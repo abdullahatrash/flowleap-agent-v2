@@ -70,7 +70,6 @@ src/vs/workbench/api/common/extHostQuickOpen.ts @TylerLeonhardt
 src/vs/workbench/api/browser/mainThreadSecretState.ts @TylerLeonhardt
 
 # Extensions
-extensions/microsoft-authentication/** @TylerLeonhardt
 extensions/github-authentication/** @TylerLeonhardt
 extensions/git/** @lszomoru
 extensions/git-base/** @lszomoru

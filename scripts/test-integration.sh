@@ -207,7 +207,7 @@ if should_run_suite terminal-suggest; then
 echo
 echo "### Terminal Suggest tests"
 echo
-npm run test-extension -- -l terminal-suggest --enable-proposed-api=vscode.vscode-api-tests "${GREP_ARGS[@]}"
+npm run test-extension -- -l terminal-suggest "${GREP_ARGS[@]}"
 kill_app
 fi
 
