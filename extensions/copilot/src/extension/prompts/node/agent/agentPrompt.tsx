@@ -47,6 +47,7 @@ import { AgentMultirootWorkspaceStructure } from '../panel/workspace/workspaceSt
 import { AgentConversationHistory, AgentUserMessageInHistory } from './agentConversationHistory';
 import './allAgentPrompts';
 import { AlternateGPTPrompt, DefaultReminderInstructions, DefaultToolReferencesHint, ReminderInstructionsProps, ToolReferencesHintProps } from './defaultAgentInstructions';
+import { PatentAIInstructions } from './patentAIPrompt';
 import { AgentPromptCustomizations, ReminderInstructionsConstructor, ToolReferencesHintConstructor } from './promptRegistry';
 import { SummarizedConversationHistory } from './summarizedConversationHistory';
 import { DeferredToolListReminder } from './toolSearchInstructions';
@@ -183,21 +184,27 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 
 	private async getSystemPrompt(customizations: AgentPromptCustomizations) {
 		const modelFamily = this.props.endpoint.family ?? 'unknown';
+		const availableTools = this.props.promptContext.tools?.availableTools;
 
-		if (this.props.endpoint.family.startsWith('gpt-') && this.configurationService.getExperimentBasedConfig(ConfigKey.EnableAlternateGptPrompt, this.experimentationService)) {
-			return <AlternateGPTPrompt
-				availableTools={this.props.promptContext.tools?.availableTools}
-				modelFamily={this.props.endpoint.family}
+		// Duck-typed: the Patent AI endpoint (vscode-node layer) exposes supportsWebSearch.
+		// Stock endpoints don't, so this is false on a non-patent configuration.
+		const webSearchAvailable = (this.props.endpoint as IChatEndpoint & { readonly supportsWebSearch?: boolean }).supportsWebSearch === true;
+
+		const useAlternateGptPrompt = this.props.endpoint.family.startsWith('gpt-') && this.configurationService.getExperimentBasedConfig(ConfigKey.EnableAlternateGptPrompt, this.experimentationService);
+		const PromptClass = useAlternateGptPrompt ? AlternateGPTPrompt : customizations.SystemPrompt!;
+
+		// Single prompt-include seam for the Patent AI overlay: PatentAIInstructions is a
+		// self-contained system block that renders only when a patent tool is available, so
+		// it adds nothing on a stock configuration. Including it here once covers every model
+		// family instead of editing each model-family prompt file.
+		return <>
+			<PromptClass
+				availableTools={availableTools}
+				modelFamily={modelFamily}
 				codesearchMode={this.props.codesearchMode}
-			/>;
-		}
-
-		const PromptClass = customizations.SystemPrompt!;
-		return <PromptClass
-			availableTools={this.props.promptContext.tools?.availableTools}
-			modelFamily={modelFamily}
-			codesearchMode={this.props.codesearchMode}
-		/>;
+			/>
+			<PatentAIInstructions availableTools={availableTools} webSearchAvailable={webSearchAvailable} />
+		</>;
 	}
 
 	private async getAgentCustomInstructions(frozenCustomizationsIndex?: { value: string; toolReferences: readonly ChatLanguageModelToolReference[] | undefined }) {

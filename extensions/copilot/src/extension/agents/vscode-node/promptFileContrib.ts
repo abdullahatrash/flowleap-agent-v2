@@ -14,6 +14,7 @@ import { AskAgentProvider } from './askAgentProvider';
 import { ExploreAgentProvider } from './exploreAgentProvider';
 import { GitHubOrgCustomAgentProvider } from './githubOrgCustomAgentProvider';
 import { GitHubOrgInstructionsProvider } from './githubOrgInstructionsProvider';
+import { PatentResearchAgentProvider } from './patentResearchAgentProvider';
 import { PlanAgentProvider } from './planAgentProvider';
 
 export class PromptFileContribution extends Disposable implements IExtensionContribution {
@@ -41,6 +42,10 @@ export class PromptFileContribution extends Disposable implements IExtensionCont
 			// Register Ask agent provider for read-only Q&A mode
 			const askProvider = instantiationService.createInstance(AskAgentProvider);
 			this._register(vscode.chat.registerCustomAgentProvider(askProvider));
+
+			// Register Patent Research agent provider (patentai overlay)
+			const patentResearchProvider = instantiationService.createInstance(PatentResearchAgentProvider);
+			this._register(vscode.chat.registerCustomAgentProvider(patentResearchProvider));
 
 			// Register Explore agent provider for code research subagent
 			const exploreProviderRegistration = this._register(new MutableDisposable<vscode.Disposable>());

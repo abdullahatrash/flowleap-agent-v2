@@ -50,6 +50,23 @@ export const DEFAULT_READ_TOOLS: readonly string[] = [
 ];
 
 /**
+ * Patent-specific tools available to patent agents.
+ */
+export const PATENT_TOOLS: readonly string[] = [
+	'patents',
+	'buildPatentQuery',
+	'buildUSPTOQuery',
+	'academic',
+	'readPdf',
+	'opsApiGuide',
+	'usptoApiGuide',
+	'citationApiGuide',
+	'legalSearchGuide',
+	'writePatentResults',
+	'fetch',
+];
+
+/**
  * Builds .agent.md content from a configuration object using string formatting.
  * No YAML library required — generates valid YAML frontmatter via string templates.
  */

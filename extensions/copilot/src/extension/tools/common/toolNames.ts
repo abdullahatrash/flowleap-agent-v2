@@ -86,6 +86,19 @@ export enum ToolName {
 	CoreTypeInPage = 'type_in_page',
 	CoreHandleDialog = 'handle_dialog',
 	CoreRunPlaywrightCode = 'run_playwright_code',
+
+	// Patent AI tools (patentai overlay). The implementations and contributions
+	// land in later migration layers; these names are the vocabulary the patent
+	// system prompt (patentAIPrompt.tsx) keys off to scope patent guidance.
+	BuildPatentQuery = 'build_patent_query',
+	SearchPatents = 'search_patents',
+	OpsApiGuide = 'ops_api_guide',
+	USPTOApiGuide = 'uspto_api_guide',
+	CitationApiGuide = 'citation_api_guide',
+	LegalSearchGuide = 'legal_search_guide',
+	SearchAcademic = 'search_academic',
+	ReadPdf = 'read_pdf',
+	WritePatentResults = 'write_patent_results',
 }
 
 /**
@@ -267,6 +280,17 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.ResolveMemoryFileUri]: ToolCategory.Core,
 	[ToolName.Skill]: ToolCategory.Core,
 	[ToolName.SessionStoreSql]: ToolCategory.Core,
+
+	// Patent AI tools (patentai overlay)
+	[ToolName.BuildPatentQuery]: ToolCategory.WebInteraction,
+	[ToolName.SearchPatents]: ToolCategory.WebInteraction,
+	[ToolName.OpsApiGuide]: ToolCategory.WebInteraction,
+	[ToolName.USPTOApiGuide]: ToolCategory.WebInteraction,
+	[ToolName.CitationApiGuide]: ToolCategory.WebInteraction,
+	[ToolName.LegalSearchGuide]: ToolCategory.WebInteraction,
+	[ToolName.SearchAcademic]: ToolCategory.WebInteraction,
+	[ToolName.ReadPdf]: ToolCategory.Core,
+	[ToolName.WritePatentResults]: ToolCategory.Core,
 } as const;
 
 
