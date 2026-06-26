@@ -26,6 +26,7 @@ import './multiReplaceStringTool';
 import './newNotebookTool';
 import './newWorkspace/newWorkspaceTool';
 import './notebookSummaryTool';
+import './patentSearchSubagentTool';
 import './readFileTool';
 import './readProjectStructureTool';
 import './replaceStringTool';

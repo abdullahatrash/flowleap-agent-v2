@@ -91,14 +91,25 @@ export enum ToolName {
 	// land in later migration layers; these names are the vocabulary the patent
 	// system prompt (patentAIPrompt.tsx) keys off to scope patent guidance.
 	BuildPatentQuery = 'build_patent_query',
+	BuildUSPTOQuery = 'build_uspto_query',
 	SearchPatents = 'search_patents',
+	GetPatentDetails = 'get_patent_details',
+	GetPatentFigures = 'get_patent_figures',
+	PatentApiRequest = 'patent_api_request',
+	SearchCitations = 'search_citations',
+	SearchForwardCitations = 'search_forward_citations',
 	OpsApiGuide = 'ops_api_guide',
 	USPTOApiGuide = 'uspto_api_guide',
 	CitationApiGuide = 'citation_api_guide',
+	SearchLegal = 'search_legal',
 	LegalSearchGuide = 'legal_search_guide',
 	SearchAcademic = 'search_academic',
 	ReadPdf = 'read_pdf',
 	WritePatentResults = 'write_patent_results',
+	PatentSearchSubagent = 'patent_search_subagent',
+	AnalyzeClaim = 'analyze_claim',
+	CompareClaims = 'compare_claims',
+	PatentAnalyticsViz = 'patent_analytics_viz',
 }
 
 /**
@@ -158,6 +169,25 @@ export enum ContributedToolName {
 	// Patent AI tools (patentai overlay). The contributed name maps back to its
 	// internal ToolName (same enum key), so `search_patents` reaches SearchPatentsTool.
 	SearchPatents = 'copilot_searchPatents',
+	SearchAcademic = 'copilot_searchAcademic',
+	WritePatentResults = 'copilot_writePatentResults',
+	PatentSearchSubagent = 'copilot_patentSearchSubagent',
+	AnalyzeClaim = 'copilot_analyzeClaim',
+	CompareClaims = 'copilot_compareClaims',
+	PatentAnalyticsViz = 'copilot_patentAnalyticsViz',
+	GetPatentDetails = 'copilot_getPatentDetails',
+	GetPatentFigures = 'copilot_getPatentFigures',
+	ReadPdf = 'copilot_readPdf',
+	BuildPatentQuery = 'copilot_buildPatentQuery',
+	BuildUSPTOQuery = 'copilot_buildUSPTOQuery',
+	PatentApiRequest = 'copilot_patentApiRequest',
+	OpsApiGuide = 'copilot_opsApiGuide',
+	USPTOApiGuide = 'copilot_usptoApiGuide',
+	SearchCitations = 'copilot_searchCitations',
+	SearchForwardCitations = 'copilot_searchForwardCitations',
+	CitationApiGuide = 'copilot_citationApiGuide',
+	SearchLegal = 'copilot_searchLegal',
+	LegalSearchGuide = 'copilot_legalSearchGuide',
 }
 
 export const byokEditToolNamesToToolNames = {
@@ -287,14 +317,25 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 
 	// Patent AI tools (patentai overlay)
 	[ToolName.BuildPatentQuery]: ToolCategory.WebInteraction,
+	[ToolName.BuildUSPTOQuery]: ToolCategory.WebInteraction,
 	[ToolName.SearchPatents]: ToolCategory.WebInteraction,
+	[ToolName.GetPatentDetails]: ToolCategory.WebInteraction,
+	[ToolName.GetPatentFigures]: ToolCategory.WebInteraction,
+	[ToolName.PatentApiRequest]: ToolCategory.WebInteraction,
+	[ToolName.SearchCitations]: ToolCategory.WebInteraction,
+	[ToolName.SearchForwardCitations]: ToolCategory.WebInteraction,
 	[ToolName.OpsApiGuide]: ToolCategory.WebInteraction,
 	[ToolName.USPTOApiGuide]: ToolCategory.WebInteraction,
 	[ToolName.CitationApiGuide]: ToolCategory.WebInteraction,
+	[ToolName.SearchLegal]: ToolCategory.WebInteraction,
 	[ToolName.LegalSearchGuide]: ToolCategory.WebInteraction,
 	[ToolName.SearchAcademic]: ToolCategory.WebInteraction,
 	[ToolName.ReadPdf]: ToolCategory.Core,
 	[ToolName.WritePatentResults]: ToolCategory.Core,
+	[ToolName.PatentSearchSubagent]: ToolCategory.Core,
+	[ToolName.AnalyzeClaim]: ToolCategory.WebInteraction,
+	[ToolName.CompareClaims]: ToolCategory.WebInteraction,
+	[ToolName.PatentAnalyticsViz]: ToolCategory.WebInteraction,
 } as const;
 
 

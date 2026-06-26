@@ -20,6 +20,68 @@ describe('ToolNames', () => {
 		expect(getContributedToolName(ToolName.SearchPatents)).toBe(ContributedToolName.SearchPatents);
 	});
 
+	it('round-trips the claim-analysis tool family both ways', () => {
+		// The claim-analysis family (analyze/compare/analytics) is wired only through the shared enum KEY
+		// (toolNames.ts pairs the `copilot_*` contributed name with the `*` ToolName by key). A key typo
+		// would silently sever the mapping so the tool never reaches its registration. Assert both directions.
+		const family = [
+			[ContributedToolName.AnalyzeClaim, ToolName.AnalyzeClaim],
+			[ContributedToolName.CompareClaims, ToolName.CompareClaims],
+			[ContributedToolName.PatentAnalyticsViz, ToolName.PatentAnalyticsViz],
+		] as const;
+		for (const [contributed, internal] of family) {
+			expect(getToolName(contributed)).toBe(internal);
+			expect(getContributedToolName(internal)).toBe(contributed);
+		}
+	});
+
+	it('round-trips every patent search-family contributed name to its internal ToolName', () => {
+		// The contributed `copilot_*` name and the internal `*` ToolName are linked only by their shared
+		// enum KEY (the loop in toolNames.ts pairs them by key). A typo on either side silently breaks the
+		// mapping and the tool would never reach its registration. Assert both directions for the whole family.
+		const family = [
+			[ContributedToolName.BuildPatentQuery, ToolName.BuildPatentQuery],
+			[ContributedToolName.BuildUSPTOQuery, ToolName.BuildUSPTOQuery],
+			[ContributedToolName.PatentApiRequest, ToolName.PatentApiRequest],
+			[ContributedToolName.OpsApiGuide, ToolName.OpsApiGuide],
+			[ContributedToolName.USPTOApiGuide, ToolName.USPTOApiGuide],
+		] as const;
+		for (const [contributed, internal] of family) {
+			expect(getToolName(contributed)).toBe(internal);
+			expect(getContributedToolName(internal)).toBe(contributed);
+		}
+	});
+
+	it('round-trips the citation tool family contributed names to their internal ToolNames', () => {
+		// The citation family is wired only through the shared enum KEY (toolNames.ts pairs the
+		// `copilot_*` contributed name with the `*` ToolName by key). A key typo would silently sever the
+		// mapping so the tool never reaches its registration, and `search_citations` would never light up
+		// the Patent Agent prompt. Assert both directions for the whole family.
+		const family = [
+			[ContributedToolName.SearchCitations, ToolName.SearchCitations],
+			[ContributedToolName.SearchForwardCitations, ToolName.SearchForwardCitations],
+			[ContributedToolName.CitationApiGuide, ToolName.CitationApiGuide],
+		] as const;
+		for (const [contributed, internal] of family) {
+			expect(getToolName(contributed)).toBe(internal);
+			expect(getContributedToolName(internal)).toBe(contributed);
+		}
+	});
+
+	it('round-trips the details/figures/PDF tool family both ways', () => {
+		// Same key-pairing contract as the search family: each details/figures/PDF tool only reaches
+		// its registration if its `copilot_*` contribution and internal ToolName share an enum key.
+		const family = [
+			[ContributedToolName.GetPatentDetails, ToolName.GetPatentDetails],
+			[ContributedToolName.GetPatentFigures, ToolName.GetPatentFigures],
+			[ContributedToolName.ReadPdf, ToolName.ReadPdf],
+		] as const;
+		for (const [contributed, internal] of family) {
+			expect(getToolName(contributed)).toBe(internal);
+			expect(getContributedToolName(internal)).toBe(contributed);
+		}
+	});
+
 	it('returns original name for unmapped core tools', () => {
 		// Core tool without a contributed alias
 		const unmapped = ToolName.CoreRunInTerminal;
