@@ -431,7 +431,11 @@ export const watchApiProposalNamesTask = task.define('watch-api-proposal-names',
 
 // Codicons
 const root = path.dirname(path.dirname(import.meta.dirname));
-const codiconSource = path.join(root, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf');
+// FlowLeap: prefer the repo-committed font with FlowLeap-branded copilot glyphs
+// over the stock @vscode/codicons font. Regenerate it after a codicons package
+// bump via build/flowleap/patch-copilot-glyphs.py (see build/flowleap/README.md).
+const flowleapCodicon = path.join(root, 'build', 'flowleap', 'codicon.ttf');
+const codiconSource = fs.existsSync(flowleapCodicon) ? flowleapCodicon : path.join(root, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf');
 const codiconDest = path.join(root, 'src', 'vs', 'base', 'browser', 'ui', 'codicons', 'codicon', 'codicon.ttf');
 
 function copyCodiconsImpl() {
