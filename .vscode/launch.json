@@ -159,80 +159,6 @@
 			}
 		},
 		{
-			"type": "extensionHost",
-			"request": "launch",
-			"name": "VS Code API Tests (single folder)",
-			"runtimeExecutable": "${execPath}",
-			"args": [
-				// "${workspaceFolder}", // Uncomment for running out of sources.
-				"${workspaceFolder}/extensions/vscode-api-tests/testWorkspace",
-				"--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-api-tests",
-				"--extensionTestsPath=${workspaceFolder}/extensions/vscode-api-tests/out/singlefolder-tests",
-				"--disable-extensions"
-			],
-			"outFiles": [
-				"${workspaceFolder}/extensions/vscode-api-tests/out/**/*.js"
-			],
-			"presentation": {
-				"group": "5_tests",
-				"order": 3
-			}
-		},
-		{
-			"type": "extensionHost",
-			"request": "launch",
-			"name": "VS Code API Tests (workspace)",
-			"runtimeExecutable": "${execPath}",
-			"args": [
-				"${workspaceFolder}/extensions/vscode-api-tests/testworkspace.code-workspace",
-				"--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-api-tests",
-				"--extensionTestsPath=${workspaceFolder}/extensions/vscode-api-tests/out/workspace-tests"
-			],
-			"outFiles": [
-				"${workspaceFolder}/extensions/vscode-api-tests/out/**/*.js"
-			],
-			"presentation": {
-				"group": "5_tests",
-				"order": 4
-			}
-		},
-		{
-			"type": "extensionHost",
-			"request": "launch",
-			"name": "VS Code Tokenizer Tests",
-			"runtimeExecutable": "${execPath}",
-			"args": [
-				"${workspaceFolder}/extensions/vscode-colorize-tests/test",
-				"--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-colorize-tests",
-				"--extensionTestsPath=${workspaceFolder}/extensions/vscode-colorize-tests/out"
-			],
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js"
-			],
-			"presentation": {
-				"group": "5_tests",
-				"order": 5
-			}
-		},
-		{
-			"type": "extensionHost",
-			"request": "launch",
-			"name": "VS Code Tokenizer Performance Tests",
-			"runtimeExecutable": "${execPath}",
-			"args": [
-				"${workspaceFolder}/extensions/vscode-colorize-perf-tests/test",
-				"--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode-colorize-perf-tests",
-				"--extensionTestsPath=${workspaceFolder}/extensions/vscode-colorize-perf-tests/out"
-			],
-			"outFiles": [
-				"${workspaceFolder}/out/**/*.js"
-			],
-			"presentation": {
-				"group": "5_tests",
-				"order": 6
-			}
-		},
-		{
 			"type": "chrome",
 			"request": "attach",
 			"name": "Attach to VS Code",
@@ -273,8 +199,7 @@
 				"--no-cached-data",
 				"--crash-reporter-directory=${workspaceFolder}/.profile-oss/crashes",
 				// for general runtime freezes: https://github.com/microsoft/vscode/issues/127861#issuecomment-904144910
-				"--disable-features=CalculateNativeWinOcclusion",
-				"--disable-extension=vscode.vscode-api-tests"
+				"--disable-features=CalculateNativeWinOcclusion"
 			],
 			"userDataDir": "${userHome}/.vscode-oss-dev",
 			"webRoot": "${workspaceFolder}",
@@ -319,7 +244,6 @@
 				"--crash-reporter-directory=${workspaceFolder}/.profile-oss/crashes",
 				// for general runtime freezes: https://github.com/microsoft/vscode/issues/127861#issuecomment-904144910
 				"--disable-features=CalculateNativeWinOcclusion",
-				"--disable-extension=vscode.vscode-api-tests",
 				"--agents"
 			],
 			"userDataDir": "${userHome}/.vscode-oss-dev",
@@ -367,8 +291,7 @@
 				"--no-cached-data",
 				"--crash-reporter-directory=${workspaceFolder}/.profile-oss/crashes",
 				// for general runtime freezes: https://github.com/microsoft/vscode/issues/127861#issuecomment-904144910
-				"--disable-features=CalculateNativeWinOcclusion",
-				"--disable-extension=vscode.vscode-api-tests"
+				"--disable-features=CalculateNativeWinOcclusion"
 			],
 			"userDataDir": "${userHome}/.vscode-oss-dev",
 			"webRoot": "${workspaceFolder}",
@@ -654,15 +577,6 @@
 				"VSCODE_DEV": "1",
 				"VSCODE_CLI": "1"
 			}
-		},
-		{
-			"name": "Launch Built-in Extension",
-			"type": "extensionHost",
-			"request": "launch",
-			"runtimeExecutable": "${execPath}",
-			"args": [
-				"--extensionDevelopmentPath=${workspaceRoot}/extensions/debug-auto-launch"
-			]
 		},
 		{
 			"name": "Monaco Editor - Playground",
