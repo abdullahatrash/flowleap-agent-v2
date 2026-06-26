@@ -230,7 +230,6 @@
       }
     ],
     "configurationDefaults": {
-      "workbench.colorTheme": "Light Modern",
       "workbench.startupEditor": "none",
       "window.menuBarVisibility": "compact",
       "editor.minimap.enabled": false,
