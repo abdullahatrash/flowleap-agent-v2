@@ -1,0 +1,199 @@
+{
+	"name": "docx-viewer",
+	"displayName": "%displayName%",
+	"description": "%description%",
+	"extensionKind": [
+		"ui",
+		"workspace"
+	],
+	"version": "1.0.0",
+	"publisher": "flowleap",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.90.0"
+	},
+	"main": "./out/extension",
+	"categories": [
+		"Visualization"
+	],
+	"activationEvents": [],
+	"capabilities": {
+		"virtualWorkspaces": true,
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"contributes": {
+		"configuration": {
+			"type": "object",
+			"title": "%config.title%",
+			"properties": {
+				"docxViewer.font": {
+					"type": "string",
+					"default": "Arial",
+					"description": "%config.font%"
+				},
+				"docxViewer.theme": {
+					"type": "string",
+					"default": "auto",
+					"enum": [
+						"auto",
+						"light",
+						"dark"
+					],
+					"description": "%config.theme%"
+				},
+				"docxViewer.zoomLevel": {
+					"type": "number",
+					"default": 1,
+					"minimum": 0.5,
+					"maximum": 3,
+					"description": "%config.zoomLevel%"
+				},
+				"docxViewer.showOutline": {
+					"type": "boolean",
+					"default": true,
+					"description": "%config.showOutline%"
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "docxViewer.openConfig",
+				"title": "%command.openConfig%",
+				"category": "Document Viewer"
+			},
+			{
+				"command": "docxViewer.zoomIn",
+				"title": "%command.zoomIn%",
+				"category": "Document Viewer",
+				"icon": "$(zoom-in)"
+			},
+			{
+				"command": "docxViewer.zoomOut",
+				"title": "%command.zoomOut%",
+				"category": "Document Viewer",
+				"icon": "$(zoom-out)"
+			},
+			{
+				"command": "docxViewer.resetZoom",
+				"title": "%command.resetZoom%",
+				"category": "Document Viewer",
+				"icon": "$(zoom-reset)"
+			},
+			{
+				"command": "docxViewer.toggleOutline",
+				"title": "%command.toggleOutline%",
+				"category": "Document Viewer",
+				"icon": "$(list-tree)"
+			},
+			{
+				"command": "docxViewer.toggleTheme",
+				"title": "%command.toggleTheme%",
+				"category": "Document Viewer",
+				"icon": "$(color-mode)"
+			},
+			{
+				"command": "docxViewer.toggleToolbar",
+				"title": "%command.toggleToolbar%",
+				"category": "Document Viewer",
+				"icon": "$(toolbar)"
+			}
+		],
+		"customEditors": [
+			{
+				"viewType": "flowleap.docxViewer",
+				"displayName": "%customEditor.displayName%",
+				"priority": "default",
+				"selector": [
+					{
+						"filenamePattern": "*.docx"
+					},
+					{
+						"filenamePattern": "*.doc"
+					},
+					{
+						"filenamePattern": "*.odt"
+					}
+				]
+			}
+		],
+		"menus": {
+			"editor/title": [
+				{
+					"command": "docxViewer.zoomIn",
+					"when": "activeCustomEditorId == flowleap.docxViewer",
+					"group": "navigation@1"
+				},
+				{
+					"command": "docxViewer.zoomOut",
+					"when": "activeCustomEditorId == flowleap.docxViewer",
+					"group": "navigation@2"
+				},
+				{
+					"command": "docxViewer.resetZoom",
+					"when": "activeCustomEditorId == flowleap.docxViewer",
+					"group": "navigation@3"
+				},
+				{
+					"command": "docxViewer.toggleOutline",
+					"when": "activeCustomEditorId == flowleap.docxViewer",
+					"group": "navigation@4"
+				},
+				{
+					"command": "docxViewer.toggleTheme",
+					"when": "activeCustomEditorId == flowleap.docxViewer",
+					"group": "navigation@5"
+				},
+				{
+					"command": "docxViewer.toggleToolbar",
+					"when": "activeCustomEditorId == flowleap.docxViewer",
+					"group": "navigation@6"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "docxViewer.zoomIn",
+					"when": "activeCustomEditorId == flowleap.docxViewer"
+				},
+				{
+					"command": "docxViewer.zoomOut",
+					"when": "activeCustomEditorId == flowleap.docxViewer"
+				},
+				{
+					"command": "docxViewer.resetZoom",
+					"when": "activeCustomEditorId == flowleap.docxViewer"
+				},
+				{
+					"command": "docxViewer.toggleOutline",
+					"when": "activeCustomEditorId == flowleap.docxViewer"
+				},
+				{
+					"command": "docxViewer.toggleTheme",
+					"when": "activeCustomEditorId == flowleap.docxViewer"
+				},
+				{
+					"command": "docxViewer.toggleToolbar",
+					"when": "activeCustomEditorId == flowleap.docxViewer"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"compile": "gulp compile-extension:docx-viewer",
+		"watch": "gulp watch-extension:docx-viewer",
+		"vscode:prepublish": "npm run build-ext",
+		"build-ext": "node ../../node_modules/gulp/bin/gulp.js --gulpfile ../../build/gulpfile.extensions.mjs compile-extension:docx-viewer ./tsconfig.json"
+	},
+	"dependencies": {
+		"mammoth": "^1.8.0",
+		"odt2html": "^1.0.1"
+	},
+	"devDependencies": {
+		"@types/node": "22.x"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/flowleap/vscode.git"
+	}
+}

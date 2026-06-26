@@ -54,6 +54,7 @@ const compilations = [
 	'extensions/configuration-editing/tsconfig.json',
 	'extensions/css-language-features/client/tsconfig.json',
 	'extensions/css-language-features/server/tsconfig.json',
+	'extensions/docx-viewer/tsconfig.json',
 	'extensions/emmet/tsconfig.json',
 	'extensions/extension-editing/tsconfig.json',
 	'extensions/flowleap/tsconfig.json',

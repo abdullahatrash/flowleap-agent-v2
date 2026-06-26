@@ -18,6 +18,7 @@ export const dirs = [
 	'extensions/copilot',
 	'extensions/css-language-features',
 	'extensions/css-language-features/server',
+	'extensions/docx-viewer',
 	'extensions/emmet',
 	'extensions/extension-editing',
 	'extensions/flowleap',

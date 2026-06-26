@@ -1,0 +1,27 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as fs from 'fs/promises';
+
+const odt2html = require('odt2html');
+
+export class OdtHandler {
+	public static async renderOdt(odtPath: string): Promise<string> {
+		try {
+			const stat = await fs.stat(odtPath);
+			if (stat.size === 0) {
+				return '';
+			}
+			// The odt2html returns promise
+			const html = await odt2html.toHTML({
+				path: odtPath
+			});
+			return html;
+		} catch (error) {
+			console.error('Error converting ODT:', error);
+			throw new Error(`Failed to convert ODT file: ${error}`);
+		}
+	}
+}

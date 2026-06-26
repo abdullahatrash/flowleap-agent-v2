@@ -1,0 +1,17 @@
+{
+	"displayName": "Document Viewer",
+	"description": "View DOCX and ODT documents directly within VS Code",
+	"config.title": "Document Viewer",
+	"config.font": "Font family for document rendering",
+	"config.theme": "Theme for document viewer (auto, light, dark)",
+	"config.zoomLevel": "Default zoom level for documents (0.5 to 3.0)",
+	"config.showOutline": "Show document outline/table of contents",
+	"command.openConfig": "Open Document Viewer Configuration",
+	"command.zoomIn": "Zoom In",
+	"command.zoomOut": "Zoom Out",
+	"command.resetZoom": "Reset Zoom",
+	"command.toggleOutline": "Toggle Outline",
+	"command.toggleTheme": "Toggle Theme",
+	"command.toggleToolbar": "Toggle Toolbar",
+	"customEditor.displayName": "Document Viewer"
+}
