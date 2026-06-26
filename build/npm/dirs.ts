@@ -36,6 +36,7 @@ export const dirs = [
 	'extensions/merge-conflict',
 	'extensions/mermaid-markdown-features',
 	'extensions/notebook-renderers',
+	'extensions/pdf-preview',
 	'extensions/references-view',
 	'extensions/search-result',
 	'extensions/simple-browser',

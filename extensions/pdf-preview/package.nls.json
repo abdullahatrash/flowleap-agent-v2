@@ -1,0 +1,12 @@
+{
+	"displayName": "PDF Preview",
+	"description": "View PDF files and extract text for AI analysis in FlowLeap",
+	"customEditor.pdfPreview.displayName": "PDF Preview",
+	"command.extractText": "Extract Text from PDF",
+	"command.goToPage": "Go to Page",
+	"command.zoomIn": "Zoom In",
+	"command.zoomOut": "Zoom Out",
+	"config.defaultZoom": "Default zoom level for PDF preview",
+	"config.scrollMode": "Scroll mode for multi-page PDFs",
+	"config.backendUrl": "FlowLeap backend server URL for OCR and AI features"
+}

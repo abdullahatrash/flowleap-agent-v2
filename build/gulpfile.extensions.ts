@@ -73,6 +73,7 @@ const compilations = [
 	'extensions/mermaid-markdown-features/tsconfig.json',
 	'extensions/terminal-suggest/tsconfig.json',
 	'extensions/notebook-renderers/tsconfig.json',
+	'extensions/pdf-preview/tsconfig.json',
 	'extensions/references-view/tsconfig.json',
 	'extensions/search-result/tsconfig.json',
 	'extensions/simple-browser/tsconfig.json',

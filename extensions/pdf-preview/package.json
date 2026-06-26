@@ -1,0 +1,131 @@
+{
+	"name": "pdf-preview",
+	"displayName": "%displayName%",
+	"description": "%description%",
+	"extensionKind": [
+		"ui",
+		"workspace"
+	],
+	"version": "1.0.0",
+	"publisher": "flowleap",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.95.0"
+	},
+	"main": "./out/extension",
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [],
+	"capabilities": {
+		"virtualWorkspaces": true,
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"contributes": {
+		"customEditors": [
+			{
+				"viewType": "flowleap.pdfPreview",
+				"displayName": "%customEditor.pdfPreview.displayName%",
+				"priority": "default",
+				"selector": [
+					{
+						"filenamePattern": "*.pdf"
+					}
+				]
+			}
+		],
+		"commands": [
+			{
+				"command": "pdf-preview.extractText",
+				"title": "%command.extractText%",
+				"category": "PDF"
+			},
+			{
+				"command": "pdf-preview.goToPage",
+				"title": "%command.goToPage%",
+				"category": "PDF"
+			},
+			{
+				"command": "pdf-preview.zoomIn",
+				"title": "%command.zoomIn%",
+				"category": "PDF"
+			},
+			{
+				"command": "pdf-preview.zoomOut",
+				"title": "%command.zoomOut%",
+				"category": "PDF"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "pdf-preview.extractText",
+					"when": "activeCustomEditorId == 'flowleap.pdfPreview'"
+				},
+				{
+					"command": "pdf-preview.goToPage",
+					"when": "activeCustomEditorId == 'flowleap.pdfPreview'"
+				},
+				{
+					"command": "pdf-preview.zoomIn",
+					"when": "activeCustomEditorId == 'flowleap.pdfPreview'"
+				},
+				{
+					"command": "pdf-preview.zoomOut",
+					"when": "activeCustomEditorId == 'flowleap.pdfPreview'"
+				}
+			]
+		},
+		"configuration": [
+			{
+				"title": "PDF Preview",
+				"properties": {
+					"pdfPreview.defaultZoom": {
+						"type": "number",
+						"default": 1.0,
+						"description": "%config.defaultZoom%"
+					},
+					"pdfPreview.scrollMode": {
+						"type": "string",
+						"enum": [
+							"vertical",
+							"horizontal",
+							"wrapped"
+						],
+						"default": "vertical",
+						"description": "%config.scrollMode%"
+					}
+				}
+			},
+			{
+				"title": "FlowLeap Backend",
+				"properties": {
+					"flowleap.backendUrl": {
+						"type": "string",
+						"default": "https://api.flowleap.co",
+						"description": "%config.backendUrl%",
+						"format": "uri"
+					}
+				}
+			}
+		]
+	},
+	"scripts": {
+		"compile": "gulp compile-extension:pdf-preview",
+		"watch": "gulp watch-extension:pdf-preview",
+		"vscode:prepublish": "npm run build-ext",
+		"build-ext": "node ../../node_modules/gulp/bin/gulp.js --gulpfile ../../build/gulpfile.extensions.mjs compile-extension:pdf-preview ./tsconfig.json"
+	},
+	"dependencies": {
+		"pdfjs-dist": "4.0.379"
+	},
+	"devDependencies": {
+		"@types/node": "22.x"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/flowleap/vscode.git"
+	}
+}

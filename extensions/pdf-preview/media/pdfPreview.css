@@ -1,0 +1,287 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) FlowLeap. All rights reserved.
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html, body {
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	color: var(--vscode-foreground);
+	background-color: var(--vscode-editor-background);
+}
+
+/* Toolbar */
+#toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 8px 16px;
+	background-color: var(--vscode-editorWidget-background);
+	border-bottom: 1px solid var(--vscode-widget-border);
+	flex-wrap: wrap;
+}
+
+.toolbar-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+#toolbar button {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: 4px;
+	background-color: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	cursor: pointer;
+	font-size: 12px;
+	transition: background-color 0.1s;
+}
+
+#toolbar button:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+#toolbar button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+#toolbar button svg {
+	flex-shrink: 0;
+}
+
+#page-info {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 13px;
+}
+
+#page-input {
+	width: 50px;
+	padding: 2px 6px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 2px;
+	background-color: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	text-align: center;
+	font-size: 12px;
+}
+
+#page-input:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	border-color: var(--vscode-focusBorder);
+}
+
+#page-count {
+	min-width: 30px;
+}
+
+#zoom-level {
+	min-width: 50px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.extract-group {
+	border-left: 1px solid var(--vscode-widget-border);
+	padding-left: 12px;
+}
+
+#extract-text {
+	background-color: var(--vscode-button-secondaryBackground) !important;
+	color: var(--vscode-button-secondaryForeground) !important;
+}
+
+#extract-text:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground) !important;
+}
+
+#extract-ocr {
+	background-color: var(--vscode-button-background) !important;
+	color: var(--vscode-button-foreground) !important;
+}
+
+#extract-ocr:hover {
+	background-color: var(--vscode-button-hoverBackground) !important;
+}
+
+#extract-ocr:disabled {
+	opacity: 0.7;
+	cursor: wait;
+}
+
+/* Viewer Container */
+#viewer-container {
+	height: calc(100% - 45px);
+	overflow: auto;
+	background-color: var(--vscode-editor-background);
+}
+
+#viewer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 20px;
+	gap: 20px;
+}
+
+/* PDF Pages */
+.pdf-page {
+	background-color: white;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+	position: relative;
+}
+
+.pdf-page canvas {
+	display: block;
+}
+
+.pdf-page .text-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	overflow: hidden;
+	opacity: 0.2;
+	line-height: 1.0;
+	pointer-events: auto;
+}
+
+.pdf-page .text-layer > span {
+	color: transparent;
+	position: absolute;
+	white-space: pre;
+	transform-origin: 0% 0%;
+	cursor: text;
+}
+
+.pdf-page .text-layer > span::selection {
+	background: var(--vscode-editor-selectionBackground);
+}
+
+.pdf-page .text-layer > span::-moz-selection {
+	background: var(--vscode-editor-selectionBackground);
+}
+
+/* Loading indicator */
+#loading {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	padding: 24px;
+	background-color: var(--vscode-editorWidget-background);
+	border: 1px solid var(--vscode-widget-border);
+	border-radius: 8px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+	z-index: 100;
+}
+
+#loading.hidden {
+	display: none;
+}
+
+.spinner {
+	width: 32px;
+	height: 32px;
+	border: 3px solid var(--vscode-progressBar-background);
+	border-top-color: var(--vscode-button-background);
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Error state */
+.error-message {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	padding: 40px;
+	text-align: center;
+	color: var(--vscode-errorForeground);
+}
+
+.error-message svg {
+	width: 48px;
+	height: 48px;
+	margin-bottom: 16px;
+	opacity: 0.7;
+}
+
+.error-message h2 {
+	margin-bottom: 8px;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.error-message p {
+	color: var(--vscode-descriptionForeground);
+	max-width: 400px;
+}
+
+/* Scrollbar styling */
+#viewer-container::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+#viewer-container::-webkit-scrollbar-track {
+	background: var(--vscode-scrollbarSlider-background);
+}
+
+#viewer-container::-webkit-scrollbar-thumb {
+	background: var(--vscode-scrollbarSlider-hoverBackground);
+	border-radius: 5px;
+}
+
+#viewer-container::-webkit-scrollbar-thumb:hover {
+	background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+	#toolbar {
+		padding: 8px;
+		gap: 8px;
+	}
+
+	.toolbar-group {
+		gap: 4px;
+	}
+
+	#toolbar button {
+		padding: 4px;
+	}
+
+	#extract-text span {
+		display: none;
+	}
+}
