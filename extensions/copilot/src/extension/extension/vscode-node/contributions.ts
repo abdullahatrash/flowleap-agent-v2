@@ -5,6 +5,7 @@
 
 import { PromptFileContribution } from '../../agents/vscode-node/promptFileContrib';
 import { AuthenticationContrib } from '../../authentication/vscode-node/authentication.contribution';
+import { PatentAIContribution } from '../../patentai/vscode-node/patentContribution';
 import { BYOKContrib } from '../../byok/vscode-node/byokContribution';
 import { ChatDebugFileLoggerContribution } from '../../chat/vscode-node/chatDebugFileLoggerService';
 import { ChatQuotaContribution } from '../../chat/vscode-node/chatQuota.contribution';
@@ -70,6 +71,7 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(ExtensionStateCommandContribution),
 	asContributionFactory(ConversationFeature),
 	asContributionFactory(AuthenticationContrib),
+	asContributionFactory(PatentAIContribution),
 	chatBlockLanguageContribution,
 	asContributionFactory(LoggingActionsContrib),
 	asContributionFactory(FetcherTelemetryContribution),

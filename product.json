@@ -106,6 +106,9 @@
 		],
 		"github-enterprise": [
 			"GitHub.copilot-chat"
+		],
+		"flowleap": [
+			"vscode.flowleap"
 		]
 	},
 	"configurationDefaults": {

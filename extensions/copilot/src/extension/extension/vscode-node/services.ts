@@ -10,8 +10,6 @@ import { IAuthenticationService } from '../../../platform/authentication/common/
 import { ICopilotTokenManager } from '../../../platform/authentication/common/copilotTokenManager';
 import { StaticGitHubAuthenticationService } from '../../../platform/authentication/common/staticGitHubAuthenticationService';
 import { createStaticGitHubTokenProvider, getOrCreateTestingCopilotTokenManager } from '../../../platform/authentication/node/copilotTokenManager';
-import { AuthenticationService } from '../../../platform/authentication/vscode-node/authenticationService';
-import { VSCodeCopilotTokenManager } from '../../../platform/authentication/vscode-node/copilotTokenManager';
 import { IChatAgentService } from '../../../platform/chat/common/chatAgents';
 import { IChatDebugFileLoggerService } from '../../../platform/chat/common/chatDebugFileLoggerService';
 import { IChatHookService } from '../../../platform/chat/common/chatHookService';
@@ -126,6 +124,8 @@ import { IPromptCategorizerService, PromptCategorizerService } from '../../promp
 import { IPromptVariablesService } from '../../prompt/node/promptVariablesService';
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
 import { DevContainerConfigurationServiceImpl } from '../../prompt/vscode-node/devContainerConfigurationServiceImpl';
+import { PatentAIAuthService } from '../../patentai/vscode-node/patentAuthService';
+import { PatentAICopilotTokenManager } from '../../patentai/vscode-node/patentCopilotTokenManager';
 import { PatentAIEndpointProvider } from '../../patentai/vscode-node/patentEndpointProvider';
 import { GitCommitMessageServiceImpl } from '../../prompt/vscode-node/gitCommitMessageServiceImpl';
 import { GitDiffService } from '../../prompt/vscode-node/gitDiffService';
@@ -195,7 +195,13 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 		builder.define(ICopilotTokenManager, getOrCreateTestingCopilotTokenManager(env.devDeviceId));
 	} else {
 		setupTelemetry(builder, extensionContext, internalAIKey, ariaKey);
-		builder.define(ICopilotTokenManager, new SyncDescriptor(VSCodeCopilotTokenManager));
+		// FlowLeap Patent AI: BYOK-only token manager. Replaces the CAPI-backed
+		// VSCodeCopilotTokenManager so the extension never mints a GitHub Copilot token
+		// and never reaches the `copilot_internal` token endpoint. It fabricates no token
+		// (see PatentAICopilotTokenManager): inference is BYO-key only via the endpoint
+		// provider below, so no Copilot token is needed, and entitlement/quota — all of
+		// which derive from the token — stays empty so chat is never gated on GitHub.
+		builder.define(ICopilotTokenManager, new SyncDescriptor(PatentAICopilotTokenManager));
 	}
 
 	if (isScenarioAutomation) {
@@ -204,7 +210,11 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 		builder.define(IIgnoreService, new SyncDescriptor(NullIgnoreService));
 		builder.define(IWorkspaceChunkSearchService, new SyncDescriptor(ScenarioAutomationWorkspaceChunkSearchService));
 	} else {
-		builder.define(IAuthenticationService, new SyncDescriptor(AuthenticationService));
+		// FlowLeap (ADR 0002): the single Clerk-backed auth service stands in for the stock
+		// AuthenticationService. It owns the FlowLeap Session and bypasses GitHub — no GitHub
+		// session is ever reported, so the agent never requires GitHub sign-in and BYOK
+		// inference is permitted. The Copilot/CAPI token is disabled separately (#8).
+		builder.define(IAuthenticationService, new SyncDescriptor(PatentAIAuthService));
 		// FlowLeap Patent AI: BYOK-only endpoint provider. Replaces the stock
 		// endpoint provider so every chat turn resolves to the user's own connected
 		// model key and never reaches the retired Patent AI backend (410).

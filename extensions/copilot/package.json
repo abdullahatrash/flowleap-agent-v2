@@ -151,6 +151,12 @@
     "chatSessionCustomizationProvider"
   ],
   "contributes": {
+    "authentication": [
+      {
+        "id": "flowleap",
+        "label": "FlowLeap"
+      }
+    ],
     "languageModelTools": [
       {
         "name": "copilot_searchCodebase",
@@ -2339,6 +2345,16 @@
       }
     ],
     "commands": [
+      {
+        "command": "patent-ai.signIn",
+        "title": "Sign In",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "patent-ai.signOut",
+        "title": "Sign Out",
+        "category": "FlowLeap"
+      },
       {
         "command": "github.copilot.chat.triggerPermissiveSignIn",
         "title": "%github.copilot.command.triggerPermissiveSignIn%"

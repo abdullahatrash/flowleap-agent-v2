@@ -27,6 +27,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatSessionsUriHandler, CustomUriHandler } from '../../chatSessions/vscode/chatSessionsUriHandler';
 import { EXTENSION_ID } from '../../common/constants';
+import { registerDefaultUriHandler } from '../../uriHandler/vscode-node/extensionUriHandler';
 import { ILaunchConfigService, needsWorkspaceFolderForTaskError } from '../common/launchConfigService';
 import { CopilotDebugCommandSessionFactory } from '../node/copilotDebugCommandSessionFactory';
 import { SimpleRPC } from '../node/copilotDebugWorker/rpc';
@@ -69,7 +70,9 @@ export class CopilotDebugCommandContribution extends Disposable implements vscod
 		super();
 
 		this.nonce = this.ensureNonce();
-		this._register(vscode.window.registerUriHandler(this));
+		// The extension allows only one vscode.window.registerUriHandler; register as the
+		// default route so the FlowLeap auth callback (`/callback`) can coexist on its own route.
+		this._register(registerDefaultUriHandler(this));
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration(ConfigKey.TerminalToDebuggerEnabled.fullyQualifiedId)) {
 				this.registerSerializer = this.registerSerializer.then(() => this.registerEnvironment());
