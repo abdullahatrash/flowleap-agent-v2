@@ -51,17 +51,43 @@ export const DEFAULT_READ_TOOLS: readonly string[] = [
 
 /**
  * Patent-specific tools available to patent agents.
+ *
+ * The complete research toolset: multi-source search, citation tracking,
+ * patent reading (details/figures/PDF), legal lookup, claim assessment,
+ * landscape analytics, raw backend access, API guides, and result writing.
+ *
+ * Excludes `patentSearchSubagent` on purpose — a research agent must not
+ * recursively spawn the top-level patent search subagent.
+ *
+ * NOTE: these are `toolReferenceName`s (the package.json contribution alias),
+ * not internal `ToolName` values.
  */
 export const PATENT_TOOLS: readonly string[] = [
+	// Search & query building
 	'patents',
+	'academic',
 	'buildPatentQuery',
 	'buildUSPTOQuery',
-	'academic',
+	// Citation tracking
+	'citations',
+	'forwardCitations',
+	// Reading patent content
+	'patentDetails',
+	'patentFigures',
 	'readPdf',
+	// Legal research
+	'legal',
+	// Claim assessment & landscape analytics
+	'analyzeClaim',
+	'compareClaims',
+	'patentAnalytics',
+	// Raw backend access & API guides
+	'patentApiRequest',
 	'opsApiGuide',
 	'usptoApiGuide',
 	'citationApiGuide',
 	'legalSearchGuide',
+	// Output & web fallback
 	'writePatentResults',
 	'fetch',
 ];

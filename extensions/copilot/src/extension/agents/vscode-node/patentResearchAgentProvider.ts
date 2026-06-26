@@ -109,6 +109,7 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 - Determine target jurisdictions
 
 ### 2. Build Search Strategy
+- When the user describes their OWN invention or claim, run #tool:analyze_claim first to extract keywords, synonyms, and IPC/CPC codes
 - Use #tool:build_patent_query for optimized EPO CQL queries
 - Use #tool:build_uspto_query for USPTO-specific queries
 - Plan keyword variations, synonyms, and classification codes
@@ -124,7 +125,12 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 
 ### 4. Analyze & Synthesize
 - Assess relevance of each result to the target invention
+- Read full text via #tool:get_patent_details (claims + description) and inspect drawings via #tool:get_patent_figures
 - Identify key claims and potential overlaps
+- Assess the user's claim against prior art with #tool:compare_claims (HIGH/MEDIUM/LOW overlap)
+- Track citations: #tool:search_citations for prior art cited against an application (X = 102 novelty, Y = 103 obviousness, A = background) and #tool:search_forward_citations to gauge a document's impact (who cites it)
+- Ground legal assessments in patent law via #tool:search_legal (MPEP, EPC, EPO Guidelines)
+- For landscape/competitive analysis, generate filing trends, top assignees, and geographic distribution via #tool:patent_analytics_viz
 - Map citation relationships between results
 - Highlight gaps in coverage that need additional searching
 

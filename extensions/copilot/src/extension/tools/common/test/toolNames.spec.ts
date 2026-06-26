@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { ContributedToolName, getContributedToolName, getToolName, mapContributedToolNamesInSchema, mapContributedToolNamesInString, ToolName } from '../toolNames';
+import { packageJson } from '../../../../platform/env/common/packagejson';
+import { ContributedToolName, getContributedToolName, getToolName, mapContributedToolNamesInSchema, mapContributedToolNamesInString, toolCategories, ToolName } from '../toolNames';
 
 describe('ToolNames', () => {
 	it('Can map tool names', async () => {
@@ -80,6 +81,58 @@ describe('ToolNames', () => {
 			expect(getToolName(contributed)).toBe(internal);
 			expect(getContributedToolName(internal)).toBe(contributed);
 		}
+	});
+
+	it('locks the full patent tool set (registry parity) so a missing or renamed patent tool fails CI', () => {
+		// Authoritative list of all 20 patent tools, keyed by their shared enum KEY. Each key must resolve to a
+		// ToolName value, a ContributedToolName value (same key), a toolCategories entry, and a matching
+		// `languageModelTools` contribution in package.json — and the contributed<->internal names must round-trip.
+		// `satisfies` pins each key to a real member of BOTH enums, so a renamed/removed enum member fails to
+		// compile; the runtime checks below catch a dropped category, a missing/renamed package.json contribution,
+		// or a severed key pairing. This includes `patentSearchSubagent`: it is a patent tool in the registry even
+		// though the PatentResearch agent intentionally does not grant it.
+		const PATENT_TOOL_KEYS = [
+			'BuildPatentQuery',
+			'BuildUSPTOQuery',
+			'SearchPatents',
+			'SearchAcademic',
+			'GetPatentDetails',
+			'GetPatentFigures',
+			'ReadPdf',
+			'SearchCitations',
+			'SearchForwardCitations',
+			'CitationApiGuide',
+			'SearchLegal',
+			'LegalSearchGuide',
+			'AnalyzeClaim',
+			'CompareClaims',
+			'PatentAnalyticsViz',
+			'PatentApiRequest',
+			'OpsApiGuide',
+			'USPTOApiGuide',
+			'WritePatentResults',
+			'PatentSearchSubagent',
+		] as const satisfies readonly (keyof typeof ToolName & keyof typeof ContributedToolName)[];
+
+		const contributedNames = new Set(packageJson.contributes.languageModelTools.map(tool => tool.name));
+		const problems = PATENT_TOOL_KEYS.map(key => {
+			const toolName = ToolName[key];
+			const contributedName = ContributedToolName[key];
+			const issues: string[] = [];
+			if (!Object.prototype.hasOwnProperty.call(toolCategories, toolName)) {
+				issues.push('missing toolCategories entry');
+			}
+			if (!contributedNames.has(contributedName)) {
+				issues.push('missing languageModelTools contribution in package.json');
+			}
+			if (getToolName(contributedName) !== toolName || getContributedToolName(toolName) !== contributedName) {
+				issues.push('contributed<->internal round-trip broken');
+			}
+			return { key, issues };
+		}).filter(entry => entry.issues.length > 0);
+
+		expect({ count: PATENT_TOOL_KEYS.length, duplicates: PATENT_TOOL_KEYS.length - new Set(PATENT_TOOL_KEYS).size, problems })
+			.toEqual({ count: 20, duplicates: 0, problems: [] });
 	});
 
 	it('returns original name for unmapped core tools', () => {
