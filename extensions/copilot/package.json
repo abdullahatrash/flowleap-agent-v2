@@ -7051,6 +7051,39 @@
         "sessionTypes": [
           "local"
         ]
+      },
+      {
+        "path": "./assets/skills/patent-search/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/claim-analysis/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/prior-art/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/freedom-to-operate/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/patent-landscape/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/legal-research/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/citation-analysis/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/patent-translation/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/audit-report/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/patent-examination/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/figure-analysis/SKILL.md"
       }
     ],
     "terminal": {
