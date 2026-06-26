@@ -126,7 +126,7 @@ import { IPromptCategorizerService, PromptCategorizerService } from '../../promp
 import { IPromptVariablesService } from '../../prompt/node/promptVariablesService';
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
 import { DevContainerConfigurationServiceImpl } from '../../prompt/vscode-node/devContainerConfigurationServiceImpl';
-import { ProductionEndpointProvider } from '../../prompt/vscode-node/endpointProviderImpl';
+import { PatentAIEndpointProvider } from '../../patentai/vscode-node/patentEndpointProvider';
 import { GitCommitMessageServiceImpl } from '../../prompt/vscode-node/gitCommitMessageServiceImpl';
 import { GitDiffService } from '../../prompt/vscode-node/gitDiffService';
 import { PromptVariablesServiceImpl } from '../../prompt/vscode-node/promptVariablesService';
@@ -205,7 +205,10 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 		builder.define(IWorkspaceChunkSearchService, new SyncDescriptor(ScenarioAutomationWorkspaceChunkSearchService));
 	} else {
 		builder.define(IAuthenticationService, new SyncDescriptor(AuthenticationService));
-		builder.define(IEndpointProvider, new SyncDescriptor(ProductionEndpointProvider));
+		// FlowLeap Patent AI: BYOK-only endpoint provider. Replaces the stock
+		// endpoint provider so every chat turn resolves to the user's own connected
+		// model key and never reaches the retired Patent AI backend (410).
+		builder.define(IEndpointProvider, new SyncDescriptor(PatentAIEndpointProvider));
 		builder.define(IIgnoreService, new SyncDescriptor(VsCodeIgnoreService));
 		builder.define(IWorkspaceChunkSearchService, new SyncDescriptor(WorkspaceChunkSearchService));
 	}
