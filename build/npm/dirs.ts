@@ -20,6 +20,7 @@ export const dirs = [
 	'extensions/css-language-features/server',
 	'extensions/emmet',
 	'extensions/extension-editing',
+	'extensions/flowleap',
 	'extensions/git',
 	'extensions/git-base',
 	'extensions/github',

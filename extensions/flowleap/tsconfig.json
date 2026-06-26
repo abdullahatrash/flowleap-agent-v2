@@ -1,0 +1,25 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"rootDir": "./src",
+		"outDir": "./out",
+		"lib": [
+			"ES2024",
+			"DOM"
+		],
+		"types": [
+			"node"
+		],
+		"typeRoots": [
+			"./node_modules/@types"
+		],
+		"noFallthroughCasesInSwitch": true,
+		"noUnusedLocals": false,
+		"skipLibCheck": true
+	},
+	"include": [
+		"src/**/*",
+		"../../src/vscode-dts/vscode.d.ts"
+	]
+}
+

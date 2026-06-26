@@ -1,0 +1,256 @@
+{
+  "name": "flowleap",
+  "displayName": "FlowLeap",
+  "description": "FlowLeap Patent IDE - AI-Powered Patent Analysis",
+  "version": "0.0.1",
+  "publisher": "vscode",
+  "engines": {
+    "vscode": "^1.42.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "FlowLeap Navy",
+        "uiTheme": "vs-dark",
+        "path": "./themes/flowleap-navy.json"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "flowleap-sidebar",
+          "title": "FlowLeap",
+          "icon": "$(beaker)"
+        }
+      ],
+      "panel": [
+        {
+          "id": "flowleap-panel",
+          "title": "FlowLeap",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "flowleap-sidebar": [
+        {
+          "type": "webview",
+          "id": "flowleap.projectSidebar",
+          "name": "Projects",
+          "icon": "$(folder-library)",
+          "contextualTitle": "FlowLeap Projects"
+        }
+      ],
+      "flowleap-panel": [
+        {
+          "type": "webview",
+          "id": "flowleap.chatInput",
+          "name": "Chat",
+          "icon": "$(comment-discussion)",
+          "contextualTitle": "FlowLeap Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "flowleap.openSettings",
+        "title": "FlowLeap Settings"
+      },
+      {
+        "command": "flowleap.showCurrentUser",
+        "title": "Show Current User",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.openHome",
+        "title": "Open FlowLeap Home",
+        "category": "FlowLeap",
+        "icon": "$(home)"
+      },
+      {
+        "command": "flowleap.newProject",
+        "title": "New Project",
+        "category": "FlowLeap",
+        "icon": "$(add)"
+      },
+      {
+        "command": "flowleap.openProject",
+        "title": "Open Project",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.showAllProjects",
+        "title": "Show All Projects",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.openChatQuickPick",
+        "title": "Ask FlowLeap...",
+        "category": "FlowLeap",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "flowleap.setChatMode",
+        "title": "Set Chat Mode",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.refreshProjects",
+        "title": "Refresh Projects",
+        "category": "FlowLeap",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "flowleap.openNotes",
+        "title": "Open Project Notes",
+        "category": "FlowLeap",
+        "icon": "$(note)"
+      },
+      {
+        "command": "flowleap.setProjectStatus",
+        "title": "Set Project Status",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.addTag",
+        "title": "Add Tag",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.removeTag",
+        "title": "Remove Tag",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.archiveProject",
+        "title": "Archive Project",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.unarchiveProject",
+        "title": "Unarchive Project",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.checkForUpdates",
+        "title": "Check for Updates",
+        "category": "FlowLeap"
+      }
+    ],
+    "menus": {
+      "menubar/preferences": [
+        {
+          "command": "flowleap.openSettings",
+          "group": "2_configuration",
+          "order": 0.5
+        }
+      ],
+      "view/title": [
+        {
+          "command": "flowleap.newProject",
+          "when": "view == flowleap.projectSidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "flowleap.refreshProjects",
+          "when": "view == flowleap.projectSidebar",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "flowleap.openHome",
+          "when": "true"
+        },
+        {
+          "command": "flowleap.openChatQuickPick",
+          "when": "true"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "flowleap.projectSidebar",
+        "contents": "Welcome to FlowLeap!\n\nCreate your first project to get started.\n[New Project](command:flowleap.newProject)\n[Open Folder](command:workbench.action.files.openFolder)"
+      }
+    ],
+    "configuration": [
+      {
+        "title": "FlowLeap Settings",
+        "order": -1,
+        "properties": {
+          "flowleap.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable FlowLeap features"
+          },
+          "flowleap.showHomeOnStartup": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show FlowLeap Home dashboard on startup"
+          },
+          "flowleap.chatMode": {
+            "type": "string",
+            "enum": [
+              "default",
+              "plan",
+              "search",
+              "analyze"
+            ],
+            "default": "default",
+            "description": "Default chat mode"
+          },
+          "flowleap.projectsDirectory": {
+            "type": "string",
+            "default": "",
+            "description": "Default directory for new projects. Leave empty to use ~/FlowLeap Projects"
+          }
+        }
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "flowleap.openChatQuickPick",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l"
+      },
+      {
+        "command": "flowleap.openHome",
+        "key": "ctrl+shift+h",
+        "mac": "cmd+shift+h"
+      }
+    ],
+    "configurationDefaults": {
+      "workbench.colorTheme": "Light Modern",
+      "workbench.startupEditor": "none",
+      "window.menuBarVisibility": "compact",
+      "editor.minimap.enabled": false,
+      "breadcrumbs.enabled": false,
+      "workbench.tips.enabled": true,
+      "editor.fontSize": 14,
+      "editor.fontFamily": "'JetBrains Mono', 'SF Mono', Monaco, Menlo, monospace",
+      "editor.lineHeight": 1.6,
+      "editor.renderWhitespace": "selection",
+      "editor.cursorBlinking": "smooth",
+      "editor.cursorSmoothCaretAnimation": "on",
+      "editor.smoothScrolling": true,
+      "workbench.list.smoothScrolling": true,
+      "terminal.integrated.fontSize": 13,
+      "terminal.integrated.cursorBlinking": true,
+      "terminal.integrated.cursorStyle": "line",
+      "workbench.editorAssociations": {
+        "*.md": "vscode.markdown.preview.editor"
+      }
+    }
+  },
+  "main": "./out/extension.js"
+}
