@@ -154,6 +154,10 @@ export enum ContributedToolName {
 	SwitchAgent = 'copilot_switchAgent',
 	ResolveMemoryFileUri = 'copilot_resolveMemoryFileUri',
 	SessionStoreSql = 'copilot_sessionStoreSql',
+
+	// Patent AI tools (patentai overlay). The contributed name maps back to its
+	// internal ToolName (same enum key), so `search_patents` reaches SearchPatentsTool.
+	SearchPatents = 'copilot_searchPatents',
 }
 
 export const byokEditToolNamesToToolNames = {

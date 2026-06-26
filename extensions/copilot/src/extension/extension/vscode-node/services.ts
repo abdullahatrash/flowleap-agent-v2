@@ -125,6 +125,7 @@ import { IPromptVariablesService } from '../../prompt/node/promptVariablesServic
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
 import { DevContainerConfigurationServiceImpl } from '../../prompt/vscode-node/devContainerConfigurationServiceImpl';
 import { PatentAIAuthService } from '../../patentai/vscode-node/patentAuthService';
+import { IPatentBackendClient, PatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { PatentAICopilotTokenManager } from '../../patentai/vscode-node/patentCopilotTokenManager';
 import { PatentAIEndpointProvider } from '../../patentai/vscode-node/patentEndpointProvider';
 import { GitCommitMessageServiceImpl } from '../../prompt/vscode-node/gitCommitMessageServiceImpl';
@@ -222,6 +223,10 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 		builder.define(IIgnoreService, new SyncDescriptor(VsCodeIgnoreService));
 		builder.define(IWorkspaceChunkSearchService, new SyncDescriptor(WorkspaceChunkSearchService));
 	}
+
+	// FlowLeap Patent AI: the single backend-client seam every patent-data tool goes through.
+	// Centralizes the `401 → re-sign-in` / `402 → start-trial` gating so each tool inherits it.
+	builder.define(IPatentBackendClient, new SyncDescriptor(PatentBackendClient));
 
 	builder.define(IGithubCodeSearchService, new SyncDescriptor(GithubCodeSearchService));
 	builder.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(GithubAvailableEmbeddingTypesService));

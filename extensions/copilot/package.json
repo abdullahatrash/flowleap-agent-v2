@@ -1283,6 +1283,43 @@
             "description"
           ]
         }
+      },
+      {
+        "name": "copilot_searchPatents",
+        "displayName": "Search Patents",
+        "toolReferenceName": "patents",
+        "when": "!isWeb",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(search)",
+        "userDescription": "Execute patent search using CQL query",
+        "modelDescription": "Executes an EPO OPS CQL patent search for EP/WO patents; returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents — not US patents (use uspto_api_guide for those). Use after build_patent_query to run the generated CQL. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (e.g. 'EP,WO' to restrict to fulltext-available patents). No wildcards on ic/cpc fields; max 100 results per request.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "CQL query string (preferably from build_patent_query tool). Examples: 'pa=Pfizer* AND ic=A61K AND ti=cancer', 'pa=Vestas* AND ic=F03D AND ti=\"wind turbine\"'. IMPORTANT: No wildcards on ic/cpc fields."
+            },
+            "range": {
+              "type": "string",
+              "description": "Result range in format 'start-end', e.g., '1-25', '26-50'. Max 100 results per request. Use pagination for more results.",
+              "default": "1-25"
+            },
+            "countries": {
+              "type": "string",
+              "description": "Filter by country codes (optional). Use 'EP,WO' to get only European/WIPO patents with fulltext available. Default: all countries.",
+              "examples": [
+                "EP,WO",
+                "US,EP,WO",
+                "all"
+              ]
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
       }
     ],
     "languageModelToolSets": [

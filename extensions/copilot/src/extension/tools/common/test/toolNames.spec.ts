@@ -12,6 +12,14 @@ describe('ToolNames', () => {
 		expect(getToolName(ContributedToolName.ApplyPatch)).toBe(ToolName.ApplyPatch);
 	});
 
+	it('maps the search_patents contribution both ways so the patent prompt detects it', () => {
+		// `copilot_searchPatents` must resolve to the internal `search_patents` name that
+		// SearchPatentsTool registers under and that detectPatentTools() keys off — otherwise the
+		// Patent Agent prompt stays inert. Bidirectional, so the tool is also advertised correctly.
+		expect(getToolName(ContributedToolName.SearchPatents)).toBe(ToolName.SearchPatents);
+		expect(getContributedToolName(ToolName.SearchPatents)).toBe(ContributedToolName.SearchPatents);
+	});
+
 	it('returns original name for unmapped core tools', () => {
 		// Core tool without a contributed alias
 		const unmapped = ToolName.CoreRunInTerminal;
