@@ -5977,8 +5977,16 @@
       ],
       "commandPalette": [
         {
+          "command": "flowleap.signIn",
+          "when": "flowleap.signedOut"
+        },
+        {
           "command": "patent-ai.signIn",
           "when": "false"
+        },
+        {
+          "command": "patent-ai.signOut",
+          "when": "flowleap.signedIn"
         },
         {
           "command": "github.copilot.debug.extensionState",
