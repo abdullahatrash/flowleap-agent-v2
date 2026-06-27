@@ -10,6 +10,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IExtensionContribution } from '../../common/contributions';
 import { getPatentAIConfig } from './configService';
+import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { PatentAIAuthService } from './patentAuthService';
 
@@ -87,6 +88,10 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 				patentAuthService.notifyAuthenticationChanged();
 			}
 		}));
+
+		// Mirror the provider's session state into the `flowleap.signedIn` / `flowleap.signedOut`
+		// context keys so UI surfaces can gate on auth state (separate concern from the bridge above).
+		this._register(registerFlowleapAuthContextKeys(provider));
 
 		this._logService.info('[Patent AI] FlowLeap authentication provider registered');
 	}
