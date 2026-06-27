@@ -3073,6 +3073,11 @@
     ],
     "commands": [
       {
+        "command": "flowleap.signIn",
+        "title": "Sign In",
+        "category": "FlowLeap"
+      },
+      {
         "command": "patent-ai.signIn",
         "title": "Sign In",
         "category": "FlowLeap"
@@ -5971,6 +5976,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "patent-ai.signIn",
+          "when": "false"
+        },
         {
           "command": "github.copilot.debug.extensionState",
           "when": "false"

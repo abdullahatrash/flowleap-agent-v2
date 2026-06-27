@@ -108,7 +108,8 @@
 			"GitHub.copilot-chat"
 		],
 		"flowleap": [
-			"vscode.flowleap"
+			"vscode.flowleap",
+			"GitHub.copilot-chat"
 		]
 	},
 	"configurationDefaults": {

@@ -12,6 +12,7 @@ import { IExtensionContribution } from '../../common/contributions';
 import { getPatentAIConfig } from './configService';
 import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
+import { triggerFlowleapSignIn } from './flowleapSignIn';
 import { PatentAIAuthService } from './patentAuthService';
 
 /**
@@ -103,52 +104,13 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 	 * "command 'patent-ai.signIn' not found"; a missing provider surfaces as a clear error instead.
 	 */
 	private _registerAuthCommands(): void {
-		// Sign In. `options.silent` suppresses toasts: a blocking onboarding overlay dims
-		// notifications, so a toast fired there renders hidden "under the dialog"; such callers
-		// pass silent:true and show their own inline status. Returns the resulting auth state so
-		// callers (e.g. the onboarding gate, #21) can decide whether to advance.
-		this._register(vscode.commands.registerCommand('patent-ai.signIn', async (options?: { silent?: boolean }): Promise<boolean> => {
-			this._logService.info('[Patent AI] Sign In command executed');
-			const silent = options?.silent === true;
-
-			const provider = this._authProvider;
-			if (!provider) {
-				this._logService.error('[Patent AI] Sign In: authentication provider unavailable');
-				if (!silent) {
-					vscode.window.showErrorMessage('Sign in is unavailable. Please reload the window and try again.');
-				}
-				return false;
-			}
-
-			// If a valid session already exists, don't force another browser round-trip.
-			await provider.waitForInitialization();
-			if (provider.isAuthenticated) {
-				this._logService.info('[Patent AI] Already authenticated; skipping browser sign-in');
-				return true;
-			}
-
-			try {
-				await provider.signIn();
-				// Gate the toast on REAL auth state: signIn() can resolve while the stored token
-				// is already invalid (e.g. a dead-on-arrival short-lived token).
-				const authed = provider.isAuthenticated;
-				if (!silent) {
-					if (authed) {
-						vscode.window.showInformationMessage('Successfully signed in to FlowLeap');
-					} else {
-						vscode.window.showErrorMessage('Sign in did not complete. Please try again.');
-					}
-				}
-				return authed;
-			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Unknown error';
-				this._logService.error(`[Patent AI] Sign in failed: ${message}`);
-				if (!silent) {
-					vscode.window.showErrorMessage(`Sign in failed: ${message}`);
-				}
-				return false;
-			}
-		}));
+		// Sign In. Canonical user-facing command `flowleap.signIn` and the `patent-ai.signIn` alias
+		// (kept for existing callers: the onboarding gate #21, the chat affordance, and the reactive
+		// 401 re-auth that fires `executeCommand('patent-ai.signIn')`) both route through the SAME
+		// native `getSession({createIfNone:true})` path via {@link triggerFlowleapSignIn}.
+		const signInHandler = (options?: { silent?: boolean }): Promise<boolean> => this._triggerSignIn(options?.silent === true);
+		this._register(vscode.commands.registerCommand('flowleap.signIn', signInHandler));
+		this._register(vscode.commands.registerCommand('patent-ai.signIn', signInHandler));
 
 		// Sign Out.
 		this._register(vscode.commands.registerCommand('patent-ai.signOut', async (): Promise<void> => {
@@ -177,6 +139,37 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		}));
 
 		this._logService.info('[Patent AI] Authentication commands registered');
+	}
+
+	/**
+	 * Drive the native sign-in path. Both `flowleap.signIn` and the `patent-ai.signIn` alias call
+	 * this; `silent` suppresses toasts for blocking-overlay callers (see {@link triggerFlowleapSignIn}).
+	 * The provider-unavailable guard lives here (the helper assumes a provider), so the commands stay
+	 * registered and degrade to a clear error even if provider init failed.
+	 */
+	private async _triggerSignIn(silent: boolean): Promise<boolean> {
+		this._logService.info('[Patent AI] Sign In command executed');
+
+		const provider = this._authProvider;
+		if (!provider) {
+			this._logService.error('[Patent AI] Sign In: authentication provider unavailable');
+			if (!silent) {
+				vscode.window.showErrorMessage('Sign in is unavailable. Please reload the window and try again.');
+			}
+			return false;
+		}
+
+		return triggerFlowleapSignIn({
+			waitForInit: () => provider.waitForInitialization(),
+			isAuthenticated: () => provider.isAuthenticated,
+			// Native path: VS Code owns dedup, session persistence, and the Accounts badge; the
+			// provider's `createSession` runs the deep-link flow. `trustedExtensionAuthAccess`
+			// (product.json) pre-authorizes this extension so no consent modal is shown.
+			getSession: () => Promise.resolve(vscode.authentication.getSession(FlowLeapAuthenticationProvider.ID, [], { createIfNone: true })),
+			showInfo: message => void vscode.window.showInformationMessage(message),
+			showError: message => void vscode.window.showErrorMessage(message),
+			log: message => this._logService.info(message),
+		}, silent);
 	}
 
 	/**
