@@ -12,6 +12,7 @@ import { createActionViewItem } from '../../../../platform/actions/browser/menuE
 import { Action2, MenuId, MenuItemAction, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
@@ -205,7 +206,7 @@ registerAction2(class extends Action2 {
 			},
 			f1: true,
 			icon: debugConfigure,
-			precondition: CONTEXT_DEBUG_UX.notEqualsTo('simple'),
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUG_UX.notEqualsTo('simple'), PatentIdeContextKeys.Mode.toNegated()),
 			menu: [{
 				id: MenuId.ViewContainerTitle,
 				group: 'navigation',

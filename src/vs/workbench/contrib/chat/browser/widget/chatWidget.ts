@@ -81,6 +81,7 @@ import { IChatListItemTemplate } from './chatListRenderer.js';
 import { ChatListWidget } from './chatListWidget.js';
 import { ChatEditorOptions } from './chatOptions.js';
 import { ChatViewWelcomePart, IChatViewWelcomeContent } from '../viewsWelcome/chatViewWelcomeController.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { IChatTipService } from '../chatTipService.js';
 import { ChatTipContentPart } from './chatContentParts/chatTipContentPart.js';
 import { ChatContentMarkdownRenderer } from './chatContentMarkdownRenderer.js';
@@ -1258,7 +1259,17 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		}
 
 		let title: string;
-		if (this.input.currentModeKind === ChatModeKind.Ask) {
+		// FlowLeap Patent IDE: Use patent-specific titles
+		const isPatentMode = PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false;
+		if (isPatentMode) {
+			if (this.input.currentModeKind === ChatModeKind.Ask) {
+				title = localize('patentChatDescription', "Ask about patents");
+			} else if (this.input.currentModeKind === ChatModeKind.Edit) {
+				title = localize('patentEditsTitle', "Edit documents");
+			} else {
+				title = localize('patentAgentTitle', "Patent Analysis Agent");
+			}
+		} else if (this.input.currentModeKind === ChatModeKind.Ask) {
 			title = localize('chatDescription', "Ask about your code");
 		} else if (this.input.currentModeKind === ChatModeKind.Edit) {
 			title = localize('editsTitle', "Edit in context");

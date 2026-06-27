@@ -22,8 +22,11 @@ import { getTitleBarStyle } from '../../platform/window/common/window.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { isFullscreen, onDidChangeFullscreen } from '../../base/browser/browser.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
+import { PatentIdeContextKeys } from '../common/patent/patentIdeContextKeys.js';
 
 export class WorkbenchContextKeysHandler extends Disposable {
+
+	private patentIdeModeContext: IContextKey<boolean>;
 
 	private dirtyWorkingCopiesContext: IContextKey<boolean>;
 
@@ -111,6 +114,10 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		// Automation
 		this.inAutomationContext = InAutomationContext.bindTo(this.contextKeyService);
 		this.inAutomationContext.set(!!this.environmentService.enableSmokeTestDriver);
+
+		// Patent IDE Mode
+		this.patentIdeModeContext = PatentIdeContextKeys.Mode.bindTo(this.contextKeyService);
+		this.patentIdeModeContext.set(true); // Enable Patent IDE mode by default
 
 		// Editor Groups
 		this.activeEditorGroupEmpty = ActiveEditorGroupEmptyContext.bindTo(this.contextKeyService);

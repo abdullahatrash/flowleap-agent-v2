@@ -5,140 +5,30 @@
 
 import { isValidBasename } from '../../../../../base/common/extpath.js';
 import { extname } from '../../../../../base/common/path.js';
-import { basename, joinPath } from '../../../../../base/common/resources.js';
+import { joinPath } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { ILanguageService } from '../../../../../editor/common/languages/language.js';
-import { getIconClassesForLanguageId } from '../../../../../editor/common/services/getIconClasses.js';
 import * as nls from '../../../../../nls.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IQuickInputService, IQuickPickItem, QuickPickInput } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { SnippetsAction } from './abstractSnippetsActions.js';
-import { ISnippetsService } from '../snippets.js';
-import { SnippetSource } from '../snippetsFile.js';
+import { Snippet, SnippetSource } from '../snippetsFile.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { IUserDataProfileService } from '../../../../services/userDataProfile/common/userDataProfile.js';
+import { patentPromptCategories, PromptCategory, PromptTemplate } from '../../../../common/patent/patentPromptTemplates.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
+import { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 
-namespace ISnippetPick {
-	export function is(thing: object | undefined): thing is ISnippetPick {
-		return !!thing && URI.isUri((<ISnippetPick>thing).filepath);
-	}
+interface ICategoryPick extends IQuickPickItem {
+	category: PromptCategory;
 }
 
-interface ISnippetPick extends IQuickPickItem {
-	filepath: URI;
-	hint?: true;
-}
-
-async function computePicks(snippetService: ISnippetsService, userDataProfileService: IUserDataProfileService, languageService: ILanguageService, labelService: ILabelService) {
-
-	const existing: ISnippetPick[] = [];
-	const future: ISnippetPick[] = [];
-
-	const seen = new Set<string>();
-	const added = new Map<string, { snippet: ISnippetPick; detail: string }>();
-
-	for (const file of await snippetService.getSnippetFiles()) {
-
-		if (file.source === SnippetSource.Extension) {
-			// skip extension snippets
-			continue;
-		}
-
-		if (file.isGlobalSnippets) {
-
-			await file.load();
-
-			// list scopes for global snippets
-			const names = new Set<string>();
-			let source: string | undefined;
-
-			outer: for (const snippet of file.data) {
-				if (!source) {
-					source = snippet.source;
-				}
-
-				for (const scope of snippet.scopes) {
-					const name = languageService.getLanguageName(scope);
-					if (name) {
-						if (names.size >= 4) {
-							names.add(`${name}...`);
-							break outer;
-						} else {
-							names.add(name);
-						}
-					}
-				}
-			}
-
-			const snippet: ISnippetPick = {
-				label: basename(file.location),
-				filepath: file.location,
-				description: names.size === 0
-					? nls.localize('global.scope', "(global)")
-					: nls.localize('global.1', "({0})", [...names].join(', '))
-			};
-			existing.push(snippet);
-
-			if (!source) {
-				continue;
-			}
-
-			const detail = nls.localize('detail.label', "({0}) {1}", source, labelService.getUriLabel(file.location, { relative: true }));
-			const lastItem = added.get(basename(file.location));
-			if (lastItem) {
-				snippet.detail = detail;
-				lastItem.snippet.detail = lastItem.detail;
-			}
-			added.set(basename(file.location), { snippet, detail });
-
-		} else {
-			// language snippet
-			const mode = basename(file.location).replace(/\.json$/, '');
-			existing.push({
-				label: basename(file.location),
-				description: `(${languageService.getLanguageName(mode) ?? mode})`,
-				filepath: file.location
-			});
-			seen.add(mode);
-		}
-	}
-
-	const dir = userDataProfileService.currentProfile.snippetsHome;
-	for (const languageId of languageService.getRegisteredLanguageIds()) {
-		const label = languageService.getLanguageName(languageId);
-		if (label && !seen.has(languageId)) {
-			future.push({
-				label: languageId,
-				description: `(${label})`,
-				filepath: joinPath(dir, `${languageId}.json`),
-				hint: true,
-				iconClasses: getIconClassesForLanguageId(languageId)
-			});
-		}
-	}
-
-	existing.sort((a, b) => {
-		const a_ext = extname(a.filepath.path);
-		const b_ext = extname(b.filepath.path);
-		if (a_ext === b_ext) {
-			return a.label.localeCompare(b.label);
-		} else if (a_ext === '.code-snippets') {
-			return -1;
-		} else {
-			return 1;
-		}
-	});
-
-	future.sort((a, b) => {
-		return a.label.localeCompare(b.label);
-	});
-
-	return { existing, future };
+interface ITemplatePick extends IQuickPickItem {
+	template: PromptTemplate;
 }
 
 async function createSnippetFile(scope: string, defaultPath: URI, quickInputService: IQuickInputService, fileService: IFileService, textFileService: ITextFileService, opener: IOpenerService) {
@@ -153,7 +43,7 @@ async function createSnippetFile(scope: string, defaultPath: URI, quickInputServ
 	await fileService.createFolder(defaultPath);
 
 	const input = await quickInputService.input({
-		placeHolder: nls.localize('name', "Type snippet file name"),
+		placeHolder: nls.localize('name', "Type template file name"),
 		async validateInput(input) {
 			if (!input) {
 				return nls.localize('bad_name1', "Invalid file name");
@@ -176,31 +66,20 @@ async function createSnippetFile(scope: string, defaultPath: URI, quickInputServ
 
 	await textFileService.write(resource, [
 		'{',
-		'\t// Place your ' + scope + ' snippets here. Each snippet is defined under a snippet name and has a scope, prefix, body and ',
-		'\t// description. Add comma separated ids of the languages where the snippet is applicable in the scope field. If scope ',
-		'\t// is left empty or omitted, the snippet gets applied to all languages. The prefix is what is ',
-		'\t// used to trigger the snippet and the body will be expanded and inserted. Possible variables are: ',
+		'\t// Place your ' + scope + ' prompt templates here. Each template is defined under a name and has a scope, prefix, body and ',
+		'\t// description. Add comma separated ids of the languages where the template is applicable in the scope field. If scope ',
+		'\t// is left empty or omitted, the template gets applied to all languages. The prefix is what is ',
+		'\t// used to trigger the template and the body will be expanded and inserted. Possible variables are: ',
 		'\t// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. ',
 		'\t// Placeholders with the same ids are connected.',
 		'\t// Example:',
-		'\t// "Print to console": {',
-		'\t// \t"scope": "javascript,typescript",',
-		'\t// \t"prefix": "log",',
+		'\t// "Prior Art Search": {',
+		'\t// \t"prefix": "search",',
 		'\t// \t"body": [',
-		'\t// \t\t"console.log(\'$1\');",',
+		'\t// \t\t"<task>Search for prior art related to $1</task>",',
 		'\t// \t\t"$2"',
 		'\t// \t],',
-		'\t// \t"description": "Log output to console"',
-		'\t// }',
-		'\t//',
-		'\t// You can also restrict snippets to specific files using include/exclude patterns:',
-		'\t// "Test snippet": {',
-		'\t// \t"scope": "javascript,typescript",',
-		'\t// \t"prefix": "test",',
-		'\t// \t"body": "test(\'$1\', () => {\\n\\t$0\\n});",',
-		'\t// \t"include": ["**/*.test.ts", "*.spec.ts"],',
-		'\t// \t"exclude": ["**/temp/*.ts"],',
-		'\t// \t"description": "Insert test block"',
+		'\t// \t"description": "Basic prior art search prompt"',
 		'\t// }',
 		'}'
 	].join('\n'));
@@ -209,47 +88,14 @@ async function createSnippetFile(scope: string, defaultPath: URI, quickInputServ
 	return undefined;
 }
 
-async function createLanguageSnippetFile(pick: ISnippetPick, fileService: IFileService, textFileService: ITextFileService) {
-	if (await fileService.exists(pick.filepath)) {
-		return;
-	}
-	const contents = [
-		'{',
-		'\t// Place your snippets for ' + pick.label + ' here. Each snippet is defined under a snippet name and has a prefix, body and ',
-		'\t// description. The prefix is what is used to trigger the snippet and the body will be expanded and inserted. Possible variables are:',
-		'\t// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. Placeholders with the ',
-		'\t// same ids are connected.',
-		'\t// Example:',
-		'\t// "Print to console": {',
-		'\t// \t"prefix": "log",',
-		'\t// \t"body": [',
-		'\t// \t\t"console.log(\'$1\');",',
-		'\t// \t\t"$2"',
-		'\t// \t],',
-		'\t// \t"description": "Log output to console"',
-		'\t// }',
-		'\t//',
-		'\t// You can also restrict snippets to specific files using include/exclude patterns:',
-		'\t// "Test snippet": {',
-		'\t// \t"prefix": "test",',
-		'\t// \t"body": "test(\'$1\', () => {\\n\\t$0\\n});",',
-		'\t// \t"include": ["**/*.test.ts", "*.spec.ts"],',
-		'\t// \t"exclude": ["**/temp/*.ts"],',
-		'\t// \t"description": "Insert test block"',
-		'\t// }',
-		'}'
-	].join('\n');
-	await textFileService.write(pick.filepath, contents);
-}
-
 export class ConfigureSnippetsAction extends SnippetsAction {
 	constructor() {
 		super({
 			id: 'workbench.action.openSnippets',
-			title: nls.localize2('openSnippet.label', "Configure Snippets"),
+			title: nls.localize2('openSnippet.label', "Configure Prompt Templates"),
 			shortTitle: {
-				...nls.localize2('userSnippets', "Snippets"),
-				mnemonicTitle: nls.localize({ key: 'miOpenSnippets', comment: ['&& denotes a mnemonic'] }, "&&Snippets"),
+				...nls.localize2('userSnippets', "Prompt Templates"),
+				mnemonicTitle: nls.localize({ key: 'miOpenSnippets', comment: ['&& denotes a mnemonic'] }, "&&Prompt Templates"),
 			},
 			f1: true,
 			menu: [
@@ -261,23 +107,32 @@ export class ConfigureSnippetsAction extends SnippetsAction {
 
 	async run(accessor: ServicesAccessor): Promise<any> {
 
-		const snippetService = accessor.get(ISnippetsService);
 		const quickInputService = accessor.get(IQuickInputService);
 		const opener = accessor.get(IOpenerService);
-		const languageService = accessor.get(ILanguageService);
 		const userDataProfileService = accessor.get(IUserDataProfileService);
 		const workspaceService = accessor.get(IWorkspaceContextService);
 		const fileService = accessor.get(IFileService);
 		const textFileService = accessor.get(ITextFileService);
-		const labelService = accessor.get(ILabelService);
+		const editorService = accessor.get(IEditorService);
 
-		const picks = await computePicks(snippetService, userDataProfileService, languageService, labelService);
-		const existing: QuickPickInput[] = picks.existing;
+		// Build category picks
+		const categoryPicks: QuickPickInput<ICategoryPick>[] = [
+			{ type: 'separator', label: nls.localize('group.categories', "Patent Prompt Template Categories") }
+		];
 
+		for (const category of patentPromptCategories) {
+			categoryPicks.push({
+				label: `$(${category.icon.id}) ${category.label}`,
+				description: category.description,
+				category
+			} satisfies ICategoryPick);
+		}
+
+		// Add custom template file options
 		type SnippetPick = IQuickPickItem & { uri: URI } & { scope: string };
 		const globalSnippetPicks: SnippetPick[] = [{
 			scope: nls.localize('new.global_scope', 'global'),
-			label: nls.localize('new.global', "New Global Snippets file..."),
+			label: nls.localize('new.global', "New Global Prompt Template file..."),
 			uri: userDataProfileService.currentProfile.snippetsHome
 		}];
 
@@ -285,33 +140,80 @@ export class ConfigureSnippetsAction extends SnippetsAction {
 		for (const folder of workspaceService.getWorkspace().folders) {
 			workspaceSnippetPicks.push({
 				scope: nls.localize('new.workspace_scope', "{0} workspace", folder.name),
-				label: nls.localize('new.folder', "New Snippets file for '{0}'...", folder.name),
+				label: nls.localize('new.folder', "New Prompt Template file for '{0}'...", folder.name),
 				uri: folder.toResource('.vscode')
 			});
 		}
 
-		if (existing.length > 0) {
-			existing.unshift({ type: 'separator', label: nls.localize('group.global', "Existing Snippets") });
-			existing.push({ type: 'separator', label: nls.localize('new.global.sep', "New Snippets") });
-		} else {
-			existing.push({ type: 'separator', label: nls.localize('new.global.sep', "New Snippets") });
+		const customPicks: QuickPickInput[] = [
+			{ type: 'separator', label: nls.localize('new.global.sep', "Custom Templates") },
+			...globalSnippetPicks,
+			...workspaceSnippetPicks
+		];
+
+		const pick = await quickInputService.pick(
+			([] as QuickPickInput[]).concat(categoryPicks, customPicks),
+			{
+				placeHolder: nls.localize('openSnippet.pickLanguage', "Select Prompt Template Category"),
+				matchOnDescription: true
+			}
+		);
+
+		if (!pick) {
+			return;
 		}
 
-		const pick = await quickInputService.pick(([] as QuickPickInput[]).concat(existing, globalSnippetPicks, workspaceSnippetPicks, picks.future), {
-			placeHolder: nls.localize('openSnippet.pickLanguage', "Select Snippets File or Create Snippets"),
-			matchOnDescription: true
+		// Handle custom template file creation
+		if (globalSnippetPicks.indexOf(pick as SnippetPick) >= 0 || workspaceSnippetPicks.indexOf(pick as SnippetPick) >= 0) {
+			return createSnippetFile((pick as SnippetPick).scope, (pick as SnippetPick).uri, quickInputService, fileService, textFileService, opener);
+		}
+
+		// Handle category selection — show templates within the category
+		const categoryPick = pick as ICategoryPick;
+		if (!categoryPick.category) {
+			return;
+		}
+
+		const templatePicks: QuickPickInput<ITemplatePick>[] = categoryPick.category.templates.map(template => ({
+			label: template.name,
+			description: template.prefix,
+			detail: template.description,
+			template
+		} satisfies ITemplatePick));
+
+		const templateChoice = await quickInputService.pick(templatePicks, {
+			placeHolder: nls.localize('pickTemplate', "Select a prompt template to insert"),
+			matchOnDetail: true
 		});
 
-		if (globalSnippetPicks.indexOf(pick as SnippetPick) >= 0) {
-			return createSnippetFile((pick as SnippetPick).scope, (pick as SnippetPick).uri, quickInputService, fileService, textFileService, opener);
-		} else if (workspaceSnippetPicks.indexOf(pick as SnippetPick) >= 0) {
-			return createSnippetFile((pick as SnippetPick).scope, (pick as SnippetPick).uri, quickInputService, fileService, textFileService, opener);
-		} else if (ISnippetPick.is(pick)) {
-			if (pick.hint) {
-				await createLanguageSnippetFile(pick, fileService, textFileService);
-			}
-			return opener.open(pick.filepath);
+		if (!templateChoice || !(templateChoice as ITemplatePick).template) {
+			return;
 		}
 
+		const template = (templateChoice as ITemplatePick).template;
+		const snippetBody = template.body.join('\n');
+		const snippetObj = new Snippet(
+			false,
+			[],
+			template.name,
+			template.prefix,
+			template.description,
+			snippetBody,
+			'',
+			SnippetSource.User,
+			`patent-template/${template.prefix}`
+		);
+
+		// If no active text editor, open a new untitled editor first
+		let codeEditor = editorService.activeTextEditorControl as ICodeEditor | undefined;
+		if (!codeEditor || !SnippetController2.get(codeEditor)) {
+			const input = await editorService.openEditor({ resource: undefined });
+			codeEditor = input?.getControl() as ICodeEditor | undefined;
+		}
+
+		if (codeEditor) {
+			codeEditor.focus();
+			SnippetController2.get(codeEditor)?.insert(snippetObj.codeSnippet, {});
+		}
 	}
 }

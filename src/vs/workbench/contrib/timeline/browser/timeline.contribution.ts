@@ -10,6 +10,7 @@ import { IViewsRegistry, IViewDescriptor, Extensions as ViewExtensions } from '.
 import { VIEW_CONTAINER } from '../../files/browser/explorerViewlet.js';
 import { ITimelineService, TimelinePaneId } from '../common/timeline.js';
 import { TimelineHasProviderContext } from '../common/timelineService.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { TimelinePane } from './timelinePane.js';
 import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -36,7 +37,7 @@ export class TimelinePaneDescriptor implements IViewDescriptor {
 	readonly canToggleVisibility = true;
 	readonly hideByDefault = false;
 	readonly canMoveView = true;
-	readonly when = TimelineHasProviderContext;
+	readonly when = ContextKeyExpr.and(TimelineHasProviderContext, PatentIdeContextKeys.Mode.toNegated());
 
 	focusCommand = { id: 'timeline.focus' };
 }

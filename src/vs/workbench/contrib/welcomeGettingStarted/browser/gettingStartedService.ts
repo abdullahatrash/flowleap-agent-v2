@@ -10,6 +10,7 @@ import { Memento } from '../../../common/memento.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ContextKeyExpr, ContextKeyExpression, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IUserDataSyncEnablementService } from '../../../../platform/userDataSync/common/userDataSync.js';
 import { IExtensionDescription } from '../../../../platform/extensions/common/extensions.js';
@@ -331,8 +332,12 @@ export class WalkthroughsService extends Disposable implements IWalkthroughsServ
 				new Promise<string | undefined>(resolve => setTimeout(() => resolve(walkthrough.when), 5000))
 			]);
 
+			// Automatically hide extension walkthroughs in Patent IDE mode
+			const originalWhen = ContextKeyExpr.deserialize(override ?? walkthrough.when) ?? ContextKeyExpr.true();
+			const whenWithPatentIdeFilter = ContextKeyExpr.and(originalWhen, PatentIdeContextKeys.Mode.toNegated()) ?? ContextKeyExpr.true();
+
 			if (this.sessionInstalledExtensions.has(extension.identifier.value.toLowerCase())
-				&& this.contextService.contextMatchesRules(ContextKeyExpr.deserialize(override ?? walkthrough.when) ?? ContextKeyExpr.true())
+				&& this.contextService.contextMatchesRules(whenWithPatentIdeFilter)
 			) {
 				this.sessionInstalledExtensions.delete(extension.identifier.value.toLowerCase());
 				if (index < sectionToOpenIndex && isNewlyInstalled) {

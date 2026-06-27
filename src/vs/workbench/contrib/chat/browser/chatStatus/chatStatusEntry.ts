@@ -28,6 +28,7 @@ import { CHAT_SETUP_ACTION_ID } from '../actions/chatActions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { isWeb } from '../../../../../base/common/platform.js';
 import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { ChatConfiguration } from '../../common/constants.js';
 
 /**
@@ -156,6 +157,12 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
 				return elem;
 			}
 		};
+
+		// FlowLeap Patent IDE: Don't show Copilot status bar in Patent IDE mode
+		const isPatentIdeMode = PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false;
+		if (isPatentIdeMode) {
+			return;
+		}
 
 		this.update();
 

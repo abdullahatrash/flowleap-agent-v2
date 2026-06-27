@@ -46,6 +46,7 @@ import { Action2, IMenu, IMenuService, MenuId, registerAction2 } from '../../../
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { registerAndCreateHistoryNavigationContext } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
@@ -1073,6 +1074,7 @@ registerAction2(class extends ViewAction<Repl> {
 				description: localize2('clearRepl.descriotion', 'Clears all program output from your debug REPL')
 			},
 			f1: true,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			icon: debugConsoleClearAll,
 			menu: [{
 				id: MenuId.ViewTitle,

@@ -18,6 +18,7 @@ import { ILocalizedString } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -44,7 +45,7 @@ class ToggleBreakpointAction extends Action2 {
 			},
 			category: nls.localize2('debugCategory', "Debug"),
 			f1: true,
-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
 			keybinding: {
 				when: ContextKeyExpr.or(EditorContextKeys.editorTextFocus, CONTEXT_DISASSEMBLY_VIEW_FOCUS),
 				primary: KeyCode.F9,
@@ -283,6 +284,7 @@ class ToggleDisassemblyViewSourceCodeAction extends Action2 {
 				description: nls.localize2('toggleDisassemblyViewSourceCodeDescription', 'Shows or hides source code in disassembly')
 			},
 			f1: true,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 		});
 	}
 

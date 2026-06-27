@@ -21,6 +21,7 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { InputFocusedContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { IExtensionHostDebugService } from '../../../../platform/debug/common/extensionHostDebug.js';
 import { IEnvironmentService } from '../../../../platform/environment/common/environment.js';
@@ -991,6 +992,7 @@ registerAction2(class AddConfigurationAction extends Action2 {
 			title: nls.localize2('addConfiguration', "Add Configuration..."),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			menu: {
 				id: MenuId.EditorContent,
 				when: ContextKeyExpr.and(
@@ -1084,7 +1086,7 @@ registerAction2(class ToggleExceptionBreakpointsAction extends Action2 {
 			title: nls.localize2('toggleExceptionBreakpoints', "Toggle Exception Breakpoints"),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
-			precondition: CONTEXT_DEBUGGERS_AVAILABLE
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated())
 		});
 	}
 
