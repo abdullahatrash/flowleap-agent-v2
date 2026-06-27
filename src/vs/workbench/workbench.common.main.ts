@@ -235,6 +235,9 @@ import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
 import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
 
+// FlowLeap (Patent)
+import './contrib/patent/browser/patentAuth.contribution.js';
+
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';
 

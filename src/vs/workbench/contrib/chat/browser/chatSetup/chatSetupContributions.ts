@@ -23,6 +23,7 @@ import { Action2, MenuId, MenuRegistry, registerAction2 } from '../../../../../p
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { IsWebContext } from '../../../../../platform/contextkey/common/contextkeys.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
@@ -231,12 +232,15 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					title: ChatSetupTriggerAction.CHAT_SETUP_ACTION_LABEL,
 					category: CHAT_CATEGORY,
 					f1: true,
-					precondition: ContextKeyExpr.or(
-						ChatContextKeys.Setup.hidden,
-						ChatContextKeys.Setup.disabledInWorkspace,
-						ChatContextKeys.Setup.untrusted,
-						ChatContextKeys.Setup.completed.negate(),
-						ChatContextKeys.Entitlement.canSignUp
+					precondition: ContextKeyExpr.and(
+						ContextKeyExpr.or(
+							ChatContextKeys.Setup.hidden,
+							ChatContextKeys.Setup.disabledInWorkspace,
+							ChatContextKeys.Setup.untrusted,
+							ChatContextKeys.Setup.completed.negate(),
+							ChatContextKeys.Entitlement.canSignUp
+						),
+						PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub "Use AI Features with Copilot" setup command in Patent IDE mode
 					)
 				});
 			}
@@ -373,7 +377,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Setup.disabledInWorkspace.negate(),
 							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available), // hide only when signed in (a default GitHub account is present); still shown while signed out or before the account state resolves, incl. untrusted workspaces — no auth prompt
 							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.signedOut
+							ChatContextKeys.Entitlement.signedOut,
+							PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub Copilot setup CTA in Patent IDE mode; the FlowLeap Accounts CTA (patentAuth.contribution) is the only sign-in entry
 						)
 					}
 				});
@@ -411,6 +416,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ContextKeyExpr.equals(`config.${ChatConfiguration.TitleBarSignInEnabled}`, true),
 							ContextKeyExpr.has('updateTitleBar').negate(),
 							InEditorZenModeContext.negate(),
+							PatentIdeContextKeys.Mode.negate(), // FlowLeap: hide the GitHub title-bar Sign In in Patent IDE mode
 						),
 					}]
 				});
@@ -457,7 +463,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 						ContextKeyExpr.or(
 							ChatContextKeys.Entitlement.canSignUp,
 							ChatContextKeys.Entitlement.planFree
-						)
+						),
+						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub plan-upgrade command, hidden in Patent IDE mode (already inert — no GitHub entitlement)
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -524,7 +531,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Entitlement.planProPlus,
 							ChatContextKeys.Entitlement.planMax,
 							ChatContextKeys.Entitlement.planEdu,
-						)
+						),
+						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub budget command, hidden in Patent IDE mode (already inert — no GitHub entitlement)
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -614,6 +622,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			ChatContextKeys.Setup.hidden.negate(),
 			ChatContextKeys.Setup.disabledInWorkspace.negate(),
 			ChatContextKeys.Setup.completed.negate(),
+			PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub editor context-menu Explain/Fix/Code Review entries in Patent IDE mode
 		);
 
 		MenuRegistry.appendMenuItem(MenuId.EditorContext, {

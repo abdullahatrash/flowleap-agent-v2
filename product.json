@@ -141,6 +141,7 @@
 			"codex-placeholder"
 		],
 		"chat.extensionUnification.enabled": false,
+		"chat.titleBar.signIn.enabled": false,
 		"workbench.sideBar.location": "right",
 		"workbench.secondarySideBar.forceMaximized": true,
 		"workbench.secondarySideBar.defaultVisibility": "maximized"
