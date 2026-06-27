@@ -24,6 +24,9 @@ import { PatentAIAuthService } from './patentAuthService';
 export class PatentAIContribution extends Disposable implements IExtensionContribution {
 	readonly id = 'patentai';
 
+	/** The flow owner. Created in {@link _registerAuthProvider}; the commands drive it. */
+	private _authProvider: FlowLeapAuthenticationProvider | undefined;
+
 	constructor(
 		@ILogService private readonly _logService: ILogService,
 		@IAuthenticationService private readonly _authService: IAuthenticationService,
@@ -64,20 +67,37 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 	}
 
 	/**
-	 * Register FlowLeap as the single authentication provider in VS Code's Accounts menu.
+	 * Register FlowLeap as the single authentication provider in VS Code's Accounts menu. The
+	 * provider OWNS the sign-in flow (ADR 0002); we keep its instance so the commands can drive it.
 	 */
 	private _registerAuthProvider(): void {
+		const provider = FlowLeapAuthenticationProvider.register(this._extensionContext, this._logService);
+		this._authProvider = provider;
+		this._register(provider);
+
+		// Bridge the provider's session changes onto the IAuthenticationService seam so existing
+		// `onDidAuthenticationChange` consumers (BYOK policy, model picker, context keys, …) still
+		// react to FlowLeap sign-in/out now that the provider — not the service — owns the flow.
+		// Only identity changes (added/removed) are bridged, not label-only `{changed}` refreshes,
+		// matching `onDidAuthenticationChange`'s contract. The cast is safe: PatentAIAuthService is
+		// what's registered as IAuthenticationService.
 		const patentAuthService = this._authService as unknown as PatentAIAuthService;
-		this._register(FlowLeapAuthenticationProvider.register(patentAuthService, this._extensionContext));
+		this._register(provider.onDidChangeSessions(e => {
+			if ((e.added?.length ?? 0) > 0 || (e.removed?.length ?? 0) > 0) {
+				patentAuthService.notifyAuthenticationChanged();
+			}
+		}));
+
 		this._logService.info('[Patent AI] FlowLeap authentication provider registered');
 	}
 
 	/**
-	 * Register the sign-in / sign-out / cancel commands.
+	 * Register the sign-in / sign-out / cancel commands. They drive the {@link FlowLeapAuthenticationProvider}
+	 * flow owner. The commands are always registered even if the provider failed to initialize, so
+	 * other surfaces (the chat sign-in affordance, the onboarding gate in #21) never hit a
+	 * "command 'patent-ai.signIn' not found"; a missing provider surfaces as a clear error instead.
 	 */
 	private _registerAuthCommands(): void {
-		const patentAuthService = this._authService as unknown as PatentAIAuthService;
-
 		// Sign In. `options.silent` suppresses toasts: a blocking onboarding overlay dims
 		// notifications, so a toast fired there renders hidden "under the dialog"; such callers
 		// pass silent:true and show their own inline status. Returns the resulting auth state so
@@ -86,18 +106,27 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			this._logService.info('[Patent AI] Sign In command executed');
 			const silent = options?.silent === true;
 
+			const provider = this._authProvider;
+			if (!provider) {
+				this._logService.error('[Patent AI] Sign In: authentication provider unavailable');
+				if (!silent) {
+					vscode.window.showErrorMessage('Sign in is unavailable. Please reload the window and try again.');
+				}
+				return false;
+			}
+
 			// If a valid session already exists, don't force another browser round-trip.
-			await patentAuthService.waitForInitialization();
-			if (patentAuthService.isAuthenticated) {
+			await provider.waitForInitialization();
+			if (provider.isAuthenticated) {
 				this._logService.info('[Patent AI] Already authenticated; skipping browser sign-in');
 				return true;
 			}
 
 			try {
-				await patentAuthService.signIn();
+				await provider.signIn();
 				// Gate the toast on REAL auth state: signIn() can resolve while the stored token
 				// is already invalid (e.g. a dead-on-arrival short-lived token).
-				const authed = patentAuthService.isAuthenticated;
+				const authed = provider.isAuthenticated;
 				if (!silent) {
 					if (authed) {
 						vscode.window.showInformationMessage('Successfully signed in to FlowLeap');
@@ -119,8 +148,13 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		// Sign Out.
 		this._register(vscode.commands.registerCommand('patent-ai.signOut', async (): Promise<void> => {
 			this._logService.info('[Patent AI] Sign Out command executed');
+			const provider = this._authProvider;
+			if (!provider) {
+				this._logService.error('[Patent AI] Sign Out: authentication provider unavailable');
+				return;
+			}
 			try {
-				await patentAuthService.signOut();
+				await provider.signOut();
 				vscode.window.showInformationMessage('Signed out of FlowLeap');
 			} catch (error) {
 				const message = error instanceof Error ? error.message : 'Unknown error';
@@ -134,7 +168,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		// declared in `contributes.commands` / the command palette.
 		this._register(vscode.commands.registerCommand('patent-ai.cancelSignIn', (): void => {
 			this._logService.info('[Patent AI] Cancel Sign-In command executed');
-			patentAuthService.cancelSignIn();
+			this._authProvider?.cancelSignIn();
 		}));
 
 		this._logService.info('[Patent AI] Authentication commands registered');
@@ -157,9 +191,12 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 	 * Log FlowLeap sign-in status once stored-token restore has settled.
 	 */
 	private _logAuthenticationStatus(): void {
-		const patentAuthService = this._authService as unknown as PatentAIAuthService;
-		void patentAuthService.waitForInitialization().then(() => {
-			this._logService.info(`[Patent AI] FlowLeap authentication ${patentAuthService.isAuthenticated ? 'active' : 'inactive (signed out)'}`);
+		const provider = this._authProvider;
+		if (!provider) {
+			return;
+		}
+		void provider.waitForInitialization().then(() => {
+			this._logService.info(`[Patent AI] FlowLeap authentication ${provider.isAuthenticated ? 'active' : 'inactive (signed out)'}`);
 		});
 	}
 }

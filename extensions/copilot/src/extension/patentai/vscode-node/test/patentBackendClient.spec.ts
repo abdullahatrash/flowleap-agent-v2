@@ -5,6 +5,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The client triggers 401 re-auth through `vscode.commands.executeCommand('patent-ai.signIn')`.
+// Capture the call so the re-auth test can assert it (the `vscode` test alias has no `commands`).
+const { executeCommandMock } = vi.hoisted(() => ({ executeCommandMock: vi.fn(async () => undefined) }));
+vi.mock('vscode', () => ({ commands: { executeCommand: executeCommandMock } }));
+
 // Keep the vscode-backed config dependency out of the unit; the client reads apiUrl from here.
 vi.mock('../configService', () => ({
 	getPatentAIConfig: () => ({
@@ -18,7 +23,6 @@ vi.mock('../configService', () => ({
 
 import { AuthRequiredError, PatentBackendClient, PatentBackendError, SubscriptionRequiredError } from '../patentBackendClient';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
-import type { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import type { IEnvService } from '../../../../platform/env/common/envService';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import { FetchOptions, HeadersImpl, IFetcherService, isAbortError, Response } from '../../../../platform/networking/common/fetcherService';
@@ -54,11 +58,6 @@ function makeEnvService() {
 	return { service: { openExternal } as unknown as IEnvService, openExternal };
 }
 
-function makeAuthService() {
-	const signIn = vi.fn(async () => { /* noop */ });
-	return { service: { signIn } as unknown as IAuthenticationService, signIn };
-}
-
 /**
  * A real (no `any`-cast) {@link IFetcherService} whose `fetch` is scripted per test. Members the
  * client never exercises are no-ops/throwers — an acceptable test fake that still implements the
@@ -88,9 +87,8 @@ function makeFetcherService(impl: FetchImpl): IFetcherService {
 function makeClient(fetchImpl: FetchImpl) {
 	const notification = makeNotificationService();
 	const env = makeEnvService();
-	const auth = makeAuthService();
-	const client = new PatentBackendClient(makeLogService(), notification.service, env.service, auth.service, makeFetcherService(fetchImpl));
-	return { client, notification, env, auth };
+	const client = new PatentBackendClient(makeLogService(), notification.service, env.service, makeFetcherService(fetchImpl));
+	return { client, notification, env };
 }
 
 /** Stub CancellationToken that is never cancelled. */
@@ -353,7 +351,7 @@ describe('auth gate (401)', () => {
 	});
 
 	it('shows the "Sign In" warning and starts sign-in when accepted — for any 401, even a non-JSON body', async () => {
-		const { client, notification, auth } = makeClient(async () => makeResponse(401, 'not json'));
+		const { client, notification } = makeClient(async () => makeResponse(401, 'not json'));
 		notification.showWarningMessage.mockResolvedValueOnce(SIGN_IN_ACTION as never);
 
 		const thrown = await captureThrow(() => client.get('/citation-search/EP-1-A1', makeToken()));
@@ -361,7 +359,9 @@ describe('auth gate (401)', () => {
 
 		expect(thrown).toBeInstanceOf(AuthRequiredError);
 		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.any(String), SIGN_IN_ACTION);
-		expect(auth.signIn).toHaveBeenCalledTimes(1);
+		// Re-auth is triggered through the FlowLeap provider's sign-in command (decoupled from the
+		// concrete provider/auth-service type).
+		expect(executeCommandMock).toHaveBeenCalledWith('patent-ai.signIn');
 	});
 
 	it('does not let a throwing notification mask the AuthRequiredError', async () => {

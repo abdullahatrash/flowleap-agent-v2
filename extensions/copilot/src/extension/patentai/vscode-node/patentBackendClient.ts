@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
+import * as vscode from 'vscode';
 import { IEnvService } from '../../../platform/env/common/envService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService, Response } from '../../../platform/networking/common/fetcherService';
@@ -104,19 +104,6 @@ interface AuthRequiredInfo {
 	readonly message: string;
 }
 
-/**
- * Minimal structural contract for a service that can start the FlowLeap sign-in flow. Lets the
- * client trigger re-auth without depending on the concrete `PatentAIAuthService`, and degrades to
- * a no-op when the active {@link IAuthenticationService} can't sign in (e.g. scenario automation).
- */
-interface IReauthCapable {
-	signIn(): Promise<void>;
-}
-
-function isReauthCapable(service: object): service is IReauthCapable {
-	return typeof (service as Partial<IReauthCapable>).signIn === 'function';
-}
-
 // ── Implementation ──────────────────────────────────────────────────────────────
 
 const SIGN_IN_ACTION = 'Sign In';
@@ -126,10 +113,11 @@ const START_TRIAL_ACTION = 'Start Free Trial';
  * DI implementation of {@link IPatentBackendClient}.
  *
  * Replaces the old fork's module-global UX hooks (`setSubscriptionRequiredHandler` &c.) with
- * constructor-injected services: the `402`/`401` gating UX is driven through {@link INotificationService},
- * {@link IEnvService} and {@link IAuthenticationService}, never module singletons. The bearer token is
- * read from the {@link getPatentAccessToken} registry seam (not the injected auth service) so the
- * request path stays decoupled from auth-service internals.
+ * constructor-injected services: the `402`/`401` gating UX is driven through {@link INotificationService}
+ * and {@link IEnvService}, never module singletons. The bearer token is read from the
+ * {@link getPatentAccessToken} registry seam so the request path stays decoupled from the auth
+ * provider. Re-auth on `401` is triggered through the `patent-ai.signIn` command — owned by the
+ * FlowLeap auth provider — so the client never depends on the auth provider's concrete type.
  */
 export class PatentBackendClient implements IPatentBackendClient {
 	readonly _serviceBrand: undefined;
@@ -138,7 +126,6 @@ export class PatentBackendClient implements IPatentBackendClient {
 		@ILogService private readonly _logService: ILogService,
 		@INotificationService private readonly _notificationService: INotificationService,
 		@IEnvService private readonly _envService: IEnvService,
-		@IAuthenticationService private readonly _authService: IAuthenticationService,
 		@IFetcherService private readonly _fetcherService: IFetcherService,
 	) { }
 
@@ -168,7 +155,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 		if (method === 'POST') {
 			headers['Content-Type'] = 'application/json';
 		}
-		// Bearer token comes from the registry seam (PatentAIAuthService registers its accessor there),
+		// Bearer token comes from the registry seam (FlowLeapAuthenticationProvider registers its accessor there),
 		// keeping the request path decoupled from the auth service. No apiKey fallback exists — FlowLeap
 		// is BYOK for inference and the backend is the Clerk-gated paid path (ADR 0002/0004).
 		const accessToken = getPatentAccessToken();
@@ -265,8 +252,11 @@ export class PatentBackendClient implements IPatentBackendClient {
 
 	private async _promptAuthRequired(info: AuthRequiredInfo): Promise<void> {
 		const choice = await this._notificationService.showWarningMessage(info.message, SIGN_IN_ACTION);
-		if (choice === SIGN_IN_ACTION && isReauthCapable(this._authService)) {
-			await this._authService.signIn();
+		if (choice === SIGN_IN_ACTION) {
+			// Trigger interactive sign-in through the command owned by the FlowLeap auth provider.
+			// Decoupled via the command id so the client never depends on the provider/auth-service
+			// concrete type (and this survives the canonical `flowleap.signIn` alias added later).
+			await vscode.commands.executeCommand('patent-ai.signIn');
 		}
 	}
 }
