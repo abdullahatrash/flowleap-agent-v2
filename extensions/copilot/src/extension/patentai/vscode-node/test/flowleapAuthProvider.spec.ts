@@ -35,13 +35,25 @@ vi.mock('vscode', () => {
 		}
 	}
 	return {
-		Uri: { parse: (value: string) => value },
+		Uri: {
+			parse: (value: string) => value,
+			// Mirrors `vscode.Uri.from` for the callback construction: authority is already
+			// lower-cased by the provider, so a plain template is faithful here.
+			from: ({ scheme, authority, path }: { scheme: string; authority: string; path: string }) => ({
+				toString: () => `${scheme}://${authority}${path}`,
+			}),
+		},
 		window: {
 			showWarningMessage: showWarningMessageMock,
 			showInformationMessage: showInformationMessageMock,
 			showErrorMessage: showErrorMessageMock,
 		},
-		env: { openExternal: openExternalMock },
+		env: {
+			openExternal: openExternalMock,
+			uriScheme: 'flowleap',
+			// Desktop: identity rewrite. (Remote/web rewrites are out of scope — see provider.)
+			asExternalUri: async (u: { toString: () => string }) => u,
+		},
 		EventEmitter: FakeEventEmitter,
 	};
 });
@@ -52,7 +64,6 @@ vi.mock('../configService', () => ({
 		apiUrl: 'https://api.test/v1',
 		clientId: 'patent-ai-agent',
 		authUrl: 'https://api.test/oauth/authorize',
-		redirectUri: 'flowleap://github.copilot-chat/callback',
 		frontendUrl: 'https://flowleap.co',
 	}),
 }));
@@ -102,6 +113,9 @@ function makeExtensionContext(seed?: { token: string; expiresAt: number }) {
 			delete: async (key: string) => { store.delete(key); },
 		},
 		subscriptions: [],
+		// Drives the `asExternalUri` callback authority — the provider lower-cases it to
+		// `github.copilot-chat`.
+		extension: { id: 'GitHub.copilot-chat' },
 	} as unknown as import('vscode').ExtensionContext;
 }
 
@@ -223,9 +237,12 @@ describe('FlowLeapAuthenticationProvider OAuth callback handling', () => {
 		const signIn = provider.signIn();
 		await tick();
 
-		// The provider generated a random state and put it in the opened auth URL.
+		// The provider generated a random state and put it in the opened auth URL, alongside the
+		// `asExternalUri`-derived callback (desktop: scheme + lower-cased extension id + /callback).
 		const openedUrl = String(openExternalMock.mock.calls[0][0]);
-		const state = new URL(openedUrl).searchParams.get('state');
+		const params = new URL(openedUrl).searchParams;
+		expect(params.get('redirect_uri')).toBe('flowleap://github.copilot-chat/callback');
+		const state = params.get('state');
 		handleCallback(`token=${makeJwt({ sub: 'u1', email: 'user@flowleap.co' })}&state=${state}&expires_in=2592000`);
 
 		await expect(signIn).resolves.toBeUndefined();

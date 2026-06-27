@@ -207,10 +207,23 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Store state for callback validation
 		this._pendingState = state;
 
+		// Derive the callback deep link from the running extension's id + product URI scheme, routed
+		// through `asExternalUri` (the idiomatic VS Code pattern). On desktop this yields
+		// `flowleap://github.copilot-chat/callback`, matching the `/callback` route and the backend
+		// allow-list. The authority MUST be lower-cased: `context.extension.id` is `GitHub.copilot-chat`
+		// but URI authorities parse/route lower-cased; `Uri.from` normalizes it anyway, but we
+		// lower-case explicitly to make the intent — and the emitted string — unambiguous.
+		// NOTE: `asExternalUri` rewrites the URI under remote/Codespaces/web, and the backend +
+		// website use exact-string allow-listing (Issue 3), so sign-in is desktop-only for now
+		// (PRD 0002 Resolved Decisions); remote/web is explicitly out of scope.
+		const callbackUri = (await vscode.env.asExternalUri(
+			vscode.Uri.from({ scheme: vscode.env.uriScheme, authority: this._context.extension.id.toLowerCase(), path: '/callback' })
+		)).toString();
+
 		// Build auth URL - backend will redirect to website for Clerk sign-in
 		const authUrl = new URL(config.authUrl);
 		authUrl.searchParams.set('client_id', config.clientId);
-		authUrl.searchParams.set('redirect_uri', config.redirectUri);
+		authUrl.searchParams.set('redirect_uri', callbackUri);
 		authUrl.searchParams.set('response_type', 'token');
 		authUrl.searchParams.set('state', state);
 

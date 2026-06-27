@@ -16,7 +16,6 @@ vi.mock('../configService', () => ({
 		apiUrl: 'https://api.test/v1',
 		clientId: 'patent-ai-agent',
 		authUrl: 'https://api.test/oauth/authorize',
-		redirectUri: 'flowleap://github.copilot-chat/callback',
 		frontendUrl: 'https://flowleap.co',
 	}),
 }));

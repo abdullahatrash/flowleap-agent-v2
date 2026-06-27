@@ -16,12 +16,6 @@ export interface PatentAIConfig {
 	clientId: string;
 	/** Authorize URL the system browser opens for Clerk sign-in (derived from {@link apiUrl}). */
 	authUrl: string;
-	/**
-	 * Deep link the backend redirects to with the Clerk token. Its authority MUST be the
-	 * id of the extension that registers the `flowleap://` URI handler, so VS Code routes
-	 * the callback back to us (see `configService.getPatentAIConfig`).
-	 */
-	redirectUri: string;
 	/** Frontend URL for dashboard / pricing links (separate from the API host). */
 	frontendUrl: string;
 }

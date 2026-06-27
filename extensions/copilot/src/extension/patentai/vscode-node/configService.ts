@@ -6,12 +6,6 @@
 import * as vscode from 'vscode';
 import { PatentAIConfig } from '../common/config';
 
-// Authority of the `flowleap://…/callback` deep link. MUST equal the id of the extension
-// that registers the URI handler — i.e. this built-in Copilot Chat extension — so VS Code
-// routes the OAuth callback back to PatentAIAuthService. (URI authorities are lower-cased on
-// parse and extension-id matching is case-insensitive, so the lower-cased form is used.)
-const CALLBACK_EXTENSION_ID = 'github.copilot-chat';
-
 /**
  * Resolve the FlowLeap (Patent AI) auth configuration from environment and VS Code settings.
  * Environment variables take precedence over settings.
@@ -39,8 +33,8 @@ export function getPatentAIConfig(): PatentAIConfig {
 		apiUrl,
 		clientId: 'patent-ai-agent',
 		// Redirects to the website for Clerk sign-in, then back with the Clerk template token.
+		// The callback deep link itself is derived in the auth provider via `asExternalUri`.
 		authUrl: `${backendBaseUrl}/oauth/authorize`,
-		redirectUri: `${vscode.env.uriScheme}://${CALLBACK_EXTENSION_ID}/callback`,
 		frontendUrl,
 	};
 }
