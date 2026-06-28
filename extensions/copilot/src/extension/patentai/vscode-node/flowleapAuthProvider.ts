@@ -207,18 +207,21 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Store state for callback validation
 		this._pendingState = state;
 
-		// Derive the callback deep link from the running extension's id + product URI scheme, routed
-		// through `asExternalUri` (the idiomatic VS Code pattern). On desktop this yields
-		// `flowleap://github.copilot-chat/callback`, matching the `/callback` route and the backend
-		// allow-list. The authority MUST be lower-cased: `context.extension.id` is `GitHub.copilot-chat`
-		// but URI authorities parse/route lower-cased; `Uri.from` normalizes it anyway, but we
-		// lower-case explicitly to make the intent — and the emitted string — unambiguous.
-		// NOTE: `asExternalUri` rewrites the URI under remote/Codespaces/web, and the backend +
-		// website use exact-string allow-listing (Issue 3), so sign-in is desktop-only for now
-		// (PRD 0002 Resolved Decisions); remote/web is explicitly out of scope.
-		const callbackUri = (await vscode.env.asExternalUri(
-			vscode.Uri.from({ scheme: vscode.env.uriScheme, authority: this._context.extension.id.toLowerCase(), path: '/callback' })
-		)).toString();
+		// Build the canonical callback deep link from the product URI scheme + the extension id. It
+		// MUST exactly equal the backend allow-list entry `flowleap://github.copilot-chat/callback`
+		// (oauth.ts REGISTERED_CLIENTS does EXACT-string matching). The authority is the lower-cased
+		// extension id (`GitHub.copilot-chat` -> `github.copilot-chat`); `.toString(true)` skips
+		// percent-encoding so `URLSearchParams.set` below encodes it exactly once.
+		//
+		// We deliberately do NOT route through `vscode.env.asExternalUri`: on desktop it appends a
+		// `?windowId=N` query, which both double-encodes (`...callback%253FwindowId%253D1`) AND breaks
+		// the backend's exact-match allow-list -> "Invalid redirect_uri for this client". Sign-in is
+		// desktop-only (PRD 0002), so the remote/web URI rewriting asExternalUri offers is not needed.
+		const callbackUri = vscode.Uri.from({
+			scheme: vscode.env.uriScheme,
+			authority: this._context.extension.id.toLowerCase(),
+			path: '/callback'
+		}).toString(true);
 
 		// Build auth URL - backend will redirect to website for Clerk sign-in
 		const authUrl = new URL(config.authUrl);
@@ -462,7 +465,13 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 * {@link getSessions} — local-only sign-out per ADR 0006 (no backend revoke).
 	 */
 	private async _clearToken(): Promise<void> {
-		const removed = this._currentSession;
+		// Report a `{removed}` session whenever a token existed — even if `_currentSession` was never
+		// materialized. `_currentSession` is built lazily by `getSessions()`, but `_initializeAuth`
+		// restores the TOKEN on startup without building the session. Without this, a sign-out before
+		// any `getSessions()` call would fire NO event, leaving the `flowleap.signedIn` context key
+		// (so the palette Sign In/Sign Out gating) and the Accounts menu stuck "signed in". Synthesize
+		// the session from the token so listeners always re-evaluate auth state.
+		const removed = this._currentSession ?? (this._clerkToken ? this._buildSession(this._clerkToken) : undefined);
 
 		this._clerkToken = undefined;
 		this._tokenExpiresAt = 0;

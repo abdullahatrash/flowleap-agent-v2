@@ -159,17 +159,48 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			return false;
 		}
 
-		return triggerFlowleapSignIn({
-			waitForInit: () => provider.waitForInitialization(),
-			isAuthenticated: () => provider.isAuthenticated,
-			// Native path: VS Code owns dedup, session persistence, and the Accounts badge; the
-			// provider's `createSession` runs the deep-link flow. `trustedExtensionAuthAccess`
-			// (product.json) pre-authorizes this extension so no consent modal is shown.
-			getSession: () => Promise.resolve(vscode.authentication.getSession(FlowLeapAuthenticationProvider.ID, [], { createIfNone: true })),
-			showInfo: message => void vscode.window.showInformationMessage(message),
-			showError: message => void vscode.window.showErrorMessage(message),
-			log: message => this._logService.info(message),
-		}, silent);
+		// Onboarding (silent) path: keep the gated helper. It must NOT re-open the browser when a valid
+		// session already exists, suppresses its own toasts (the blocking overlay shows inline status),
+		// and bounds the init wait so a stalled keychain read can't hang it.
+		if (silent) {
+			return triggerFlowleapSignIn({
+				waitForInit: () => Promise.race([
+					provider.waitForInitialization(),
+					new Promise<void>(resolve => setTimeout(resolve, 1500)),
+				]),
+				isAuthenticated: () => provider.isAuthenticated,
+				getSession: async () => {
+					await provider.signIn();
+					return (await provider.getSessions())[0];
+				},
+				showInfo: () => { /* silent: onboarding shows its own inline status */ },
+				showError: () => { /* silent */ },
+				log: message => this._logService.info(message),
+			}, true);
+		}
+
+		// Explicit user invocation (command palette): drive the provider's deep-link flow DIRECTLY —
+		// the same path the proven-working Accounts/`createSession` flow uses, which calls
+		// `provider.signIn()` -> `openExternal`. We deliberately SKIP the `isAuthenticated`
+		// short-circuit and the native `getSession` indirection: when the user explicitly clicks
+		// "Sign In" we ALWAYS open the browser (a stale/unusable restored token must not silently
+		// suppress it — the symptom that made the palette command appear dead). The provider's
+		// in-flight dedup prevents a duplicate browser open, and a completed flow overwrites any
+		// stale token.
+		try {
+			this._logService.info('[Patent AI] Sign In: opening browser via provider.signIn()');
+			await provider.signIn();
+			const authed = provider.isAuthenticated;
+			if (authed) {
+				vscode.window.showInformationMessage('Successfully signed in to FlowLeap');
+			}
+			return authed;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unknown error';
+			this._logService.error(`[Patent AI] Sign in failed: ${message}`);
+			vscode.window.showErrorMessage(`Sign in failed: ${message}`);
+			return false;
+		}
 	}
 
 	/**

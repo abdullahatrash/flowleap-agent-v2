@@ -286,12 +286,17 @@
 	height: 152px;
 	border-radius: 0;
 	border: none;
-	background: transparent;
 	box-shadow: none;
-	background-image: url('../../../../browser/media/code-icon.svg');
-	background-repeat: no-repeat;
-	background-position: center center;
-	background-size: 148px;
+	/* FlowLeap brand mark — masked so it recolors to a theme-aware accent and stays visible on light & dark. */
+	background-color: var(--vscode-textLink-foreground, #3b6fed);
+	-webkit-mask-image: url('./flowleap-logo.svg');
+	mask-image: url('./flowleap-logo.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center center;
+	mask-position: center center;
+	-webkit-mask-size: 120px;
+	mask-size: 120px;
 }
 
 .onboarding-a-signin-content {
@@ -501,6 +506,15 @@
 	padding: 8px 0;
 	font-size: 13px;
 	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-signin-error {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 0;
+	font-size: 13px;
+	color: var(--vscode-errorForeground);
 }
 
 .onboarding-a-provider-mark {
@@ -1044,7 +1058,8 @@
 	}
 
 	.onboarding-a-signin-brand-icon {
-		background-size: 78px;
+		-webkit-mask-size: 78px;
+		mask-size: 78px;
 	}
 
 	.onboarding-a-signin-content {

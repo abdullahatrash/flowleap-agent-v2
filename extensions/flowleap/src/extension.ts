@@ -487,21 +487,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
-	// Sign in — placeholder alias (ADR 0002).
-	// The single Clerk-backed `flowleap` auth provider lives in the copilot extension's
-	// patent-ai service and is surfaced via `patent-ai.signIn`. Until the auth-consolidation
-	// layer lands that command, this shell registers no provider and runs no OAuth: it delegates
-	// when the command exists and otherwise tells the user sign-in is not wired up yet.
-	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.signIn', async () => {
-			const commands = await vscode.commands.getCommands(true);
-			if (commands.includes('patent-ai.signIn')) {
-				await vscode.commands.executeCommand('patent-ai.signIn');
-				return;
-			}
-			vscode.window.showInformationMessage('FlowLeap sign-in will be available once authentication is configured.');
-		})
-	);
+	// Sign in is owned end-to-end by the copilot extension's `flowleap` auth provider, which
+	// registers the canonical `flowleap.signIn` command (and the `patent-ai.signIn` alias) and runs
+	// the Clerk deep-link OAuth flow (ADR 0002). The UI shell must NOT register `flowleap.signIn`:
+	// a second registration of the same id throws "already exists", which — depending on activation
+	// order — aborts the copilot registration and leaves sign-in bound to a dead no-op. The shell
+	// just invokes the command (see `flowleap.showCurrentUser` below).
 
 	// Show current user — reads sign-in state from the single `flowleap` provider (ADR 0002).
 	// A silent (createIfNone: false) request returns undefined when no provider is registered yet,
