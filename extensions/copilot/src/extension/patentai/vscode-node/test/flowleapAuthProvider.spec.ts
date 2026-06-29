@@ -113,9 +113,8 @@ function makeExtensionContext(seed?: { token: string; expiresAt: number }) {
 			delete: async (key: string) => { store.delete(key); },
 		},
 		subscriptions: [],
-		// Drives the `asExternalUri` callback authority — the provider lower-cases it to
-		// `github.copilot-chat`.
-		extension: { id: 'GitHub.copilot-chat' },
+		// Drives the callback authority used by the backend redirect_uri allow-list.
+		extension: { id: 'flowleap.patent-ai' },
 	} as unknown as import('vscode').ExtensionContext;
 }
 
@@ -238,10 +237,10 @@ describe('FlowLeapAuthenticationProvider OAuth callback handling', () => {
 		await tick();
 
 		// The provider generated a random state and put it in the opened auth URL, alongside the
-		// `asExternalUri`-derived callback (desktop: scheme + lower-cased extension id + /callback).
+		// canonical callback (desktop: scheme + lower-cased extension id + /callback).
 		const openedUrl = String(openExternalMock.mock.calls[0][0]);
 		const params = new URL(openedUrl).searchParams;
-		expect(params.get('redirect_uri')).toBe('flowleap://github.copilot-chat/callback');
+		expect(params.get('redirect_uri')).toBe('flowleap://flowleap.patent-ai/callback');
 		const state = params.get('state');
 		handleCallback(`token=${makeJwt({ sub: 'u1', email: 'user@flowleap.co' })}&state=${state}&expires_in=2592000`);
 

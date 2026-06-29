@@ -12,6 +12,15 @@ interface ChatMode {
 	icon: string;
 }
 
+/** A quick-pick entry that carries a {@link ChatMode}, so mode entries can be discriminated without the `in` operator. */
+interface ChatModeQuickPickItem extends vscode.QuickPickItem {
+	readonly mode: ChatMode;
+}
+
+function isChatModeQuickPickItem(item: vscode.QuickPickItem): item is ChatModeQuickPickItem {
+	return (item as Partial<ChatModeQuickPickItem>).mode !== undefined;
+}
+
 const CHAT_MODES: ChatMode[] = [
 	{
 		id: 'default',
@@ -98,7 +107,7 @@ export class ChatBarController implements vscode.Disposable {
 				label: '',
 				kind: vscode.QuickPickItemKind.Separator
 			},
-			...CHAT_MODES.map(mode => ({
+			...CHAT_MODES.map((mode): ChatModeQuickPickItem => ({
 				label: `${mode.icon} ${mode.label}`,
 				description: mode.id === this.currentMode.id ? '(current)' : '',
 				detail: mode.description,
@@ -143,13 +152,13 @@ export class ChatBarController implements vscode.Disposable {
 
 			if (label.includes('Start New Chat')) {
 				quickPick.hide();
-				await vscode.commands.executeCommand('workbench.panel.chatSidebar.copilot');
+				await vscode.commands.executeCommand('flowleap.chatInput.focus');
 			} else if (label.startsWith('$(search) Ask:')) {
 				const question = quickPick.value;
 				quickPick.hide();
 				await this.askQuestion(question);
-			} else if ('mode' in selected) {
-				const mode = (selected as any).mode as ChatMode;
+			} else if (isChatModeQuickPickItem(selected)) {
+				const mode = selected.mode;
 				this.setMode(mode.id);
 				quickPick.hide();
 				vscode.window.showInformationMessage(`Chat mode set to: ${mode.label}`);
@@ -161,8 +170,8 @@ export class ChatBarController implements vscode.Disposable {
 	}
 
 	private async askQuestion(question: string): Promise<void> {
-		// Open the chat panel
-		await vscode.commands.executeCommand('workbench.panel.chatSidebar.copilot');
+		// Open the FlowLeap chat panel.
+		await vscode.commands.executeCommand('flowleap.chatInput.focus');
 
 		// Note: In a real implementation, we would send the question to the chat
 		// This requires integration with the VS Code Chat API
@@ -220,8 +229,8 @@ export class ChatInputPanel implements vscode.WebviewViewProvider {
 	}
 
 	private async handleSubmit(_message: string, _mode: string): Promise<void> {
-		// Open chat and send message
-		await vscode.commands.executeCommand('workbench.panel.chatSidebar.copilot');
+		// Open FlowLeap chat and send message.
+		await vscode.commands.executeCommand('flowleap.chatInput.focus');
 		// In real implementation, send the message
 	}
 

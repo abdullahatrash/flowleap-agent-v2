@@ -8,6 +8,7 @@ import { commands, env, ExtensionContext, ExtensionMode, l10n as vscodeL10n } fr
 import { isScenarioAutomation } from '../../../platform/env/common/envService';
 import { isProduction } from '../../../platform/env/common/packagejson';
 import { IIgnoreService } from '../../../platform/ignore/common/ignoreService';
+import { ILogService } from '../../../platform/log/common/logService';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ChatExtGlobalPerfMark, markChatExtGlobal } from '../../../util/common/performance';
 import { IInstantiationServiceBuilder, InstantiationServiceBuilder } from '../../../util/common/services';
@@ -64,10 +65,18 @@ export async function baseActivate(configuration: IExtensionActivationConfigurat
 
 	await instantiationService.invokeFunction(async accessor => {
 		const expService = accessor.get(IExperimentationService);
+		const logService = accessor.get(ILogService);
 
-		// Await intialization of exp service. This ensure cache is fresh.
-		// It will then auto refresh every 30 minutes after that.
-		await expService.hasTreatments();
+		// Await initialization of the experimentation service so its cache is fresh (it then auto-refreshes
+		// every 30 minutes). Bounded by a 1000ms timeout: in BYOK / CAPI-disabled builds the treatment
+		// endpoint may be unreachable, and an unbounded await here would stall extension activation.
+		await Promise.race([
+			expService.hasTreatments(),
+			new Promise<void>(resolve => setTimeout(() => {
+				logService.warn('Experimentation treatments did not initialize within 1000ms; continuing extension activation');
+				resolve();
+			}, 1000))
+		]);
 
 		// THIS is awaited because some contributions can block activation
 		// via `IExtensionContribution#activationBlocker`

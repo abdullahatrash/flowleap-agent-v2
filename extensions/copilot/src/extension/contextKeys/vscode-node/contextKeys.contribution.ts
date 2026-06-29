@@ -20,7 +20,7 @@ import { isClientBYOKAllowed } from '../../byok/common/byokProvider';
 import { EXTENSION_ID } from '../../common/constants';
 
 const welcomeViewContextKeys = {
-	Activated: 'github.copilot-chat.activated',
+	Activated: 'flowleap.patent-ai.activated',
 	Offline: 'github.copilot.offline',
 	IndividualDisabled: 'github.copilot.interactiveSession.individual.disabled',
 	IndividualExpired: 'github.copilot.interactiveSession.individual.expired',
@@ -147,7 +147,7 @@ export class ContextKeysContribution extends Disposable {
 				// Expected in BYOK / air-gapped flows where the user is not signed in to GitHub.
 				this._logService.debug(SESSION_LOGIN_MESSAGE);
 			} else {
-				this._logService.error(`GitHub Copilot could not connect to server. Extension activation failed: "${reason}"`);
+				this._logService.error(`Patent AI could not connect to server. Extension activation failed: "${reason}"`);
 			}
 		}
 

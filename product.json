@@ -38,22 +38,22 @@
 	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
 	"builtInExtensions": [],
 	"defaultChatAgent": {
-		"extensionId": "GitHub.copilot",
-		"chatExtensionId": "GitHub.copilot-chat",
-		"chatExtensionOutputId": "GitHub.copilot-chat.GitHub Copilot Chat.log",
+		"extensionId": "flowleap.patent-ai",
+		"chatExtensionId": "flowleap.patent-ai",
+		"chatExtensionOutputId": "flowleap.patent-ai.Patent AI.log",
 		"chatExtensionOutputExtensionStateCommand": "github.copilot.debug.extensionState",
-		"documentationUrl": "https://aka.ms/github-copilot-overview",
-		"termsStatementUrl": "https://aka.ms/github-copilot-terms-statement",
-		"privacyStatementUrl": "https://aka.ms/github-copilot-privacy-statement",
-		"skusDocumentationUrl": "https://aka.ms/github-copilot-plans",
-		"publicCodeMatchesUrl": "https://aka.ms/github-copilot-match-public-code",
-		"managePlanUrl": "https://aka.ms/github-copilot-manage-plan",
-		"upgradePlanUrl": "https://aka.ms/github-copilot-upgrade-plan",
-		"signUpUrl": "https://aka.ms/github-sign-up",
+		"documentationUrl": "",
+		"termsStatementUrl": "",
+		"privacyStatementUrl": "",
+		"skusDocumentationUrl": "",
+		"publicCodeMatchesUrl": "",
+		"managePlanUrl": "",
+		"upgradePlanUrl": "",
+		"signUpUrl": "",
 		"provider": {
 			"default": {
-				"id": "github",
-				"name": "GitHub"
+				"id": "flowleap",
+				"name": "FlowLeap"
 			},
 			"enterprise": {
 				"id": "github-enterprise",
@@ -68,14 +68,13 @@
 				"name": "Apple"
 			}
 		},
-		"providerExtensionId": "vscode.github-authentication",
+		"providerExtensionId": "flowleap.patent-ai",
 		"providerUriSetting": "github-enterprise.uri",
 		"providerScopes": [
 			[
-				"read:user",
-				"user:email",
-				"repo",
-				"workflow"
+				"openid",
+				"profile",
+				"email"
 			],
 			[
 				"user:email"
@@ -84,32 +83,32 @@
 				"read:user"
 			]
 		],
-		"entitlementUrl": "https://api.github.com/copilot_internal/user",
-		"entitlementSignupLimitedUrl": "https://api.github.com/copilot_internal/subscribe_limited_user",
-		"chatQuotaExceededContext": "github.copilot.chat.quotaExceeded",
-		"completionsQuotaExceededContext": "github.copilot.completions.quotaExceeded",
-		"walkthroughCommand": "github.copilot.open.walkthrough",
-		"completionsMenuCommand": "github.copilot.toggleStatusMenu",
-		"chatRefreshTokenCommand": "github.copilot.refreshToken",
-		"generateCommitMessageCommand": "github.copilot.git.generateCommitMessage",
-		"resolveMergeConflictsCommand": "github.copilot.git.resolveMergeConflicts",
-		"completionsAdvancedSetting": "github.copilot.advanced",
-		"completionsEnablementSetting": "github.copilot.enable",
-		"nextEditSuggestionsSetting": "github.copilot.nextEditSuggestions.enabled",
-		"tokenEntitlementUrl": "https://api.github.com/copilot_internal/v2/token",
-		"mcpRegistryDataUrl": "https://api.github.com/copilot/mcp_registry",
-		"managedSettingsUrl": "https://api.github.com/copilot_internal/managed_settings"
+		"entitlementUrl": "",
+		"entitlementSignupLimitedUrl": "",
+		"chatQuotaExceededContext": "",
+		"completionsQuotaExceededContext": "",
+		"walkthroughCommand": "",
+		"completionsMenuCommand": "",
+		"chatRefreshTokenCommand": "",
+		"generateCommitMessageCommand": "",
+		"resolveMergeConflictsCommand": "",
+		"completionsAdvancedSetting": "",
+		"completionsEnablementSetting": "",
+		"nextEditSuggestionsSetting": "",
+		"tokenEntitlementUrl": "",
+		"mcpRegistryDataUrl": "",
+		"managedSettingsUrl": ""
 	},
 	"trustedExtensionAuthAccess": {
 		"github": [
-			"GitHub.copilot-chat"
+			"flowleap.patent-ai"
 		],
 		"github-enterprise": [
-			"GitHub.copilot-chat"
+			"flowleap.patent-ai"
 		],
 		"flowleap": [
 			"vscode.flowleap",
-			"GitHub.copilot-chat"
+			"flowleap.patent-ai"
 		]
 	},
 	"configurationDefaults": {
@@ -222,7 +221,7 @@
 		}
 	],
 	"builtInExtensionsEnabledWithAutoUpdates": [
-		"GitHub.copilot-chat"
+		"flowleap.patent-ai"
 	],
 	"sessionsWindowAllowedExtensions": [],
 	"voiceWsUrl": "wss://falcon-caas.mai.microsoft.com/voice-code/api/v1/realtime/voice"

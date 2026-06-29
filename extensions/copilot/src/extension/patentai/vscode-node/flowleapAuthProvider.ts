@@ -208,9 +208,10 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		this._pendingState = state;
 
 		// Build the canonical callback deep link from the product URI scheme + the extension id. It
-		// MUST exactly equal the backend allow-list entry `flowleap://github.copilot-chat/callback`
+		// MUST exactly equal a backend allow-list entry, for example
+		// `flowleap://flowleap.patent-ai/callback`
 		// (oauth.ts REGISTERED_CLIENTS does EXACT-string matching). The authority is the lower-cased
-		// extension id (`GitHub.copilot-chat` -> `github.copilot-chat`); `.toString(true)` skips
+		// extension id (`flowleap.patent-ai`); `.toString(true)` skips
 		// percent-encoding so `URLSearchParams.set` below encodes it exactly once.
 		//
 		// We deliberately do NOT route through `vscode.env.asExternalUri`: on desktop it appends a
