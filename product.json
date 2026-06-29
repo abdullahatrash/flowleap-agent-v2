@@ -40,6 +40,7 @@
 	"defaultChatAgent": {
 		"extensionId": "flowleap.patent-ai",
 		"chatExtensionId": "flowleap.patent-ai",
+		"alwaysEnabled": true,
 		"chatExtensionOutputId": "flowleap.patent-ai.Patent AI.log",
 		"chatExtensionOutputExtensionStateCommand": "github.copilot.debug.extensionState",
 		"documentationUrl": "",
@@ -113,6 +114,7 @@
 	},
 	"configurationDefaults": {
 		"workbench.colorTheme": "Light Modern",
+		"security.workspace.trust.enabled": false,
 		"workbench.openInAgents.enabled": false,
 		"chat.experimental.incrementalRendering.enabled": true,
 		"chat.experimental.incrementalRendering.animationStyle": "fade",

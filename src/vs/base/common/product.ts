@@ -402,6 +402,14 @@ export interface IDefaultChatAgent {
 	readonly extensionId: string;
 	readonly chatExtensionId: string;
 
+	/**
+	 * When `true`, the default chat extension is treated as the product's core agent and is kept
+	 * enabled regardless of chat-setup state. Upstream disables the chat extension until GitHub
+	 * chat setup completes; in BYOK products where that setup flow is neutralized this gate would
+	 * disable the agent forever, so it must be opted out of.
+	 */
+	readonly alwaysEnabled?: boolean;
+
 	readonly chatExtensionOutputId: string;
 	readonly chatExtensionOutputExtensionStateCommand: string;
 
