@@ -126,6 +126,17 @@ export class ConversationFeature implements IExtensionContribution {
 			}
 		};
 		void refreshHasByokModels();
+
+		// Unblock activation immediately on startup, before the BYOK model query above resolves. This is
+		// load-bearing for BYOK-only builds (no Copilot token ever arrives): `vscode.lm.selectChatModels`
+		// cannot resolve until this extension is fully activated, while activation would otherwise wait for
+		// that query to set `hasByokModels` — a circular wait that hangs the extension at "activating…" and,
+		// transitively, blocks FlowLeap sign-in (whose auth provider is registered by this extension). Chat
+		// enablement stays gated by `reevaluate()`, so completing the blocker early shows no chat prematurely.
+		if (!activationBlockerDeferred.isSettled) {
+			this.logService.info('ConversationFeature: activation unblocked on startup; chat enablement still driven by reevaluate()');
+			activationBlockerDeferred.complete();
+		}
 		this._disposables.add(vscode.lm.onDidChangeChatModels(() => void refreshHasByokModels()));
 
 		// Re-evaluate enablement whenever the Copilot token changes (including routine refreshes),
@@ -134,14 +145,10 @@ export class ConversationFeature implements IExtensionContribution {
 			reevaluate();
 		}));
 
-		// Always unblock activation when the identity settles; chat enablement is driven by `reevaluate` independently.
-		// Without this, BYOK-only sessions can deadlock (the BYOK query needs this extension fully activated,
-		// while activation waits for the BYOK query to set `hasByokModels`).
+		// Re-evaluate enablement whenever the identity settles. Activation is already unblocked on startup
+		// above, so this only refreshes enablement (it no longer needs to complete the activation blocker).
 		this._disposables.add(authenticationService.onDidAuthenticationChange(() => {
 			reevaluate();
-			if (!activationBlockerDeferred.isSettled) {
-				activationBlockerDeferred.complete();
-			}
 		}));
 
 		reevaluate();
