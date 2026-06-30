@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { LanguageModelChat, lm, type ChatRequest } from 'vscode';
+import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ChatModelFamily, EmbeddingsEndpointFamily, ICompletionModelInformation, IEmbeddingModelInformation, IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
 import { AutoChatEndpoint } from '../../../platform/endpoint/node/autoChatEndpoint';
 import { EmbeddingEndpoint } from '../../../platform/endpoint/node/embeddingsEndpoint';
@@ -44,6 +45,17 @@ const BYOK_VENDOR_IDS: readonly string[] = [
 ];
 
 /**
+ * Internal utility families used by background callers (title/intent generation,
+ * commit messages, summarization, subagents, …). They have no real BYOK model, so
+ * the user assigns each a model via these settings (the same ones the upstream
+ * provider reads). Without honoring them, utility calls fall back to an arbitrary
+ * first model — e.g. a rate-limited `:free` OpenRouter model that stalls the turn.
+ */
+const UTILITY_MODEL_CONFIG_KEY = 'chat.utilityModel';
+const UTILITY_SMALL_MODEL_CONFIG_KEY = 'chat.utilitySmallModel';
+const UTILITY_FAMILIES: ReadonlySet<string> = new Set(['copilot-utility', 'copilot-utility-small']);
+
+/**
  * Endpoint provider for FlowLeap Patent AI.
  *
  * This provider bypasses GitHub's CAPI completely. Inference is BYO-key only: every
@@ -67,6 +79,7 @@ export class PatentAIEndpointProvider implements IEndpointProvider {
 	constructor(
 		@ILogService protected readonly _logService: ILogService,
 		@IInstantiationService protected readonly _instantiationService: IInstantiationService,
+		@IConfigurationService protected readonly _configurationService: IConfigurationService,
 	) {
 		this._logService.info('[Patent AI] Endpoint provider initialized (BYOK-only)');
 	}
@@ -117,6 +130,45 @@ export class PatentAIEndpointProvider implements IEndpointProvider {
 	}
 
 	/**
+	 * Resolve a utility family ('copilot-utility' / 'copilot-utility-small') to the BYOK model
+	 * the user assigned via `chat.utilityModel` / `chat.utilitySmallModel`. The setting value is
+	 * `${vendor}/${id}` (e.g. `openrouter/anthropic/claude-haiku-4.5`). Returns undefined when the
+	 * override is unset, malformed, points at a non-BYOK vendor, or doesn't resolve to exactly one
+	 * model, so the caller falls back to the default {@link _resolveByokEndpoint} behavior. This
+	 * mirrors the upstream ProductionEndpointProvider so background callers honor the same settings.
+	 */
+	private async _resolveUtilityOverride(family: string): Promise<IChatEndpoint | undefined> {
+		const configKey = family === 'copilot-utility-small' ? UTILITY_SMALL_MODEL_CONFIG_KEY : UTILITY_MODEL_CONFIG_KEY;
+		const raw = this._configurationService.getNonExtensionConfig<unknown>(configKey);
+		if (typeof raw !== 'string' || raw.length === 0) {
+			return undefined;
+		}
+		const slashIdx = raw.indexOf('/');
+		if (slashIdx <= 0 || slashIdx >= raw.length - 1) {
+			this._logService.warn(`[Patent AI] Ignoring malformed ${configKey} override '${raw}' (expected '\${vendor}/\${id}').`);
+			return undefined;
+		}
+		const vendor = raw.substring(0, slashIdx);
+		const id = raw.substring(slashIdx + 1);
+		if (NON_BYOK_VENDORS.has(vendor)) {
+			this._logService.warn(`[Patent AI] Ignoring ${configKey} override '${raw}': '${vendor}' is not a BYOK vendor.`);
+			return undefined;
+		}
+		try {
+			const models = (await lm.selectChatModels({ vendor, id })).filter(m => this._isByokModel(m));
+			if (models.length !== 1) {
+				this._logService.warn(`[Patent AI] ${configKey} override '${raw}' matched ${models.length} models; using default utility model instead.`);
+				return undefined;
+			}
+			this._logService.info(`[Patent AI] Applying ${configKey} override '${models[0].vendor}/${models[0].id}' for '${family}'`);
+			return this._instantiationService.createInstance(ExtensionContributedChatEndpoint, models[0]);
+		} catch (err) {
+			this._logService.warn(`[Patent AI] Failed to resolve ${configKey} override '${raw}': ${err}`);
+			return undefined;
+		}
+	}
+
+	/**
 	 * True when the user has connected at least one usable BYO-key chat model
 	 * (Anthropic/OpenAI/Google/OpenRouter/…). The onboarding gate reads this to
 	 * decide whether to let a chat turn proceed or prompt the user to connect a
@@ -160,6 +212,15 @@ export class PatentAIEndpointProvider implements IEndpointProvider {
 		// Resolve to the user's BYO-key model so these run client-side.
 		if (!requestOrFamilyOrModel || typeof requestOrFamilyOrModel === 'string') {
 			const preferred = typeof requestOrFamilyOrModel === 'string' ? requestOrFamilyOrModel : undefined;
+			// Internal utility families honor the user's chat.utilityModel / chat.utilitySmallModel
+			// assignment first; without this they'd match no real model and fall back to an arbitrary
+			// first BYOK model (e.g. a rate-limited `:free` model that stalls the turn).
+			if (preferred && UTILITY_FAMILIES.has(preferred)) {
+				const override = await this._resolveUtilityOverride(preferred);
+				if (override) {
+					return override;
+				}
+			}
 			const byok = await this._resolveByokEndpoint(preferred);
 			return byok ?? this._throwNoByokModel();
 		}

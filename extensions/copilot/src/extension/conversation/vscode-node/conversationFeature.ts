@@ -95,8 +95,16 @@ export class ConversationFeature implements IExtensionContribution {
 			if (hasToken) {
 				this.logService.info(`copilot token sku: ${authenticationService.copilotToken?.sku ?? ''}`);
 			}
-			this.enabled = shouldActivate;
-			this.activated = shouldActivate;
+			// BYOK build: activation is latch-on — once chat is available it is never torn down.
+			// The `hasToken || hasByokModels` gate is a vestige of Copilot entitlement gating; in a
+			// BYOK product chat is always available and "can this turn run" is a turn-time question
+			// answered by PatentAIEndpointProvider. Assigning only when `shouldActivate` is true keeps
+			// the deterministic startup activation below (and any later re-evaluation) from deactivating
+			// the already-registered default agent. See docs/adr/0004-byok-inference-routing.md.
+			if (shouldActivate) {
+				this.enabled = true;
+				this.activated = true;
+			}
 			if (shouldActivate && !activationBlockerDeferred.isSettled) {
 				if (hasToken) {
 					markChatExtGlobal(ChatExtGlobalPerfMark.DidWaitForCopilotToken);
@@ -127,14 +135,21 @@ export class ConversationFeature implements IExtensionContribution {
 		};
 		void refreshHasByokModels();
 
-		// Unblock activation immediately on startup, before the BYOK model query above resolves. This is
-		// load-bearing for BYOK-only builds (no Copilot token ever arrives): `vscode.lm.selectChatModels`
-		// cannot resolve until this extension is fully activated, while activation would otherwise wait for
-		// that query to set `hasByokModels` — a circular wait that hangs the extension at "activating…" and,
-		// transitively, blocks FlowLeap sign-in (whose auth provider is registered by this extension). Chat
-		// enablement stays gated by `reevaluate()`, so completing the blocker early shows no chat prematurely.
+		// Activate chat deterministically on startup, before the async BYOK-model query above resolves.
+		// This is load-bearing for BYOK-only builds (no Copilot token ever arrives): the default agent
+		// (`github.copilot.default`) registers only when the feature activates, so if activation waited
+		// for `refreshHasByokModels()` to set `hasByokModels`, core's `ChatService.activateDefaultAgent`
+		// could run first and throw `No default agent registered`. It also avoids a circular wait —
+		// `vscode.lm.selectChatModels` cannot resolve until this extension is fully activated, while
+		// activation would otherwise wait on that query — which hangs the extension at "activating…" and,
+		// transitively, blocks FlowLeap sign-in (whose auth provider this extension registers). Flipping
+		// `enabled` here registers the default agent and the other participants/providers synchronously.
+		// Activation is latch-on (see `reevaluate`), so this is never torn down. There is no entitlement
+		// to gate on in a BYOK product; "can this turn run" is resolved at turn time by the endpoint
+		// provider. See docs/adr/0004-byok-inference-routing.md.
+		this.enabled = true;
 		if (!activationBlockerDeferred.isSettled) {
-			this.logService.info('ConversationFeature: activation unblocked on startup; chat enablement still driven by reevaluate()');
+			this.logService.info('ConversationFeature: chat activated deterministically on startup (BYOK build)');
 			activationBlockerDeferred.complete();
 		}
 		this._disposables.add(vscode.lm.onDidChangeChatModels(() => void refreshHasByokModels()));

@@ -12,12 +12,8 @@ import { IBlockedExtensionService } from '../../../platform/chat/common/blockedE
 import { ChatFetchResponseType, ChatLocation, getErrorDetailsFromChatFetchError } from '../../../platform/chat/common/commonTypes';
 import { getTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { EmbeddingType, getWellKnownEmbeddingTypeInfo, IEmbeddingsComputer } from '../../../platform/embeddings/common/embeddingsComputer';
-import { ChatEndpointFamily, IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
 import { CustomDataPartMimeTypes } from '../../../platform/endpoint/common/endpointTypes';
 import { encodeStatefulMarker } from '../../../platform/endpoint/common/statefulMarkerContainer';
-import { AutoChatEndpoint } from '../../../platform/endpoint/node/autoChatEndpoint';
-import { IAutomodeService } from '../../../platform/endpoint/node/automodeService';
-import { CopilotChatEndpoint, CopilotUtilitySmallChatEndpoint } from '../../../platform/endpoint/node/copilotChatEndpoint';
 import { IEnvService, isScenarioAutomation } from '../../../platform/env/common/envService';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { IOctoKitService } from '../../../platform/github/common/githubService';
@@ -27,189 +23,19 @@ import { IChatEndpoint, IEndpoint } from '../../../platform/networking/common/ne
 import { APIUsage } from '../../../platform/networking/common/openai';
 import { IOTelService, type OTelModelOptions } from '../../../platform/otel/common/otelService';
 import { retrieveCapturingTokenByCorrelation, runWithCapturingToken } from '../../../platform/requestLogger/node/requestLogger';
-import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { isEncryptedThinkingDelta } from '../../../platform/thinking/common/thinking';
 import { BaseTokensPerCompletion } from '../../../platform/tokenizer/node/tokenizer';
 import { TelemetryCorrelationId } from '../../../util/common/telemetryCorrelationId';
-import { Emitter } from '../../../util/vs/base/common/event';
 import { Disposable, MutableDisposable } from '../../../util/vs/base/common/lifecycle';
 import { isBoolean, isDefined, isNumber, isString, isStringArray } from '../../../util/vs/base/common/types';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { ChatLocation as ApiChatLocation, ExtensionMode } from '../../../vscodeTypes';
+import { ExtensionMode } from '../../../vscodeTypes';
 import type { LMResponsePart } from '../../byok/common/byokProvider';
 import { IExtensionContribution } from '../../common/contributions';
 import { PromptRenderer } from '../../prompts/node/base/promptRenderer';
 import { isImageDataPart } from '../common/languageModelChatMessageHelpers';
 import { LanguageModelAccessPrompt } from './languageModelAccessPrompt';
-import { formatPricingLabel, formatTokenCount, getModelCapabilitiesDescription, buildReasoningEffortSchemaProperty } from '../common/languageModelAccess';
-
-/**
- * Markers in the autoModelHint experiment variable that indicate the auto model
- * is routing to an experimental or evaluation model.
- */
-const experimentalAutoModelHintMarkers = ['minimax', 'mp3yn0h7', 'yaqq2gxh'];
-
-/**
- * Builds a configurationSchema for the model picker based on the endpoint's supported capabilities.
- * Models that support reasoning_effort get a "Thinking Effort" dropdown in the model picker UI.
- */
-/**
- * Returns the available context size options for a model, or undefined if the
- * model does not support configurable context sizes.
- *
- * Driven entirely by CAPI billing metadata:
- * - When CAPI returns a `long_context` tier with higher prices, offers
- *   `default.context_max` as the default and `modelMaxPromptTokens` as an
- *   opt-in larger option so the user knowingly opts into higher billing.
- * - When there is no `long_context` tier, or prices match the default tier
- *   (i.e. `longContext` is absent on the pricing object), no selector is
- *   shown — the model silently uses the full context window.
- */
-function getContextSizeOptions(endpoint: IChatEndpoint): { value: number; description: string; isDefault: boolean }[] | undefined {
-	const pricing = endpoint.tokenPricing;
-
-	// Only offer a selector when CAPI provides a default context max,
-	// which indicates a meaningful distinction between default and long context tiers.
-	if (!pricing?.default.contextMax) {
-		return undefined;
-	}
-
-	const defaultMax = pricing.default.contextMax;
-	const fullMax = endpoint.modelMaxPromptTokens;
-
-	// No point showing a selector if the default is already the full context
-	if (defaultMax >= fullMax) {
-		return undefined;
-	}
-
-	const hasLongContextSurcharge = !!pricing.longContext;
-
-	// When both tiers cost the same, show only the full context window as a
-	// non-switchable indicator — the user always gets the larger window.
-	if (!hasLongContextSurcharge) {
-		return [
-			{ value: fullMax, description: vscode.l10n.t('Longer sessions'), isDefault: true },
-		];
-	}
-
-	return [
-		{ value: defaultMax, description: vscode.l10n.t('Default recommended context size'), isDefault: true },
-		{
-			value: fullMax,
-			description: vscode.l10n.t('Longer sessions'),
-			isDefault: false,
-		},
-	];
-}
-
-// Auto model delegates to different backends, so don't expose config pickers
-function buildConfigurationSchema(endpoint: IChatEndpoint): { configurationSchema?: vscode.LanguageModelConfigurationSchema } {
-	if (endpoint instanceof AutoChatEndpoint) {
-		return {};
-	}
-
-	const properties: Record<string, NonNullable<vscode.LanguageModelConfigurationSchema['properties']>[string]> = {};
-
-	// Reasoning effort config
-	const effortLevels = endpoint.supportsReasoningEffort;
-	if (effortLevels && effortLevels.length > 1) {
-		properties.reasoningEffort = buildReasoningEffortSchemaProperty(effortLevels, endpoint.family.toLowerCase());
-	}
-
-	// Context size config
-	const contextSizeOptions = getContextSizeOptions(endpoint);
-	if (contextSizeOptions) {
-		const defaultOption = contextSizeOptions.find(o => o.isDefault);
-		properties.contextSize = {
-			type: 'number',
-			title: vscode.l10n.t('Context Size'),
-			enum: contextSizeOptions.map(o => o.value),
-			enumItemLabels: contextSizeOptions.map(o => formatTokenCount(o.value)),
-			enumDescriptions: contextSizeOptions.map(o => o.description),
-			default: defaultOption?.value,
-			group: 'tokens',
-		};
-	}
-
-	if (Object.keys(properties).length === 0) {
-		return {};
-	}
-
-	return { configurationSchema: { properties } };
-}
-
-const utilityAliasFamilies: readonly ChatEndpointFamily[] = ['copilot-utility-small', 'copilot-utility'];
-
-/**
- * Checks whether `endpoint` is the built-in Copilot endpoint for a utility alias.
- */
-function isDefaultEndpointForUtilityFamily(family: ChatEndpointFamily, endpoint: IChatEndpoint): boolean {
-	if (!(endpoint instanceof CopilotChatEndpoint)) {
-		return false;
-	}
-	switch (family) {
-		case 'copilot-utility-small':
-			return endpoint.family === CopilotUtilitySmallChatEndpoint.capiFamily;
-		case 'copilot-utility':
-			return endpoint.isFallback;
-		default:
-			return false;
-	}
-}
-
-/**
- * Builds the {@link vscode.LanguageModelChatInformation} entry that publishes a
- * utility-family alias (e.g. `copilot-utility-small`) under the copilot vendor.
- *
- * If the endpoint is a Copilot endpoint and a matching entry exists in
- * {@link models} for its model id, that entry is cloned so the alias inherits
- * provider-specific metadata (including `requiresAuthorization`). Otherwise a
- * minimal entry is synthesized from the endpoint with `maxInputTokens` reduced
- * by both `baseCount` and {@link BaseTokensPerCompletion} to match what the
- * regular model entries report, and {@link requiresAuthorization} is applied so
- * the synthesized alias enforces the same model-access authorization as a
- * normal copilot model entry.
- */
-export function buildUtilityAliasModelInfo(
-	family: ChatEndpointFamily,
-	endpoint: IChatEndpoint,
-	models: readonly vscode.LanguageModelChatInformation[],
-	baseCount: number,
-	requiresAuthorization: vscode.LanguageModelChatInformation['requiresAuthorization'],
-): { info: vscode.LanguageModelChatInformation; synthesized: boolean } {
-	const base = endpoint instanceof CopilotChatEndpoint ? models.find(m => m.id === endpoint.model) : undefined;
-	if (base) {
-		return {
-			synthesized: false,
-			info: {
-				...base,
-				id: family,
-				family,
-				isUserSelectable: false,
-				isDefault: false,
-			},
-		};
-	}
-	return {
-		synthesized: true,
-		info: {
-			id: family,
-			name: endpoint.name,
-			family,
-			version: endpoint.version,
-			maxInputTokens: endpoint.modelMaxPromptTokens - baseCount - BaseTokensPerCompletion,
-			maxOutputTokens: endpoint.maxOutputTokens,
-			requiresAuthorization,
-			isUserSelectable: false,
-			isDefault: false,
-			capabilities: {
-				toolCalling: endpoint.supportsToolCalls,
-				imageInput: endpoint.supportsVision,
-			},
-		},
-	};
-}
 
 export class LanguageModelAccess extends Disposable implements IExtensionContribution {
 
@@ -217,35 +43,13 @@ export class LanguageModelAccess extends Disposable implements IExtensionContrib
 
 	readonly activationBlocker?: Promise<void>;
 
-	private readonly _onDidChange = this._register(new Emitter<void>());
-	private _currentModels: vscode.LanguageModelChatInformation[] = []; // Store current models for reference
-	private _chatEndpoints: IChatEndpoint[] = [];
-	/**
-	 * Maps utility family aliases (e.g. `copilot-utility-small`,
-	 * `copilot-utility`) to the resolved endpoint they were last published
-	 * under. Lets {@link _getEndpointForModel} route alias lookups to the
-	 * underlying endpoint without re-resolving the user setting.
-	 */
-	private _utilityAliasEndpoints: Map<string, IChatEndpoint> = new Map();
-	// Overrides resolved outside model-info publication, reused on the next alias publish.
-	private readonly _resolvedUtilityEndpoints = new Map<ChatEndpointFamily, { endpoint: IChatEndpoint; baseCount: number }>();
-	private _lmWrapper: CopilotLanguageModelWrapper;
-	private _promptBaseCountCache: LanguageModelAccessPromptBaseCountCache;
-
 	constructor(
 		@ILogService private readonly _logService: ILogService,
-		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
-		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider,
 		@IEmbeddingsComputer private readonly _embeddingsComputer: IEmbeddingsComputer,
 		@IVSCodeExtensionContext private readonly _vsCodeExtensionContext: IVSCodeExtensionContext,
-		@IAutomodeService private readonly _automodeService: IAutomodeService,
-		@IExperimentationService private readonly _expService: IExperimentationService,
 	) {
 		super();
-
-		this._lmWrapper = this._instantiationService.createInstance(CopilotLanguageModelWrapper);
-		this._promptBaseCountCache = this._instantiationService.createInstance(LanguageModelAccessPromptBaseCountCache);
 
 		if (this._vsCodeExtensionContext.extensionMode === ExtensionMode.Test && !isScenarioAutomation) {
 			this._logService.warn('[LanguageModelAccess] LanguageModels and Embeddings are NOT AVAILABLE in test mode.');
@@ -263,279 +67,19 @@ export class LanguageModelAccess extends Disposable implements IExtensionContrib
 		super.dispose();
 	}
 
-	get currentModels(): vscode.LanguageModelChatInformation[] {
-		return this._currentModels;
-	}
-
 	private async _registerChatProvider(): Promise<void> {
-		const provider: vscode.LanguageModelChatProvider = {
-			onDidChangeLanguageModelChatInformation: this._onDidChange.event,
-			provideLanguageModelChatInformation: this._provideLanguageModelChatInfo.bind(this),
-			provideLanguageModelChatResponse: this._provideLanguageModelChatResponse.bind(this),
-			provideTokenCount: this._provideTokenCount.bind(this)
-		};
-		this._register(vscode.lm.registerLanguageModelChatProvider('copilot', provider));
-		this._register(this._authenticationService.onDidAuthenticationChange(() => {
-			if (!this._authenticationService.anyGitHubSession) {
-				this._currentModels = [];
-			}
-			// Auth changed which means models could've changed. Fire the event
-			this._onDidChange.fire();
-		}));
-		this._register(this._endpointProvider.onDidModelsRefresh(() => {
-			// Drop stale overrides; model publication uses defaults until refresh completes.
-			this._resolvedUtilityEndpoints.clear();
-			void this._refreshUtilityOverrides();
-			this._onDidChange.fire();
-		}));
-	}
-
-	private async _provideLanguageModelChatInfo(options: { silent: boolean }, token: vscode.CancellationToken): Promise<vscode.LanguageModelChatInformation[]> {
-		const session = await this._getToken();
-		if (!session) {
-			// Return cached models until we have auth reacquired
-			// We clear this list in onDidAuthenticationChange so signed out should still have model picker clear
-			return this._currentModels;
-		}
-
-		const models: vscode.LanguageModelChatInformation[] = [];
-		const allEndpoints = await this._endpointProvider.getAllChatEndpoints();
-		if (!allEndpoints.length) {
-			return this._currentModels;
-		}
-		const chatEndpoints = allEndpoints.filter(e => e.showInModelPicker || e.model === 'gpt-4o-mini');
-		const autoEndpoint = await this._automodeService.resolveAutoModeEndpoint(undefined, allEndpoints);
-		chatEndpoints.push(autoEndpoint);
-		let defaultChatEndpoint: IChatEndpoint;
-		const defaultExpModel = this._expService.getTreatmentVariable<string>('chat.defaultLanguageModel')?.replace('copilot/', '');
-		if (this._authenticationService.copilotToken?.isNoAuthUser || !defaultExpModel || defaultExpModel === AutoChatEndpoint.pseudoModelId) {
-			// No auth, no experiment, and exp that sets auto to default all get default model
-			defaultChatEndpoint = autoEndpoint;
-		} else {
-			// Find exp default
-			defaultChatEndpoint = chatEndpoints.find(e => e.model === defaultExpModel) || autoEndpoint;
-		}
-
-		const seenFamilies = new Set<string>();
-
-		for (const endpoint of chatEndpoints) {
-			if (seenFamilies.has(endpoint.family) && !endpoint.showInModelPicker) {
-				continue;
-			}
-			seenFamilies.add(endpoint.family);
-
-			const sanitizedModelName = endpoint.name
-				.replace(/\([^)]*\bcontext\)/gi, '')
-				.trim();
-			let modelTooltip: string | undefined;
-			if (endpoint.degradationReason) {
-				modelTooltip = endpoint.degradationReason;
-			} else if (endpoint instanceof AutoChatEndpoint) {
-				const baseAutoTooltip = vscode.l10n.t('Auto selects the best model based on your request complexity and model performance.');
-				if (endpoint.discountRange.high === endpoint.discountRange.low && endpoint.discountRange.low !== 0) {
-					modelTooltip = `${baseAutoTooltip} ${vscode.l10n.t('Model use through Auto is billed at a {0}% discount.', endpoint.discountRange.low * 100)}`;
-				} else if (endpoint.discountRange.high !== endpoint.discountRange.low) {
-					modelTooltip = `${baseAutoTooltip} ${vscode.l10n.t('Model use through Auto is billed at a {0}% to {1}% discount.', endpoint.discountRange.low * 100, endpoint.discountRange.high * 100)}`;
-				} else {
-					modelTooltip = baseAutoTooltip;
-				}
-				const isOrgManaged = !!this._authenticationService.copilotToken?.isManagedPlan;
-				const autoModeHint = this._expService.getTreatmentVariable<string>('copilotchat.autoModelHint');
-				const showExperimentalHint = !isOrgManaged && !!autoModeHint && experimentalAutoModelHintMarkers.some(marker => autoModeHint.includes(marker));
-				if (showExperimentalHint) {
-					modelTooltip = `${modelTooltip} ${vscode.l10n.t('This model may be experimental or in evaluation.')}`;
-				}
-			} else {
-				modelTooltip = getModelCapabilitiesDescription(endpoint);
-			}
-
-			// Counting tokens requires instantiating the tokenizers, which makes this process use a lot of memory.
-			// Let's cache the results across extension activations
-			const baseCount = await this._promptBaseCountCache.getBaseCount(endpoint);
-			const multiplier = endpoint.multiplier !== undefined ? `${endpoint.multiplier}x` : undefined;
-			let modelDetail: string | undefined;
-
-			if (endpoint instanceof AutoChatEndpoint) {
-				if (endpoint.discountRange.high === endpoint.discountRange.low && endpoint.discountRange.low !== 0) {
-					modelDetail = `${endpoint.discountRange.low * 100}% discount`;
-				} else if (endpoint.discountRange.high !== endpoint.discountRange.low) {
-					modelDetail = `${endpoint.discountRange.low * 100}% to ${endpoint.discountRange.high * 100}% discount`;
-				}
-			}
-			if (endpoint.customModel) {
-				const customModel = endpoint.customModel;
-				modelDetail = customModel.owner_name;
-				modelTooltip = vscode.l10n.t('{0} is contributed by {1} using {2}.', sanitizedModelName, customModel.owner_name, customModel.key_name);
-			}
-
-			const session = this._authenticationService.anyGitHubSession;
-			const isDefault = endpoint === defaultChatEndpoint;
-
-			const model: vscode.LanguageModelChatInformation = {
-				id: endpoint instanceof AutoChatEndpoint ? AutoChatEndpoint.pseudoModelId : endpoint.model,
-				name: endpoint instanceof AutoChatEndpoint ? 'Auto' : sanitizedModelName,
-				family: endpoint.family,
-				tooltip: modelTooltip,
-				pricing: endpoint instanceof AutoChatEndpoint ? undefined : (multiplier ?? (endpoint.tokenPricing ? formatPricingLabel(endpoint.tokenPricing) : undefined)),
-				inputCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.default.inputPrice,
-				outputCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.default.outputPrice,
-				cacheCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.default.cacheReadTokenPrice,
-				cacheWriteCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.default.cacheWriteTokenPrice,
-				longContextInputCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.longContext?.inputPrice,
-				longContextOutputCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.longContext?.outputPrice,
-				longContextCacheCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.longContext?.cacheReadTokenPrice,
-				longContextCacheWriteCost: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.tokenPricing?.longContext?.cacheWriteTokenPrice,
-				multiplierNumeric: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.multiplier,
-				priceCategory: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.priceCategory,
-				category: endpoint instanceof AutoChatEndpoint ? undefined : endpoint.modelPickerCategory,
-				detail: modelDetail,
-				statusIcon: endpoint.degradationReason ? new vscode.ThemeIcon('warning') : undefined,
-				version: endpoint.version,
-				maxInputTokens: endpoint.modelMaxPromptTokens - baseCount - BaseTokensPerCompletion,
-				maxOutputTokens: endpoint.maxOutputTokens,
-				requiresAuthorization: session && { label: session.account.label },
-				isDefault: {
-					[ApiChatLocation.Panel]: isDefault,
-					[ApiChatLocation.Terminal]: isDefault,
-					[ApiChatLocation.Notebook]: isDefault,
-					[ApiChatLocation.Editor]: endpoint instanceof AutoChatEndpoint, // inline chat gets 'Auto' by default
-				},
-				isUserSelectable: endpoint.showInModelPicker,
-				capabilities: {
-					imageInput: endpoint instanceof AutoChatEndpoint ? true : endpoint.supportsVision,
-					toolCalling: endpoint.supportsToolCalls,
-				},
-				...buildConfigurationSchema(endpoint),
-			};
-
-			models.push(model);
-		}
-
-		this._currentModels = models;
-		this._chatEndpoints = chatEndpoints;
-
-		this._registerUtilityAliasModels(models, allEndpoints);
-		return models;
-	}
-
-	/** Publishes utility aliases without waiting for override resolution. */
-	private _registerUtilityAliasModels(
-		models: vscode.LanguageModelChatInformation[],
-		allEndpoints: readonly IChatEndpoint[],
-	): void {
-		this._utilityAliasEndpoints.clear();
-		const session = this._authenticationService.anyGitHubSession;
-		const requiresAuthorization = session ? { label: session.account.label } : undefined;
-
-		for (const family of utilityAliasFamilies) {
-			const cached = this._resolvedUtilityEndpoints.get(family);
-			const endpoint = cached?.endpoint ?? allEndpoints.find(e => isDefaultEndpointForUtilityFamily(family, e));
-			if (!endpoint) {
-				continue;
-			}
-			this._utilityAliasEndpoints.set(family, endpoint);
-
-			try {
-				// Copilot defaults clone an existing entry; synthesized override aliases need baseCount.
-				const aliasInfo = buildUtilityAliasModelInfo(family, endpoint, models, cached?.baseCount ?? 0, requiresAuthorization);
-				this._logService.trace(`[LanguageModelAccess] Publishing alias '${family}' -> ${endpoint.model} (${aliasInfo.synthesized ? 'synthesized' : 'cloned'}, ${endpoint instanceof CopilotChatEndpoint ? 'copilot' : 'override'}).`);
-				models.push(aliasInfo.info);
-			} catch (err) {
-				this._logService.warn(`[LanguageModelAccess] Failed to publish utility alias '${family}' -> ${endpoint.model}; skipping. Error: ${err}`);
-			}
-		}
-
-		// Override resolution may hang, so keep it off the model-info request path.
-		void this._refreshUtilityOverrides().catch(err => {
-			this._logService.warn(`[LanguageModelAccess] Failed to refresh utility overrides: ${err}`);
-		});
-	}
-
-	/** Resolves configured utility model overrides for the next alias publish. */
-	private async _refreshUtilityOverrides(): Promise<void> {
-		let didChange = false;
-		for (const family of utilityAliasFamilies) {
-			let resolved: IChatEndpoint | undefined;
-			try {
-				resolved = await this._endpointProvider.getChatEndpoint(family);
-			} catch (err) {
-				this._logService.warn(`[LanguageModelAccess] Failed to resolve utility alias '${family}' in background: ${err}`);
-				continue;
-			}
-			if (!resolved) {
-				continue;
-			}
-			// Skip when the override resolved to the same endpoint that's
-			// already published; no alias change needed.
-			const published = this._utilityAliasEndpoints.get(family);
-			if (published && published.model === resolved.model && published.modelProvider === resolved.modelProvider) {
-				continue;
-			}
-			let baseCount: number;
-			try {
-				baseCount = await this._promptBaseCountCache.getBaseCount(resolved);
-			} catch (err) {
-				this._logService.warn(`[LanguageModelAccess] Failed to compute baseCount for utility alias '${family}' -> ${resolved.model}; keeping previously-published alias. Error: ${err}`);
-				continue;
-			}
-			this._resolvedUtilityEndpoints.set(family, { endpoint: resolved, baseCount });
-			didChange = true;
-		}
-		if (didChange) {
-			this._onDidChange.fire();
-		}
-	}
-
-	private async _getEndpointForModel(model: vscode.LanguageModelChatInformation) {
-		if (model.id === AutoChatEndpoint.pseudoModelId) {
-			const allEndpoints = await this._endpointProvider.getAllChatEndpoints();
-			if (!allEndpoints.length) {
-				return undefined;
-			}
-			return await this._automodeService.resolveAutoModeEndpoint(undefined, allEndpoints);
-		}
-		const aliasEndpoint = this._utilityAliasEndpoints.get(model.id);
-		if (aliasEndpoint) {
-			return aliasEndpoint;
-		}
-		return this._chatEndpoints.find(e => e.model === model.id);
-	}
-
-	private async _provideLanguageModelChatResponse(
-		model: vscode.LanguageModelChatInformation,
-		messages: Array<vscode.LanguageModelChatMessage | vscode.LanguageModelChatMessage2>,
-		options: vscode.ProvideLanguageModelChatResponseOptions,
-		progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
-		token: vscode.CancellationToken
-	): Promise<void> {
-		let endpoint = await this._getEndpointForModel(model);
-		if (!endpoint) {
-			throw new Error(`Endpoint not found for model ${model.id}`);
-		}
-
-		// Apply context size override if configured
-		const contextSize = options.modelConfiguration?.contextSize;
-		if (typeof contextSize === 'number' && contextSize < endpoint.modelMaxPromptTokens) {
-			endpoint = endpoint.cloneWithTokenOverride(contextSize);
-		}
-
-		return this._lmWrapper.provideLanguageModelResponse(endpoint, messages, {
-			...options,
-			modelOptions: options.modelOptions
-		}, options.requestInitiator, progress, token);
-	}
-
-	private async _provideTokenCount(
-		model: vscode.LanguageModelChatInformation,
-		text: string | vscode.LanguageModelChatMessage | vscode.LanguageModelChatMessage2,
-		token: vscode.CancellationToken
-	): Promise<number> {
-		const endpoint = await this._getEndpointForModel(model);
-		if (!endpoint) {
-			throw new Error(`Endpoint not found for model ${model.id}`);
-		}
-
-		return this._lmWrapper.provideTokenCount(endpoint, text);
+		// BYOK build: intentionally DO NOT register a `copilot`-vendor language-model provider.
+		//
+		// VS Code's `vscode.lm` selection path dispatches a chat turn straight to the provider
+		// registered for the selected model's vendor. With a `copilot` provider registered, a
+		// remembered or default `copilot`-vendor model bypasses PatentAIEndpointProvider and hits
+		// CAPI — disabled in #8 — producing "Missing Authentication header". Inference here is
+		// BYOK-only, so no `copilot`-vendor model may be reachable for a chat turn; the user's BYOK
+		// providers register themselves (see byokContribution). This class's model-publishing path
+		// is gated behind a Copilot token that never arrives in this build, so it stays inert.
+		//
+		// Do NOT re-register this provider. See docs/adr/0004-byok-inference-routing.md.
+		return;
 	}
 
 	private async _registerEmbeddings(): Promise<void> {
@@ -585,40 +129,6 @@ export class LanguageModelAccess extends Disposable implements IExtensionContrib
 			return undefined;
 		}
 	}
-}
-
-class LanguageModelAccessPromptBaseCountCache {
-	constructor(
-		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
-		@IInstantiationService private readonly _instantiationService: IInstantiationService,
-		@IEnvService private readonly _envService: IEnvService
-	) { }
-
-	public async getBaseCount(endpoint: IChatEndpoint): Promise<number> {
-		const key = `lmBaseCount/${endpoint.model}`;
-		const cached = this._extensionContext.globalState.get<{ extensionVersion: string; baseCount: number }>(key);
-		if (cached && cached.extensionVersion === this._envService.getVersion() && typeof cached.baseCount === 'number') {
-			return cached.baseCount;
-		}
-
-		const baseCount = await this._computeBaseCount(endpoint);
-		// Store the computed value along with the extension version so we can
-		// invalidate the cache when the extension is updated.
-		try {
-			await this._extensionContext.globalState.update(key, { extensionVersion: this._envService.getVersion(), baseCount });
-		} catch (err) {
-			// Best-effort cache update — don't fail the caller if persisting the
-			// cache entry fails for any reason.
-		}
-
-		return baseCount;
-	}
-
-	private async _computeBaseCount(endpoint: IChatEndpoint): Promise<number> {
-		const baseCount = await PromptRenderer.create(this._instantiationService, endpoint, LanguageModelAccessPrompt, { noSafety: false, messages: [] }).countTokens();
-		return baseCount;
-	}
-
 }
 
 /**

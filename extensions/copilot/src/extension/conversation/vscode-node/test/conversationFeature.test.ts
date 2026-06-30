@@ -72,11 +72,15 @@ suite('Conversation feature test suite', function () {
 		}
 	});
 
-	test(`If the 'interactive' version does not match, the feature is not enabled and not activated`, function () {
+	test('The feature activates deterministically on startup without a Copilot token (BYOK build, ADR 0004)', function () {
+		// BYOK build: no Copilot token ever arrives, yet chat must activate on startup so the
+		// default agent registers (otherwise core's activateDefaultAgent throws `No default agent
+		// registered`) and a no-key user still gets a chat surface to reach the connect-provider
+		// prompt. Activation no longer waits on entitlement or a BYOK model.
 		const conversationFeature = instaService.createInstance(ConversationFeature);
 		try {
-			assert.deepStrictEqual(conversationFeature.enabled, false);
-			assert.deepStrictEqual(conversationFeature.activated, false);
+			assert.deepStrictEqual(conversationFeature.enabled, true);
+			assert.deepStrictEqual(conversationFeature.activated, true);
 		} finally {
 			conversationFeature.dispose();
 		}
@@ -153,23 +157,20 @@ suite('Conversation feature test suite', function () {
 		}
 	});
 
-	test('activationBlocker resolves on an auth change even when the BYOK query never settles', async function () {
-		// Reproduces the air-gapped startup deadlock: the BYOK detection query (which itself
-		// activates this extension's language-model providers) can hang until extension
-		// activation completes, while extension activation is waiting for `activationBlocker`.
-		// The auth-change event must unconditionally unblock activation regardless of token
-		// or BYOK availability.
+	test('activation does not wait on the BYOK probe: activates deterministically even when the model query never settles (ADR 0004)', async function () {
+		// Regression for the `No default agent registered` race. The default agent registers only
+		// when the feature activates; in a BYOK build (no Copilot token) the old code gated activation
+		// on the async `selectChatModels` probe, so core's activateDefaultAgent could run before the
+		// agent registered. Activation must now complete on startup regardless of whether the probe
+		// ever settles — here it never does — so the blocker resolves and the feature is activated.
 		sandbox.stub(vscode.lm, 'selectChatModels').returns(new Promise<vscode.LanguageModelChat[]>(() => { /* never resolves */ }));
 		sandbox.stub(vscode.lm, 'onDidChangeChatModels').returns({ dispose: () => { } });
 
 		const conversationFeature = instaService.createInstance(ConversationFeature);
 		try {
-			const authService = accessor.get(IAuthenticationService) as unknown as { fireAuthenticationChange(source: string): void };
-			authService.fireAuthenticationChange('test');
-
 			await conversationFeature.activationBlocker;
-			assert.deepStrictEqual(conversationFeature.activated, false);
-			assert.deepStrictEqual(conversationFeature.enabled, false);
+			assert.deepStrictEqual(conversationFeature.activated, true);
+			assert.deepStrictEqual(conversationFeature.enabled, true);
 		} finally {
 			conversationFeature.dispose();
 		}
