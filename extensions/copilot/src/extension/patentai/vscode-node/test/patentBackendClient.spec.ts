@@ -349,7 +349,26 @@ describe('auth gate (401)', () => {
 		expect(err.message).not.toContain('"error"');
 	});
 
-	it('shows the "Sign In" warning and starts sign-in when accepted — for any 401, even a non-JSON body', async () => {
+	it('never-signed-in (no local token): shows a sign-in invitation (info, no "expired" language) and starts sign-in when accepted', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(401, BODY));
+		notification.showInformationMessage.mockResolvedValueOnce(SIGN_IN_ACTION as never);
+
+		const thrown = await captureThrow(() => client.get('/citation-search/EP-1-A1', makeToken()));
+		await flush();
+
+		expect(thrown).toBeInstanceOf(AuthRequiredError);
+		// The client knows no token was sent — the backend body must not turn this into an
+		// "expired session" claim for a user who never signed in.
+		expect((thrown as AuthRequiredError).message).not.toContain('expired');
+		expect(notification.showInformationMessage).toHaveBeenCalledWith(expect.not.stringContaining('expired'), SIGN_IN_ACTION);
+		expect(notification.showWarningMessage).not.toHaveBeenCalled();
+		// Sign-in is triggered through the FlowLeap provider's sign-in command (decoupled from the
+		// concrete provider/auth-service type).
+		expect(executeCommandMock).toHaveBeenCalledWith('patent-ai.signIn');
+	});
+
+	it('expired session (token was sent): shows the expired-session warning and starts sign-in when accepted — even for a non-JSON body', async () => {
+		registerPatentAccessTokenProvider(() => 'tok-stale');
 		const { client, notification } = makeClient(async () => makeResponse(401, 'not json'));
 		notification.showWarningMessage.mockResolvedValueOnce(SIGN_IN_ACTION as never);
 
@@ -357,15 +376,26 @@ describe('auth gate (401)', () => {
 		await flush();
 
 		expect(thrown).toBeInstanceOf(AuthRequiredError);
-		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.any(String), SIGN_IN_ACTION);
-		// Re-auth is triggered through the FlowLeap provider's sign-in command (decoupled from the
-		// concrete provider/auth-service type).
+		expect((thrown as AuthRequiredError).message).toContain('expired');
+		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining('expired'), SIGN_IN_ACTION);
+		expect(notification.showInformationMessage).not.toHaveBeenCalled();
 		expect(executeCommandMock).toHaveBeenCalledWith('patent-ai.signIn');
+	});
+
+	it('expired session: prefers the backend-supplied message from a JSON body', async () => {
+		registerPatentAccessTokenProvider(() => 'tok-stale');
+		const { client, notification } = makeClient(async () => makeResponse(401, BODY));
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await flush();
+
+		expect((thrown as AuthRequiredError).message).toBe('Authentication required. Please sign in.');
+		expect(notification.showWarningMessage).toHaveBeenCalledWith('Authentication required. Please sign in.', SIGN_IN_ACTION);
 	});
 
 	it('does not let a throwing notification mask the AuthRequiredError', async () => {
 		const { client, notification } = makeClient(async () => makeResponse(401, BODY));
-		notification.showWarningMessage.mockImplementationOnce(() => { throw new Error('boom'); });
+		notification.showInformationMessage.mockImplementationOnce(() => { throw new Error('boom'); });
 
 		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
 

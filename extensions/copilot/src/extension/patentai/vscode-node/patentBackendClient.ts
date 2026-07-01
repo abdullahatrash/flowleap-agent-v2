@@ -102,12 +102,18 @@ interface SubscriptionRequiredInfo {
 
 interface AuthRequiredInfo {
 	readonly message: string;
+	/**
+	 * True when no local token existed before the request — the user was never signed in (or
+	 * signed out), so the prompt is an invitation, not an expired-session warning.
+	 */
+	readonly signedOut?: boolean;
 }
 
 // ── Implementation ──────────────────────────────────────────────────────────────
 
 const SIGN_IN_ACTION = 'Sign In';
 const START_TRIAL_ACTION = 'Start Free Trial';
+const SIGNED_OUT_MESSAGE = 'Sign in to FlowLeap to use patent data.';
 
 /**
  * DI implementation of {@link IPatentBackendClient}.
@@ -206,9 +212,13 @@ export class PatentBackendClient implements IPatentBackendClient {
 				}
 
 				// Centralized auth gate: a `401` means the Clerk token is missing, expired, or invalid.
-				// Surface a structured error and prompt re-sign-in instead of a raw body.
+				// The client knows *before* the request whether a local token existed, so it can tell
+				// never-signed-in apart from an expired session without trusting the backend body: no
+				// token → a sign-in invitation; token sent but rejected → the expired-session prompt.
 				if (response.status === 401) {
-					const info = parseAuthRequired(text);
+					const info: AuthRequiredInfo = accessToken
+						? parseAuthRequired(text)
+						: { message: SIGNED_OUT_MESSAGE, signedOut: true };
 					this._fireAuthRequiredUx(info);
 					throw new AuthRequiredError(info.message);
 				}
@@ -251,7 +261,11 @@ export class PatentBackendClient implements IPatentBackendClient {
 	}
 
 	private async _promptAuthRequired(info: AuthRequiredInfo): Promise<void> {
-		const choice = await this._notificationService.showWarningMessage(info.message, SIGN_IN_ACTION);
+		// A signed-out user did nothing wrong — invite with an info toast; reserve the warning
+		// severity for a session that was working and then expired.
+		const choice = info.signedOut
+			? await this._notificationService.showInformationMessage(info.message, SIGN_IN_ACTION)
+			: await this._notificationService.showWarningMessage(info.message, SIGN_IN_ACTION);
 		if (choice === SIGN_IN_ACTION) {
 			// Trigger interactive sign-in through the command owned by the FlowLeap auth provider.
 			// Decoupled via the command id so the client never depends on the provider/auth-service
