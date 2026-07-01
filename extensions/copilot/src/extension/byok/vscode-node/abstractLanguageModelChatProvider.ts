@@ -9,6 +9,8 @@ import { IChatModelInformation, ModelSupportedEndpoint } from '../../../platform
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService } from '../../../platform/networking/common/fetcherService';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
+import { looksLikeByokKeyRejection, notifyByokKeyRejected } from '../../../platform/endpoint/vscode-node/byokKeyRejection';
+import { toErrorMessage } from '../../../util/common/errorMessage';
 import { IStringDictionary } from '../../../util/vs/base/common/collections';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { CopilotLanguageModelWrapper } from '../../conversation/vscode-node/languageModelAccess';
@@ -64,7 +66,18 @@ export abstract class AbstractLanguageModelChatProvider<C extends LanguageModelC
 			apiKey = await this.configureDefaultGroupWithApiKeyOnly();
 		}
 
-		const models = await this.getAllModels(silent, apiKey, configuration as C);
+		let models: T[];
+		try {
+			models = await this.getAllModels(silent, apiKey, configuration as C);
+		} catch (e) {
+			// A configured key the provider rejects must be visibly flagged: silent background
+			// listing would otherwise just leave the models out of the picker with no explanation.
+			// Rethrow regardless — core renders the error row in the Manage Models editor from it.
+			if (apiKey && looksLikeByokKeyRejection(toErrorMessage(e, false))) {
+				notifyByokKeyRejected(this._name);
+			}
+			throw e;
+		}
 		return models.map(model => ({
 			...model,
 			isBYOK: true,

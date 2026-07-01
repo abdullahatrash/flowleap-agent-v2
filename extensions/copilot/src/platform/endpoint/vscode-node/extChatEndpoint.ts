@@ -27,6 +27,7 @@ import { EndpointEditToolName, isEndpointEditToolName } from '../common/endpoint
 import { CustomDataPartMimeTypes } from '../common/endpointTypes';
 import { decodeStatefulMarker, encodeStatefulMarker, rawPartAsStatefulMarker } from '../common/statefulMarkerContainer';
 import { rawPartAsThinkingData } from '../common/thinkingDataContainer';
+import { byokKeyRejectionReason, looksLikeByokKeyRejection, notifyByokKeyRejected } from './byokKeyRejection';
 import { ExtensionContributedChatTokenizer } from './extChatTokenizer';
 
 enum ChatImageMimeType {
@@ -287,6 +288,19 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 				};
 			}
 		} catch (e) {
+			// A rejected BYOK key surfaces here as an untyped SDK error for every vendor. Replace
+			// the raw dump with an actionable message (the chat error renderer makes the manage-models
+			// command link clickable) and prompt the key update via the shared notifier.
+			const detail = toErrorMessage(e, false);
+			if (looksLikeByokKeyRejection(detail)) {
+				notifyByokKeyRejected(this.languageModel.vendor);
+				return {
+					type: ChatFetchResponseType.Failed,
+					reason: byokKeyRejectionReason(this.languageModel.vendor, detail),
+					requestId: generateUuid(),
+					serverRequestId: undefined
+				};
+			}
 			return {
 				type: ChatFetchResponseType.Failed,
 				reason: toErrorMessage(e, true),

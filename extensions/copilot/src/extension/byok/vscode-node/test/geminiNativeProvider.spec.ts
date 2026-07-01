@@ -14,6 +14,15 @@ import { TestLogService } from '../../../../platform/testing/common/testLogServi
 import type { IBYOKStorageService } from '../byokStorageService';
 
 const mockHandleAPIKeyUpdate = vi.fn();
+const mockNotifyByokKeyRejected = vi.fn();
+
+vi.mock('../../../../platform/endpoint/vscode-node/byokKeyRejection', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../../../platform/endpoint/vscode-node/byokKeyRejection')>();
+	return {
+		...actual,
+		notifyByokKeyRejected: mockNotifyByokKeyRejected,
+	};
+});
 
 vi.mock('@google/genai', () => {
 	class MockGoogleGenAI {
@@ -41,8 +50,11 @@ vi.mock('@google/genai', () => {
 		}
 	}
 
+	class MockApiError extends Error { }
+
 	return {
 		GoogleGenAI: MockGoogleGenAI,
+		ApiError: MockApiError,
 		Type: { OBJECT: 'object' },
 	};
 });
@@ -280,7 +292,12 @@ describe('GeminiNativeBYOKLMProvider', () => {
 	// 	)).rejects.toThrow(/No API key configured/i);
 	// });
 
-	it.skip('prompts for a new API key when listing models fails with an invalid key', async () => {
+	// Replaces the pre-configuration-API skipped tests ("prompts for a new API key…" /
+	// "retries listing…"): the key now arrives via configuration.apiKey and the re-prompt is
+	// core's Manage Models flow, so the provider's contract on an invalid key is: notify the
+	// user (visibly flagged, not silently absent from the picker) and rethrow for core's
+	// per-group error row.
+	it('flags a rejected API key during model listing and rethrows for core', async () => {
 		const { GeminiNativeBYOKLMProvider } = await import('../geminiNativeProvider');
 		const genai = await import('@google/genai');
 		const MockGoogleGenAI = genai.GoogleGenAI as unknown as { listModelsResult: AsyncIterable<any> };
@@ -289,66 +306,13 @@ describe('GeminiNativeBYOKLMProvider', () => {
 			throw new Error('ApiError: {"error":{"message":"API key not valid. Please pass a valid API key.","details":[{"reason":"API_KEY_INVALID"}]}}');
 		})();
 
-		const storage = createStorageService({
-			getAPIKey: vi.fn().mockResolvedValue('bad_key'),
-		});
-
-		mockHandleAPIKeyUpdate.mockResolvedValue({ apiKey: undefined, deleted: false, cancelled: true });
-
-		const provider = new GeminiNativeBYOKLMProvider(undefined, storage, new TestLogService(), createRequestLogger(), new NullTelemetryService(), new NoopOTelService(resolveOTelConfig({ env: {}, extensionVersion: '1.0.0', sessionId: 'test' })));
+		const provider = new GeminiNativeBYOKLMProvider(undefined, createStorageService(), new TestLogService(), createRequestLogger(), new NullTelemetryService(), new NoopOTelService(resolveOTelConfig({ env: {}, extensionVersion: '1.0.0', sessionId: 'test' })));
 		const tokenSource = new vscode.CancellationTokenSource();
-		const models = await provider.provideLanguageModelChatInformation({ silent: false }, tokenSource.token);
 
-		// When the key is invalid, we should re-prompt for a new one
-		// and handle the failure gracefully by returning an empty list.
-		expect(models).toEqual([]);
-		expect(mockHandleAPIKeyUpdate).toHaveBeenCalled();
-	});
-
-	it.skip('retries listing models after re-prompting with a valid API key', async () => {
-		const { GeminiNativeBYOKLMProvider } = await import('../geminiNativeProvider');
-		const genai = await import('@google/genai');
-		const MockGoogleGenAI = genai.GoogleGenAI as unknown as { listModelsResult: AsyncIterable<any> };
-
-		let iterationCount = 0;
-		let hasThrown = false;
-		const modelId = 'test-model';
-
-		MockGoogleGenAI.listModelsResult = {
-			async *[Symbol.asyncIterator]() {
-				iterationCount++;
-				if (!hasThrown) {
-					hasThrown = true;
-					throw new Error('ApiError: {"error":{"message":"API key not valid. Please pass a valid API key.","details":[{"reason":"API_KEY_INVALID"}]}}');
-				}
-				yield { name: modelId };
-			}
-		};
-
-		const storage = createStorageService({
-			getAPIKey: vi.fn().mockResolvedValue('bad_key'),
-		});
-
-		mockHandleAPIKeyUpdate.mockResolvedValue({ apiKey: 'k_new', deleted: false, cancelled: false });
-
-		const knownModels = {
-			[modelId]: {
-				name: 'Test Model',
-				maxInputTokens: 1000,
-				maxOutputTokens: 1000,
-				toolCalling: false,
-				vision: false
-			}
-		};
-
-		const provider = new GeminiNativeBYOKLMProvider(knownModels, storage, new TestLogService(), createRequestLogger(), new NullTelemetryService(), new NoopOTelService(resolveOTelConfig({ env: {}, extensionVersion: '1.0.0', sessionId: 'test' })));
-		const tokenSource = new vscode.CancellationTokenSource();
-		const models = await provider.provideLanguageModelChatInformation({ silent: false }, tokenSource.token);
-
-		// First attempt should fail with invalid key, then after re-prompting
-		// we should retry listing models and succeed with the new key.
-		expect(models.map(m => m.id)).toEqual([modelId]);
-		expect(iterationCount).toBe(2);
-		expect(mockHandleAPIKeyUpdate).toHaveBeenCalled();
+		await expect(provider.provideLanguageModelChatInformation(
+			{ silent: true, configuration: { apiKey: 'bad_key' } } as Parameters<typeof provider.provideLanguageModelChatInformation>[0],
+			tokenSource.token
+		)).rejects.toThrow(/API key not valid/i);
+		expect(mockNotifyByokKeyRejected).toHaveBeenCalledWith('Gemini');
 	});
 });
