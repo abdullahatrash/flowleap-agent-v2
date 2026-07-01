@@ -246,9 +246,13 @@ export class PatentAIEndpointProvider implements IEndpointProvider {
 	 * only inference path, so this is a hard stop rather than a fallback to the retired
 	 * backend. The onboarding gate ({@link hasByokModel}) is expected to catch this state
 	 * earlier and prompt the user to connect a provider.
+	 *
+	 * The message carries a `command:` link: in the chat error renderer the manage-models
+	 * command is the one trusted command, so "Manage Models" is clickable there; elsewhere
+	 * the sentence still reads sensibly as plain text.
 	 */
 	private _throwNoByokModel(): never {
-		throw new Error('No connected model. Add your own provider key via "Manage Models" to start a chat.');
+		throw new Error('No connected model. Add your own API key to start a chat: [Manage Models](command:workbench.action.chat.manage)');
 	}
 
 	/**
