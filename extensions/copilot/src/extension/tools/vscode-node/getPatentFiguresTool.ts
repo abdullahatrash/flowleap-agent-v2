@@ -9,7 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { decodeBase64 } from '../../../util/vs/base/common/buffer';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 
@@ -157,7 +157,7 @@ class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
 				}
 				this.logService.error(`[GetPatentFiguresTool] Backend error ${error.status}: ${error.message}`);
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error fetching figures for ${publicationNumber}: ${error.status} - ${error.message}`)
+					new LanguageModelTextPart(`Error fetching figures for ${publicationNumber}: ${error.status} - ${error.message}` + patentBackendErrorRecoveryHint(error))
 				]);
 			}
 			this.logService.error(`[GetPatentFiguresTool] Exception: ${error instanceof Error ? error.message : String(error)}`);

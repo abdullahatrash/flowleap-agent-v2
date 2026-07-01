@@ -8,7 +8,7 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { curlToApiRequestHint } from './curlToApiRequest';
@@ -151,7 +151,7 @@ class OpsApiGuideTool implements ICopilotTool<IOpsApiGuideParams> {
 				}
 				this.logService.error(`[OpsApiGuideTool] Backend error ${error.status}: ${error.message}`);
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error: Failed to fetch OPS API docs: ${error.status} ${error.message}`)
+					new LanguageModelTextPart(`Error: Failed to fetch OPS API docs: ${error.status} ${error.message}` + patentBackendErrorRecoveryHint(error))
 				]);
 			}
 			this.logService.error(`[OpsApiGuideTool] Exception: ${error instanceof Error ? error.message : String(error)}`);

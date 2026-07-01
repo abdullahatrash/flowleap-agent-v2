@@ -60,6 +60,22 @@ export class AuthRequiredError extends PatentBackendError {
 	}
 }
 
+/**
+ * Model-facing recovery hint for an auth/setup failure from the backend. Tools append this to
+ * their error result so the assistant can tell the user the concrete next step in-chat — the
+ * actionable notification the seam fires is easy to miss mid-conversation. Empty for every
+ * other backend error, so tools keep their generic error format.
+ */
+export function patentBackendErrorRecoveryHint(error: PatentBackendError): string {
+	if (error instanceof AuthRequiredError) {
+		return ' The user is not signed in to FlowLeap (a notification with a Sign In button was shown). Ask the user to run the "FlowLeap: Sign In" command, then retry this tool.';
+	}
+	if (error instanceof SubscriptionRequiredError) {
+		return ' FlowLeap needs to be set up before patent data is available (a notification with the next step was shown). Ask the user to complete it, then retry this tool.';
+	}
+	return '';
+}
+
 // ── Service options + interface ────────────────────────────────────────────────
 
 export interface IPatentBackendRequestOptions {

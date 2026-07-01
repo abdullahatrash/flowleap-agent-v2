@@ -8,7 +8,7 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { normaliseToRelativePath } from './curlToApiRequest';
@@ -100,16 +100,9 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 				if (error.message === 'Request cancelled.') {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Request cancelled.')]);
 				}
-				if (error.status === 401 || error.status === 403) {
-					return new LanguageModelToolResult([
-						new LanguageModelTextPart(
-							'Authentication required — ask the user to run the \'Patent AI: Sign In\' command, then retry.'
-						)
-					]);
-				}
 				this.logService.error(`[PatentApiRequestTool] Backend error ${error.status}: ${error.message}`);
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Backend error ${error.status}: ${error.message}`)
+					new LanguageModelTextPart(`Backend error ${error.status}: ${error.message}` + patentBackendErrorRecoveryHint(error))
 				]);
 			}
 			this.logService.error(`[PatentApiRequestTool] Exception: ${error instanceof Error ? error.message : String(error)}`);

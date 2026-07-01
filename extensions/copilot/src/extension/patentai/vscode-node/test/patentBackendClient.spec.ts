@@ -20,7 +20,7 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, PatentBackendClient, PatentBackendError, SubscriptionRequiredError } from '../patentBackendClient';
+import { AuthRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
 import type { ILogService } from '../../../../platform/log/common/logService';
@@ -400,5 +400,20 @@ describe('auth gate (401)', () => {
 		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
 
 		expect(thrown).toBeInstanceOf(AuthRequiredError);
+	});
+});
+
+describe('patentBackendErrorRecoveryHint', () => {
+
+	it('maps each error type to its model-facing hint (empty for generic backend errors)', () => {
+		expect([
+			patentBackendErrorRecoveryHint(new AuthRequiredError('nope')),
+			patentBackendErrorRecoveryHint(new SubscriptionRequiredError('nope', 'https://flowleap.co/pricing')),
+			patentBackendErrorRecoveryHint(new PatentBackendError(500, 'boom')),
+		]).toEqual([
+			expect.stringContaining('"FlowLeap: Sign In"'),
+			expect.stringContaining('set up'),
+			'',
+		]);
 	});
 });

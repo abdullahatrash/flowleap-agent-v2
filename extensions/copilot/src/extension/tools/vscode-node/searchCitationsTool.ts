@@ -8,7 +8,7 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 
@@ -130,7 +130,7 @@ class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams> {
 				}
 				this.logService.error(`[SearchCitationsTool] Backend error ${error.status}: ${error.message}`);
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error: Citation search backend returned ${error.status}: ${error.message}`)
+					new LanguageModelTextPart(`Error: Citation search backend returned ${error.status}: ${error.message}` + patentBackendErrorRecoveryHint(error))
 				]);
 			}
 			this.logService.error(`[SearchCitationsTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
