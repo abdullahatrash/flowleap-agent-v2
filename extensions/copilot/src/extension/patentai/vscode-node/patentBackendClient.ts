@@ -62,6 +62,21 @@ export class AuthRequiredError extends PatentBackendError {
 }
 
 /**
+ * Thrown when the backend answers `400 { error: { code: 'patent_provider_key_invalid',
+ * provider } }` — EPO OPS / USPTO ODP rejected the USER's forwarded data key (#30 wire
+ * contract). Deliberately not 401 (Clerk re-sign-in) or 402: the recovery action is
+ * "update your patent-data keys". Extends {@link PatentBackendError} so tool catch paths
+ * keep working.
+ */
+export class DataKeyInvalidError extends PatentBackendError {
+	readonly code = 'patent_provider_key_invalid';
+	constructor(message: string, readonly provider: 'epo' | 'uspto') {
+		super(400, message);
+		this.name = 'DataKeyInvalidError';
+	}
+}
+
+/**
  * Model-facing recovery hint for an auth/setup failure from the backend. Tools append this to
  * their error result so the assistant can tell the user the concrete next step in-chat — the
  * actionable notification the seam fires is easy to miss mid-conversation. Empty for every
@@ -73,6 +88,10 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	}
 	if (error instanceof SubscriptionRequiredError) {
 		return ' FlowLeap needs to be set up before patent data is available (a notification with the next step was shown). Ask the user to complete it, then retry this tool.';
+	}
+	if (error instanceof DataKeyInvalidError) {
+		const providerName = error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP';
+		return ` The user's ${providerName} data key was rejected by the provider. Ask the user to run the "FlowLeap: Patent Data Keys" command to update it, then retry this tool.`;
 	}
 	return '';
 }
@@ -130,7 +149,13 @@ interface AuthRequiredInfo {
 
 const SIGN_IN_ACTION = 'Sign In';
 const START_TRIAL_ACTION = 'Start Free Trial';
+const UPDATE_KEYS_ACTION = 'Patent Data Keys';
 const SIGNED_OUT_MESSAGE = 'Sign in to FlowLeap to use patent data.';
+
+interface DataKeyInvalidInfo {
+	readonly message: string;
+	readonly provider: 'epo' | 'uspto';
+}
 
 /**
  * DI implementation of {@link IPatentBackendClient}.
@@ -239,6 +264,17 @@ export class PatentBackendClient implements IPatentBackendClient {
 					}
 				}
 
+				// Centralized data-key gate: `400 patent_provider_key_invalid` means EPO/USPTO
+				// rejected the USER's forwarded key (#30 contract). Prompt the keys UI once here
+				// so every tool inherits the "update your keys" action.
+				if (response.status === 400) {
+					const info = parseDataKeyInvalid(text);
+					if (info) {
+						this._fireDataKeyInvalidUx(info);
+						throw new DataKeyInvalidError(info.message, info.provider);
+					}
+				}
+
 				// Centralized auth gate: a `401` means the Clerk token is missing, expired, or invalid.
 				// The client knows *before* the request whether a local token existed, so it can tell
 				// never-signed-in apart from an expired session without trusting the backend body: no
@@ -288,6 +324,21 @@ export class PatentBackendClient implements IPatentBackendClient {
 		this._promptAuthRequired(info).catch(err => this._logService.warn(`[PatentBackendClient] re-auth prompt failed: ${err}`));
 	}
 
+	/**
+	 * Show the "update your keys" prompt for a rejected data key, opening the keys UI when
+	 * accepted. Fire-and-forget: a failing prompt must never mask the {@link DataKeyInvalidError}.
+	 */
+	private _fireDataKeyInvalidUx(info: DataKeyInvalidInfo): void {
+		this._promptDataKeyInvalid(info).catch(err => this._logService.warn(`[PatentBackendClient] data-key prompt failed: ${err}`));
+	}
+
+	private async _promptDataKeyInvalid(info: DataKeyInvalidInfo): Promise<void> {
+		const choice = await this._notificationService.showWarningMessage(info.message, UPDATE_KEYS_ACTION);
+		if (choice === UPDATE_KEYS_ACTION) {
+			await vscode.commands.executeCommand('flowleap.patentDataKeys');
+		}
+	}
+
 	private async _promptAuthRequired(info: AuthRequiredInfo): Promise<void> {
 		// A signed-out user did nothing wrong — invite with an info toast; reserve the warning
 		// severity for a session that was working and then expired.
@@ -304,6 +355,25 @@ export class PatentBackendClient implements IPatentBackendClient {
 }
 
 // ── Body parsing ────────────────────────────────────────────────────────────────
+
+/** Parse a `400` body, returning data-key info only when it matches the #30 contract. */
+function parseDataKeyInvalid(body: string): DataKeyInvalidInfo | undefined {
+	try {
+		const parsed = JSON.parse(body) as { error?: { code?: string; message?: string; provider?: string } };
+		const error = parsed?.error;
+		if (error?.code !== 'patent_provider_key_invalid' || (error.provider !== 'epo' && error.provider !== 'uspto')) {
+			return undefined;
+		}
+		const providerName = error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP';
+		return {
+			message: error.message || `${providerName} rejected your patent-data key. Update it to continue.`,
+			provider: error.provider,
+		};
+	} catch {
+		// Not JSON — let the caller fall back to generic error handling.
+		return undefined;
+	}
+}
 
 /** Extract a clean message from a `401` body, falling back to a default. */
 function parseAuthRequired(body: string): AuthRequiredInfo {

@@ -3088,6 +3088,11 @@
         "category": "FlowLeap"
       },
       {
+        "command": "flowleap.patentDataKeys",
+        "title": "Patent Data Keys",
+        "category": "FlowLeap"
+      },
+      {
         "command": "github.copilot.chat.triggerPermissiveSignIn",
         "title": "%github.copilot.command.triggerPermissiveSignIn%"
       },

@@ -14,7 +14,9 @@ import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { triggerFlowleapSignIn } from './flowleapSignIn';
 import { PatentAIAuthService } from './patentAuthService';
+import { IPatentBackendClient } from './patentBackendClient';
 import { PatentDataKeysStore } from './patentDataKeysStore';
+import { registerPatentDataKeysCommand } from './patentDataKeysUI';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -42,6 +44,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		@ILogService private readonly _logService: ILogService,
 		@IAuthenticationService private readonly _authService: IAuthenticationService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+		@IPatentBackendClient private readonly _patentBackendClient: IPatentBackendClient,
 	) {
 		super();
 		this._initialize();
@@ -61,6 +64,11 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// Registers the patentDataKeysRegistry accessor the backend client reads per
 			// request (#31); loads from SecretStorage asynchronously.
 			this._dataKeysStore = PatentDataKeysStore.register(this._extensionContext, this._logService);
+		});
+		this._safeStep('register data-keys command', () => {
+			if (this._dataKeysStore) {
+				this._register(registerPatentDataKeysCommand(this._dataKeysStore, this._patentBackendClient, this._logService));
+			}
 		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());
 		this._safeStep('log authentication status', () => this._logAuthenticationStatus());

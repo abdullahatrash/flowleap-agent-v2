@@ -20,7 +20,7 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
+import { AuthRequiredError, DataKeyInvalidError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
 import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
@@ -439,16 +439,57 @@ describe('auth gate (401)', () => {
 	});
 });
 
+describe('data-key gate (400 patent_provider_key_invalid)', () => {
+
+	const BODY = {
+		error: {
+			message: 'EPO OPS rejected the supplied consumer key/secret (HTTP 401). Check your OPS credentials.',
+			type: 'invalid_request_error',
+			code: 'patent_provider_key_invalid',
+			provider: 'epo',
+		},
+	};
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-123'));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('throws a structured DataKeyInvalidError, shows the keys prompt, and opens the keys UI when accepted', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(400, BODY));
+		notification.showWarningMessage.mockResolvedValueOnce('Patent Data Keys' as never);
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await flush();
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).toBeInstanceOf(DataKeyInvalidError);
+		expect((thrown as DataKeyInvalidError).provider).toBe('epo');
+		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining('EPO OPS'), 'Patent Data Keys');
+		expect(executeCommandMock).toHaveBeenCalledWith('flowleap.patentDataKeys');
+	});
+
+	it('leaves a generic 400 (no matching code) untyped', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(400, { error: { code: 'bad_request', message: 'nope' } }));
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).not.toBeInstanceOf(DataKeyInvalidError);
+		expect(notification.showWarningMessage).not.toHaveBeenCalled();
+	});
+});
+
 describe('patentBackendErrorRecoveryHint', () => {
 
 	it('maps each error type to its model-facing hint (empty for generic backend errors)', () => {
 		expect([
 			patentBackendErrorRecoveryHint(new AuthRequiredError('nope')),
 			patentBackendErrorRecoveryHint(new SubscriptionRequiredError('nope', 'https://flowleap.co/pricing')),
+			patentBackendErrorRecoveryHint(new DataKeyInvalidError('nope', 'uspto')),
 			patentBackendErrorRecoveryHint(new PatentBackendError(500, 'boom')),
 		]).toEqual([
 			expect.stringContaining('"FlowLeap: Sign In"'),
 			expect.stringContaining('set up'),
+			expect.stringContaining('"FlowLeap: Patent Data Keys"'),
 			'',
 		]);
 	});
