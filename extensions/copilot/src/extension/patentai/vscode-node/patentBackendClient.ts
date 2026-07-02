@@ -11,6 +11,7 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { createServiceIdentifier } from '../../../util/common/services';
 import { URI } from '../../../util/vs/base/common/uri';
+import { EPO_OPS_KEY_HEADER, EPO_OPS_SECRET_HEADER, getPatentDataKeys, USPTO_ODP_KEY_HEADER } from '../common/patentDataKeysRegistry';
 import { getPatentAccessToken } from '../common/patentTokenRegistry';
 import { getPatentAIConfig } from './configService';
 
@@ -183,6 +184,17 @@ export class PatentBackendClient implements IPatentBackendClient {
 		const accessToken = getPatentAccessToken();
 		if (accessToken) {
 			headers['Authorization'] = `Bearer ${accessToken}`;
+		}
+		// BYO patent-data keys (#31, ADR 0005): forwarded per the #30 wire contract when the
+		// user configured them; absent headers mean the backend's FlowLeap-key behavior. The
+		// two providers are independent (EPO-only / USPTO-only are valid). Never log these.
+		const dataKeys = getPatentDataKeys();
+		if (dataKeys?.epo) {
+			headers[EPO_OPS_KEY_HEADER] = dataKeys.epo.key;
+			headers[EPO_OPS_SECRET_HEADER] = dataKeys.epo.secret;
+		}
+		if (dataKeys?.usptoOdp) {
+			headers[USPTO_ODP_KEY_HEADER] = dataKeys.usptoOdp;
 		}
 
 		try {

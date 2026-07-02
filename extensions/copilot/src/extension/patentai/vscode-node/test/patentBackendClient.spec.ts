@@ -21,6 +21,7 @@ vi.mock('../configService', () => ({
 }));
 
 import { AuthRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
+import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
 import type { ILogService } from '../../../../platform/log/common/logService';
@@ -221,6 +222,41 @@ describe('PatentBackendClient.post', () => {
 		expect(thrown).toBeInstanceOf(PatentBackendError);
 		expect((thrown as PatentBackendError).message).toBe('Request cancelled.');
 	}, 3000);
+});
+
+describe('BYO patent-data key forwarding (#31)', () => {
+
+	beforeEach(() => {
+		registerPatentAccessTokenProvider(() => undefined);
+		registerPatentDataKeysProvider(() => undefined);
+	});
+	afterEach(() => vi.restoreAllMocks());
+
+	it('forwards the #30 wire-contract headers per configuration (both, EPO-only, USPTO-only, none)', async () => {
+		const captured: Array<Record<string, string> | undefined> = [];
+		const { client } = makeClient(async (_url, options) => {
+			captured.push(options.headers);
+			return makeResponse(200, { success: true });
+		});
+		const configs = [
+			{ epo: { key: 'ek', secret: 'es' }, usptoOdp: 'uk' },
+			{ epo: { key: 'ek', secret: 'es' } },
+			{ usptoOdp: 'uk' },
+			undefined,
+		];
+
+		for (const keys of configs) {
+			registerPatentDataKeysProvider(() => keys);
+			await client.post('/patent-search', {}, makeToken());
+		}
+
+		expect(captured.map(h => [h?.['X-EPO-OPS-Key'], h?.['X-EPO-OPS-Secret'], h?.['X-USPTO-ODP-Key']])).toEqual([
+			['ek', 'es', 'uk'],
+			['ek', 'es', undefined],
+			[undefined, undefined, 'uk'],
+			[undefined, undefined, undefined],
+		]);
+	});
 });
 
 describe('PatentBackendClient.get', () => {

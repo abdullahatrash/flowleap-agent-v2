@@ -14,6 +14,7 @@ import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { triggerFlowleapSignIn } from './flowleapSignIn';
 import { PatentAIAuthService } from './patentAuthService';
+import { PatentDataKeysStore } from './patentDataKeysStore';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -28,6 +29,14 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 
 	/** The flow owner. Created in {@link _registerAuthProvider}; the commands drive it. */
 	private _authProvider: FlowLeapAuthenticationProvider | undefined;
+
+	/** SecretStorage owner for the BYO patent-data keys (#31); the Keys UI (#32) drives it. */
+	private _dataKeysStore: PatentDataKeysStore | undefined;
+
+	/** The data-keys store, for the Keys UI layer (#32). */
+	get dataKeysStore(): PatentDataKeysStore | undefined {
+		return this._dataKeysStore;
+	}
 
 	constructor(
 		@ILogService private readonly _logService: ILogService,
@@ -48,6 +57,11 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		// "command 'patent-ai.signIn' not found".
 		this._safeStep('validate configuration', () => this._validateConfiguration());
 		this._safeStep('register auth provider', () => this._registerAuthProvider());
+		this._safeStep('register data-keys store', () => {
+			// Registers the patentDataKeysRegistry accessor the backend client reads per
+			// request (#31); loads from SecretStorage asynchronously.
+			this._dataKeysStore = PatentDataKeysStore.register(this._extensionContext, this._logService);
+		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());
 		this._safeStep('log authentication status', () => this._logAuthenticationStatus());
 
