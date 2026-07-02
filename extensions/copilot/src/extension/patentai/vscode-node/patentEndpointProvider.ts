@@ -30,7 +30,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
  * "thinking" hang (`copilotcli` / `claude-code`). This list is exhaustive: it covers
  * every non-BYOK `registerLanguageModelChatProvider` vendor in the extension.
  */
-const NON_BYOK_VENDORS: ReadonlySet<string> = new Set(['copilot', 'copilotcli', 'claude-code', 'patent-ai', 'flowleap']);
+export const NON_BYOK_VENDORS: ReadonlySet<string> = new Set(['copilot', 'copilotcli', 'claude-code', 'patent-ai', 'flowleap']);
 
 const BYOK_VENDOR_IDS: readonly string[] = [
 	'anthropic',

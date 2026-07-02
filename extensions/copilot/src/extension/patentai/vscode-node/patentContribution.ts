@@ -17,6 +17,7 @@ import { PatentAIAuthService } from './patentAuthService';
 import { IPatentBackendClient } from './patentBackendClient';
 import { PatentDataKeysStore } from './patentDataKeysStore';
 import { registerPatentDataKeysCommand } from './patentDataKeysUI';
+import { registerPatentSetupView } from './patentSetupView';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -68,6 +69,14 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		this._safeStep('register data-keys command', () => {
 			if (this._dataKeysStore) {
 				this._register(registerPatentDataKeysCommand(this._dataKeysStore, this._patentBackendClient, this._logService));
+			}
+		});
+		this._safeStep('register setup view', () => {
+			// The "Setup" row view under the FlowLeap activity-bar container (the container
+			// itself is contributed by the flowleap shell extension; this extension owns the
+			// state the view shows, so the provider lives here).
+			if (this._dataKeysStore && this._authProvider) {
+				this._register(registerPatentSetupView(this._dataKeysStore, this._authProvider, this._logService));
 			}
 		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());

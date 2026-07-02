@@ -82,11 +82,17 @@ const PROVIDERS: readonly ProviderSpec[] = [
 	{ provider: 'uspto', label: 'USPTO ODP (US Patent Office)', signupUrl: USPTO_SIGNUP_URL, isConfigured: s => !!s.getKeys()?.usptoOdp },
 ];
 
-/** Register the `FlowLeap: Patent Data Keys` command. */
+/** Register the `FlowLeap: Patent Data Keys` command. An optional provider argument
+ *  (e.g. from the FlowLeap Setup view) deep-links straight to that provider's menu. */
 export function registerPatentDataKeysCommand(store: PatentDataKeysStore, client: IPatentBackendClient, logService: ILogService): vscode.Disposable {
-	return vscode.commands.registerCommand(PATENT_DATA_KEYS_COMMAND, async () => {
+	return vscode.commands.registerCommand(PATENT_DATA_KEYS_COMMAND, async (provider?: Provider) => {
 		try {
-			await showProviderMenu(store, client);
+			const spec = PROVIDERS.find(s => s.provider === provider);
+			if (spec) {
+				await showActionMenu(store, client, spec);
+			} else {
+				await showProviderMenu(store, client);
+			}
 		} catch (error) {
 			logService.error(`[Patent AI] Patent Data Keys UI failed: ${error instanceof Error ? error.message : String(error)}`);
 		}

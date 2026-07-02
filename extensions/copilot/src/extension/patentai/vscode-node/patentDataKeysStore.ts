@@ -5,6 +5,7 @@
 
 import { ILogService } from '../../../platform/log/common/logService';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
+import { Emitter, Event } from '../../../util/vs/base/common/event';
 import {
 	PatentDataKeys,
 	PatentEpoCredentials,
@@ -27,6 +28,10 @@ const DATA_KEYS_STORAGE_KEY = 'patent-ai-data-keys';
 export class PatentDataKeysStore {
 
 	private _keys: PatentDataKeys | undefined;
+
+	private readonly _onDidChange = new Emitter<void>();
+	/** Fires when the configured keys change (load, set, clear) — drives status UI refreshes. */
+	readonly onDidChange: Event<void> = this._onDidChange.event;
 
 	/** Resolves once the initial SecretStorage load completed (the accessor returns undefined until then). */
 	readonly whenReady: Promise<void>;
@@ -57,6 +62,7 @@ export class PatentDataKeysStore {
 				...(typeof parsed.usptoOdp === 'string' && parsed.usptoOdp ? { usptoOdp: parsed.usptoOdp } : {}),
 			};
 			this._logService.info(`[Patent AI] Data keys loaded (epo=${!!this._keys.epo}, usptoOdp=${!!this._keys.usptoOdp})`);
+			this._onDidChange.fire();
 		} catch (error) {
 			this._logService.error(`[Patent AI] Failed to load data keys: ${error instanceof Error ? error.message : String(error)}`);
 		}
@@ -96,5 +102,6 @@ export class PatentDataKeysStore {
 			this._keys = undefined;
 			await this._context.secrets.delete(DATA_KEYS_STORAGE_KEY);
 		}
+		this._onDidChange.fire();
 	}
 }

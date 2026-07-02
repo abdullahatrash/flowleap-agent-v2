@@ -6641,6 +6641,14 @@
       }
     ],
     "views": {
+      "flowleap-sidebar": [
+        {
+          "id": "flowleap.setupView",
+          "name": "Setup",
+          "icon": "$(gear)",
+          "contextualTitle": "FlowLeap Setup"
+        }
+      ],
       "copilot-chat": [
         {
           "id": "copilot-chat",
