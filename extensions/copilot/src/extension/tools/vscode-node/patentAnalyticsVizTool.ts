@@ -62,6 +62,9 @@ interface AnalyticsData {
 /** Sample size for the distribution aggregations — the OPS search page we fetch with biblio details. */
 const SAMPLE_SIZE = 100;
 
+/** The backend staggers per-doc biblio fetches for the sample, so allow well beyond the 30s default. */
+const SEARCH_TIMEOUT_MS = 90_000;
+
 /**
  * Tool for fetching patent analytics. Builds a CQL query from the structured criteria, searches
  * EPO OPS via the FlowLeap backend (through the shared {@link IPatentBackendClient} seam, so it
@@ -104,7 +107,7 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 				params.set('countries', options.input.countryCode.toUpperCase());
 			}
 
-			const result = await this.patentBackendClient.get<OpsEnvelope<OpsSearchData>>(`/ops/search?${params.toString()}`, token);
+			const result = await this.patentBackendClient.get<OpsEnvelope<OpsSearchData>>(`/ops/search?${params.toString()}`, token, { timeoutMs: SEARCH_TIMEOUT_MS });
 
 			if (!result.success || !result.data) {
 				return new LanguageModelToolResult([
