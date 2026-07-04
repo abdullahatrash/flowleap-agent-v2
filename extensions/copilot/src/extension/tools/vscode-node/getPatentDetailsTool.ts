@@ -16,35 +16,46 @@ interface IGetPatentDetailsParams {
 	publicationNumber: string;
 }
 
-interface PatentDetails {
-	publicationNumber: string;
-	countryCode: string;
-	kindCode: string;
-	title: string | null;
-	abstract: string | null;
-	claims: string | null;
-	description: string | null;
-	applicants: string[];
-	inventors: string[];
-	filingDate: string | null;
-	publicationDate: string | null;
-	priorityDate: string | null;
-	ipc: string[];
-	cpc: string[];
-	citationCount: number;
-	familyId: string | null;
-}
-
-interface PatentDetailsResult {
+interface OpsEnvelope<T> {
 	success: boolean;
-	patent?: PatentDetails;
+	data?: T;
 	error?: string;
 }
 
+interface OpsBiblioData {
+	docId: string;
+	title: string | null;
+	abstract: string | null;
+	applicants: string[];
+	inventors: string[];
+	ipc: string[];
+	cpc: string[];
+	dates: {
+		filing: string | null;
+		publication: string | null;
+		priority: string[];
+	};
+}
+
+interface OpsClaimsData {
+	docId: string;
+	lang: string;
+	claims: string[];
+}
+
+interface OpsDescriptionData {
+	docId: string;
+	lang: string;
+	description: string;
+}
+
 /**
- * Tool for retrieving full patent details (claims + description) from the Google Patents BigQuery
- * dataset via the FlowLeap backend. Routes through the shared {@link IPatentBackendClient} seam, so it
- * inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating.
+ * Tool for retrieving full patent details (bibliographic data + claims + description) from EPO OPS
+ * via the FlowLeap backend (`/ops/biblio` + `/ops/fulltext/*`). Routes through the shared
+ * {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` gating. OPS full text covers mainly EP and WO publications; for other
+ * jurisdictions the biblio section still resolves and the output points the model at the
+ * USPTO fallback.
  */
 class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 
@@ -63,52 +74,39 @@ class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 	}
 
 	/**
-	 * Normalize a publication number to the BigQuery format (US-10000000-B2). EPO returns
-	 * un-hyphenated numbers (US10000000B2, EP1234567A1); BigQuery expects hyphens between the
-	 * country code, number, and kind code.
+	 * Normalize a publication number to the OPS epodoc format (US10000000B2). Search results and
+	 * user input may carry hyphens, dots, or spaces (US-10000000-B2); epodoc wants them stripped.
+	 * Kind-code edge cases are handled server-side by cleanDocumentId.
 	 */
 	private normalizePublicationNumber(pubNum: string): string {
-		// Already hyphenated — return as-is.
-		if (pubNum.includes('-')) {
-			return pubNum;
-		}
-
-		// Match CountryCode + Number + KindCode (e.g. US10000000B2, EP1234567A1, WO2020123456A1).
-		const match = pubNum.match(/^(?<country>[A-Z]{2})(?<number>\d+)(?<kind>[A-Z]\d?)$/);
-		if (match?.groups) {
-			const { country, number, kind } = match.groups;
-			return `${country}-${number}-${kind}`;
-		}
-
-		// No match — return as-is and let the backend handle it.
-		return pubNum;
+		return pubNum.replace(/[-.\s/]/g, '').toUpperCase();
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IGetPatentDetailsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[GetPatentDetailsTool] Invoking patent details fetch');
 
 		const { publicationNumber } = options.input;
-		const normalizedPubNum = this.normalizePublicationNumber(publicationNumber);
-		this.logService.info(`[GetPatentDetailsTool] Normalized: ${publicationNumber} -> ${normalizedPubNum}`);
+		const doc = this.normalizePublicationNumber(publicationNumber);
+		this.logService.info(`[GetPatentDetailsTool] Normalized: ${publicationNumber} -> ${doc}`);
 
 		try {
-			const path = `/patent-search-bq/${encodeURIComponent(normalizedPubNum)}`;
-			this.logService.info(`[GetPatentDetailsTool] Calling backend: ${path}`);
+			const biblioPromise = this.patentBackendClient.get<OpsEnvelope<OpsBiblioData>>(
+				`/ops/biblio?${new URLSearchParams({ doc }).toString()}`, token);
+			const claimsPromise = this.fetchOptionalSection<OpsClaimsData>('/ops/fulltext/claims', doc, token);
+			const descriptionPromise = this.fetchOptionalSection<OpsDescriptionData>('/ops/fulltext/description', doc, token);
 
-			const result = await this.patentBackendClient.get<PatentDetailsResult>(path, token);
-
-			this.logService.info(`[GetPatentDetailsTool] Result success: ${result.success}`);
-
-			if (!result.success || !result.patent) {
-				const errorMsg = result.error || `Patent not found: ${publicationNumber}`;
+			const biblio = await biblioPromise;
+			if (!biblio.success || !biblio.data) {
+				const errorMsg = biblio.error || `Patent not found: ${publicationNumber}`;
 				this.logService.error(`[GetPatentDetailsTool] Error: ${errorMsg}`);
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(errorMsg)
+					new LanguageModelTextPart(`${errorMsg}\n\n${this.usptoFallbackHint(doc)}`)
 				]);
 			}
 
-			// Format results for LLM
-			const formattedResponse = this.formatPatentDetails(result.patent);
+			const [claims, description] = await Promise.all([claimsPromise, descriptionPromise]);
+
+			const formattedResponse = this.formatPatentDetails(biblio.data, claims, description, doc);
 			this.logService.info(`[GetPatentDetailsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -121,8 +119,9 @@ class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Request cancelled.')]);
 				}
 				this.logService.error(`[GetPatentDetailsTool] Backend error ${error.status}: ${error.message}`);
+				const notFoundHint = error.status === 404 ? `\n\n${this.usptoFallbackHint(doc)}` : '';
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error fetching patent ${publicationNumber}: ${error.status} - ${error.message}` + patentBackendErrorRecoveryHint(error))
+					new LanguageModelTextPart(`Error fetching patent ${publicationNumber}: ${error.status} - ${error.message}` + patentBackendErrorRecoveryHint(error) + notFoundHint)
 				]);
 			}
 			this.logService.error(`[GetPatentDetailsTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
@@ -133,34 +132,62 @@ class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 	}
 
 	/**
+	 * Fetch an optional full-text section. OPS full text is only published for some jurisdictions
+	 * (mainly EP/WO), so a 404 here must not fail the whole tool — return null and let the
+	 * formatter point at the fallback. Auth/subscription errors (401/402) and cancellation still
+	 * propagate: the same guards protect `/ops/biblio`, so surfacing them once there is enough.
+	 */
+	private async fetchOptionalSection<T>(path: string, doc: string, token: CancellationToken): Promise<T | null> {
+		try {
+			const result = await this.patentBackendClient.get<OpsEnvelope<T>>(
+				`${path}?${new URLSearchParams({ doc }).toString()}`, token);
+			return result.success && result.data ? result.data : null;
+		} catch (error) {
+			if (error instanceof PatentBackendError && error.message === 'Request cancelled.') {
+				throw error;
+			}
+			this.logService.info(`[GetPatentDetailsTool] Optional section ${path} unavailable for ${doc}: ${error instanceof Error ? error.message : String(error)}`);
+			return null;
+		}
+	}
+
+	private usptoFallbackHint(doc: string): string {
+		return `For US patents, full text is available via the USPTO: use patent_api_request with GET /patent-search-uspto/grants/${doc.replace(/^US/, '').replace(/[A-Z]\d?$/, '')} or POST /patent-search-uspto/search.`;
+	}
+
+	/**
 	 * Format patent details for LLM consumption
 	 */
-	private formatPatentDetails(patent: PatentDetails): string {
+	private formatPatentDetails(biblio: OpsBiblioData, claims: OpsClaimsData | null, description: OpsDescriptionData | null, doc: string): string {
+		const countryCode = biblio.docId?.substring(0, 2) || doc.substring(0, 2);
+		const fulltextFallback = `Not available via EPO OPS for this document (full text is published mainly for EP/WO). ${this.usptoFallbackHint(doc)}`;
+
 		const lines: string[] = [
-			`# Patent: ${patent.publicationNumber}`,
+			`# Patent: ${biblio.docId || doc}`,
 			'',
-			`**Title:** ${patent.title || 'N/A'}`,
-			`**Country:** ${patent.countryCode} | **Kind:** ${patent.kindCode}`,
-			`**Filing Date:** ${patent.filingDate || 'N/A'}`,
-			`**Publication Date:** ${patent.publicationDate || 'N/A'}`,
-			`**Priority Date:** ${patent.priorityDate || 'N/A'}`,
+			`**Title:** ${biblio.title || 'N/A'}`,
+			`**Country:** ${countryCode}`,
+			`**Filing Date:** ${biblio.dates?.filing || 'N/A'}`,
+			`**Publication Date:** ${biblio.dates?.publication || 'N/A'}`,
+			`**Priority Date(s):** ${biblio.dates?.priority?.length > 0 ? biblio.dates.priority.join(', ') : 'N/A'}`,
 			'',
-			`**Applicants:** ${patent.applicants?.length > 0 ? patent.applicants.join(', ') : 'N/A'}`,
-			`**Inventors:** ${patent.inventors?.length > 0 ? patent.inventors.join(', ') : 'N/A'}`,
+			`**Applicants:** ${biblio.applicants?.length > 0 ? biblio.applicants.join(', ') : 'N/A'}`,
+			`**Inventors:** ${biblio.inventors?.length > 0 ? biblio.inventors.join(', ') : 'N/A'}`,
 			'',
-			`**IPC Classifications:** ${patent.ipc?.length > 0 ? patent.ipc.join(', ') : 'N/A'}`,
-			`**CPC Classifications:** ${patent.cpc?.length > 0 ? patent.cpc.join(', ') : 'N/A'}`,
-			`**Citation Count:** ${patent.citationCount || 0}`,
-			`**Family ID:** ${patent.familyId || 'N/A'}`,
+			`**IPC Classifications:** ${biblio.ipc?.length > 0 ? biblio.ipc.join(', ') : 'N/A'}`,
+			`**CPC Classifications:** ${biblio.cpc?.length > 0 ? biblio.cpc.join(', ') : 'N/A'}`,
 			'',
 			'## Abstract',
-			patent.abstract || 'No abstract available.',
+			biblio.abstract || 'No abstract available.',
 			'',
 			'## Claims',
-			patent.claims || 'No claims available.',
+			claims && claims.claims.length > 0 ? claims.claims.join('\n\n') : fulltextFallback,
 			'',
 			'## Description',
-			patent.description || 'No description available.',
+			description?.description || fulltextFallback,
+			'',
+			'---',
+			`For citations use search_citations / search_forward_citations; for the patent family use patent_api_request with GET /ops/family?doc=${doc}.`,
 		];
 
 		return lines.join('\n');

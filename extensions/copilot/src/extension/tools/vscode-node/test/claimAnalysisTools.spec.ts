@@ -19,19 +19,21 @@ function makeLogService(): ILogService {
 }
 
 /**
- * A {@link IPatentBackendClient} whose `post` returns a scripted payload, capturing the path and body
- * it was called with so the test can assert the tool routes through the shared client seam.
+ * A {@link IPatentBackendClient} whose `post`/`get` return scripted payloads, capturing the paths
+ * and bodies they were called with so the test can assert the tool routes through the shared
+ * client seam.
  */
-function makeBackendClient(payload: unknown) {
-	const calls: { path: string; body: unknown }[] = [];
+function makeBackendClient(postPayload?: unknown, getPayload?: unknown) {
+	const calls: { path: string; body?: unknown }[] = [];
 	const client: IPatentBackendClient = {
 		_serviceBrand: undefined,
 		async post<T>(path: string, body: unknown, _token: CancellationToken, _options?: IPatentBackendRequestOptions): Promise<T> {
 			calls.push({ path, body });
-			return payload as T;
+			return postPayload as T;
 		},
-		get<T>(): Promise<T> {
-			throw new Error('get not used by claim-analysis tools');
+		async get<T>(pathWithQuery: string, _token: CancellationToken, _options?: IPatentBackendRequestOptions): Promise<T> {
+			calls.push({ path: pathWithQuery });
+			return getPayload as T;
 		},
 	};
 	return { client, calls };
@@ -107,58 +109,44 @@ describe('claim-analysis tools', () => {
 		`);
 	});
 
-	it('CompareClaimsTool POSTs /compare-claims and renders structured markdown', async () => {
-		const { client, calls } = makeBackendClient({
+	it('CompareClaimsTool GETs /ops/fulltext/claims per patent and renders the comparison package', async () => {
+		const { client, calls } = makeBackendClient(undefined, {
 			success: true,
-			summary: 'One highly relevant prior art reference found.',
-			comparisons: [
-				{
-					patentNumber: 'US-7654321-B2',
-					title: 'Photovoltaic module',
-					relevanceScore: 'HIGH',
-					overlappingElements: ['light-absorbing layer'],
-					missingElements: ['flexible substrate'],
-					keyDifferences: ['Prior art uses a rigid substrate'],
-					analysis: 'Strong overlap on the absorber stack.',
-				},
-			],
+			data: {
+				docId: 'US7654321B2',
+				lang: 'en',
+				claims: ['1. A photovoltaic module comprising a rigid substrate and a light-absorbing layer.'],
+			},
 		});
 		const tool = new CompareClaimsTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({ userClaim: 'A flexible photovoltaic device.', patentNumbers: ['US-7654321-B2'] }), makeToken());
 
-		expect(calls).toEqual([{ path: '/compare-claims', body: { userClaim: 'A flexible photovoltaic device.', patentNumbers: ['US-7654321-B2'] } }]);
+		expect(calls).toEqual([{ path: '/ops/fulltext/claims?doc=US7654321B2' }]);
 		expect(textOf(result)).toMatchInlineSnapshot(`
-			"## Prior Art Comparison Results
+			"## Prior Art Claim Comparison Package
 
-			### Summary
-			One highly relevant prior art reference found.
+			### User Claim
+			\`\`\`
+			A flexible photovoltaic device.
+			\`\`\`
 
-			### Detailed Comparisons
+			### Prior Art Claims
 
 			#### US-7654321-B2
-			**Title:** Photovoltaic module
-			**Relevance:** 🔴 HIGH
-
-			**Overlapping Elements:**
-			- ✓ light-absorbing layer
-
-			**Elements NOT in Prior Art:**
-			- ✗ flexible substrate
-
-			**Key Differences:**
-			- Prior art uses a rigid substrate
-
-			**Analysis:**
-			Strong overlap on the absorber stack.
+			\`\`\`
+			1. A photovoltaic module comprising a rigid substrate and a light-absorbing layer.
+			\`\`\`
 
 			---
+			### Analysis Instructions
+			Now perform an element-by-element comparison of the user claim against each prior-art claim set above. For each patent, report:
+			1. **Relevance** — HIGH (anticipates most/all elements), MEDIUM (discloses several elements), or LOW.
+			2. **Overlapping elements** — user-claim elements disclosed by the prior art, citing the specific claim number.
+			3. **Missing elements** — user-claim elements NOT found in the prior art (potential novelty).
+			4. **Key differences** — material differences in scope or implementation.
 
-			### Next Steps
-			- **HIGH relevance patents** should be carefully reviewed for 102 (anticipation) issues
-			- **MEDIUM relevance patents** may be combined for 103 (obviousness) rejections
-			- Use \`get_patent_details\` to view full claims of specific patents
-			- Consider searching for additional prior art if coverage is low"
+			Then summarize: HIGH-relevance patents raise §102 (anticipation) risk; combinations of MEDIUM-relevance patents may support §103 (obviousness) rejections. Use get_patent_details for full descriptions of specific patents if needed."
 		`);
 	});
 });

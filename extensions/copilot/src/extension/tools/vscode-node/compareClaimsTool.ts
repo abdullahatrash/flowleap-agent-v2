@@ -17,28 +17,31 @@ interface ICompareClaimsParams {
 	patentNumbers: string[];
 }
 
-interface ClaimComparison {
-	patentNumber: string;
-	title: string;
-	relevanceScore: 'HIGH' | 'MEDIUM' | 'LOW';
-	overlappingElements: string[];
-	missingElements: string[];
-	keyDifferences: string[];
-	analysis: string;
-}
-
-interface CompareClaimsResult {
+interface OpsEnvelope<T> {
 	success: boolean;
-	comparisons?: ClaimComparison[];
-	summary?: string;
+	data?: T;
 	error?: string;
 }
 
+interface OpsClaimsData {
+	docId: string;
+	lang: string;
+	claims: string[];
+}
+
+interface FetchedClaims {
+	patentNumber: string;
+	claims: string[] | null;
+	failureReason?: string;
+}
+
 /**
- * Tool for comparing a user's claim against prior art patents. Calls the FlowLeap backend (via the
- * shared {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
- * `402 → start-trial` gating), which fetches patent claims and analyzes overlaps.
- * Should be called AFTER search_patents to analyze relevant results.
+ * Tool for comparing a user's claim against prior art patents. Fetches the actual claims of each
+ * cited patent from EPO OPS (`/ops/fulltext/claims`, via the shared {@link IPatentBackendClient}
+ * seam, so it inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating) and
+ * returns them alongside the user's claim with an analysis rubric — the agent performs the
+ * element-by-element comparison itself. Should be called AFTER search_patents to analyze
+ * relevant results.
  */
 export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 
@@ -84,23 +87,23 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 		}
 
 		try {
-			const result = await this.patentBackendClient.post<CompareClaimsResult>(
-				'/compare-claims',
-				{ userClaim, patentNumbers: limitedPatents },
-				token
-			);
+			const fetched = await Promise.all(limitedPatents.map(p => this.fetchClaims(p, token)));
 
-			this.logService.info('[CompareClaimsTool] Comparison result received');
+			const withClaims = fetched.filter(f => f.claims && f.claims.length > 0);
+			this.logService.info(`[CompareClaimsTool] Fetched claims for ${withClaims.length}/${fetched.length} patents`);
 
-			if (!result.success || !result.comparisons) {
-				this.logService.error(`[CompareClaimsTool] Comparison failed: ${result.error}`);
+			if (withClaims.length === 0) {
+				const failures = fetched.map(f => `- ${f.patentNumber}: ${f.failureReason || 'no claims returned'}`).join('\n');
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error comparing claims: ${result.error}`)
+					new LanguageModelTextPart(
+						`Could not retrieve claims for any of the requested patents:\n${failures}\n\n` +
+						'EPO OPS full text covers mainly EP/WO publications. For US patents, fetch claims via ' +
+						'patent_api_request (POST /patent-search-uspto/search) or get_patent_details, then compare manually.'
+					)
 				]);
 			}
 
-			// Format comparison for LLM
-			const formattedResponse = this.formatComparison(result);
+			const formattedResponse = this.formatComparisonPackage(userClaim, fetched);
 			this.logService.info(`[CompareClaimsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -125,74 +128,72 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 	}
 
 	/**
-	 * Format comparison results for LLM consumption
+	 * Fetch the claims of one patent. Per-patent 404s (full text not published via OPS for that
+	 * jurisdiction) are reported inline rather than failing the whole comparison; auth (401/402)
+	 * and cancellation errors propagate so the seam's centralized recovery UX still fires.
 	 */
-	private formatComparison(result: CompareClaimsResult): string {
+	private async fetchClaims(patentNumber: string, token: CancellationToken): Promise<FetchedClaims> {
+		const doc = patentNumber.replace(/[-.\s/]/g, '').toUpperCase();
+		try {
+			const result = await this.patentBackendClient.get<OpsEnvelope<OpsClaimsData>>(
+				`/ops/fulltext/claims?${new URLSearchParams({ doc }).toString()}`, token);
+			if (!result.success || !result.data || result.data.claims.length === 0) {
+				return { patentNumber, claims: null, failureReason: result.error || 'no claims returned' };
+			}
+			return { patentNumber, claims: result.data.claims };
+		} catch (error) {
+			if (error instanceof PatentBackendError) {
+				if (error.message === 'Request cancelled.' || error.status === 401 || error.status === 402) {
+					throw error;
+				}
+				return { patentNumber, claims: null, failureReason: `${error.status} - ${error.message}` };
+			}
+			return { patentNumber, claims: null, failureReason: error instanceof Error ? error.message : 'unknown error' };
+		}
+	}
+
+	/**
+	 * Assemble the user claim and the fetched prior-art claims into a comparison package with an
+	 * analysis rubric for the agent.
+	 */
+	private formatComparisonPackage(userClaim: string, fetched: FetchedClaims[]): string {
 		const lines: string[] = [
-			'## Prior Art Comparison Results',
+			'## Prior Art Claim Comparison Package',
+			'',
+			'### User Claim',
+			'```',
+			userClaim.trim(),
+			'```',
+			'',
+			'### Prior Art Claims',
 			'',
 		];
 
-		if (result.summary) {
-			lines.push('### Summary');
-			lines.push(result.summary);
+		for (const f of fetched) {
+			lines.push(`#### ${f.patentNumber}`);
+			if (f.claims && f.claims.length > 0) {
+				lines.push('```');
+				lines.push(f.claims.join('\n\n'));
+				lines.push('```');
+			} else {
+				lines.push(`Claims unavailable via EPO OPS (${f.failureReason}). For US patents, fetch via patent_api_request (POST /patent-search-uspto/search).`);
+			}
 			lines.push('');
 		}
 
-		lines.push('### Detailed Comparisons');
-		lines.push('');
-
-		for (const comp of result.comparisons || []) {
-			lines.push(`#### ${comp.patentNumber}`);
-			lines.push(`**Title:** ${comp.title}`);
-			lines.push(`**Relevance:** ${this.getRelevanceEmoji(comp.relevanceScore)} ${comp.relevanceScore}`);
-			lines.push('');
-
-			if (comp.overlappingElements.length > 0) {
-				lines.push('**Overlapping Elements:**');
-				comp.overlappingElements.forEach(elem => lines.push(`- ✓ ${elem}`));
-				lines.push('');
-			}
-
-			if (comp.missingElements.length > 0) {
-				lines.push('**Elements NOT in Prior Art:**');
-				comp.missingElements.forEach(elem => lines.push(`- ✗ ${elem}`));
-				lines.push('');
-			}
-
-			if (comp.keyDifferences.length > 0) {
-				lines.push('**Key Differences:**');
-				comp.keyDifferences.forEach(diff => lines.push(`- ${diff}`));
-				lines.push('');
-			}
-
-			if (comp.analysis) {
-				lines.push('**Analysis:**');
-				lines.push(comp.analysis);
-				lines.push('');
-			}
-
-			lines.push('---');
-			lines.push('');
-		}
-
-		// Add guidance
-		lines.push('### Next Steps');
-		lines.push('- **HIGH relevance patents** should be carefully reviewed for 102 (anticipation) issues');
-		lines.push('- **MEDIUM relevance patents** may be combined for 103 (obviousness) rejections');
-		lines.push('- Use `get_patent_details` to view full claims of specific patents');
-		lines.push('- Consider searching for additional prior art if coverage is low');
+		lines.push(
+			'---',
+			'### Analysis Instructions',
+			'Now perform an element-by-element comparison of the user claim against each prior-art claim set above. For each patent, report:',
+			'1. **Relevance** — HIGH (anticipates most/all elements), MEDIUM (discloses several elements), or LOW.',
+			'2. **Overlapping elements** — user-claim elements disclosed by the prior art, citing the specific claim number.',
+			'3. **Missing elements** — user-claim elements NOT found in the prior art (potential novelty).',
+			'4. **Key differences** — material differences in scope or implementation.',
+			'',
+			'Then summarize: HIGH-relevance patents raise §102 (anticipation) risk; combinations of MEDIUM-relevance patents may support §103 (obviousness) rejections. Use get_patent_details for full descriptions of specific patents if needed.'
+		);
 
 		return lines.join('\n');
-	}
-
-	private getRelevanceEmoji(score: string): string {
-		switch (score) {
-			case 'HIGH': return '🔴';
-			case 'MEDIUM': return '🟡';
-			case 'LOW': return '🟢';
-			default: return '⚪';
-		}
 	}
 }
 
