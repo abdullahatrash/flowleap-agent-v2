@@ -258,6 +258,13 @@ export interface IProductConfiguration {
 	readonly remoteDefaultExtensionsIfInstalledLocally?: string[];
 
 	/**
+	 * View containers (by ID, e.g. `workbench.view.debug`) that start unpinned for new users.
+	 * They stay available via the activity/panel bar context menu and open transiently, but are
+	 * not shown by default. Only applies when no cached composite-bar state exists yet.
+	 */
+	readonly defaultHiddenViewContainers?: readonly string[];
+
+	/**
 	 * Maps an extension-contributed setting key to either a full enterprise {@link IPolicy}
 	 * (the setting owns/"parents" the policy — the original syntax) or an
 	 * {@link IExtensionConfigurationPolicyReference} (`{ policyReference: { name } }`), attaching the
