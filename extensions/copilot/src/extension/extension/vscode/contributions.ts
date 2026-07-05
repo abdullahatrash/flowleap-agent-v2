@@ -7,7 +7,6 @@ import { NesActivationTelemetryContribution } from '../../../platform/inlineEdit
 import { asContributionFactory, IExtensionContributionFactory } from '../../common/contributions';
 import * as contextContribution from '../../context/vscode/context.contribution';
 import { LifecycleTelemetryContrib } from '../../telemetry/common/lifecycleTelemetryContrib';
-import { GithubTelemetryForwardingContrib } from '../../telemetry/vscode/githubTelemetryForwardingContrib';
 
 // ###############################################################################
 // ###                                                                         ###
@@ -20,7 +19,6 @@ import { GithubTelemetryForwardingContrib } from '../../telemetry/vscode/githubT
 const vscodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(LifecycleTelemetryContrib),
 	asContributionFactory(NesActivationTelemetryContribution),
-	asContributionFactory(GithubTelemetryForwardingContrib),
 	contextContribution,
 ];
 
