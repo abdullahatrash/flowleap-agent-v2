@@ -198,6 +198,11 @@
             "default": true,
             "description": "Show FlowLeap Home dashboard on startup"
           },
+          "flowleap.showSetupOnStartup": {
+            "type": "boolean",
+            "default": true,
+            "description": "Open the FlowLeap Settings sidebar on startup until an AI model or patent-data key is configured."
+          },
           "flowleap.chatMode": {
             "type": "string",
             "enum": [

@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { PatentDataKeysStore } from './patentDataKeysStore';
-import { PATENT_DATA_KEYS_COMMAND } from './patentDataKeysUI';
+import { PATENT_DATA_KEYS_COMMAND } from './patentDataKeysPage';
 import { NON_BYOK_VENDORS } from './patentEndpointProvider';
 
 /**

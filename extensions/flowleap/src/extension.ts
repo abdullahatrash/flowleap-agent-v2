@@ -126,10 +126,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// --- Commands ---
 
-	// Open FlowLeap settings
+	// Open FlowLeap settings — the FlowLeap Settings sidebar (patent-data key fields + BYOK
+	// entry), owned by the Patent Agent extension and invoked by command string (same
+	// cross-extension pattern as flowleap.signIn). It links out to the native @flowleap
+	// preferences.
 	context.subscriptions.push(
 		vscode.commands.registerCommand('flowleap.openSettings', () => {
-			return vscode.commands.executeCommand('workbench.action.openSettings', '@flowleap');
+			return vscode.commands.executeCommand('flowleap.patentDataKeys');
 		})
 	);
 

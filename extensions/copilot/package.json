@@ -6649,6 +6649,15 @@
           "contextualTitle": "FlowLeap Setup"
         }
       ],
+      "flowleap-settings": [
+        {
+          "type": "webview",
+          "id": "flowleap.settingsView",
+          "name": "FlowLeap Settings",
+          "icon": "$(settings-gear)",
+          "contextualTitle": "FlowLeap Settings"
+        }
+      ],
       "copilot-chat": [
         {
           "id": "copilot-chat",
@@ -6668,6 +6677,11 @@
     },
     "viewsContainers": {
       "activitybar": [
+        {
+          "id": "flowleap-settings",
+          "title": "FlowLeap Settings",
+          "icon": "$(settings-gear)"
+        },
         {
           "id": "copilot-chat",
           "title": "Chat Debug",

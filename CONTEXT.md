@@ -28,6 +28,17 @@ A deep patent-analysis workflow shipped as a `SKILL.md` (e.g. `prior-art`, `clai
 deliverable. Registered in `package.json` → `chatSkills`.
 _Avoid_: building patent-analysis as coded "intents" — that duplicates the Skills.
 
+**FlowLeap Settings Sidebar**:
+The webview view behind the gear icon in the Activity Bar (owned by the Patent Agent
+extension, since it owns the key store) where the user enters BYO patent-data keys — the EPO
+OPS **Consumer Key + Consumer Secret** pair and the USPTO ODP **API Key** — and reaches the
+BYOK model picker ("Add AI Model"). Keys go straight to SecretStorage; the view only ever sees
+presence booleans, never stored values. It is the single front door for "Settings" in FlowLeap
+surfaces (dashboard, Setup view, invalid-key toasts, menubar Preferences), auto-revealed on
+startup for fresh installs, and links out to the native Settings editor for plain preferences.
+_Avoid_: putting keys in the native Settings editor / `settings.json` (plaintext — forbidden by
+ADR 0005); quick-pick/input-box chains for key entry (the pre-sidebar UX this replaced).
+
 **Workspace-Assistance Command**:
 A lightweight, **user-typed slash command** that helps the user *operate the file-rich patent
 project* — not analysis. Distinct from a Patent Skill (a command is a shortcut, not a deliverable).

@@ -85,7 +85,7 @@ export class HomeDashboardPanel {
 						vscode.commands.executeCommand('workbench.action.openRecent');
 						return;
 					case 'openSettings':
-						vscode.commands.executeCommand('workbench.action.openSettings', '@flowleap');
+						vscode.commands.executeCommand('flowleap.openSettings');
 						return;
 					case 'openChat':
 						vscode.commands.executeCommand('workbench.action.chat.open');

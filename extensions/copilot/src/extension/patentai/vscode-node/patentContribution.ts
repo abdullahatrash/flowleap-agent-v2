@@ -16,7 +16,7 @@ import { triggerFlowleapSignIn } from './flowleapSignIn';
 import { PatentAIAuthService } from './patentAuthService';
 import { IPatentBackendClient } from './patentBackendClient';
 import { PatentDataKeysStore } from './patentDataKeysStore';
-import { registerPatentDataKeysCommand } from './patentDataKeysUI';
+import { maybeShowSetupOnStartup, PatentDataKeysViewProvider, registerPatentDataKeysCommand } from './patentDataKeysPage';
 import { registerPatentSetupView } from './patentSetupView';
 
 /**
@@ -66,9 +66,14 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// request (#31); loads from SecretStorage asynchronously.
 			this._dataKeysStore = PatentDataKeysStore.register(this._extensionContext, this._logService);
 		});
-		this._safeStep('register data-keys command', () => {
+		this._safeStep('register settings view', () => {
+			// The FlowLeap Settings sidebar (own activity-bar gear icon): patent-data key
+			// fields + the Add AI Model (BYOK) entry point. The flowleap.patentDataKeys
+			// command reveals it, so all deep links land there.
 			if (this._dataKeysStore) {
-				this._register(registerPatentDataKeysCommand(this._dataKeysStore, this._patentBackendClient, this._logService));
+				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._logService);
+				this._register(viewProvider.register());
+				this._register(registerPatentDataKeysCommand(viewProvider, this._logService));
 			}
 		});
 		this._safeStep('register setup view', () => {
@@ -80,6 +85,13 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			}
 		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());
+		this._safeStep('reveal setup on first run', () => {
+			// Fire-and-forget: first-run users land on the FlowLeap Settings sidebar
+			// (nothing configured yet); configured users are never interrupted.
+			if (this._dataKeysStore && this._authProvider) {
+				void maybeShowSetupOnStartup(this._dataKeysStore, this._authProvider, this._logService);
+			}
+		});
 		this._safeStep('log authentication status', () => this._logAuthenticationStatus());
 
 		this._logService.info('[Patent AI] FlowLeap authentication ready');

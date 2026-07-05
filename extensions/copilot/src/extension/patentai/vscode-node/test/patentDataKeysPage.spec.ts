@@ -4,18 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { vi } from 'vitest';
-
-vi.mock('vscode', () => ({
-	commands: { registerCommand: vi.fn() },
-	window: {},
-	env: {},
-	Uri: { parse: vi.fn() },
-	ProgressLocation: { Notification: 15 },
-}));
 
 import { AuthRequiredError, DataKeyInvalidError, IPatentBackendClient, PatentBackendError } from '../patentBackendClient';
-import { testPatentDataConnection } from '../patentDataKeysUI';
+import { renderPatentDataKeysPageHtml, testPatentDataConnection } from '../patentDataKeysPage';
 
 function makeClient(behavior: { get?: () => Promise<unknown>; post?: () => Promise<unknown> }): IPatentBackendClient {
 	return {
@@ -47,21 +38,47 @@ describe('testPatentDataConnection', () => {
 		const testingUspto = await testPatentDataConnection(makeClient({ post: epoRejected }), 'uspto');
 
 		expect(testingEpo.ok).toBe(false);
+		expect(testingEpo.failedProvider).toBe('epo');
 		expect(testingEpo.message).toContain('EPO OPS credentials rejected');
 		expect(testingEpo.message).toContain('Update the key');
 		expect(testingUspto.ok).toBe(false);
+		expect(testingUspto.failedProvider).toBe('epo');
 		expect(testingUspto.message).toContain('EPO OPS credentials rejected');
 		expect(testingUspto.message).toContain('Fix or clear that provider first');
 	});
 
-	it('maps signed-out and unreachable-backend states to actionable messages', async () => {
+	it('maps signed-out and unreachable-backend states to actionable messages without blaming a key', async () => {
 		const signedOut = await testPatentDataConnection(
 			makeClient({ get: () => Promise.reject(new AuthRequiredError('no session')) }), 'epo');
 		const down = await testPatentDataConnection(
 			makeClient({ get: () => Promise.reject(new PatentBackendError(undefined, 'Request timed out after 15000 ms.')) }), 'epo');
 
 		expect(signedOut).toEqual({ ok: false, message: 'Sign in to FlowLeap first (the test runs through your FlowLeap account).' });
+		expect(signedOut.failedProvider).toBeUndefined();
 		expect(down.ok).toBe(false);
+		expect(down.failedProvider).toBeUndefined();
 		expect(down.message).toContain('Could not reach the FlowLeap backend');
+	});
+});
+
+describe('renderPatentDataKeysPageHtml', () => {
+
+	it('renders the key fields as a static, secret-free skeleton', () => {
+		const html = renderPatentDataKeysPageHtml('test-nonce');
+
+		// The three fields, correctly named per provider portal terminology.
+		expect(html).toContain('Consumer Key');
+		expect(html).toContain('Consumer Secret');
+		expect(html).toContain('API Key');
+		// The LLM BYOK entry point rendered alongside the data-key cards.
+		expect(html).toContain('Add AI Model (BYOK)');
+		expect(html).toContain('developers.epo.org');
+		expect(html).toContain('data.uspto.gov/myodp');
+		// Masked inputs only; no value attributes — key material never reaches the markup.
+		expect(html.match(/type="password"/g)).toHaveLength(3);
+		expect(html).not.toContain('value=');
+		// Locked-down CSP with the provided nonce.
+		expect(html).toContain(`script-src 'nonce-test-nonce'`);
+		expect(html).toContain(`default-src 'none'`);
 	});
 });
