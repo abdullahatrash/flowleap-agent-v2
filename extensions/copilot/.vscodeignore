@@ -12,10 +12,7 @@ assets/walkthroughs/**
 !dist/worker2.js
 !dist/tikTokenizerWorker.js
 !dist/diffWorker.js
-!dist/copilotCLITodoWorker.js
 !dist/webview.js
-!dist/copilotDebugCommand.js
-!dist/copilotCLIShim.js
 !dist/cli.js
 !dist/suggestionsPanelWebview.js
 !node_modules/@vscode/copilot-typescript-server-plugin/package.json
