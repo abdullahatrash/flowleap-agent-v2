@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { Event } from '../../../../../../base/common/event.js';
-import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { IFlowLeapCliService } from '../../../../../../platform/flowleapCli/common/flowleapCliService.js';
-import { NullLogService } from '../../../../../../platform/log/common/log.js';
-import { INotificationHandle, INotificationProgress, INotificationService, IPromptChoice, IPromptOptions, Severity } from '../../../../../../platform/notification/common/notification.js';
-import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
+import { Event } from '../../../../../base/common/event.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { IFlowLeapCliService } from '../../../../../platform/flowleapCli/common/flowleapCliService.js';
+import { NullLogService } from '../../../../../platform/log/common/log.js';
+import { INotificationHandle, INotificationProgress, INotificationService, IPromptChoice, IPromptOptions, Severity } from '../../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { FlowLeapCliNudge } from '../../browser/flowleapCliNudge.js';
 
 const noopProgress: INotificationProgress = { infinite() { }, total() { }, worked() { }, done() { } };

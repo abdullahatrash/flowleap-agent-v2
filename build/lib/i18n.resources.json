@@ -677,6 +677,10 @@
 			"project": "vscode-sessions"
 		},
 		{
+			"name": "vs/sessions/contrib/flowleapCli",
+			"project": "vscode-sessions"
+		},
+		{
 			"name": "vs/sessions/contrib/providers/copilotChatSessions",
 			"project": "vscode-sessions"
 		},

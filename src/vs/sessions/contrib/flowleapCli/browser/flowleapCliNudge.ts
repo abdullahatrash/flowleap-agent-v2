@@ -3,13 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { URI } from '../../../../../base/common/uri.js';
-import { localize } from '../../../../../nls.js';
-import { IFlowLeapCliService } from '../../../../../platform/flowleapCli/common/flowleapCliService.js';
-import { ILogService } from '../../../../../platform/log/common/log.js';
-import { INotificationService, NeverShowAgainScope, Severity } from '../../../../../platform/notification/common/notification.js';
-import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { localize } from '../../../../nls.js';
+import { IFlowLeapCliService } from '../../../../platform/flowleapCli/common/flowleapCliService.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { INotificationService, NeverShowAgainScope, Severity } from '../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 
 /** The FlowLeap CLI install documentation (source of truth for install steps). */
 const FLOWLEAP_CLI_INSTALL_URL = 'https://github.com/abdullahatrash/flowleap-cli#installation';

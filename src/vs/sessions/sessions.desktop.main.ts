@@ -233,6 +233,9 @@ import './contrib/providers/agentHost/browser/agentHostSessionBranchActions.js';
 import './contrib/providers/agentHost/browser/agentHostSkillButtons.js';
 import './contrib/providers/agentHost/electron-browser/agentHost.contribution.js';
 
+// FlowLeap CLI
+import './contrib/flowleapCli/browser/flowleapCliNudge.contribution.js';
+
 //#endregion
 
 export { main } from './electron-browser/sessions.main.js';
