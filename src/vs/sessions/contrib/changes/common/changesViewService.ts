@@ -21,8 +21,6 @@ export interface ActiveSessionState {
 	readonly uncommittedChanges: number | undefined;
 	readonly hasBranchChanges: boolean | undefined;
 	readonly hasGitHubRemote: boolean | undefined;
-	readonly hasPullRequest: boolean | undefined;
-	readonly hasOpenPullRequest: boolean | undefined;
 	readonly hasGitOperationInProgress: boolean | undefined;
 }
 

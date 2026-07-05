@@ -58,7 +58,6 @@ import { IMultiDiffEditorOptions } from '../../../../editor/browser/widget/multi
 import { getChangesEditorLabels } from './changesEditorLabels.js';
 import { ISessionChangesService } from './sessionChangesService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { CIStatusWidget } from './checksWidget.js';
 import { GITHUB_REMOTE_FILE_SCHEME, ISessionChangesetOperation, SessionChangesetOperationScope, SessionChangesetOperationStatus, SessionStatus } from '../../../services/sessions/common/session.js';
 import { isAgentHostProviderId } from '../../../common/agentHostSessionsProvider.js';
 import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
@@ -67,8 +66,6 @@ import { Color } from '../../../../base/common/color.js';
 import { PANEL_SECTION_BORDER } from '../../../../workbench/common/theme.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../../workbench/common/editor.js';
 import { logChangesViewFileSelect, logChangesViewVersionModeChange, logChangesViewViewModeChange } from '../../../common/sessionsTelemetry.js';
-import { ChecksViewModel } from './checksViewModel.js';
-import { REVEAL_CI_CHECKS_COMMAND_ID } from './checksActions.js';
 import { ActiveSessionContextKeys, CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID, ChangesContextKeys, ChangesViewMode, IsolationMode, SESSIONS_CHANGES_OPEN_SINGLE_FILE_DIFF_SETTING } from '../common/changes.js';
 import { buildTreeChildren, ChangesTreeElement, ChangesTreeRenderer, IChangesFileItem, IChangesTreeRootInfo, isChangesFileItem, toIChangesFileItem } from './changesViewRenderer.js';
 import { ResourceTree } from '../../../../base/common/resourceTree.js';
@@ -199,8 +196,7 @@ class ChangesMenuWorkbenchButtonBarWidget extends Disposable {
 			action.id === 'github.copilot.claude.sessions.commit' ||
 			action.id === 'github.copilot.claude.sessions.commitAndSync' ||
 			action.id === 'agentSession.markAsDone' ||
-			action.id === 'agentSession.restore' ||
-			action.id === 'sessions.action.fixCIChecks'
+			action.id === 'agentSession.restore'
 		) {
 			return { showIcon: true, showLabel: true, isSecondary: false };
 		}
@@ -353,7 +349,6 @@ export class ChangesViewPane extends ViewPane {
 
 	private changesProgressBar!: ProgressBar;
 	private tree: WorkbenchCompressibleObjectTree<ChangesTreeElement> | undefined;
-	private ciStatusWidget: CIStatusWidget | undefined;
 	private splitView: SplitView | undefined;
 	private splitViewContainer: HTMLElement | undefined;
 
@@ -366,8 +361,6 @@ export class ChangesViewPane extends ViewPane {
 	private readonly hasUncommittedChangesContextKey: IContextKey<boolean>;
 	private readonly hasBranchChangesContextKey: IContextKey<boolean>;
 	private readonly hasGitHubRemoteContextKey: IContextKey<boolean>;
-	private readonly hasPullRequestContextKey: IContextKey<boolean>;
-	private readonly hasOpenPullRequestContextKey: IContextKey<boolean>;
 	private readonly hasGitOperationInProgressContextKey: IContextKey<boolean>;
 
 	private readonly hasGitOperationInProgressObs: IObservable<boolean>;
@@ -410,8 +403,6 @@ export class ChangesViewPane extends ViewPane {
 		this.hasUncommittedChangesContextKey = ActiveSessionContextKeys.HasUncommittedChanges.bindTo(this.scopedContextKeyService);
 		this.hasBranchChangesContextKey = ActiveSessionContextKeys.HasBranchChanges.bindTo(this.scopedContextKeyService);
 		this.hasGitHubRemoteContextKey = ActiveSessionContextKeys.HasGitHubRemote.bindTo(this.scopedContextKeyService);
-		this.hasPullRequestContextKey = ActiveSessionContextKeys.HasPullRequest.bindTo(this.scopedContextKeyService);
-		this.hasOpenPullRequestContextKey = ActiveSessionContextKeys.HasOpenPullRequest.bindTo(this.scopedContextKeyService);
 		this.hasGitOperationInProgressContextKey = ActiveSessionContextKeys.HasGitOperationInProgress.bindTo(this.scopedContextKeyService);
 
 		// Version mode
@@ -528,20 +519,15 @@ export class ChangesViewPane extends ViewPane {
 		const welcomeMessage = dom.append(this.welcomeContainer, $('.changes-welcome-message'));
 		welcomeMessage.textContent = localize('changesView.noChanges', "Changed files and other session artifacts will appear here.");
 
-		// CI Status widget — bottom pane
-		this.ciStatusWidget = this._register(this.scopedInstantiationService.createInstance(CIStatusWidget, this.splitViewContainer));
-
-		// Create SplitView
+		// Create SplitView hosting the file tree pane.
 		this.splitView = this._register(new SplitView(this.splitViewContainer, {
 			orientation: Orientation.VERTICAL,
 			proportionalLayout: false,
 		}));
 
-		// Shared constants for pane sizing
-		const ciMinHeight = CIStatusWidget.HEADER_HEIGHT + CIStatusWidget.MIN_BODY_HEIGHT;
 		const treeMinHeight = 3 * ChangesTreeDelegate.ROW_HEIGHT;
 
-		// Top pane: file tree
+		// File tree pane
 		const treePane: IView = {
 			element: this.contentContainer,
 			minimumSize: treeMinHeight,
@@ -553,23 +539,7 @@ export class ChangesViewPane extends ViewPane {
 			},
 		};
 
-		// Bottom pane: CI checks
-		const ciElement = this.ciStatusWidget.element;
-		const ciWidget = this.ciStatusWidget;
-		const ciPane: IView = {
-			element: ciElement,
-			get minimumSize() { return ciWidget.collapsed ? CIStatusWidget.HEADER_HEIGHT : ciMinHeight; },
-			get maximumSize() { return ciWidget.collapsed ? CIStatusWidget.HEADER_HEIGHT : Number.POSITIVE_INFINITY; },
-			onDidChange: Event.map(this.ciStatusWidget.onDidChangeHeight, () => undefined),
-			layout: (height) => {
-				ciElement.style.height = `${height}px`;
-				const bodyHeight = Math.max(0, height - CIStatusWidget.HEADER_HEIGHT);
-				ciWidget.layout(bodyHeight);
-			},
-		};
-
 		this.splitView.addView(treePane, Sizing.Distribute, 0, true);
-		this.splitView.addView(ciPane, CIStatusWidget.HEADER_HEIGHT + CIStatusWidget.PREFERRED_BODY_HEIGHT, 1, true);
 
 		// Style the sash as a visible separator between sections
 		const updateSplitViewStyles = () => {
@@ -578,40 +548,6 @@ export class ChangesViewPane extends ViewPane {
 		};
 		updateSplitViewStyles();
 		this._register(this.themeService.onDidColorThemeChange(updateSplitViewStyles));
-
-		// Initially hide CI pane until checks arrive
-		this.splitView.setViewVisible(1, false);
-
-		let savedCIPaneHeight = CIStatusWidget.HEADER_HEIGHT + CIStatusWidget.PREFERRED_BODY_HEIGHT;
-		this._register(this.ciStatusWidget.onDidToggleCollapsed(collapsed => {
-			if (!this.splitView || !this.ciStatusWidget) {
-				return;
-			}
-			if (collapsed) {
-				// Save current size before collapsing
-				const currentSize = this.splitView.getViewSize(1);
-				if (currentSize > CIStatusWidget.HEADER_HEIGHT) {
-					savedCIPaneHeight = currentSize;
-				}
-				this.splitView.resizeView(1, CIStatusWidget.HEADER_HEIGHT);
-			} else {
-				// Restore saved size on expand
-				this.splitView.resizeView(1, savedCIPaneHeight);
-			}
-			this.layoutSplitView();
-		}));
-
-		this._register(this.ciStatusWidget.onDidChangeHeight(() => {
-			if (!this.splitView || !this.ciStatusWidget) {
-				return;
-			}
-			const visible = this.ciStatusWidget.visible;
-			const isCurrentlyVisible = this.splitView.isViewVisible(1);
-			if (visible !== isCurrentlyVisible) {
-				this.splitView.setViewVisible(1, visible);
-			}
-			this.layoutSplitView();
-		}));
 
 		this._register(this.onDidChangeBodyVisibility(visible => {
 			if (visible) {
@@ -776,14 +712,6 @@ export class ChangesViewPane extends ViewPane {
 			}));
 		}
 
-		// Checks
-		if (this.ciStatusWidget) {
-			const checksViewModel = this.scopedInstantiationService.createInstance(ChecksViewModel);
-			this.renderDisposables.add(checksViewModel);
-
-			this.renderDisposables.add(this.ciStatusWidget.setInput(checksViewModel));
-		}
-
 		// Update tree data with combined entries
 		this.renderDisposables.add(autorun(reader => {
 			const changes = changesObs.read(reader);
@@ -845,8 +773,6 @@ export class ChangesViewPane extends ViewPane {
 				this.hasGitRepositoryContextKey.set(state.hasGitRepository);
 				this.isMergeBaseBranchProtectedContextKey.set(state.isMergeBaseBranchProtected === true);
 				this.hasGitHubRemoteContextKey.set(state.hasGitHubRemote === true);
-				this.hasPullRequestContextKey.set(state.hasPullRequest === true);
-				this.hasOpenPullRequestContextKey.set(state.hasOpenPullRequest === true);
 				this.hasUpstreamContextKey.set(state.upstreamBranchName !== undefined);
 				this.hasIncomingChangesContextKey.set(state.incomingChanges !== undefined && state.incomingChanges > 0);
 				this.hasOutgoingChangesContextKey.set(state.outgoingChanges !== undefined && state.outgoingChanges > 0);
@@ -1121,18 +1047,6 @@ export class ChangesViewPane extends ViewPane {
 
 		// Open multi-file diff editor
 		await this._openMultiFileDiffEditor(resource);
-	}
-
-	/**
-	 * Reveal the CI checks section: expand it if collapsed and move keyboard
-	 * focus into it. No-op when there are no checks to show.
-	 */
-	revealChecks(): void {
-		if (!this.ciStatusWidget || !this.ciStatusWidget.visible) {
-			return;
-		}
-		this.ciStatusWidget.expand();
-		this.ciStatusWidget.focus();
 	}
 
 	private async _openFileItem(item: IChangesFileItem, items: IChangesFileItem[], sideBySide: boolean, preserveFocus: boolean, pinned: boolean, includeSidebar: boolean): Promise<void> {
@@ -1506,30 +1420,6 @@ class ChangesDiffStatsAction extends Action2 {
 	}
 }
 registerAction2(ChangesDiffStatsAction);
-
-/**
- * Opens the Changes view and reveals (expands + focuses) the CI checks section.
- * Used by the CI failures banner above the chat input.
- */
-class RevealCIChecksAction extends Action2 {
-	static readonly ID = REVEAL_CI_CHECKS_COMMAND_ID;
-
-	constructor() {
-		super({
-			id: RevealCIChecksAction.ID,
-			title: localize2('revealChecks', 'Reveal Checks'),
-			category: CHAT_CATEGORY,
-			f1: false,
-		});
-	}
-
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const viewsService = accessor.get(IViewsService);
-		const view = await viewsService.openView<ChangesViewPane>(CHANGES_VIEW_ID, true);
-		view?.revealChecks();
-	}
-}
-registerAction2(RevealCIChecksAction);
 
 class ChangesDiffStatsActionItem extends ActionViewItem {
 	private readonly diffStatsObs: IObservable<{ files: number; insertions: number; deletions: number } | undefined>;

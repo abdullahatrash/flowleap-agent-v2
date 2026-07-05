@@ -5,11 +5,10 @@
 
 import assert from 'assert';
 import { Codicon } from '../../../../../base/common/codicons.js';
-import { constObservable, IObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IChatSessionFileChange, IChatSessionFileChange2 } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
-import { IGitHubInfo, ISessionWorkspace, sessionFileChangesEqual, sessionWorkspaceEqual } from '../../common/session.js';
+import { ISessionWorkspace, sessionFileChangesEqual, sessionWorkspaceEqual } from '../../common/session.js';
 
 suite('sessionFileChangesEqual', () => {
 
@@ -99,7 +98,7 @@ suite('sessionWorkspaceEqual', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	function workspace(branchName = 'main', gitHubInfo: IObservable<IGitHubInfo | undefined> = constObservable(undefined)): ISessionWorkspace {
+	function workspace(branchName = 'main'): ISessionWorkspace {
 		const root = URI.file('/repo');
 		return {
 			uri: root,
@@ -116,7 +115,6 @@ suite('sessionWorkspaceEqual', () => {
 					workTreeUri: undefined,
 					branchName,
 					baseBranchName: 'main',
-					gitHubInfo,
 				},
 			}],
 			requiresWorkspaceTrust: true,
@@ -125,14 +123,7 @@ suite('sessionWorkspaceEqual', () => {
 	}
 
 	test('returns true for rebuilt workspace objects with the same values', () => {
-		const gitHubInfo = constObservable<IGitHubInfo | undefined>(undefined);
-		assert.strictEqual(sessionWorkspaceEqual(workspace('main', gitHubInfo), workspace('main', gitHubInfo)), true);
-	});
-
-	test('returns true for rebuilt workspace objects with equivalent GitHub info values', () => {
-		const gitHubInfoA: IGitHubInfo = { owner: 'owner', repo: 'repo' };
-		const gitHubInfoB: IGitHubInfo = { owner: 'owner', repo: 'repo' };
-		assert.strictEqual(sessionWorkspaceEqual(workspace('main', constObservable(gitHubInfoA)), workspace('main', constObservable(gitHubInfoB))), true);
+		assert.strictEqual(sessionWorkspaceEqual(workspace('main'), workspace('main')), true);
 	});
 
 	test('returns false when folder repository metadata changes', () => {

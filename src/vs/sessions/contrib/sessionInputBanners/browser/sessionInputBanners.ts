@@ -9,20 +9,14 @@ import { Disposable, DisposableStore, MutableDisposable } from '../../../../base
 import { URI } from '../../../../base/common/uri.js';
 import { autorun, derived, IObservable, ISettableObservable, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { SessionStatus } from '../../../services/sessions/common/session.js';
-import { IGitHubService } from '../../github/browser/githubService.js';
-import { GitHubCheckStatus } from '../../github/common/types.js';
-import { FIX_CI_CHECKS_COMMAND_ID, getFailedChecks, REVEAL_CI_CHECKS_COMMAND_ID } from '../../changes/browser/checksActions.js';
 import { AgentFeedbackKind, AgentFeedbackState, IAgentFeedbackService } from '../../agentFeedback/browser/agentFeedbackService.js';
 import { ISessionInputBanner, SessionInputBannerWidget } from './sessionInputBannerWidget.js';
 
-/** Persisted set of session ids whose CI banner the user dismissed. */
-const STORAGE_KEY_CI_DISMISSED = 'sessions.inputBanners.ci.dismissed';
 /** Persisted set of session ids whose comments banner the user dismissed. */
 const STORAGE_KEY_COMMENTS_DISMISSED = 'sessions.inputBanners.comments.dismissed';
 
@@ -32,15 +26,6 @@ const STORAGE_KEY_COMMENTS_DISMISSED = 'sessions.inputBanners.comments.dismissed
  * agent via the `viewUnreviewedComments` tool.
  */
 const REVIEWABLE_KINDS: ReadonlySet<AgentFeedbackKind> = new Set([AgentFeedbackKind.PRReview, AgentFeedbackKind.AgentReview]);
-
-interface ICIBannerState {
-	readonly sessionId: string;
-	readonly failed: number;
-	/** Number of checks that have completed (succeeded or failed). */
-	readonly completed: number;
-	/** Number of checks still running or queued. */
-	readonly pending: number;
-}
 
 interface ICommentsBannerState {
 	readonly sessionId: string;
@@ -52,27 +37,23 @@ interface ICommentsBannerState {
 }
 
 /**
- * Hosts the banners that render directly above the active session's chat input:
- * a CI failures banner and a created-comments banner. Each banner can be
- * permanently dismissed per session.
+ * Hosts the banner that renders directly above the active session's chat input:
+ * a created-comments banner that can be permanently dismissed per session.
  *
  * The host is owned by the session's chat view and only shows content while
- * that view is the active session (driven via {@link setActive}); the CI model
- * and feedback are read for the active session.
+ * that view is the active session (driven via {@link setActive}); feedback is
+ * read for the active session.
  */
 export class SessionInputBanners extends Disposable {
 
 	readonly domNode: HTMLElement;
 
-	private readonly _ciSlot: HTMLElement;
 	private readonly _commentsSlot: HTMLElement;
 
-	private readonly _ciContent = this._register(new MutableDisposable<DisposableStore>());
 	private readonly _commentsContent = this._register(new MutableDisposable<DisposableStore>());
 
 	private readonly _active = observableValue<boolean>(this, false);
 
-	private readonly _ciDismissed = observableValue<ReadonlySet<string>>(this, new Set());
 	private readonly _commentsDismissed = observableValue<ReadonlySet<string>>(this, new Set());
 
 	private _feedbackChanged!: IObservable<void>;
@@ -91,25 +72,6 @@ export class SessionInputBanners extends Disposable {
 			return undefined;
 		}
 		return session;
-	});
-
-	private readonly _ciState: IObservable<ICIBannerState | undefined> = derived(this, reader => {
-		const session = this._session.read(reader);
-		if (!session || this._ciDismissed.read(reader).has(session.sessionId)) {
-			return undefined;
-		}
-		const ciModel = this.gitHubService.activeSessionPullRequestCIObs.read(reader);
-		if (!ciModel) {
-			return undefined;
-		}
-		const checks = ciModel.checks.read(reader);
-		const failed = getFailedChecks(checks).length;
-		if (failed === 0) {
-			return undefined;
-		}
-		const completed = checks.filter(check => check.status === GitHubCheckStatus.Completed).length;
-		const pending = checks.length - completed;
-		return { sessionId: session.sessionId, failed, completed, pending };
 	});
 
 	private readonly _commentsState: IObservable<ICommentsBannerState | undefined> = derived(this, reader => {
@@ -131,9 +93,7 @@ export class SessionInputBanners extends Disposable {
 
 	constructor(
 		@ISessionsService private readonly sessionsService: ISessionsService,
-		@IGitHubService private readonly gitHubService: IGitHubService,
 		@IAgentFeedbackService private readonly feedbackService: IAgentFeedbackService,
-		@ICommandService private readonly commandService: ICommandService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ILogService private readonly logService: ILogService,
@@ -141,63 +101,22 @@ export class SessionInputBanners extends Disposable {
 		super();
 
 		this.domNode = dom.$('.session-input-banners');
-		this._ciSlot = dom.append(this.domNode, dom.$('.session-input-banner-slot'));
 		this._commentsSlot = dom.append(this.domNode, dom.$('.session-input-banner-slot'));
 
 		this._feedbackChanged = observableSignalFromEvent(this, this.feedbackService.onDidChangeFeedback);
 
 		// Load persisted dismissal state and keep it in sync with other windows/profiles.
-		this._ciDismissed.set(this._readDismissed(STORAGE_KEY_CI_DISMISSED), undefined);
 		this._commentsDismissed.set(this._readDismissed(STORAGE_KEY_COMMENTS_DISMISSED), undefined);
-		this._register(this.storageService.onDidChangeValue(StorageScope.PROFILE, STORAGE_KEY_CI_DISMISSED, this._store)(() => {
-			this._ciDismissed.set(this._readDismissed(STORAGE_KEY_CI_DISMISSED), undefined);
-		}));
 		this._register(this.storageService.onDidChangeValue(StorageScope.PROFILE, STORAGE_KEY_COMMENTS_DISMISSED, this._store)(() => {
 			this._commentsDismissed.set(this._readDismissed(STORAGE_KEY_COMMENTS_DISMISSED), undefined);
 		}));
 
-		this._register(autorun(reader => this._renderCIBanner(this._ciState.read(reader))));
 		this._register(autorun(reader => this._renderCommentsBanner(this._commentsState.read(reader))));
 	}
 
 	/** Marks whether the owning chat view is the active session. */
 	setActive(active: boolean): void {
 		this._active.set(active, undefined);
-	}
-
-	private _renderCIBanner(state: ICIBannerState | undefined): void {
-		const store = this._ciContent.value = new DisposableStore();
-		dom.clearNode(this._ciSlot);
-		if (!state) {
-			return;
-		}
-
-		const failedText = state.completed === 1
-			? localize('ci.oneCheckFailed', "1 check failed")
-			: localize('ci.checksFailed', "{0} out of {1} checks failed", state.failed, state.completed);
-		const text = state.pending > 0
-			? localize('ci.checksFailedPending', "{0}, {1} pending", failedText, state.pending)
-			: failedText;
-
-		this._renderBanner(this._ciSlot, store, {
-			icon: Codicon.warning,
-			accent: true,
-			text,
-			ariaLabel: text,
-			dismissTooltip: localize('ci.dismiss', "Hide for this session"),
-			actions: [
-				{
-					label: localize('ci.fixChecks', "Fix Checks"),
-					primary: true,
-					run: () => this._executeCommand(FIX_CI_CHECKS_COMMAND_ID),
-				},
-				{
-					label: localize('ci.revealChecks', "Reveal Checks"),
-					run: () => this._executeCommand(REVEAL_CI_CHECKS_COMMAND_ID),
-				},
-			],
-			dismiss: () => this._dismiss(STORAGE_KEY_CI_DISMISSED, this._ciDismissed, state.sessionId),
-		});
 	}
 
 	private _renderCommentsBanner(state: ICommentsBannerState | undefined): void {
@@ -250,10 +169,6 @@ export class SessionInputBanners extends Disposable {
 					? localize('comments.one', "1 comment")
 					: localize('comments.many', "{0} comments", count);
 		}
-	}
-
-	private _executeCommand(commandId: string): void {
-		this.commandService.executeCommand(commandId).catch(err => this.logService.error('[SessionInputBanners] command failed', commandId, err));
 	}
 
 	private async _addressComments(sessionResource: URI): Promise<void> {

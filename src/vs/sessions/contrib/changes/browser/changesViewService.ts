@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Codicon } from '../../../../base/common/codicons.js';
 import { structuralEquals } from '../../../../base/common/equals.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, derivedObservableWithCache, derivedOpts, IObservable, ISettableObservable, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
@@ -169,15 +168,6 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 				? IsolationMode.Workspace
 				: IsolationMode.Worktree;
 
-			// Pull request state
-			const gitHubInfo = gitRepository?.gitHubInfo.read(reader);
-			const hasPullRequest = gitHubInfo?.pullRequest?.uri !== undefined;
-			const hasOpenPullRequest = hasPullRequest &&
-				(gitHubInfo.pullRequest.icon?.id === Codicon.gitPullRequestDraft.id ||
-					gitHubInfo.pullRequest.icon?.id === Codicon.gitPullRequest.id ||
-					gitHubInfo.pullRequest.icon?.id === Codicon.gitPullRequestError.id ||
-					gitHubInfo.pullRequest.icon?.id === Codicon.gitPullRequestComment.id);
-
 			// Repository state
 			const hasGitHubRemote = gitRepository?.hasGitHubRemote ?? false;
 			const upstreamBranchName = gitRepository?.upstreamBranchName;
@@ -199,8 +189,6 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 				uncommittedChanges,
 				hasBranchChanges,
 				hasGitHubRemote,
-				hasPullRequest,
-				hasOpenPullRequest,
 				hasGitOperationInProgress
 			} satisfies ActiveSessionState;
 		});

@@ -30,7 +30,6 @@ import { ISessionsManagementService } from '../../../../services/sessions/common
 import { ISessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { ChatContextKeys } from '../../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ActiveSessionContextKeys } from '../../../changes/common/changes.js';
-import { hasActiveSessionFailedCIChecks } from '../../../changes/browser/checksActions.js';
 import { ISessionsPartService } from '../../../../services/sessions/browser/sessionsPartService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 
@@ -1013,21 +1012,12 @@ registerAction2(class MarkSessionAsDoneAction extends Action2 {
 					SessionIsArchivedContext.negate(),
 					ActiveSessionContextKeys.HasGitRepository.isEqualTo(true),
 					ActiveSessionContextKeys.HasGitOperationInProgress.negate(),
-					hasActiveSessionFailedCIChecks.negate(),
 					ContextKeyExpr.or(
 						// No changes
 						ActiveSessionContextKeys.HasBranchChanges.negate(),
 						// Merge changes (base branch is not protected)
 						ContextKeyExpr.and(
 							ActiveSessionContextKeys.IsMergeBaseBranchProtected.isEqualTo(false),
-							ActiveSessionContextKeys.HasIncomingChanges.isEqualTo(false),
-							ActiveSessionContextKeys.HasOutgoingChanges.isEqualTo(false),
-							ActiveSessionContextKeys.HasUncommittedChanges.isEqualTo(false)
-						),
-						// Pull-request (base branch is protected)
-						ContextKeyExpr.and(
-							ActiveSessionContextKeys.IsMergeBaseBranchProtected.isEqualTo(true),
-							ActiveSessionContextKeys.HasPullRequest.isEqualTo(true),
 							ActiveSessionContextKeys.HasIncomingChanges.isEqualTo(false),
 							ActiveSessionContextKeys.HasOutgoingChanges.isEqualTo(false),
 							ActiveSessionContextKeys.HasUncommittedChanges.isEqualTo(false)

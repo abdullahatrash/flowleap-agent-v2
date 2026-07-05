@@ -7,7 +7,6 @@ import { IReader } from '../../../../base/common/observable.js';
 import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import {
 	SessionHasChangesContext,
-	SessionHasPullRequestContext,
 	SessionHasWorkspaceContext,
 	SessionIsArchivedContext,
 	SessionIsCreatedContext,
@@ -40,7 +39,6 @@ interface ISessionContextKeys {
 	readonly supportsDelete: IContextKey<boolean>;
 	readonly workspaceIsVirtual: IContextKey<boolean>;
 	readonly hasChanges: IContextKey<boolean>;
-	readonly hasPullRequest: IContextKey<boolean>;
 	readonly hasWorkspace: IContextKey<boolean>;
 	readonly isCreated: IContextKey<boolean>;
 	readonly sticky: IContextKey<boolean>;
@@ -72,7 +70,6 @@ function getBoundKeys(contextKeyService: IContextKeyService): ISessionContextKey
 			supportsDelete: SessionSupportsDeleteContext.bindTo(contextKeyService),
 			workspaceIsVirtual: SessionWorkspaceIsVirtualContext.bindTo(contextKeyService),
 			hasChanges: SessionHasChangesContext.bindTo(contextKeyService),
-			hasPullRequest: SessionHasPullRequestContext.bindTo(contextKeyService),
 			hasWorkspace: SessionHasWorkspaceContext.bindTo(contextKeyService),
 			isCreated: SessionIsCreatedContext.bindTo(contextKeyService),
 			sticky: SessionIsStickyContext.bindTo(contextKeyService),
@@ -119,9 +116,6 @@ export function setSessionContextKeys(session: ISession | undefined, contextKeyS
 		deletions += change.deletions;
 	}
 	keys.hasChanges.set(insertions > 0 || deletions > 0);
-
-	const pullRequest = session?.workspace.read(reader)?.folders[0]?.gitRepository?.gitHubInfo.read(reader)?.pullRequest;
-	keys.hasPullRequest.set(!!pullRequest);
 
 	keys.hasWorkspace.set(!!session?.workspace.read(reader)?.label);
 }

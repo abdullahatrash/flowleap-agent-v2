@@ -71,8 +71,6 @@ export interface ISessionGitRepository {
 	readonly uncommittedChanges?: number;
 	/** Whether a Git operation is currently in progress. */
 	readonly hasGitOperationInProgress?: boolean;
-	/** GitHub information associated with the repository. */
-	readonly gitHubInfo: IObservable<IGitHubInfo | undefined>;
 }
 
 /**
@@ -118,29 +116,6 @@ export interface ISessionWorkspace {
 	 * Whether this workspace is a virtual
 	 */
 	readonly isVirtualWorkspace: boolean;
-}
-
-/**
- * GitHub information associated with a session.
- */
-export interface IGitHubInfo {
-	/** GitHub repository owner. */
-	readonly owner: string;
-	/** GitHub repository name. */
-	readonly repo: string;
-	/** Pull request associated with this session, if any. */
-	readonly pullRequest?: {
-		/** Pull request number. */
-		readonly number: number;
-		/** URI of the pull request. */
-		readonly uri: URI;
-		/** Icon reflecting the PR state. */
-		readonly icon?: ThemeIcon;
-		/** Object ID of the base ref (merge target) commit. */
-		readonly baseRefOid?: string;
-		/** Object ID of the head ref (PR branch) commit. */
-		readonly headRefOid?: string;
-	};
 }
 
 export interface ISessionChangesSummary {
@@ -501,32 +476,6 @@ export function sessionFileChangesEqual(a: readonly ISessionFileChange[], b: rea
 }
 
 /**
- * Structural equality for {@link IGitHubInfo}. Used as an `equalsFn` on the `gitHubInfo` observable
- * so that providers can re-publish updated info without notifying observers when the underlying GitHub
- * info has not actually changed.
- */
-export function gitHubInfoEqual(a: IGitHubInfo | undefined, b: IGitHubInfo | undefined): boolean {
-	if (a === b) {
-		return true;
-	}
-
-	if (a === undefined || b === undefined) {
-		return false;
-	}
-
-	const aIcon = a.pullRequest?.icon;
-	const bIcon = b.pullRequest?.icon;
-
-	return a.owner === b.owner &&
-		a.repo === b.repo &&
-		a.pullRequest?.number === b.pullRequest?.number &&
-		isEqual(a.pullRequest?.uri, b.pullRequest?.uri) &&
-		(aIcon === bIcon || (!!aIcon && !!bIcon && ThemeIcon.isEqual(aIcon, bIcon))) &&
-		a.pullRequest?.baseRefOid === b.pullRequest?.baseRefOid &&
-		a.pullRequest?.headRefOid === b.pullRequest?.headRefOid;
-}
-
-/**
  * Structural equality for {@link ISessionWorkspace}.
  */
 export function sessionWorkspaceEqual(a: ISessionWorkspace | undefined, b: ISessionWorkspace | undefined): boolean {
@@ -583,6 +532,5 @@ export function sessionGitRepositoryEqual(a: ISessionGitRepository | undefined, 
 		&& a.incomingChanges === b.incomingChanges
 		&& a.outgoingChanges === b.outgoingChanges
 		&& a.uncommittedChanges === b.uncommittedChanges
-		&& a.hasGitOperationInProgress === b.hasGitOperationInProgress
-		&& gitHubInfoEqual(a.gitHubInfo.get(), b.gitHubInfo.get());
+		&& a.hasGitOperationInProgress === b.hasGitOperationInProgress;
 }

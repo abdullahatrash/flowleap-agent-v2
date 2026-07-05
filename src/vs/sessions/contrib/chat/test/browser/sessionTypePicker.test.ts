@@ -58,7 +58,7 @@ function createFakeSession(providerId: string, sessionTypeId: string, folderUri:
 			workingDirectory: folderUri,
 			name: folderUri.path,
 			description: undefined,
-			gitRepository: { uri: folderUri, workTreeUri: undefined, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+			gitRepository: { uri: folderUri, workTreeUri: undefined, baseBranchName: undefined },
 		}],
 		requiresWorkspaceTrust: false,
 		isVirtualWorkspace: false,

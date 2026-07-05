@@ -16,7 +16,6 @@ import { IsPhoneLayoutContext } from '../../../common/contextkeys.js';
 import { ISessionChangesService, SessionChangesService } from './sessionChangesService.js';
 import './changesActions.js';
 import './changesViewActions.js';
-import './checksActions.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ChangesViewService } from './changesViewService.js';

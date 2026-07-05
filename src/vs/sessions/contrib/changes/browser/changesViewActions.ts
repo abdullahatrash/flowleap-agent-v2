@@ -15,7 +15,6 @@ import { ContextKeyExpr, IContextKeyService } from '../../../../platform/context
 import { bindContextKey } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { ActiveSessionContextKeys, CHANGES_VIEW_ID, ChangesContextKeys, SESSIONS_CHANGES_OPEN_SINGLE_FILE_DIFF_SETTING } from '../common/changes.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
-import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isEqual } from '../../../../base/common/resources.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
@@ -67,45 +66,6 @@ class ChangesViewActionsContribution extends Disposable implements IWorkbenchCon
 }
 
 registerWorkbenchContribution2(ChangesViewActionsContribution.ID, ChangesViewActionsContribution, WorkbenchPhase.AfterRestored);
-
-class OpenPullRequestAction extends Action2 {
-	static readonly ID = 'workbench.action.agentSessions.openPullRequest';
-
-	constructor() {
-		super({
-			id: OpenPullRequestAction.ID,
-			title: localize2('openPullRequest', "Open Pull Request"),
-			icon: Codicon.gitPullRequest,
-			f1: false,
-			menu: {
-				id: MenuId.AgentsChangesToolbar,
-				group: 'navigation',
-				order: 9,
-				when: ContextKeyExpr.and(
-					IsSessionsWindowContext,
-					ActiveSessionContextKeys.HasPullRequest)
-			}
-		});
-	}
-
-	async run(accessor: ServicesAccessor): Promise<void> {
-		const openerService = accessor.get(IOpenerService);
-		const sessionsService = accessor.get(ISessionsService);
-		const activeSession = sessionsService.activeSession.get();
-		if (!activeSession) {
-			return;
-		}
-
-		const gitHubInfo = activeSession.workspace.get()?.folders[0]?.gitRepository?.gitHubInfo.get();
-		if (!gitHubInfo?.pullRequest?.uri) {
-			return;
-		}
-
-		await openerService.open(gitHubInfo.pullRequest.uri);
-	}
-}
-
-registerAction2(OpenPullRequestAction);
 
 class OpenChangesAction extends Action2 {
 	static readonly ID = 'workbench.action.agentSessions.openChanges';

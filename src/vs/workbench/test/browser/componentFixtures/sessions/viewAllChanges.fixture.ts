@@ -59,7 +59,6 @@ function createMockWorkspace(): ISessionWorkspace {
 				branchName: 'feature/session-changes',
 				baseBranchName: 'main',
 				hasGitHubRemote: false,
-				gitHubInfo: constObservable(undefined),
 			},
 		}],
 		requiresWorkspaceTrust: false,

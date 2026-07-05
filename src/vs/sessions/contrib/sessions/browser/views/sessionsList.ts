@@ -384,12 +384,11 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 			const sessionStatus = element.status.read(reader);
 			const isRead = this.options.isRead(element);
 			const isArchived = element.isArchived.read(reader);
-			const gitHubInfo = element.workspace.read(reader)?.folders[0]?.gitRepository?.gitHubInfo.read(reader);
 
 			// The status icon (spinner vs. codicon, cross-fade, reduced-motion) is fully
 			// owned by the SessionStatusIcon widget; here we just feed it the latest state.
 			// Row recycling re-feeds the widget, which cross-fades to the new session's icon.
-			template.statusIcon.setStatus(sessionStatus, isRead, isArchived, gitHubInfo?.pullRequest?.icon);
+			template.statusIcon.setStatus(sessionStatus, isRead, isArchived);
 			template.container.classList.toggle('in-progress', sessionStatus === SessionStatus.InProgress);
 			template.container.classList.toggle('needs-input', sessionStatus === SessionStatus.NeedsInput);
 			template.container.classList.toggle('unread', !isRead && !isArchived);

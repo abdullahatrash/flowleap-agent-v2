@@ -33,7 +33,6 @@ interface ISessionStatusInputs {
 	readonly status: SessionStatus;
 	readonly isRead: boolean;
 	readonly isArchived: boolean;
-	readonly completedStateIcon: ThemeIcon | undefined;
 }
 
 /**
@@ -84,8 +83,8 @@ export class SessionStatusIcon extends Disposable {
 	 * Updates the rendered status. Cross-fades when the glyph/variant changes
 	 * (after the first render); identical re-renders only refresh the color.
 	 */
-	setStatus(status: SessionStatus, isRead: boolean, isArchived: boolean, completedStateIcon?: ThemeIcon): void {
-		const inputs: ISessionStatusInputs = { status, isRead, isArchived, completedStateIcon };
+	setStatus(status: SessionStatus, isRead: boolean, isArchived: boolean): void {
+		const inputs: ISessionStatusInputs = { status, isRead, isArchived };
 		this._lastInputs = inputs;
 		this._render(inputs);
 	}
@@ -102,7 +101,7 @@ export class SessionStatusIcon extends Disposable {
 	}
 
 	private _render(inputs: ISessionStatusInputs): void {
-		const { status, isRead, isArchived, completedStateIcon } = inputs;
+		const { status, isRead, isArchived } = inputs;
 		const isSpinner = (status === SessionStatus.InProgress || status === SessionStatus.NeedsInput) && !this._accessibilityService.isMotionReduced();
 
 		let cacheKey: string;
@@ -115,7 +114,7 @@ export class SessionStatusIcon extends Disposable {
 			color = isNeedsInput ? asCssVariable('list.warningForeground') : asCssVariable('textLink.foreground');
 			createIcon = () => createPixelSpinner(undefined, { variant });
 		} else {
-			const icon = this._sessionsListModelService.getStatusIcon(status, isRead, isArchived, completedStateIcon);
+			const icon = this._sessionsListModelService.getStatusIcon(status, isRead, isArchived);
 			cacheKey = ThemeIcon.asCSSSelector(icon);
 			color = icon.color ? asCssVariable(icon.color.id) : '';
 			createIcon = () => $(`span${cacheKey}`);

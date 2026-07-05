@@ -40,7 +40,7 @@ function makeWorkspace(hasWorktree: boolean): ISessionWorkspace {
 			workingDirectory: workTreeUri ?? root,
 			name: 'repo',
 			description: undefined,
-			gitRepository: { uri: root, workTreeUri, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+			gitRepository: { uri: root, workTreeUri, baseBranchName: undefined },
 		}],
 		requiresWorkspaceTrust: true,
 		isVirtualWorkspace: false,

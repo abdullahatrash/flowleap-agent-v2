@@ -29,7 +29,7 @@ function makeSession(opts: { repository?: URI; worktree?: URI } = {}): ISession 
 			workingDirectory: opts.worktree ?? opts.repository,
 			name: 'test',
 			description: undefined,
-			gitRepository: { uri: opts.repository, workTreeUri: opts.worktree, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+			gitRepository: { uri: opts.repository, workTreeUri: opts.worktree, baseBranchName: undefined },
 		} satisfies ISessionFolder],
 		requiresWorkspaceTrust: false,
 	} : undefined;

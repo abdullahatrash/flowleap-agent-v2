@@ -74,7 +74,6 @@ function createFolder(uri: URI, opts: { readonly workTreeUri?: URI; readonly wit
 				uri,
 				workTreeUri: opts.workTreeUri,
 				baseBranchName: undefined,
-				gitHubInfo: constObservable(undefined),
 			}
 			: undefined,
 	};

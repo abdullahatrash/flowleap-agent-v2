@@ -237,7 +237,6 @@ class LocalSession extends Disposable {
 				uri: folder.root,
 				workTreeUri: undefined,
 				baseBranchName: undefined,
-				gitHubInfo: constObservable(undefined),
 			};
 
 			// Monotonically increasing version used to discard stale diff results.

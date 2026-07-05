@@ -93,8 +93,7 @@ registerAction2(class ShowSessionsPickerAction extends Action2 {
 			const isRead = sessionsListModelService.isSessionRead(session);
 			const isArchived = session.isArchived.get();
 			const workspace = session.workspace.get();
-			const pullRequestIcon = workspace?.folders[0]?.gitRepository?.gitHubInfo.get()?.pullRequest?.icon;
-			const icon = sessionsListModelService.getStatusIcon(status, isRead, isArchived, pullRequestIcon);
+			const icon = sessionsListModelService.getStatusIcon(status, isRead, isArchived);
 
 			// Second row: workspace (with its icon, like the session header /
 			// list) and the relative time. A leading blank icon aligns the

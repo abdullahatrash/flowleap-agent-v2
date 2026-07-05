@@ -92,7 +92,7 @@ export interface ISessionsListModelService {
 	 * icons returned here are the reduced-motion fallbacks (and the glyphs used by
 	 * surfaces that don't host the widget, such as the sessions picker).
 	 */
-	getStatusIcon(status: SessionStatus, isRead: boolean, isArchived: boolean, completedStateIcon?: ThemeIcon): ThemeIcon;
+	getStatusIcon(status: SessionStatus, isRead: boolean, isArchived: boolean): ThemeIcon;
 }
 
 export const ISessionsListModelService = createDecorator<ISessionsListModelService>('sessionsListModelService');
@@ -269,7 +269,7 @@ export class SessionsListModelService extends Disposable implements ISessionsLis
 
 	// -- Status icon --
 
-	getStatusIcon(status: SessionStatus, isRead: boolean, isArchived: boolean, completedStateIcon?: ThemeIcon): ThemeIcon {
+	getStatusIcon(status: SessionStatus, isRead: boolean, isArchived: boolean): ThemeIcon {
 		switch (status) {
 			case SessionStatus.InProgress:
 				return { ...Codicon.sessionInProgress, color: themeColorFromId('textLink.foreground') };
@@ -280,9 +280,6 @@ export class SessionsListModelService extends Disposable implements ISessionsLis
 			default:
 				if (isArchived) {
 					return { ...Codicon.passFilled, color: themeColorFromId('agentSessionReadIndicator.foreground') };
-				}
-				if (completedStateIcon) {
-					return completedStateIcon;
 				}
 				if (!isRead) {
 					return { ...Codicon.circleFilled, color: themeColorFromId('textLink.foreground') };
