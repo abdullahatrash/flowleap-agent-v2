@@ -62,6 +62,7 @@ extensions/json/build/update-grammars.js
 extensions/media-preview/media/audioPreview.js
 extensions/media-preview/media/imagePreview.js
 extensions/media-preview/media/videoPreview.js
+extensions/pdf-preview/media/pdfPreview.js
 extensions/postinstall.mjs
 extensions/search-result/syntaxes/generateTMLanguage.js
 extensions/sql/build/update-grammar.mjs
