@@ -299,12 +299,12 @@ suite('CopilotChatSessionsProvider', () => {
 	test('has correct id and label', () => {
 		const provider = createProvider(disposables, model);
 		assert.strictEqual(provider.id, COPILOT_PROVIDER_ID);
-		assert.strictEqual(provider.sessionTypes.length, 3);
+		assert.strictEqual(provider.sessionTypes.length, 2);
 	});
 
 	test('sessionTypes excludes Claude when setting is disabled', () => {
 		const provider = createProvider(disposables, model, { claudeEnabled: false });
-		assert.strictEqual(provider.sessionTypes.length, 2);
+		assert.strictEqual(provider.sessionTypes.length, 1);
 		assert.ok(!provider.sessionTypes.some(t => t.id === ClaudeCodeSessionType.id));
 	});
 
@@ -314,19 +314,19 @@ suite('CopilotChatSessionsProvider', () => {
 		// Claude entry (the agent host's). Otherwise both register and the
 		// user sees Claude twice.
 		const provider = createProvider(disposables, model, { claudeEnabled: true, preferAgentHost: true });
-		assert.strictEqual(provider.sessionTypes.length, 2);
+		assert.strictEqual(provider.sessionTypes.length, 1);
 		assert.ok(!provider.sessionTypes.some(t => t.id === ClaudeCodeSessionType.id));
 	});
 
 	test('sessionTypes includes Claude when claudeEnabled and preferAgentHost is false', () => {
 		const provider = createProvider(disposables, model, { claudeEnabled: true, preferAgentHost: false });
-		assert.strictEqual(provider.sessionTypes.length, 3);
+		assert.strictEqual(provider.sessionTypes.length, 2);
 		assert.ok(provider.sessionTypes.some(t => t.id === ClaudeCodeSessionType.id));
 	});
 
 	test('onDidChangeSessionTypes fires when claude setting changes', () => {
 		const { provider, configService } = createProviderWithConfig(disposables, model);
-		assert.strictEqual(provider.sessionTypes.length, 3);
+		assert.strictEqual(provider.sessionTypes.length, 2);
 
 		let fired = false;
 		disposables.add(provider.onDidChangeSessionTypes(() => { fired = true; }));
@@ -341,7 +341,7 @@ suite('CopilotChatSessionsProvider', () => {
 		});
 
 		assert.ok(fired, 'onDidChangeSessionTypes should have fired');
-		assert.strictEqual(provider.sessionTypes.length, 2);
+		assert.strictEqual(provider.sessionTypes.length, 1);
 	});
 
 	test('onDidChangeSessionTypes fires when preferAgentHost setting changes', () => {
@@ -349,7 +349,7 @@ suite('CopilotChatSessionsProvider', () => {
 		// flipping the EXP-backed preference unregisters this provider's
 		// Claude entry without requiring a window reload.
 		const { provider, configService } = createProviderWithConfig(disposables, model);
-		assert.strictEqual(provider.sessionTypes.length, 3);
+		assert.strictEqual(provider.sessionTypes.length, 2);
 
 		let fired = false;
 		disposables.add(provider.onDidChangeSessionTypes(() => { fired = true; }));
@@ -363,7 +363,7 @@ suite('CopilotChatSessionsProvider', () => {
 		});
 
 		assert.ok(fired, 'onDidChangeSessionTypes should have fired');
-		assert.strictEqual(provider.sessionTypes.length, 2);
+		assert.strictEqual(provider.sessionTypes.length, 1);
 		assert.ok(!provider.sessionTypes.some(t => t.id === ClaudeCodeSessionType.id));
 	});
 

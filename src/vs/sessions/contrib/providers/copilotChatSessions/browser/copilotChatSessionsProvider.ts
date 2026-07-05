@@ -140,8 +140,6 @@ export interface ICopilotChatSession {
 	readonly mainChat: ISettableObservable<IChat>;
 }
 
-const OPEN_REPO_COMMAND = 'github.copilot.chat.cloudSessions.openRepository';
-
 /** Provider ID for the Copilot Chat Sessions provider. */
 export const COPILOT_PROVIDER_ID = 'default-copilot';
 
@@ -1391,7 +1389,6 @@ export class CopilotChatSessionsProvider extends Disposable implements ISessions
 		if (this._isCopilotCliAvailable()) {
 			types.push(CopilotCLISessionType);
 		}
-		types.push(CopilotCloudSessionType);
 		if (this._isClaudeAvailable()) {
 			types.push(ClaudeCodeSessionType);
 		}
@@ -1511,15 +1508,9 @@ export class CopilotChatSessionsProvider extends Disposable implements ISessions
 			}
 		}));
 
-		this.browseActions = [
-			{
-				label: localize('repositories', "Repositories"),
-				group: SESSION_WORKSPACE_GROUP_GITHUB,
-				icon: Codicon.library,
-				providerId: this.id,
-				run: () => this._browseForRepo(),
-			},
-		];
+		// FlowLeap: no GitHub "Repositories" browse action — Copilot Cloud
+		// sessions require Copilot sign-in, which this product does not support.
+		this.browseActions = [];
 
 		// Forward session changes from the underlying model
 		this._register(this.agentSessionsService.model.onDidChangeSessions(() => {
@@ -2444,30 +2435,6 @@ export class CopilotChatSessionsProvider extends Disposable implements ISessions
 	}
 
 	// -- Private --
-
-	private async _browseForRepo(): Promise<ISessionWorkspace | undefined> {
-		const repoId = await this.commandService.executeCommand<string>(OPEN_REPO_COMMAND);
-		if (repoId) {
-			const uri = URI.from({ scheme: GITHUB_REMOTE_FILE_SCHEME, authority: 'github', path: `/${repoId}/HEAD` });
-			const folder: ISessionFolder = {
-				root: uri,
-				workingDirectory: uri,
-				name: basename(uri),
-				description: undefined,
-				gitRepository: undefined,
-			};
-			return {
-				uri,
-				label: this._labelFromUri(uri),
-				icon: this._iconFromUri(uri),
-				group: SESSION_WORKSPACE_GROUP_GITHUB,
-				folders: [folder],
-				requiresWorkspaceTrust: false,
-				isVirtualWorkspace: true,
-			};
-		}
-		return undefined;
-	}
 
 	resolveWorkspace(uri: URI): ISessionWorkspace | undefined {
 		if (uri.scheme !== Schemas.file && uri.scheme !== GITHUB_REMOTE_FILE_SCHEME) {
