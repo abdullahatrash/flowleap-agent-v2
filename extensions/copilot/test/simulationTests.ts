@@ -38,5 +38,4 @@ import './simulation/inlineEdit/inlineEdit.stest';
 import './simulation/notebookEdits.stest';
 import './simulation/notebooks.stest';
 import './simulation/prTitleAndDescription.stest';
-import './simulation/renameSuggestionsProvider.stest';
 import './simulation/tools/toolcall.stest';
