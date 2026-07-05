@@ -159,30 +159,6 @@
     ],
     "languageModelTools": [
       {
-        "name": "copilot_searchCodebase",
-        "toolReferenceName": "codebase",
-        "displayName": "%copilot.tools.searchCodebase.name%",
-        "icon": "$(folder)",
-        "userDescription": "%copilot.codebase.tool.description%",
-        "modelDescription": "Run a natural language search for relevant code or documentation comments from the user's current workspace. Returns relevant code snippets from the user's current workspace if it is large, or the full contents of the workspace if it is small.",
-        "tags": [
-          "codesearch",
-          "vscode_codesearch"
-        ],
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string",
-              "description": "The query to search the codebase for. Should contain all relevant context. Should ideally be text that might appear in the codebase, such as function names, variable names, or comments."
-            }
-          },
-          "required": [
-            "query"
-          ]
-        }
-      },
-      {
         "name": "execution_subagent",
         "toolReferenceName": "executionSubagent",
         "displayName": "%copilot.tools.executionSubagent.name%",
@@ -1047,67 +1023,6 @@
           },
           "required": [
             "filePaths"
-          ]
-        }
-      },
-      {
-        "name": "copilot_githubRepo",
-        "toolReferenceName": "githubRepo",
-        "legacyToolReferenceFullNames": [
-          "githubRepo"
-        ],
-        "displayName": "%github.copilot.tools.githubRepo.name%",
-        "modelDescription": "Searches a GitHub repository for relevant source code snippets. Only use this tool if the user is very clearly asking for code snippets from a specific GitHub repository. Do not use this tool for Github repos that the user has open in their workspace.",
-        "userDescription": "%github.copilot.tools.githubRepo.userDescription%",
-        "icon": "$(repo)",
-        "when": "!config.github.copilot.chat.githubMcpServer.enabled",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "repo": {
-              "type": "string",
-              "description": "The name of the Github repository to search for code in. Should must be formatted as '<owner>/<repo>'."
-            },
-            "query": {
-              "type": "string",
-              "description": "The query to search for repo. Should contain all relevant context."
-            }
-          },
-          "required": [
-            "repo",
-            "query"
-          ]
-        }
-      },
-      {
-        "name": "copilot_githubTextSearch",
-        "legacyToolReferenceFullNames": [
-          "githubTextSearch"
-        ],
-        "toolReferenceName": "githubTextSearch",
-        "displayName": "%github.copilot.tools.githubTextSearch.name%",
-        "modelDescription": "Lexically searches a GitHub repository or organization for files containing specific keywords or code patterns. Use this when looking for exact strings, function names, or identifiers in a GitHub repo or org. Unlike the semantic search tool, this uses keyword matching rather than meaning-based search.",
-        "userDescription": "%github.copilot.tools.githubTextSearch.userDescription%",
-        "icon": "$(search)",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "scope": {
-              "type": "string",
-              "description": "The GitHub scope to search. Use 'owner/repo' to search a single repository, or an org name (no slash) to search across an entire organization."
-            },
-            "query": {
-              "type": "string",
-              "description": "The keyword search query. Supports GitHub code search syntax such as 'language:typescript', 'extension:ts', 'path:src/', etc."
-            },
-            "maxResults": {
-              "type": "number",
-              "description": "Optional. The maximum number of search results to return. Defaults to 100."
-            }
-          },
-          "required": [
-            "scope",
-            "query"
           ]
         }
       },
@@ -2053,7 +1968,6 @@
         "icon": "$(search)",
         "tools": [
           "changes",
-          "codebase",
           "fileSearch",
           "listDirectory",
           "textSearch",
@@ -2124,83 +2038,10 @@
         ],
         "commands": [
           {
-            "name": "explain",
-            "description": "%copilot.workspace.explain.description%"
-          },
-          {
-            "name": "review",
-            "description": "%copilot.workspace.review.description%",
-            "when": "github.copilot.advanced.review.intent"
-          },
-          {
-            "name": "tests",
-            "description": "%copilot.workspace.tests.description%",
-            "disambiguation": [
-              {
-                "category": "create_tests",
-                "description": "The user wants to generate unit tests.",
-                "examples": [
-                  "Generate tests for my selection using pytest."
-                ]
-              }
-            ]
-          },
-          {
-            "name": "fix",
-            "description": "%copilot.workspace.fix.description%",
-            "sampleRequest": "%copilot.workspace.fix.sampleRequest%"
-          },
-          {
-            "name": "new",
-            "description": "%copilot.workspace.new.description%",
-            "sampleRequest": "%copilot.workspace.new.sampleRequest%",
-            "isSticky": true,
-            "disambiguation": [
-              {
-                "category": "create_new_workspace_or_extension",
-                "description": "The user wants to create a complete Visual Studio Code workspace from scratch, such as a new application or a Visual Studio Code extension. Use this category only if the question relates to generating or creating new workspaces in Visual Studio Code. Do not use this category for updating existing code or generating sample code snippets",
-                "examples": [
-                  "Scaffold a Node server.",
-                  "Create a sample project which uses the fileSystemProvider API.",
-                  "react application"
-                ]
-              }
-            ]
-          },
-          {
-            "name": "newNotebook",
-            "description": "%copilot.workspace.newNotebook.description%",
-            "sampleRequest": "%copilot.workspace.newNotebook.sampleRequest%",
-            "disambiguation": [
-              {
-                "category": "create_jupyter_notebook",
-                "description": "The user wants to create a new Jupyter notebook in Visual Studio Code.",
-                "examples": [
-                  "Create a notebook to analyze this CSV file."
-                ]
-              }
-            ]
-          },
-          {
             "name": "semanticSearch",
             "description": "%copilot.workspace.semanticSearch.description%",
             "sampleRequest": "%copilot.workspace.semanticSearch.sampleRequest%",
             "when": "config.github.copilot.semanticSearch.enabled"
-          },
-          {
-            "name": "setupTests",
-            "description": "%copilot.vscode.setupTests.description%",
-            "sampleRequest": "%copilot.vscode.setupTests.sampleRequest%",
-            "when": "config.github.copilot.chat.setupTests.enabled",
-            "disambiguation": [
-              {
-                "category": "set_up_tests",
-                "description": "The user wants to configure project test setup, framework, or test runner. The user does not want to fix their existing tests.",
-                "examples": [
-                  "Set up tests for this project."
-                ]
-              }
-            ]
           }
         ]
       },
@@ -2254,83 +2095,10 @@
             "description": "%copilot.agent.compact.description%"
           },
           {
-            "name": "explain",
-            "description": "%copilot.workspace.explain.description%"
-          },
-          {
-            "name": "review",
-            "description": "%copilot.workspace.review.description%",
-            "when": "github.copilot.advanced.review.intent"
-          },
-          {
-            "name": "tests",
-            "description": "%copilot.workspace.tests.description%",
-            "disambiguation": [
-              {
-                "category": "create_tests",
-                "description": "The user wants to generate unit tests.",
-                "examples": [
-                  "Generate tests for my selection using pytest."
-                ]
-              }
-            ]
-          },
-          {
-            "name": "fix",
-            "description": "%copilot.workspace.fix.description%",
-            "sampleRequest": "%copilot.workspace.fix.sampleRequest%"
-          },
-          {
-            "name": "new",
-            "description": "%copilot.workspace.new.description%",
-            "sampleRequest": "%copilot.workspace.new.sampleRequest%",
-            "isSticky": true,
-            "disambiguation": [
-              {
-                "category": "create_new_workspace_or_extension",
-                "description": "The user wants to create a complete Visual Studio Code workspace from scratch, such as a new application or a Visual Studio Code extension. Use this category only if the question relates to generating or creating new workspaces in Visual Studio Code. Do not use this category for updating existing code or generating sample code snippets",
-                "examples": [
-                  "Scaffold a Node server.",
-                  "Create a sample project which uses the fileSystemProvider API.",
-                  "react application"
-                ]
-              }
-            ]
-          },
-          {
-            "name": "newNotebook",
-            "description": "%copilot.workspace.newNotebook.description%",
-            "sampleRequest": "%copilot.workspace.newNotebook.sampleRequest%",
-            "disambiguation": [
-              {
-                "category": "create_jupyter_notebook",
-                "description": "The user wants to create a new Jupyter notebook in Visual Studio Code.",
-                "examples": [
-                  "Create a notebook to analyze this CSV file."
-                ]
-              }
-            ]
-          },
-          {
             "name": "semanticSearch",
             "description": "%copilot.workspace.semanticSearch.description%",
             "sampleRequest": "%copilot.workspace.semanticSearch.sampleRequest%",
             "when": "config.github.copilot.semanticSearch.enabled"
-          },
-          {
-            "name": "setupTests",
-            "description": "%copilot.vscode.setupTests.description%",
-            "sampleRequest": "%copilot.vscode.setupTests.sampleRequest%",
-            "when": "config.github.copilot.chat.setupTests.enabled",
-            "disambiguation": [
-              {
-                "category": "set_up_tests",
-                "description": "The user wants to configure project test setup, framework, or test runner. The user does not want to fix their existing tests.",
-                "examples": [
-                  "Set up tests for this project."
-                ]
-              }
-            ]
           }
         ]
       },
@@ -2377,43 +2145,6 @@
         ]
       },
       {
-        "id": "github.copilot.vscode",
-        "name": "vscode",
-        "fullName": "VS Code",
-        "description": "%copilot.vscode.description%",
-        "when": "!github.copilot.interactiveSession.disabled",
-        "sampleRequest": "%copilot.vscode.sampleRequest%",
-        "locations": [
-          "panel"
-        ],
-        "disambiguation": [
-          {
-            "category": "vscode_configuration_questions",
-            "description": "The user wants to learn about, use, or configure the Visual Studio Code. Use this category if the users question is specifically about commands, settings, keybindings, extensions and other features available in Visual Studio Code. Do not use this category to answer questions about generating code or creating new projects including Visual Studio Code extensions.",
-            "examples": [
-              "Switch to light mode.",
-              "Keyboard shortcut to toggle terminal visibility.",
-              "Settings to enable minimap.",
-              "Whats new in the latest release?"
-            ]
-          },
-          {
-            "category": "configure_python_environment",
-            "description": "The user wants to set up their Python environment.",
-            "examples": [
-              "Create a virtual environment for my project."
-            ]
-          }
-        ],
-        "commands": [
-          {
-            "name": "search",
-            "description": "%copilot.vscode.search.description%",
-            "sampleRequest": "%copilot.vscode.search.sampleRequest%"
-          }
-        ]
-      },
-      {
         "id": "github.copilot.terminal",
         "name": "terminal",
         "fullName": "Terminal",
@@ -2423,13 +2154,6 @@
         "isDefault": true,
         "locations": [
           "terminal"
-        ],
-        "commands": [
-          {
-            "name": "explain",
-            "description": "%copilot.terminal.explain.description%",
-            "sampleRequest": "%copilot.terminal.explain.sampleRequest%"
-          }
         ]
       },
       {
@@ -2441,22 +2165,6 @@
         "sampleRequest": "%copilot.terminal.sampleRequest%",
         "locations": [
           "panel"
-        ],
-        "commands": [
-          {
-            "name": "explain",
-            "description": "%copilot.terminal.explain.description%",
-            "sampleRequest": "%copilot.terminal.explain.sampleRequest%",
-            "disambiguation": [
-              {
-                "category": "terminal_state_questions",
-                "description": "The user wants to learn about specific state such as the selection, command, or failed command in the integrated terminal in Visual Studio Code.",
-                "examples": [
-                  "Why did the latest terminal command fail?"
-                ]
-              }
-            ]
-          }
         ]
       }
     ],
@@ -3008,13 +2716,6 @@
         "label": "GitHub"
       }
     ],
-    "viewsWelcome": [
-      {
-        "view": "debug",
-        "when": "flowleap.patent-ai.activated",
-        "contents": "%github.copilot.viewsWelcome.debug%"
-      }
-    ],
     "chatViewsWelcome": [
       {
         "icon": "$(chat-sparkle)",
@@ -3270,13 +2971,6 @@
         "category": "Chat"
       },
       {
-        "command": "github.copilot.interactiveSession.feedback",
-        "title": "%github.copilot.command.sendChatFeedback%",
-        "enablement": "flowleap.patent-ai.activated && !github.copilot.interactiveSession.disabled",
-        "icon": "$(feedback)",
-        "category": "Chat"
-      },
-      {
         "command": "github.copilot.debug.workbenchState",
         "title": "%github.copilot.command.logWorkbenchState%",
         "category": "Developer"
@@ -3353,17 +3047,6 @@
         "category": "Chat"
       },
       {
-        "command": "github.copilot.tests.fixTestFailure",
-        "icon": "$(sparkle)",
-        "title": "%github.copilot.command.fixTestFailure%",
-        "category": "Chat"
-      },
-      {
-        "command": "github.copilot.tests.fixTestFailure.fromInline",
-        "icon": "$(sparkle)",
-        "title": "%github.copilot.command.fixTestFailure%"
-      },
-      {
         "command": "github.copilot.chat.attachFile",
         "title": "%github.copilot.chat.attachFile%",
         "category": "Chat"
@@ -3397,64 +3080,15 @@
         "category": "Developer"
       },
       {
-        "command": "github.copilot.open.walkthrough",
-        "title": "%github.copilot.command.openWalkthrough%",
-        "category": "Chat"
-      },
-      {
         "command": "github.copilot.debug.generateInlineEditTests",
         "title": "Generate Inline Edit Tests",
         "category": "Chat",
         "enablement": "resourceScheme == 'ccreq'"
       },
       {
-        "command": "github.copilot.buildRemoteWorkspaceIndex",
-        "title": "%github.copilot.command.buildRemoteWorkspaceIndex%",
-        "category": "Chat",
-        "enablement": "flowleap.patent-ai.activated"
-      },
-      {
-        "command": "github.copilot.deleteExternalIngestWorkspaceIndex",
-        "title": "%github.copilot.command.deleteExternalIngestWorkspaceIndex%",
-        "category": "Developer",
-        "enablement": "flowleap.patent-ai.activated && !github.copilot.blackbirdExternalIndexingDisabled"
-      },
-      {
-        "command": "github.copilot.report",
-        "title": "Report Issue",
-        "category": "Chat"
-      },
-      {
-        "command": "github.copilot.chat.rerunWithCopilotDebug",
-        "title": "%github.copilot.command.rerunWithCopilotDebug%",
-        "category": "Chat"
-      },
-      {
-        "command": "github.copilot.chat.startCopilotDebugCommand",
-        "title": "Start Copilot Debug"
-      },
-      {
         "command": "github.copilot.chat.clearTemporalContext",
         "title": "Clear Temporal Context",
         "category": "Developer"
-      },
-      {
-        "command": "github.copilot.search.markHelpful",
-        "title": "Helpful",
-        "icon": "$(thumbsup)",
-        "enablement": "!github.copilot.search.feedback.sent"
-      },
-      {
-        "command": "github.copilot.search.markUnhelpful",
-        "title": "Unhelpful",
-        "icon": "$(thumbsdown)",
-        "enablement": "!github.copilot.search.feedback.sent"
-      },
-      {
-        "command": "github.copilot.search.feedback",
-        "title": "Feedback",
-        "icon": "$(feedback)",
-        "enablement": "!github.copilot.search.feedback.sent"
       },
       {
         "command": "github.copilot.chat.debug.showElements",
@@ -3555,11 +3189,6 @@
         "command": "github.copilot.nes.captureExpected.submit",
         "title": "Submit NES Captures",
         "category": "Copilot"
-      },
-      {
-        "command": "github.copilot.debug.collectWorkspaceIndexDiagnostics",
-        "title": "%github.copilot.command.collectWorkspaceIndexDiagnostics%",
-        "category": "Developer"
       },
       {
         "command": "github.copilot.chat.mcp.setup.check",
@@ -3989,14 +3618,6 @@
               "preview"
             ],
             "markdownDescription": "%github.copilot.config.claudeAgent.sdkExtensionInstallTimeout%"
-          },
-          "github.copilot.chat.copilotDebugCommand.enabled": {
-            "type": "boolean",
-            "default": true,
-            "tags": [
-              "preview"
-            ],
-            "description": "%github.copilot.chat.copilotDebugCommand.enabled%"
           },
           "github.copilot.chat.codesearch.enabled": {
             "type": "boolean",
@@ -5094,18 +4715,6 @@
               "onExp"
             ]
           },
-          "github.copilot.chat.debugTerminalCommandPatterns": {
-            "type": "array",
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "markdownDescription": "%github.copilot.config.debugTerminalCommandPatterns%",
-            "tags": [
-              "advanced",
-              "experimental"
-            ]
-          },
           "github.copilot.chat.localWorkspaceRecording.enabled": {
             "type": "boolean",
             "default": false,
@@ -5966,20 +5575,6 @@
           "group": "otel@1"
         }
       ],
-      "testing/item/result": [
-        {
-          "command": "github.copilot.tests.fixTestFailure.fromInline",
-          "when": "testResultState == failed && !testResultOutdated",
-          "group": "inline@2"
-        }
-      ],
-      "testing/item/context": [
-        {
-          "command": "github.copilot.tests.fixTestFailure.fromInline",
-          "when": "testResultState == failed && !testResultOutdated",
-          "group": "inline@2"
-        }
-      ],
       "commandPalette": [
         {
           "command": "patent-ai.signIn",
@@ -5998,20 +5593,8 @@
           "when": "false"
         },
         {
-          "command": "github.copilot.interactiveSession.feedback",
-          "when": "flowleap.patent-ai.activated && !github.copilot.interactiveSession.disabled"
-        },
-        {
           "command": "github.copilot.debug.workbenchState",
           "when": "true"
-        },
-        {
-          "command": "github.copilot.chat.rerunWithCopilotDebug",
-          "when": "false"
-        },
-        {
-          "command": "github.copilot.chat.startCopilotDebugCommand",
-          "when": "false"
         },
         {
           "command": "github.copilot.git.generateCommitMessage",
@@ -6095,26 +5678,6 @@
         },
         {
           "command": "github.copilot.devcontainer.generateDevContainerConfig",
-          "when": "false"
-        },
-        {
-          "command": "github.copilot.tests.fixTestFailure",
-          "when": "false"
-        },
-        {
-          "command": "github.copilot.tests.fixTestFailure.fromInline",
-          "when": "false"
-        },
-        {
-          "command": "github.copilot.search.markHelpful",
-          "when": "false"
-        },
-        {
-          "command": "github.copilot.search.markUnhelpful",
-          "when": "false"
-        },
-        {
-          "command": "github.copilot.search.feedback",
           "when": "false"
         },
         {
@@ -6261,23 +5824,6 @@
           "command": "github.copilot.chat.debug.exportPromptLogsAsJson",
           "when": "view == copilot-chat && viewItem == chatprompt",
           "group": "export@3"
-        }
-      ],
-      "searchPanel/aiResults/commands": [
-        {
-          "command": "github.copilot.search.markHelpful",
-          "group": "inline@0",
-          "when": "aiResultsTitle && aiResultsRequested"
-        },
-        {
-          "command": "github.copilot.search.markUnhelpful",
-          "group": "inline@1",
-          "when": "aiResultsTitle && aiResultsRequested"
-        },
-        {
-          "command": "github.copilot.search.feedback",
-          "group": "inline@2",
-          "when": "aiResultsTitle && aiResultsRequested && github.copilot.debugReportFeedback"
         }
       ],
       "comments/comment/title": [
@@ -6436,18 +5982,6 @@
           "when": "scmProvider == git && chatSetupCompleted"
         }
       ],
-      "testing/message/context": [
-        {
-          "command": "github.copilot.tests.fixTestFailure",
-          "when": "testing.testItemHasUri",
-          "group": "inline@1"
-        }
-      ],
-      "issue/reporter": [
-        {
-          "command": "github.copilot.report"
-        }
-      ],
       "github.copilot.chat.debug.filter": [
         {
           "command": "github.copilot.chat.debug.showElements",
@@ -6599,30 +6133,6 @@
           "lineMatcher": ".+",
           "offset": 0
         }
-      },
-      {
-        "id": "copilot-chat.terminalToDebugging",
-        "commandLineMatcher": ".+",
-        "kind": "explain",
-        "commandExitResult": "error",
-        "outputMatcher": {
-          "anchor": "bottom",
-          "length": 1,
-          "lineMatcher": "",
-          "offset": 0
-        }
-      },
-      {
-        "id": "copilot-chat.terminalToDebuggingSuccess",
-        "commandLineMatcher": ".+",
-        "kind": "explain",
-        "commandExitResult": "success",
-        "outputMatcher": {
-          "anchor": "bottom",
-          "length": 1,
-          "lineMatcher": "",
-          "offset": 0
-        }
       }
     ],
     "languages": [
@@ -6700,12 +6210,6 @@
       }
     },
     "keybindings": [
-      {
-        "command": "github.copilot.chat.rerunWithCopilotDebug",
-        "key": "ctrl+alt+.",
-        "mac": "cmd+alt+.",
-        "when": "flowleap.patent-ai.activated && terminalShellIntegrationEnabled && terminalFocus && !terminalAltBufferActive"
-      },
       {
         "command": "github.copilot.nes.captureExpected.confirm",
         "key": "ctrl+enter",

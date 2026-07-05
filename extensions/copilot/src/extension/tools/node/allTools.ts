@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './applyPatchTool';
-import './codebaseTool';
 import './createDirectoryTool';
 import './createFileTool';
 import './editNotebookTool';
@@ -14,8 +13,6 @@ import './findTestsFilesTool';
 import './findTextInFilesTool';
 import './getErrorsTool';
 import './getNotebookCellOutputTool';
-import './githubRepoSemanticSearchTool.tsx';
-import './githubTextSearchTool';
 import './insertEditTool';
 import './installExtensionTool';
 import './listDirTool';

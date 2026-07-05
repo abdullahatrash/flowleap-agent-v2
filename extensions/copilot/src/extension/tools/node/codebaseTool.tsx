@@ -27,7 +27,6 @@ import { renderPromptElementJSON } from '../../prompts/node/base/promptRenderer'
 import { ToolCallResultWrapper } from '../../prompts/node/panel/toolCalling';
 import { WorkspaceContext, WorkspaceContextProps } from '../../prompts/node/panel/workspace/workspaceContext';
 import { ToolName } from '../common/toolNames';
-import { ToolRegistry } from '../common/toolsRegistry';
 
 export interface ICodebaseToolParams {
 	query: string;
@@ -192,8 +191,6 @@ export class CodebaseTool implements vscode.LanguageModelTool<ICodebaseToolParam
 		return (isAnonymous || agentEnabled) && noScopedDirectories;
 	}
 }
-
-ToolRegistry.registerTool(CodebaseTool);
 
 class WorkspaceContextWrapper extends PromptElement<WorkspaceContextProps> {
 	constructor(
