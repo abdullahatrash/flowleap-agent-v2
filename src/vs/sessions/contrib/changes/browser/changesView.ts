@@ -69,8 +69,6 @@ import { EditorResourceAccessor, SideBySideEditor } from '../../../../workbench/
 import { logChangesViewFileSelect, logChangesViewVersionModeChange, logChangesViewViewModeChange } from '../../../common/sessionsTelemetry.js';
 import { ChecksViewModel } from './checksViewModel.js';
 import { REVEAL_CI_CHECKS_COMMAND_ID } from './checksActions.js';
-// eslint-disable-next-line local/code-import-patterns -- TODO: move skill button constants out of providers
-import { AGENT_HOST_SKILL_BUTTON_UPDATE_PR_ID, isAgentHostSkillButtonId } from '../../providers/agentHost/browser/agentHostSkillButtons.js';
 import { ActiveSessionContextKeys, CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID, ChangesContextKeys, ChangesViewMode, IsolationMode, SESSIONS_CHANGES_OPEN_SINGLE_FILE_DIFF_SETTING } from '../common/changes.js';
 import { buildTreeChildren, ChangesTreeElement, ChangesTreeRenderer, IChangesFileItem, IChangesTreeRootInfo, isChangesFileItem, toIChangesFileItem } from './changesViewRenderer.js';
 import { ResourceTree } from '../../../../base/common/resourceTree.js';
@@ -174,8 +172,7 @@ class ChangesMenuWorkbenchButtonBarWidget extends Disposable {
 			return { showIcon: false, showLabel: true, isSecondary: false, customLabel: `$(loading) ${labelWithCount}` };
 		}
 		if (
-			action.id === 'github.copilot.claude.sessions.sync' ||
-			action.id === AGENT_HOST_SKILL_BUTTON_UPDATE_PR_ID
+			action.id === 'github.copilot.claude.sessions.sync'
 		) {
 			const customLabel = outgoingChanges > 0
 				? `${action.label} ${outgoingChanges}↑`
@@ -203,8 +200,7 @@ class ChangesMenuWorkbenchButtonBarWidget extends Disposable {
 			action.id === 'github.copilot.claude.sessions.commitAndSync' ||
 			action.id === 'agentSession.markAsDone' ||
 			action.id === 'agentSession.restore' ||
-			action.id === 'sessions.action.fixCIChecks' ||
-			isAgentHostSkillButtonId(action.id)
+			action.id === 'sessions.action.fixCIChecks'
 		) {
 			return { showIcon: true, showLabel: true, isSecondary: false };
 		}

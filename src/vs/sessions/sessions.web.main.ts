@@ -150,42 +150,6 @@ import '../workbench/contrib/preferences/browser/keyboardLayoutPicker.js';
 import '../workbench/contrib/debug/browser/extensionHostDebugService.js';
 import '../workbench/contrib/welcomeBanner/browser/welcomeBanner.contribution.js';
 
-// Web tunnel agent host — discovers tunnels via Dev Tunnels REST API and connects via relay
-import './contrib/providers/remoteAgentHost/browser/webTunnelAgentHostService.contribution.js';
-
-// Tunnel agent host — reconciles discovered tunnels into session providers
-import './contrib/providers/remoteAgentHost/browser/tunnelAgentHost.contribution.js';
-
-// WSL agent host — reconciles cached WSL distros into session providers
-import './contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js';
-
-// Remote agent host terminal profiles — registers terminal profiles for connected agent hosts
-import './contrib/providers/remoteAgentHost/browser/remoteAgentHostTerminal.contribution.js';
-
-// Remote agent host session provider — discovers agents and registers sessions
-import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
-import './contrib/providers/remoteAgentHost/browser/remoteAgentHostActions.js';
-import './contrib/providers/agentHost/browser/agentSessionSettings.contribution.js';
-import './contrib/providers/agentHost/browser/agentHostSettings.contribution.js';
-import './contrib/providers/agentHost/browser/agentHostSessionBranchActions.js';
-import './contrib/providers/agentHost/browser/agentHostSkillButtons.js';
-
-// Host filter dropdown in the titlebar (scopes the sessions list to a host)
-import './contrib/providers/remoteAgentHost/browser/hostFilter.contribution.js';
-
-// Mobile chat-input config picker (combined mode + model bottom sheet
-// on phone). Web-only because phones never run on the Electron desktop
-// build. The desktop mode + model pickers are gated off on phone via
-// `when: IsPhoneLayoutContext.negate()`, so the two registrations are
-// mutually exclusive at the action-menu level.
-import './contrib/providers/agentHost/browser/mobile/mobileChatInputConfigPicker.js';
-
-// Phone-only presenter for the workbench `ChatInputPart`'s Mode + Model
-// pickers. Replaces the desktop popups with the same bottom-sheet
-// experience used by the empty new-chat input, applied to the
-// already-opened chat input. Web-only for the same reason as above.
-import './contrib/providers/agentHost/browser/mobile/mobileChatPhoneInputPresenter.js';
-
 // Mobile-aware Copilot permission picker. Replaces the desktop
 // permission picker registration (which the shared contribution
 // skips when `isWeb`), so we get the bottom-sheet sheet on phone
