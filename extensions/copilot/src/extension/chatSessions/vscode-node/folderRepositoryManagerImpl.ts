@@ -26,10 +26,8 @@ import {
 	IFolderRepositoryManager,
 	InitializeFolderRepositoryOptions
 } from '../common/folderRepositoryManager';
-import { isUntitledSessionId } from '../common/utils';
-import { isWelcomeView } from '../copilotcli/node/copilotCli';
+import { isUntitledSessionId, isWelcomeView } from '../common/utils';
 import { IClaudeSessionStateService } from '../claude/common/claudeSessionStateService';
-import { ICopilotCLISessionService } from '../copilotcli/node/copilotcliSessionService';
 
 /**
  * Message shown when user needs to trust a folder to continue.
@@ -840,39 +838,6 @@ export abstract class FolderRepositoryManager extends Disposable implements IFol
 
 // #endregion
 
-// #region CopilotCLIFolderRepositoryManager
-
-/**
- * CopilotCLI-specific implementation that resolves folder information for
- * existing sessions using the CLI session service as a fallback.
- */
-export class CopilotCLIFolderRepositoryManager extends FolderRepositoryManager {
-	constructor(
-		@IChatSessionWorktreeService worktreeService: IChatSessionWorktreeService,
-		@IChatSessionWorkspaceFolderService workspaceFolderService: IChatSessionWorkspaceFolderService,
-		@ICopilotCLISessionService private readonly sessionService: ICopilotCLISessionService,
-		@IGitService gitService: IGitService,
-		@IWorkspaceService workspaceService: IWorkspaceService,
-		@ILogService logService: ILogService,
-		@IToolsService toolsService: IToolsService,
-		@IFileSystemService private readonly fileSystem: IFileSystemService,
-		@IChatSessionMetadataStore metadataStore: IChatSessionMetadataStore
-	) {
-		super(worktreeService, workspaceFolderService, gitService, workspaceService, logService, toolsService, metadataStore);
-	}
-
-	/**
-	 * @inheritdoc
-	 */
-	protected async getSessionFallbackFolder(sessionId: string): Promise<vscode.Uri | undefined> {
-		const cwd = this.sessionService.getSessionWorkingDirectory(sessionId);
-		if (cwd && (await checkPathExists(cwd, this.fileSystem))) {
-			return cwd;
-		}
-		return undefined;
-	}
-}
-
 async function checkPathExists(filePath: vscode.Uri, fileSystem: IFileSystemService): Promise<boolean> {
 	try {
 		await fileSystem.stat(filePath);
@@ -881,8 +846,6 @@ async function checkPathExists(filePath: vscode.Uri, fileSystem: IFileSystemServ
 		return false;
 	}
 }
-
-// #endregion
 
 // #region ClaudeFolderRepositoryManager
 

@@ -5,22 +5,19 @@
 
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
-import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
-import { createDirectoryIfNotExists, IFileSystemService } from '../../../../platform/filesystem/common/fileSystemService';
-import { ILogService } from '../../../../platform/log/common/logService';
-import { findLast } from '../../../../util/vs/base/common/arraysFind';
-import { disposableTimeout, SequencerByKey, ThrottledDelayer } from '../../../../util/vs/base/common/async';
-import { Disposable, DisposableMap } from '../../../../util/vs/base/common/lifecycle';
-import { dirname } from '../../../../util/vs/base/common/resources';
-import { ChatSessionMetadataFile, IChatSessionMetadataStore, RepositoryProperties, RequestDetails, WorkspaceFolderEntry } from '../../common/chatSessionMetadataStore';
-import { ChatSessionWorktreeProperties } from '../../common/chatSessionWorktreeService';
-import { isUntitledSessionId } from '../../common/utils';
-import { IWorkspaceInfo } from '../../common/workspaceInfo';
-import { getCopilotBulkMetadataFile, getCopilotCLISessionDir } from '../../copilotcli/node/cliHelpers';
-import { ICopilotCLIAgents } from '../../copilotcli/node/copilotCli';
+import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
+import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
+import { ILogService } from '../../../platform/log/common/logService';
+import { findLast } from '../../../util/vs/base/common/arraysFind';
+import { disposableTimeout, SequencerByKey, ThrottledDelayer } from '../../../util/vs/base/common/async';
+import { Disposable, DisposableMap } from '../../../util/vs/base/common/lifecycle';
+import { dirname } from '../../../util/vs/base/common/resources';
+import { ChatSessionMetadataFile, IChatSessionMetadataStore, RepositoryProperties, RequestDetails, WorkspaceFolderEntry } from '../common/chatSessionMetadataStore';
+import { ChatSessionWorktreeProperties } from '../common/chatSessionWorktreeService';
+import { isUntitledSessionId } from '../common/utils';
+import { IWorkspaceInfo } from '../common/workspaceInfo';
+import { getBulkMetadataFile, getSessionStateDir } from '../node/sessionStoragePaths';
 
-// const WORKSPACE_FOLDER_MEMENTO_KEY = 'github.copilot.cli.sessionWorkspaceFolders';
-// const WORKTREE_MEMENTO_KEY = 'github.copilot.cli.sessionWorktrees';
 const LEGACY_BULK_METADATA_FILENAME = 'copilotcli.session.metadata.json';
 const LEGACY_BULK_MIGRATED_KEY = 'github.copilot.cli.legacyBulkMigrated';
 const REQUEST_MAPPING_FILENAME = 'vscode.requests.metadata.json';
@@ -52,7 +49,7 @@ export class ChatSessionMetadataStore extends Disposable implements IChatSession
 	private readonly _folderToSessions = new Map<string, Set<string>>();
 
 	/** Path of the shared bulk metadata cache file in `~/.copilot/`. */
-	private readonly _cacheFile = Uri.file(getCopilotBulkMetadataFile());
+	private readonly _cacheFile = Uri.file(getBulkMetadataFile());
 
 	/**
 	 * Single-promise gate. Initially set to `initializeStorage()`; {@link refresh} chains
@@ -78,7 +75,6 @@ export class ChatSessionMetadataStore extends Disposable implements IChatSession
 		@IFileSystemService private readonly fileSystemService: IFileSystemService,
 		@ILogService private readonly logService: ILogService,
 		@IVSCodeExtensionContext private readonly extensionContext: IVSCodeExtensionContext,
-		@ICopilotCLIAgents private readonly copilotCLIAgents: ICopilotCLIAgents,
 	) {
 		super();
 
@@ -177,17 +173,14 @@ export class ChatSessionMetadataStore extends Disposable implements IChatSession
 		for (const [sessionId, metadata] of Object.entries(this._cache)) {
 			this._updateFolderIndex(sessionId, metadata);
 		}
-
-		// this.extensionContext.globalState.update(WORKTREE_MEMENTO_KEY, undefined);
-		// this.extensionContext.globalState.update(WORKSPACE_FOLDER_MEMENTO_KEY, undefined);
 	}
 
 	public getMetadataFileUri(sessionId: string): vscode.Uri {
-		return Uri.joinPath(Uri.file(getCopilotCLISessionDir(sessionId)), 'vscode.metadata.json');
+		return Uri.joinPath(Uri.file(getSessionStateDir(sessionId)), 'vscode.metadata.json');
 	}
 
 	private getRequestMappingFileUri(sessionId: string): vscode.Uri {
-		return Uri.joinPath(Uri.file(getCopilotCLISessionDir(sessionId)), REQUEST_MAPPING_FILENAME);
+		return Uri.joinPath(Uri.file(getSessionStateDir(sessionId)), REQUEST_MAPPING_FILENAME);
 	}
 
 	async deleteSessionMetadata(sessionId: string): Promise<void> {
@@ -367,7 +360,7 @@ export class ChatSessionMetadataStore extends Disposable implements IChatSession
 
 	async getSessionAgent(sessionId: string): Promise<string | undefined> {
 		const details = await this.getRequestDetails(sessionId);
-		return findLast(details, d => !!d.modeInstructions)?.modeInstructions?.uri ?? findLast(details, d => !!d.agentId)?.agentId ?? this.copilotCLIAgents.getSessionAgent(sessionId);
+		return findLast(details, d => !!d.modeInstructions)?.modeInstructions?.uri ?? findLast(details, d => !!d.agentId)?.agentId;
 	}
 
 	private async writeRequestDetails(sessionId: string, details: RequestDetails[]): Promise<void> {

@@ -6,33 +6,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
-import { IVSCodeExtensionContext } from '../../../../../platform/extContext/common/extensionContext';
-import { MockFileSystemService } from '../../../../../platform/filesystem/node/test/mockFileSystemService';
-import { ILogService } from '../../../../../platform/log/common/logService';
-import { mock } from '../../../../../util/common/test/simpleMock';
-import { Emitter } from '../../../../../util/vs/base/common/event';
-import { URI } from '../../../../../util/vs/base/common/uri';
-import { ChatSessionWorktreeProperties } from '../../../common/chatSessionWorktreeService';
-import { IWorkspaceInfo } from '../../../common/workspaceInfo';
-import { getCopilotCLISessionDir } from '../../../copilotcli/node/cliHelpers';
-import { NullCopilotCLIAgents } from '../../../copilotcli/node/test/testHelpers';
+import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { MockFileSystemService } from '../../../../platform/filesystem/node/test/mockFileSystemService';
+import { ILogService } from '../../../../platform/log/common/logService';
+import { mock } from '../../../../util/common/test/simpleMock';
+import { Emitter } from '../../../../util/vs/base/common/event';
+import { URI } from '../../../../util/vs/base/common/uri';
+import { ChatSessionWorktreeProperties } from '../../common/chatSessionWorktreeService';
+import { IWorkspaceInfo } from '../../common/workspaceInfo';
+import { getSessionStateDir } from '../../node/sessionStoragePaths';
 import { ChatSessionMetadataStore } from '../chatSessionMetadataStoreImpl';
 
-// Hoisted holder lets each test point the JSONL helper at its own mock path.
-const jsonlPathHolder = vi.hoisted(() => {
-	const p = '/mock/copilot-home/worktree.jsonl';
-	return { get: () => p };
-});
 
-vi.mock('../../../copilotcli/node/cliHelpers', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('../../../copilotcli/node/cliHelpers')>();
+vi.mock('../../node/sessionStoragePaths', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../node/sessionStoragePaths')>();
 	return {
 		...actual,
-		getCopilotCLISessionDir: (sessionId: string) => `/mock/session-state/${sessionId}`,
-		getCopilotCLISessionStateDir: () => '/mock/session-state',
-		// New shared bulk + JSONL paths — all go through the mocked IFileSystemService.
-		getCopilotBulkMetadataFile: () => '/mock/copilot-home/vscode.session.metadata.cache.json',
-		getCopilotWorktreeSessionsFile: () => jsonlPathHolder.get(),
+		getSessionStateDir: (sessionId: string) => `/mock/session-state/${sessionId}`,
+		getBulkMetadataFile: () => '/mock/copilot-home/vscode.session.metadata.cache.json',
 	};
 });
 
@@ -97,7 +88,7 @@ const BULK_METADATA_FILE = Uri.file('/mock/copilot-home/vscode.session.metadata.
 const LEGACY_BULK_METADATA_FILE = Uri.joinPath(Uri.file('/mock/global/storage'), 'copilotcli', 'copilotcli.session.metadata.json');
 
 function sessionDirectoryUri(sessionId: string): Uri {
-	return Uri.file(getCopilotCLISessionDir(sessionId));
+	return Uri.file(getSessionStateDir(sessionId));
 }
 
 function sessionMetadataFileUri(sessionId: string): Uri {
@@ -175,7 +166,6 @@ describe('ChatSessionMetadataStore', () => {
 			mockFs,
 			logService,
 			extensionContext,
-			new NullCopilotCLIAgents(),
 		);
 		// Flush enough microtask rounds so that initializeStorage() —
 		// which chains several async I/O steps — fully settles.

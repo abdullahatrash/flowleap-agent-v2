@@ -8,16 +8,20 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable, DisposableResourceMap, DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { IChatSessionWorkspaceFolderService } from '../common/chatSessionWorkspaceFolderService';
 import { IChatSessionWorktreeService } from '../common/chatSessionWorktreeService';
-import { ICopilotCLIChatSessionItemProvider } from './copilotCLIChatSessions';
 import { IGitService } from '../../../platform/git/common/gitService';
 import { IChatSessionMetadataStore } from '../common/chatSessionMetadataStore';
+
+/** Minimal shape of a session-item provider that can refresh affected sessions after a repository change. */
+interface ISessionRefresher {
+	refreshSession(refreshOptions: { reason: 'update'; sessionIds: string[] }): Promise<void>;
+}
 
 export class ChatSessionRepositoryTracker extends Disposable {
 	private readonly repositories = new DisposableResourceMap();
 
 	constructor(
 		// This is only required in non-controller code paths.
-		private readonly sessionItemProvider: ICopilotCLIChatSessionItemProvider | undefined,
+		private readonly sessionItemProvider: ISessionRefresher | undefined,
 		@IChatSessionWorktreeService private readonly worktreeService: IChatSessionWorktreeService,
 		@IChatSessionWorkspaceFolderService private readonly workspaceFolderService: IChatSessionWorkspaceFolderService,
 		@IGitService private readonly gitService: IGitService,
@@ -93,7 +97,7 @@ export class ChatSessionRepositoryTracker extends Disposable {
  * You can optionally provide a list of sessions that should not be refreshed.
  * E.g. if you know that those sessions are not affected or are already up to date, you can exclude them from the refresh to avoid unnecessary work.
  */
-export async function clearChangesCacheForAffectedSessions(folder: vscode.Uri, sessionsToIgnore: string[], logService: ILogService, metadataStore: IChatSessionMetadataStore, workspaceFolderService: IChatSessionWorkspaceFolderService, worktreeService: IChatSessionWorktreeService, sessionItemProvider?: ICopilotCLIChatSessionItemProvider): Promise<void> {
+export async function clearChangesCacheForAffectedSessions(folder: vscode.Uri, sessionsToIgnore: string[], logService: ILogService, metadataStore: IChatSessionMetadataStore, workspaceFolderService: IChatSessionWorkspaceFolderService, worktreeService: IChatSessionWorktreeService, sessionItemProvider?: ISessionRefresher): Promise<void> {
 	logService.trace(`[ChatSessionRepositoryTracker][onDidChangeRepositoryState] Repository state changed for ${folder.toString()}. Updating session properties.`);
 
 	const sessionIds = metadataStore.getSessionIdsForFolder(folder).filter(id => !sessionsToIgnore.includes(id));

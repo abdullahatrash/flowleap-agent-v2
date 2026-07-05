@@ -33,8 +33,7 @@ import { IClaudeWorkspaceFolderService } from '../common/claudeWorkspaceFolderSe
 import { IChatSessionWorktreeCheckpointService } from '../common/chatSessionWorktreeCheckpointService';
 import { IChatSessionWorktreeService } from '../common/chatSessionWorktreeService';
 import { IChatFolderMruService, IFolderRepositoryManager } from '../common/folderRepositoryManager';
-import { CopilotCLIAgents, ICopilotCLIAgents } from '../copilotcli/node/copilotCli';
-import { ChatSessionMetadataStore } from '../copilotcli/vscode-node/chatSessionMetadataStoreImpl';
+import { ChatSessionMetadataStore } from './chatSessionMetadataStoreImpl';
 import { AgentSessionsWorkspace } from './agentSessionsWorkspace';
 import { ChatSessionWorkspaceFolderService } from './chatSessionWorkspaceFolderServiceImpl';
 import { ClaudeWorkspaceFolderService } from './claudeWorkspaceFolderServiceImpl';
@@ -51,10 +50,8 @@ import { ClaudeFolderRepositoryManager } from './folderRepositoryManagerImpl';
  * surfaces (vendor, `github.copilot.cli.*` commands, the `copilotcli` /
  * `copilot-cloud-agent` session providers and their context keys) are intentionally NOT
  * registered here, and their `contributes.*` declarations have been removed from
- * `package.json`. The implementation files for those surfaces are kept on disk but
- * dormant — never wired up — to keep future upstream merges small. The only piece still
- * needed from that area is the shared chat-session metadata store, which the Claude Code
- * session provider depends on (see {@link createSessionMetadataStore}).
+ * `package.json`. Only the Claude Code session provider is wired up, together with the
+ * shared chat-session metadata store it depends on (see {@link createSessionMetadataStore}).
  */
 export class ChatSessionsContrib extends Disposable implements IExtensionContribution {
 	readonly id = 'chatSessions';
@@ -103,14 +100,12 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 
 	/**
 	 * Creates the shared chat-session metadata store used by the Claude Code session
-	 * provider. The store lives under the (dormant) copilotcli area and depends on
-	 * {@link ICopilotCLIAgents}, a passive data service that registers no VS Code
-	 * surfaces, so instantiating these two is safe and activates nothing Copilot-CLI.
+	 * provider. The store persists per-session metadata under `~/.copilot/` and registers
+	 * no VS Code surfaces, so instantiating it is passive.
 	 */
 	private createSessionMetadataStore(instantiationService: IInstantiationService): IChatSessionMetadataStore {
 		const metadataInstaService = instantiationService.createChild(
 			new ServiceCollection(
-				[ICopilotCLIAgents, new SyncDescriptor(CopilotCLIAgents)],
 				[IChatSessionMetadataStore, new SyncDescriptor(ChatSessionMetadataStore)],
 			));
 		return metadataInstaService.invokeFunction(accessor => accessor.get(IChatSessionMetadataStore));
