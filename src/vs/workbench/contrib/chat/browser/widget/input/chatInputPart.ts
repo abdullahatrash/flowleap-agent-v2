@@ -108,12 +108,6 @@ import { IChatWidget, IChatWidgetViewModelChangeEvent, ISessionTypePickerDelegat
 import { ChatEditingShowChangesAction, ViewPreviousEditsAction } from '../../chatEditing/chatEditingActions.js';
 import { resizeImage } from '../../chatImageUtils.js';
 import { ChatSessionPickerActionItem, IChatSessionPickerDelegate } from '../../chatSessions/chatSessionPickerActionItem.js';
-import { AgentHostChatInputPicker, AgentHostChatInputPickerActionViewItem } from '../../agentSessions/agentHost/agentHostChatInputPicker.js';
-import { OpenAgentHostAutoApprovePickerAction, OpenAgentHostModePickerAction, OpenAgentHostPermissionModePickerAction, OpenAgentHostFolderPickerAction } from '../../agentSessions/agentHost/agentHostChatInputPicker.contribution.js';
-import { AgentHostGenericConfigChips } from '../../agentSessions/agentHost/agentHostGenericConfigChips.js';
-import { AgentHostFolderPickerActionItem } from '../../agentSessions/agentHost/agentHostFolderPickerActionItem.js';
-import { SessionConfigKey } from '../../../../../../platform/agentHost/common/sessionConfigKeys.js';
-import { ClaudeSessionConfigKey } from '../../../../../../platform/agentHost/common/claudeSessionConfigKeys.js';
 import { IChatPhoneInputPresenter, MobileChatInputCombinedPickerActionItem } from './chatPhoneInputPresenter.js';
 import { IChatContextService } from '../../contextContrib/chatContextService.js';
 import { IDisposableReference } from '../chatContentParts/chatCollections.js';
@@ -3195,27 +3189,6 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		// Secondary toolbar (permissions) — below the input box.
-		// Per-action minimum widths (in pixels) for pickers that collapse to an
-		// icon-only label via a CSS container query in `AgentHostChatInputPicker`.
-		// Most pickers reserve ~22px for the icon.
-		const agentHostShortPickerMinWidths = new Map<string, number>([
-			[OpenAgentHostModePickerAction.ID, 22],
-			[OpenAgentHostAutoApprovePickerAction.ID, 22],
-			[OpenAgentHostPermissionModePickerAction.ID, 22],
-			[OpenAgentHostFolderPickerAction.ID, 22],
-		]);
-		// Direct-rendered chip lane for agent-host config properties that
-		// are advertised by the agent's schema but not handled by a
-		// dedicated `MenuId.ChatInputSecondary` action. Sits as a sibling
-		// of the secondary toolbar so the toolbar can take the available
-		// space (`flex: 1 1 0`) while the chips pin to the right next to
-		// the context-usage widget.
-		const genericChipsContainer = dom.$('.chat-secondary-generic-chips');
-		const genericChipsLane = this._register(this.instantiationService.createInstance(
-			AgentHostGenericConfigChips,
-			widget,
-		));
-		genericChipsLane.render(genericChipsContainer);
 		this.secondaryToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, this.secondaryToolbarContainer, MenuId.ChatInputSecondary, {
 			telemetrySource: this.options.menus.telemetrySource,
 			menuOptions: { shouldForwardArgs: true },
@@ -3226,11 +3199,6 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 				kind: 'all',
 				minItems: 1,
 				actionMinWidth: 48,
-				// Agent-host pickers collapse to an icon-only label via a CSS
-				// container query in `AgentHostChatInputPicker` when narrow.
-				// Report a smaller min-width for them so the responsive layout
-				// keeps them visible instead of overflowing into the menu.
-				getActionMinWidth: action => agentHostShortPickerMinWidths.get(action.id),
 			},
 			actionViewItemProvider: (action, options) => {
 				if ((action.id === OpenSessionTargetPickerAction.ID || action.id === OpenDelegationPickerAction.ID) && action instanceof MenuItemAction) {
@@ -3300,27 +3268,6 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 						this.permissionWidgetDisposeListener.clear();
 					});
 					return widget;
-				} else if (
-					(action.id === OpenAgentHostModePickerAction.ID
-						|| action.id === OpenAgentHostAutoApprovePickerAction.ID
-						|| action.id === OpenAgentHostPermissionModePickerAction.ID)
-					&& action instanceof MenuItemAction
-				) {
-					if (this.options.isSessionsWindow) {
-						return new HiddenActionViewItem(action);
-					}
-					const property = action.id === OpenAgentHostAutoApprovePickerAction.ID
-						? SessionConfigKey.AutoApprove
-						: action.id === OpenAgentHostPermissionModePickerAction.ID
-							? ClaudeSessionConfigKey.PermissionMode
-							: SessionConfigKey.Mode;
-					const picker = this.instantiationService.createInstance(AgentHostChatInputPicker, widget, property);
-					return new AgentHostChatInputPickerActionViewItem(action, picker);
-				} else if (action.id === OpenAgentHostFolderPickerAction.ID && action instanceof MenuItemAction) {
-					if (this.options.isSessionsWindow) {
-						return new HiddenActionViewItem(action);
-					}
-					return this.instantiationService.createInstance(AgentHostFolderPickerActionItem, action, widget, secondaryPickerOptions);
 				} else if (action.id === ChatSessionPrimaryPickerAction.ID && action instanceof MenuItemAction) {
 					// Create all pickers and return a container action view item
 					const widgets = this.createChatSessionPickerWidgets(action, secondaryPickerOptions);
@@ -3335,7 +3282,6 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}));
 		this.secondaryToolbar.getElement().classList.add('chat-secondary-input-toolbar');
 		this.secondaryToolbar.context = { widget } satisfies IChatExecuteActionContext;
-		dom.append(this.secondaryToolbarContainer, genericChipsContainer);
 		this._register(this.secondaryToolbar.onDidChangeMenuItems(() => {
 			// Update container reference for the pickers when the secondary toolbar hosts one.
 			// Only assign when found so we don't overwrite a valid primary container reference
