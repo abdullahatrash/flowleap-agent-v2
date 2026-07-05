@@ -3,10 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { isWeb } from '../../../base/common/platform.js';
 import * as nls from '../../../nls.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
-import product from '../../product/common/product.js';
 import { Registry } from '../../registry/common/platform.js';
 import { AgentHostEnabledSettingId } from './agentService.js';
 
@@ -37,14 +35,18 @@ configurationRegistry.registerConfiguration({
 		[AgentHostEnabledSettingId]: {
 			type: 'boolean',
 			description: nls.localize('chat.agentHost.enabled', "When enabled, some agents run in a separate agent host process."),
-			default: !isWeb && product.quality !== 'stable',
+			// FlowLeap: the agent host only runs GitHub Copilot CLI agents, which
+			// require Copilot sign-in and are unusable in this product. Claude
+			// sessions run in the extension host and do not need it.
+			default: false,
 			tags: ['experimental', 'advanced'],
 			experiment: { mode: 'startup' },
 		},
 		'chat.agents.copilotCli.hideExtensionHost': {
 			type: 'boolean',
 			description: nls.localize('chat.agents.copilotCli.hideExtensionHost', "When enabled, hides the Extension Host Copilot CLI entry from the Agents window picker."),
-			default: false,
+			// FlowLeap: Copilot CLI needs Copilot sign-in, which this product does not support.
+			default: true,
 			tags: ['experimental'],
 			experiment: { mode: 'startup' },
 		},
@@ -71,7 +73,8 @@ configurationRegistry.registerConfiguration({
 		'chat.editor.copilotCli.hideExtensionHost': {
 			type: 'boolean',
 			description: nls.localize('chat.editor.copilotCli.hideExtensionHost', "When enabled, hides the Extension Host Copilot CLI entry from the editor window chat picker."),
-			default: false,
+			// FlowLeap: Copilot CLI needs Copilot sign-in, which this product does not support.
+			default: true,
 			tags: ['experimental'],
 			experiment: { mode: 'startup' },
 		},
