@@ -196,26 +196,28 @@ export interface INewChatInputSendRequest {
 }
 
 /**
- * Randomized, friendly placeholders shown in the new-session chat input
- * to add a bit of personality. One is picked per widget instance, avoiding
- * an immediate repeat of the previous pick.
+ * Randomized placeholders shown in the new-session chat input. They lead
+ * with patent-research framings (prior art, freedom-to-operate, claim
+ * analysis) to signal what FlowLeap is for, while keeping a few open-ended
+ * research prompts so the window still reads as a general-purpose agent
+ * surface. One is picked per widget instance, avoiding an immediate repeat
+ * of the previous pick.
  */
 const RANDOM_PLACEHOLDERS = [
-	localize('sessionsChatInput.placeholder.whatAreYouBuilding', "What are you building?"),
-	localize('sessionsChatInput.placeholder.whatWillYouShipToday', "What will you ship today?"),
-	localize('sessionsChatInput.placeholder.describeWhatYouWantToBuild', "Describe what you want to build"),
-	localize('sessionsChatInput.placeholder.whatsYourNextMilestone', "What's your next milestone?"),
-	localize('sessionsChatInput.placeholder.whatAreYouTryingToAchieve', "What are you trying to achieve?"),
-	localize('sessionsChatInput.placeholder.pitchYourIdea', "Pitch your idea"),
-	localize('sessionsChatInput.placeholder.whatsTheGoal', "What's the goal?"),
-	localize('sessionsChatInput.placeholder.whatWillYouCreate', "What will you create?"),
-	localize('sessionsChatInput.placeholder.whatFeatureAreYouDreamingUp', "What feature are you dreaming up?"),
-	localize('sessionsChatInput.placeholder.describeTheOutcome', "Describe the outcome you want"),
-	localize('sessionsChatInput.placeholder.whatProblemAreYouSolving', "What problem are you solving?"),
-	localize('sessionsChatInput.placeholder.whatsNextOnYourRoadmap', "What's next on your roadmap?"),
-	localize('sessionsChatInput.placeholder.whatWouldYouLikeToAutomate', "What would you like to automate?"),
-	localize('sessionsChatInput.placeholder.whatWillYouLaunch', "What will you launch?"),
-	localize('sessionsChatInput.placeholder.describeYourMission', "Describe your mission"),
+	localize('sessionsChatInput.placeholder.searchPriorArt', "Search prior art for…"),
+	localize('sessionsChatInput.placeholder.runFreedomToOperate', "Run a freedom-to-operate check on…"),
+	localize('sessionsChatInput.placeholder.analyzeTheClaims', "Analyze the claims of a patent…"),
+	localize('sessionsChatInput.placeholder.mapThePatentLandscape', "Map the patent landscape for…"),
+	localize('sessionsChatInput.placeholder.findInvalidatingReferences', "Find references that challenge novelty…"),
+	localize('sessionsChatInput.placeholder.assessPatentability', "Assess the patentability of an idea…"),
+	localize('sessionsChatInput.placeholder.compareTwoPatents', "Compare the claims of two patents…"),
+	localize('sessionsChatInput.placeholder.summarizeProsecutionHistory', "Summarize a patent's prosecution history…"),
+	localize('sessionsChatInput.placeholder.findForwardCitations', "Find who cites a patent…"),
+	localize('sessionsChatInput.placeholder.reviewSpecificationForPriorArt', "Review a specification against prior art…"),
+	localize('sessionsChatInput.placeholder.searchAcademicLiterature', "Search the academic literature for…"),
+	localize('sessionsChatInput.placeholder.whatAreYouResearching', "What are you researching?"),
+	localize('sessionsChatInput.placeholder.whatPatentQuestion', "What patent question can I help with?"),
+	localize('sessionsChatInput.placeholder.describeWhatToAnalyze', "Describe what you want to analyze"),
 ];
 
 let lastPlaceholderIndex = -1;
