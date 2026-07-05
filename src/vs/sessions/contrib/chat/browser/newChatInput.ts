@@ -56,7 +56,6 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { SlashCommandHandler } from './slashCommands.js';
 import { VariableCompletionHandler } from './variableCompletions.js';
-import { AgentHostInputCompletionHandler } from './agentHostInputCompletions.js';
 import { IChatModelInputState } from '../../../../workbench/contrib/chat/common/model/chatModel.js';
 import { IChatRequestVariableEntry, isExplicitFileOrImageVariableEntry, toFileVariableEntry } from '../../../../workbench/contrib/chat/common/attachments/chatVariableEntries.js';
 import { ChatAgentLocation, ChatModeKind } from '../../../../workbench/contrib/chat/common/constants.js';
@@ -263,7 +262,6 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 
 	// Slash commands
 	private _slashCommandHandler: SlashCommandHandler | undefined;
-	private _agentHostInputCompletionHandler: AgentHostInputCompletionHandler | undefined;
 	private readonly _scopedInstantiationService: IInstantiationService;
 
 	// Input state
@@ -578,10 +576,6 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 			VariableCompletionHandler, this._editor, this._contextAttachments, () => this.options.getContextFolderUri(),
 		));
 
-		this._agentHostInputCompletionHandler = this._register(this.instantiationService.createInstance(
-			AgentHostInputCompletionHandler, this._editor, this._contextAttachments,
-		));
-
 		this._register(this._editor.onDidChangeModelContent(() => {
 			this._updateDraftState();
 			this._updateSendButtonState();
@@ -709,7 +703,6 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 	private async _send(background = false): Promise<void> {
 		const rawQuery = this._editor.getModel()?.getValue() ?? '';
 		const query = rawQuery.trim();
-		const queryOffset = rawQuery.length - rawQuery.trimStart().length;
 		const hasSendableAttachment = this._contextAttachments.attachments.some(isExplicitFileOrImageVariableEntry);
 		if ((!query && !hasSendableAttachment) || this._sending) {
 			return;
@@ -728,7 +721,7 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 			return;
 		}
 
-		const attachments = this._agentHostInputCompletionHandler?.getAttachmentsForSend(query, queryOffset) ?? [...this._contextAttachments.attachments];
+		const attachments = [...this._contextAttachments.attachments];
 		const attachedContext = attachments.length > 0
 			? attachments
 			: undefined;
