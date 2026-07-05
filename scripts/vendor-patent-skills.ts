@@ -26,6 +26,12 @@
 //      name — built-in skill discovery silently skips mismatches.
 //   2. The source repo should be clean; a dirty tree produces a warning since
 //      the recorded commit would not reproduce the snapshot.
+//
+// Coexistence with user/workspace skills: a user-level (`~/.claude/skills`)
+// or workspace-level skill with the same name shadows the bundled built-in of
+// that name, per the SDK's and the prompts service's normal precedence. This
+// is intentional — there is no dedup layer; the built-in reappears when the
+// user copy is removed.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -35,7 +41,9 @@ const ROOT = path.resolve(__dirname, '..');
 const SOURCE_REPO = process.env['FLOWLEAP_CLI_DIR'] ?? path.resolve(ROOT, '..', 'flowleap-cli');
 const SOURCE_SKILLS = path.join(SOURCE_REPO, 'skills');
 const TARGET_SKILLS = path.join(ROOT, 'src', 'vs', 'sessions', 'skills');
-const MANIFEST_PATH = path.join(TARGET_SKILLS, '.vendored-patent-skills.json');
+// Not dot-prefixed: the build resource globs skip dotfiles, and the manifest
+// should ship with the snapshot it describes.
+const MANIFEST_PATH = path.join(TARGET_SKILLS, 'vendored-patent-skills.json');
 
 interface IVendorManifest {
 	readonly description: string;

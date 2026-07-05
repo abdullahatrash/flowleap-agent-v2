@@ -1,0 +1,29 @@
+{
+	"description": "Vendored snapshot of the FlowLeap patent skills. Do not edit these skill directories by hand; re-run scripts/vendor-patent-skills.ts to update them.",
+	"source": "flowleap-cli/skills",
+	"commit": "e5b91c9c7753488e28fd25a114ed630cf0a55b24",
+	"skills": [
+		"flowleap",
+		"flowleap-academic",
+		"flowleap-auth",
+		"flowleap-citation",
+		"flowleap-keys",
+		"flowleap-legal",
+		"flowleap-npl",
+		"flowleap-ops",
+		"flowleap-patent",
+		"flowleap-shared",
+		"flowleap-tools",
+		"flowleap-uspto",
+		"persona-ip-analyst",
+		"persona-patent-attorney",
+		"persona-researcher",
+		"persona-startup-founder",
+		"recipe-academic-literature-review",
+		"recipe-claim-analysis",
+		"recipe-freedom-to-operate",
+		"recipe-patent-landscape",
+		"recipe-patent-to-report",
+		"recipe-prior-art-search"
+	]
+}
