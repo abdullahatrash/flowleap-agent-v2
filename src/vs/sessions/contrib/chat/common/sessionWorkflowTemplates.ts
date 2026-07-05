@@ -40,7 +40,8 @@ export function getSessionWorkflowTemplates(): readonly ISessionWorkflowTemplate
 			description: localize('sessionTemplate.priorArt.description', "Comprehensive prior-art search across patents and academic literature"),
 			prompt: localize(
 				'sessionTemplate.priorArt.prompt',
-				"Prior-art search: <describe the invention, claim, or technology>\n\nUse the recipe-prior-art-search skill to run a comprehensive prior-art search on the topic above, covering both patents and academic literature. Write the findings as a Markdown report in the working directory."
+				"Prior-art search: <describe the invention, claim, or technology>\n\nUse the {0} skill to run a comprehensive prior-art search on the topic above, covering both patents and academic literature. Write the findings as a Markdown report in the working directory.",
+				'recipe-prior-art-search'
 			),
 		},
 		{
@@ -49,7 +50,8 @@ export function getSessionWorkflowTemplates(): readonly ISessionWorkflowTemplate
 			description: localize('sessionTemplate.fto.description', "Freedom-to-operate search for a product or technology"),
 			prompt: localize(
 				'sessionTemplate.fto.prompt',
-				"FTO analysis: <describe the product or technology and its target markets>\n\nUse the recipe-freedom-to-operate skill to run a freedom-to-operate search for the product described above. Write the findings as a Markdown report in the working directory."
+				"FTO analysis: <describe the product or technology and its target markets>\n\nUse the {0} skill to run a freedom-to-operate search for the product described above. Write the findings as a Markdown report in the working directory.",
+				'recipe-freedom-to-operate'
 			),
 		},
 		{
@@ -58,7 +60,8 @@ export function getSessionWorkflowTemplates(): readonly ISessionWorkflowTemplate
 			description: localize('sessionTemplate.landscape.description', "Patent landscape analysis for a technology area"),
 			prompt: localize(
 				'sessionTemplate.landscape.prompt',
-				"Patent landscape: <technology area>\n\nUse the recipe-patent-landscape skill to run a patent landscape analysis for the technology area above. Write the findings as a Markdown report in the working directory."
+				"Patent landscape: <technology area>\n\nUse the {0} skill to run a patent landscape analysis for the technology area above. Write the findings as a Markdown report in the working directory.",
+				'recipe-patent-landscape'
 			),
 		},
 		{
@@ -67,7 +70,8 @@ export function getSessionWorkflowTemplates(): readonly ISessionWorkflowTemplate
 			description: localize('sessionTemplate.claims.description', "Extract and analyze the claims of a patent"),
 			prompt: localize(
 				'sessionTemplate.claims.prompt',
-				"Claim analysis: <patent number, e.g. US10123456B2>\n\nUse the recipe-claim-analysis skill to extract and analyze the claims of the patent above, with full context. Write the analysis as a Markdown report in the working directory."
+				"Claim analysis: <patent number, e.g. US10123456B2>\n\nUse the {0} skill to extract and analyze the claims of the patent above, with full context. Write the analysis as a Markdown report in the working directory.",
+				'recipe-claim-analysis'
 			),
 		},
 		{
@@ -76,7 +80,8 @@ export function getSessionWorkflowTemplates(): readonly ISessionWorkflowTemplate
 			description: localize('sessionTemplate.report.description', "Extract all data from a patent into a structured report"),
 			prompt: localize(
 				'sessionTemplate.report.prompt',
-				"Patent report: <patent number, e.g. EP1234567B1>\n\nUse the recipe-patent-to-report skill to extract all data from the patent above into a structured report. Write it as a Markdown report in the working directory."
+				"Patent report: <patent number, e.g. EP1234567B1>\n\nUse the {0} skill to extract all data from the patent above into a structured report. Write it as a Markdown report in the working directory.",
+				'recipe-patent-to-report'
 			),
 		},
 	];
