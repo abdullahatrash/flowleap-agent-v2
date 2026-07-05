@@ -11,7 +11,6 @@ import { IChatDebugFileLoggerService } from '../../../../platform/chat/common/ch
 import { INativeEnvService } from '../../../../platform/env/common/envService';
 import { IGitService } from '../../../../platform/git/common/gitService';
 import { ILogService } from '../../../../platform/log/common/logService';
-import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { IMcpService } from '../../../../platform/mcp/common/mcpService';
 import { IOTelService, type ISpanHandle, SpanStatusCode, type TraceContext } from '../../../../platform/otel/common/index';
 import { deriveClaudeOTelEnv } from '../../../../platform/otel/common/agentOTelEnv';
@@ -23,8 +22,6 @@ import { Disposable, DisposableMap } from '../../../../util/vs/base/common/lifec
 import { isWindows } from '../../../../util/vs/base/common/platform';
 import { URI } from '../../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
-import { getErrorDetailsFromChatFetchError } from '../../../../platform/chat/common/commonTypes';
-import { IOctoKitService } from '../../../../platform/github/common/githubService';
 import { LanguageModelToolMCPSource } from '../../../../vscodeTypes';
 import { IClaudePluginService } from './claudeSkills';
 import { ExternalEditTracker } from '../../common/externalEditTracker';
@@ -59,8 +56,6 @@ export class ClaudeAgentManager extends Disposable {
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
-		@IOctoKitService private readonly octoKitService: IOctoKitService,
 	) {
 		super();
 	}
@@ -108,21 +103,12 @@ export class ClaudeAgentManager extends Disposable {
 			}
 
 			if (invokeError instanceof ClaudeProxyError) {
+				// Claude-native mode routes directly through the SDK's own credential
+				// chain, so the BYOK proxy is dormant and this path is not normally hit.
+				// Surface the error message directly rather than resolving Copilot
+				// token/outage details (which do not exist in this fork).
 				this.logService.info(`[ClaudeAgentManager] Request failed due to proxy error: ${invokeError.fetchError.type}`);
-				try {
-					const copilotToken = await this.authenticationService.getCopilotToken();
-					const outageStatus = await this.octoKitService.getGitHubOutageStatus();
-					const errorDetails = getErrorDetailsFromChatFetchError(
-						invokeError.fetchError,
-						copilotToken.copilotPlan,
-						outageStatus,
-						copilotToken.tokenBasedBilling,
-						copilotToken.quotaInfo.quota_reset_date,
-					);
-					return { errorDetails };
-				} catch {
-					return { errorDetails: { message: invokeError.message } };
-				}
+				return { errorDetails: { message: invokeError.message } };
 			}
 
 			this.logService.error(invokeError as Error);
@@ -469,7 +455,6 @@ export class ClaudeCodeSession extends Disposable {
 		// Take a snapshot of settings files so we can detect changes
 		await this._settingsChangeTracker.takeSnapshot();
 
-		const serverConfig = this.langModelServer.getConfig();
 		const options: Options = {
 			cwd,
 			additionalDirectories,
@@ -479,9 +464,6 @@ export class ClaudeCodeSession extends Disposable {
 			abortController: this._abortController,
 			effort: headRequest.effort,
 			executable: process.execPath as 'node', // get it to fork the EH node process
-			// TODO: CAPI does not yet support the WebSearch tool
-			// Once it does, we can re-enable it.
-			disallowedTools: ['WebSearch'],
 			// Use sessionId for new sessions, resume for existing ones (mutually exclusive)
 			...(this._isResumed
 				? { resume: this.sessionId }
@@ -495,8 +477,10 @@ export class ClaudeCodeSession extends Disposable {
 			plugins,
 			settings: {
 				env: {
-					ANTHROPIC_BASE_URL: `http://localhost:${serverConfig.port}`,
-					ANTHROPIC_AUTH_TOKEN: `${serverConfig.nonce}.${this.sessionId}`,
+					// Claude-native auth: we intentionally do NOT set ANTHROPIC_BASE_URL /
+					// ANTHROPIC_AUTH_TOKEN so the Claude CLI uses its own credential chain
+					// (the user's claude.ai subscription via `claude /login`, or their
+					// ANTHROPIC_API_KEY) instead of routing through the BYOK proxy.
 					CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
 					USE_BUILTIN_RIPGREP: '0',
 					PATH: `${this.envService.appRoot}/node_modules/@vscode/ripgrep-universal/bin/${process.platform}-${process.arch}${pathSep}${process.env.PATH}`,

@@ -8,7 +8,6 @@ import type * as vscode from 'vscode';
 import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
-import { formatPricingLabel, getModelCapabilitiesDescription, getReasoningEffortDescription } from '../../../conversation/common/languageModelAccess';
 import { createServiceIdentifier } from '../../../../util/common/services';
 import { Emitter } from '../../../../util/vs/base/common/event';
 import { Disposable } from '../../../../util/vs/base/common/lifecycle';
@@ -17,6 +16,54 @@ import { tryParseClaudeModelId } from './claudeModelId';
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 
 export const CLAUDE_REASONING_EFFORT_PROPERTY = 'reasoningEffort';
+
+const NATIVE_CLAUDE_CONTEXT_WINDOW = 200_000;
+const NATIVE_CLAUDE_MAX_OUTPUT = 64_000;
+
+/**
+ * The Claude model tiers surfaced in the Agents window composer for
+ * Claude-native mode. The `id` doubles as the SDK model alias — the Claude CLI
+ * resolves each ('sonnet'/'opus'/'haiku') to its latest concrete version and
+ * bills it to the user's own Claude credentials, so no version strings are
+ * tracked here. Built at call time so localized strings pick up the active
+ * language bundle.
+ */
+function getNativeClaudeModels(): vscode.LanguageModelChatInformation[] {
+	const base = {
+		maxInputTokens: NATIVE_CLAUDE_CONTEXT_WINDOW,
+		maxOutputTokens: NATIVE_CLAUDE_MAX_OUTPUT,
+		isUserSelectable: true,
+		capabilities: { imageInput: true, toolCalling: true },
+		targetChatSessionType: 'claude-code',
+	} as const;
+	return [
+		{
+			...base,
+			id: 'sonnet',
+			name: l10n.t('Claude Sonnet'),
+			family: 'sonnet',
+			version: 'sonnet',
+			tooltip: l10n.t('Balanced Claude model for everyday agentic coding.'),
+			isDefault: true,
+		},
+		{
+			...base,
+			id: 'opus',
+			name: l10n.t('Claude Opus'),
+			family: 'opus',
+			version: 'opus',
+			tooltip: l10n.t('Most capable Claude model for complex, multi-step work.'),
+		},
+		{
+			...base,
+			id: 'haiku',
+			name: l10n.t('Claude Haiku'),
+			family: 'haiku',
+			version: 'haiku',
+			tooltip: l10n.t('Fastest, most cost-effective Claude model.'),
+		},
+	];
+}
 
 export interface IClaudeCodeModels {
 	readonly _serviceBrand: undefined;
@@ -85,39 +132,12 @@ export class ClaudeCodeModels extends Disposable implements IClaudeCodeModels {
 	}
 
 	private async _provideLanguageModelChatInfo(): Promise<vscode.LanguageModelChatInformation[]> {
-		const endpoints = await this._getEndpoints();
-		return endpoints.map(endpoint => {
-			const multiplier = endpoint.multiplier === undefined ? undefined : `${endpoint.multiplier}x`;
-			const tooltip: string | undefined = getModelCapabilitiesDescription(endpoint);
-			return {
-				id: endpoint.model,
-				name: endpoint.name,
-				family: endpoint.family,
-				version: endpoint.version,
-				maxInputTokens: endpoint.modelMaxPromptTokens,
-				maxOutputTokens: endpoint.maxOutputTokens,
-				pricing: multiplier ?? (endpoint.tokenPricing ? formatPricingLabel(endpoint.tokenPricing) : undefined),
-				inputCost: endpoint.tokenPricing?.default.inputPrice,
-				outputCost: endpoint.tokenPricing?.default.outputPrice,
-				cacheCost: endpoint.tokenPricing?.default.cacheReadTokenPrice,
-				cacheWriteCost: endpoint.tokenPricing?.default.cacheWriteTokenPrice,
-				longContextInputCost: endpoint.tokenPricing?.longContext?.inputPrice,
-				longContextOutputCost: endpoint.tokenPricing?.longContext?.outputPrice,
-				longContextCacheCost: endpoint.tokenPricing?.longContext?.cacheReadTokenPrice,
-				longContextCacheWriteCost: endpoint.tokenPricing?.longContext?.cacheWriteTokenPrice,
-				multiplierNumeric: endpoint.multiplier,
-				priceCategory: endpoint.priceCategory,
-				tooltip,
-				isUserSelectable: true,
-				configurationSchema: buildConfigurationSchema(endpoint),
-				capabilities: {
-					imageInput: endpoint.supportsVision,
-					toolCalling: endpoint.supportsToolCalls,
-					editTools: endpoint.supportedEditTools ? [...endpoint.supportedEditTools] : undefined,
-				},
-				targetChatSessionType: 'claude-code'
-			};
-		});
+		// Claude-native mode: sessions run against the Claude CLI's own credential
+		// chain (claude.ai subscription or ANTHROPIC_API_KEY), so the available
+		// models are the standard Anthropic tiers rather than the BYOK endpoints.
+		// The SDK resolves each alias ('opus'/'sonnet'/'haiku') to its latest
+		// concrete version, so we don't have to track model version strings here.
+		return getNativeClaudeModels();
 	}
 
 	public async resolveReasoningEffort(requestedModel: ParsedClaudeModelId | string | undefined, requestedReasoningEffort: string | undefined): Promise<EffortLevel | undefined> {
@@ -213,30 +233,4 @@ export function pickReasoningEffort(endpoint: IChatEndpoint | undefined, request
 		return endpoint.supportsReasoningEffort[0];
 	}
 	return undefined;
-}
-
-function buildConfigurationSchema(endpoint: IChatEndpoint): vscode.LanguageModelConfigurationSchema | undefined {
-	const effortLevels = endpoint.supportsReasoningEffort?.filter(
-		(level): level is typeof SUPPORTED_EFFORT_LEVELS[number] =>
-			(SUPPORTED_EFFORT_LEVELS as readonly string[]).includes(level)
-	);
-	if (!effortLevels) {
-		return;
-	}
-
-	const defaultEffort = effortLevels.includes('high') ? 'high' : undefined;
-
-	return {
-		properties: {
-			[CLAUDE_REASONING_EFFORT_PROPERTY]: {
-				type: 'string',
-				title: l10n.t('Thinking Effort'),
-				enum: effortLevels,
-				enumItemLabels: effortLevels.map(level => level.charAt(0).toUpperCase() + level.slice(1)),
-				enumDescriptions: effortLevels.map(getReasoningEffortDescription),
-				default: defaultEffort,
-				group: 'navigation',
-			}
-		}
-	};
 }

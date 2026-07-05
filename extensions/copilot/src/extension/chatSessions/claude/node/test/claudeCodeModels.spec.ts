@@ -226,104 +226,27 @@ describe('ClaudeCodeModels', () => {
 			return info ?? [];
 		}
 
-		it('registers provider and surfaces endpoints as LanguageModelChatInformation', async () => {
-			const { service } = createServiceWithRefreshableEndpoints([
-				createMockEndpoint({ model: 'claude-sonnet-4-model', name: 'Claude Sonnet 4', family: 'claude-sonnet-4', multiplier: 1 }),
-				createMockEndpoint({ model: 'claude-opus-4.5-model', name: 'Claude Opus 4.5', family: 'claude-opus-4.5', multiplier: 5 }),
-			]);
-			const { lm, getCapturedProvider } = createMockLm();
-
-			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info).toHaveLength(2);
-
-			const sonnet = info.find(i => i.id === 'claude-sonnet-4-model')!;
-			expect(sonnet.name).toBe('Claude Sonnet 4');
-			expect(sonnet.family).toBe('claude-sonnet-4');
-			expect(sonnet.pricing).toBe('1x');
-			expect(sonnet.targetChatSessionType).toBe('claude-code');
-			expect(sonnet.isUserSelectable).toBe(true);
-
-			const opus = info.find(i => i.id === 'claude-opus-4.5-model')!;
-			expect(opus.pricing).toBe('5x');
-		});
-
-		it('returns undefined multiplier string when endpoint has no multiplier', async () => {
-			const { service } = createServiceWithRefreshableEndpoints([
-				createMockEndpoint({ model: 'claude-sonnet-4-model', name: 'Claude Sonnet 4', family: 'claude-sonnet-4' }),
-			]);
-			const { lm, getCapturedProvider } = createMockLm();
-
-			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info[0].pricing).toBeUndefined();
-		});
-
-		it('returns empty array when no endpoints are available', async () => {
+		it('surfaces the static native Claude model tiers regardless of endpoints', async () => {
+			// Claude-native mode: models come from the standard Anthropic aliases,
+			// not from the BYOK endpoint provider — so an empty endpoint list must
+			// still produce a non-empty picker (regression for "No models available").
 			const { service } = createServiceWithRefreshableEndpoints([]);
 			const { lm, getCapturedProvider } = createMockLm();
 
 			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info).toHaveLength(0);
-		});
+			expect(info.map(i => i.id)).toEqual(['sonnet', 'opus', 'haiku']);
 
-		it('maps endpoint properties to LanguageModelChatInformation fields', async () => {
-			const endpoint = createMockEndpoint({ model: 'claude-sonnet-4-model', name: 'Claude Sonnet 4', family: 'claude-sonnet-4' });
-			const { service } = createServiceWithRefreshableEndpoints([endpoint]);
-			const { lm, getCapturedProvider } = createMockLm();
+			const sonnet = info.find(i => i.id === 'sonnet')!;
+			expect(sonnet.family).toBe('sonnet');
+			expect(sonnet.targetChatSessionType).toBe('claude-code');
+			expect(sonnet.isUserSelectable).toBe(true);
+			expect(sonnet.isDefault).toBe(true);
+			expect(sonnet.capabilities?.toolCalling).toBe(true);
+			expect(sonnet.maxInputTokens).toBeGreaterThan(0);
+			expect(sonnet.maxOutputTokens).toBeGreaterThan(0);
 
-			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info[0].maxInputTokens).toBe(endpoint.modelMaxPromptTokens);
-			expect(info[0].maxOutputTokens).toBe(endpoint.maxOutputTokens);
-			expect(info[0].version).toBe(endpoint.version);
-		});
-		it('includes configurationSchema when endpoint supports multiple reasoning effort levels', async () => {
-			const { service } = createServiceWithRefreshableEndpoints([
-				createMockEndpoint({
-					model: 'claude-sonnet-4-model',
-					name: 'Claude Sonnet 4',
-					family: 'claude-sonnet-4',
-					supportsReasoningEffort: ['low', 'medium', 'high'],
-				}),
-			]);
-			const { lm, getCapturedProvider } = createMockLm();
-
-			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info[0].configurationSchema).toBeDefined();
-			const schema = info[0].configurationSchema!;
-			expect(schema.properties?.['reasoningEffort']).toBeDefined();
-			expect(schema.properties!['reasoningEffort'].enum).toEqual(['low', 'medium', 'high']);
-			expect(schema.properties!['reasoningEffort'].default).toBe('high');
-		});
-
-		it('omits configurationSchema when endpoint has no reasoning effort support', async () => {
-			const { service } = createServiceWithRefreshableEndpoints([
-				createMockEndpoint({
-					model: 'claude-sonnet-4-model',
-					name: 'Claude Sonnet 4',
-					family: 'claude-sonnet-4',
-				}),
-			]);
-			const { lm, getCapturedProvider } = createMockLm();
-
-			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info[0].configurationSchema).toBeUndefined();
-		});
-
-		it('includes configurationSchema when endpoint has only one reasoning effort level', async () => {
-			const { service } = createServiceWithRefreshableEndpoints([
-				createMockEndpoint({
-					model: 'claude-sonnet-4-model',
-					name: 'Claude Sonnet 4',
-					family: 'claude-sonnet-4',
-					supportsReasoningEffort: ['high'],
-				}),
-			]);
-			const { lm, getCapturedProvider } = createMockLm();
-
-			const info = await getProviderInfo(service, lm, getCapturedProvider);
-			expect(info[0].configurationSchema).toBeDefined();
-			const schema = info[0].configurationSchema!;
-			expect(schema.properties?.['reasoningEffort'].enum).toEqual(['high']);
-			expect(schema.properties!['reasoningEffort'].default).toBe('high');
+			// Exactly one model is marked default.
+			expect(info.filter(i => i.isDefault === true)).toHaveLength(1);
 		});
 	});
 
