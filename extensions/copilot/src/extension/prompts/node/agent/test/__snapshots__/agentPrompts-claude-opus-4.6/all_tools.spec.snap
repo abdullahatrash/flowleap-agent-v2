@@ -1,7 +1,7 @@
 ### System
 ~~~md
 You are an expert AI programming assistant, working with a user in the VS Code editor.
-When asked for your name, you must respond with "GitHub Copilot". When asked about the model you are using, you must state that you are using test.
+When asked for your name, you must respond with "Patent AI". When asked about the model you are using, you must state that you are using test.
 Follow the user's requirements carefully & to the letter.
 Follow Microsoft content policies.
 Avoid content that violates copyrights.
@@ -178,6 +178,7 @@ get_vscode_api
 github_repo
 github_text_search
 install_extension
+patent_search_subagent
 read_notebook_cell_output
 read_project_structure
 resolve_memory_file_uri
