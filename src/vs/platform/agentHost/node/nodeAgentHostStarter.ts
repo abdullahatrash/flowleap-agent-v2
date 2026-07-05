@@ -9,7 +9,6 @@ import { FileAccess, Schemas } from '../../../base/common/network.js';
 import { Client, IIPCOptions } from '../../../base/parts/ipc/node/ipc.cp.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { IEnvironmentService, INativeEnvironmentService } from '../../environment/common/environment.js';
-import { parseAgentHostDebugPort } from '../../environment/node/environmentService.js';
 import { ILogService } from '../../log/common/log.js';
 import { getResolvedShellEnv } from '../../shell/node/shellEnv.js';
 import { IAgentHostConnection, IAgentHostStarter } from '../common/agent.js';
@@ -130,15 +129,9 @@ export class NodeAgentHostStarter extends Disposable implements IAgentHostStarte
 			env,
 		};
 
-		const agentHostDebug = parseAgentHostDebugPort(this._environmentService.args, this._environmentService.isBuilt);
-		if (agentHostDebug) {
-			if (agentHostDebug.break && agentHostDebug.port) {
-				opts.debugBrk = agentHostDebug.port;
-			} else if (!agentHostDebug.break && agentHostDebug.port) {
-				opts.debug = agentHostDebug.port;
-			}
-		}
-
+		// Agent-host debug-port plumbing (--inspect-agenthost) was removed with
+		// the process wiring (#73); this starter is never instantiated and the
+		// whole tree is deleted in #74.
 		const client = new Client(FileAccess.asFileUri('bootstrap-fork').fsPath, opts);
 
 		const store = new DisposableStore();

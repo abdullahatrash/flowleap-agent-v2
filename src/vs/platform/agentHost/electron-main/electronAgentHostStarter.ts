@@ -11,7 +11,6 @@ import { validatedIpcMain } from '../../../base/parts/ipc/electron-main/ipcMain.
 import { Client as MessagePortClient } from '../../../base/parts/ipc/electron-main/ipc.mp.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { IEnvironmentMainService } from '../../environment/electron-main/environmentMainService.js';
-import { parseAgentHostDebugPort } from '../../environment/node/environmentService.js';
 import { ILifecycleMainService } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
 import { Schemas } from '../../../base/common/network.js';
@@ -56,11 +55,10 @@ export class ElectronAgentHostStarter extends Disposable implements IAgentHostSt
 		this.utilityProcess = new UtilityProcess(this._logService, NullTelemetryService, this._lifecycleMainService);
 		this.utilityProcessStarted = new DeferredPromise<void>();
 
-		const inspectParams = parseAgentHostDebugPort(this._environmentMainService.args, this._environmentMainService.isBuilt);
-		const execArgv = inspectParams.port ? [
-			'--nolazy',
-			`--inspect${inspectParams.break ? '-brk' : ''}=${inspectParams.port}`
-		] : undefined;
+		// Agent-host debug-port plumbing (--inspect-agenthost) was removed with
+		// the process wiring (#73); this starter is never instantiated and the
+		// whole tree is deleted in #74.
+		const execArgv = undefined;
 
 		// Resolve user shell environment so spawned tools/terminals inherit
 		// PATH and other vars from the user's login shell (macOS/Linux GUI launches).
