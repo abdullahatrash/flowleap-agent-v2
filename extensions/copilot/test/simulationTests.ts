@@ -37,5 +37,4 @@ import './prompts/settingsEditorSearchResultsSelector.stest';
 import './simulation/inlineEdit/inlineEdit.stest';
 import './simulation/notebookEdits.stest';
 import './simulation/notebooks.stest';
-import './simulation/prTitleAndDescription.stest';
 import './simulation/tools/toolcall.stest';
