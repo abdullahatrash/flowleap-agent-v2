@@ -18,9 +18,9 @@ export const IPluginGitService = createDecorator<IPluginGitService>('pluginGitSe
  * | Deployment flavor                  | Implementation                  | Materialisation strategy                                | Test fixture                                                           |
  * | ---------------------------------- | ------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
  * | Desktop (no remote AHP)            | `NativePluginGitCommandService` | Real `git` via `ILocalGitService` in the shared process | `chat/test/electron-browser/pluginGitCommandService.test.ts`           |
- * | Desktop + remote AHP backend       | `NativePluginGitCommandService` | Real `git` locally; server pulls dir via AHP FS         | + `platform/agentHost/test/node/agentPluginManager.test.ts`            |
+ * | Desktop + remote AHP backend       | `NativePluginGitCommandService` | Real `git` locally; server pulls dir via AHP FS         | —                                                                      |
  * | Web standalone (no AHP)            | `BrowserPluginGitCommandService`| GitHub tarball fetch + extract into virtual FS          | `chat/test/browser/pluginGitCommandService.test.ts`                    |
- * | Web + remote AHP backend           | `BrowserPluginGitCommandService`| Tarball locally; server pulls dir via AHP FS            | + `platform/agentHost/test/node/agentPluginManager.test.ts`            |
+ * | Web + remote AHP backend           | `BrowserPluginGitCommandService`| Tarball locally; server pulls dir via AHP FS            | —                                                                      |
  *
  * The "+ remote AHP" rows reuse the local impl unchanged: the server-side
  * `AgentPluginManager` consumes the already-materialised plugin dir through

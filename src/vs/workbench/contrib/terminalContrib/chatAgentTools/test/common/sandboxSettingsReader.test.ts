@@ -9,7 +9,7 @@ import { TestConfigurationService } from '../../../../../../platform/configurati
 import { NullLogService } from '../../../../../../platform/log/common/log.js';
 import { AgentNetworkDomainSettingId } from '../../../../../../platform/networkFilter/common/settings.js';
 import { AgentSandboxEnabledValue, AgentSandboxSettingId } from '../../../../../../platform/sandbox/common/settings.js';
-import { AgentHostSandboxKey } from '../../../../../../platform/agentHost/common/sandboxConfigSchema.js';
+import { AgentHostSandboxKey } from '../../../../../../platform/agentSessionState/common/sandboxConfigSchema.js';
 import { readAgentHostSandboxValues, readSandboxSetting } from '../../common/sandboxSettingsReader.js';
 
 suite('sandboxSettingsReader', () => {

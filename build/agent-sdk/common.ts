@@ -181,8 +181,7 @@ export function buildCdnUrl(sdk: Sdk, sdkVersion: string, sdkTarget: string): st
 /**
  * Builds the `format2`-style URL template stamped into
  * `product.agentSdks.<sdk>.urlTemplate`. The runtime substitutes
- * `{sdkTarget}` per launch via `resolveSdkTarget` in
- * `src/vs/platform/agentHost/node/agentSdkDownloader.ts`. Matches the
+ * `{sdkTarget}` per launch via `resolveSdkTarget`. Matches the
  * upload path written by `upload.ts` with `{sdkTarget}` in place of the
  * concrete target suffix.
  */

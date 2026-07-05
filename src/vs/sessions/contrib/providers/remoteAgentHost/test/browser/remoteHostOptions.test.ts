@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { RemoteAgentHostConnectionStatus } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { RemoteAgentHostConnectionStatus } from '../../../../../../platform/agentSessionState/common/remoteAgentHostService.js';
 import { getStatusHover, getStatusLabel } from '../../browser/remoteHostOptions.js';
 
 suite('remoteHostOptions', () => {

@@ -7,9 +7,9 @@ import assert from 'assert';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { McpServerType } from '../../../mcp/common/mcpPlatformTypes.js';
-import { CustomizationType, McpServerStatus, type McpServerCustomization } from '../../../agentHost/common/state/protocol/state.js';
-import { DEFAULT_MCP_APP } from '../../../agentHost/common/state/protocol/mcpAppDefaults.js';
-import { customizationId } from '../../../agentHost/common/state/sessionState.js';
+import { CustomizationType, McpServerStatus, type McpServerCustomization } from '../../../agentSessionState/common/state/protocol/state.js';
+import { DEFAULT_MCP_APP } from '../../../agentSessionState/common/state/protocol/mcpAppDefaults.js';
+import { customizationId } from '../../../agentSessionState/common/state/sessionState.js';
 
 function stubMcpCustomization(): McpServerCustomization {
 	return { type: CustomizationType.McpServer, id: 'stub', uri: 'file:///plugin', name: 'test', enabled: true, state: { kind: McpServerStatus.Starting } };

@@ -8,7 +8,7 @@ job emits the same `urlTemplate` per SDK — the runtime substitutes
 `{sdkTarget}` per launch via `resolveSdkTarget()`, which is what lets
 macOS Universal bundles share one `product.json` across arm64 + x64.
 
-The runtime side (`src/vs/platform/agentHost/`) downloads and caches
+The runtime side (the agent-host runtime (removed)) downloads and caches
 the SDK tarball at first use. See `IAgentSdkProductConfig` in
 `src/vs/base/common/product.ts` for the contract.
 
@@ -146,4 +146,4 @@ VSCODE_AGENT_HOST_CLAUDE_SDK_ROOT=/path/to/anthropic-claude-sdk-install \
   ./scripts/code.sh
 ```
 
-(See `src/vs/platform/agentHost/common/agentService.ts` for env var names.)
+(Env var names were defined by the former agent-host runtime.)

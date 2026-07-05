@@ -7,10 +7,10 @@ import { Event } from '../../base/common/event.js';
 import { IObservable } from '../../base/common/observable.js';
 import { equals } from '../../base/common/objects.js';
 import { URI } from '../../base/common/uri.js';
-import { IAgentConnection } from '../../platform/agentHost/common/agentService.js';
-import { RemoteAgentHostConnectionStatus } from '../../platform/agentHost/common/remoteAgentHostService.js';
-import { ResolveSessionConfigResult, SessionConfigValueItem } from '../../platform/agentHost/common/state/protocol/commands.js';
-import { AgentCustomization, Customization, McpServerStatus, RootConfigState } from '../../platform/agentHost/common/state/protocol/state.js';
+import { IAgentConnection } from '../../platform/agentSessionState/common/agentService.js';
+import { RemoteAgentHostConnectionStatus } from '../../platform/agentSessionState/common/remoteAgentHostService.js';
+import { ResolveSessionConfigResult, SessionConfigValueItem } from '../../platform/agentSessionState/common/state/protocol/commands.js';
+import { AgentCustomization, Customization, McpServerStatus, RootConfigState } from '../../platform/agentSessionState/common/state/protocol/state.js';
 import { ISessionsProvider } from '../services/sessions/common/sessionsProvider.js';
 import { ISessionAgentRef } from '../services/sessions/common/session.js';
 

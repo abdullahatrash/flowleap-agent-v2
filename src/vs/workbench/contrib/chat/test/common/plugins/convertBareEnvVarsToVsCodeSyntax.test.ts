@@ -8,7 +8,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { IMcpRemoteServerConfiguration, IMcpStdioServerConfiguration, McpServerType } from '../../../../../../platform/mcp/common/mcpPlatformTypes.js';
 import { convertBareEnvVarsToVsCodeSyntax as convertBareEnvVarsToVsCodeSyntaxRaw } from '../../../common/plugins/agentPluginServiceImpl.js';
-import { CustomizationType, McpServerStatus, type McpServerCustomization } from '../../../../../../platform/agentHost/common/state/protocol/state.js';
+import { CustomizationType, McpServerStatus, type McpServerCustomization } from '../../../../../../platform/agentSessionState/common/state/protocol/state.js';
 import type { IMcpServerDefinition } from '../../../../../../platform/agentPlugins/common/pluginParsers.js';
 
 function stubMcpCustomization(): McpServerCustomization {

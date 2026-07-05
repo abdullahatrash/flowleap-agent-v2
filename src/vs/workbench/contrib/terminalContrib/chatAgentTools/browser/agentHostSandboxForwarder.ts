@@ -5,12 +5,12 @@
 
 import { Disposable, IDisposable } from '../../../../../base/common/lifecycle.js';
 import { equals } from '../../../../../base/common/objects.js';
-import { AgentHostCustomTerminalToolEnabledSettingId, AgentHostSdkSandboxEnabledSettingId, IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
-import { IAgentHostConnectionsService } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
-import { AgentHostSandboxConfigKey, AgentHostSandboxKey } from '../../../../../platform/agentHost/common/sandboxConfigSchema.js';
+import { AgentHostCustomTerminalToolEnabledSettingId, AgentHostSdkSandboxEnabledSettingId, IAgentConnection } from '../../../../../platform/agentSessionState/common/agentService.js';
+import { IAgentHostConnectionsService } from '../../../../../platform/agentSessionState/common/agentHostConnectionsService.js';
+import { AgentHostSandboxConfigKey, AgentHostSandboxKey } from '../../../../../platform/agentSessionState/common/sandboxConfigSchema.js';
 import { AgentSandboxEnabledValue } from '../../../../../platform/sandbox/common/settings.js';
-import { ActionType } from '../../../../../platform/agentHost/common/state/protocol/actions.js';
-import { ROOT_STATE_URI } from '../../../../../platform/agentHost/common/state/sessionState.js';
+import { ActionType } from '../../../../../platform/agentSessionState/common/state/protocol/actions.js';
+import { ROOT_STATE_URI } from '../../../../../platform/agentSessionState/common/state/sessionState.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IWorkbenchContribution } from '../../../../common/contributions.js';

@@ -23,14 +23,14 @@ import {
 	IResourceListResult,
 	IResourceReadResult,
 	LOCAL_AGENT_HOST_ADDRESS,
-} from '../../../../platform/agentHost/common/agentHostResourceService.js';
-import { normalizeRemoteAgentHostAddress } from '../../../../platform/agentHost/common/agentHostUri.js';
+} from '../../../../platform/agentSessionState/common/agentHostResourceService.js';
+import { normalizeRemoteAgentHostAddress } from '../../../../platform/agentSessionState/common/agentHostUri.js';
 import {
 	ContentEncoding,
 	ResourceCopyParams, ResourceDeleteParams, ResourceMkdirParams, ResourceMoveParams,
 	ResourceRequestParams, ResourceResolveParams, ResourceResolveResult, ResourceType, ResourceWriteParams,
-} from '../../../../platform/agentHost/common/state/protocol/commands.js';
-import { ROOT_STATE_URI } from '../../../../platform/agentHost/common/state/sessionState.js';
+} from '../../../../platform/agentSessionState/common/state/protocol/commands.js';
+import { ROOT_STATE_URI } from '../../../../platform/agentSessionState/common/state/sessionState.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';

@@ -8,12 +8,12 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { DisposableStore, IReference } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IProcessPropertyMap, ITerminalChildProcess, ITerminalLaunchError, ITerminalLaunchResult, ProcessPropertyType } from '../../../../platform/terminal/common/terminal.js';
-import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
-import { AGENT_HOST_SCHEME, fromAgentHostUri } from '../../../../platform/agentHost/common/agentHostUri.js';
-import { ActionType, ActionEnvelope } from '../../../../platform/agentHost/common/state/sessionActions.js';
-import { TerminalClaimKind, type TerminalContentPart, type TerminalState } from '../../../../platform/agentHost/common/state/protocol/state.js';
-import { IAgentSubscription } from '../../../../platform/agentHost/common/state/agentSubscription.js';
-import { StateComponents } from '../../../../platform/agentHost/common/state/sessionState.js';
+import { IAgentConnection } from '../../../../platform/agentSessionState/common/agentService.js';
+import { AGENT_HOST_SCHEME, fromAgentHostUri } from '../../../../platform/agentSessionState/common/agentHostUri.js';
+import { ActionType, ActionEnvelope } from '../../../../platform/agentSessionState/common/state/sessionActions.js';
+import { TerminalClaimKind, type TerminalContentPart, type TerminalState } from '../../../../platform/agentSessionState/common/state/protocol/state.js';
+import { IAgentSubscription } from '../../../../platform/agentSessionState/common/state/agentSubscription.js';
+import { StateComponents } from '../../../../platform/agentSessionState/common/state/sessionState.js';
 import { BasePty } from '../common/basePty.js';
 
 /**

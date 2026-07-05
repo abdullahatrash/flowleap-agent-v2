@@ -9,7 +9,7 @@ import { IObservable } from '../../base/common/observable.js';
 import { extUri, basename } from '../../base/common/resources.js';
 import { ThemeIcon } from '../../base/common/themables.js';
 import { URI } from '../../base/common/uri.js';
-import type { ISessionGitState } from '../../platform/agentHost/common/state/sessionState.js';
+import type { ISessionGitState } from '../../platform/agentSessionState/common/state/sessionState.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IGitHubInfo, ISessionWorkspace } from '../services/sessions/common/session.js';
 

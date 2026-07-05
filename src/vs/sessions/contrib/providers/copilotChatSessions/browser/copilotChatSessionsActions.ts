@@ -24,9 +24,8 @@ import { LocalSessionType } from '../../localChatSessions/browser/localChatSessi
 import { IsolationPicker } from './isolationPicker.js';
 import { ModePicker, ModePickerModel } from './modePicker.js';
 import { CopilotPermissionPickerDelegate, PermissionPicker } from './permissionPicker.js';
-import { BaseAgentHostSessionsProvider, CopilotCLISessionType } from '../../agentHost/browser/baseAgentHostSessionsProvider.js';
+import { CopilotCLISessionType } from './copilotCliSessionType.js';
 import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 
 const IsActiveSessionCopilotCLI = ContextKeyExpr.equals(SessionTypeContext.key, CopilotCLISessionType.id);
 const IsActiveSessionLocal = ContextKeyExpr.equals(SessionTypeContext.key, LocalSessionType.id);
@@ -270,18 +269,6 @@ class CopilotActiveSessionContribution extends Disposable implements IWorkbenchC
 				const providerSession = provider instanceof CopilotChatSessionsProvider ? provider.getSession(session.sessionId) : undefined;
 				const isLoading = providerSession?.loading.read(reader);
 				hasRepositoryKey.set(!isLoading && !!providerSession?.gitRepository);
-			} else if (session?.providerId === LOCAL_AGENT_HOST_PROVIDER_ID) {
-				const provider = sessionsProvidersService.getProvider(session.providerId);
-				const providerSession = provider instanceof BaseAgentHostSessionsProvider
-					? provider.getSessionByResource(session.resource)
-					: undefined;
-
-				const isLoading = providerSession?.loading.read(reader);
-				const workspace = providerSession?.workspace.read(reader);
-				const hasGitRepository = workspace?.folders
-					.some(folder => folder.gitRepository !== undefined) ?? false;
-
-				hasRepositoryKey.set(!isLoading && hasGitRepository);
 			} else {
 				hasRepositoryKey.set(false);
 			}

@@ -8,7 +8,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { combinedDisposable, Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { basename, isEqual } from '../../../../base/common/resources.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { AgentHostMcpServers, AgentHostMcpServersConfigKey } from '../../../../platform/agentHost/common/agentHostSchema.js';
+import { AgentHostMcpServers, AgentHostMcpServersConfigKey } from '../../../../platform/agentSessionState/common/agentHostSchema.js';
 import { IAgentHostCustomizationService } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationService.js';
 import { IMcpServerConfiguration } from '../../../../platform/mcp/common/mcpPlatformTypes.js';
 import { IAgentHostMcpServer, IAgentHostSessionsProvider, isAgentHostProvider } from '../../../common/agentHostSessionsProvider.js';
@@ -16,7 +16,7 @@ import { ISessionsProvidersService } from '../../sessions/browser/sessionsProvid
 import { ISessionsManagementService } from '../../sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../sessions/browser/sessionsService.js';
 import { ISessionsProvider } from '../../sessions/common/sessionsProvider.js';
-import { AgentCustomization, Customization, CustomizationType } from '../../../../platform/agentHost/common/state/sessionState.js';
+import { AgentCustomization, Customization, CustomizationType } from '../../../../platform/agentSessionState/common/state/sessionState.js';
 import { ISession } from '../../sessions/common/session.js';
 
 export class AgentHostCustomizationService extends Disposable implements IAgentHostCustomizationService {

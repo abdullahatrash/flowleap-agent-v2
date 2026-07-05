@@ -14,10 +14,10 @@ import { TestInstantiationService } from '../../../../../../platform/instantiati
 import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ILogService, NullLogService } from '../../../../../../platform/log/common/log.js';
-import { IAgentCreateSessionConfig, IAgentHostService, IAgentResolveSessionConfigParams } from '../../../../../../platform/agentHost/common/agentService.js';
-import { ActionType } from '../../../../../../platform/agentHost/common/state/protocol/actions.js';
-import type { ResolveSessionConfigResult } from '../../../../../../platform/agentHost/common/state/protocol/commands.js';
-import type { ConfigSchema } from '../../../../../../platform/agentHost/common/state/protocol/state.js';
+import { IAgentCreateSessionConfig, IAgentHostService, IAgentResolveSessionConfigParams } from '../../../../../../platform/agentSessionState/common/agentService.js';
+import { ActionType } from '../../../../../../platform/agentSessionState/common/state/protocol/actions.js';
+import type { ResolveSessionConfigResult } from '../../../../../../platform/agentSessionState/common/state/protocol/commands.js';
+import type { ConfigSchema } from '../../../../../../platform/agentSessionState/common/state/protocol/state.js';
 import { IWorkbenchEnvironmentService } from '../../../../../services/environment/common/environmentService.js';
 import { IWorkspaceTrustManagementService } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import { IChatService } from '../../../common/chatService/chatService.js';

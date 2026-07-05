@@ -9,7 +9,7 @@ import { IObservable, observableValue, transaction } from '../../../../base/comm
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
+import { IAgentConnection } from '../../../../platform/agentSessionState/common/agentService.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { AgentHostPty } from './agentHostPty.js';

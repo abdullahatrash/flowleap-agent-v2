@@ -113,6 +113,9 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
 registerSingleton(IPluginGitService, NativePluginGitCommandService, InstantiationType.Delayed);
 registerSharedProcessRemoteService(ILocalGitService, 'localGit');
 
+registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
+registerSingleton(IRemoteAgentHostService, NullRemoteAgentHostService, InstantiationType.Delayed);
+
 
 //#endregion
 
@@ -211,11 +214,11 @@ import '../workbench/contrib/policyExport/electron-browser/policyExport.contribu
 
 import './electron-browser/sessions.desktop.contribution.js';
 
-// Remote Agent Host
-import '../workbench/services/agentHost/electron-browser/agentHostService.js';
-import '../platform/agentHost/electron-browser/remoteAgentHostService.js';
-import '../platform/agentHost/electron-browser/sshRemoteAgentHostService.js';
-import '../platform/agentHost/electron-browser/wslRemoteAgentHostService.js';
+// Remote Agent Host: the runtime is removed; the dormant editor client + null remote service are
+// registered below so keep-list consumers that inject these interfaces resolve without spawning a host.
+import { IAgentHostService } from '../platform/agentSessionState/common/agentService.js';
+import { EditorRemoteAgentHostServiceClient } from '../workbench/services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
+import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../platform/agentSessionState/common/remoteAgentHostService.js';
 // Chat
 import './contrib/agentFeedback/browser/agentFeedback.contribution.js';
 import './contrib/chat/electron-browser/chat.contribution.js';

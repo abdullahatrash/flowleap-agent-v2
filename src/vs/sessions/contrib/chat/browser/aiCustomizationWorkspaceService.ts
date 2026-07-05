@@ -19,7 +19,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { localize } from '../../../../nls.js';
-import { AGENT_HOST_SCHEME } from '../../../../platform/agentHost/common/agentHostUri.js';
+import { AGENT_HOST_SCHEME } from '../../../../platform/agentSessionState/common/agentHostUri.js';
 
 /**
  * Agent Sessions override of IAICustomizationWorkspaceService.

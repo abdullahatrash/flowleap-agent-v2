@@ -16,7 +16,7 @@ import {
 	AgentHostPermissionMode,
 	AgentHostPermissionsSetting,
 	AgentHostLocalFilePermissionsSettingId,
-} from '../../../../../platform/agentHost/common/agentHostResourceService.js';
+} from '../../../../../platform/agentSessionState/common/agentHostResourceService.js';
 import { AgentHostResourceService } from '../../common/agentHostResourceService.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 

@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable, IDisposable } from '../../../../base/common/lifecycle.js';
-import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
-import { SYNCED_CUSTOMIZATION_SCHEME } from '../../../../platform/agentHost/common/agentHostFileSystemService.js';
-import { AGENT_HOST_LABEL_FORMATTER, AGENT_HOST_SCHEME } from '../../../../platform/agentHost/common/agentHostUri.js';
+import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../../../platform/agentSessionState/common/agentHostFileSystemProvider.js';
+import { SYNCED_CUSTOMIZATION_SCHEME } from '../../../../platform/agentSessionState/common/agentHostFileSystemService.js';
+import { AGENT_HOST_LABEL_FORMATTER, AGENT_HOST_SCHEME } from '../../../../platform/agentSessionState/common/agentHostUri.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { InMemoryFileSystemProvider } from '../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';

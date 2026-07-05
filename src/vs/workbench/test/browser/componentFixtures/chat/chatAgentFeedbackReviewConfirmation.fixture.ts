@@ -207,7 +207,7 @@ const longComment: IChatAgentFeedbackReviewComment = {
 	id: 'pr-2',
 	kindLabel: 'PR Review',
 	text: 'The error handling here swallows the original stack trace, which makes telemetry diagnosis difficult. Re-throw with the cause attached, or at minimum log the original error before wrapping it so we keep the callstack for the dashboard.',
-	fileUri: URI.file('/workspace/src/platform/agentHost/node/agentService.ts'),
+	fileUri: URI.file('/workspace/src/platform/agentSessionState/node/agentService.ts'),
 };
 
 // ============================================================================

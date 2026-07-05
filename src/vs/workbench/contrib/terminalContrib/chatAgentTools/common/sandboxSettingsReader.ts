@@ -7,7 +7,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { AgentNetworkDomainSettingId } from '../../../../../platform/networkFilter/common/settings.js';
 import { AgentSandboxEnabledValue, AgentSandboxSettingId } from '../../../../../platform/sandbox/common/settings.js';
-import { sandboxSettingIdToAgentHostKey } from '../../../../../platform/agentHost/common/sandboxConfigSchema.js';
+import { sandboxSettingIdToAgentHostKey } from '../../../../../platform/agentSessionState/common/sandboxConfigSchema.js';
 
 /** Setting IDs that affect the engine's sandbox configuration (modern + deprecated). */
 export const SANDBOX_SETTING_KEYS: readonly string[] = [

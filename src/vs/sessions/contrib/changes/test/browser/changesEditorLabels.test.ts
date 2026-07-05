@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { AGENT_HOST_LABEL_FORMATTER, toAgentHostUri } from '../../../../../platform/agentHost/common/agentHostUri.js';
+import { AGENT_HOST_LABEL_FORMATTER, toAgentHostUri } from '../../../../../platform/agentSessionState/common/agentHostUri.js';
 import { TestEnvironmentService, TestLifecycleService, TestPathService, TestRemoteAgentService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { TestContextService, TestStorageService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 import { LabelService } from '../../../../../workbench/services/label/common/labelService.js';

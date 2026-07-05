@@ -20,10 +20,9 @@ import { IChatWidgetService } from '../chat.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { AUTOPILOT_DONT_SHOW_AGAIN_KEY, AUTO_APPROVE_DONT_SHOW_AGAIN_KEY } from '../../common/chatPermissionStorageKeys.js';
 import { resetShownWarnings } from '../../common/chatPermissionWarnings.js';
-import { OpenCopilotCliStateFileAction } from './openCopilotCliStateFileAction.js';
-import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
-import { IAgentHostConnectionsService } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
-import { StateComponents } from '../../../../../platform/agentHost/common/state/sessionState.js';
+import { IAgentConnection } from '../../../../../platform/agentSessionState/common/agentService.js';
+import { IAgentHostConnectionsService } from '../../../../../platform/agentSessionState/common/agentHostConnectionsService.js';
+import { StateComponents } from '../../../../../platform/agentSessionState/common/state/sessionState.js';
 
 function uriReplacer(_key: string, value: unknown): unknown {
 	if (URI.isUri(value)) {
@@ -46,7 +45,6 @@ export function registerChatDeveloperActions() {
 	registerAction2(InspectAgentHostSubscriptionsAction);
 	registerAction2(ClearRecentlyUsedLanguageModelsAction);
 	registerAction2(ResetChatPermissionWarningDialogsAction);
-	registerAction2(OpenCopilotCliStateFileAction);
 }
 
 function formatChatModelReferenceInspection(accessor: ServicesAccessor): string {

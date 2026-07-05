@@ -22,7 +22,7 @@ import { AICustomizationManagementCommands } from '../../../../../workbench/cont
 import { AICustomizationManagementSection } from '../../../../../workbench/contrib/chat/common/aiCustomizationWorkspaceService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import { reportNewChatPickerClosed } from '../../../chat/browser/newChatPickerTelemetry.js';
-import { CopilotCLISessionType } from '../../agentHost/browser/baseAgentHostSessionsProvider.js';
+import { CopilotCLISessionType } from './copilotCliSessionType.js';
 import { URI } from '../../../../../base/common/uri.js';
 
 interface IModePickerItem {

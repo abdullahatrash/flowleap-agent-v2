@@ -9,7 +9,7 @@ import { timeout } from '../../../../../base/common/async.js';
 import { autorun } from '../../../../../base/common/observable.js';
 import { toAction } from '../../../../../base/common/actions.js';
 import Severity from '../../../../../base/common/severity.js';
-import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../../../../platform/agentSessionState/common/remoteAgentHostService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
