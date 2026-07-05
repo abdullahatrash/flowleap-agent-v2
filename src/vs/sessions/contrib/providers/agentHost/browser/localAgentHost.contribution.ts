@@ -18,6 +18,7 @@ import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { localize } from '../../../../../nls.js';
 import { LocalAgentHostSessionsProvider } from './localAgentHostSessionsProvider.js';
+import { FlowLeapCliNudge } from './flowleapCliNudge.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	id: 'sessions',
@@ -60,6 +61,16 @@ class LocalAgentHostContribution extends Disposable implements IWorkbenchContrib
 
 		const provider = this._register(instantiationService.createInstance(LocalAgentHostSessionsProvider));
 		this._register(sessionsProvidersService.registerProvider(provider));
+
+		// When the first Claude (agent host) session appears, lazily verify the
+		// FlowLeap CLI is installed and nudge the user if it is missing. This runs
+		// off the session-creation critical path and never gates it.
+		const cliNudge = this._register(instantiationService.createInstance(FlowLeapCliNudge));
+		this._register(provider.onDidChangeSessions(e => {
+			if (e.added.length > 0) {
+				void cliNudge.checkOnce();
+			}
+		}));
 
 		const resolverRegistrations = this._register(new DisposableMap<string>());
 		const registerResolvers = () => {

@@ -50,6 +50,8 @@ import { IExternalTerminalMainService } from '../../platform/externalTerminal/el
 import { LinuxExternalTerminalService, MacExternalTerminalService, WindowsExternalTerminalService } from '../../platform/externalTerminal/node/externalTerminalService.js';
 import { ISandboxHelperMainService } from '../../platform/sandbox/electron-main/sandboxHelperService.js';
 import { SandboxHelperService } from '../../platform/sandbox/node/sandboxHelper.js';
+import { IFlowLeapCliMainService } from '../../platform/flowleapCli/electron-main/flowleapCliService.js';
+import { FlowLeapCliService } from '../../platform/flowleapCli/node/flowleapCliService.js';
 import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/diskFileSystemProviderClient.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { DiskFileSystemProviderChannel } from '../../platform/files/electron-main/diskFileSystemProviderServer.js';
@@ -1188,6 +1190,7 @@ export class CodeApplication extends Disposable {
 			services.set(IExternalTerminalMainService, new SyncDescriptor(LinuxExternalTerminalService));
 		}
 		services.set(ISandboxHelperMainService, new SyncDescriptor(SandboxHelperService));
+		services.set(IFlowLeapCliMainService, new SyncDescriptor(FlowLeapCliService));
 
 		// Backups
 		const backupMainService = new BackupMainService(this.environmentMainService, this.configurationService, this.logService, this.stateService);
@@ -1369,6 +1372,10 @@ export class CodeApplication extends Disposable {
 		// Sandbox Helper
 		const sandboxHelperChannel = ProxyChannel.fromService(accessor.get(ISandboxHelperMainService), disposables);
 		mainProcessElectronServer.registerChannel('sandboxHelper', sandboxHelperChannel);
+
+		// FlowLeap CLI
+		const flowleapCliChannel = ProxyChannel.fromService(accessor.get(IFlowLeapCliMainService), disposables);
+		mainProcessElectronServer.registerChannel('flowleapCli', flowleapCliChannel);
 
 		// MCP
 		const mcpDiscoveryChannel = ProxyChannel.fromService(accessor.get(INativeMcpDiscoveryHelperService), disposables);
