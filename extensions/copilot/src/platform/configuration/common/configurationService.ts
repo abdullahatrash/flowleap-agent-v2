@@ -1064,12 +1064,6 @@ export namespace ConfigKey {
 	export const CompletionsFetcher = defineSetting<FetcherId | undefined>('chat.completionsFetcher', ConfigType.ExperimentBased, undefined);
 	export const NextEditSuggestionsFetcher = defineSetting<FetcherId | undefined>('chat.nesFetcher', ConfigType.ExperimentBased, undefined);
 
-	export const GitHubMcpToolsets = defineSetting<string[]>('chat.githubMcpServer.toolsets', ConfigType.Simple, ['default']);
-	export const GitHubMcpReadonly = defineSetting<boolean>('chat.githubMcpServer.readonly', ConfigType.Simple, false);
-	export const GitHubMcpLockdown = defineSetting<boolean>('chat.githubMcpServer.lockdown', ConfigType.Simple, false);
-	export type GitHubMcpChannelValue = 'stable' | 'insiders';
-	export const GitHubMcpChannel = defineSetting<GitHubMcpChannelValue>('chat.githubMcpServer.channel', ConfigType.Simple, 'stable');
-
 	export const BackgroundAgentEnabled = defineSetting<boolean>('chat.backgroundAgent.enabled', ConfigType.Simple, true);
 	export const CloudAgentEnabled = defineSetting<boolean>('chat.cloudAgent.enabled', ConfigType.Simple, true);
 	export const CloudAgentBackendVersion = defineSetting<'v1' | 'v2'>('chat.cloudAgentBackend.version', ConfigType.ExperimentBased, 'v1');
