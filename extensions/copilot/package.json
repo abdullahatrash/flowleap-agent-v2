@@ -3023,11 +3023,6 @@
         "category": "Chat"
       },
       {
-        "command": "github.copilot.terminal.explainTerminalLastCommand",
-        "title": "%github.copilot.command.explainTerminalLastCommand%",
-        "category": "Chat"
-      },
-      {
         "command": "github.copilot.git.generateCommitMessage",
         "title": "%github.copilot.git.generateCommitMessage%",
         "icon": "$(sparkle)",
@@ -3077,17 +3072,6 @@
         "command": "github.copilot.debug.generateSTest",
         "title": "%github.copilot.command.generateSTest%",
         "enablement": "github.copilot.debugReportFeedback",
-        "category": "Developer"
-      },
-      {
-        "command": "github.copilot.debug.generateInlineEditTests",
-        "title": "Generate Inline Edit Tests",
-        "category": "Chat",
-        "enablement": "resourceScheme == 'ccreq'"
-      },
-      {
-        "command": "github.copilot.chat.clearTemporalContext",
-        "title": "Clear Temporal Context",
         "category": "Developer"
       },
       {
@@ -5440,10 +5424,6 @@
     ],
     "menus": {
       "editor/title": [
-        {
-          "command": "github.copilot.debug.generateInlineEditTests",
-          "when": "resourceScheme == 'ccreq'"
-        },
         {
           "command": "github.copilot.chat.notebook.enableFollowCellExecution",
           "when": "config.github.copilot.chat.notebook.followCellExecution.enabled && !github.copilot.notebookFollowInSessionEnabled && github.copilot.notebookAgentModeUsage && !config.notebook.globalToolbar",
