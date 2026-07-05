@@ -78,6 +78,7 @@ import { ISettingsEditorSearchService } from '../../../platform/settingsEditor/c
 import { IExperimentationService, NullExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { NullTelemetryService } from '../../../platform/telemetry/common/nullTelemetryService';
 import { ITelemetryService, ITelemetryUserConfig, TelemetryUserConfigImpl } from '../../../platform/telemetry/common/telemetry';
+import { NullWorkspaceMutationManager } from '../../../platform/testing/common/nullWorkspaceMutationManager';
 import { IWorkspaceMutationManager } from '../../../platform/testing/common/workspaceMutationManager';
 import { ISetupTestsDetector, SetupTestsDetector } from '../../../platform/testing/node/setupTestDetector';
 import { ITestDepsResolver, TestDepsResolver } from '../../../platform/testing/node/testDepsResolver';
@@ -110,9 +111,6 @@ import { IIntentService, IntentService } from '../../intents/node/intentService'
 import { INewWorkspacePreviewContentManager, NewWorkspacePreviewContentManagerImpl } from '../../intents/node/newIntent';
 import { LanguageContextProviderService } from '../../languageContextProvider/vscode-node/languageContextProviderService';
 import { ILinkifyService, LinkifyService } from '../../linkify/common/linkifyService';
-import { DebugCommandToConfigConverter, IDebugCommandToConfigConverter } from '../../onboardDebug/node/commandToConfigConverter';
-import { DebuggableCommandIdentifier, IDebuggableCommandIdentifier } from '../../onboardDebug/node/debuggableCommandIdentifier';
-import { ILanguageToolsProvider, LanguageToolsProvider } from '../../onboardDebug/node/languageToolsProvider';
 import { IPowerService } from '../../power/common/powerService';
 import { PowerService } from '../../power/vscode-node/powerService';
 import { ChatMLFetcherImpl } from '../../prompt/node/chatMLFetcher';
@@ -235,7 +233,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(ISearchService, new SyncDescriptor(SearchServiceImpl));
 	builder.define(ITestDepsResolver, new SyncDescriptor(TestDepsResolver));
 	builder.define(ISetupTestsDetector, new SyncDescriptor(SetupTestsDetector));
-	builder.define(IWorkspaceMutationManager, new SyncDescriptor(WorkspaceMutationManager));
+	builder.define(IWorkspaceMutationManager, new SyncDescriptor(NullWorkspaceMutationManager));
 	builder.define(IScopeSelector, new SyncDescriptor(ScopeSelectorImpl));
 	builder.define(IGitService, new SyncDescriptor(GitServiceImpl));
 	builder.define(IGitDiffService, new SyncDescriptor(GitDiffService));
@@ -261,9 +259,6 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(IPromptVariablesService, new SyncDescriptor(PromptVariablesServiceImpl));
 	builder.define(IPromptWorkspaceLabels, new SyncDescriptor(PromptWorkspaceLabels));
 	builder.define(IUserFeedbackService, new SyncDescriptor(UserFeedbackService));
-	builder.define(IDebugCommandToConfigConverter, new SyncDescriptor(DebugCommandToConfigConverter));
-	builder.define(IDebuggableCommandIdentifier, new SyncDescriptor(DebuggableCommandIdentifier));
-	builder.define(ILanguageToolsProvider, new SyncDescriptor(LanguageToolsProvider));
 	builder.define(ICodeMapperService, new SyncDescriptor(CodeMapperService));
 	builder.define(ICompletionsFetchService, new SyncDescriptor(CompletionsFetchService));
 	builder.define(IFixCookbookService, new SyncDescriptor(FixCookbookService));

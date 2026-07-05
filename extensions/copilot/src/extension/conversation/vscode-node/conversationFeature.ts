@@ -6,7 +6,7 @@
 
 import * as vscode from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
-import { IChatAgentService, terminalAgentName } from '../../../platform/chat/common/chatAgents';
+import { IChatAgentService } from '../../../platform/chat/common/chatAgents';
 import { IConversationOptions } from '../../../platform/chat/common/conversationOptions';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { DevContainerConfigGeneratorArguments, IDevContainerConfigurationService } from '../../../platform/devcontainer/common/devContainerConfigurationService';
@@ -28,8 +28,6 @@ import { vscodeNodeChatContributions } from '../../extension/vscode-node/contrib
 import { IMergeConflictService } from '../../git/common/mergeConflictService';
 import { registerInlineChatCommands } from '../../inlineChat/vscode-node/inlineChatCommands';
 import { INewWorkspacePreviewContentManager } from '../../intents/node/newIntent';
-import { FindInFilesArgs } from '../../intents/node/searchIntent';
-import { TerminalExplainIntent } from '../../intents/node/terminalExplainIntent';
 import { ILinkifyService } from '../../linkify/common/linkifyService';
 import { registerLinkCommands } from '../../linkify/vscode-node/commands';
 import { InlineCodeSymbolLinkifier } from '../../linkify/vscode-node/inlineCodeSymbolLinkifier';
@@ -37,7 +35,6 @@ import { NotebookCellLinkifier } from '../../linkify/vscode-node/notebookCellLin
 import { SymbolLinkifier } from '../../linkify/vscode-node/symbolLinkifier';
 import { IntentDetector } from '../../prompt/node/intentDetector';
 import { SemanticSearchTextSearchProvider } from '../../workspaceSemanticSearch/node/semanticSearchTextSearchProvider';
-import { GitHubPullRequestProviders } from '../node/githubPullRequestProviders';
 import { startFeedbackCollection } from './feedbackCollection';
 import { registerNewWorkspaceIntentCommand } from './newWorkspaceFollowup';
 import { generateTerminalFixes, setLastCommandMatchResult } from './terminalFixGenerator';
@@ -295,9 +292,7 @@ export class ConversationFeature implements IExtensionContribution {
 		const disposables = new DisposableStore();
 
 		[
-			vscode.commands.registerCommand('github.copilot.interactiveSession.feedback', () => vscode.commands.executeCommand('github.copilot.report', 'Copilot chat feedback')),
 			vscode.commands.registerCommand('github.copilot.chat.compact', () => vscode.commands.executeCommand('workbench.action.chat.open', { query: '/compact' })),
-			vscode.commands.registerCommand('github.copilot.terminal.explainTerminalLastCommand', async () => this.triggerTerminalChat({ query: `/${TerminalExplainIntent.intentName} #terminalLastCommand` })),
 			vscode.commands.registerCommand('github.copilot.terminal.fixTerminalLastCommand', async () => generateTerminalFixes(this.instantiationService)),
 			vscode.commands.registerCommand('github.copilot.terminal.generateCommitMessage', async () => {
 				const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -368,31 +363,8 @@ export class ConversationFeature implements IExtensionContribution {
 			this.instantiationService.invokeFunction(registerInlineChatCommands),
 			this.registerTerminalQuickFixProviders(),
 			registerNewWorkspaceIntentCommand(this.newWorkspacePreviewContentManager, this.logService, options),
-			registerGitHubPullRequestTitleAndDescriptionProvider(this.instantiationService),
-			registerSearchIntentCommand(),
 		].forEach(d => disposables.add(d));
 		return disposables;
-	}
-
-	private async triggerTerminalChat(options: { query: string; isPartialQuery?: boolean }) {
-		const chatLocation = this.configurationService.getConfig(ConfigKey.TerminalChatLocation);
-		let commandId: string;
-		switch (chatLocation) {
-			case 'quickChat':
-				commandId = 'workbench.action.quickchat.toggle';
-				options.query = `@${terminalAgentName} ` + options.query;
-				break;
-			case 'terminal':
-				commandId = 'workbench.action.terminal.chat.start';
-				// HACK: Currently @terminal is hardcoded in core
-				break;
-			case 'chatView':
-			default:
-				commandId = 'workbench.action.chat.open';
-				options.query = `@${terminalAgentName} ` + options.query;
-				break;
-		}
-		await vscode.commands.executeCommand(commandId, options);
 	}
 
 	private registerRelatedInformationProviders(): IDisposable {
@@ -423,10 +395,6 @@ export class ConversationFeature implements IExtensionContribution {
 						{
 							command: 'github.copilot.terminal.fixTerminalLastCommand',
 							title: vscode.l10n.t('Fix using Copilot')
-						},
-						{
-							command: 'github.copilot.terminal.explainTerminalLastCommand',
-							title: vscode.l10n.t('Explain using Copilot')
 						}
 					];
 				}
@@ -441,18 +409,4 @@ export class ConversationFeature implements IExtensionContribution {
 			})
 		);
 	}
-}
-
-function registerSearchIntentCommand(): IDisposable {
-	return vscode.commands.registerCommand('github.copilot.executeSearch', async (arg: FindInFilesArgs) => {
-		const show = arg.filesToExclude.length > 0 || arg.filesToInclude.length > 0;
-		vscode.commands.executeCommand('workbench.view.search.focus').then(() =>
-			vscode.commands.executeCommand('workbench.action.search.toggleQueryDetails', { show })
-		);
-		vscode.commands.executeCommand('workbench.action.findInFiles', arg);
-	});
-}
-
-function registerGitHubPullRequestTitleAndDescriptionProvider(instantiationService: IInstantiationService): IDisposable {
-	return instantiationService.createInstance(GitHubPullRequestProviders);
 }
