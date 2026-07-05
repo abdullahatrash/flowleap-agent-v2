@@ -293,9 +293,10 @@ const desktopResourcePatterns = [
 	'vs/workbench/browser/parts/editor/media/*.png',
 	'vs/workbench/contrib/debug/browser/media/*.png',
 
-	// Sessions - built-in prompts and skills
+	// Sessions - built-in prompts and skills (full skill directories: skills may
+	// bundle references/assets beside SKILL.md)
 	'vs/sessions/prompts/*.prompt.md',
-	'vs/sessions/skills/**/SKILL.md',
+	'vs/sessions/skills/**',
 ];
 
 // Resources for server target (minimal - no UI)

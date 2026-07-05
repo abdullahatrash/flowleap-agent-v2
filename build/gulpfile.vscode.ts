@@ -102,7 +102,8 @@ const vscodeResourceIncludes = [
 	'out-build/vs/sessions/contrib/welcome/browser/media/*.svg',
 	'out-build/vs/sessions/contrib/welcome/browser/media/themePreviews/*.svg',
 	'out-build/vs/sessions/prompts/*.prompt.md',
-	'out-build/vs/sessions/skills/**/SKILL.md',
+	// Full skill directories: skills may bundle references/assets beside SKILL.md
+	'out-build/vs/sessions/skills/**',
 
 	// Extensions
 	'out-build/vs/workbench/contrib/extensions/browser/media/{theme-icon.png,language-icon.svg}',
