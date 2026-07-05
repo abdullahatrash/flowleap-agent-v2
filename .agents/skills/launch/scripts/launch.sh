@@ -210,7 +210,6 @@ ARGS=(
 	"--remote-debugging-port=$CDP_PORT"
 	"--inspect-extensions=$EXTHOST_PORT"
 	"--inspect=$MAIN_PORT"
-	"--inspect-agenthost=$AGENTHOST_PORT"
 )
 if [[ "$AGENTS" == "1" ]]; then
 	ARGS=("--agents" "${ARGS[@]}")
