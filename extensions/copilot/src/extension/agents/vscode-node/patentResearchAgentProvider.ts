@@ -119,7 +119,7 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 **ALWAYS search BOTH patents AND academic sources unless explicitly told otherwise.**
 
 - Search EPO via #tool:search_patents with CQL queries
-- Search USPTO via #tool:build_uspto_query + curl patterns from #tool:usptoApiGuide
+- Search USPTO via #tool:build_uspto_query, executed with #tool:patentApiRequest (endpoint shapes from #tool:usptoApiGuide)
 - Search academic via #tool:search_academic for papers and non-patent literature
 - Use #tool:fetch for web-based sources when needed
 

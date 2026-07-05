@@ -1,6 +1,6 @@
 ---
 name: patent-landscape
-description: Technology landscape and trend analysis across patent portfolios
+description: Technology landscape and trend analysis across patent portfolios — filing volumes, top assignees, geographic distribution, year-over-year trends, white spaces. Use when the user asks who files in a technology domain, about patent trends, competitive or market IP intelligence, or white-space opportunities. For finding individual patents use patent-search; for prior art against an invention use prior-art.
 user-invocable: true
 ---
 
@@ -10,45 +10,33 @@ Map the patent landscape for a technology domain — who files, where, when, and
 
 ## Phase 1: Define Scope
 
-Ask via `askQuestions`:
+Ask (via the `vscode_askQuestions` tool):
 1. **Technology domain** (e.g., "solid-state batteries", "federated learning")
 2. **Time period** (e.g., "last 5 years", "2020-2025")
 3. **Focus**: top filers, technology trends, geographic distribution, or all
 
-Map technology to IPC/CPC codes (use 2-3 codes for coverage).
+Map the technology to 2-3 IPC/CPC codes for coverage (see the prior-art skill's `references/cpc-classification.md`).
 
 ## Phase 2: Data Collection
 
-### 2a. Volume Analysis (EPO OPS)
-Run multiple searches to gauge landscape size:
-1. `build_patent_query` → broad query (just IPC code + year range)
-2. `search_patents` → note total count
-3. Refine with sub-topics to see distribution
+### 2a. Analytics in One Call (PREFERRED)
+`patent_analytics_viz` is the priority tool for landscape questions: it builds the query, searches EPO OPS live, and returns the exact total match count plus yearly trend, geographic distribution, and top assignees (aggregated over the 100 most relevant matches — note the sample basis in the report). Run it once per sub-topic to compare clusters.
 
-### 2b. Top Applicants (EPO OPS)
-Search by major expected filers:
-- `pa=Samsung and ic=H01M and pd>=2020` → count
-- `pa=Toyota and ic=H01M and pd>=2020` → count
-- `pa=CATL and ic=H01M and pd>=2020` → count
-Repeat for 8-10 top companies in the domain.
+### 2b. Targeted Counts (EPO OPS)
+Where you need precise per-slice counts beyond the analytics sample:
+- `build_patent_query` → `search_patents`, note the total count per query
+- Top applicants: `pa=Samsung and ic=H01M and pd>=2020` → count; repeat for 8-10 expected filers
+- Year-over-year: `ic=G06N and pd>=2020 and pd<=2020` → 2020 count; repeat per year
 
 ### 2c. US Data (USPTO)
-Run parallel searches via `/v1/patent-search-uspto`:
-- By CPC code + date range for volume
-- By assignee for top filer analysis
-- For bulk details: `uspto_api_guide` action="endpoint" endpoint="bulk" → POST with up to 100 patent IDs for efficient data retrieval
-
-### 2d. Year-over-Year Trends
-Search by year to build trend data:
-- `ic=G06N and pd>=2020 and pd<=2020` → 2020 count
-- `ic=G06N and pd>=2021 and pd<=2021` → 2021 count
-- ... repeat per year
+- `build_uspto_query` (ODP Lucene — never legacy PatentsView parameters) → `patent_api_request` (POST)
+- Vary by CPC code + date range for volume, by assignee for top-filer analysis
+- Bulk detail retrieval: `uspto_api_guide` action="endpoint" endpoint="bulk" → `patent_api_request` POST with up to 100 patent IDs
 
 ## Phase 3: Analysis
 
 ### Filing Trends
-- Is the technology growing, stable, or declining?
-- Any inflection points? (sudden increase = technology breakthrough or regulation change)
+- Growing, stable, or declining? Any inflection points? (sudden increase = breakthrough or regulation change)
 
 ### Top Filers Ranking
 | Rank | Company | EP/WO Count | US Count | Total | Trend |
@@ -64,12 +52,12 @@ Which filing offices are most active? (EP, US, CN, JP, KR)
 
 ## Phase 4: Report
 
-CREATE markdown file with:
+Save via `write_patent_results`:
 1. **Executive Summary**: key findings in 3-5 bullets
-2. **Methodology**: IPC codes used, date range, databases searched
+2. **Methodology**: IPC codes used, date range, databases searched, whether figures are exact counts or the 100-result analytics sample
 3. **Filing Volume & Trends**: year-over-year data
 4. **Top Filers**: ranked table with counts
 5. **Technology Sub-Clusters**: breakdown by sub-topics
-6. **Key Patents**: the 5-10 most cited/important patents found
+6. **Key Patents**: the 5-10 most cited/important patents found (`search_forward_citations` for citation counts)
 7. **White Spaces**: areas with low filing activity (potential opportunities)
 8. **Data Tables**: raw data for all searches performed

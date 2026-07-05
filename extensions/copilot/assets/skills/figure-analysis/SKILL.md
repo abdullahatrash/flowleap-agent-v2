@@ -1,6 +1,6 @@
 ---
 name: figure-analysis
-description: Retrieve and visually analyze patent figures/drawings for search, prior art, claim mapping, and examination
+description: Retrieve patent figures/drawings as inline images and analyze them visually — reference numerals, claim mapping, visual prior art comparison. Use when the user asks to see, show, or analyze a patent's figures or drawings, for structural/mechanical/design inventions or flowcharts where the drawings carry the disclosure, or to verify a reference visually across languages.
 user-invocable: true
 ---
 

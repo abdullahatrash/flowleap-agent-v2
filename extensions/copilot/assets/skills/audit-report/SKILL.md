@@ -1,6 +1,6 @@
 ---
 name: audit-report
-description: Generate traceable audit trail documenting all searches, sources, and AI decisions
+description: Generate a traceable audit report documenting every search, source, limitation, and AI decision in a research session. Use after any substantive patent research (prior art, FTO, landscape) or when the user asks for an audit trail, search methodology documentation, due-diligence records, or AI-usage disclosure for patent-office or law-firm requirements.
 user-invocable: true
 ---
 
@@ -15,86 +15,56 @@ Create a comprehensive audit trail of all patent research activities for governa
 - AIPPI recommends comprehensive audit trails for all AI-assisted patent work
 
 ## When to Generate
-- After ANY prior art search
-- After FTO analysis
-- After landscape analysis
-- After any research that may be relied upon for legal decisions
+After ANY prior art search, FTO analysis, landscape analysis, or research that may be relied upon for legal decisions.
 
 ## Audit Report Structure
 
 ### Section 1: Research Summary
-```markdown
-## Research Summary
-- **Date**: [date of research]
-- **Objective**: [what was being researched and why]
-- **Requested by**: [user/client context if provided]
-- **AI Tool Used**: Patent AI Agent (FlowLeap)
-- **Databases Searched**: [list all databases]
-```
+Date, objective, requested-by context, "AI Tool Used: Patent AI Agent (FlowLeap)", and the list of databases searched.
 
 ### Section 2: Search Log (MOST CRITICAL)
 Document EVERY search executed:
 
-```markdown
-## Search Log
-
-| # | Database | Query/Parameters | Results Count | Date Executed |
-|---|----------|-----------------|---------------|---------------|
-| 1 | EPO OPS | pa=Samsung and ic=H01M and pd>=2023 | 47 | 2025-02-23 |
-| 2 | USPTO | assignee=Samsung, cpcCode=H01M, dateRange.from=2023 | 89 | 2025-02-23 |
-| 3 | Google Patents (CN) | site:patents.google.com/patent/CN "Samsung" "battery" | ~120 | 2025-02-23 |
-| 4 | Semantic Scholar | "solid state battery electrolyte" | 34 | 2025-02-23 |
-```
+| # | Database | Tool + Query/Parameters | Results Count | Date Executed |
+|---|----------|------------------------|---------------|---------------|
+| 1 | EPO OPS | search_patents: pa=Samsung and ic=H01M and pd>=2023 | 47 | [date] |
+| 2 | USPTO ODP | build_uspto_query → patent_api_request (Samsung, H01M, 2023-) | 89 | [date] |
+| 3 | Google Patents (CN) | web_search: site:patents.google.com/patent/CN "Samsung" "battery" | ~120 | [date] |
+| 4 | Academic | search_academic: "solid state battery electrolyte" | 34 | [date] |
 
 ### Section 3: Sources Cited
 For every patent/reference cited in the analysis:
 
-```markdown
-## Sources Cited
-
 | Reference | Source Database | How Retrieved | Verified |
 |-----------|---------------|---------------|----------|
-| EP3875305 B1 | EPO OPS search #1 | search_patents → biblio curl | ✅ Claims retrieved |
-| US11,234,567 | USPTO search #2 | /v1/patent-search-uspto | ✅ Abstract confirmed |
+| EP3875305 B1 | EPO OPS search #1 | search_patents → get_patent_details | ✅ Claims retrieved |
+| US11,234,567 | USPTO search #2 | build_uspto_query → patent_api_request | ✅ Abstract confirmed |
 | CN115432109A | Google Patents #3 | web_search | ⚠️ Machine-translated |
-```
 
-### Section 4: Data NOT Retrieved
-Document what you could NOT verify:
-
-```markdown
-## Limitations
-- CN/JP/KR patents: machine-translated only, not verified by human translator
-- Legal status: checked for EP/US only, not verified for CN/JP/KR
+### Section 4: Limitations (what was NOT retrieved)
+Be explicit, e.g.:
+- CN/JP/KR patents: machine-translated only, not verified by a human translator
+- Legal status: checked for EP/US only
 - Claims: full text retrieved for top 5 EP patents only
-- Time period: searched 2020-2025 only
-```
+- Time period searched
 
 ### Section 5: AI Disclosure
 ```markdown
-## AI Tool Disclosure
 This research was conducted using Patent AI Agent (FlowLeap), an AI-assisted
-patent search tool. The following AI capabilities were used:
-- Natural language to CQL query conversion (build_patent_query)
-- Patent search execution (EPO OPS, USPTO PatentsView)
-- Claim text retrieval and analysis
-- [list other tools used]
+patent search tool. AI capabilities used: [list the tools actually used, e.g.
+natural-language query conversion (build_patent_query/build_uspto_query),
+patent search execution (EPO OPS, USPTO ODP), claim retrieval and analysis].
 
 All patent numbers, dates, and claim text cited in this report were retrieved
 from the respective patent databases. No patent data was generated or inferred
 by the AI system.
 ```
 
-## How to Build the Audit Report
+## How to Build It
 
-During research, track everything in a structured way:
-1. Before each tool call, note what you're about to search
-2. After each result, note the count and key findings
-3. When citing any reference, note which search returned it
-4. At the end, compile into the audit report format above
+During research: before each tool call note what you're searching; after each result note the count; when citing a reference note which search returned it. At the end, compile into the format above.
 
-CREATE the audit report as a separate markdown file alongside the main research report.
-Name it: `[topic]-audit-trail-[date].md`
+Save via `write_patent_results` as a separate file alongside the main research report, named `[topic]-audit-trail-[date].md`.
 
 ## Rules
 - NEVER skip the audit report when doing substantive research
