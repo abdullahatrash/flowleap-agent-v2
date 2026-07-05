@@ -232,9 +232,6 @@ import './contrib/providers/agentHost/browser/agentHostSessionBranchActions.js';
 import './contrib/providers/agentHost/browser/agentHostSkillButtons.js';
 import './contrib/providers/agentHost/electron-browser/agentHost.contribution.js';
 
-// Tunnel Host (allow remote connections to local agent host)
-import './contrib/tunnelHost/electron-browser/tunnelHost.contribution.js';
-
 //#endregion
 
 export { main } from './electron-browser/sessions.main.js';
