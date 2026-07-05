@@ -44,7 +44,7 @@ const newSessionViewPayload: ISpotlightPayload = {
 			id: 'harnessPicker',
 			targetId: 'sessions.newSession.harnessPicker',
 			title: localize('sessions.onboarding.newSessionView.harness.title', "Choose a Harness"),
-			description: localize('sessions.onboarding.newSessionView.harness.description', "Pick a harness such as Copilot, Claude or Codex — each one uses its own agent loop to run the agent."),
+			description: localize('sessions.onboarding.newSessionView.harness.description', "Pick the agent that powers this session — Claude runs its own agent loop to explore, edit, and iterate with you."),
 			placement: 'above',
 		},
 		{

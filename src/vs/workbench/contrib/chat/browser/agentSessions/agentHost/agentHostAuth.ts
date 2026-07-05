@@ -156,7 +156,10 @@ export async function authenticateProtectedResources(
 				options.logPrefix,
 			);
 			if (!token) {
-				options.logService.info(`${options.logPrefix} No token resolved for resource: ${resource.resource}`);
+				// Expected when the resource's auth provider has no session (e.g. GitHub
+				// auth is disabled in this fork). Log at trace so it does not spam the
+				// console for hidden/unauthenticated providers at window startup.
+				options.logService.trace(`${options.logPrefix} No token resolved for resource: ${resource.resource}`);
 				continue;
 			}
 
