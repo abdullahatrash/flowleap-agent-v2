@@ -27,6 +27,9 @@ import { NoAgentHostEmptyState } from './noAgentHostEmptyState.js';
 import { IChatRequestVariableEntry } from '../../../../workbench/contrib/chat/common/attachments/chatVariableEntries.js';
 import { IAgentHostFilterService } from '../../../services/agentHostFilter/common/agentHostFilter.js';
 import { IChatViewOptions } from '../../../browser/parts/chatView.js';
+import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
+import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { getSessionWorkflowTemplates } from '../common/sessionWorkflowTemplates.js';
 
 // #region --- New Chat Widget ---
 
@@ -67,6 +70,7 @@ export class NewChatWidget extends Disposable {
 		@IAquariumService private readonly aquariumService: IAquariumService,
 		@IAgentHostFilterService private readonly agentHostFilterService: IAgentHostFilterService,
 		@ISessionsProvidersService private readonly sessionsProvidersService: ISessionsProvidersService,
+		@IHoverService private readonly hoverService: IHoverService,
 	) {
 		super();
 		this._renderHarnessPickerInControls = this.options.renderSessionTypePickerInControls.get();
@@ -154,6 +158,7 @@ export class NewChatWidget extends Disposable {
 			: this._renderWorkspacePicker(workspacePickerContainer));
 
 		this._newChatInput.render(chatWidgetContent, parent);
+		this._renderWorkflowTemplates(chatWidgetContent);
 
 		// Create initial session for any workspace already selected at construct time.
 		// If the selection arrives later (provider registers asynchronously), the
@@ -166,6 +171,31 @@ export class NewChatWidget extends Disposable {
 		}
 
 		chatWidgetContainer.classList.add('revealed');
+	}
+
+	/**
+	 * Renders the patent workflow starter chips below the composer input.
+	 * Picking one seeds the input with the template's prompt (editable, not
+	 * auto-sent) so the user fills in their parameters before sending. The
+	 * session that results is an ordinary session of whatever type the picker
+	 * has selected — templates add no session type.
+	 */
+	private _renderWorkflowTemplates(container: HTMLElement): void {
+		const templates = getSessionWorkflowTemplates();
+		if (templates.length === 0) {
+			return;
+		}
+
+		const row = dom.append(container, dom.$('.new-session-workflow-templates'));
+		for (const template of templates) {
+			const chip = dom.append(row, dom.$('button.new-session-workflow-template-chip'));
+			dom.append(chip, dom.$('span.codicon.codicon-search'));
+			dom.append(chip, dom.$('span.new-session-workflow-template-chip-label', undefined, template.label));
+			this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), chip, template.description));
+			this._register(dom.addDisposableListener(chip, dom.EventType.CLICK, () => {
+				this._newChatInput.prefillInput(template.prompt);
+			}));
+		}
 	}
 
 	/**

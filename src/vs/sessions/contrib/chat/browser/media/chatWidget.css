@@ -452,3 +452,39 @@
 .action-widget .monaco-list-row.action.sessions-browse-inline-item.focused:not(.option-disabled) .description {
 	visibility: visible;
 }
+
+/* Patent workflow starter chips below the new-session composer input.
+ * Picking one prefills the input with the template's prompt. */
+.new-session-workflow-templates {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.new-session-workflow-template-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--vscode-spacing-size60);
+	padding: var(--vscode-spacing-size40) var(--vscode-spacing-size100);
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: var(--vscode-cornerRadius-xLarge);
+	background-color: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	font-size: var(--vscode-bodyFontSize-small);
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.new-session-workflow-template-chip:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.new-session-workflow-template-chip:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.new-session-workflow-template-chip .codicon {
+	font-size: var(--vscode-codiconFontSize-compact);
+}
