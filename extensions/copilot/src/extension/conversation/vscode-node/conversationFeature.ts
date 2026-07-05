@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { IChatAgentService } from '../../../platform/chat/common/chatAgents';
 import { IConversationOptions } from '../../../platform/chat/common/conversationOptions';
-import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { DevContainerConfigGeneratorArguments, IDevContainerConfigurationService } from '../../../platform/devcontainer/common/devContainerConfigurationService';
 import { ICombinedEmbeddingIndex } from '../../../platform/embeddings/common/vscodeIndex';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
@@ -64,7 +63,6 @@ export class ConversationFeature implements IExtensionContribution {
 	constructor(
 		@IInstantiationService private instantiationService: IInstantiationService,
 		@ILogService private readonly logService: ILogService,
-		@IConfigurationService private configurationService: IConfigurationService,
 		@IConversationOptions private conversationOptions: IConversationOptions,
 		@IChatAgentService private chatAgentService: IChatAgentService,
 		@ITelemetryService private telemetryService: ITelemetryService,

@@ -28,7 +28,6 @@ import * as path from '../../../util/vs/base/common/path';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService, ServicesAccessor } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { Intent } from '../../common/constants';
-import { explainIntentPromptSnippet } from '../../intents/node/explainIntent';
 import { ChatParticipantRequestHandler } from '../../prompt/node/chatParticipantRequestHandler';
 import { sendReviewActionTelemetry } from '../../prompt/node/feedbackGenerator';
 import { CurrentSelection } from '../../prompts/node/panel/currentSelection';
@@ -36,6 +35,8 @@ import { SymbolAtCursor } from '../../prompts/node/panel/symbolAtCursor';
 import { reviewFileChanges, ReviewSession } from '../../review/node/doReview';
 import { QuickFixesProvider, RefactorsProvider } from './inlineChatCodeActions';
 import { NotebookExectionStatusBarItemProvider } from './inlineChatNotebookActions';
+
+const explainIntentPromptSnippet = 'Write an explanation for the active selection as paragraphs of text.';
 
 export function registerInlineChatCommands(accessor: ServicesAccessor): IDisposable {
 	const instaService = accessor.get(IInstantiationService);

@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import './codeMapper/codeMapper.stest';
-import './e2e/cli.stest';
 import './e2e/edit.stest';
 import './e2e/explain.stest';
 import './e2e/fetchWebPageTool.stest';
@@ -27,15 +26,12 @@ import './inline/agent.stest';
 import './inline/fixing.stest';
 import './inline/inlineEditCode.stest';
 import './inline/inlineExplain.stest';
-import './inline/inlineGenerateCode.stest';
 import './inline/multiFileEdit.stest';
 import './inline/review.stest';
-import './intent/inlineChatIntent.stest';
 import './intent/panelChatIntent.stest';
 import './prompts/customInstructions.stest';
 import './prompts/devContainerConfigGenerator.stest';
 import './prompts/gitCommitMessageGenerator.stest';
-import './prompts/newNotebookCell.stest';
 import './prompts/newWorkspace.stest';
 import './prompts/settingsEditorSearchResultsSelector.stest';
 import './simulation/inlineEdit/inlineEdit.stest';
@@ -43,11 +39,4 @@ import './simulation/notebookEdits.stest';
 import './simulation/notebooks.stest';
 import './simulation/prTitleAndDescription.stest';
 import './simulation/renameSuggestionsProvider.stest';
-import './simulation/setupTests.stest';
-import './simulation/slash-test/testGen.cpp.stest';
-import './simulation/slash-test/testGen.csharp.stest';
-import './simulation/slash-test/testGen.java.stest';
-import './simulation/slash-test/testGen.js.stest';
-import './simulation/slash-test/testGen.py.stest';
-import './simulation/slash-test/testGen.ts.stest';
 import './simulation/tools/toolcall.stest';

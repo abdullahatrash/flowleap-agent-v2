@@ -85,6 +85,7 @@ import { MockExtensionContext } from '../../../platform/test/node/extensionConte
 import { _createBaselineServices, TestingServiceCollection } from '../../../platform/test/node/services';
 import { SimulationNotebookService, SimulationReviewService, TestingDialogService } from '../../../platform/test/node/simulationWorkspaceServices';
 import { ITestProvider } from '../../../platform/testing/common/testProvider';
+import { NullWorkspaceMutationManager } from '../../../platform/testing/common/nullWorkspaceMutationManager';
 import { IWorkspaceMutationManager } from '../../../platform/testing/common/workspaceMutationManager';
 import { ISetupTestsDetector, NullSetupTestsDetector } from '../../../platform/testing/node/setupTestDetector';
 import { TestProvider } from '../../../platform/testing/vscode/testProviderImpl';
@@ -116,7 +117,6 @@ import { IChatDiskSessionResources } from '../../prompts/common/chatDiskSessionR
 import { ChatDiskSessionResources } from '../../prompts/node/chatDiskSessionResourcesImpl';
 import { CodeMapperService, ICodeMapperService } from '../../prompts/node/codeMapper/codeMapperService';
 import { FixCookbookService, IFixCookbookService } from '../../prompts/node/inline/fixCookbookService';
-import { WorkspaceMutationManager } from '../../testing/node/setupTestsFileManager';
 import { EditToolLearningService, IEditToolLearningService } from '../../tools/common/editToolLearningService';
 import { IToolDeferralService } from '../../../platform/networking/common/toolDeferralService';
 import { ToolDeferralService } from '../../tools/common/toolDeferralService';
@@ -169,7 +169,7 @@ export function createExtensionTestingServices(): TestingServiceCollection {
 	testingServiceCollection.define(IGitService, new SyncDescriptor(GitServiceImpl));
 	testingServiceCollection.define(IOctoKitService, new SyncDescriptor(OctoKitService));
 	testingServiceCollection.define(ISetupTestsDetector, new SyncDescriptor(NullSetupTestsDetector));
-	testingServiceCollection.define(IWorkspaceMutationManager, new SyncDescriptor(WorkspaceMutationManager));
+	testingServiceCollection.define(IWorkspaceMutationManager, new SyncDescriptor(NullWorkspaceMutationManager));
 	testingServiceCollection.define(ITestProvider, new SyncDescriptor(TestProvider));
 	testingServiceCollection.define(INaiveChunkingService, new SyncDescriptor(NaiveChunkingService));
 	testingServiceCollection.define(ILinkifyService, new SyncDescriptor(LinkifyService));

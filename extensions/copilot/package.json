@@ -6625,17 +6625,7 @@
       {
         "path": "./assets/skills/figure-analysis/SKILL.md"
       }
-    ],
-    "terminal": {
-      "profiles": [
-        {
-          "icon": "copilot",
-          "id": "copilot-cli",
-          "title": "GitHub Copilot CLI",
-          "titleTemplate": "${sequence}"
-        }
-      ]
-    }
+    ]
   },
   "prettier": {
     "useTabs": true,
