@@ -31,6 +31,34 @@ suite('sessionWorkflowTemplates', () => {
 				invokesSkill: true,
 				hasParameterToken: true,
 			},
+			{
+				id: 'freedom-to-operate',
+				label: 'Freedom to Operate',
+				promptLead: 'FTO analysis',
+				invokesSkill: true,
+				hasParameterToken: true,
+			},
+			{
+				id: 'patent-landscape',
+				label: 'Patent Landscape',
+				promptLead: 'Patent landscape',
+				invokesSkill: true,
+				hasParameterToken: true,
+			},
+			{
+				id: 'claim-analysis',
+				label: 'Claim Analysis',
+				promptLead: 'Claim analysis',
+				invokesSkill: true,
+				hasParameterToken: true,
+			},
+			{
+				id: 'patent-to-report',
+				label: 'Patent to Report',
+				promptLead: 'Patent report',
+				invokesSkill: true,
+				hasParameterToken: true,
+			},
 		]);
 	});
 });
