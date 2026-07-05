@@ -45,7 +45,7 @@ export function isViewUnreviewedCommentsTool(toolName: string): boolean {
  * `AgentFeedbackKind` enum so a value written by either side decodes on the
  * other without translation.
  */
-export type AgentFeedbackKindValue = 'user' | 'codeReview' | 'prReview';
+export type AgentFeedbackKindValue = 'user' | 'codeReview';
 
 /**
  * Lifecycle state of a feedback item. String values match the client-side
@@ -57,11 +57,11 @@ export type AgentFeedbackStateValue = 'created' | 'accepted' | 'submitted' | 're
  * Feedback semantics carried in an annotation's {@link Annotation._meta}.
  *
  * The optional client-only fields ({@link suggestion}, {@link codeSelection},
- * {@link diffHunks}, {@link sourcePRReviewCommentId}) are populated when a
- * feedback item is converted from a code- or PR-review comment on the client;
- * server tools only ever write {@link kind} / {@link state} /
- * {@link sessionResource}. {@link suggestion} is typed loosely here because
- * its concrete shape lives in the client (sessions) layer.
+ * {@link diffHunks}) are populated when a feedback item is converted from an
+ * agent code-review comment on the client; server tools only ever write
+ * {@link kind} / {@link state} / {@link sessionResource}. {@link suggestion} is
+ * typed loosely here because its concrete shape lives in the client (sessions)
+ * layer.
  */
 export interface IFeedbackAnnotationMeta {
 	readonly kind: AgentFeedbackKindValue;
@@ -70,7 +70,6 @@ export interface IFeedbackAnnotationMeta {
 	readonly suggestion?: unknown;
 	readonly codeSelection?: string;
 	readonly diffHunks?: string;
-	readonly sourcePRReviewCommentId?: string;
 	/**
 	 * Transient marker set by the client when the user reveals this comment to
 	 * the agent via the `viewUnreviewedComments` tool. The server tool returns
@@ -83,7 +82,7 @@ export interface IFeedbackAnnotationMeta {
 }
 
 function isAgentFeedbackKindValue(value: unknown): value is AgentFeedbackKindValue {
-	return value === 'user' || value === 'codeReview' || value === 'prReview';
+	return value === 'user' || value === 'codeReview';
 }
 
 function isAgentFeedbackStateValue(value: unknown): value is AgentFeedbackStateValue {
@@ -111,7 +110,6 @@ export function readFeedbackAnnotationMeta(annotation: Annotation): IFeedbackAnn
 	if (raw['suggestion'] !== undefined) { result.suggestion = raw['suggestion']; }
 	if (typeof raw['codeSelection'] === 'string') { result.codeSelection = raw['codeSelection']; }
 	if (typeof raw['diffHunks'] === 'string') { result.diffHunks = raw['diffHunks']; }
-	if (typeof raw['sourcePRReviewCommentId'] === 'string') { result.sourcePRReviewCommentId = raw['sourcePRReviewCommentId']; }
 	if (typeof raw['pendingAgentReveal'] === 'boolean') { result.pendingAgentReveal = raw['pendingAgentReveal']; }
 	return result;
 }

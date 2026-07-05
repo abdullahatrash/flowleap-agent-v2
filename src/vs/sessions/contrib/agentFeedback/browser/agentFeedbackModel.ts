@@ -5,7 +5,16 @@
 
 import type { URI } from '../../../../base/common/uri.js';
 import type { IRange } from '../../../../editor/common/core/range.js';
-import type { ICodeReviewSuggestion } from '../../codeReview/browser/codeReviewService.js';
+
+export interface ICodeReviewSuggestion {
+	readonly edits: readonly ICodeReviewSuggestionChange[];
+}
+
+export interface ICodeReviewSuggestionChange {
+	readonly range: IRange;
+	readonly newText: string;
+	readonly oldText: string;
+}
 
 /**
  * Core agent-feedback model types.
@@ -30,8 +39,6 @@ export const enum AgentFeedbackKind {
 	UserReview = 'user',
 	/** Converted from an in-product (agent) code review comment. */
 	AgentReview = 'codeReview',
-	/** Converted from a pull request review comment. */
-	PRReview = 'prReview',
 }
 
 /**
@@ -72,10 +79,8 @@ export interface IAgentFeedback {
 	readonly suggestion?: ICodeReviewSuggestion;
 	readonly codeSelection?: string;
 	readonly diffHunks?: string;
-	/** Origin of this feedback item (user-authored, converted from code/PR review). */
+	/** Origin of this feedback item (user-authored, converted from an agent code review). */
 	readonly kind: AgentFeedbackKind;
-	/** When this feedback was converted from a PR review comment, the original thread ID. */
-	readonly sourcePRReviewCommentId?: string;
 	/**
 	 * Additional comment messages that belong to the same thread as this feedback,
 	 * talking about the same code region. The first {@link text} is the initial
@@ -89,7 +94,7 @@ export interface IAgentFeedback {
 	 * Transient marker set when the user reveals this comment to the agent via
 	 * the `viewUnreviewedComments` tool. The agent-host server tool returns the
 	 * comments carrying this flag and then clears it. Only meaningful for
-	 * reviewable (PR / code review) comments.
+	 * reviewable (agent code review) comments.
 	 */
 	readonly pendingAgentReveal?: boolean;
 }

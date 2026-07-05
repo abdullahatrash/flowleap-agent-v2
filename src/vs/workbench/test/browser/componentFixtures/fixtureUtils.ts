@@ -101,8 +101,6 @@ import { IChatEditingService } from '../../../contrib/chat/common/editing/chatEd
 import { ISessionsManagementService } from '../../../../sessions/services/sessions/common/sessionsManagement.js';
 // eslint-disable-next-line local/code-import-patterns
 import { ISessionsService } from '../../../../sessions/services/sessions/browser/sessionsService.js';
-// eslint-disable-next-line local/code-import-patterns
-import { ICodeReviewService, PRReviewStateKind } from '../../../../sessions/contrib/codeReview/browser/codeReviewService.js';
 import { constObservable } from '../../../../base/common/observable.js';
 
 // Editor
@@ -636,13 +634,6 @@ export function createEditorServices(disposables: DisposableStore, options?: Cre
 	definePartialInstance(ISessionsService, {
 		_serviceBrand: undefined,
 		activeSession: constObservable(undefined),
-	});
-
-	definePartialInstance(ICodeReviewService, {
-		_serviceBrand: undefined,
-		getPRReviewState: () => constObservable({ kind: PRReviewStateKind.None }),
-		resolvePRReviewThread: async () => { },
-		markPRReviewCommentConverted: () => { },
 	});
 
 	// Allow additional services to override defaults

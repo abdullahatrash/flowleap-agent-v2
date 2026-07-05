@@ -68,7 +68,7 @@ function makeAgentSession(opts: {
 		workingDirectory: opts.worktree ?? opts.repository!,
 		name: 'test',
 		description: undefined,
-		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined },
 	} : undefined;
 	const chat: IChat = {
 		resource: URI.parse('file:///session'),
@@ -132,7 +132,7 @@ function makeNonAgentSession(opts: { repository?: URI; worktree?: URI; providerT
 		workingDirectory: opts.worktree ?? opts.repository!,
 		name: 'test',
 		description: undefined,
-		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined },
 	} : undefined;
 	const chat: IChat = {
 		resource: URI.parse('file:///session'),

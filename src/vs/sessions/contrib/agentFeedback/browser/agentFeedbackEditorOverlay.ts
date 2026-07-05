@@ -23,7 +23,6 @@ import { assertType } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
 import { getActiveResourceCandidates } from './agentFeedbackEditorUtils.js';
 import { Menus } from '../../../browser/menus.js';
-import { ICodeReviewService } from '../../codeReview/browser/codeReviewService.js';
 import { getAcceptedAgentFeedbackCommentCount, getSessionEditorComments } from './sessionEditorComments.js';
 
 class SubmitFeedbackActionRunner extends ActionRunner {
@@ -193,7 +192,6 @@ class AgentFeedbackOverlayController {
 		@IAgentFeedbackService agentFeedbackService: IAgentFeedbackService,
 		@IInstantiationService instaService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
-		@ICodeReviewService codeReviewService: ICodeReviewService,
 	) {
 		this._domNode.classList.add('agent-feedback-editor-overlay');
 		this._domNode.style.position = 'absolute';
@@ -242,7 +240,6 @@ class AgentFeedbackOverlayController {
 				const comments = getSessionEditorComments(
 					sessionResource,
 					agentFeedbackService.getFeedback(sessionResource),
-					codeReviewService.getPRReviewState(sessionResource).read(r),
 				);
 				if (comments.length > 0) {
 					navigationBearings = agentFeedbackService.getNavigationBearing(sessionResource, comments);

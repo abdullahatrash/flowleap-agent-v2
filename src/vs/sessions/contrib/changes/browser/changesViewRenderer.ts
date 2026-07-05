@@ -160,7 +160,6 @@ interface IChangesTreeTemplate {
 	readonly toolbar: WorkbenchToolBar;
 	readonly toolbarMenu: IMenu;
 	readonly changeKindContextKey: IContextKey<'root' | 'folder' | 'file'>;
-	readonly reviewCommentsBadge: HTMLElement;
 	readonly agentFeedbackBadge: HTMLElement;
 	readonly decorationBadge: HTMLElement;
 	readonly addedSpan: HTMLElement;
@@ -206,9 +205,6 @@ export class ChangesTreeRenderer implements ICompressibleTreeRenderer<ChangesTre
 		const templateDisposables = new DisposableStore();
 		const label = templateDisposables.add(this.labels.create(container, { supportHighlights: true, supportIcons: true }));
 
-		const reviewCommentsBadge = dom.$('.changes-review-comments-badge');
-		label.element.appendChild(reviewCommentsBadge);
-
 		const agentFeedbackBadge = dom.$('.changes-agent-feedback-badge');
 		label.element.appendChild(agentFeedbackBadge);
 
@@ -245,7 +241,7 @@ export class ChangesTreeRenderer implements ICompressibleTreeRenderer<ChangesTre
 		const decorationBadge = dom.$('.changes-decoration-badge');
 		label.element.appendChild(decorationBadge);
 
-		return { label, toolbar, toolbarMenu, changeKindContextKey, reviewCommentsBadge, agentFeedbackBadge, decorationBadge, addedSpan, removedSpan, lineCountsContainer, elementDisposables: new DisposableStore(), templateDisposables };
+		return { label, toolbar, toolbarMenu, changeKindContextKey, agentFeedbackBadge, decorationBadge, addedSpan, removedSpan, lineCountsContainer, elementDisposables: new DisposableStore(), templateDisposables };
 	}
 
 	renderElement(node: ITreeNode<ChangesTreeElement, void>, _index: number, templateData: IChangesTreeTemplate): void {
@@ -277,7 +273,6 @@ export class ChangesTreeRenderer implements ICompressibleTreeRenderer<ChangesTre
 		});
 
 		// Hide file-specific decorations for folders
-		templateData.reviewCommentsBadge.style.display = 'none';
 		templateData.agentFeedbackBadge.style.display = 'none';
 		templateData.decorationBadge.style.display = 'none';
 		templateData.lineCountsContainer.style.display = 'none';
@@ -312,24 +307,6 @@ export class ChangesTreeRenderer implements ICompressibleTreeRenderer<ChangesTre
 		// Show file-specific decorations for changed files only
 		templateData.lineCountsContainer.style.display = showChangeDecorations ? '' : 'none';
 		templateData.decorationBadge.style.display = showChangeDecorations ? '' : 'none';
-
-		// Review comments
-		templateData.elementDisposables.add(autorun(reader => {
-			const reviewCommentByFile = this.changesViewService.activeSessionReviewCommentCountByFileObs.read(reader);
-			const reviewCommentCount = reviewCommentByFile?.get(data.uri.fsPath) ?? 0;
-
-			if (reviewCommentCount > 0) {
-				templateData.reviewCommentsBadge.style.display = '';
-				templateData.reviewCommentsBadge.className = 'changes-review-comments-badge';
-				templateData.reviewCommentsBadge.replaceChildren(
-					dom.$('.codicon.codicon-comment-unresolved'),
-					dom.$('span', undefined, `${reviewCommentCount}`)
-				);
-			} else {
-				templateData.reviewCommentsBadge.style.display = 'none';
-				templateData.reviewCommentsBadge.replaceChildren();
-			}
-		}));
 
 		// Agent feedback
 		templateData.elementDisposables.add(autorun(reader => {
@@ -430,7 +407,6 @@ export class ChangesTreeRenderer implements ICompressibleTreeRenderer<ChangesTre
 			separator: this.labelService.getSeparator(data.uri.scheme, data.uri.authority),
 		});
 
-		templateData.reviewCommentsBadge.style.display = 'none';
 		templateData.agentFeedbackBadge.style.display = 'none';
 		templateData.decorationBadge.style.display = 'none';
 		templateData.lineCountsContainer.style.display = 'none';
@@ -448,7 +424,6 @@ export class ChangesTreeRenderer implements ICompressibleTreeRenderer<ChangesTre
 		});
 
 		// Hide file-specific decorations for folders
-		templateData.reviewCommentsBadge.style.display = 'none';
 		templateData.agentFeedbackBadge.style.display = 'none';
 		templateData.decorationBadge.style.display = 'none';
 		templateData.lineCountsContainer.style.display = 'none';

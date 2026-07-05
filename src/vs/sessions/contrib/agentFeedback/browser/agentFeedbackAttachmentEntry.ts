@@ -44,7 +44,6 @@ export function createAgentFeedbackVariableEntry(sessionResource: URI, feedbackI
 			range: f.range,
 			codeSelection: f.codeSelection,
 			diffHunks: f.diffHunks,
-			sourcePRReviewCommentId: f.sourcePRReviewCommentId,
 			replies: f.replies,
 		})),
 		value: buildAgentFeedbackValue(feedbackItems),
@@ -66,9 +65,6 @@ export function buildAgentFeedbackValue(feedbackItems: readonly IAgentFeedback[]
 			: `${item.range.startLineNumber}-${item.range.endLineNumber}`;
 
 		let part = `[${fileName}:${lineRef}]`;
-		if (item.sourcePRReviewCommentId) {
-			part += `\n(PR review comment, thread ID: ${item.sourcePRReviewCommentId} — resolve this thread when addressed)`;
-		}
 		if (item.codeSelection) {
 			part += `\nSelection:\n\`\`\`\n${item.codeSelection}\n\`\`\``;
 		}

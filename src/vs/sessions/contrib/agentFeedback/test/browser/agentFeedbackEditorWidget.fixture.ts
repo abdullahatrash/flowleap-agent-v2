@@ -15,8 +15,7 @@ import { TokenizationRegistry } from '../../../../../editor/common/languages.js'
 import { AgentFeedbackKind, IAgentFeedback, IAgentFeedbackService } from '../../browser/agentFeedbackService.js';
 import { AgentFeedbackEditorWidget } from '../../browser/agentFeedbackEditorWidgetContribution.js';
 import { ComponentFixtureContext, createEditorServices, createTextModel, defineComponentFixture, defineThemedFixtureGroup } from '../../../../../workbench/test/browser/componentFixtures/fixtureUtils.js';
-import { ICodeReviewService, ICodeReviewSuggestion } from '../../../codeReview/browser/codeReviewService.js';
-import { createMockCodeReviewService } from '../../../../../workbench/test/browser/componentFixtures/sessions/mockCodeReviewService.js';
+import { ICodeReviewSuggestion } from '../../browser/agentFeedbackModel.js';
 import { ISessionEditorComment, SessionEditorCommentSource } from '../../browser/sessionEditorComments.js';
 
 const sessionResource = URI.parse('vscode-agent-session://fixture/session-1');
@@ -69,20 +68,6 @@ function createFeedbackComment(id: string, text: string, startLineNumber: number
 		suggestion,
 		canConvertToAgentFeedback: false,
 		replies,
-	};
-}
-
-function createPRReviewComment(id: string, text: string, startLineNumber: number, endLineNumber: number = startLineNumber): ISessionEditorComment {
-	return {
-		id: `prReview:${id}`,
-		sourceId: id,
-		source: SessionEditorCommentSource.PRReview,
-		kind: AgentFeedbackKind.PRReview,
-		text,
-		resourceUri: fileResource,
-		range: createRange(startLineNumber, endLineNumber),
-		sessionResource,
-		canConvertToAgentFeedback: true,
 	};
 }
 
@@ -164,12 +149,10 @@ function renderWidget(context: ComponentFixtureContext, options: IFixtureOptions
 	ensureTokenColorMap();
 
 	const agentFeedbackService = createMockAgentFeedbackService();
-	const codeReviewService = createMockCodeReviewService();
 	const instantiationService = createEditorServices(scopedDisposables, {
 		colorTheme: context.theme,
 		additionalServices: reg => {
 			reg.defineInstance(IAgentFeedbackService, agentFeedbackService);
-			reg.defineInstance(ICodeReviewService, codeReviewService);
 			reg.define(IMarkdownRendererService, MarkdownRendererService);
 		},
 	});
@@ -253,11 +236,6 @@ const suggestionMix = [
 	createFeedbackComment('f-3', 'Keep the helper name aligned with the domain concept.', 9),
 ];
 
-const prReviewOnly = [
-	createPRReviewComment('pr-1', 'This variable should be renamed to match our naming conventions.', 2),
-	createPRReviewComment('pr-2', 'Please add error handling for the edge case when second is zero.', 7, 8),
-];
-
 const threadedFeedback = [
 	createFeedbackComment(
 		'f-thread',
@@ -274,9 +252,7 @@ const threadedFeedback = [
 
 const allSourcesMixed = [
 	createFeedbackComment('f-1', 'Prefer a clearer variable name on this line.', 2),
-	createPRReviewComment('pr-1', 'Our style guide says to use descriptive names here.', 3),
 	createFeedbackComment('r-1', 'This should be extracted into a helper.', 6),
-	createPRReviewComment('pr-2', 'This logic duplicates what we have in utils.ts — consider reusing.', 8, 9),
 ];
 
 export default defineThemedFixtureGroup({ path: 'sessions/agentFeedback/' }, {
@@ -352,28 +328,11 @@ export default defineThemedFixtureGroup({ path: 'sessions/agentFeedback/' }, {
 		}),
 	}),
 
-	ExpandedPRReviewOnly: defineComponentFixture({
-		labels: { kind: 'screenshot' },
-		render: context => renderWidget(context, {
-			commentItems: prReviewOnly,
-			expanded: true,
-		}),
-	}),
-
 	ExpandedAllSourcesMixed: defineComponentFixture({
 		labels: { kind: 'screenshot' },
 		render: context => renderWidget(context, {
 			commentItems: allSourcesMixed,
 			expanded: true,
-		}),
-	}),
-
-	ExpandedFocusedPRReview: defineComponentFixture({
-		labels: { kind: 'screenshot' },
-		render: context => renderWidget(context, {
-			commentItems: allSourcesMixed,
-			expanded: true,
-			focusedCommentId: 'prReview:pr-2',
 		}),
 	}),
 

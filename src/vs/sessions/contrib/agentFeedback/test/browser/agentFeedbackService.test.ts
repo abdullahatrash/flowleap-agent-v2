@@ -485,7 +485,7 @@ suite('AgentFeedbackService - State', () => {
 	});
 
 	test('created feedback transitions to accepted on acceptFeedback', () => {
-		const created = service.addFeedback(session, fileA, r(10), 'pending', undefined, undefined, undefined, AgentFeedbackKind.AgentReview, AgentFeedbackState.Created);
+		const created = service.addFeedback(session, fileA, r(10), 'pending', undefined, undefined, AgentFeedbackKind.AgentReview, AgentFeedbackState.Created);
 		assert.strictEqual(created.state, AgentFeedbackState.Created);
 
 		service.acceptFeedback(session, created.id);
@@ -494,7 +494,7 @@ suite('AgentFeedbackService - State', () => {
 
 	test('markFeedbackSubmitted resolves accepted items directly for non-agent-host sessions', () => {
 		const accepted = service.addFeedback(session, fileA, r(10), 'accepted');
-		const created = service.addFeedback(session, fileA, r(20), 'created', undefined, undefined, undefined, AgentFeedbackKind.AgentReview, AgentFeedbackState.Created);
+		const created = service.addFeedback(session, fileA, r(20), 'created', undefined, undefined, AgentFeedbackKind.AgentReview, AgentFeedbackState.Created);
 
 		service.markFeedbackSubmitted(session);
 

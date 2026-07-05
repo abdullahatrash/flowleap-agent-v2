@@ -8,7 +8,7 @@ import { timeout } from '../../../../../base/common/async.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { constObservable, ISettableObservable, observableValue } from '../../../../../base/common/observable.js';
+import { ISettableObservable, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { runWithFakedTimers } from '../../../../../base/test/common/timeTravelScheduler.js';
@@ -89,7 +89,7 @@ function createMockProvider(id: string, opts?: {
 					workingDirectory: uri,
 					name: uri.path.substring(1) || uri.path,
 					description: undefined,
-					gitRepository: { uri, workTreeUri: undefined, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+					gitRepository: { uri, workTreeUri: undefined, baseBranchName: undefined },
 				}],
 				requiresWorkspaceTrust: false,
 				isVirtualWorkspace: false,
@@ -754,7 +754,7 @@ suite('WorkspacePicker - Tab discovery', () => {
 					workingDirectory: uri,
 					name: uri.path,
 					description: undefined,
-					gitRepository: { uri, workTreeUri: undefined, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
+					gitRepository: { uri, workTreeUri: undefined, baseBranchName: undefined },
 				}],
 				requiresWorkspaceTrust: false,
 				isVirtualWorkspace: false,

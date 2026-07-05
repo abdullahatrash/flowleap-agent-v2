@@ -13,11 +13,10 @@ import { ActionType } from '../../../../platform/agentSessionState/common/state/
 import { Annotation, AnnotationEntry, AnnotationsState, StateComponents, StringOrMarkdown } from '../../../../platform/agentSessionState/common/state/sessionState.js';
 import { TextRange } from '../../../../platform/agentSessionState/common/state/protocol/common/state.js';
 import { FEEDBACK_ANNOTATION_META_KEY, readFeedbackAnnotationMeta, type AgentFeedbackKindValue, type AgentFeedbackStateValue, type IFeedbackAnnotationMeta } from '../../../../platform/agentSessionState/common/meta/agentFeedbackAnnotations.js';
-import { ICodeReviewSuggestion } from '../../codeReview/browser/codeReviewService.js';
 import { IAgentHostSessionsProvider, isAgentHostProviderId } from '../../../common/agentHostSessionsProvider.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
-import { AgentFeedbackKind, AgentFeedbackState, IAgentFeedback } from './agentFeedbackModel.js';
+import { AgentFeedbackKind, AgentFeedbackState, IAgentFeedback, type ICodeReviewSuggestion } from './agentFeedbackModel.js';
 
 // --- Backend interface --------------------------------------------------------
 
@@ -172,14 +171,12 @@ interface IFeedbackMetaView {
 	readonly suggestion?: ICodeReviewSuggestion;
 	readonly codeSelection?: string;
 	readonly diffHunks?: string;
-	readonly sourcePRReviewCommentId?: string;
 	readonly pendingAgentReveal?: boolean;
 }
 
 const KIND_FROM_VALUE: Record<AgentFeedbackKindValue, AgentFeedbackKind> = {
 	user: AgentFeedbackKind.UserReview,
 	codeReview: AgentFeedbackKind.AgentReview,
-	prReview: AgentFeedbackKind.PRReview,
 };
 
 const STATE_FROM_VALUE: Record<AgentFeedbackStateValue, AgentFeedbackState> = {
@@ -217,7 +214,6 @@ function readFeedbackMeta(annotation: Annotation): IFeedbackMetaView | undefined
 		suggestion: asCodeReviewSuggestion(base.suggestion),
 		codeSelection: base.codeSelection,
 		diffHunks: base.diffHunks,
-		sourcePRReviewCommentId: base.sourcePRReviewCommentId,
 		pendingAgentReveal: base.pendingAgentReveal,
 	};
 }
@@ -257,7 +253,6 @@ function feedbackToAnnotation(feedback: IAgentFeedback): Annotation {
 		suggestion: feedback.suggestion,
 		codeSelection: feedback.codeSelection,
 		diffHunks: feedback.diffHunks,
-		sourcePRReviewCommentId: feedback.sourcePRReviewCommentId,
 		pendingAgentReveal: feedback.pendingAgentReveal,
 	};
 	return {
@@ -292,7 +287,6 @@ function annotationToFeedback(annotation: Annotation, sessionResource: URI): IAg
 		codeSelection: meta?.codeSelection,
 		diffHunks: meta?.diffHunks,
 		kind: meta?.kind ?? AgentFeedbackKind.UserReview,
-		sourcePRReviewCommentId: meta?.sourcePRReviewCommentId,
 		replies: replies.length ? replies : undefined,
 		state: annotation.resolved ? AgentFeedbackState.Resolved : (meta?.state ?? AgentFeedbackState.Accepted),
 		pendingAgentReveal: meta?.pendingAgentReveal,

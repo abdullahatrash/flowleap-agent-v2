@@ -5,13 +5,12 @@
 
 import { Codicon } from '../../base/common/codicons.js';
 import { match as matchGlob } from '../../base/common/glob.js';
-import { IObservable } from '../../base/common/observable.js';
 import { extUri, basename } from '../../base/common/resources.js';
 import { ThemeIcon } from '../../base/common/themables.js';
 import { URI } from '../../base/common/uri.js';
 import type { ISessionGitState } from '../../platform/agentSessionState/common/state/sessionState.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { IGitHubInfo, ISessionWorkspace } from '../services/sessions/common/session.js';
+import { ISessionWorkspace } from '../services/sessions/common/session.js';
 
 export interface IAgentHostSessionProjectSummary {
 	readonly uri: URI;
@@ -91,7 +90,7 @@ export function agentHostSessionWorkspaceKey(workspace: ISessionWorkspace | unde
 	].join('\n');
 }
 
-export function buildAgentHostSessionWorkspace(project: IAgentHostSessionProjectSummary | undefined, workingDirectory: URI | undefined, options: IAgentHostSessionWorkspaceOptions, gitHubInfo: IObservable<IGitHubInfo | undefined>, gitState?: ISessionGitState): ISessionWorkspace | undefined {
+export function buildAgentHostSessionWorkspace(project: IAgentHostSessionProjectSummary | undefined, workingDirectory: URI | undefined, options: IAgentHostSessionWorkspaceOptions, gitState?: ISessionGitState): ISessionWorkspace | undefined {
 	const baseBranchName = gitState?.baseBranchName;
 	const baseBranchProtected = baseBranchName !== undefined
 		? matchesAnyBranchProtectionPattern(baseBranchName, options.branchProtectionPatterns)
@@ -117,7 +116,7 @@ export function buildAgentHostSessionWorkspace(project: IAgentHostSessionProject
 				workingDirectory: workingDirectory ?? project.uri,
 				name: project.displayName,
 				description: options.description,
-				gitRepository: { uri: project.uri, workTreeUri, gitHubInfo, ...gitFields },
+				gitRepository: { uri: project.uri, workTreeUri, ...gitFields },
 			}],
 			requiresWorkspaceTrust: options.requiresWorkspaceTrust,
 			isVirtualWorkspace: false,
@@ -141,7 +140,7 @@ export function buildAgentHostSessionWorkspace(project: IAgentHostSessionProject
 			workingDirectory,
 			name: folderName,
 			description: options.description,
-			gitRepository: { uri: workingDirectory, workTreeUri: undefined, gitHubInfo, ...gitFields },
+			gitRepository: { uri: workingDirectory, workTreeUri: undefined, ...gitFields },
 		}],
 		requiresWorkspaceTrust: options.requiresWorkspaceTrust,
 		isVirtualWorkspace: false,

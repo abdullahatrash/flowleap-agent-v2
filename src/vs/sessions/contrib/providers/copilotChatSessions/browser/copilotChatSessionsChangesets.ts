@@ -11,9 +11,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { AgentSessionProviders } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessions.js';
 import { IChatSessionFileChange2 } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { GitDiffChange, IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
-import { BRANCH_CHANGES_CHANGESET_ID, gitHubInfoEqual, IChat, IGitHubInfo, ISessionChangeset, ISessionChangesetOperation, ISessionChangesetOperationTarget, ISessionFileChange, ISessionWorkspace, sessionFileChangesEqual } from '../../../../services/sessions/common/session.js';
-import { IGitHubService } from '../../../github/browser/githubService.js';
-import { toPRContentUri } from '../../../github/common/utils.js';
+import { BRANCH_CHANGES_CHANGESET_ID, IChat, ISessionChangeset, ISessionChangesetOperation, ISessionChangesetOperationTarget, ISessionFileChange, ISessionWorkspace, sessionFileChangesEqual } from '../../../../services/sessions/common/session.js';
 
 interface IChangesetResolver {
 	resolve(firstCheckpointRef: string, lastCheckpointRef: string | undefined): Promise<IChatSessionFileChange2[] | undefined>;
@@ -49,74 +47,13 @@ class GitRepositoryChangesetResolver implements IChangesetResolver {
 	}
 }
 
-class GitHubRepositoryChangesetResolver implements IChangesetResolver {
-	private readonly _gitHubInfoObs: IObservable<IGitHubInfo | undefined>;
-
-	constructor(
-		workspace: IObservable<ISessionWorkspace | undefined>,
-		@IGitHubService private readonly _gitHubService: IGitHubService
-	) {
-		this._gitHubInfoObs = derivedOpts({ equalsFn: gitHubInfoEqual }, reader => {
-			const gitRepository = workspace.read(reader)?.folders[0].gitRepository;
-			return gitRepository?.gitHubInfo.read(reader);
-		});
-	}
-
-	async resolve(firstCheckpointRef: string, lastCheckpointRef: string): Promise<IChatSessionFileChange2[] | undefined> {
-		const gitHubInfo = this._gitHubInfoObs.get();
-		if (!gitHubInfo || !gitHubInfo.pullRequest?.number) {
-			return undefined;
-		}
-
-		const params = {
-			owner: gitHubInfo.owner,
-			repo: gitHubInfo.repo,
-			prNumber: gitHubInfo.pullRequest.number,
-		} as const;
-
-		const changes = await this._gitHubService.getChangedFiles(params.owner, params.repo, firstCheckpointRef, lastCheckpointRef);
-		return changes.map(change => {
-			const uri = toPRContentUri(change.filename, {
-				...params,
-				commitSha: lastCheckpointRef,
-				status: change.status,
-				isBase: false
-			});
-
-			const originalUri = change.status !== 'added'
-				? toPRContentUri(change.previous_filename || change.filename, {
-					...params,
-					commitSha: firstCheckpointRef,
-					previousFileName: change.previous_filename,
-					status: change.status,
-					isBase: true
-				})
-				: undefined;
-
-			const modifiedUri = change.status !== 'removed'
-				? uri
-				: undefined;
-
-			return {
-				uri,
-				originalUri,
-				modifiedUri,
-				insertions: change.additions,
-				deletions: change.deletions
-			} satisfies IChatSessionFileChange2;
-		});
-	}
-}
-
 export function createChangesets(
 	sessionType: string,
 	workspaceObs: IObservable<ISessionWorkspace | undefined>,
 	chatsObs: IObservable<readonly IChat[]>,
 	instantiationService: IInstantiationService,
 ): IObservable<readonly ISessionChangeset[]> {
-	const changesetResolver = sessionType === AgentSessionProviders.Cloud
-		? instantiationService.createInstance(GitHubRepositoryChangesetResolver, workspaceObs)
-		: instantiationService.createInstance(GitRepositoryChangesetResolver, workspaceObs);
+	const changesetResolver = instantiationService.createInstance(GitRepositoryChangesetResolver, workspaceObs);
 
 	const changesets: ISessionChangeset[] = [new BranchChangesChangeset(workspaceObs, chatsObs)];
 	if (sessionType !== AgentSessionProviders.Cloud) {

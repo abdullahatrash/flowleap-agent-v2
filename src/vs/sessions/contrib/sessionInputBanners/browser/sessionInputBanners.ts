@@ -25,14 +25,12 @@ const STORAGE_KEY_COMMENTS_DISMISSED = 'sessions.inputBanners.comments.dismissed
  * review or an in-product code review), matching the comments surfaced to the
  * agent via the `viewUnreviewedComments` tool.
  */
-const REVIEWABLE_KINDS: ReadonlySet<AgentFeedbackKind> = new Set([AgentFeedbackKind.PRReview, AgentFeedbackKind.AgentReview]);
+const REVIEWABLE_KINDS: ReadonlySet<AgentFeedbackKind> = new Set([AgentFeedbackKind.AgentReview]);
 
 interface ICommentsBannerState {
 	readonly sessionId: string;
 	readonly sessionResource: URI;
 	readonly count: number;
-	/** Whether all counted comments are PR reviews, all are agent reviews, or mixed. */
-	readonly kind: 'pr' | 'agent' | 'mixed';
 	readonly firstCommentId: string;
 }
 
@@ -85,10 +83,7 @@ export class SessionInputBanners extends Disposable {
 		if (created.length === 0) {
 			return undefined;
 		}
-		const allPR = created.every(item => item.kind === AgentFeedbackKind.PRReview);
-		const allAgent = created.every(item => item.kind === AgentFeedbackKind.AgentReview);
-		const kind = allPR ? 'pr' : allAgent ? 'agent' : 'mixed';
-		return { sessionId: session.sessionId, sessionResource: session.resource, count: created.length, kind, firstCommentId: created[0].id };
+		return { sessionId: session.sessionId, sessionResource: session.resource, count: created.length, firstCommentId: created[0].id };
 	});
 
 	constructor(
@@ -126,7 +121,7 @@ export class SessionInputBanners extends Disposable {
 			return;
 		}
 
-		const text = this._commentsBannerText(state.kind, state.count);
+		const text = this._commentsBannerText(state.count);
 
 		this._renderBanner(this._commentsSlot, store, {
 			icon: Codicon.commentDiscussion,
@@ -154,21 +149,10 @@ export class SessionInputBanners extends Disposable {
 		container.appendChild(widget.domNode);
 	}
 
-	private _commentsBannerText(kind: 'pr' | 'agent' | 'mixed', count: number): string {
-		switch (kind) {
-			case 'pr':
-				return count === 1
-					? localize('comments.pr.one', "1 PR comment")
-					: localize('comments.pr.many', "{0} PR comments", count);
-			case 'agent':
-				return count === 1
-					? localize('comments.agent.one', "1 agent comment")
-					: localize('comments.agent.many', "{0} agent comments", count);
-			case 'mixed':
-				return count === 1
-					? localize('comments.one', "1 comment")
-					: localize('comments.many', "{0} comments", count);
-		}
+	private _commentsBannerText(count: number): string {
+		return count === 1
+			? localize('comments.agent.one', "1 agent comment")
+			: localize('comments.agent.many', "{0} agent comments", count);
 	}
 
 	private async _addressComments(sessionResource: URI): Promise<void> {

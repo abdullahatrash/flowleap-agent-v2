@@ -410,14 +410,13 @@ export class SessionsTelemetryContribution extends Disposable implements IWorkbe
 			return;
 		}
 		this._lifecycleTracker.bumpCounter(session, 'feedbackSubmitted');
-		const { totalCount, userCount, codeReviewCount, prReviewCount, replyCount } = e;
+		const { totalCount, userCount, codeReviewCount, replyCount } = e;
 		void this._getSessionActionPayload(session).then(payload => {
 			this._telemetryService.publicLog2<FeedbackSubmittedEvent, FeedbackSubmittedClassification>('agents/feedbackSubmitted', {
 				...payload,
 				totalCount,
 				userCount,
 				codeReviewCount,
-				prReviewCount,
 				replyCount,
 			});
 		});
@@ -1209,7 +1208,7 @@ type FeedbackConvertedEvent = {
 	sessionFilesChanged: number;
 	sessionLinesAdded: number;
 	sessionLinesDeleted: number;
-	feedbackKind: AgentFeedbackKind.AgentReview | AgentFeedbackKind.PRReview;
+	feedbackKind: AgentFeedbackKind.AgentReview;
 	hasSuggestion: boolean;
 	hasExistingFeedbackForFile: boolean;
 };
@@ -1229,7 +1228,7 @@ type FeedbackConvertedClassification = {
 	sessionFilesChanged: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Number of files changed in the session at the time of the action.' };
 	sessionLinesAdded: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Total number of lines added across all changed files in the session at the time of the action.' };
 	sessionLinesDeleted: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Total number of lines deleted across all changed files in the session at the time of the action.' };
-	feedbackKind: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Origin of the converted comment: codeReview (in-product code review) or prReview (pull request review).' };
+	feedbackKind: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Origin of the converted comment: codeReview (in-product code review).' };
 	hasSuggestion: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the converted comment includes a suggested code edit.' };
 	hasExistingFeedbackForFile: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the session already had at least one feedback comment for the same file before the conversion.' };
 };
@@ -1266,7 +1265,7 @@ type FeedbackReplyAddedClassification = {
 	sessionFilesChanged: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Number of files changed in the session at the time of the action.' };
 	sessionLinesAdded: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Total number of lines added across all changed files in the session at the time of the action.' };
 	sessionLinesDeleted: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Total number of lines deleted across all changed files in the session at the time of the action.' };
-	feedbackKind: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Origin of the feedback thread that received the reply (user, codeReview, prReview).' };
+	feedbackKind: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Origin of the feedback thread that received the reply (user, codeReview).' };
 	replyCount: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Number of replies on the feedback thread after the new reply was appended.' };
 };
 
@@ -1286,7 +1285,6 @@ type FeedbackSubmittedEvent = {
 	totalCount: number;
 	userCount: number;
 	codeReviewCount: number;
-	prReviewCount: number;
 	replyCount: number;
 };
 
@@ -1308,7 +1306,6 @@ type FeedbackSubmittedClassification = {
 	totalCount: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Total number of feedback items being submitted.' };
 	userCount: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Number of user-authored feedback items being submitted.' };
 	codeReviewCount: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Number of feedback items being submitted that originated as code review comments.' };
-	prReviewCount: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Number of feedback items being submitted that originated as PR review comments.' };
 	replyCount: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Total number of replies across all feedback items being submitted.' };
 };
 

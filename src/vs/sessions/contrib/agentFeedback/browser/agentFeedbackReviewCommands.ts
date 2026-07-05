@@ -7,15 +7,14 @@ import { URI, UriComponents } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { AgentFeedbackReviewCommandId, IChatAgentFeedbackReviewComment } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
-import { ICodeReviewService } from '../../codeReview/browser/codeReviewService.js';
 import { AgentFeedbackKind, AgentFeedbackState, IAgentFeedbackService } from './agentFeedbackService.js';
 
 /**
- * Feedback kinds that originate from a review the user triages (a pull request
- * review or an in-product code review). Mirrors the server-side reviewable
- * kinds and excludes user-authored feedback.
+ * Feedback kinds that originate from a review the user triages (an in-product
+ * agent code review). Mirrors the server-side reviewable kinds and excludes
+ * user-authored feedback.
  */
-const REVIEWABLE_KINDS: ReadonlySet<AgentFeedbackKind> = new Set([AgentFeedbackKind.PRReview, AgentFeedbackKind.AgentReview]);
+const REVIEWABLE_KINDS: ReadonlySet<AgentFeedbackKind> = new Set([AgentFeedbackKind.AgentReview]);
 
 /**
  * Localized origin label for a reviewable feedback item, matching the labels
@@ -23,8 +22,6 @@ const REVIEWABLE_KINDS: ReadonlySet<AgentFeedbackKind> = new Set([AgentFeedbackK
  */
 function kindLabel(kind: AgentFeedbackKind): string | undefined {
 	switch (kind) {
-		case AgentFeedbackKind.PRReview:
-			return localize('agentFeedbackReview.prReview', "PR Review");
 		case AgentFeedbackKind.AgentReview:
 			return localize('agentFeedbackReview.agentReview', "Agent Review");
 		default:
@@ -59,15 +56,7 @@ export function registerAgentFeedbackReviewCommands(): void {
 
 	CommandsRegistry.registerCommand(AgentFeedbackReviewCommandId.Delete, (accessor, sessionResource: UriComponents, commentId: string): void => {
 		const feedbackService = accessor.get(IAgentFeedbackService);
-		const codeReviewService = accessor.get(ICodeReviewService);
 		const resource = URI.revive(sessionResource);
-		// Suppress the originating PR comment first (before removing the mirror)
-		// so the PR-review seeder does not immediately re-create the mirror the
-		// user just deleted.
-		const item = feedbackService.getFeedback(resource).find(f => f.id === commentId);
-		if (item?.kind === AgentFeedbackKind.PRReview && item.sourcePRReviewCommentId) {
-			codeReviewService.dismissPRReviewComment(resource, item.sourcePRReviewCommentId);
-		}
 		feedbackService.removeFeedback(resource, commentId);
 	});
 

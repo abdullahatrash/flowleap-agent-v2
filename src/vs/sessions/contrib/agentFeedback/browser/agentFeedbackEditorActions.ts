@@ -16,7 +16,6 @@ import { CHAT_CATEGORY } from '../../../../workbench/contrib/chat/browser/action
 import { AgentFeedbackState, IAgentFeedbackService } from './agentFeedbackService.js';
 import { getActiveResourceCandidates } from './agentFeedbackEditorUtils.js';
 import { Menus } from '../../../browser/menus.js';
-import { ICodeReviewService } from '../../codeReview/browser/codeReviewService.js';
 import { getSessionEditorComments } from './sessionEditorComments.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 export const submitFeedbackActionId = 'agentFeedbackEditor.action.submit';
@@ -41,7 +40,6 @@ abstract class AgentFeedbackEditorAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<boolean | void> {
 		const editorService = accessor.get(IEditorService);
 		const agentFeedbackService = accessor.get(IAgentFeedbackService);
-		const codeReviewService = accessor.get(ICodeReviewService);
 
 		const editorGroupsService = accessor.get(IEditorGroupsService);
 
@@ -59,7 +57,6 @@ abstract class AgentFeedbackEditorAction extends Action2 {
 			const comments = getSessionEditorComments(
 				sessionResource,
 				agentFeedbackService.getFeedback(sessionResource),
-				codeReviewService.getPRReviewState(sessionResource).get(),
 			);
 			if (comments.length > 0) {
 				return this.runWithSession(accessor, sessionResource);
@@ -116,11 +113,9 @@ class NavigateFeedbackAction extends AgentFeedbackEditorAction {
 
 	override async runWithSession(accessor: ServicesAccessor, sessionResource: URI): Promise<void> {
 		const agentFeedbackService = accessor.get(IAgentFeedbackService);
-		const codeReviewService = accessor.get(ICodeReviewService);
 		const comments = getSessionEditorComments(
 			sessionResource,
 			agentFeedbackService.getFeedback(sessionResource),
-			codeReviewService.getPRReviewState(sessionResource).get(),
 		);
 
 		const comment = agentFeedbackService.getNextNavigableItem(sessionResource, comments, this._next);

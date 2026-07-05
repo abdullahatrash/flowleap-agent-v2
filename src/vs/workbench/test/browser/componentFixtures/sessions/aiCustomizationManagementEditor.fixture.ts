@@ -68,9 +68,6 @@ import { IAgentHostCustomizationService } from '../../../../contrib/chat/browser
 import { McpServerStatus } from '../../../../../platform/agentSessionState/common/state/protocol/state.js';
 // eslint-disable-next-line local/code-import-patterns
 import { IAgentFeedbackService } from '../../../../../sessions/contrib/agentFeedback/browser/agentFeedbackService.js';
-// eslint-disable-next-line local/code-import-patterns
-import { ICodeReviewService } from '../../../../../sessions/contrib/codeReview/browser/codeReviewService.js';
-import { createMockCodeReviewService } from './mockCodeReviewService.js';
 import { IChatEditingService } from '../../../../contrib/chat/common/editing/chatEditingService.js';
 import { IAgentSessionsService } from '../../../../contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ComponentFixtureContext, createEditorServices, defineComponentFixture, defineThemedFixtureGroup, registerWorkbenchServices } from '../fixtureUtils.js';
@@ -572,7 +569,6 @@ async function renderEditor(ctx: ComponentFixtureContext, options: IRenderEditor
 		additionalServices: (reg) => {
 			const harnessService = createMockHarnessService(options.sessionResource, availableHarnesses);
 			const agentFeedbackService = createMockAgentFeedbackService();
-			const codeReviewService = createMockCodeReviewService();
 			registerWorkbenchServices(reg);
 			// Enable the structured customization preview setting so the
 			// editor exercises the preview-first behavior in fixtures.
@@ -609,7 +605,6 @@ async function renderEditor(ctx: ComponentFixtureContext, options: IRenderEditor
 				override registerTextModelContentProvider() { return { dispose: () => { } }; }
 			}());
 			reg.defineInstance(IAgentFeedbackService, agentFeedbackService);
-			reg.defineInstance(ICodeReviewService, codeReviewService);
 			reg.defineInstance(IChatEditingService, new class extends mock<IChatEditingService>() {
 				override readonly editingSessionsObs = constObservable([]);
 			}());

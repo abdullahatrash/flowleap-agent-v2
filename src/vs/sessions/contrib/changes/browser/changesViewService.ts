@@ -12,7 +12,6 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangeset, ISessionChangesetOperation, ISessionFileChange } from '../../../services/sessions/common/session.js';
 import { AgentFeedbackState, IAgentFeedbackService } from '../../agentFeedback/browser/agentFeedbackService.js';
-import { ICodeReviewService, PRReviewStateKind } from '../../codeReview/browser/codeReviewService.js';
 import { ChangesViewMode, IsolationMode } from '../common/changes.js';
 import { ActiveSessionState, IChangesViewService } from '../common/changesViewService.js';
 
@@ -28,7 +27,6 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 	readonly activeSessionChangesetObs: IObservable<ISessionChangeset | undefined>;
 	readonly activeSessionChangesetOperationsObs: IObservable<readonly ISessionChangesetOperation[]>;
 	readonly activeSessionHasGitRepositoryObs: IObservable<boolean>;
-	readonly activeSessionReviewCommentCountByFileObs: IObservable<Map<string, number>>;
 	readonly activeSessionAgentFeedbackCountByFileObs: IObservable<Map<string, number>>;
 	readonly activeSessionStateObs: IObservable<ActiveSessionState | undefined>;
 	readonly activeSessionIsLoadingObs: IObservable<boolean>;
@@ -50,7 +48,6 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 
 	constructor(
 		@IAgentFeedbackService private readonly agentFeedbackService: IAgentFeedbackService,
-		@ICodeReviewService private readonly codeReviewService: ICodeReviewService,
 		@ISessionsService private readonly sessionsService: ISessionsService,
 		@IStorageService private readonly storageService: IStorageService,
 	) {
@@ -89,9 +86,6 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 		const { isLoading, state } = this._getActiveSessionState();
 		this.activeSessionIsLoadingObs = isLoading;
 		this.activeSessionStateObs = state;
-
-		// Active session review comment count by file
-		this.activeSessionReviewCommentCountByFileObs = this._getActiveSessionReviewComments();
 
 		// Active session agent feedback count by file
 		this.activeSessionAgentFeedbackCountByFileObs = this._getActiveSessionAgentFeedback();
@@ -200,26 +194,6 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 		};
 	}
 
-	private _getActiveSessionReviewComments(): IObservable<Map<string, number>> {
-		return derived(reader => {
-			const sessionResource = this.activeSessionResourceObs.read(reader);
-			if (!sessionResource) {
-				return new Map<string, number>();
-			}
-
-			const result = new Map<string, number>();
-			const prReviewState = this.codeReviewService.getPRReviewState(sessionResource).read(reader);
-			if (prReviewState.kind === PRReviewStateKind.Loaded) {
-				for (const comment of prReviewState.comments) {
-					const uriKey = comment.uri.fsPath;
-					result.set(uriKey, (result.get(uriKey) ?? 0) + 1);
-				}
-			}
-
-			return result;
-		});
-	}
-
 	private _getActiveSessionAgentFeedback(): IObservable<Map<string, number>> {
 		const didChangeFeedbackSignal = observableSignalFromEvent(this, this.agentFeedbackService.onDidChangeFeedback);
 
@@ -234,7 +208,7 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 			const feedbackItems = this.agentFeedbackService.getFeedback(sessionResource);
 			const result = new Map<string, number>();
 			for (const item of feedbackItems) {
-				if (!item.sourcePRReviewCommentId && item.state !== AgentFeedbackState.Resolved) {
+				if (item.state !== AgentFeedbackState.Resolved) {
 					const uriKey = item.resourceUri.fsPath;
 					result.set(uriKey, (result.get(uriKey) ?? 0) + 1);
 				}

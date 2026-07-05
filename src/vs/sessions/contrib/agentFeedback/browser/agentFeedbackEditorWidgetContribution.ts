@@ -28,7 +28,6 @@ import { AgentFeedbackKind, IAgentFeedbackService, AgentFeedbackState } from './
 import { isIChatSessionFileChange2 } from '../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createAgentFeedbackContext } from './agentFeedbackEditorUtils.js';
-import { ICodeReviewService, IPRReviewState } from '../../codeReview/browser/codeReviewService.js';
 import { getSessionEditorComments, groupNearbySessionEditorComments, ISessionEditorComment, SessionEditorCommentSource, toSessionEditorCommentId } from './sessionEditorComments.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -102,7 +101,6 @@ export class AgentFeedbackEditorWidget extends Disposable implements IOverlayWid
 		private readonly _sessionResource: URI,
 		private readonly _replyDraftState: IReplyDraftState | undefined,
 		@IAgentFeedbackService private readonly _agentFeedbackService: IAgentFeedbackService,
-		@ICodeReviewService private readonly _codeReviewService: ICodeReviewService,
 		@IMarkdownRendererService private readonly _markdownRendererService: IMarkdownRendererService,
 		@ICodeEditorService private readonly _codeEditorService: ICodeEditorService,
 	) {
@@ -361,8 +359,6 @@ export class AgentFeedbackEditorWidget extends Disposable implements IOverlayWid
 
 	private _getTypeLabel(comment: ISessionEditorComment): string | undefined {
 		switch (comment.kind) {
-			case AgentFeedbackKind.PRReview:
-				return nls.localize('prReviewComment', "PR Review");
 			case AgentFeedbackKind.AgentReview:
 				return nls.localize('agentReviewComment', "Agent Review");
 			default:
@@ -466,11 +462,6 @@ export class AgentFeedbackEditorWidget extends Disposable implements IOverlayWid
 	}
 
 	private _removeComment(comment: ISessionEditorComment): void {
-		if (comment.source === SessionEditorCommentSource.PRReview) {
-			this._codeReviewService.resolvePRReviewThread(this._sessionResource!, comment.sourceId);
-			return;
-		}
-
 		this._agentFeedbackService.removeFeedback(this._sessionResource, comment.sourceId);
 	}
 
@@ -660,9 +651,9 @@ export class AgentFeedbackEditorWidget extends Disposable implements IOverlayWid
 			return;
 		}
 
-		// For PR review comments, convert to agent feedback first preserving
-		// the original text, then add the reply so that the original comment and
-		// the reply live in the same thread.
+		// For convertible (external review) comments, convert to agent feedback
+		// first preserving the original text, then add the reply so that the
+		// original comment and the reply live in the same thread.
 		if (!comment.canConvertToAgentFeedback) {
 			return;
 		}
@@ -674,12 +665,10 @@ export class AgentFeedbackEditorWidget extends Disposable implements IOverlayWid
 			comment.text,
 			comment.suggestion,
 			createAgentFeedbackContext(this._editor, this._codeEditorService, comment.resourceUri, comment.range),
-			comment.sourceId,
-			AgentFeedbackKind.PRReview,
+			AgentFeedbackKind.AgentReview,
 		);
 		this._agentFeedbackService.addReply(this._sessionResource, feedback.id, replyText);
 		this._agentFeedbackService.setNavigationAnchor(this._sessionResource, toSessionEditorCommentId(SessionEditorCommentSource.AgentFeedback, feedback.id));
-		this._codeReviewService.markPRReviewCommentConverted(this._sessionResource, comment.sourceId);
 	}
 
 	private _saveEdit(comment: ISessionEditorComment, newText: string): void {
@@ -740,11 +729,9 @@ export class AgentFeedbackEditorWidget extends Disposable implements IOverlayWid
 			text,
 			comment.suggestion,
 			createAgentFeedbackContext(this._editor, this._codeEditorService, comment.resourceUri, comment.range),
-			comment.sourceId,
-			AgentFeedbackKind.PRReview,
+			AgentFeedbackKind.AgentReview,
 		);
 		this._agentFeedbackService.setNavigationAnchor(this._sessionResource, toSessionEditorCommentId(SessionEditorCommentSource.AgentFeedback, feedback.id));
-		this._codeReviewService.markPRReviewCommentConverted(this._sessionResource, comment.sourceId);
 	}
 
 	/**
@@ -1057,7 +1044,6 @@ class AgentFeedbackEditorWidgetContribution extends Disposable implements IEdito
 		private readonly _editor: ICodeEditor,
 		@IAgentFeedbackService private readonly _agentFeedbackService: IAgentFeedbackService,
 		@ISessionsManagementService private readonly _sessionsManagementService: ISessionsManagementService,
-		@ICodeReviewService private readonly _codeReviewService: ICodeReviewService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 	) {
 		super();
@@ -1087,9 +1073,7 @@ class AgentFeedbackEditorWidgetContribution extends Disposable implements IEdito
 				return;
 			}
 
-			this._rebuildWidgets(
-				this._codeReviewService.getPRReviewState(this._sessionResource).read(reader),
-			);
+			this._rebuildWidgets();
 			this._handleNavigation();
 		}));
 	}
@@ -1103,9 +1087,7 @@ class AgentFeedbackEditorWidgetContribution extends Disposable implements IEdito
 		this._sessionResource = this._agentFeedbackService.getSessionForFile(model.uri)?.resource;
 	}
 
-	private _rebuildWidgets(
-		prReviewState: IPRReviewState | undefined = this._sessionResource ? this._codeReviewService.getPRReviewState(this._sessionResource).get() : undefined,
-	): void {
+	private _rebuildWidgets(): void {
 		this._clearWidgets();
 
 		if (!this._sessionResource) {
@@ -1120,7 +1102,6 @@ class AgentFeedbackEditorWidgetContribution extends Disposable implements IEdito
 		const comments = getSessionEditorComments(
 			this._sessionResource,
 			this._agentFeedbackService.getFeedback(this._sessionResource),
-			prReviewState,
 		);
 		const fileComments = this._getCommentsForModel(model.uri, comments);
 		if (fileComments.length === 0) {
@@ -1235,7 +1216,6 @@ class AgentFeedbackEditorWidgetContribution extends Disposable implements IEdito
 		const comments = getSessionEditorComments(
 			this._sessionResource,
 			this._agentFeedbackService.getFeedback(this._sessionResource),
-			this._codeReviewService.getPRReviewState(this._sessionResource).get(),
 		);
 		const bearing = this._agentFeedbackService.getNavigationBearing(this._sessionResource, comments);
 		if (bearing.activeIdx < 0) {
