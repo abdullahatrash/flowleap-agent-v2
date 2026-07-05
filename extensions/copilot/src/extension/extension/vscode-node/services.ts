@@ -188,7 +188,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 		builder.define(ICopilotTokenManager, getOrCreateTestingCopilotTokenManager(env.devDeviceId));
 	} else {
 		// FlowLeap Patent AI: BYOK-only token manager. Replaces the CAPI-backed
-		// VSCodeCopilotTokenManager so the extension never mints a GitHub Copilot token
+		// stock token manager so the extension never mints a GitHub Copilot token
 		// and never reaches the `copilot_internal` token endpoint. It fabricates no token
 		// (see PatentAICopilotTokenManager): inference is BYO-key only via the endpoint
 		// provider below, so no Copilot token is needed, and entitlement/quota — all of
