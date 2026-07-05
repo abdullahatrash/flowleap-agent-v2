@@ -1,6 +1,6 @@
 ---
 name: freedom-to-operate
-description: Freedom-to-operate (FTO) analysis — find active blocking patents for a product or technology in target markets, map claims against product features, and verify legal status. Use when the user asks about FTO, infringement risk, blocking patents, or "can I sell/launch/build X without infringing". Always includes the not-legal-advice disclaimer. For general novelty searching use prior-art instead.
+description: Freedom-to-operate (FTO) analysis — find active blocking patents for a product or technology in target markets, map claims against product features, and verify legal status. Use when the user asks about FTO, infringement risk, blocking patents, or "can I sell/launch/build X without infringing". Always includes the not-legal-advice disclaimer. For the reverse — asserting YOUR patent against a product — use infringement-charting; for general novelty searching use prior-art.
 user-invocable: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: patent-landscape
-description: Technology landscape and trend analysis across patent portfolios — filing volumes, top assignees, geographic distribution, year-over-year trends, white spaces. Use when the user asks who files in a technology domain, about patent trends, competitive or market IP intelligence, or white-space opportunities. For finding individual patents use patent-search; for prior art against an invention use prior-art.
+description: Technology landscape and trend analysis across patent portfolios — filing volumes, top assignees, geographic distribution, year-over-year trends, white spaces. Use when the user asks who files in a technology domain, about patent trends, competitive or market IP intelligence, or white-space opportunities. For a single company's holdings use portfolio-analysis; for finding individual patents use patent-search; for prior art against an invention use prior-art.
 user-invocable: true
 ---
 
