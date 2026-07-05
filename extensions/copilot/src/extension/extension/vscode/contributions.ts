@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { NesActivationTelemetryContribution } from '../../../platform/inlineEdits/common/nesActivationStatusTelemetry.contribution';
 import { asContributionFactory, IExtensionContributionFactory } from '../../common/contributions';
 import * as contextContribution from '../../context/vscode/context.contribution';
 import { LifecycleTelemetryContrib } from '../../telemetry/common/lifecycleTelemetryContrib';
@@ -18,7 +17,6 @@ import { LifecycleTelemetryContrib } from '../../telemetry/common/lifecycleTelem
 
 const vscodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(LifecycleTelemetryContrib),
-	asContributionFactory(NesActivationTelemetryContribution),
 	contextContribution,
 ];
 
