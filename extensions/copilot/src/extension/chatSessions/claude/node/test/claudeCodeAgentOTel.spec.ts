@@ -19,7 +19,6 @@ import { MockChatResponseStream } from '../../../../test/node/testHelpers';
 import type { ClaudeFolderInfo } from '../../common/claudeFolderInfo';
 import { ClaudeCodeSession } from '../claudeCodeAgent';
 import { IClaudeCodeSdkService } from '../claudeCodeSdkService';
-import { ClaudeLanguageModelServer } from '../claudeLanguageModelServer';
 import { parseClaudeModelId } from '../claudeModelId';
 import { IClaudeSessionStateService } from '../../common/claudeSessionStateService';
 
@@ -27,13 +26,6 @@ const TEST_MODEL_ID_STRING = 'claude-3-sonnet';
 const TEST_MODEL_ID = parseClaudeModelId(TEST_MODEL_ID_STRING);
 const TEST_PERMISSION_MODE: PermissionMode = 'acceptEdits';
 const TEST_FOLDER_INFO: ClaudeFolderInfo = { cwd: '/test/project', additionalDirectories: [] };
-
-function createMockLangModelServer(): ClaudeLanguageModelServer {
-	return {
-		incrementUserInitiatedMessageCount: vi.fn(),
-		getConfig: () => ({ port: 8080, nonce: 'test-nonce' }),
-	} as unknown as ClaudeLanguageModelServer;
-}
 
 function createMockChatRequest(prompt = ''): vscode.ChatRequest {
 	return { prompt, references: [], tools: new Map(), id: 'test-request-id', toolInvocationToken: {} } as unknown as vscode.ChatRequest;
@@ -180,7 +172,7 @@ describe('Claude Session OTel Tool Spans', () => {
 
 		commitTestState(localSessionStateService, sessionId);
 		const session = store.add(localInstantiationService.createInstance(
-			ClaudeCodeSession, createMockLangModelServer(), sessionId, true
+			ClaudeCodeSession, sessionId, true
 		));
 		const stream = new MockChatResponseStream();
 
@@ -223,7 +215,7 @@ describe('Claude Session OTel Tool Spans', () => {
 
 		commitTestState(localSessionStateService, sessionId);
 		const session = store.add(localInstantiationService.createInstance(
-			ClaudeCodeSession, createMockLangModelServer(), sessionId, true
+			ClaudeCodeSession, sessionId, true
 		));
 		const stream = new MockChatResponseStream();
 
@@ -265,7 +257,7 @@ describe('Claude Session OTel Tool Spans', () => {
 
 		commitTestState(localSessionStateService, sessionId);
 		const session = store.add(localInstantiationService.createInstance(
-			ClaudeCodeSession, createMockLangModelServer(), sessionId, true
+			ClaudeCodeSession, sessionId, true
 		));
 		const stream = new MockChatResponseStream();
 
@@ -301,7 +293,7 @@ describe('Claude Session OTel Tool Spans', () => {
 
 		commitTestState(localSessionStateService, sessionId);
 		const session = store.add(localInstantiationService.createInstance(
-			ClaudeCodeSession, createMockLangModelServer(), sessionId, true
+			ClaudeCodeSession, sessionId, true
 		));
 		const stream = new MockChatResponseStream();
 
@@ -337,7 +329,7 @@ describe('Claude Session OTel Tool Spans', () => {
 
 		commitTestState(localSessionStateService, sessionId);
 		const session = store.add(localInstantiationService.createInstance(
-			ClaudeCodeSession, createMockLangModelServer(), sessionId, true
+			ClaudeCodeSession, sessionId, true
 		));
 		const stream = new MockChatResponseStream();
 

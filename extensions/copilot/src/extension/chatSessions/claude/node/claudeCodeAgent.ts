@@ -32,26 +32,15 @@ import { ClaudeSessionUri } from '../common/claudeSessionUri';
 import { IClaudeToolPermissionService } from '../common/claudeToolPermissionService';
 import { IClaudePlanFileTracker } from '../common/claudePlanFileTracker';
 import { IClaudeCodeSdkService } from './claudeCodeSdkService';
-import { ClaudeLanguageModelServer } from './claudeLanguageModelServer';
 import { resolvePromptToContentBlocks } from './claudePromptResolver';
 import { ClaudeSettingsChangeTracker } from './claudeSettingsChangeTracker';
 import { ParsedClaudeModelId } from '../common/claudeModelId';
 import { IClaudeSessionStateService } from '../common/claudeSessionStateService';
 import { ClaudeOTelTracker } from './claudeOTelTracker';
 
-// Manages Claude Code agent interactions and language model server lifecycle
+// Manages Claude Code agent interactions
 export class ClaudeAgentManager extends Disposable {
-	private _langModelServer: ClaudeLanguageModelServer | undefined;
 	private _sessions = this._register(new DisposableMap<string, ClaudeCodeSession>());
-
-	private async getLangModelServer(): Promise<ClaudeLanguageModelServer> {
-		if (!this._langModelServer) {
-			this._langModelServer = this.instantiationService.createInstance(ClaudeLanguageModelServer);
-			await this._langModelServer.start();
-		}
-
-		return this._langModelServer;
-	}
 
 	constructor(
 		@ILogService private readonly logService: ILogService,
@@ -69,15 +58,13 @@ export class ClaudeAgentManager extends Disposable {
 		yieldRequested?: () => boolean
 	): Promise<vscode.ChatResult> {
 		try {
-			const langModelServer = await this.getLangModelServer();
-
 			this.logService.trace(`[ClaudeAgentManager] Handling request for sessionId=${claudeSessionId}.`);
 			let session = this._sessions.get(claudeSessionId);
 			if (session) {
 				this.logService.trace(`[ClaudeAgentManager] Reusing Claude session ${claudeSessionId}.`);
 			} else {
 				this.logService.trace(`[ClaudeAgentManager] Creating Claude session for sessionId=${claudeSessionId}.`);
-				session = this.instantiationService.createInstance(ClaudeCodeSession, langModelServer, claudeSessionId, isNewSession);
+				session = this.instantiationService.createInstance(ClaudeCodeSession, claudeSessionId, isNewSession);
 				this._sessions.set(claudeSessionId, session);
 			}
 
@@ -210,7 +197,6 @@ export class ClaudeCodeSession extends Disposable {
 	}
 
 	constructor(
-		private readonly langModelServer: ClaudeLanguageModelServer,
 		public readonly sessionId: string,
 		isNewSession: boolean,
 		@ILogService private readonly logService: ILogService,
@@ -563,10 +549,6 @@ export class ClaudeCodeSession extends Disposable {
 
 			// Mark this request as yielded to the SDK; it becomes the current request.
 			this._inFlightRequests.push(request);
-
-			// Increment user-initiated message count for this model
-			// This is used by the language model server to track which requests are user-initiated
-			this.langModelServer.incrementUserInitiatedMessageCount(request.modelId.toEndpointModelId());
 
 			// Resolve the prompt content blocks now that this request is being handled
 			const prompt = await resolvePromptToContentBlocks(request.request);
