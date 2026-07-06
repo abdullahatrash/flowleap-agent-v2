@@ -1,5 +1,12 @@
 # Free app, BYO keys, monetize the ecosystem (Pro)
 
+**Status:** rejected (2026-07-06) — decision reversed before implementation: the app will
+**not** be free with an ecosystem-upsell (Pro) tier. The shipped model stands: flat Polar
+subscription with card-required 7-day trial gating patent data (backend ADR 0004; runtime
+402 gate at `IPatentBackendClient`). BYOK **inference** (ADR 0004 of this repo) is
+unaffected. The backend mirror (`flowleap-backend` ADR 0007) and PRD 0002 are rejected
+likewise.
+
 The FlowLeap app is **free to use, forever**. Inference is already BYOK (ADR 0004); we
 extend the same "bring your own key" model to **patent data** — the user supplies their own
 EPO OPS and USPTO credentials through a friendly in-app UI. The backend stays as the

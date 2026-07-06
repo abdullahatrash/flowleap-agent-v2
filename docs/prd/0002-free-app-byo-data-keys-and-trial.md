@@ -1,5 +1,5 @@
 ---
-status: draft
+status: rejected (2026-07-06 — free-app/ecosystem-upsell model abandoned; see ADR 0005 status note)
 relates-to: docs/adr/0005-free-app-byo-patent-data-keys.md, docs/adr/0004-byok-inference-routing.md, docs/adr/0002-consolidate-auth-to-clerk-template-token.md
 ---
 
