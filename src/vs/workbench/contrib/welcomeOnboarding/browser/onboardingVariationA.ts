@@ -29,6 +29,7 @@ import { ITelemetryService } from '../../../../platform/telemetry/common/telemet
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import {
 	OnboardingStepId,
@@ -41,6 +42,7 @@ import {
 	SubscriptionAccess,
 	computeVisibleSteps,
 	decideTrialPoll,
+	roleToFirstInvestigation,
 	getOnboardingStepTitle,
 	getOnboardingStepSubtitle,
 	TRIAL_POLL_INTERVAL_MS,
@@ -176,6 +178,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _minimizePollToken = 0;
 	private _minimizePollHandle: number | undefined;
 	private _resumeButton: HTMLButtonElement | undefined;
+	// Timer that reverts the finale "Copied" confirmation back to "Copy prompt".
+	private _finaleCopyResetHandle: number | undefined;
 
 	constructor(
 		@ILayoutService private readonly layoutService: ILayoutService,
@@ -192,6 +196,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IEditorService private readonly editorService: IEditorService,
+		@IClipboardService private readonly clipboardService: IClipboardService,
 	) {
 		super();
 
@@ -289,7 +294,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		}));
 		this.disposables.add(addDisposableListener(this.nextButton, EventType.CLICK, () => {
 			if (this._isLastStep()) {
-				this._logAction('complete');
+				// Finishing on the finale without running is the finale's skip; any other last step
+				// is a plain completion.
+				this._logAction(this.steps[this.currentStepIndex] === OnboardingStepId.Finale ? 'first_run_skipped' : 'complete');
 				this._dismiss('complete');
 				return;
 			}
@@ -578,6 +585,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			case OnboardingStepId.Model:
 				this._renderModelStep(this.contentEl);
 				break;
+			case OnboardingStepId.Finale:
+				this._renderFinaleStep(this.contentEl);
+				break;
 		}
 
 		this.bodyEl?.setAttribute('aria-label', localize(
@@ -632,7 +642,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		const primary = 'onboarding-a-btn onboarding-a-btn-primary';
 		const secondary = 'onboarding-a-btn onboarding-a-btn-secondary';
 		if (this._isLastStep()) {
-			return { className: primary, label: localize('onboarding.done', "Done") };
+			// The finale's primary CTA is the in-content "Run" button, so the footer is the
+			// de-emphasized skip; any other last step keeps a primary "Done".
+			return stepId === OnboardingStepId.Finale
+				? { className: secondary, label: localize('onboarding.finale.later', "Maybe later") }
+				: { className: primary, label: localize('onboarding.done', "Done") };
 		}
 		switch (stepId) {
 			case OnboardingStepId.SignIn:
@@ -1478,8 +1492,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
 			this._logAction('model_skipped', OnboardingStepId.Model);
-			// Model is the final P1 step, so skipping still completes the wizard.
-			this._dismiss('complete');
+			// Model is no longer the last step — advance to the finale (the wizard's payoff).
+			this._nextStep();
 		}));
 
 		// Optional shortcut for users who already hold EPO/USPTO keys. Data keys are deliberately not
@@ -1529,6 +1543,89 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			return await this.commandService.executeCommand<boolean>('flowleap.checkModelConfigured') === true;
 		} catch {
 			return false;
+		}
+	}
+
+	// =====================================================================
+	// Step: Finale (run the first investigation — the wizard's payoff)
+	// =====================================================================
+
+	private _renderFinaleStep(container: HTMLElement): void {
+		const wrapper = append(container, $('.onboarding-a-finale'));
+		const prompt = roleToFirstInvestigation(this.selectedRole);
+
+		const promptLabel = append(wrapper, $('div.onboarding-a-finale-prompt-label'));
+		promptLabel.textContent = localize('onboarding.finale.promptLabel', "Your first investigation");
+
+		const promptBox = append(wrapper, $('.onboarding-a-finale-prompt'));
+		const icon = append(promptBox, $('span.onboarding-a-finale-prompt-icon'));
+		icon.setAttribute('aria-hidden', 'true');
+		icon.appendChild(renderIcon(Codicon.sparkle));
+		const promptText = append(promptBox, $('p.onboarding-a-finale-prompt-text'));
+		promptText.textContent = prompt;
+
+		const actions = append(wrapper, $('.onboarding-a-finale-actions'));
+		const copyBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-finale-copy')));
+		copyBtn.type = 'button';
+		copyBtn.textContent = localize('onboarding.finale.copy', "Copy prompt");
+
+		// The "open chat" follow-up appears only after the prompt is copied — it's the next move.
+		const openRow = append(wrapper, $('.onboarding-a-finale-openrow'));
+		openRow.style.display = 'none';
+		const openHint = append(openRow, $('span.onboarding-a-finale-openhint'));
+		openHint.textContent = localize('onboarding.finale.openHint', "Paste it into chat and press send. ");
+		const openChatBtn = this._registerStepFocusable(append(openRow, $<HTMLButtonElement>('button.onboarding-a-finale-openchat')));
+		openChatBtn.type = 'button';
+		openChatBtn.textContent = localize('onboarding.finale.openChat', "Open chat");
+
+		this.stepDisposables.add(addDisposableListener(copyBtn, EventType.CLICK, () => {
+			void this._handleCopyPrompt(prompt, copyBtn, openRow);
+		}));
+		this.stepDisposables.add(addDisposableListener(openChatBtn, EventType.CLICK, () => this._handleOpenChat()));
+
+		// Cancel a pending "Copied" revert if the step is torn down mid-confirmation.
+		this.stepDisposables.add({ dispose: () => this._clearFinaleCopyReset() });
+	}
+
+	/** Copy the prompt to the clipboard and briefly confirm; then surface the "open chat" follow-up. */
+	private async _handleCopyPrompt(prompt: string, copyBtn: HTMLButtonElement, openRow: HTMLElement): Promise<void> {
+		try {
+			await this.clipboardService.writeText(prompt);
+		} catch {
+			// Clipboard unavailable — leave the button as-is; the prompt is still readable above.
+			return;
+		}
+		// Keep the funnel event name for continuity even though the user runs it themselves.
+		this._logAction('first_run_started', OnboardingStepId.Finale, this.selectedRole);
+		this.accessibilityService.alert(localize('onboarding.finale.copied.alert', "Prompt copied to clipboard."));
+
+		copyBtn.textContent = localize('onboarding.finale.copied', "Copied to clipboard");
+		copyBtn.classList.add('copied');
+		openRow.style.display = '';
+
+		this._clearFinaleCopyReset();
+		this._finaleCopyResetHandle = getActiveWindow().setTimeout(() => {
+			this._finaleCopyResetHandle = undefined;
+			if (copyBtn.isConnected) {
+				copyBtn.textContent = localize('onboarding.finale.copy', "Copy prompt");
+				copyBtn.classList.remove('copied');
+			}
+		}, 2000);
+	}
+
+	/** Complete the wizard and reveal chat (no query injected) so the user can paste and send. */
+	private _handleOpenChat(): void {
+		this._clearFinaleCopyReset();
+		Event.once(this.onDidComplete)(() => {
+			void this.commandService.executeCommand('workbench.action.chat.open');
+		});
+		this._dismiss('complete');
+	}
+
+	private _clearFinaleCopyReset(): void {
+		if (this._finaleCopyResetHandle !== undefined) {
+			getActiveWindow().clearTimeout(this._finaleCopyResetHandle);
+			this._finaleCopyResetHandle = undefined;
 		}
 	}
 
@@ -1652,6 +1749,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 	private _removeFromDOM(): void {
 		this._stopTrialPoll();
+		this._clearFinaleCopyReset();
 		// Tear down any minimize state (listeners, poll, resume button) — covers a dismiss while minimized.
 		this._teardownMinimize();
 		// Invalidate any in-flight subscription check so a late result can't act on a torn-down modal.

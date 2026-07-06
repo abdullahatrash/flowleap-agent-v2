@@ -18,6 +18,7 @@ export const enum OnboardingStepId {
 	AgentSessions = 'onboarding.agentSessions',
 	Trial = 'onboarding.trial',
 	Model = 'onboarding.model',
+	Finale = 'onboarding.finale',
 }
 
 /**
@@ -39,6 +40,8 @@ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
 			return localize('onboarding.step.trial', "Start Your Trial");
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model', "Connect Your AI Model");
+		case OnboardingStepId.Finale:
+			return localize('onboarding.step.finale', "Run Your First Investigation");
 	}
 }
 
@@ -61,6 +64,8 @@ export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
 			return localize('onboarding.step.trial.subtitle', "Explore the full patent backend on our credentials \u2014 no key setup required.");
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model.subtitle', "FlowLeap runs on your own AI model. One key connects it.");
+		case OnboardingStepId.Finale:
+			return localize('onboarding.step.finale.subtitle', "Copy the prompt, paste it into chat, and press send — you'll see FlowLeap work with real sources.");
 	}
 }
 
@@ -78,6 +83,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepId[] = [
 	OnboardingStepId.SignIn,
 	OnboardingStepId.Trial,
 	OnboardingStepId.Model,
+	OnboardingStepId.Finale,
 ];
 
 /**
@@ -150,6 +156,27 @@ export const ONBOARDING_ROLE_OPTIONS: readonly IOnboardingRoleOption[] = [
 		icon: 'rocket',
 	},
 ];
+
+/**
+ * Map the stored persona to a role-tailored first-investigation prompt shown on the finale step.
+ * The user copies it into chat themselves (issue #79 finale — no auto-run). Copy is patent-domain
+ * and readable; an unknown/absent role falls back to a generic prior-art search. Pure so the mapping
+ * is unit-tested directly.
+ */
+export function roleToFirstInvestigation(role: OnboardingRole | undefined): string {
+	switch (role) {
+		case OnboardingRole.PatentAttorney:
+			return localize('onboarding.finale.prompt.attorney', "Analyze the claims of US 7,479,949 (Apple's multitouch patent): list the independent claims, break claim 1 into its limitations, and find the closest prior art — flag any X-category references that could challenge novelty.");
+		case OnboardingRole.IpAnalyst:
+			return localize('onboarding.finale.prompt.analyst', "Sketch the patent landscape for solid-state battery electrolytes: surface the leading assignees, how filings have trended over the last five years, and where the whitespace is.");
+		case OnboardingRole.Researcher:
+			return localize('onboarding.finale.prompt.researcher', "Run a prior-art sweep on CRISPR base editing across both patents and academic literature, and summarize the most relevant disclosures with citations.");
+		case OnboardingRole.Founder:
+			return localize('onboarding.finale.prompt.founder', "Run a quick freedom-to-operate sketch for a smart-ring sleep tracker: find the patents most likely to read on it and flag the biggest infringement risks.");
+		default:
+			return localize('onboarding.finale.prompt.generic', "Search for prior art on an invention you care about — describe it in a sentence or two and I'll find the closest patents and publications, with citations.");
+	}
+}
 
 /**
  * Tri-state FlowLeap subscription access, mirroring the extension's `getSubscriptionAccess()`

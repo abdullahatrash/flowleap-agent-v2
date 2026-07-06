@@ -10,26 +10,39 @@ import {
 	parseGheInstanceInput,
 	computeVisibleSteps,
 	decideTrialPoll,
+	roleToFirstInvestigation,
 	ONBOARDING_STEPS,
 	OnboardingStepId,
+	OnboardingRole,
 	TRIAL_POLL_TIMEOUT_MS,
 } from '../../common/onboardingTypes.js';
 
 suite('onboarding step ordering + visibility', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('canonical order is Role → See it work → Sign in → Trial → Model', () => {
+	test('canonical order is Role → See it work → Sign in → Trial → Model → Finale', () => {
 		assert.deepStrictEqual([...ONBOARDING_STEPS], [
 			OnboardingStepId.Role,
 			OnboardingStepId.AgentSessions,
 			OnboardingStepId.SignIn,
 			OnboardingStepId.Trial,
 			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
 		]);
 	});
 
 	test('the deleted Personalize step is not in the flow', () => {
 		assert.ok(!ONBOARDING_STEPS.includes(OnboardingStepId.Personalize));
+	});
+
+	test('the Finale step is the last step and always visible', () => {
+		assert.strictEqual(ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1], OnboardingStepId.Finale);
+		for (const signedIn of [true, false]) {
+			for (const hasAccess of [true, false]) {
+				const visible = computeVisibleSteps({ signedIn, hasAccess });
+				assert.strictEqual(visible[visible.length - 1], OnboardingStepId.Finale, `signedIn=${signedIn} hasAccess=${hasAccess}`);
+			}
+		}
 	});
 
 	test('signed-in users without access see the Trial step', () => {
@@ -39,6 +52,7 @@ suite('onboarding step ordering + visibility', () => {
 			OnboardingStepId.SignIn,
 			OnboardingStepId.Trial,
 			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
 		]);
 	});
 
@@ -48,6 +62,7 @@ suite('onboarding step ordering + visibility', () => {
 			OnboardingStepId.AgentSessions,
 			OnboardingStepId.SignIn,
 			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
 		];
 		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: false }), withoutTrial);
 		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: true }), withoutTrial);
@@ -59,6 +74,7 @@ suite('onboarding step ordering + visibility', () => {
 			OnboardingStepId.AgentSessions,
 			OnboardingStepId.SignIn,
 			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
 		]);
 	});
 
@@ -80,6 +96,26 @@ suite('onboarding step ordering + visibility', () => {
 				assert.deepStrictEqual(canonicalIndices, sorted);
 			}
 		}
+	});
+});
+
+suite('roleToFirstInvestigation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('every role (and no role) maps to a non-empty prompt', () => {
+		for (const role of [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder, undefined]) {
+			assert.ok(roleToFirstInvestigation(role).trim().length > 0, `role=${role}`);
+		}
+	});
+
+	test('distinct roles get distinct prompts', () => {
+		const prompts = [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder]
+			.map(r => roleToFirstInvestigation(r));
+		assert.strictEqual(new Set(prompts).size, prompts.length);
+	});
+
+	test('an unknown role falls back to the generic prompt', () => {
+		assert.strictEqual(roleToFirstInvestigation(undefined), roleToFirstInvestigation('nonsense' as unknown as OnboardingRole));
 	});
 });
 
