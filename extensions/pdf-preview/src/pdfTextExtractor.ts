@@ -63,7 +63,8 @@ async function getPdfJs(extensionPath: string): Promise<PDFJSLib> {
 		const workerPath = vscode.Uri.joinPath(vscode.Uri.file(extensionPath), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs').fsPath;
 
 		try {
-			// Dynamic import of ESM module
+			// pdfjs-dist ships ESM-only, so a static import can't work from the CJS extension host
+			// eslint-disable-next-line no-restricted-syntax
 			const pdfjs = await import(/* webpackIgnore: true */ pdfjsPath);
 			pdfjsLib = pdfjs as unknown as PDFJSLib;
 
@@ -181,13 +182,21 @@ export class PdfTextExtractor {
 
 		console.log(`[PDF Preview] Starting OCR for: ${filename}`);
 
+		// /v1/ocr sits behind the FlowLeap auth + subscription guard chain, so the
+		// request must carry the FlowLeap session token like every other patent-data call.
+		const session = await vscode.authentication.getSession('flowleap', [], { createIfNone: false });
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+		};
+		if (session) {
+			headers['Authorization'] = `Bearer ${session.accessToken}`;
+		}
+
 		try {
 			// Call backend OCR endpoint
 			const response = await fetch(`${backendUrl}/v1/ocr`, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
+				headers,
 				body: JSON.stringify({
 					file: base64Data,
 					filename: filename,
@@ -195,6 +204,14 @@ export class PdfTextExtractor {
 			});
 
 			if (!response.ok) {
+				if (response.status === 401) {
+					throw new Error(session
+						? 'Your FlowLeap session has expired. Please sign in again to use OCR.'
+						: 'OCR requires a FlowLeap account. Please sign in to FlowLeap and try again.');
+				}
+				if (response.status === 402) {
+					throw new Error('OCR requires an active FlowLeap subscription or trial.');
+				}
 				const errorText = await response.text();
 				throw new Error(`OCR request failed: ${response.status} ${errorText}`);
 			}
