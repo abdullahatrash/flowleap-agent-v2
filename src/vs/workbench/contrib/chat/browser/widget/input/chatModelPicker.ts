@@ -87,7 +87,7 @@ const ModelPickerSection = {
 const RESTRICTED_MODE_TRUST_ACTION_ID = 'restrictedModeTrust';
 
 /**
- * Id of the synthetic "Sign in to use Copilot..." entry shown when Chat still
+ * Id of the synthetic "Sign in to use FlowLeap..." entry shown when Chat still
  * requires sign-in / setup. Like the Trust entry it is a command, so it gets a
  * plain `menuitem` role.
  */
@@ -476,7 +476,7 @@ function createManageModelsAction(commandService: ICommandService): IActionWidge
  * Unavailable in Restricted Mode" header and a "Trust Workspace..." action
  * (invoking `onRequestTrust`) replace all of the above. Likewise, when
  * `setupRequired` is set (trusted, but Chat still needs sign-in / setup), a
- * "Sign in to use Copilot" header and a Sign In action (invoking
+ * "Sign in to use FlowLeap" header and a Sign In action (invoking
  * `onRequestSetup`) replace all of the above. `restrictedMode` takes precedence.
  */
 export function buildModelPickerItems(
@@ -543,7 +543,7 @@ export function buildModelPickerItems(
 		// entries can make `models` non-empty.
 		items.push({
 			kind: ActionListItemKind.Header,
-			label: localize('chat.modelPicker.setupRequired', "Sign in to use Copilot"),
+			label: localize('chat.modelPicker.setupRequired', "Sign in to use FlowLeap"),
 		});
 		items.push({
 			item: {
@@ -551,12 +551,12 @@ export function buildModelPickerItems(
 				enabled: !!onRequestSetup,
 				checked: false,
 				class: undefined,
-				tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to GitHub Copilot to choose a model."),
-				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
+				tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to FlowLeap to choose a model."),
+				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use FlowLeap..."),
 				run: () => onRequestSetup?.()
 			},
 			kind: ActionListItemKind.Action,
-			label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
+			label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use FlowLeap..."),
 			group: { title: '', icon: ThemeIcon.fromId(Codicon.signIn.id) },
 			disabled: !onRequestSetup,
 			hideIcon: false,
@@ -578,7 +578,7 @@ export function buildModelPickerItems(
 			let hover: MarkdownString | undefined;
 			if (canUpgrade) {
 				hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
-				hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+				hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
 			}
 			items.push({
 				item: {
@@ -992,9 +992,9 @@ function createUnavailableModelItem(
 	if (reason === 'upgrade') {
 		hoverContent = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
 		if (chatEntitlementService.entitlement === ChatEntitlement.Pro) {
-			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHoverProPlus', "[Upgrade to GitHub Copilot Pro+](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHoverProPlus', "[Upgrade to FlowLeap Pro+](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
 		} else {
-			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+			hoverContent.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
 		}
 	} else if (reason === 'update') {
 		hoverContent = getUpdateHoverContent(updateStateType);
@@ -1553,7 +1553,7 @@ export class ModelPickerWidget extends Disposable {
 		this._domNode.ariaLabel = restrictedMode
 			? localize('chat.modelPicker.ariaLabelRestricted', "Pick Model, models are unavailable in Restricted Mode")
 			: setupRequired
-				? localize('chat.modelPicker.ariaLabelSetupRequired', "Pick Model, sign in to use Copilot")
+				? localize('chat.modelPicker.ariaLabelSetupRequired', "Pick Model, sign in to use FlowLeap")
 				: localize('chat.modelPicker.ariaLabel', "Pick Model, {0}", fullLabel);
 	}
 

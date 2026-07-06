@@ -316,7 +316,7 @@ export const platformSessionSchema = createSchema({
 			localize('agentHost.sessionConfig.autoApprove.bypass', "Bypass Approvals"),
 		],
 		enumDescriptions: [
-			localize('agentHost.sessionConfig.autoApprove.defaultDescription', "Copilot uses your configured settings"),
+			localize('agentHost.sessionConfig.autoApprove.defaultDescription', "FlowLeap uses your configured settings"),
 			localize('agentHost.sessionConfig.autoApprove.bypassDescription', "All tool calls are auto-approved"),
 		],
 		default: 'default',
@@ -639,7 +639,7 @@ export const platformRootSchema = createSchema({
 	[AgentHostSessionSyncEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.sessionSyncEnabled.title', "Session Sync"),
-		description: localize('agentHost.config.sessionSyncEnabled.description', "Whether remote session sync is enabled for the copilot-sdk CLI."),
+		description: localize('agentHost.config.sessionSyncEnabled.description', "Whether remote session sync is enabled for the agent SDK CLI."),
 		default: false,
 	}),
 	[AgentHostCodexEnabledConfigKey]: schemaProperty<boolean>({

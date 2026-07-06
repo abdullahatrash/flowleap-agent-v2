@@ -42,7 +42,7 @@ configurationRegistry.registerConfiguration({
 		},
 		'chat.agents.copilotCli.hideExtensionHost': {
 			type: 'boolean',
-			description: nls.localize('chat.agents.copilotCli.hideExtensionHost', "When enabled, hides the Extension Host Copilot CLI entry from the Agents window picker."),
+			description: nls.localize('chat.agents.copilotCli.hideExtensionHost', "When enabled, hides the Extension Host CLI Agent entry from the Agents window picker."),
 			// FlowLeap: Copilot CLI needs Copilot sign-in, which this product does not support.
 			default: true,
 			tags: ['experimental'],
@@ -53,8 +53,8 @@ configurationRegistry.registerConfiguration({
 			enum: ['local', 'copilotEh', 'copilotAh'],
 			enumDescriptions: [
 				nls.localize('chat.editor.defaultProvider.local', "Use the built-in VS Code local chat harness"),
-				nls.localize('chat.editor.defaultProvider.copilotEh', "Use the Extension Host Copilot CLI"),
-				nls.localize('chat.editor.defaultProvider.copilotAh', "Use the Agent Host Copilot CLI"),
+				nls.localize('chat.editor.defaultProvider.copilotEh', "Use the Extension Host CLI Agent"),
+				nls.localize('chat.editor.defaultProvider.copilotAh', "Use the Agent Host CLI Agent"),
 			],
 			description: nls.localize('chat.editor.defaultProvider', "Controls which provider is used as the default for new editor chat sessions."),
 			default: 'local',
@@ -70,7 +70,7 @@ configurationRegistry.registerConfiguration({
 		},
 		'chat.editor.copilotCli.hideExtensionHost': {
 			type: 'boolean',
-			description: nls.localize('chat.editor.copilotCli.hideExtensionHost', "When enabled, hides the Extension Host Copilot CLI entry from the editor window chat picker."),
+			description: nls.localize('chat.editor.copilotCli.hideExtensionHost', "When enabled, hides the Extension Host CLI Agent entry from the editor window chat picker."),
 			// FlowLeap: Copilot CLI needs Copilot sign-in, which this product does not support.
 			default: true,
 			tags: ['experimental'],

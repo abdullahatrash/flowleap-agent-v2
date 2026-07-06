@@ -135,7 +135,7 @@ suite('ChatQuotaExceededPart', () => {
 			assert.strictEqual(button.textContent, 'Manage Budget');
 		});
 
-		test('shows "Upgrade to GitHub Copilot Pro" for Free user', () => {
+		test('shows "Upgrade to FlowLeap Pro" for Free user', () => {
 			const widget = createWidget(ChatEntitlement.Free, {
 				message: 'Quota exceeded',
 				isQuotaExceeded: true,
@@ -143,7 +143,7 @@ suite('ChatQuotaExceededPart', () => {
 
 			const button = getPrimaryButton(widget);
 			assert.ok(button);
-			assert.strictEqual(button.textContent, 'Upgrade to GitHub Copilot Pro');
+			assert.strictEqual(button.textContent, 'Upgrade to FlowLeap Pro');
 		});
 
 		test('shows "Manage Budget" for Pro user with additional_spend_limit_reached', () => {
