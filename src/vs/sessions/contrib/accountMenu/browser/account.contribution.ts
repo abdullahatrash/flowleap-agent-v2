@@ -565,6 +565,12 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 	}
 
 	private shouldShowCopilotDashboardHover(): boolean {
+		// The dashboard renders the Copilot entitlement state, which can never
+		// resolve for a FlowLeap account (the auth service grants no GitHub
+		// sessions by design) — it would permanently show its signed-out CTA.
+		if (this.accountProviderId === 'flowleap') {
+			return false;
+		}
 		return !this.chatEntitlementService.sentiment.hidden && !!this.accountName;
 	}
 
