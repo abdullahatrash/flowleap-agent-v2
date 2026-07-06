@@ -22,7 +22,7 @@ Build a table of every concept with synonyms, technical equivalents, and related
 |---------|----------------------|
 | [Primary concept] | [synonym1], [synonym2], [technical term] |
 
-Use dictionaries, technical manuals, and `web_search` to discover terms. Aim for **at least 3 variations per concept**.
+Use dictionaries, technical manuals, and `web_search` (when available) to discover terms. Aim for **at least 3 variations per concept**.
 
 ### 1c. Classification Mapping
 Identify **2-3 CPC/IPC codes** covering the invention (see [references/cpc-classification.md](references/cpc-classification.md)). Note both broad parent codes and specific subgroups.
@@ -59,7 +59,7 @@ Start broad, narrow progressively. Document hit counts at every step:
 4. For endpoint details beyond search: `uspto_api_guide` action="list"
 
 ### 2d. Google Patents / WIPO / Asian Offices
-Use `web_search` for coverage the APIs miss:
+Use `web_search` for coverage the APIs miss (if `web_search` is not available on this model, skip this sweep, cover CN/JP/KR via patent-family expansion in 2f, and record the coverage gap in the audit trail):
 - Full text: `site:patents.google.com "[phrase]" "[kw2]"` (add CPC code to narrow)
 - PCT applications: `site:patentscope.wipo.int "[kw1]" "[kw2]"`
 - CN/JP/KR: `site:patents.google.com/patent/CN "[kw1]"` (likewise /JP, /KR) — see the patent-translation skill for the full multi-language strategy
@@ -67,7 +67,7 @@ Use `web_search` for coverage the APIs miss:
 ### 2e. Non-Patent Literature (NPL)
 Prior art is NOT limited to patents:
 1. `search_academic` for papers (Scholar, arXiv, PubMed)
-2. `web_search` targeted: `site:arxiv.org`, `site:pubmed.gov`, `site:ieee.org`
+2. `web_search` targeted: `site:arxiv.org`, `site:pubmed.gov`, `site:ieee.org` (if unavailable, `search_academic` in step 1 is the NPL source — note any remaining gap)
 3. Consider conference proceedings, standards, product manuals, YouTube demos
 
 ### 2f. Family & Citation Expansion

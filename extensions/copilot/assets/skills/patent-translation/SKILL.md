@@ -16,7 +16,9 @@ Strategy for finding patents in Chinese, Japanese, Korean, and other non-English
 
 ## Search Strategy by Jurisdiction
 
-All via `web_search` — Google Patents indexes machine-translated versions, so search in English:
+All via `web_search` — Google Patents indexes machine-translated versions, so search in English.
+
+**If `web_search` is not available** (it only exists on some models): skip the site-search patterns below and rely on Step 3 (patent-family expansion via EPO OPS — CN/JP/KR filings frequently have EP/WO/US family members with English text) plus `fetch_webpage` when you already have a concrete Google Patents URL for a known publication number. State explicitly in your report that direct CN/JP/KR full-coverage search was not possible — never present family-based coverage as a complete national-office search.
 
 - **Chinese (CN)**: `site:patents.google.com/patent/CN "keyword1" "keyword2"`
   - Companies to watch: Huawei, CATL, BYD, BOE, Xiaomi, SMIC, DJI

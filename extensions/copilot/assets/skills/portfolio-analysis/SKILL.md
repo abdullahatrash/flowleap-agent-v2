@@ -11,7 +11,7 @@ Map what a company actually holds, what it's worth strategically, and where the 
 ## Phase 1: Scope
 
 Ask (via the `vscode_askQuestions` tool):
-1. **Company** — and enumerate subsidiaries/acquisitions before searching (Google → also Alphabet, DeepMind, Waymo; check `web_search "[company] subsidiaries patents"`). Missing subsidiaries is the #1 way portfolio counts come out wrong.
+1. **Company** — and enumerate subsidiaries/acquisitions before searching (Google → also Alphabet, DeepMind, Waymo; check `web_search "[company] subsidiaries patents"`, or if `web_search` is not available on this model, ask the user for the subsidiary list and state which entities the counts cover). Missing subsidiaries is the #1 way portfolio counts come out wrong.
 2. **Purpose** — M&A diligence, competitive intel, licensing scan? (drives depth)
 3. **Technology focus** — whole portfolio or one domain?
 4. **Time window** — default: last 20 years (the maximum enforceable term)

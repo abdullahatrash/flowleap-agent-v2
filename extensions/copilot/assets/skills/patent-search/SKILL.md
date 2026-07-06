@@ -30,7 +30,7 @@ Before ANY search, determine jurisdiction. If not specified by the user, ask (vi
 - Date: `pd>=2024`
 - Combined: `pa=Tesla and ic=H01M and pd>=2023`
 
-Common CPC/IPC codes by domain: see the prior-art skill's `references/cpc-classification.md`, or `web_search "cpc scheme [term]"`.
+Common CPC/IPC codes by domain: see the prior-art skill's `references/cpc-classification.md`, or `web_search "cpc scheme [term]"` (when `web_search` is available).
 
 ## USPTO Search (US Patents)
 
