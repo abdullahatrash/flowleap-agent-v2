@@ -86,15 +86,18 @@ export const ONBOARDING_STEPS: readonly OnboardingStepId[] = [
 export interface OnboardingStepContext {
 	/** Whether a FlowLeap session currently exists. */
 	readonly signedIn: boolean;
+	/** Whether the user already has access-granting subscription (active or trialing). */
+	readonly hasAccess: boolean;
 }
 
 /**
  * The steps visible for a given runtime {@link OnboardingStepContext}, in {@link ONBOARDING_STEPS}
  * order. The trial step is value-framed on FlowLeap's own credentials, so it only makes sense once
- * signed in; a user who continues without signing in never sees it (issue #79 flow, step 4).
+ * signed in AND without access yet: a user who continues without signing in never sees it, and a
+ * user who already has an active/trialing subscription has nothing to start (issue #79 flow, step 4).
  */
 export function computeVisibleSteps(context: OnboardingStepContext): OnboardingStepId[] {
-	return ONBOARDING_STEPS.filter(stepId => stepId !== OnboardingStepId.Trial || context.signedIn);
+	return ONBOARDING_STEPS.filter(stepId => stepId !== OnboardingStepId.Trial || (context.signedIn && !context.hasAccess));
 }
 
 /**

@@ -32,8 +32,8 @@ suite('onboarding step ordering + visibility', () => {
 		assert.ok(!ONBOARDING_STEPS.includes(OnboardingStepId.Personalize));
 	});
 
-	test('signed-in users see the Trial step', () => {
-		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true }), [
+	test('signed-in users without access see the Trial step', () => {
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true, hasAccess: false }), [
 			OnboardingStepId.Role,
 			OnboardingStepId.AgentSessions,
 			OnboardingStepId.SignIn,
@@ -42,8 +42,19 @@ suite('onboarding step ordering + visibility', () => {
 		]);
 	});
 
-	test('signed-out users skip the Trial step', () => {
-		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false }), [
+	test('signed-out users skip the Trial step regardless of access', () => {
+		const withoutTrial = [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Model,
+		];
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: false }), withoutTrial);
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: true }), withoutTrial);
+	});
+
+	test('signed-in users who already have access skip the Trial step', () => {
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true, hasAccess: true }), [
 			OnboardingStepId.Role,
 			OnboardingStepId.AgentSessions,
 			OnboardingStepId.SignIn,
@@ -51,12 +62,23 @@ suite('onboarding step ordering + visibility', () => {
 		]);
 	});
 
+	test('the Trial step appears only for the signed-in-without-access quadrant', () => {
+		for (const signedIn of [true, false]) {
+			for (const hasAccess of [true, false]) {
+				const includesTrial = computeVisibleSteps({ signedIn, hasAccess }).includes(OnboardingStepId.Trial);
+				assert.strictEqual(includesTrial, signedIn && !hasAccess, `signedIn=${signedIn} hasAccess=${hasAccess}`);
+			}
+		}
+	});
+
 	test('visible steps preserve canonical relative order', () => {
 		for (const signedIn of [true, false]) {
-			const visible = computeVisibleSteps({ signedIn });
-			const canonicalIndices = visible.map(s => ONBOARDING_STEPS.indexOf(s));
-			const sorted = [...canonicalIndices].sort((a, b) => a - b);
-			assert.deepStrictEqual(canonicalIndices, sorted);
+			for (const hasAccess of [true, false]) {
+				const visible = computeVisibleSteps({ signedIn, hasAccess });
+				const canonicalIndices = visible.map(s => ONBOARDING_STEPS.indexOf(s));
+				const sorted = [...canonicalIndices].sort((a, b) => a - b);
+				assert.deepStrictEqual(canonicalIndices, sorted);
+			}
 		}
 	});
 });
