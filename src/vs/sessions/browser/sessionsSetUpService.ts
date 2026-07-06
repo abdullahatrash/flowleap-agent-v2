@@ -197,7 +197,7 @@ class SessionsSetUpWidget extends Disposable {
 			createWorkbenchDialogOptions({
 				type: 'none',
 				extraClasses: ['chat-setup-dialog', 'sessions-welcome-dialog', 'sessions-main-welcome-dialog'],
-				detail: localize('sessions.welcome.detail', "Your AI-powered coding experience where agents explore, build, and iterate with you."),
+				detail: localize('sessions.welcome.detail', "Your AI-powered patent workspace where agents research, analyze, and draft with you."),
 				icon: Codicon.agent,
 				alignment: DialogContentsAlignment.Vertical,
 				cancelId: 1,

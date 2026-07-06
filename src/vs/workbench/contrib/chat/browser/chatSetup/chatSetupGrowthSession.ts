@@ -130,7 +130,7 @@ export class GrowthSessionOpenerParticipant implements ISessionOpenerParticipant
 			previousRequests: [{
 				request: localize('growthSession.previousRequest', "Tell me about FlowLeap!"),
 				// allow-any-unicode-next-line
-				response: localize('growthSession.previousResponse', "Welcome to FlowLeap, your AI coding assistant! Here are some things you can try:\n\n- 🐛 *\"Help me debug this error\"* — paste an error message and get a fix\n- 🧪 *\"Write tests for my function\"* — select code and ask for unit tests\n- 💡 *\"Explain this code\"* — highlight something unfamiliar and ask what it does\n- 🚀 *\"Scaffold a REST API\"* — describe what you want and let Agent mode build it\n- 🎨 *\"Refactor this to be more readable\"* — select messy code and clean it up\n\nType anything below to get started!"),
+				response: localize('growthSession.previousResponse', "Welcome to FlowLeap, your AI patent assistant! Here are some things you can try:\n\n- 🔍 *\"Run a prior-art search for my invention\"* — describe the invention and get relevant references\n- 📋 *\"Assess the patentability of an idea\"* — get a novelty and non-obviousness read with citations\n- ⚖️ *\"Analyze this claim against a reference\"* — paste a claim and a document for an element-by-element comparison\n- 🗺️ *\"Map the patent landscape for a technology\"* — see who is filing what in your field\n- ✍️ *\"Draft claims from my disclosure\"* — turn an invention disclosure into a first claim set\n\nType anything below to get started!"),
 			}],
 		};
 		await commandService.executeCommand(CHAT_OPEN_ACTION_ID, opts);
