@@ -91,8 +91,25 @@ async function writeProjectConfig(projectPath: string, config: Record<string, un
 	await vscode.workspace.fs.writeFile(configUri, Buffer.from(JSON.stringify(config, null, '\t')));
 }
 
+/**
+ * globalState key carrying a first-run investigation prompt across the `vscode.openFolder` reload
+ * that `flowleap.startFirstInvestigation` triggers (onboarding wizard finale, issue #79 P2a). Set
+ * before opening the prepared workspace; consumed once on the next activation to pre-fill chat.
+ */
+const PENDING_FIRST_INVESTIGATION_KEY = 'flowleap.pendingFirstInvestigation';
+
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('FlowLeap extension activated');
+
+	// If a first-run investigation was queued before the window reloaded into its prepared workspace,
+	// pre-fill the chat with it now — pre-filled, not submitted, so the user presses send.
+	const pendingInvestigation = context.globalState.get<string>(PENDING_FIRST_INVESTIGATION_KEY);
+	if (pendingInvestigation) {
+		// Clear first so a failed open can't loop on every future activation.
+		void context.globalState.update(PENDING_FIRST_INVESTIGATION_KEY, undefined);
+		void vscode.commands.executeCommand('workbench.action.chat.open', { query: pendingInvestigation, isPartialQuery: true })
+			.then(undefined, (err: unknown) => console.warn('FlowLeap: could not pre-fill first investigation', err));
+	}
 
 	// NOTE (ADR 0002): The UI shell does NOT register an authentication provider or run its
 	// own OAuth flow. The single Clerk-backed `flowleap` provider lives in the copilot
@@ -238,6 +255,79 @@ export async function activate(context: vscode.ExtensionContext) {
 				await vscode.commands.executeCommand('vscode.openFolder', projectUri);
 			} catch (error) {
 				vscode.window.showErrorMessage(`Failed to create project: ${error}`);
+			}
+		})
+	);
+
+	// Start First Investigation — the onboarding wizard finale (issue #79 P2a). Prepares a workspace
+	// non-interactively and pre-fills chat with a role-tailored prompt. Because opening the folder
+	// reloads the window, the prompt is stashed and pre-filled on the next activation (see above).
+	context.subscriptions.push(
+		vscode.commands.registerCommand('flowleap.startFirstInvestigation', async (args?: { prompt?: string; projectType?: ProjectType }) => {
+			const projectType: ProjectType = (args?.projectType === 'patent-analysis' || args?.projectType === 'prior-art-search' || args?.projectType === 'custom')
+				? args.projectType
+				: 'prior-art-search';
+			const prompt = typeof args?.prompt === 'string' ? args.prompt.trim() : '';
+
+			const projectName = 'My First Investigation';
+			const projectsDir = getProjectsDirectory();
+			const projectPath = path.join(projectsDir, projectName);
+			const projectUri = vscode.Uri.file(projectPath);
+
+			// Already inside the prepared workspace (e.g. re-running the wizard): just pre-fill chat.
+			const alreadyOpen = (vscode.workspace.workspaceFolders ?? []).some(f => f.uri.fsPath === projectPath);
+			if (alreadyOpen) {
+				if (prompt) {
+					void vscode.commands.executeCommand('workbench.action.chat.open', { query: prompt, isPartialQuery: true });
+				}
+				return;
+			}
+
+			try {
+				await vscode.workspace.fs.createDirectory(vscode.Uri.file(projectsDir));
+				await vscode.workspace.fs.createDirectory(projectUri);
+				await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.join(projectPath, '.flowleap')));
+				await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.join(projectPath, 'prior-art')));
+				await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.join(projectPath, 'analysis')));
+				await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.join(projectPath, 'outputs')));
+
+				const config = {
+					name: projectName,
+					type: projectType,
+					status: 'draft' as ProjectStatus,
+					tags: [],
+					archived: false,
+					created: new Date().toISOString()
+				};
+				await writeProjectConfig(projectPath, config);
+				await vscode.workspace.fs.writeFile(
+					vscode.Uri.file(path.join(projectPath, 'notes.md')),
+					Buffer.from(getNotesTemplate(projectName, projectType))
+				);
+
+				const storedProjects = getStoredProjects(context);
+				if (!storedProjects.some(p => p.path === projectPath)) {
+					storedProjects.push({
+						id: projectPath,
+						name: projectName,
+						path: projectPath,
+						type: projectType,
+						status: 'draft',
+						tags: [],
+						archived: false,
+						lastAccessed: new Date(),
+						created: config.created
+					});
+					await saveStoredProjects(context, storedProjects);
+				}
+
+				// Stash the prompt so it survives the reload, then open the prepared workspace.
+				if (prompt) {
+					await context.globalState.update(PENDING_FIRST_INVESTIGATION_KEY, prompt);
+				}
+				await vscode.commands.executeCommand('vscode.openFolder', projectUri);
+			} catch (error) {
+				vscode.window.showErrorMessage(`Failed to start your first investigation: ${error}`);
 			}
 		})
 	);
