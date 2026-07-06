@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { IEnvService } from '../../../platform/env/common/envService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService, Response } from '../../../platform/networking/common/fetcherService';
@@ -77,6 +78,22 @@ export class DataKeyInvalidError extends PatentBackendError {
 }
 
 /**
+ * Thrown when the backend answers `400 { error: { code: 'data_keys_required', provider? } }` — after
+ * the trial ends, patent-data calls need the USER's own EPO OPS / USPTO key and none was forwarded
+ * (ADR 0008 / flowleap-backend#76). Distinct from {@link DataKeyInvalidError} (a *rejected* key): here
+ * no key was sent at all. The recovery action is "add your patent-data keys". `provider` names the
+ * missing provider when the backend identifies one; otherwise the prompt is generic. Extends
+ * {@link PatentBackendError} so tool catch paths keep working.
+ */
+export class DataKeysRequiredError extends PatentBackendError {
+	readonly code = 'data_keys_required';
+	constructor(message: string, readonly provider: 'epo' | 'uspto' | undefined) {
+		super(400, message);
+		this.name = 'DataKeysRequiredError';
+	}
+}
+
+/**
  * Model-facing recovery hint for an auth/setup failure from the backend. Tools append this to
  * their error result so the assistant can tell the user the concrete next step in-chat — the
  * actionable notification the seam fires is easy to miss mid-conversation. Empty for every
@@ -92,6 +109,10 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	if (error instanceof DataKeyInvalidError) {
 		const providerName = error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP';
 		return ` The user's ${providerName} data key was rejected by the provider. Ask the user to run the "FlowLeap: Patent Data Keys" command to update it, then retry this tool.`;
+	}
+	if (error instanceof DataKeysRequiredError) {
+		const providerClause = error.provider ? `${error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP'} ` : 'EPO OPS or USPTO ';
+		return ` Patent data now requires the user's own ${providerClause}key (a notification with an "Add Patent Data Keys" button was shown). Ask the user to run the "FlowLeap: Patent Data Keys" command to add it, then retry this tool.`;
 	}
 	return '';
 }
@@ -157,6 +178,11 @@ interface DataKeyInvalidInfo {
 	readonly provider: 'epo' | 'uspto';
 }
 
+interface DataKeysRequiredInfo {
+	readonly message: string;
+	readonly provider: 'epo' | 'uspto' | undefined;
+}
+
 /**
  * DI implementation of {@link IPatentBackendClient}.
  *
@@ -169,6 +195,14 @@ interface DataKeyInvalidInfo {
  */
 export class PatentBackendClient implements IPatentBackendClient {
 	readonly _serviceBrand: undefined;
+
+	/**
+	 * Providers already prompted for `data_keys_required` this session (keyed by provider, or `*`
+	 * when none was named). Patent tools can fail in a burst — one gated call per tool — so the
+	 * recovery notification fires at most once per provider per session while the thrown error still
+	 * reaches every tool. Mirrors the intent of a debounce; there is no shared throttle helper to reuse.
+	 */
+	private readonly _dataKeysRequiredPrompted = new Set<string>();
 
 	constructor(
 		@ILogService private readonly _logService: ILogService,
@@ -273,6 +307,13 @@ export class PatentBackendClient implements IPatentBackendClient {
 						this._fireDataKeyInvalidUx(info);
 						throw new DataKeyInvalidError(info.message, info.provider);
 					}
+					// Post-trial: patent data now runs on the user's own keys and none was forwarded
+					// (`data_keys_required`, ADR 0008). Prompt the keys UI once per provider per session.
+					const required = parseDataKeysRequired(text);
+					if (required) {
+						this._fireDataKeysRequiredUx(required);
+						throw new DataKeysRequiredError(required.message, required.provider);
+					}
 				}
 
 				// Centralized auth gate: a `401` means the Clerk token is missing, expired, or invalid.
@@ -339,6 +380,30 @@ export class PatentBackendClient implements IPatentBackendClient {
 		}
 	}
 
+	/**
+	 * Show the "add your patent-data keys" prompt for a `data_keys_required` gate, opening the keys
+	 * UI (focused on the named provider when known) when accepted. Debounced to once per provider per
+	 * session and fire-and-forget, so it never masks the {@link DataKeysRequiredError}.
+	 */
+	private _fireDataKeysRequiredUx(info: DataKeysRequiredInfo): void {
+		const guardKey = info.provider ?? '*';
+		if (this._dataKeysRequiredPrompted.has(guardKey)) {
+			return;
+		}
+		this._dataKeysRequiredPrompted.add(guardKey);
+		this._promptDataKeysRequired(info).catch(err => this._logService.warn(`[PatentBackendClient] data-keys-required prompt failed: ${err}`));
+	}
+
+	private async _promptDataKeysRequired(info: DataKeysRequiredInfo): Promise<void> {
+		const addKeysAction = l10n.t('Add Patent Data Keys');
+		const choice = await this._notificationService.showWarningMessage(info.message, addKeysAction);
+		if (choice === addKeysAction) {
+			// Forward the provider so the keys UI focuses the missing section (the command ignores a
+			// non-'epo'/'uspto' arg, so an unknown provider harmlessly opens the keys view unfocused).
+			await vscode.commands.executeCommand('flowleap.patentDataKeys', info.provider);
+		}
+	}
+
 	private async _promptAuthRequired(info: AuthRequiredInfo): Promise<void> {
 		// A signed-out user did nothing wrong — invite with an info toast; reserve the warning
 		// severity for a session that was working and then expired.
@@ -369,6 +434,26 @@ function parseDataKeyInvalid(body: string): DataKeyInvalidInfo | undefined {
 			message: error.message || `${providerName} rejected your patent-data key. Update it to continue.`,
 			provider: error.provider,
 		};
+	} catch {
+		// Not JSON — let the caller fall back to generic error handling.
+		return undefined;
+	}
+}
+
+/** Parse a `400` body, returning data-keys-required info only when it matches the ADR 0008 contract. */
+function parseDataKeysRequired(body: string): DataKeysRequiredInfo | undefined {
+	try {
+		const parsed = JSON.parse(body) as { error?: { code?: string; message?: string; provider?: string } };
+		const error = parsed?.error;
+		if (error?.code !== 'data_keys_required') {
+			return undefined;
+		}
+		const provider = error.provider === 'epo' || error.provider === 'uspto' ? error.provider : undefined;
+		const providerName = provider === 'epo' ? 'EPO OPS' : provider === 'uspto' ? 'USPTO ODP' : undefined;
+		const fallback = providerName
+			? l10n.t('Patent data now runs on your own keys. Add your {0} key to continue.', providerName)
+			: l10n.t('Patent data now runs on your own keys. Add your EPO OPS or USPTO key to continue.');
+		return { message: error.message || fallback, provider };
 	} catch {
 		// Not JSON — let the caller fall back to generic error handling.
 		return undefined;

@@ -20,7 +20,7 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, DataKeyInvalidError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
+import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
 import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
@@ -33,6 +33,8 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 // Action labels the client surfaces — mirror the private consts in patentBackendClient.ts.
 const SIGN_IN_ACTION = 'Sign In';
 const START_TRIAL_ACTION = 'Start Free Trial';
+// Localized via l10n.t in the client; with no bundle configured l10n returns the source string.
+const ADD_KEYS_ACTION = 'Add Patent Data Keys';
 
 // The single seam the client now goes through to reach the network.
 type FetchImpl = (url: string, options: FetchOptions) => Promise<Response>;
@@ -476,6 +478,87 @@ describe('data-key gate (400 patent_provider_key_invalid)', () => {
 		expect(thrown).not.toBeInstanceOf(DataKeyInvalidError);
 		expect(notification.showWarningMessage).not.toHaveBeenCalled();
 	});
+
+	it('a patent_provider_key_invalid 400 stays DataKeyInvalidError, not DataKeysRequiredError', async () => {
+		const { client } = makeClient(async () => makeResponse(400, BODY));
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+
+		expect(thrown).toBeInstanceOf(DataKeyInvalidError);
+		expect(thrown).not.toBeInstanceOf(DataKeysRequiredError);
+	});
+});
+
+describe('data-keys-required gate (400 data_keys_required, ADR 0008)', () => {
+
+	const BODY = {
+		error: {
+			message: 'Your trial has ended. Add your EPO OPS key to continue using patent data.',
+			type: 'invalid_request_error',
+			code: 'data_keys_required',
+			provider: 'epo',
+		},
+	};
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-123'));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('throws a structured DataKeysRequiredError carrying status 400, code, and the named provider', async () => {
+		const { client } = makeClient(async () => makeResponse(400, BODY));
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).toBeInstanceOf(DataKeysRequiredError);
+		const err = thrown as DataKeysRequiredError;
+		expect(err.status).toBe(400);
+		expect(err.code).toBe('data_keys_required');
+		expect(err.provider).toBe('epo');
+	});
+
+	it('shows the "Add Patent Data Keys" prompt and opens the keys UI focused on the named provider when accepted', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(400, BODY));
+		notification.showWarningMessage.mockResolvedValueOnce(ADD_KEYS_ACTION as never);
+
+		await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await flush();
+
+		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.any(String), ADD_KEYS_ACTION);
+		expect(executeCommandMock).toHaveBeenCalledWith('flowleap.patentDataKeys', 'epo');
+	});
+
+	it('falls back to a localized message and opens the keys UI unfocused when no provider is named', async () => {
+		const noProviderBody = { error: { code: 'data_keys_required' } };
+		const { client, notification } = makeClient(async () => makeResponse(400, noProviderBody));
+		notification.showWarningMessage.mockResolvedValueOnce(ADD_KEYS_ACTION as never);
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await flush();
+
+		expect((thrown as DataKeysRequiredError).provider).toBeUndefined();
+		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining('your own keys'), ADD_KEYS_ACTION);
+		expect(executeCommandMock).toHaveBeenCalledWith('flowleap.patentDataKeys', undefined);
+	});
+
+	it('debounces: a burst of gated calls for the same provider prompts only once per session', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(400, BODY));
+
+		await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await captureThrow(() => client.get('/citation-search/EP-1-A1', makeToken()));
+		await flush();
+
+		expect(notification.showWarningMessage).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not let a throwing notification mask the DataKeysRequiredError', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(400, BODY));
+		notification.showWarningMessage.mockImplementationOnce(() => { throw new Error('boom'); });
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+
+		expect(thrown).toBeInstanceOf(DataKeysRequiredError);
+	});
 });
 
 describe('patentBackendErrorRecoveryHint', () => {
@@ -485,12 +568,21 @@ describe('patentBackendErrorRecoveryHint', () => {
 			patentBackendErrorRecoveryHint(new AuthRequiredError('nope')),
 			patentBackendErrorRecoveryHint(new SubscriptionRequiredError('nope', 'https://flowleap.co/pricing')),
 			patentBackendErrorRecoveryHint(new DataKeyInvalidError('nope', 'uspto')),
+			patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', 'epo')),
+			patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', undefined)),
 			patentBackendErrorRecoveryHint(new PatentBackendError(500, 'boom')),
 		]).toEqual([
 			expect.stringContaining('"FlowLeap: Sign In"'),
 			expect.stringContaining('set up'),
 			expect.stringContaining('"FlowLeap: Patent Data Keys"'),
+			expect.stringContaining('"FlowLeap: Patent Data Keys"'),
+			expect.stringContaining('"FlowLeap: Patent Data Keys"'),
 			'',
 		]);
+	});
+
+	it('the data-keys-required hint names the provider when known and is generic otherwise', () => {
+		expect(patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', 'epo'))).toContain('EPO OPS');
+		expect(patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', undefined))).toContain('EPO OPS or USPTO');
 	});
 });
