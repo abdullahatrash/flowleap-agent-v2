@@ -29,6 +29,7 @@ import { ITelemetryService } from '../../../../platform/telemetry/common/telemet
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import {
 	OnboardingStepId,
 	ONBOARDING_AI_PREFERENCE_OPTIONS,
@@ -80,6 +81,16 @@ const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
 
 /** Set form for {@link IContextKeyService.onDidChangeContext} `affectsSome` checks. */
 const FLOWLEAP_SIGNED_IN_CONTEXT_KEYS = new Set([FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
+
+/**
+ * Editor input typeId of the chat models management editor (owned by
+ * `contrib/chat/browser/chatManagement/chatManagementEditorInput`). Referenced by string so this
+ * contrib doesn't take a cross-contrib dependency just to detect the editor closing.
+ */
+const MODELS_MANAGEMENT_EDITOR_TYPE_ID = 'workbench.input.modelsManagement';
+
+/** How often the minimized wizard re-checks an action's completion condition (e.g. model added). */
+const MINIMIZE_POLL_INTERVAL_MS = 3_000;
 
 /**
  * Variation A — Classic Wizard Modal
@@ -155,6 +166,16 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _trialPollToken = 0;
 	// Fire `model_key_added` at most once per wizard run.
 	private _modelKeyAddedLogged = false;
+	// Minimize/restore: when a step action opens workbench UI (the models editor, the FlowLeap
+	// Settings sidebar) the full-screen overlay would sit on top of it, so we hide the overlay and
+	// restore when the opened surface is done. `_minimizeDisposables` holds the restore listeners;
+	// `_minimizePollToken` invalidates a stale completion poll; `_resumeButton` is the always-there
+	// escape hatch for surfaces with no close event.
+	private _minimized = false;
+	private readonly _minimizeDisposables = this._register(new DisposableStore());
+	private _minimizePollToken = 0;
+	private _minimizePollHandle: number | undefined;
+	private _resumeButton: HTMLButtonElement | undefined;
 
 	constructor(
 		@ILayoutService private readonly layoutService: ILayoutService,
@@ -170,6 +191,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super();
 
@@ -1321,6 +1343,103 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	}
 
 	// =====================================================================
+	// Minimize / restore (so workbench UI opened by a step is not trapped under the overlay)
+	// =====================================================================
+
+	/**
+	 * Hide the overlay so a workbench surface a step just opened (the models editor, the FlowLeap
+	 * Settings sidebar) is usable. This is NOT a dismiss — all state is kept and no complete/skip is
+	 * logged. Restores automatically when the models editor closes or (optionally) when
+	 * {@link options.restoreWhen} becomes true, and always via the resume affordance for surfaces
+	 * with no close event.
+	 */
+	private _minimize(options: { restoreWhen?: () => Promise<boolean> } = {}): void {
+		if (this._minimized || !this.overlay) {
+			return;
+		}
+		this._minimized = true;
+		this.overlay.classList.add('minimized');
+
+		// Auto-restore when the chat models-management editor we opened is closed.
+		this._minimizeDisposables.add(this.editorService.onDidCloseEditor(e => {
+			if (e.editor.typeId === MODELS_MANAGEMENT_EDITOR_TYPE_ID) {
+				this._restore();
+			}
+		}));
+
+		// Optionally restore early once the action completes (e.g. a model gets connected).
+		if (options.restoreWhen) {
+			this._startMinimizePoll(options.restoreWhen);
+		}
+
+		// Universal escape hatch: some surfaces (the sidebar view opened by `flowleap.patentDataKeys`)
+		// have no editor-close event, so always offer an explicit way back.
+		this._showResumeAffordance();
+	}
+
+	private _startMinimizePoll(restoreWhen: () => Promise<boolean>): void {
+		const token = ++this._minimizePollToken;
+		const win = getActiveWindow();
+		const tick = async () => {
+			this._minimizePollHandle = undefined;
+			let done = false;
+			try {
+				done = await restoreWhen();
+			} catch {
+				done = false;
+			}
+			if (token !== this._minimizePollToken || !this._minimized) {
+				return;
+			}
+			if (done) {
+				this._restore();
+			} else {
+				this._minimizePollHandle = win.setTimeout(tick, MINIMIZE_POLL_INTERVAL_MS);
+			}
+		};
+		this._minimizePollHandle = win.setTimeout(tick, MINIMIZE_POLL_INTERVAL_MS);
+	}
+
+	private _showResumeAffordance(): void {
+		const btn = append(this.layoutService.activeContainer, $<HTMLButtonElement>('button.onboarding-a-resume'));
+		btn.type = 'button';
+		const icon = append(btn, $('span.onboarding-a-resume-icon'));
+		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronUp));
+		icon.setAttribute('aria-hidden', 'true');
+		const label = append(btn, $('span'));
+		label.textContent = localize('onboarding.resume', "Resume FlowLeap setup");
+		btn.setAttribute('aria-label', label.textContent);
+		this._minimizeDisposables.add(addDisposableListener(btn, EventType.CLICK, () => this._restore()));
+		this._resumeButton = btn;
+	}
+
+	private _restore(): void {
+		if (!this._minimized) {
+			return;
+		}
+		this._teardownMinimize();
+		this.overlay?.classList.remove('minimized');
+		// Re-render so any state the opened surface changed (e.g. a model now connected) is fresh,
+		// then return focus into the modal.
+		this._rerenderCurrentStep();
+		this._focusCurrentStepElement();
+	}
+
+	private _teardownMinimize(): void {
+		this._minimized = false;
+		this._minimizePollToken++;
+		if (this._minimizePollHandle !== undefined) {
+			getActiveWindow().clearTimeout(this._minimizePollHandle);
+			this._minimizePollHandle = undefined;
+		}
+		this._minimizeDisposables.clear();
+		if (this._resumeButton) {
+			this._resumeButton.remove();
+			this._resumeButton = undefined;
+		}
+	}
+
+	// =====================================================================
 	// Step: Model (connect a BYO AI model)
 	// =====================================================================
 
@@ -1346,20 +1465,37 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		skip.type = 'button';
 		skip.textContent = localize('onboarding.model.later', "I'll do this later");
 
-		this.stepDisposables.add(addDisposableListener(connectBtn, EventType.CLICK, async () => {
+		this.stepDisposables.add(addDisposableListener(connectBtn, EventType.CLICK, () => {
 			this._logAction('model_connect', OnboardingStepId.Model);
-			try {
-				await this.commandService.executeCommand('workbench.action.chat.manage');
-			} catch {
-				// Manage UI unavailable — leave the status as-is; the user can retry.
-			}
-			await this._refreshModelState(status, connectBtn);
+			// The manage editor opens in the workbench, under the overlay — minimize so it's usable,
+			// and auto-restore when it closes or as soon as a model is connected.
+			this._minimize({ restoreWhen: () => this._isModelConfigured() });
+			this.commandService.executeCommand('workbench.action.chat.manage').then(undefined, () => {
+				// Manage UI unavailable — pop straight back so the user isn't stranded behind nothing.
+				this._restore();
+			});
 		}));
 
 		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
 			this._logAction('model_skipped', OnboardingStepId.Model);
 			// Model is the final P1 step, so skipping still completes the wizard.
 			this._dismiss('complete');
+		}));
+
+		// Optional shortcut for users who already hold EPO/USPTO keys. Data keys are deliberately not
+		// a wizard step (the trial covers patent data; EPO registration is slow — issue #79 / ADR 0008),
+		// so this is a muted footnote, not a CTA.
+		const dataKeysNote = append(wrapper, $('.onboarding-a-model-datakeys'));
+		dataKeysNote.append(localize('onboarding.model.dataKeys.prefix', "Optional — FlowLeap covers patent data during your trial. Already have EPO OPS or USPTO keys? "));
+		const dataKeysLink = this._registerStepFocusable(append(dataKeysNote, $<HTMLButtonElement>('button.onboarding-a-model-datakeys-link')));
+		dataKeysLink.type = 'button';
+		dataKeysLink.textContent = localize('onboarding.model.dataKeys.link', "Add them now");
+		this.stepDisposables.add(addDisposableListener(dataKeysLink, EventType.CLICK, () => {
+			this._logAction('data_keys_opened', OnboardingStepId.Model);
+			// The keys UI is the FlowLeap Settings sidebar — minimize so it's usable; it has no
+			// editor-close event, so the resume affordance is the way back (no completion poll).
+			this._minimize();
+			this.commandService.executeCommand('flowleap.patentDataKeys').then(undefined, () => this._restore());
 		}));
 
 		void this._refreshModelState(status, connectBtn);
@@ -1371,12 +1507,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	 * command seam. Fires `model_key_added` once when a model is present.
 	 */
 	private async _refreshModelState(status: HTMLElement, connectBtn: HTMLButtonElement): Promise<void> {
-		let configured = false;
-		try {
-			configured = await this.commandService.executeCommand<boolean>('flowleap.checkModelConfigured') === true;
-		} catch {
-			configured = false;
-		}
+		const configured = await this._isModelConfigured();
 		if (!status.isConnected) {
 			return;
 		}
@@ -1389,6 +1520,15 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			connectBtn.textContent = localize('onboarding.model.manage', "Manage models");
 		} else {
 			status.textContent = '';
+		}
+	}
+
+	/** Whether a BYO model is connected, via the extension bridge (same test as the Setup tree). */
+	private async _isModelConfigured(): Promise<boolean> {
+		try {
+			return await this.commandService.executeCommand<boolean>('flowleap.checkModelConfigured') === true;
+		} catch {
+			return false;
 		}
 	}
 
@@ -1512,6 +1652,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 	private _removeFromDOM(): void {
 		this._stopTrialPoll();
+		// Tear down any minimize state (listeners, poll, resume button) — covers a dismiss while minimized.
+		this._teardownMinimize();
 		// Invalidate any in-flight subscription check so a late result can't act on a torn-down modal.
 		this._accessCheckToken++;
 

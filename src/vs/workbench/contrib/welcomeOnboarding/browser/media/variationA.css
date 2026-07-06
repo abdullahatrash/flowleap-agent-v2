@@ -1318,6 +1318,77 @@
 	outline-offset: 2px;
 }
 
+/* Optional "already have data keys" footnote on the Model step */
+.onboarding-a-model-datakeys {
+	align-self: center;
+	max-width: 460px;
+	text-align: center;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-model-datakeys-link {
+	background: none;
+	border: none;
+	padding: 0;
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+}
+
+.onboarding-a-model-datakeys-link:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-model-datakeys-link:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+/* =========================================================================
+ * Minimize / restore — hide the overlay while a step's workbench UI is open
+ * ========================================================================= */
+.onboarding-a-overlay.minimized {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.onboarding-a-resume {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 10001;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+	border-radius: 999px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.onboarding-a-resume:hover {
+	background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.onboarding-a-resume:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.onboarding-a-resume-icon .codicon {
+	font-size: 14px;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.onboarding-a-overlay,
 	.onboarding-a-card,
