@@ -34,6 +34,7 @@ import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.j
 import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../../../platform/accessibility/common/accessibility.js';
 import { IsWindowsContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { viewFilterSubmenu } from '../../../browser/parts/views/viewFilter.js';
 import { ViewAction } from '../../../browser/parts/views/viewPane.js';
@@ -88,6 +89,7 @@ Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews
 	canMoveView: true,
 	canToggleVisibility: true,
 	ctorDescriptor: new SyncDescriptor(OutputViewPane),
+	when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: Hide when Patent IDE mode is ON
 	openCommandActionDescriptor: {
 		id: 'workbench.action.output.toggleOutput',
 		mnemonicTitle: nls.localize({ key: 'miToggleOutput', comment: ['&& denotes a mnemonic'] }, "&&Output"),

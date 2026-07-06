@@ -401,7 +401,7 @@ export class ViewsService extends Disposable implements IViewsService {
 	private registerOpenViewContainerAction(viewContainer: ViewContainer): IDisposable {
 		const disposables = new DisposableStore();
 		if (viewContainer.openCommandActionDescriptor) {
-			const { id, mnemonicTitle, keybindings, order } = viewContainer.openCommandActionDescriptor ?? { id: viewContainer.id };
+			const { id, mnemonicTitle, keybindings, order, when } = viewContainer.openCommandActionDescriptor ?? { id: viewContainer.id };
 			const title = viewContainer.openCommandActionDescriptor.title ?? viewContainer.title;
 			const that = this;
 			disposables.add(registerAction2(class OpenViewContainerAction extends Action2 {
@@ -460,7 +460,7 @@ export class ViewsService extends Disposable implements IViewsService {
 						title: mnemonicTitle,
 					},
 					group: defaultLocation === ViewContainerLocation.Sidebar ? '3_sidebar' : defaultLocation === ViewContainerLocation.AuxiliaryBar ? '4_auxbar' : '5_panel',
-					when: ContextKeyExpr.has(getEnabledViewContainerContextKey(viewContainer.id)),
+					when: ContextKeyExpr.and(ContextKeyExpr.has(getEnabledViewContainerContextKey(viewContainer.id)), when),
 					order: order ?? Number.MAX_VALUE
 				}));
 			}

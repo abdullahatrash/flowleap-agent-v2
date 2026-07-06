@@ -13,6 +13,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IssueReporterData, IWorkbenchIssueService } from './issue.js';
 
 const OpenIssueReporterActionId = 'workbench.action.openIssueReporter';
@@ -126,6 +127,7 @@ export class BaseIssueContribution extends Disposable implements IWorkbenchContr
 				id: OpenIssueReporterActionId,
 				title: localize({ key: 'miReportIssue', comment: ['&& denotes a mnemonic', 'Translate this to "Report Issue in English" in all languages please!'] }, "Report &&Issue")
 			},
+			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: Hide GitHub/Microsoft issue reporter when Patent IDE mode is ON
 			order: 3
 		}));
 	}
