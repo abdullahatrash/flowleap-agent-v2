@@ -78,6 +78,9 @@ type OnboardingActionEvent = {
  */
 const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
 
+/** Set form for {@link IContextKeyService.onDidChangeContext} `affectsSome` checks. */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEYS = new Set([FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
+
 /**
  * Variation A — Classic Wizard Modal
  *
@@ -125,7 +128,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _footerSignInBtn: HTMLButtonElement | undefined;
 
 	private currentStepIndex = 0;
-	private steps: OnboardingStepId[] = computeVisibleSteps({ signedIn: false });
+	private steps: OnboardingStepId[] = computeVisibleSteps({ signedIn: false, hasAccess: false });
 	private readonly disposables = this._register(new DisposableStore());
 	private readonly stepDisposables = this._register(new DisposableStore());
 	private previouslyFocusedElement: HTMLElement | undefined;
@@ -137,6 +140,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private selectedKeymapId = 'vscode';
 	private _detectedEditorIds: Set<string> | undefined;
 	private _userSignedIn = false;
+	// Whether the user already has an access-granting subscription (active/trialing). When true the
+	// Trial step is filtered out (nothing to start). Refreshed asynchronously via the subscription
+	// bridge; `_accessCheckToken` invalidates a stale in-flight check so it can't clobber newer state.
+	private _hasAccess = false;
+	private _accessCheckToken = 0;
 	private _signInInFlight = false;
 	private _signInError: string | undefined;
 	private selectedAiMode: AiCollaborationMode = AiCollaborationMode.Balanced;
@@ -194,6 +202,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		this._isShowing = true;
 		this._modelKeyAddedLogged = false;
+		this._hasAccess = false;
 		this._userSignedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
 		this._recomputeSteps();
 		this._logAction('wizard_started', this.steps[0]);
@@ -289,6 +298,21 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			}
 		}));
 
+		// The `flowleap.signedIn` context key is set asynchronously by the FlowLeap extension after
+		// activation + token restore, so the value read above can be a cold-launch false. Track later
+		// changes for the whole time the modal is up so the sign-in and Trial steps recover once it lands.
+		this.disposables.add(this.contextKeyService.onDidChangeContext(e => {
+			if (e.affectsSome(FLOWLEAP_SIGNED_IN_CONTEXT_KEYS)) {
+				this._syncSignedInFromContext();
+			}
+		}));
+
+		// If we already look signed in, confirm existing access so a returning user with an active
+		// trial never sees the Trial step (issue #79 state-awareness fix).
+		if (this._userSignedIn) {
+			void this._refreshAccess();
+		}
+
 		// Entrance animation
 		this.overlay.classList.add('entering');
 		getActiveWindow().requestAnimationFrame(() => {
@@ -347,9 +371,73 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	 */
 	private _recomputeSteps(): void {
 		const currentStepId = this.steps[this.currentStepIndex];
-		this.steps = computeVisibleSteps({ signedIn: this._userSignedIn });
+		this.steps = computeVisibleSteps({ signedIn: this._userSignedIn, hasAccess: this._hasAccess });
 		const newIndex = this.steps.indexOf(currentStepId);
 		this.currentStepIndex = newIndex >= 0 ? newIndex : Math.min(this.currentStepIndex, this.steps.length - 1);
+	}
+
+	/** Re-render the current step, progress dots, and footer in place (no focus steal). */
+	private _rerenderCurrentStep(): void {
+		if (!this._isShowing) {
+			return;
+		}
+		this._renderStep();
+		this._renderProgress();
+		this._updateButtonStates();
+	}
+
+	/**
+	 * React to the `flowleap.signedIn` context key changing while the modal is open (Bug 1). The key
+	 * arrives asynchronously, so we sync `_userSignedIn`, rebuild the flow, and re-render the current
+	 * step so the sign-in step reflects the session and the Trial step becomes reachable. A passive
+	 * flip does not auto-advance — that's reserved for the explicit sign-in click.
+	 */
+	private _syncSignedInFromContext(): void {
+		const signedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
+		if (signedIn === this._userSignedIn) {
+			return;
+		}
+		this._userSignedIn = signedIn;
+		if (!signedIn) {
+			// Session lost — access no longer holds and any in-flight check is now stale.
+			this._hasAccess = false;
+			this._accessCheckToken++;
+		}
+		this._recomputeSteps();
+		this._rerenderCurrentStep();
+		if (signedIn) {
+			void this._refreshAccess();
+		}
+	}
+
+	/**
+	 * Confirm whether the signed-in user already has access (active/trialing) and, if so, drop the
+	 * Trial step — there is nothing to start (Bug 2). Guarded by a token + `_isShowing` so a stale or
+	 * post-dismiss result can't clobber newer state. Only a confirmed `active` flips state; an
+	 * `inactive`/`unknown` result leaves the Trial step in place.
+	 */
+	private async _refreshAccess(): Promise<void> {
+		if (!this._userSignedIn || this._hasAccess) {
+			return;
+		}
+		const token = ++this._accessCheckToken;
+		let access: SubscriptionAccess = 'unknown';
+		try {
+			access = await this.commandService.executeCommand<SubscriptionAccess>('flowleap.checkSubscription') ?? 'unknown';
+		} catch {
+			access = 'unknown';
+		}
+		// Superseded, dismissed, signed out, or inconclusive — leave the Trial step alone.
+		if (token !== this._accessCheckToken || !this._isShowing || !this._userSignedIn || access !== 'active') {
+			return;
+		}
+		this._hasAccess = true;
+		// Don't yank the Trial step out from under a user looking at it — re-render it in place so the
+		// belt-and-braces confirmation shows; otherwise recompute so it's filtered out of the flow.
+		if (this.steps[this.currentStepIndex] !== OnboardingStepId.Trial) {
+			this._recomputeSteps();
+		}
+		this._rerenderCurrentStep();
 	}
 
 	/**
@@ -373,7 +461,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				break;
 			case OnboardingStepId.Trial:
 				this._stopTrialPoll();
-				this._logAction('trial_skipped');
+				// Advancing past an already-active trial is a plain Continue, not a skip.
+				if (!this._hasAccess) {
+					this._logAction('trial_skipped');
+				}
 				break;
 			default:
 				this._logAction('next');
@@ -512,7 +603,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	/**
 	 * The label + styling for the footer primary button on a given step. The last step always
 	 * completes ("Done"); the Sign In step degrades to a secondary "Continue without Signing In"
-	 * when signed out (ADR 0003); the Trial step's footer is the "Decide later" skip.
+	 * when signed out (ADR 0003); the Trial step's footer is the "Decide later" skip, unless the
+	 * trial is already active — then there's nothing to decide, so it's a primary "Continue".
 	 */
 	private _footerNextButtonState(stepId: OnboardingStepId): { className: string; label: string } {
 		const primary = 'onboarding-a-btn onboarding-a-btn-primary';
@@ -526,7 +618,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 					? { className: primary, label: localize('onboarding.continue', "Continue") }
 					: { className: secondary, label: localize('onboarding.continueWithoutSignIn', "Continue without Signing In") };
 			case OnboardingStepId.Trial:
-				return { className: secondary, label: localize('onboarding.trial.decideLater', "Decide later") };
+				return this._hasAccess
+					? { className: primary, label: localize('onboarding.continue', "Continue") }
+					: { className: secondary, label: localize('onboarding.trial.decideLater', "Decide later") };
 			default:
 				return { className: primary, label: localize('onboarding.next', "Continue") };
 		}
@@ -708,7 +802,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this._signInError = undefined;
 			this._logAction('signin_done', OnboardingStepId.SignIn);
 			// Signing in unlocks the value-framed Trial step; rebuild the flow so it appears next.
+			// Also confirm access, so a user who already had an active trial skips the Trial step.
 			this._recomputeSteps();
+			void this._refreshAccess();
 			if (this._footerSignInBtn) {
 				this._footerSignInBtn.style.display = 'none';
 			}
@@ -1110,6 +1206,17 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _renderTrialStep(container: HTMLElement): void {
 		const wrapper = append(container, $('.onboarding-a-trial'));
 
+		// The user already has access (e.g. an active trial) — show a confirmation, not the CTA.
+		if (this._hasAccess) {
+			const confirmation = append(wrapper, $('.onboarding-a-signin-confirmation'));
+			const icon = append(confirmation, $('span'));
+			icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.check));
+			icon.setAttribute('aria-hidden', 'true');
+			const text = append(confirmation, $('span'));
+			text.textContent = localize('onboarding.trial.active', "Your trial is active. Continue to the next step.");
+			return;
+		}
+
 		const points = append(wrapper, $('ul.onboarding-a-trial-points'));
 		for (const text of [
 			localize('onboarding.trial.point.data', "7 days of full patent data on FlowLeap's credentials — no key setup."),
@@ -1122,6 +1229,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			const label = append(li, $('span'));
 			label.textContent = text;
 		}
+
+		// Belt-and-braces: access may have appeared (e.g. an existing trial) since the last check —
+		// re-confirm on render; if active it flips `_hasAccess` and re-renders as the confirmation above.
+		void this._refreshAccess();
 
 		const actions = append(wrapper, $('.onboarding-a-trial-actions'));
 		const startBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-trial-start')));
@@ -1401,6 +1512,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 	private _removeFromDOM(): void {
 		this._stopTrialPoll();
+		// Invalidate any in-flight subscription check so a late result can't act on a torn-down modal.
+		this._accessCheckToken++;
 
 		if (this._signInInFlight) {
 			// Don't leave the provider's deep-link wait dangling when the modal is torn down mid-attempt.
