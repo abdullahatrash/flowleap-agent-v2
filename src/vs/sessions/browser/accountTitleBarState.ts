@@ -17,15 +17,28 @@ export interface IResolvedAccountInfo {
 }
 
 /**
- * Resolves the current account info by trying the default account service
- * first, then falling back to raw GitHub sessions from the authentication
- * service. The fallback covers the window between session creation and
- * {@link IDefaultAccountService} initialization.
+ * Resolves the current account info from FlowLeap sessions on the
+ * authentication service, falling back to the default account service
+ * (inert in this product — the auth service reports no GitHub sessions
+ * by design, so FlowLeap is the only provider that can resolve).
  */
 export async function resolveAccountInfo(
 	defaultAccountService: IDefaultAccountService,
 	authenticationService: IAuthenticationService,
 ): Promise<IResolvedAccountInfo | undefined> {
+	try {
+		const sessions = await authenticationService.getSessions('flowleap');
+		if (sessions.length > 0) {
+			return {
+				accountName: sessions[0].account.label,
+				accountProviderId: 'flowleap',
+				accountProviderLabel: 'FlowLeap',
+			};
+		}
+	} catch {
+		// Provider not available yet (extension still activating)
+	}
+
 	const account = await defaultAccountService.getDefaultAccount();
 	if (account) {
 		return {
@@ -33,19 +46,6 @@ export async function resolveAccountInfo(
 			accountProviderId: account.authenticationProvider.id,
 			accountProviderLabel: account.authenticationProvider.name,
 		};
-	}
-
-	try {
-		const sessions = await authenticationService.getSessions('github');
-		if (sessions.length > 0) {
-			return {
-				accountName: sessions[0].account.label,
-				accountProviderId: 'github',
-				accountProviderLabel: 'GitHub',
-			};
-		}
-	} catch {
-		// Provider not available yet
 	}
 
 	return undefined;

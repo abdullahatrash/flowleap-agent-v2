@@ -37,7 +37,7 @@ export class OpenSessionInVSCodeAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenSessionInVSCodeAction.ID,
-			title: localize2('openInVSCode', 'Open in Editor'),
+			title: localize2('openInVSCode', 'Open in Patent Workspace'),
 			icon: Codicon.vscodeInsiders,
 			precondition: ContextKeyExpr.and(IsAuxiliaryWindowContext.toNegated(), SessionsWelcomeVisibleContext.toNegated()),
 			menu: [{

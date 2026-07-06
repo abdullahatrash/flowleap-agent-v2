@@ -23,39 +23,21 @@
 	width: 16px;
 	height: 16px;
 	flex: 0 0 auto;
-	/* Dev fallback: the VS Code shield logo bundled in the sessions media folder.
-	 * In production builds the distro mixin overwrites
-	 * vs/workbench/browser/media/code-icon.svg with the quality-branded icon;
-	 * the per-quality rules below then take precedence. */
-	background-image: url('./vscode-icon.svg');
-	background-repeat: no-repeat;
-	background-position: center center;
-	background-size: contain;
-	filter: grayscale(1);
-}
-
-/* In production builds vscode-distro overlays vs/workbench/browser/media/code-icon.svg
- * with the quality-specific branded VS Code icon. Use it whenever the product quality is
- * known (the data-product-quality attribute is only set in non-dev builds). */
-.monaco-workbench .open-in-vscode-titlebar-widget[data-product-quality="stable"] > .open-in-vscode-titlebar-widget-icon,
-.monaco-workbench .open-in-vscode-titlebar-widget[data-product-quality="insider"] > .open-in-vscode-titlebar-widget-icon,
-.monaco-workbench .open-in-vscode-titlebar-widget[data-product-quality="exploration"] > .open-in-vscode-titlebar-widget-icon {
-	background-image: url('../../../workbench/browser/media/code-icon.svg');
-}
-
-.monaco-enable-motion .monaco-workbench .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon,
-.monaco-workbench.monaco-enable-motion .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon {
-	transition: filter 160ms ease;
-}
-
-.monaco-reduce-motion .monaco-workbench .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon,
-.monaco-workbench.monaco-reduce-motion .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon {
-	transition-duration: 0ms !important;
+	/* FlowLeap brand mark — masked so it recolors to the title bar foreground on any theme. */
+	background-color: var(--vscode-titleBar-activeForeground);
+	-webkit-mask-image: url('./flowleap-logo.svg');
+	mask-image: url('./flowleap-logo.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center center;
+	mask-position: center center;
+	-webkit-mask-size: contain;
+	mask-size: contain;
 }
 
 .monaco-workbench .open-in-vscode-titlebar-widget:hover > .open-in-vscode-titlebar-widget-icon,
 .monaco-workbench .open-in-vscode-titlebar-widget:focus-visible > .open-in-vscode-titlebar-widget-icon {
-	filter: none;
+	background-color: var(--vscode-textLink-foreground, #3b6fed);
 }
 
 .monaco-workbench .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-label {
