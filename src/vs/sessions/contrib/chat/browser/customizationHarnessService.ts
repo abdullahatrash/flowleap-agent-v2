@@ -8,6 +8,7 @@ import { CustomizationHarnessServiceBase, createVSCodeHarnessDescriptor, IHarnes
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { SessionType } from '../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 
 /**
  * The session type that supports local harness customization.
@@ -35,6 +36,7 @@ export class SessionsCustomizationHarnessService extends CustomizationHarnessSer
 	constructor(
 		@IPromptsService promptsService: IPromptsService,
 		@ISessionsManagementService private readonly sessionsManagementService: ISessionsManagementService,
+		@IFileService fileService: IFileService,
 	) {
 		const localHarness = createVSCodeHarnessDescriptor();
 
@@ -42,6 +44,7 @@ export class SessionsCustomizationHarnessService extends CustomizationHarnessSer
 			[],
 			SessionType.Local,
 			promptsService,
+			fileService,
 		);
 
 		const sync = () => this._syncLocalHarness(localHarness, this._hasLocalSessionType());

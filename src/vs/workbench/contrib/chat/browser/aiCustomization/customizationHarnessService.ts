@@ -13,6 +13,7 @@ import {
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { SessionType } from '../../common/chatSessionsService.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 
 /**
  * Core implementation of the customization harness service.
@@ -23,11 +24,13 @@ import { URI } from '../../../../../base/common/uri.js';
 class CustomizationHarnessService extends CustomizationHarnessServiceBase {
 	constructor(
 		@IPromptsService promptsService: IPromptsService,
+		@IFileService fileService: IFileService,
 	) {
 		super(
 			[createVSCodeHarnessDescriptor()],
 			SessionType.Local,
 			promptsService,
+			fileService,
 		);
 	}
 

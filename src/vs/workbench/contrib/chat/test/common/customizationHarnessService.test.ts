@@ -15,6 +15,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { SessionType } from '../../common/chatSessionsService.js';
 import { MockPromptsService } from './promptSyntax/service/mockPromptsService.js';
 import { AICustomizationSources } from '../../common/aiCustomizationWorkspaceService.js';
+import { TestFileService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 
 suite('CustomizationHarnessService', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -24,7 +25,7 @@ suite('CustomizationHarnessService', () => {
 			harnesses = [createVSCodeHarnessDescriptor()];
 		}
 		const promptsService: IPromptsService = new MockPromptsService();
-		const service = new CustomizationHarnessServiceBase(harnesses, harnesses[0].id, promptsService);
+		const service = new CustomizationHarnessServiceBase(harnesses, harnesses[0].id, promptsService, new TestFileService());
 		store.add(service);
 		return service;
 	}
@@ -419,7 +420,7 @@ suite('CustomizationHarnessService', () => {
 				}
 				override isValidSlashCommandName() { return true; }
 			};
-			const service = new CustomizationHarnessServiceBase([createVSCodeHarnessDescriptor()], SessionType.Local, promptsService);
+			const service = new CustomizationHarnessServiceBase([createVSCodeHarnessDescriptor()], SessionType.Local, promptsService, new TestFileService());
 			store.add(service);
 			{
 				const commands = await service.getSlashCommands(testSessionResource, CancellationToken.None);
@@ -460,7 +461,7 @@ suite('CustomizationHarnessService', () => {
 				createAgent('global', 'file:///workspace/.github/agents/global.agent.md', undefined, true),
 				createAgent('other', 'file:///workspace/.github/agents/other.agent.md', ['other-session'], true),
 			]);
-			const service = new CustomizationHarnessServiceBase([createVSCodeHarnessDescriptor()], SessionType.Local, promptsService);
+			const service = new CustomizationHarnessServiceBase([createVSCodeHarnessDescriptor()], SessionType.Local, promptsService, new TestFileService());
 			store.add(service);
 
 			const agents = await service.getCustomAgents(testSessionResource1, CancellationToken.None);
@@ -489,7 +490,7 @@ suite('CustomizationHarnessService', () => {
 						{ uri: URI.parse('file:///workspace/.test/agents/disabled.agent.md'), type: PromptsType.agent, source: 'local', name: 'disabled', enabled: false, extensionId: undefined, pluginUri: undefined, userInvocable: undefined },
 					],
 				},
-			}], testSessionType1, promptsService);
+			}], testSessionType1, promptsService, new TestFileService());
 			store.add(service);
 			{
 				const agents = (await service.getCustomAgents(testSessionResource1, CancellationToken.None));
@@ -499,6 +500,38 @@ suite('CustomizationHarnessService', () => {
 				const agents = (await service.getCustomAgents(testSessionResource2, CancellationToken.None));
 				assert.deepStrictEqual(agents.map(agent => [agent.name, agent.enabled]), [['selected', true], ['not-selected', false]]);
 			}
+		});
+
+		test('resolves provider agents with unbacked URIs from metadata without reading the file', async () => {
+			// Regression: external harnesses may describe agents with synthetic,
+			// session-scoped URIs (e.g. `claude-code:/agents/...`) that have no
+			// file system provider. Resolving them must not route through the file
+			// service (which throws ENOPRO) — the agent is built from the metadata
+			// the provider already supplied.
+			const promptsService = new class extends MockPromptsService {
+				override parseNew(): Promise<never> {
+					throw new Error('parseNew must not be called for provider agents without a file system provider');
+				}
+			}();
+
+			const emitter = new Emitter<void>();
+			store.add(emitter);
+			const service = new CustomizationHarnessServiceBase([{
+				id: testSessionType1,
+				label: 'Test Extension',
+				icon: ThemeIcon.fromId('extensions'),
+				getStorageSourceFilter: () => ({ sources: [AICustomizationSources.local] }),
+				itemProvider: {
+					onDidChange: emitter.event,
+					provideChatSessionCustomizations: async (_sessionResource: URI, _token: CancellationToken): Promise<ICustomizationItem[]> => [
+						{ uri: URI.parse('test-session-type1:/agents/.github:Agents Window Developer'), type: PromptsType.agent, source: 'local', name: 'Agents Window Developer', enabled: true, extensionId: undefined, pluginUri: undefined, userInvocable: undefined },
+					],
+				},
+			}], testSessionType1, promptsService, new TestFileService());
+			store.add(service);
+
+			const agents = await service.getCustomAgents(testSessionResource1, CancellationToken.None);
+			assert.deepStrictEqual(agents.map(agent => [agent.name, agent.enabled]), [['Agents Window Developer', true]]);
 		});
 	});
 
