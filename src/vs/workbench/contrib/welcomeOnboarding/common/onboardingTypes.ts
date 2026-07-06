@@ -18,6 +18,7 @@ export const enum OnboardingStepId {
 	AgentSessions = 'onboarding.agentSessions',
 	Trial = 'onboarding.trial',
 	Model = 'onboarding.model',
+	Finale = 'onboarding.finale',
 }
 
 /**
@@ -39,6 +40,8 @@ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
 			return localize('onboarding.step.trial', "Start Your Trial");
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model', "Connect Your AI Model");
+		case OnboardingStepId.Finale:
+			return localize('onboarding.step.finale', "Run Your First Investigation");
 	}
 }
 
@@ -61,6 +64,8 @@ export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
 			return localize('onboarding.step.trial.subtitle', "Explore the full patent backend on our credentials \u2014 no key setup required.");
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model.subtitle', "FlowLeap runs on your own AI model. One key connects it.");
+		case OnboardingStepId.Finale:
+			return localize('onboarding.step.finale.subtitle', "We'll open a prepared workspace with this investigation ready in chat — you press send.");
 	}
 }
 
@@ -78,6 +83,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepId[] = [
 	OnboardingStepId.SignIn,
 	OnboardingStepId.Trial,
 	OnboardingStepId.Model,
+	OnboardingStepId.Finale,
 ];
 
 /**
@@ -150,6 +156,53 @@ export const ONBOARDING_ROLE_OPTIONS: readonly IOnboardingRoleOption[] = [
 		icon: 'rocket',
 	},
 ];
+
+/**
+ * Project type understood by the FlowLeap `flowleap.startFirstInvestigation` command (mirrors the
+ * `ProjectType` union in the FlowLeap shell extension).
+ */
+export type FirstInvestigationProjectType = 'patent-analysis' | 'prior-art-search' | 'custom';
+
+/** The prepared first investigation for the finale step: the chat prompt + the workspace type. */
+export interface FirstInvestigation {
+	readonly prompt: string;
+	readonly projectType: FirstInvestigationProjectType;
+}
+
+/**
+ * Map the stored persona to a role-tailored first investigation shown on the finale step and run in
+ * the prepared workspace (issue #79 finale). Copy is patent-domain and readable; an unknown/absent
+ * role falls back to a generic prior-art search. Pure so the mapping is unit-tested directly.
+ */
+export function roleToFirstInvestigation(role: OnboardingRole | undefined): FirstInvestigation {
+	switch (role) {
+		case OnboardingRole.PatentAttorney:
+			return {
+				prompt: localize('onboarding.finale.prompt.attorney', "Analyze the claims of US 7,479,949 (Apple's multitouch patent): list the independent claims, break claim 1 into its limitations, and find the closest prior art — flag any X-category references that could challenge novelty."),
+				projectType: 'patent-analysis',
+			};
+		case OnboardingRole.IpAnalyst:
+			return {
+				prompt: localize('onboarding.finale.prompt.analyst', "Sketch the patent landscape for solid-state battery electrolytes: surface the leading assignees, how filings have trended over the last five years, and where the whitespace is."),
+				projectType: 'patent-analysis',
+			};
+		case OnboardingRole.Researcher:
+			return {
+				prompt: localize('onboarding.finale.prompt.researcher', "Run a prior-art sweep on CRISPR base editing across both patents and academic literature, and summarize the most relevant disclosures with citations."),
+				projectType: 'prior-art-search',
+			};
+		case OnboardingRole.Founder:
+			return {
+				prompt: localize('onboarding.finale.prompt.founder', "Run a quick freedom-to-operate sketch for a smart-ring sleep tracker: find the patents most likely to read on it and flag the biggest infringement risks."),
+				projectType: 'prior-art-search',
+			};
+		default:
+			return {
+				prompt: localize('onboarding.finale.prompt.generic', "Search for prior art on an invention you care about — describe it in a sentence or two and I'll find the closest patents and publications, with citations."),
+				projectType: 'prior-art-search',
+			};
+	}
+}
 
 /**
  * Tri-state FlowLeap subscription access, mirroring the extension's `getSubscriptionAccess()`
