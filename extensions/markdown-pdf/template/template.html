@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>{{{title}}}</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+{{{style}}}
+<style>
+  .mermaid {
+    background: white;
+    padding: 10px;
+    text-align: center;
+  }
+  .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+</style>
+</head>
+<body>
+{{{content}}}
+{{{mermaid}}}
+<script>
+  (function() {
+    var waitCount = 0;
+    var maxWait = 50;
+
+    function initMermaid() {
+      waitCount++;
+      if (typeof mermaid === 'undefined') {
+        if (waitCount >= maxWait) {
+          window.mermaidRendered = true;
+          return;
+        }
+        setTimeout(initMermaid, 100);
+        return;
+      }
+
+      try {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'default',
+          securityLevel: 'loose',
+          flowchart: {
+            useMaxWidth: true,
+            htmlLabels: true,
+            curve: 'basis'
+          },
+          sequence: {
+            useMaxWidth: true,
+            diagramMarginX: 50,
+            diagramMarginY: 10
+          }
+        });
+
+        var mermaidDivs = document.querySelectorAll('.mermaid');
+        if (mermaidDivs.length > 0) {
+          mermaid.init(undefined, mermaidDivs);
+          setTimeout(function() {
+            window.mermaidRendered = true;
+          }, 500);
+        } else {
+          window.mermaidRendered = true;
+        }
+      } catch (err) {
+        window.mermaidRendered = true;
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initMermaid);
+    } else {
+      initMermaid();
+    }
+  })();
+</script>
+</body>
+</html>

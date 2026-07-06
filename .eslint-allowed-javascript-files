@@ -59,6 +59,11 @@ extensions/html-language-features/server/src/test/pathCompletionFixtures/src/tes
 extensions/html-language-features/server/test/index.js
 extensions/html/build/update-grammar.mjs
 extensions/json/build/update-grammars.js
+extensions/markdown-pdf/extension.js
+extensions/markdown-pdf/src/compile.js
+extensions/markdown-pdf/test/runTest.js
+extensions/markdown-pdf/test/suite/extension.test.js
+extensions/markdown-pdf/test/suite/index.js
 extensions/media-preview/media/audioPreview.js
 extensions/media-preview/media/imagePreview.js
 extensions/media-preview/media/videoPreview.js

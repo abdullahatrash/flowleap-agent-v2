@@ -65,6 +65,9 @@ export const unicodeFilter = Object.freeze<string[]>([
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
 
+	// vendored third-party extension, keeps upstream style
+	'!extensions/markdown-pdf/**',
+
 	'!src/vs/base/browser/dompurify/**',
 	'!src/vs/workbench/services/keybinding/browser/keyboardLayouts/**',
 	'!src/vs/workbench/contrib/terminal/common/scripts/psreadline/**',
@@ -134,6 +137,9 @@ export const indentationFilter = Object.freeze<string[]>([
 
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',
+
+	// vendored third-party extension, keeps upstream style
+	'!extensions/markdown-pdf/**',
 
 	// except specific file types
 	'!src/vs/*/**/*.d.ts',
@@ -216,6 +222,7 @@ export const copyrightFilter = Object.freeze<string[]>([
 	// vendored third-party libraries
 	'!src/vs/base/common/lit-html/**',
 	'!src/vs/base/common/signals-core/**',
+	'!extensions/markdown-pdf/**',
 
 	// extensions/copilot has its own code style
 	'!extensions/copilot/**',

@@ -59,3 +59,4 @@
 # Vendored third-party libraries
 src/vs/base/common/lit-html/**
 src/vs/base/common/signals-core/**
+extensions/markdown-pdf/**

@@ -33,6 +33,7 @@ export const dirs = [
 	'extensions/json-language-features/server',
 	'extensions/markdown-language-features',
 	'extensions/markdown-math',
+	'extensions/markdown-pdf',
 	'extensions/media-preview',
 	'extensions/merge-conflict',
 	'extensions/mermaid-markdown-features',
