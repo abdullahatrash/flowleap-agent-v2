@@ -35,8 +35,8 @@ function createWorkspaceService(folders: URI[] = [URI.file('/workspace')]): IWor
 	} as unknown as IWorkspaceService;
 }
 
-function mockSkill(uri: string, name: string): ChatSkill {
-	return { uri: URI.parse(uri), name } as ChatSkill;
+function mockSkill(uri: string, name: string, source?: ChatSkill['source']): ChatSkill {
+	return { uri: URI.parse(uri), name, source } as ChatSkill;
 }
 
 function mockPlugin(uri: string): ChatPlugin {
@@ -167,6 +167,18 @@ describe('ClaudePluginService', () => {
 		});
 		const locations = await service.getPluginLocations(CancellationToken.None);
 		expect(locations).toHaveLength(0);
+	});
+
+	it('filters out extension-contributed skills but keeps other sources', async () => {
+		const service = createService({
+			skills: [
+				mockSkill('/app/extensions/copilot/assets/skills/prior-art/SKILL.md', 'prior-art', 'extension'),
+				mockSkill('/app/extensions/copilot/assets/skills/patent-search/SKILL.md', 'patent-search', 'extension'),
+				mockSkill('/app/out/vs/sessions/skills/recipe-prior-art-search/SKILL.md', 'recipe-prior-art-search', 'builtin'),
+			],
+		});
+		const locations = await service.getPluginLocations(CancellationToken.None);
+		expect(locations.map(l => l.path)).toEqual(['/app/out/vs/sessions']);
 	});
 
 	// #endregion

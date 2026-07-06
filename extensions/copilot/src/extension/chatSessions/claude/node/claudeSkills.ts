@@ -61,8 +61,14 @@ export class ClaudePluginService extends Disposable implements IClaudePluginServ
 			pluginRoots.add(dirname(uri));
 		}
 
+		// Extension-contributed skills (the patent skills bundled via `chatSkills`) instruct the
+		// model to call panel-chat language-model tools (search_patents, patent_api_request, …)
+		// that do not exist in Claude SDK sessions, so they must not become session plugins.
+		// Skills collapse to a shared plugin root below, so a single surviving extension skill
+		// would re-add the whole bundle — the source filter has to drop every one of them.
 		(await this.promptsService.getSkills(token))
 			.filter(s => s.uri.scheme === Schemas.file)
+			.filter(s => s.source !== 'extension')
 			.map(s => s.uri)
 			.map(uri => dirname(dirname(dirname(uri))))
 			.filter(uri => !isClaudeDirectory(uri))
