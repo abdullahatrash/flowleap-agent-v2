@@ -37,6 +37,18 @@ export interface SetupState {
 	readonly byokModelCount: number;
 	readonly epoConfigured: boolean;
 	readonly usptoConfigured: boolean;
+	/**
+	 * Whether the FlowLeap subscription is currently a trial. When true, the still-missing patent-
+	 * data key rows carry a deadline-framed description: today the keys are good practice, but once
+	 * backend ADR 0008 lands (`data_keys_required` after the trial) they become load-bearing, so we
+	 * make the "add them before the trial ends" ask concrete now. Optional (defaults to false).
+	 */
+	readonly trialing?: boolean;
+}
+
+/** Description for a missing patent-data key row — deadline-framed while trialing, plain otherwise. */
+function missingKeyDescription(trialing: boolean | undefined): string {
+	return trialing ? 'Add before your trial ends — free to obtain' : 'Add key…';
 }
 
 export function buildSetupItems(state: SetupState): SetupItemData[] {
@@ -66,7 +78,7 @@ export function buildSetupItems(state: SetupState): SetupItemData[] {
 		{
 			id: 'epo',
 			label: 'EPO OPS',
-			description: state.epoConfigured ? 'Configured' : 'Add key…',
+			description: state.epoConfigured ? 'Configured' : missingKeyDescription(state.trialing),
 			tooltip: state.epoConfigured
 				? 'Your EPO OPS credentials are stored on this machine. Click to test, update, or remove.'
 				: 'Add your EPO OPS consumer key + secret for European patent data.',
@@ -77,7 +89,7 @@ export function buildSetupItems(state: SetupState): SetupItemData[] {
 		{
 			id: 'uspto',
 			label: 'USPTO ODP',
-			description: state.usptoConfigured ? 'Configured' : 'Add key…',
+			description: state.usptoConfigured ? 'Configured' : missingKeyDescription(state.trialing),
 			tooltip: state.usptoConfigured
 				? 'Your USPTO ODP key is stored on this machine. Click to test, update, or remove.'
 				: 'Add your USPTO ODP API key for US patent data and citation analysis.',
@@ -142,12 +154,25 @@ class PatentSetupTreeProvider implements vscode.TreeDataProvider<SetupItemData> 
 			// Model enumeration unavailable (e.g. during startup) — show the connect nudge.
 		}
 
+		// Trial state drives the deadline-framed copy on missing patent-data key rows. Only worth a
+		// read when signed in (an anonymous user can't be trialing); `getSubscriptionSnapshot`
+		// itself short-circuits to `unknown` without a token, so this stays cheap when signed out.
+		let trialing = false;
+		if (signedIn) {
+			try {
+				trialing = (await this._authProvider.getSubscriptionSnapshot()).status === 'trialing';
+			} catch {
+				// Inconclusive subscription read — leave the rows in their neutral "Add key…" copy.
+			}
+		}
+
 		return {
 			signedIn,
 			accountLabel,
 			byokModelCount,
 			epoConfigured: !!keys?.epo,
 			usptoConfigured: !!keys?.usptoOdp,
+			trialing,
 		};
 	}
 }

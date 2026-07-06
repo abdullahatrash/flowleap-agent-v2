@@ -29,4 +29,20 @@ describe('buildSetupItems', () => {
 			{ id: 'uspto', description: 'Add key…', ok: false, command: 'flowleap.patentDataKeys' },
 		]);
 	});
+
+	it('frames the missing patent-data key rows against the trial deadline while trialing', () => {
+		const items = buildSetupItems({ signedIn: true, byokModelCount: 1, epoConfigured: false, usptoConfigured: false, trialing: true });
+
+		const byId = Object.fromEntries(items.map(i => [i.id, i.description]));
+		expect(byId.epo).toBe('Add before your trial ends — free to obtain');
+		expect(byId.uspto).toBe('Add before your trial ends — free to obtain');
+	});
+
+	it('leaves already-configured key rows as "Configured" even while trialing', () => {
+		const items = buildSetupItems({ signedIn: true, byokModelCount: 1, epoConfigured: true, usptoConfigured: false, trialing: true });
+
+		const byId = Object.fromEntries(items.map(i => [i.id, i.description]));
+		expect(byId.epo).toBe('Configured');
+		expect(byId.uspto).toBe('Add before your trial ends — free to obtain');
+	});
 });
