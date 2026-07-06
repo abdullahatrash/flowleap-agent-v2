@@ -18,6 +18,7 @@ import { IPatentBackendClient } from './patentBackendClient';
 import { PatentDataKeysStore } from './patentDataKeysStore';
 import { maybeShowSetupOnStartup, PatentDataKeysViewProvider, registerPatentDataKeysCommand } from './patentDataKeysPage';
 import { registerPatentSetupView } from './patentSetupView';
+import { registerOnboardingBridgeCommands } from './onboardingBridge';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -85,6 +86,14 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			}
 		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());
+		this._safeStep('register onboarding bridge commands', () => {
+			// Command seam the workbench-core onboarding wizard (issue #79) reads FlowLeap state
+			// through — subscription access, model-configured, and start-trial — so core never
+			// imports across the extension boundary.
+			if (this._authProvider) {
+				this._register(registerOnboardingBridgeCommands(this._authProvider, this._logService));
+			}
+		});
 		this._safeStep('reveal setup on first run', () => {
 			// Fire-and-forget: first-run users land on the FlowLeap Settings sidebar
 			// (nothing configured yet); configured users are never interrupted.

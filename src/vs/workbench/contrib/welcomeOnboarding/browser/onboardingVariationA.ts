@@ -28,14 +28,22 @@ import { IPathService } from '../../../services/path/common/pathService.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import {
 	OnboardingStepId,
-	ONBOARDING_STEPS,
 	ONBOARDING_AI_PREFERENCE_OPTIONS,
+	ONBOARDING_ROLE_OPTIONS,
+	ONBOARDING_ROLE_STORAGE_KEY,
 	AiCollaborationMode,
+	OnboardingRole,
 	IOnboardingThemeOption,
+	SubscriptionAccess,
+	computeVisibleSteps,
+	decideTrialPoll,
 	getOnboardingStepTitle,
 	getOnboardingStepSubtitle,
+	TRIAL_POLL_INTERVAL_MS,
 } from '../common/onboardingTypes.js';
 import { IOnboardingService } from '../common/onboardingService.js';
 
@@ -71,6 +79,19 @@ type OnboardingActionEvent = {
  */
 const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
 
+/** Set form for {@link IContextKeyService.onDidChangeContext} `affectsSome` checks. */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEYS = new Set([FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
+
+/**
+ * Editor input typeId of the chat models management editor (owned by
+ * `contrib/chat/browser/chatManagement/chatManagementEditorInput`). Referenced by string so this
+ * contrib doesn't take a cross-contrib dependency just to detect the editor closing.
+ */
+const MODELS_MANAGEMENT_EDITOR_TYPE_ID = 'workbench.input.modelsManagement';
+
+/** How often the minimized wizard re-checks an action's completion condition (e.g. model added). */
+const MINIMIZE_POLL_INTERVAL_MS = 3_000;
+
 /**
  * Variation A — Classic Wizard Modal
  *
@@ -78,11 +99,20 @@ const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
  * and polished navigation. Sits on top of the agent sessions welcome
  * tab. When dismissed, the welcome tab is revealed underneath.
  *
- * Steps:
- * 1. Sign In — FlowLeap sign-in hero (a single "Continue with FlowLeap" action). Soft, not a hard
+ * Steps (patent-persona funnel, issue #79): Role → See it work → Sign in → Trial → Model.
+ * 1. Role — "What brings you to FlowLeap?" persona picker (patent attorney / IP analyst /
+ *    researcher / founder). The choice is persisted and tailors later phases.
+ * 2. See it work — the "Build with AI Agents" placeholder demo (unchanged in P1).
+ * 3. Sign In — FlowLeap sign-in hero (a single "Continue with FlowLeap" action). Soft, not a hard
  *    gate: the modal stays dismissable and "Continue without Signing In" is offered (see ADR 0003).
- * 2. Personalize — Theme selection grid + keymap pills
- * 3. Agent Sessions — Feature cards showcasing AI capabilities
+ * 4. Trial — value-framed 7-day trial; only shown when signed in. Opens checkout in the browser
+ *    and polls the subscription, auto-advancing when it turns active/trialing.
+ * 5. Model — connect a BYO AI model (OpenRouter recommended); reflects an already-connected model.
+ *
+ * The legacy Personalize (theme/keymap) and AiPreference steps are no longer in the flow; their
+ * render code is retained (referenced by the `_renderStep` switch) but never reached. The wizard
+ * never touches the theme: the product default (Light Modern) already is the sensible default
+ * (issue #79 principle 4), and theme selection stays available in Settings.
  */
 export class OnboardingVariationA extends Disposable implements IOnboardingService {
 
@@ -109,7 +139,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _footerSignInBtn: HTMLButtonElement | undefined;
 
 	private currentStepIndex = 0;
-	private readonly steps = ONBOARDING_STEPS;
+	private steps: OnboardingStepId[] = computeVisibleSteps({ signedIn: false, hasAccess: false });
 	private readonly disposables = this._register(new DisposableStore());
 	private readonly stepDisposables = this._register(new DisposableStore());
 	private previouslyFocusedElement: HTMLElement | undefined;
@@ -121,9 +151,31 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private selectedKeymapId = 'vscode';
 	private _detectedEditorIds: Set<string> | undefined;
 	private _userSignedIn = false;
+	// Whether the user already has an access-granting subscription (active/trialing). When true the
+	// Trial step is filtered out (nothing to start). Refreshed asynchronously via the subscription
+	// bridge; `_accessCheckToken` invalidates a stale in-flight check so it can't clobber newer state.
+	private _hasAccess = false;
+	private _accessCheckToken = 0;
 	private _signInInFlight = false;
 	private _signInError: string | undefined;
 	private selectedAiMode: AiCollaborationMode = AiCollaborationMode.Balanced;
+	private selectedRole: OnboardingRole | undefined;
+	// Trial subscription poll. `_trialPollToken` invalidates any in-flight tick when the poll is
+	// stopped (step change, dispose, or a resolved advance) so a late async result can't act stale.
+	private _trialPollHandle: number | undefined;
+	private _trialPollToken = 0;
+	// Fire `model_key_added` at most once per wizard run.
+	private _modelKeyAddedLogged = false;
+	// Minimize/restore: when a step action opens workbench UI (the models editor, the FlowLeap
+	// Settings sidebar) the full-screen overlay would sit on top of it, so we hide the overlay and
+	// restore when the opened surface is done. `_minimizeDisposables` holds the restore listeners;
+	// `_minimizePollToken` invalidates a stale completion poll; `_resumeButton` is the always-there
+	// escape hatch for surfaces with no close event.
+	private _minimized = false;
+	private readonly _minimizeDisposables = this._register(new DisposableStore());
+	private _minimizePollToken = 0;
+	private _minimizePollHandle: number | undefined;
+	private _resumeButton: HTMLButtonElement | undefined;
 
 	constructor(
 		@ILayoutService private readonly layoutService: ILayoutService,
@@ -138,6 +190,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		@ICommandService private readonly commandService: ICommandService,
 		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IStorageService private readonly storageService: IStorageService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super();
 
@@ -149,7 +203,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this.selectedThemeId = matchingTheme.id;
 		}
 
-		// Start detecting installed editors early so results are ready by the Personalize step
+		// Pre-select a previously stored role so a wizard re-trigger resumes sensibly (ADR 0003).
+		const storedRole = this.storageService.get(ONBOARDING_ROLE_STORAGE_KEY, StorageScope.APPLICATION);
+		if (ONBOARDING_ROLE_OPTIONS.some(o => o.id === storedRole)) {
+			this.selectedRole = storedRole as OnboardingRole;
+		}
+
+		// Start detecting installed editors early so results are ready if the Personalize step ever runs.
 		this._detectInstalledEditors().then(ids => { this._detectedEditorIds = ids; });
 	}
 
@@ -163,7 +223,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		}
 
 		this._isShowing = true;
+		this._modelKeyAddedLogged = false;
+		this._hasAccess = false;
 		this._userSignedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
+		this._recomputeSteps();
+		this._logAction('wizard_started', this.steps[0]);
 		this.previouslyFocusedElement = getActiveWindow().document.activeElement as HTMLElement | undefined;
 
 		const container = this.layoutService.activeContainer;
@@ -227,13 +291,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			if (this._isLastStep()) {
 				this._logAction('complete');
 				this._dismiss('complete');
-			} else if (this.currentStepIndex === 0) {
-				this._logAction('continueWithoutSignIn');
-				this._nextStep();
-			} else {
-				this._logAction('next');
-				this._nextStep();
+				return;
 			}
+			this._logFooterAdvance(this.steps[this.currentStepIndex]);
+			this._nextStep();
 		}));
 
 		this.disposables.add(addDisposableListener(this.overlay, EventType.MOUSE_DOWN, (e: MouseEvent) => {
@@ -258,6 +319,21 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				this._trapTab(e, event.shiftKey);
 			}
 		}));
+
+		// The `flowleap.signedIn` context key is set asynchronously by the FlowLeap extension after
+		// activation + token restore, so the value read above can be a cold-launch false. Track later
+		// changes for the whole time the modal is up so the sign-in and Trial steps recover once it lands.
+		this.disposables.add(this.contextKeyService.onDidChangeContext(e => {
+			if (e.affectsSome(FLOWLEAP_SIGNED_IN_CONTEXT_KEYS)) {
+				this._syncSignedInFromContext();
+			}
+		}));
+
+		// If we already look signed in, confirm existing access so a returning user with an active
+		// trial never sees the Trial step (issue #79 state-awareness fix).
+		if (this._userSignedIn) {
+			void this._refreshAccess();
+		}
 
 		// Entrance animation
 		this.overlay.classList.add('entering');
@@ -308,6 +384,112 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this._updateButtonStates();
 			this._focusCurrentStepElement();
 			this._logStepView();
+		}
+	}
+
+	/**
+	 * Recompute the visible steps from the current sign-in state, preserving the step the user is on.
+	 * Called at {@link show} and after a successful sign-in (which unlocks the Trial step).
+	 */
+	private _recomputeSteps(): void {
+		const currentStepId = this.steps[this.currentStepIndex];
+		this.steps = computeVisibleSteps({ signedIn: this._userSignedIn, hasAccess: this._hasAccess });
+		const newIndex = this.steps.indexOf(currentStepId);
+		this.currentStepIndex = newIndex >= 0 ? newIndex : Math.min(this.currentStepIndex, this.steps.length - 1);
+	}
+
+	/** Re-render the current step, progress dots, and footer in place (no focus steal). */
+	private _rerenderCurrentStep(): void {
+		if (!this._isShowing) {
+			return;
+		}
+		this._renderStep();
+		this._renderProgress();
+		this._updateButtonStates();
+	}
+
+	/**
+	 * React to the `flowleap.signedIn` context key changing while the modal is open (Bug 1). The key
+	 * arrives asynchronously, so we sync `_userSignedIn`, rebuild the flow, and re-render the current
+	 * step so the sign-in step reflects the session and the Trial step becomes reachable. A passive
+	 * flip does not auto-advance — that's reserved for the explicit sign-in click.
+	 */
+	private _syncSignedInFromContext(): void {
+		const signedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
+		if (signedIn === this._userSignedIn) {
+			return;
+		}
+		this._userSignedIn = signedIn;
+		if (!signedIn) {
+			// Session lost — access no longer holds and any in-flight check is now stale.
+			this._hasAccess = false;
+			this._accessCheckToken++;
+		}
+		this._recomputeSteps();
+		this._rerenderCurrentStep();
+		if (signedIn) {
+			void this._refreshAccess();
+		}
+	}
+
+	/**
+	 * Confirm whether the signed-in user already has access (active/trialing) and, if so, drop the
+	 * Trial step — there is nothing to start (Bug 2). Guarded by a token + `_isShowing` so a stale or
+	 * post-dismiss result can't clobber newer state. Only a confirmed `active` flips state; an
+	 * `inactive`/`unknown` result leaves the Trial step in place.
+	 */
+	private async _refreshAccess(): Promise<void> {
+		if (!this._userSignedIn || this._hasAccess) {
+			return;
+		}
+		const token = ++this._accessCheckToken;
+		let access: SubscriptionAccess = 'unknown';
+		try {
+			access = await this.commandService.executeCommand<SubscriptionAccess>('flowleap.checkSubscription') ?? 'unknown';
+		} catch {
+			access = 'unknown';
+		}
+		// Superseded, dismissed, signed out, or inconclusive — leave the Trial step alone.
+		if (token !== this._accessCheckToken || !this._isShowing || !this._userSignedIn || access !== 'active') {
+			return;
+		}
+		this._hasAccess = true;
+		// Don't yank the Trial step out from under a user looking at it — re-render it in place so the
+		// belt-and-braces confirmation shows; otherwise recompute so it's filtered out of the flow.
+		if (this.steps[this.currentStepIndex] !== OnboardingStepId.Trial) {
+			this._recomputeSteps();
+		}
+		this._rerenderCurrentStep();
+	}
+
+	/**
+	 * Log the first-class skip/advance telemetry for leaving a step via the footer primary button.
+	 * The role/theme captures and demo completion are the P1 funnel signals (issue #79).
+	 */
+	private _logFooterAdvance(stepId: OnboardingStepId): void {
+		switch (stepId) {
+			case OnboardingStepId.Role:
+				if (!this.selectedRole) {
+					this._logAction('role_skipped');
+				}
+				break;
+			case OnboardingStepId.AgentSessions:
+				this._logAction('demo_completed');
+				break;
+			case OnboardingStepId.SignIn:
+				if (!this._userSignedIn) {
+					this._logAction('signin_skipped');
+				}
+				break;
+			case OnboardingStepId.Trial:
+				this._stopTrialPoll();
+				// Advancing past an already-active trial is a plain Continue, not a skip.
+				if (!this._hasAccess) {
+					this._logAction('trial_skipped');
+				}
+				break;
+			default:
+				this._logAction('next');
 		}
 	}
 
@@ -375,6 +557,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		clearNode(this.contentEl);
 
 		switch (stepId) {
+			case OnboardingStepId.Role:
+				this._renderRoleStep(this.contentEl);
+				break;
 			case OnboardingStepId.SignIn:
 				this._renderSignInStep(this.contentEl);
 				break;
@@ -386,6 +571,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				break;
 			case OnboardingStepId.AgentSessions:
 				this._renderAgentSessionsStep(this.contentEl);
+				break;
+			case OnboardingStepId.Trial:
+				this._renderTrialStep(this.contentEl);
+				break;
+			case OnboardingStepId.Model:
+				this._renderModelStep(this.contentEl);
 				break;
 		}
 
@@ -403,22 +594,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			this.backButton.style.display = this.currentStepIndex === 0 ? 'none' : '';
 		}
 		if (this.nextButton) {
-			if (this.currentStepIndex === 0) {
-				if (this._userSignedIn) {
-					this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
-					this.nextButton.textContent = localize('onboarding.continue', "Continue");
-				} else {
-					// Sign-in step: secondary "Continue without Signing In"
-					this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-secondary';
-					this.nextButton.textContent = localize('onboarding.continueWithoutSignIn', "Continue without Signing In");
-				}
-			} else if (this._isLastStep()) {
-				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
-				this.nextButton.textContent = localize('onboarding.getStarted', "Get Started");
-			} else {
-				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
-				this.nextButton.textContent = localize('onboarding.next', "Continue");
-			}
+			const { className, label } = this._footerNextButtonState(this.steps[this.currentStepIndex]);
+			this.nextButton.className = className;
+			this.nextButton.textContent = label;
 		}
 		if (this.footerLeft) {
 			if (this._isLastStep()) {
@@ -442,6 +620,95 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				}
 			}
 		}
+	}
+
+	/**
+	 * The label + styling for the footer primary button on a given step. The last step always
+	 * completes ("Done"); the Sign In step degrades to a secondary "Continue without Signing In"
+	 * when signed out (ADR 0003); the Trial step's footer is the "Decide later" skip, unless the
+	 * trial is already active — then there's nothing to decide, so it's a primary "Continue".
+	 */
+	private _footerNextButtonState(stepId: OnboardingStepId): { className: string; label: string } {
+		const primary = 'onboarding-a-btn onboarding-a-btn-primary';
+		const secondary = 'onboarding-a-btn onboarding-a-btn-secondary';
+		if (this._isLastStep()) {
+			return { className: primary, label: localize('onboarding.done', "Done") };
+		}
+		switch (stepId) {
+			case OnboardingStepId.SignIn:
+				return this._userSignedIn
+					? { className: primary, label: localize('onboarding.continue', "Continue") }
+					: { className: secondary, label: localize('onboarding.continueWithoutSignIn', "Continue without Signing In") };
+			case OnboardingStepId.Trial:
+				return this._hasAccess
+					? { className: primary, label: localize('onboarding.continue', "Continue") }
+					: { className: secondary, label: localize('onboarding.trial.decideLater', "Decide later") };
+			default:
+				return { className: primary, label: localize('onboarding.next', "Continue") };
+		}
+	}
+
+	// =====================================================================
+	// Step: Role
+	// =====================================================================
+
+	private _renderRoleStep(container: HTMLElement): void {
+		const wrapper = append(container, $('.onboarding-a-role'));
+
+		const cards = append(wrapper, $('.onboarding-a-role-cards'));
+		cards.setAttribute('role', 'radiogroup');
+		cards.setAttribute('aria-label', localize('onboarding.role.label', "What brings you to FlowLeap?"));
+
+		const allCards: HTMLButtonElement[] = [];
+		for (const option of ONBOARDING_ROLE_OPTIONS) {
+			const card = this._registerStepFocusable(append(cards, $<HTMLButtonElement>('button.onboarding-a-role-card')));
+			card.type = 'button';
+			card.dataset.id = option.id;
+			card.setAttribute('role', 'radio');
+			card.setAttribute('aria-checked', option.id === this.selectedRole ? 'true' : 'false');
+			allCards.push(card);
+
+			if (option.id === this.selectedRole) {
+				card.classList.add('selected');
+			}
+
+			const iconEl = append(card, $('span.onboarding-a-role-card-icon'));
+			iconEl.setAttribute('aria-hidden', 'true');
+			const icon = Codicon[option.icon as keyof typeof Codicon] ?? Codicon.sparkle;
+			iconEl.appendChild(renderIcon(icon));
+
+			const titleEl = append(card, $('div.onboarding-a-role-card-title'));
+			titleEl.textContent = option.label;
+
+			const descEl = append(card, $('div.onboarding-a-role-card-desc'));
+			descEl.textContent = option.description;
+
+			this.stepDisposables.add(addDisposableListener(card, EventType.CLICK, () => {
+				this._selectRole(option.id);
+				for (const c of allCards) {
+					c.classList.toggle('selected', c.dataset.id === option.id);
+					c.setAttribute('aria-checked', c.dataset.id === option.id ? 'true' : 'false');
+				}
+				this.accessibilityService.alert(localize('onboarding.role.selected.alert', "{0} selected", option.label));
+			}));
+		}
+		const selectedRoleIndex = ONBOARDING_ROLE_OPTIONS.findIndex(o => o.id === this.selectedRole);
+		this._setupRadioGroupNavigation(allCards, Math.max(0, selectedRoleIndex));
+
+		// Subtle "Just exploring" skip — advances without capturing a role (issue #79 flow, step 1).
+		const skip = this._registerStepFocusable(append(wrapper, $<HTMLButtonElement>('button.onboarding-a-role-skip')));
+		skip.type = 'button';
+		skip.textContent = localize('onboarding.role.skip', "Just exploring");
+		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
+			this._logAction('role_skipped');
+			this._nextStep();
+		}));
+	}
+
+	private _selectRole(role: OnboardingRole): void {
+		this.selectedRole = role;
+		this.storageService.store(ONBOARDING_ROLE_STORAGE_KEY, role, StorageScope.APPLICATION, StorageTarget.USER);
+		this._logAction('role_selected', OnboardingStepId.Role, role);
 	}
 
 	// =====================================================================
@@ -555,6 +822,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		if (signedIn) {
 			this._userSignedIn = true;
 			this._signInError = undefined;
+			this._logAction('signin_done', OnboardingStepId.SignIn);
+			// Signing in unlocks the value-framed Trial step; rebuild the flow so it appears next.
+			// Also confirm access, so a user who already had an active trial skips the Trial step.
+			this._recomputeSteps();
+			void this._refreshAccess();
 			if (this._footerSignInBtn) {
 				this._footerSignInBtn.style.display = 'none';
 			}
@@ -950,6 +1222,317 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	}
 
 	// =====================================================================
+	// Step: Trial (only reachable when signed in)
+	// =====================================================================
+
+	private _renderTrialStep(container: HTMLElement): void {
+		const wrapper = append(container, $('.onboarding-a-trial'));
+
+		// The user already has access (e.g. an active trial) — show a confirmation, not the CTA.
+		if (this._hasAccess) {
+			const confirmation = append(wrapper, $('.onboarding-a-signin-confirmation'));
+			const icon = append(confirmation, $('span'));
+			icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.check));
+			icon.setAttribute('aria-hidden', 'true');
+			const text = append(confirmation, $('span'));
+			text.textContent = localize('onboarding.trial.active', "Your trial is active. Continue to the next step.");
+			return;
+		}
+
+		const points = append(wrapper, $('ul.onboarding-a-trial-points'));
+		for (const text of [
+			localize('onboarding.trial.point.data', "7 days of full patent data on FlowLeap's credentials — no key setup."),
+			localize('onboarding.trial.point.card', "Payment method required. Cancel anytime."),
+		]) {
+			const li = append(points, $('li.onboarding-a-trial-point'));
+			const icon = append(li, $('span.onboarding-a-trial-point-icon'));
+			icon.setAttribute('aria-hidden', 'true');
+			icon.appendChild(renderIcon(Codicon.check));
+			const label = append(li, $('span'));
+			label.textContent = text;
+		}
+
+		// Belt-and-braces: access may have appeared (e.g. an existing trial) since the last check —
+		// re-confirm on render; if active it flips `_hasAccess` and re-renders as the confirmation above.
+		void this._refreshAccess();
+
+		const actions = append(wrapper, $('.onboarding-a-trial-actions'));
+		const startBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-trial-start')));
+		startBtn.type = 'button';
+		startBtn.textContent = localize('onboarding.trial.start', "Start free trial");
+
+		const status = append(wrapper, $('.onboarding-a-trial-status'));
+		status.setAttribute('role', 'status');
+		status.setAttribute('aria-live', 'polite');
+
+		this.stepDisposables.add(addDisposableListener(startBtn, EventType.CLICK, () => {
+			void this._handleStartTrial(status);
+		}));
+
+		// Stop polling whenever this step is torn down (navigation away, dispose).
+		this.stepDisposables.add({ dispose: () => this._stopTrialPoll() });
+	}
+
+	/**
+	 * Open the trial checkout in the browser and begin polling the subscription. The wizard
+	 * auto-advances the moment the backend reports access (issue #79 flow, step 4), so returning
+	 * from the browser feels seamless. Reuses the extension seam via the `flowleap.startTrial`
+	 * command, mirroring the reactive `402` "Start free trial" path.
+	 */
+	private async _handleStartTrial(status: HTMLElement): Promise<void> {
+		this._logAction('trial_started', OnboardingStepId.Trial);
+		try {
+			await this.commandService.executeCommand('flowleap.startTrial');
+		} catch {
+			// The command lives in the copilot extension; if it isn't registered yet, surface an
+			// inline hint rather than a hidden toast (the modal dims toasts).
+			status.textContent = localize('onboarding.trial.openError', "Couldn't open checkout. Please try again.");
+			return;
+		}
+		status.textContent = localize('onboarding.trial.waiting', "Waiting for checkout to complete in your browser…");
+		this._startTrialPoll(status);
+	}
+
+	private _startTrialPoll(status: HTMLElement): void {
+		this._stopTrialPoll();
+		const token = ++this._trialPollToken;
+		const startedAt = Date.now();
+		const win = getActiveWindow();
+
+		const tick = async () => {
+			this._trialPollHandle = undefined;
+
+			let access: SubscriptionAccess = 'unknown';
+			try {
+				access = await this.commandService.executeCommand<SubscriptionAccess>('flowleap.checkSubscription') ?? 'unknown';
+			} catch {
+				access = 'unknown';
+			}
+
+			// A newer poll started, or the poll was stopped, while this check was in flight.
+			if (token !== this._trialPollToken) {
+				return;
+			}
+
+			const decision = decideTrialPoll(access, Date.now() - startedAt);
+			if (decision === 'advance') {
+				this._stopTrialPoll();
+				this._logAction('trial_confirmed', OnboardingStepId.Trial);
+				this.accessibilityService.alert(localize('onboarding.trial.confirmed.alert', "Trial active. Continuing."));
+				this._nextStep();
+			} else if (decision === 'timeout') {
+				this._stopTrialPoll();
+				if (status.isConnected) {
+					status.textContent = localize('onboarding.trial.timeout', "Finish checkout in your browser, then choose Continue.");
+				}
+			} else {
+				this._trialPollHandle = win.setTimeout(tick, TRIAL_POLL_INTERVAL_MS);
+			}
+		};
+
+		this._trialPollHandle = win.setTimeout(tick, TRIAL_POLL_INTERVAL_MS);
+	}
+
+	private _stopTrialPoll(): void {
+		// Bump the token so any in-flight tick's post-await result is ignored.
+		this._trialPollToken++;
+		if (this._trialPollHandle !== undefined) {
+			getActiveWindow().clearTimeout(this._trialPollHandle);
+			this._trialPollHandle = undefined;
+		}
+	}
+
+	// =====================================================================
+	// Minimize / restore (so workbench UI opened by a step is not trapped under the overlay)
+	// =====================================================================
+
+	/**
+	 * Hide the overlay so a workbench surface a step just opened (the models editor, the FlowLeap
+	 * Settings sidebar) is usable. This is NOT a dismiss — all state is kept and no complete/skip is
+	 * logged. Restores automatically when the models editor closes or (optionally) when
+	 * {@link options.restoreWhen} becomes true, and always via the resume affordance for surfaces
+	 * with no close event.
+	 */
+	private _minimize(options: { restoreWhen?: () => Promise<boolean> } = {}): void {
+		if (this._minimized || !this.overlay) {
+			return;
+		}
+		this._minimized = true;
+		this.overlay.classList.add('minimized');
+
+		// Auto-restore when the chat models-management editor we opened is closed.
+		this._minimizeDisposables.add(this.editorService.onDidCloseEditor(e => {
+			if (e.editor.typeId === MODELS_MANAGEMENT_EDITOR_TYPE_ID) {
+				this._restore();
+			}
+		}));
+
+		// Optionally restore early once the action completes (e.g. a model gets connected).
+		if (options.restoreWhen) {
+			this._startMinimizePoll(options.restoreWhen);
+		}
+
+		// Universal escape hatch: some surfaces (the sidebar view opened by `flowleap.patentDataKeys`)
+		// have no editor-close event, so always offer an explicit way back.
+		this._showResumeAffordance();
+	}
+
+	private _startMinimizePoll(restoreWhen: () => Promise<boolean>): void {
+		const token = ++this._minimizePollToken;
+		const win = getActiveWindow();
+		const tick = async () => {
+			this._minimizePollHandle = undefined;
+			let done = false;
+			try {
+				done = await restoreWhen();
+			} catch {
+				done = false;
+			}
+			if (token !== this._minimizePollToken || !this._minimized) {
+				return;
+			}
+			if (done) {
+				this._restore();
+			} else {
+				this._minimizePollHandle = win.setTimeout(tick, MINIMIZE_POLL_INTERVAL_MS);
+			}
+		};
+		this._minimizePollHandle = win.setTimeout(tick, MINIMIZE_POLL_INTERVAL_MS);
+	}
+
+	private _showResumeAffordance(): void {
+		const btn = append(this.layoutService.activeContainer, $<HTMLButtonElement>('button.onboarding-a-resume'));
+		btn.type = 'button';
+		const icon = append(btn, $('span.onboarding-a-resume-icon'));
+		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronUp));
+		icon.setAttribute('aria-hidden', 'true');
+		const label = append(btn, $('span'));
+		label.textContent = localize('onboarding.resume', "Resume FlowLeap setup");
+		btn.setAttribute('aria-label', label.textContent);
+		this._minimizeDisposables.add(addDisposableListener(btn, EventType.CLICK, () => this._restore()));
+		this._resumeButton = btn;
+	}
+
+	private _restore(): void {
+		if (!this._minimized) {
+			return;
+		}
+		this._teardownMinimize();
+		this.overlay?.classList.remove('minimized');
+		// Re-render so any state the opened surface changed (e.g. a model now connected) is fresh,
+		// then return focus into the modal.
+		this._rerenderCurrentStep();
+		this._focusCurrentStepElement();
+	}
+
+	private _teardownMinimize(): void {
+		this._minimized = false;
+		this._minimizePollToken++;
+		if (this._minimizePollHandle !== undefined) {
+			getActiveWindow().clearTimeout(this._minimizePollHandle);
+			this._minimizePollHandle = undefined;
+		}
+		this._minimizeDisposables.clear();
+		if (this._resumeButton) {
+			this._resumeButton.remove();
+			this._resumeButton = undefined;
+		}
+	}
+
+	// =====================================================================
+	// Step: Model (connect a BYO AI model)
+	// =====================================================================
+
+	private _renderModelStep(container: HTMLElement): void {
+		const wrapper = append(container, $('.onboarding-a-model'));
+
+		const rec = append(wrapper, $('.onboarding-a-model-rec'));
+		const recTitle = append(rec, $('div.onboarding-a-model-rec-title'));
+		recTitle.textContent = localize('onboarding.model.rec.title', "OpenRouter is the easy path");
+		const recBody = append(rec, $('div.onboarding-a-model-rec-body'));
+		recBody.textContent = localize('onboarding.model.rec.body', "One key connects every model. A typical patent session costs cents. Already have an Anthropic, OpenAI, or Gemini key? You can pick that instead.");
+
+		const actions = append(wrapper, $('.onboarding-a-model-actions'));
+		const connectBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-model-connect')));
+		connectBtn.type = 'button';
+		connectBtn.textContent = localize('onboarding.model.connect', "Connect your AI model");
+
+		const status = append(wrapper, $('.onboarding-a-model-status'));
+		status.setAttribute('role', 'status');
+		status.setAttribute('aria-live', 'polite');
+
+		const skip = this._registerStepFocusable(append(wrapper, $<HTMLButtonElement>('button.onboarding-a-model-skip')));
+		skip.type = 'button';
+		skip.textContent = localize('onboarding.model.later', "I'll do this later");
+
+		this.stepDisposables.add(addDisposableListener(connectBtn, EventType.CLICK, () => {
+			this._logAction('model_connect', OnboardingStepId.Model);
+			// The manage editor opens in the workbench, under the overlay — minimize so it's usable,
+			// and auto-restore when it closes or as soon as a model is connected.
+			this._minimize({ restoreWhen: () => this._isModelConfigured() });
+			this.commandService.executeCommand('workbench.action.chat.manage').then(undefined, () => {
+				// Manage UI unavailable — pop straight back so the user isn't stranded behind nothing.
+				this._restore();
+			});
+		}));
+
+		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
+			this._logAction('model_skipped', OnboardingStepId.Model);
+			// Model is the final P1 step, so skipping still completes the wizard.
+			this._dismiss('complete');
+		}));
+
+		// Optional shortcut for users who already hold EPO/USPTO keys. Data keys are deliberately not
+		// a wizard step (the trial covers patent data; EPO registration is slow — issue #79 / ADR 0008),
+		// so this is a muted footnote, not a CTA.
+		const dataKeysNote = append(wrapper, $('.onboarding-a-model-datakeys'));
+		dataKeysNote.append(localize('onboarding.model.dataKeys.prefix', "Optional — FlowLeap covers patent data during your trial. Already have EPO OPS or USPTO keys? "));
+		const dataKeysLink = this._registerStepFocusable(append(dataKeysNote, $<HTMLButtonElement>('button.onboarding-a-model-datakeys-link')));
+		dataKeysLink.type = 'button';
+		dataKeysLink.textContent = localize('onboarding.model.dataKeys.link', "Add them now");
+		this.stepDisposables.add(addDisposableListener(dataKeysLink, EventType.CLICK, () => {
+			this._logAction('data_keys_opened', OnboardingStepId.Model);
+			// The keys UI is the FlowLeap Settings sidebar — minimize so it's usable; it has no
+			// editor-close event, so the resume affordance is the way back (no completion poll).
+			this._minimize();
+			this.commandService.executeCommand('flowleap.patentDataKeys').then(undefined, () => this._restore());
+		}));
+
+		void this._refreshModelState(status, connectBtn);
+	}
+
+	/**
+	 * Reflect whether a BYO model is already connected, detected the same way the Setup tree does
+	 * (`vscode.lm.selectChatModels` minus the agent pseudo-vendors) via the `flowleap.checkModelConfigured`
+	 * command seam. Fires `model_key_added` once when a model is present.
+	 */
+	private async _refreshModelState(status: HTMLElement, connectBtn: HTMLButtonElement): Promise<void> {
+		const configured = await this._isModelConfigured();
+		if (!status.isConnected) {
+			return;
+		}
+		if (configured) {
+			if (!this._modelKeyAddedLogged) {
+				this._modelKeyAddedLogged = true;
+				this._logAction('model_key_added', OnboardingStepId.Model);
+			}
+			status.textContent = localize('onboarding.model.connected', "A model is connected. You're ready to go.");
+			connectBtn.textContent = localize('onboarding.model.manage', "Manage models");
+		} else {
+			status.textContent = '';
+		}
+	}
+
+	/** Whether a BYO model is connected, via the extension bridge (same test as the Setup tree). */
+	private async _isModelConfigured(): Promise<boolean> {
+		try {
+			return await this.commandService.executeCommand<boolean>('flowleap.checkModelConfigured') === true;
+		} catch {
+			return false;
+		}
+	}
+
+	// =====================================================================
 	// Radio-group keyboard navigation (roving tabindex)
 	// =====================================================================
 
@@ -1068,6 +1651,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	// =====================================================================
 
 	private _removeFromDOM(): void {
+		this._stopTrialPoll();
+		// Tear down any minimize state (listeners, poll, resume button) — covers a dismiss while minimized.
+		this._teardownMinimize();
+		// Invalidate any in-flight subscription check so a late result can't act on a torn-down modal.
+		this._accessCheckToken++;
+
 		if (this._signInInFlight) {
 			// Don't leave the provider's deep-link wait dangling when the modal is torn down mid-attempt.
 			this.commandService.executeCommand('patent-ai.cancelSignIn').then(undefined, () => { });
