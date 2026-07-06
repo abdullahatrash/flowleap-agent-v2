@@ -31,6 +31,14 @@ import { localize } from '../../nls.js';
 
 const AIDisabledConfig = 'chat.disableAIFeatures';
 
+/**
+ * Completion key for the onboarding wizard, owned by
+ * `workbench/contrib/welcomeOnboarding/common/onboardingTypes` (`ONBOARDING_STORAGE_KEY`). Mirrored
+ * here as a string literal so this layer can suppress the duplicate welcome dialog without importing
+ * a workbench contrib (issue #79 consolidation).
+ */
+const ONBOARDING_WIZARD_STATE_KEY = 'welcomeOnboarding.state';
+
 export const ISessionsSetUpService = createDecorator<ISessionsSetUpService>('sessionsSetUpService');
 
 export interface ISessionsSetUpService {
@@ -105,8 +113,16 @@ class SessionsSetUpWidget extends Disposable {
 		await this._ensureAIFeaturesEnabled();
 
 		const isFirstLaunch = !this.storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.APPLICATION, false);
+		// The onboarding wizard (issue #79) is the single first-run welcome. When it has already run
+		// its own richer welcome, don't stack this dialog on top — record completion silently instead.
+		// The key is referenced by string (owned by welcomeOnboarding/common/onboardingTypes) so this
+		// layer never imports a workbench contrib.
+		const onboardingWizardRan = this.storageService.getBoolean(ONBOARDING_WIZARD_STATE_KEY, StorageScope.APPLICATION, false);
 		// The welcome dialog is desktop-only; on web we open straight in.
-		if (isFirstLaunch && !isWeb) {
+		if (onboardingWizardRan) {
+			this.storageService.store(WELCOME_COMPLETE_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
+			this.serviceMarkDone();
+		} else if (isFirstLaunch && !isWeb) {
 			await this._showWelcomeDialog();
 		}
 
