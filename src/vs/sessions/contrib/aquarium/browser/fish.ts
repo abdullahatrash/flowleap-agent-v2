@@ -3,15 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSCODE_LOGO_PATH } from './vscodeLogoPath.js';
+import { FLOWLEAP_LOGO_PATHS, FLOWLEAP_LOGO_VIEWBOX } from './flowleapLogoPath.js';
 
 /**
- * VS Code logo "fish" used by the Agents window aquarium. Each fish is a small
+ * FlowLeap brand-mark "fish" used by the Agents window aquarium. Each fish is a small
  * SVG element styled with `color:` so the silhouette inherits via `currentColor`,
  * with animated body strips providing the swimming motion.
  */
 
-/** The three VS Code release channel colors used as fish "species". */
+/** The three fish "species" tints. */
 export const enum FishSpecies {
 	Stable = 'stable',
 	Insiders = 'insiders',
@@ -180,12 +180,12 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const NUM_BODY_STRIPS = 8;
 
 /** The body's bounding range in the original logo's user units. */
-const BODY_X_START = 5;
-const BODY_X_END = 90;
+const BODY_X_START = 4.5;
+const BODY_X_END = 91.5;
 
 /**
  * Lazily-built shared SVG element holding both the strip clipPath defs AND
- * a single `<symbol>` containing the VS Code logo path. All fish reference
+ * a single `<symbol>` containing the FlowLeap brand-mark paths. All fish reference
  * these via `clip-path: url(#…)` and `<use href="#…">` instead of duplicating
  * the path data per strip per fish (which previously caused 50 fish * 10
  * strips = 500 path parses on every aquarium activation).
@@ -217,7 +217,7 @@ function ensureSharedDefs(targetDocument: Document): void {
 
 	// All strips reference this symbol via `<use href="#agents-aquarium-fish-logo">`,
 	// so the path data is parsed exactly ONCE per session instead of FISH_COUNT * NUM_STRIPS.
-	container.appendChild(createVSCodeLogoSymbol(targetDocument));
+	container.appendChild(createFlowLeapLogoSymbol(targetDocument));
 
 	const defs = targetDocument.createElementNS(SVG_NS, 'defs');
 	for (let i = 0; i < NUM_BODY_STRIPS; i++) {
@@ -239,24 +239,28 @@ function ensureSharedDefs(targetDocument: Document): void {
 	sharedDefsByDocument.set(targetDocument, container);
 }
 
-function createVSCodeLogoSymbol(targetDocument: Document): SVGSymbolElement {
+function createFlowLeapLogoSymbol(targetDocument: Document): SVGSymbolElement {
 	const symbol = targetDocument.createElementNS(SVG_NS, 'symbol');
 	symbol.setAttribute('id', SHARED_LOGO_SYMBOL_ID);
-	symbol.setAttribute('viewBox', '0 0 96 96');
+	// The symbol's viewBox scales the brand-mark coordinate space into the
+	// 96x96 fish space of the referencing `<use>` elements.
+	symbol.setAttribute('viewBox', FLOWLEAP_LOGO_VIEWBOX);
 	symbol.setAttribute('overflow', 'visible');
 
-	const logoPath = targetDocument.createElementNS(SVG_NS, 'path');
-	logoPath.setAttribute('d', VSCODE_LOGO_PATH);
-	logoPath.setAttribute('fill', 'currentColor');
-	logoPath.setAttribute('fill-rule', 'evenodd');
-	symbol.appendChild(logoPath);
+	for (const pathData of FLOWLEAP_LOGO_PATHS) {
+		const logoPath = targetDocument.createElementNS(SVG_NS, 'path');
+		logoPath.setAttribute('d', pathData);
+		logoPath.setAttribute('fill', 'currentColor');
+		logoPath.setAttribute('fill-rule', 'evenodd');
+		symbol.appendChild(logoPath);
+	}
 
 	return symbol;
 }
 
 /**
  * Build the inline SVG element tree for a fish:
- *   - VS Code logo body, sliced into N vertical strips that each oscillate in
+ *   - FlowLeap brand-mark body, sliced into N vertical strips that each oscillate in
  *     Y with a phase-offset CSS animation (the "swimming" sine wave)
  *
  * Colors come from `currentColor` on the parent element. Built with
@@ -271,7 +275,8 @@ function buildFishSvg(targetDocument: Document): SVGSVGElement {
 	const svg = targetDocument.createElementNS(SVG_NS, 'svg');
 	svg.setAttribute('xmlns', SVG_NS);
 	svg.setAttribute('focusable', 'false');
-	// viewBox 0..96 matches the original VS Code icon.
+	// viewBox 0..96 is the fish coordinate space; the shared symbol's own
+	// viewBox scales the brand mark into it.
 	svg.setAttribute('viewBox', '0 0 96 96');
 	svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 	// Tell the rasterizer to optimize for visual quality, not speed: smoother
