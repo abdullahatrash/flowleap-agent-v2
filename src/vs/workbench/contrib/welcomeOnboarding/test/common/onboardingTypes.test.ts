@@ -5,7 +5,84 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { GheParseResultKind, parseGheInstanceInput } from '../../common/onboardingTypes.js';
+import {
+	GheParseResultKind,
+	parseGheInstanceInput,
+	computeVisibleSteps,
+	decideTrialPoll,
+	ONBOARDING_STEPS,
+	OnboardingStepId,
+	TRIAL_POLL_TIMEOUT_MS,
+} from '../../common/onboardingTypes.js';
+
+suite('onboarding step ordering + visibility', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('canonical order is Role → See it work → Sign in → Trial → Model', () => {
+		assert.deepStrictEqual([...ONBOARDING_STEPS], [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Trial,
+			OnboardingStepId.Model,
+		]);
+	});
+
+	test('the deleted Personalize step is not in the flow', () => {
+		assert.ok(!ONBOARDING_STEPS.includes(OnboardingStepId.Personalize));
+	});
+
+	test('signed-in users see the Trial step', () => {
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true }), [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Trial,
+			OnboardingStepId.Model,
+		]);
+	});
+
+	test('signed-out users skip the Trial step', () => {
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false }), [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Model,
+		]);
+	});
+
+	test('visible steps preserve canonical relative order', () => {
+		for (const signedIn of [true, false]) {
+			const visible = computeVisibleSteps({ signedIn });
+			const canonicalIndices = visible.map(s => ONBOARDING_STEPS.indexOf(s));
+			const sorted = [...canonicalIndices].sort((a, b) => a - b);
+			assert.deepStrictEqual(canonicalIndices, sorted);
+		}
+	});
+});
+
+suite('decideTrialPoll', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('advances the instant access is active', () => {
+		assert.strictEqual(decideTrialPoll('active', 0), 'advance');
+		assert.strictEqual(decideTrialPoll('active', TRIAL_POLL_TIMEOUT_MS + 1), 'advance');
+	});
+
+	test('keeps polling while inactive and within the time budget', () => {
+		assert.strictEqual(decideTrialPoll('inactive', 0), 'continue');
+		assert.strictEqual(decideTrialPoll('inactive', TRIAL_POLL_TIMEOUT_MS - 1), 'continue');
+	});
+
+	test('treats an inconclusive check as keep-waiting', () => {
+		assert.strictEqual(decideTrialPoll('unknown', 1_000), 'continue');
+	});
+
+	test('times out once the budget is spent without access', () => {
+		assert.strictEqual(decideTrialPoll('inactive', TRIAL_POLL_TIMEOUT_MS), 'timeout');
+		assert.strictEqual(decideTrialPoll('unknown', TRIAL_POLL_TIMEOUT_MS), 'timeout');
+	});
+});
 
 suite('parseGheInstanceInput', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
