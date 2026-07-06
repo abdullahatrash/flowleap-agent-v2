@@ -44,6 +44,7 @@ For every patent/reference cited in the analysis:
 ### Section 4: Limitations (what was NOT retrieved)
 Be explicit, e.g.:
 - CN/JP/KR patents: machine-translated only, not verified by a human translator
+- Web-based sources: `web_search` was not available on this model — Google Patents/PATENTSCOPE sweeps not run, CN/JP/KR covered via patent-family expansion only
 - Legal status: checked for EP/US only
 - Claims: full text retrieved for top 5 EP patents only
 - Time period searched

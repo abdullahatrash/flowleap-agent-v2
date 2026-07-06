@@ -1207,7 +1207,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(search)",
         "userDescription": "Execute patent search using CQL query",
-        "modelDescription": "Executes an EPO OPS CQL patent search for EP/WO patents; returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents — not US patents (use uspto_api_guide for those). Use after build_patent_query to run the generated CQL. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (e.g. 'EP,WO' to restrict to fulltext-available patents). No wildcards on ic/cpc fields; max 100 results per request.",
+        "modelDescription": "Executes an EPO OPS CQL patent search for EP/WO patents; returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents — not US patents (for those, use build_uspto_query then patent_api_request; see uspto_api_guide for advanced options). Use after build_patent_query to run the generated CQL. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (e.g. 'EP,WO' to restrict to fulltext-available patents). No wildcards on ic/cpc fields; max 100 results per request.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1252,6 +1252,15 @@
             "claimText": {
               "type": "string",
               "description": "The patent claim or invention description to analyze. Can be a formal claim or informal description of the invention."
+            },
+            "focus": {
+              "type": "string",
+              "enum": [
+                "search",
+                "elements",
+                "full"
+              ],
+              "description": "What to extract: 'search' returns keywords, synonyms, IPC codes and suggested queries only; 'elements' returns the claim element breakdown only; 'full' (default) returns both."
             }
           },
           "required": [
@@ -1827,7 +1836,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(book)",
         "userDescription": "Search academic sources like Google Scholar and arXiv",
-        "modelDescription": "Searches academic research papers (Google Scholar, arXiv, PubMed) for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (uspto_api_guide) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. Input: query (free text, e.g. 'CRISPR gene editing off-target effects'); sources (['scholar','arxiv','pubmed'], default ['scholar','arxiv']); maxResults (default 10, max 50).",
+        "modelDescription": "Searches academic research papers (Google Scholar, arXiv, PubMed) for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (build_uspto_query + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. Input: query (free text, e.g. 'CRISPR gene editing off-target effects'); sources (['scholar','arxiv','pubmed'], default ['scholar','arxiv']); maxResults (default 10, max 50).",
         "tags": [],
         "inputSchema": {
           "type": "object",

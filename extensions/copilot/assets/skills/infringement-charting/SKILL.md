@@ -25,7 +25,7 @@ Always include: "This claim chart is for informational purposes only and does no
 
 Gather evidence for each claim element — the chart is only as strong as its citations:
 - From the user: teardowns, internal analysis, product samples
-- `web_search`: datasheets, user manuals, developer docs, marketing pages, FCC filings, standards-compliance declarations ("supports 802.11ax" can evidence every element a standard mandates)
+- `web_search`: datasheets, user manuals, developer docs, marketing pages, FCC filings, standards-compliance declarations ("supports 802.11ax" can evidence every element a standard mandates). If `web_search` is not available on this model, ask the user (via `vscode_askQuestions`) for product documentation URLs or files instead, and use `fetch_webpage` on URLs they provide
 - `read_pdf` for datasheets and manuals
 - Log every source with URL/document + date. Distinguish **public evidence** from **inference** — never present inference as evidence.
 

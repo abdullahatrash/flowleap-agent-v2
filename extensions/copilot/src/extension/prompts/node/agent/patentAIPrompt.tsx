@@ -167,7 +167,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				PRECONDITION FOR BRANCHES A, B, C, E: the jurisdiction gate above applies.<br />
 				If jurisdiction is not explicit in the user's message, your FIRST action is the vscode_askQuestions jurisdiction carousel — only then enter the branch.<br />
 				NEVER ask when the message already signals scope: "worldwide"/"comprehensive"/"global"/"all offices"/"anywhere" → Both, "US"/"USPTO" → USPTO, "European"/"EP"/"WO" → EPO, multiple offices named → all of them — asking again (including confirmation-style asks) after an explicit signal is an error.<br />
-				When the scope is Both (worldwide/comprehensive/all offices/multiple offices), run BOTH search paths: build_patent_query → search_patents for EP/WO AND the USPTO path (build_uspto_query → uspto_api_guide) — never just one of them.<br />
+				When the scope is Both (worldwide/comprehensive/all offices/multiple offices), run BOTH search paths: build_patent_query → search_patents for EP/WO AND the USPTO path (uspto_api_guide → build_uspto_query → patent_api_request) — never just one of them.<br />
 				The branches below assume jurisdiction is already known.<br />
 				<br />
 				**A) USER PROVIDES A CLAIM TEXT for prior art search?**<br />
@@ -224,7 +224,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{this.props.webSearchAvailable ? <>
 					**I) WEB SEARCH for expanded prior art (CN, JP, KR patents + academic papers)?**<br />
 					→ Use web_search when dedicated tools don't have coverage<br />
-					→ DO NOT use web_search for: US patents (use uspto_api_guide), EP/WO patents (use ops_api_guide)<br />
+					→ DO NOT use web_search for: US patents (use the USPTO path: uspto_api_guide → build_uspto_query → patent_api_request), EP/WO patents (use search_patents / ops_api_guide)<br />
 					→ Web search is configured for patent/academic domains only<br />
 					→ SEARCH PATTERNS:<br />
 					{'• CN patents: site:patents.google.com/patent/CN "keywords"'}<br />
