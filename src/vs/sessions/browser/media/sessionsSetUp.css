@@ -49,3 +49,21 @@
 
 }
 
+/* Replace the generic agent codicon with the FlowLeap brand mark — masked so it recolors to a theme-aware accent (same technique as welcomeOnboarding). */
+.chat-setup-dialog.sessions-welcome-dialog .dialog-message-row > .dialog-icon.codicon::before {
+	content: none;
+}
+
+.chat-setup-dialog.sessions-welcome-dialog .dialog-message-row > .dialog-icon.codicon {
+	width: 64px; /* the removed glyph provided the intrinsic width */
+	background-color: var(--vscode-textLink-foreground, #3b6fed);
+	-webkit-mask-image: url('./flowleap-logo.svg');
+	mask-image: url('./flowleap-logo.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center center;
+	mask-position: center center;
+	-webkit-mask-size: 56px;
+	mask-size: 56px;
+}
+
