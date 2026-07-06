@@ -35,12 +35,14 @@ import {
 	ONBOARDING_AI_PREFERENCE_OPTIONS,
 	ONBOARDING_ROLE_OPTIONS,
 	ONBOARDING_ROLE_STORAGE_KEY,
+	ONBOARDING_STORAGE_KEY,
 	AiCollaborationMode,
 	OnboardingRole,
 	IOnboardingThemeOption,
 	SubscriptionAccess,
 	computeVisibleSteps,
 	decideTrialPoll,
+	roleToFirstInvestigation,
 	getOnboardingStepTitle,
 	getOnboardingStepSubtitle,
 	TRIAL_POLL_INTERVAL_MS,
@@ -289,7 +291,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		}));
 		this.disposables.add(addDisposableListener(this.nextButton, EventType.CLICK, () => {
 			if (this._isLastStep()) {
-				this._logAction('complete');
+				// Finishing on the finale without running is the finale's skip; any other last step
+				// is a plain completion.
+				this._logAction(this.steps[this.currentStepIndex] === OnboardingStepId.Finale ? 'first_run_skipped' : 'complete');
 				this._dismiss('complete');
 				return;
 			}
@@ -578,6 +582,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			case OnboardingStepId.Model:
 				this._renderModelStep(this.contentEl);
 				break;
+			case OnboardingStepId.Finale:
+				this._renderFinaleStep(this.contentEl);
+				break;
 		}
 
 		this.bodyEl?.setAttribute('aria-label', localize(
@@ -632,7 +639,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		const primary = 'onboarding-a-btn onboarding-a-btn-primary';
 		const secondary = 'onboarding-a-btn onboarding-a-btn-secondary';
 		if (this._isLastStep()) {
-			return { className: primary, label: localize('onboarding.done', "Done") };
+			// The finale's primary CTA is the in-content "Run" button, so the footer is the
+			// de-emphasized skip; any other last step keeps a primary "Done".
+			return stepId === OnboardingStepId.Finale
+				? { className: secondary, label: localize('onboarding.finale.later', "Maybe later") }
+				: { className: primary, label: localize('onboarding.done', "Done") };
 		}
 		switch (stepId) {
 			case OnboardingStepId.SignIn:
@@ -1478,8 +1489,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
 			this._logAction('model_skipped', OnboardingStepId.Model);
-			// Model is the final P1 step, so skipping still completes the wizard.
-			this._dismiss('complete');
+			// Model is no longer the last step — advance to the finale (the wizard's payoff).
+			this._nextStep();
 		}));
 
 		// Optional shortcut for users who already hold EPO/USPTO keys. Data keys are deliberately not
@@ -1530,6 +1541,89 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		} catch {
 			return false;
 		}
+	}
+
+	// =====================================================================
+	// Step: Finale (run the first investigation — the wizard's payoff)
+	// =====================================================================
+
+	private _renderFinaleStep(container: HTMLElement): void {
+		const wrapper = append(container, $('.onboarding-a-finale'));
+		const { prompt } = roleToFirstInvestigation(this.selectedRole);
+
+		const promptLabel = append(wrapper, $('div.onboarding-a-finale-prompt-label'));
+		promptLabel.textContent = localize('onboarding.finale.promptLabel', "Your first investigation");
+
+		const promptBox = append(wrapper, $('.onboarding-a-finale-prompt'));
+		const icon = append(promptBox, $('span.onboarding-a-finale-prompt-icon'));
+		icon.setAttribute('aria-hidden', 'true');
+		icon.appendChild(renderIcon(Codicon.sparkle));
+		const promptText = append(promptBox, $('p.onboarding-a-finale-prompt-text'));
+		promptText.textContent = prompt;
+
+		const actions = append(wrapper, $('.onboarding-a-finale-actions'));
+		const runBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-finale-run')));
+		runBtn.type = 'button';
+		runBtn.textContent = localize('onboarding.finale.run', "Run my first investigation");
+		this.stepDisposables.add(addDisposableListener(runBtn, EventType.CLICK, () => this._handleRunFirstInvestigation()));
+
+		const gate = append(wrapper, $('.onboarding-a-finale-gate'));
+		gate.setAttribute('role', 'status');
+		gate.setAttribute('aria-live', 'polite');
+
+		// Honest gating: running needs a connected model (the reactive 401/402 notifications guide
+		// sign-in/trial recovery, so those are NOT hard-blocked here — issue #79 P2a item 3).
+		void this._applyFinaleModelGate(runBtn, gate);
+	}
+
+	private async _applyFinaleModelGate(runBtn: HTMLButtonElement, gate: HTMLElement): Promise<void> {
+		const configured = await this._isModelConfigured();
+		if (!runBtn.isConnected) {
+			return;
+		}
+		clearNode(gate);
+		if (configured) {
+			runBtn.disabled = false;
+			return;
+		}
+		runBtn.disabled = true;
+		gate.append(localize('onboarding.finale.needModel', "Connect an AI model to run this. "));
+		const back = append(gate, $<HTMLButtonElement>('button.onboarding-a-finale-gate-link'));
+		back.type = 'button';
+		back.textContent = localize('onboarding.finale.needModel.link', "Go to the model step");
+		this.stepDisposables.add(addDisposableListener(back, EventType.CLICK, () => this._goToStep(OnboardingStepId.Model)));
+	}
+
+	/**
+	 * Complete the wizard and hand the role-tailored prompt to the FlowLeap shell, which opens a
+	 * prepared workspace and pre-fills chat (the user presses send). The command opens a folder — a
+	 * window reload — so completion is persisted eagerly and the command fires only after the modal
+	 * has fully dismissed.
+	 */
+	private _handleRunFirstInvestigation(): void {
+		const { prompt, projectType } = roleToFirstInvestigation(this.selectedRole);
+		this._logAction('first_run_started', OnboardingStepId.Finale, this.selectedRole);
+		// The openFolder reload can outrun the dismiss-time persistence and re-show the wizard in the
+		// new workspace, so persist completion now (same key + scope startupPage uses).
+		this.storageService.store(ONBOARDING_STORAGE_KEY, true, StorageScope.APPLICATION, StorageTarget.USER);
+		Event.once(this.onDidComplete)(() => {
+			void this.commandService.executeCommand('flowleap.startFirstInvestigation', { prompt, projectType });
+		});
+		this._dismiss('complete');
+	}
+
+	/** Jump to a specific step (used by the finale's "go to the model step" gate link). */
+	private _goToStep(stepId: OnboardingStepId): void {
+		const index = this.steps.indexOf(stepId);
+		if (index < 0 || index === this.currentStepIndex) {
+			return;
+		}
+		this.currentStepIndex = index;
+		this._renderStep();
+		this._renderProgress();
+		this._updateButtonStates();
+		this._focusCurrentStepElement();
+		this._logStepView();
 	}
 
 	// =====================================================================

@@ -1349,6 +1349,91 @@
 }
 
 /* =========================================================================
+ * Step: Finale — run the first investigation (issue #79 P2a)
+ * ========================================================================= */
+.onboarding-a-finale {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 14px;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0 auto;
+}
+
+.onboarding-a-finale-prompt-label {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-finale-prompt {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 16px 18px;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+}
+
+.onboarding-a-finale-prompt-icon .codicon {
+	font-size: 18px;
+	color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.onboarding-a-finale-prompt-text {
+	margin: 0;
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--vscode-editor-foreground);
+}
+
+.onboarding-a-finale-actions {
+	display: flex;
+	justify-content: center;
+}
+
+.onboarding-a-finale-run {
+	min-width: 240px;
+}
+
+.onboarding-a-finale-run:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.onboarding-a-finale-gate {
+	min-height: 18px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	text-align: center;
+}
+
+.onboarding-a-finale-gate-link {
+	background: none;
+	border: none;
+	padding: 0;
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+}
+
+.onboarding-a-finale-gate-link:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-finale-gate-link:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+/* =========================================================================
  * Minimize / restore — hide the overlay while a step's workbench UI is open
  * ========================================================================= */
 .onboarding-a-overlay.minimized {
