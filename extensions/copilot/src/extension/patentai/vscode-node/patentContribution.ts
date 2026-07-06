@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../platform/log/common/logService';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IExtensionContribution } from '../../common/contributions';
 import { getPatentAIConfig } from './configService';
@@ -19,6 +20,7 @@ import { PatentDataKeysStore } from './patentDataKeysStore';
 import { maybeShowSetupOnStartup, PatentDataKeysViewProvider, registerPatentDataKeysCommand } from './patentDataKeysPage';
 import { registerPatentSetupView } from './patentSetupView';
 import { registerOnboardingBridgeCommands } from './onboardingBridge';
+import { TrialCountdownStatusBar, TrialPillTelemetry } from './trialCountdownStatusBar';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -47,6 +49,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		@IAuthenticationService private readonly _authService: IAuthenticationService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@IPatentBackendClient private readonly _patentBackendClient: IPatentBackendClient,
+		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 	) {
 		super();
 		this._initialize();
@@ -85,6 +88,19 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 				this._register(registerPatentSetupView(this._dataKeysStore, this._authProvider, this._logService));
 			}
 		});
+		this._safeStep('register trial-countdown pill', () => {
+			// Status-bar "Trial · N days left" pill (issue #79, P2). Visible only while trialing;
+			// clicking it reveals the Setup surface. Reads the subscription through the provider.
+			if (this._authProvider) {
+				const provider = this._authProvider;
+				this._register(new TrialCountdownStatusBar(
+					() => provider.getSubscriptionSnapshot(),
+					provider.onDidChangeSessions,
+					this._trialPillTelemetry(),
+					this._logService,
+				));
+			}
+		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());
 		this._safeStep('register onboarding bridge commands', () => {
 			// Command seam the workbench-core onboarding wizard (issue #79) reads FlowLeap state
@@ -118,6 +134,25 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			const message = error instanceof Error ? error.message : String(error);
 			this._logService.error(`[Patent AI] Initialization step failed (${label}): ${message}`);
 		}
+	}
+
+	/**
+	 * Telemetry sink for the trial-countdown pill's two funnel signals (issue #79). Internal events
+	 * — the day count is a coarse setup-funnel measure, not user content.
+	 */
+	private _trialPillTelemetry(): TrialPillTelemetry {
+		return {
+			pillShown: (daysRemaining: number | null): void => {
+				this._telemetryService.sendInternalMSFTTelemetryEvent(
+					'flowleap.trial.pillShown',
+					{},
+					daysRemaining === null ? {} : { daysRemaining },
+				);
+			},
+			pillClicked: (): void => {
+				this._telemetryService.sendInternalMSFTTelemetryEvent('flowleap.trial.pillClicked');
+			},
+		};
 	}
 
 	/**

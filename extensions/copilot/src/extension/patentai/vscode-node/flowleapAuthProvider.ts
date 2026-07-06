@@ -9,6 +9,7 @@ import type { ILogService } from '../../../platform/log/common/logService';
 import { getPatentAccessToken, registerPatentAccessTokenProvider } from '../common/patentTokenRegistry';
 import { registerUriRoute } from '../../uriHandler/vscode-node/extensionUriHandler';
 import { getPatentAIConfig } from './configService';
+import type { FlowLeapSubscriptionSnapshot, FlowLeapSubscriptionStatus } from '../common/trialCountdown';
 
 const PROVIDER_ID = 'flowleap';
 const PROVIDER_LABEL = 'FlowLeap';
@@ -597,23 +598,43 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 * server-enforced access control.
 	 */
 	public async getSubscriptionAccess(): Promise<'active' | 'inactive' | 'unknown'> {
+		const { status } = await this.getSubscriptionSnapshot();
+		if (status === 'unknown') {
+			return 'unknown';
+		}
+		return status === 'active' || status === 'trialing' ? 'active' : 'inactive';
+	}
+
+	/**
+	 * A single read of the FlowLeap subscription that preserves the RAW status — `active` (paid)
+	 * and `trialing` are kept distinct here, unlike {@link getSubscriptionAccess} which collapses
+	 * both to "has access" — and surfaces `currentPeriodEnd` so the trial-countdown pill can name
+	 * the days left. Inconclusive reads (signed out, token not ready, non-OK response, network
+	 * error) return `{ status: 'unknown' }` with no end date, so a subscribed user is never nagged
+	 * on a transient failure. The reactive `402` gate remains the real, server-enforced control.
+	 */
+	public async getSubscriptionSnapshot(): Promise<FlowLeapSubscriptionSnapshot> {
 		const token = getPatentAccessToken();
 		if (!token) {
-			return 'unknown';
+			return { status: 'unknown' };
 		}
 		try {
 			const config = getPatentAIConfig();
 			const url = `${config.apiUrl.replace(/\/v1\/?$/, '')}/billing/subscription`;
 			const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 			if (!res.ok) {
-				return 'unknown';
+				return { status: 'unknown' };
 			}
-			const data = await res.json() as { hasSubscription?: boolean; subscription?: { status?: string } | null };
-			const status = data.subscription?.status;
-			return status === 'active' || status === 'trialing' ? 'active' : 'inactive';
+			const data = await res.json() as { hasSubscription?: boolean; subscription?: { status?: string; currentPeriodEnd?: string | null } | null };
+			const rawStatus = data.subscription?.status;
+			const status: FlowLeapSubscriptionStatus =
+				rawStatus === 'active' ? 'active'
+					: rawStatus === 'trialing' ? 'trialing'
+						: 'inactive';
+			return { status, currentPeriodEnd: data.subscription?.currentPeriodEnd ?? null };
 		} catch (error) {
 			this._logService.warn(`[Patent AI Auth] Failed to determine subscription access: ${error}`);
-			return 'unknown';
+			return { status: 'unknown' };
 		}
 	}
 
