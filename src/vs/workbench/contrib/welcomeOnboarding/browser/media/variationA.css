@@ -1397,23 +1397,23 @@
 	justify-content: center;
 }
 
-.onboarding-a-finale-run {
+.onboarding-a-finale-copy {
 	min-width: 240px;
 }
 
-.onboarding-a-finale-run:disabled {
-	opacity: 0.5;
-	cursor: default;
+.onboarding-a-finale-copy.copied {
+	background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+	color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
 }
 
-.onboarding-a-finale-gate {
+.onboarding-a-finale-openrow {
 	min-height: 18px;
 	font-size: 12px;
 	color: var(--vscode-descriptionForeground);
 	text-align: center;
 }
 
-.onboarding-a-finale-gate-link {
+.onboarding-a-finale-openchat {
 	background: none;
 	border: none;
 	padding: 0;
@@ -1423,11 +1423,11 @@
 	cursor: pointer;
 }
 
-.onboarding-a-finale-gate-link:hover {
+.onboarding-a-finale-openchat:hover {
 	text-decoration: underline;
 }
 
-.onboarding-a-finale-gate-link:focus-visible {
+.onboarding-a-finale-openchat:focus-visible {
 	outline: 2px solid var(--vscode-focusBorder);
 	outline-offset: 2px;
 	border-radius: 2px;

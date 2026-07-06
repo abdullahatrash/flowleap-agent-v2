@@ -102,30 +102,20 @@ suite('onboarding step ordering + visibility', () => {
 suite('roleToFirstInvestigation', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('every role maps to a non-empty patent-domain prompt and a valid project type', () => {
-		const validTypes = new Set(['patent-analysis', 'prior-art-search', 'custom']);
+	test('every role (and no role) maps to a non-empty prompt', () => {
 		for (const role of [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder, undefined]) {
-			const { prompt, projectType } = roleToFirstInvestigation(role);
-			assert.ok(prompt.trim().length > 0, `role=${role} prompt`);
-			assert.ok(validTypes.has(projectType), `role=${role} projectType=${projectType}`);
+			assert.ok(roleToFirstInvestigation(role).trim().length > 0, `role=${role}`);
 		}
-	});
-
-	test('roles map to their tailored project type', () => {
-		assert.strictEqual(roleToFirstInvestigation(OnboardingRole.PatentAttorney).projectType, 'patent-analysis');
-		assert.strictEqual(roleToFirstInvestigation(OnboardingRole.IpAnalyst).projectType, 'patent-analysis');
-		assert.strictEqual(roleToFirstInvestigation(OnboardingRole.Researcher).projectType, 'prior-art-search');
-		assert.strictEqual(roleToFirstInvestigation(OnboardingRole.Founder).projectType, 'prior-art-search');
-	});
-
-	test('no role falls back to a generic prior-art search', () => {
-		assert.strictEqual(roleToFirstInvestigation(undefined).projectType, 'prior-art-search');
 	});
 
 	test('distinct roles get distinct prompts', () => {
 		const prompts = [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder]
-			.map(r => roleToFirstInvestigation(r).prompt);
+			.map(r => roleToFirstInvestigation(r));
 		assert.strictEqual(new Set(prompts).size, prompts.length);
+	});
+
+	test('an unknown role falls back to the generic prompt', () => {
+		assert.strictEqual(roleToFirstInvestigation(undefined), roleToFirstInvestigation('nonsense' as unknown as OnboardingRole));
 	});
 });
 

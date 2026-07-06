@@ -29,13 +29,13 @@ import { ITelemetryService } from '../../../../platform/telemetry/common/telemet
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import {
 	OnboardingStepId,
 	ONBOARDING_AI_PREFERENCE_OPTIONS,
 	ONBOARDING_ROLE_OPTIONS,
 	ONBOARDING_ROLE_STORAGE_KEY,
-	ONBOARDING_STORAGE_KEY,
 	AiCollaborationMode,
 	OnboardingRole,
 	IOnboardingThemeOption,
@@ -178,6 +178,8 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	private _minimizePollToken = 0;
 	private _minimizePollHandle: number | undefined;
 	private _resumeButton: HTMLButtonElement | undefined;
+	// Timer that reverts the finale "Copied" confirmation back to "Copy prompt".
+	private _finaleCopyResetHandle: number | undefined;
 
 	constructor(
 		@ILayoutService private readonly layoutService: ILayoutService,
@@ -194,6 +196,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IEditorService private readonly editorService: IEditorService,
+		@IClipboardService private readonly clipboardService: IClipboardService,
 	) {
 		super();
 
@@ -1549,7 +1552,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 	private _renderFinaleStep(container: HTMLElement): void {
 		const wrapper = append(container, $('.onboarding-a-finale'));
-		const { prompt } = roleToFirstInvestigation(this.selectedRole);
+		const prompt = roleToFirstInvestigation(this.selectedRole);
 
 		const promptLabel = append(wrapper, $('div.onboarding-a-finale-prompt-label'));
 		promptLabel.textContent = localize('onboarding.finale.promptLabel', "Your first investigation");
@@ -1562,68 +1565,68 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		promptText.textContent = prompt;
 
 		const actions = append(wrapper, $('.onboarding-a-finale-actions'));
-		const runBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-finale-run')));
-		runBtn.type = 'button';
-		runBtn.textContent = localize('onboarding.finale.run', "Run my first investigation");
-		this.stepDisposables.add(addDisposableListener(runBtn, EventType.CLICK, () => this._handleRunFirstInvestigation()));
+		const copyBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-finale-copy')));
+		copyBtn.type = 'button';
+		copyBtn.textContent = localize('onboarding.finale.copy', "Copy prompt");
 
-		const gate = append(wrapper, $('.onboarding-a-finale-gate'));
-		gate.setAttribute('role', 'status');
-		gate.setAttribute('aria-live', 'polite');
+		// The "open chat" follow-up appears only after the prompt is copied — it's the next move.
+		const openRow = append(wrapper, $('.onboarding-a-finale-openrow'));
+		openRow.style.display = 'none';
+		const openHint = append(openRow, $('span.onboarding-a-finale-openhint'));
+		openHint.textContent = localize('onboarding.finale.openHint', "Paste it into chat and press send. ");
+		const openChatBtn = this._registerStepFocusable(append(openRow, $<HTMLButtonElement>('button.onboarding-a-finale-openchat')));
+		openChatBtn.type = 'button';
+		openChatBtn.textContent = localize('onboarding.finale.openChat', "Open chat");
 
-		// Honest gating: running needs a connected model (the reactive 401/402 notifications guide
-		// sign-in/trial recovery, so those are NOT hard-blocked here — issue #79 P2a item 3).
-		void this._applyFinaleModelGate(runBtn, gate);
+		this.stepDisposables.add(addDisposableListener(copyBtn, EventType.CLICK, () => {
+			void this._handleCopyPrompt(prompt, copyBtn, openRow);
+		}));
+		this.stepDisposables.add(addDisposableListener(openChatBtn, EventType.CLICK, () => this._handleOpenChat()));
+
+		// Cancel a pending "Copied" revert if the step is torn down mid-confirmation.
+		this.stepDisposables.add({ dispose: () => this._clearFinaleCopyReset() });
 	}
 
-	private async _applyFinaleModelGate(runBtn: HTMLButtonElement, gate: HTMLElement): Promise<void> {
-		const configured = await this._isModelConfigured();
-		if (!runBtn.isConnected) {
+	/** Copy the prompt to the clipboard and briefly confirm; then surface the "open chat" follow-up. */
+	private async _handleCopyPrompt(prompt: string, copyBtn: HTMLButtonElement, openRow: HTMLElement): Promise<void> {
+		try {
+			await this.clipboardService.writeText(prompt);
+		} catch {
+			// Clipboard unavailable — leave the button as-is; the prompt is still readable above.
 			return;
 		}
-		clearNode(gate);
-		if (configured) {
-			runBtn.disabled = false;
-			return;
-		}
-		runBtn.disabled = true;
-		gate.append(localize('onboarding.finale.needModel', "Connect an AI model to run this. "));
-		const back = append(gate, $<HTMLButtonElement>('button.onboarding-a-finale-gate-link'));
-		back.type = 'button';
-		back.textContent = localize('onboarding.finale.needModel.link', "Go to the model step");
-		this.stepDisposables.add(addDisposableListener(back, EventType.CLICK, () => this._goToStep(OnboardingStepId.Model)));
-	}
-
-	/**
-	 * Complete the wizard and hand the role-tailored prompt to the FlowLeap shell, which opens a
-	 * prepared workspace and pre-fills chat (the user presses send). The command opens a folder — a
-	 * window reload — so completion is persisted eagerly and the command fires only after the modal
-	 * has fully dismissed.
-	 */
-	private _handleRunFirstInvestigation(): void {
-		const { prompt, projectType } = roleToFirstInvestigation(this.selectedRole);
+		// Keep the funnel event name for continuity even though the user runs it themselves.
 		this._logAction('first_run_started', OnboardingStepId.Finale, this.selectedRole);
-		// The openFolder reload can outrun the dismiss-time persistence and re-show the wizard in the
-		// new workspace, so persist completion now (same key + scope startupPage uses).
-		this.storageService.store(ONBOARDING_STORAGE_KEY, true, StorageScope.APPLICATION, StorageTarget.USER);
+		this.accessibilityService.alert(localize('onboarding.finale.copied.alert', "Prompt copied to clipboard."));
+
+		copyBtn.textContent = localize('onboarding.finale.copied', "Copied to clipboard");
+		copyBtn.classList.add('copied');
+		openRow.style.display = '';
+
+		this._clearFinaleCopyReset();
+		this._finaleCopyResetHandle = getActiveWindow().setTimeout(() => {
+			this._finaleCopyResetHandle = undefined;
+			if (copyBtn.isConnected) {
+				copyBtn.textContent = localize('onboarding.finale.copy', "Copy prompt");
+				copyBtn.classList.remove('copied');
+			}
+		}, 2000);
+	}
+
+	/** Complete the wizard and reveal chat (no query injected) so the user can paste and send. */
+	private _handleOpenChat(): void {
+		this._clearFinaleCopyReset();
 		Event.once(this.onDidComplete)(() => {
-			void this.commandService.executeCommand('flowleap.startFirstInvestigation', { prompt, projectType });
+			void this.commandService.executeCommand('workbench.action.chat.open');
 		});
 		this._dismiss('complete');
 	}
 
-	/** Jump to a specific step (used by the finale's "go to the model step" gate link). */
-	private _goToStep(stepId: OnboardingStepId): void {
-		const index = this.steps.indexOf(stepId);
-		if (index < 0 || index === this.currentStepIndex) {
-			return;
+	private _clearFinaleCopyReset(): void {
+		if (this._finaleCopyResetHandle !== undefined) {
+			getActiveWindow().clearTimeout(this._finaleCopyResetHandle);
+			this._finaleCopyResetHandle = undefined;
 		}
-		this.currentStepIndex = index;
-		this._renderStep();
-		this._renderProgress();
-		this._updateButtonStates();
-		this._focusCurrentStepElement();
-		this._logStepView();
 	}
 
 	// =====================================================================
@@ -1746,6 +1749,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 	private _removeFromDOM(): void {
 		this._stopTrialPoll();
+		this._clearFinaleCopyReset();
 		// Tear down any minimize state (listeners, poll, resume button) — covers a dismiss while minimized.
 		this._teardownMinimize();
 		// Invalidate any in-flight subscription check so a late result can't act on a torn-down modal.

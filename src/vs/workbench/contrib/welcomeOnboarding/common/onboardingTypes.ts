@@ -65,7 +65,7 @@ export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model.subtitle', "FlowLeap runs on your own AI model. One key connects it.");
 		case OnboardingStepId.Finale:
-			return localize('onboarding.step.finale.subtitle', "We'll open a prepared workspace with this investigation ready in chat — you press send.");
+			return localize('onboarding.step.finale.subtitle', "Copy the prompt, paste it into chat, and press send — you'll see FlowLeap work with real sources.");
 	}
 }
 
@@ -158,49 +158,23 @@ export const ONBOARDING_ROLE_OPTIONS: readonly IOnboardingRoleOption[] = [
 ];
 
 /**
- * Project type understood by the FlowLeap `flowleap.startFirstInvestigation` command (mirrors the
- * `ProjectType` union in the FlowLeap shell extension).
+ * Map the stored persona to a role-tailored first-investigation prompt shown on the finale step.
+ * The user copies it into chat themselves (issue #79 finale — no auto-run). Copy is patent-domain
+ * and readable; an unknown/absent role falls back to a generic prior-art search. Pure so the mapping
+ * is unit-tested directly.
  */
-export type FirstInvestigationProjectType = 'patent-analysis' | 'prior-art-search' | 'custom';
-
-/** The prepared first investigation for the finale step: the chat prompt + the workspace type. */
-export interface FirstInvestigation {
-	readonly prompt: string;
-	readonly projectType: FirstInvestigationProjectType;
-}
-
-/**
- * Map the stored persona to a role-tailored first investigation shown on the finale step and run in
- * the prepared workspace (issue #79 finale). Copy is patent-domain and readable; an unknown/absent
- * role falls back to a generic prior-art search. Pure so the mapping is unit-tested directly.
- */
-export function roleToFirstInvestigation(role: OnboardingRole | undefined): FirstInvestigation {
+export function roleToFirstInvestigation(role: OnboardingRole | undefined): string {
 	switch (role) {
 		case OnboardingRole.PatentAttorney:
-			return {
-				prompt: localize('onboarding.finale.prompt.attorney', "Analyze the claims of US 7,479,949 (Apple's multitouch patent): list the independent claims, break claim 1 into its limitations, and find the closest prior art — flag any X-category references that could challenge novelty."),
-				projectType: 'patent-analysis',
-			};
+			return localize('onboarding.finale.prompt.attorney', "Analyze the claims of US 7,479,949 (Apple's multitouch patent): list the independent claims, break claim 1 into its limitations, and find the closest prior art — flag any X-category references that could challenge novelty.");
 		case OnboardingRole.IpAnalyst:
-			return {
-				prompt: localize('onboarding.finale.prompt.analyst', "Sketch the patent landscape for solid-state battery electrolytes: surface the leading assignees, how filings have trended over the last five years, and where the whitespace is."),
-				projectType: 'patent-analysis',
-			};
+			return localize('onboarding.finale.prompt.analyst', "Sketch the patent landscape for solid-state battery electrolytes: surface the leading assignees, how filings have trended over the last five years, and where the whitespace is.");
 		case OnboardingRole.Researcher:
-			return {
-				prompt: localize('onboarding.finale.prompt.researcher', "Run a prior-art sweep on CRISPR base editing across both patents and academic literature, and summarize the most relevant disclosures with citations."),
-				projectType: 'prior-art-search',
-			};
+			return localize('onboarding.finale.prompt.researcher', "Run a prior-art sweep on CRISPR base editing across both patents and academic literature, and summarize the most relevant disclosures with citations.");
 		case OnboardingRole.Founder:
-			return {
-				prompt: localize('onboarding.finale.prompt.founder', "Run a quick freedom-to-operate sketch for a smart-ring sleep tracker: find the patents most likely to read on it and flag the biggest infringement risks."),
-				projectType: 'prior-art-search',
-			};
+			return localize('onboarding.finale.prompt.founder', "Run a quick freedom-to-operate sketch for a smart-ring sleep tracker: find the patents most likely to read on it and flag the biggest infringement risks.");
 		default:
-			return {
-				prompt: localize('onboarding.finale.prompt.generic', "Search for prior art on an invention you care about — describe it in a sentence or two and I'll find the closest patents and publications, with citations."),
-				projectType: 'prior-art-search',
-			};
+			return localize('onboarding.finale.prompt.generic', "Search for prior art on an invention you care about — describe it in a sentence or two and I'll find the closest patents and publications, with citations.");
 	}
 }
 
