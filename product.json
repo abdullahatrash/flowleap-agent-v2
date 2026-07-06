@@ -123,7 +123,6 @@
 	"configurationDefaults": {
 		"workbench.colorTheme": "Light Modern",
 		"security.workspace.trust.enabled": false,
-		"workbench.openInAgents.enabled": false,
 		"chat.experimental.incrementalRendering.enabled": true,
 		"chat.experimental.incrementalRendering.animationStyle": "fade",
 		"chat.experimental.incrementalRendering.buffering": "word",

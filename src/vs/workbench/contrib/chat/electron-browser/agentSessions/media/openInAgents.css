@@ -16,30 +16,24 @@
 	white-space: nowrap;
 }
 
+/* FlowLeap: robot codicon instead of the agent-sessions brand SVG, gradient-clipped in the brand blues so the entry point stands out in the title bar. */
 .monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon {
 	width: 16px;
 	height: 16px;
 	flex: 0 0 auto;
-	background-image: url('../../../../../../sessions/browser/media/sessions-icon.svg');
-	background-repeat: no-repeat;
-	background-position: center center;
-	background-size: contain;
-	filter: grayscale(1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 16px;
+	background: linear-gradient(135deg, #3AC6FF 0%, #1797D9 55%, #005B9E 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
 }
 
-.monaco-enable-motion .monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon,
-.monaco-workbench.monaco-enable-motion .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon {
-	transition: filter 160ms ease;
-}
-
-.monaco-reduce-motion .monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon,
-.monaco-workbench.monaco-reduce-motion .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon {
-	transition-duration: 0ms !important;
-}
-
-.monaco-workbench .open-in-agents-titlebar-widget:hover > .open-in-agents-titlebar-widget-icon,
-.monaco-workbench .open-in-agents-titlebar-widget:focus-visible > .open-in-agents-titlebar-widget-icon {
-	filter: none;
+/* Outrank the titlebar action-toolbar codicon color (titlebarpart.css) so the gradient clip shows through */
+.monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon.codicon.codicon-robot,
+.monaco-workbench .part.titlebar .action-toolbar-container .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon.codicon.codicon-robot {
+	color: transparent;
 }
 
 
