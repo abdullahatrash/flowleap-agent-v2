@@ -4,20 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { constObservable, observableValue } from '../../../../../base/common/observable.js';
-import { IAgentHostTerminalService } from '../../../../../workbench/contrib/terminal/browser/agentHostTerminalService.js';
-import { ITerminalProfileService } from '../../../../../workbench/contrib/terminal/common/terminal.js';
-import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { mock } from '../../../../../base/test/common/mock.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { NullLogService, ILogService } from '../../../../../platform/log/common/log.js';
 import { ITerminalInstance, ITerminalService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { ITerminalCapabilityStore, ICommandDetectionCapability, TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
-import { toAgentHostUri } from '../../../../../platform/agentSessionState/common/agentHostUri.js';
 import { AgentSessionProviders } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessions.js';
 import { IChat, ISession, ISessionWorkspace } from '../../../../services/sessions/common/session.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
@@ -236,7 +232,6 @@ suite('SessionsTerminalContribution', () => {
 	let moveToBackgroundCalls: number[];
 	let showBackgroundCalls: number[];
 	let disposeOnCreatePaths: Set<string>;
-	let defaultCwdCalls: (URI | undefined)[];
 	let logService: TestLogService;
 	let allSessions: ISession[];
 	let instantiationService: TestInstantiationService;
@@ -253,7 +248,6 @@ suite('SessionsTerminalContribution', () => {
 		moveToBackgroundCalls = [];
 		showBackgroundCalls = [];
 		disposeOnCreatePaths = new Set();
-		defaultCwdCalls = [];
 		logService = new TestLogService();
 		allSessions = [];
 
@@ -331,21 +325,6 @@ suite('SessionsTerminalContribution', () => {
 		});
 
 		instantiationService.stub(IPathService, new TestPathService(HOME_DIR));
-
-		instantiationService.stub(IAgentHostTerminalService, new class extends mock<IAgentHostTerminalService>() {
-			override readonly profiles = constObservable<never[]>([]);
-			override getProfileForConnection() { return undefined; }
-			override setDefaultCwd(cwd: URI | undefined): void { defaultCwdCalls.push(cwd); }
-			override async createTerminalForEntry() { return undefined; }
-		});
-
-		instantiationService.stub(ITerminalProfileService, new class extends mock<ITerminalProfileService>() {
-			override overrideDefaultProfile() { return Disposable.None; }
-		});
-
-		instantiationService.stub(ISessionsProvidersService, new class extends mock<ISessionsProvidersService>() {
-			override getProvider() { return undefined; }
-		});
 
 		instantiationService.stub(IContextKeyService, store.add(new MockContextKeyService()));
 
@@ -463,14 +442,12 @@ suite('SessionsTerminalContribution', () => {
 		await tick();
 
 		assert.strictEqual(createdTerminals.length, 0, 'should not create a terminal while session is loading');
-		assert.strictEqual(defaultCwdCalls.at(-1), undefined, 'should not set the default cwd while session is loading');
 
 		session.loading.set(false, undefined);
 		await tick();
 
 		assert.strictEqual(createdTerminals.length, 1);
 		assert.strictEqual(createdTerminals[0].cwd.fsPath, worktreeUri.fsPath);
-		assert.strictEqual(defaultCwdCalls.at(-1)?.fsPath, worktreeUri.fsPath);
 	});
 
 	test('does not recreate terminal for the same path', async () => {
@@ -1058,18 +1035,6 @@ suite('SessionsTerminalContribution', () => {
 
 		// No setActiveInstance calls from visibility update since no commands were run
 		assert.strictEqual(activeInstanceSet.length, activeCountBefore, 'should not call setActiveInstance when no command history exists');
-	});
-
-	// --- Remote agent host sessions ---
-
-	test('uses the unwrapped repository path for a background session with a remote agent host repository', async () => {
-		const remoteRepoUri = toAgentHostUri(URI.file('/Users/user/repo'), 'my-server');
-		const session = makeAgentSession({ repository: remoteRepoUri, providerType: AgentSessionProviders.Background });
-		activeSessionObs.set(session, undefined);
-		await tick();
-
-		assert.strictEqual(createdTerminals.length, 1, 'should create a terminal at the unwrapped repository path');
-		assert.strictEqual(createdTerminals[0].cwd.fsPath, URI.file('/Users/user/repo').fsPath);
 	});
 
 	// --- Hidden tool terminals (hideFromUser) ---

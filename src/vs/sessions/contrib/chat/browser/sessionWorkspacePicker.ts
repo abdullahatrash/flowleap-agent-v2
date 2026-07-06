@@ -6,7 +6,7 @@
 import * as dom from '../../../../base/browser/dom.js';
 import * as touch from '../../../../base/browser/touch.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { IAction, toAction } from '../../../../base/common/actions.js';
+import { IAction } from '../../../../base/common/actions.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { disposableTimeout } from '../../../../base/common/async.js';
@@ -19,10 +19,8 @@ import { IActionWidgetService } from '../../../../platform/actionWidget/browser/
 import { ActionListItemKind, IActionListDelegate, IActionListItem, IActionListOptions } from '../../../../platform/actionWidget/browser/actionList.js';
 import { ITabDescriptor, TabbedActionListWidget } from '../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
 import { IMenuService, MenuItemAction } from '../../../../platform/actions/common/actions.js';
-import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus, RemoteAgentHostsEnabledSettingId } from '../../../../platform/agentSessionState/common/remoteAgentHostService.js';
-import { TUNNEL_ADDRESS_PREFIX } from '../../../../platform/agentSessionState/common/tunnelAgentHost.js';
+import { RemoteAgentHostConnectionStatus } from '../../../../platform/agentSessionState/common/remoteAgentHostService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService, IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -32,10 +30,8 @@ import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js'
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { ISessionWorkspace, ISessionWorkspaceBrowseAction, SESSION_WORKSPACE_GROUP_LOCAL, SESSION_WORKSPACE_GROUP_REMOTE } from '../../../services/sessions/common/session.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
-import { IAgentHostSessionsProvider, isAgentHostProvider } from '../../../common/agentHostSessionsProvider.js';
+import { isAgentHostProvider } from '../../../common/agentHostSessionsProvider.js';
 import { SessionWorkspacePickerGroupContext } from '../../../common/contextkeys.js';
-// eslint-disable-next-line local/code-import-patterns -- TODO: move remote host options out of providers
-import { getStatusHover, getStatusLabel, removeRemoteHost, showRemoteHostOptions } from '../../providers/remoteAgentHost/browser/remoteHostOptions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkspacesService, isRecentFolder } from '../../../../platform/workspaces/common/workspaces.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
@@ -184,8 +180,6 @@ export class WorkspacePicker extends Disposable {
 		@IStorageService private readonly storageService: IStorageService,
 		@IUriIdentityService private readonly uriIdentityService: IUriIdentityService,
 		@ISessionsProvidersService protected readonly sessionsProvidersService: ISessionsProvidersService,
-		@IRemoteAgentHostService private readonly remoteAgentHostService: IRemoteAgentHostService,
-		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
 		@IMenuService private readonly menuService: IMenuService,
@@ -353,20 +347,12 @@ export class WorkspacePicker extends Disposable {
 
 	protected _getAvailableTabs(): ITabDescriptor[] {
 		const byLabel = new Map<string, ITabDescriptor>();
-		const remoteAgentHostsEnabled = this.configurationService.getValue<boolean>(RemoteAgentHostsEnabledSettingId);
-		if (remoteAgentHostsEnabled) {
-			byLabel.set(SESSION_WORKSPACE_GROUP_REMOTE, {
-				id: SESSION_WORKSPACE_GROUP_REMOTE,
-				icon: Codicon.beaker,
-				tooltip: `${SESSION_WORKSPACE_GROUP_REMOTE} (${localize('workspacePicker.experimental', "Experimental")})`,
-			});
-		}
 		for (const provider of this.sessionsProvidersService.getProviders()) {
 			if (provider.supportsLocalWorkspaces && !byLabel.has(SESSION_WORKSPACE_GROUP_LOCAL)) {
 				byLabel.set(SESSION_WORKSPACE_GROUP_LOCAL, { id: SESSION_WORKSPACE_GROUP_LOCAL });
 			}
 			for (const action of provider.browseActions) {
-				if (action.group === SESSION_WORKSPACE_GROUP_REMOTE && !remoteAgentHostsEnabled) {
+				if (action.group === SESSION_WORKSPACE_GROUP_REMOTE) {
 					continue;
 				}
 				if (action.group && !byLabel.has(action.group)) {
@@ -757,10 +743,6 @@ export class WorkspacePicker extends Disposable {
 
 		// Browse actions from all providers (filtered to the active tab)
 		const allBrowseActions = this._getAllBrowseActions();
-		// Remote providers with connection status — shown as dynamic rows
-		// in the Manage submenu on the Remote tab.
-		const remoteProviders = allProviders.filter(isAgentHostProvider).filter(p => p.connectionStatus !== undefined);
-		const includeRemoteProviders = this._activeTab === SESSION_WORKSPACE_GROUP_REMOTE;
 
 		if (items.length > 0 && (allBrowseActions.length > 0)) {
 			items.push({ kind: ActionListItemKind.Separator, label: '' });
@@ -792,38 +774,9 @@ export class WorkspacePicker extends Disposable {
 			});
 		});
 
-		// Inline "Manage" entries: dynamic remote provider rows (scoped to
-		// the Remote tab) + menu-contributed actions (filtered by the
+		// Inline "Manage" entries: menu-contributed actions (filtered by the
 		// `sessionWorkspacePickerGroup` context key).
 		const manageActions: IAction[] = [];
-		if (includeRemoteProviders) {
-			for (const provider of remoteProviders) {
-				const status = provider.connectionStatus!.get();
-				const isTunnel = provider.remoteAddress?.startsWith(TUNNEL_ADDRESS_PREFIX);
-				const action = toAction({
-					id: `workspacePicker.remote.${provider.id}`,
-					label: provider.label,
-					tooltip: getStatusLabel(status),
-					enabled: true,
-					run: () => {
-						this._hidePicker();
-						this._showRemoteHostOptionsDelayed(provider);
-					},
-				});
-				const extended = action as IWorkspacePickerAction;
-				extended.icon = RemoteAgentHostConnectionStatus.isIncompatible(status)
-					? Codicon.warning
-					: (isTunnel ? Codicon.cloud : Codicon.remote);
-				extended.hoverContent = getStatusHover(status, provider.remoteAddress);
-				if (provider.remoteAddress) {
-					extended.onRemove = async () => {
-						await removeRemoteHost(provider, this.remoteAgentHostService);
-					};
-				}
-				manageActions.push(action);
-			}
-		}
-
 		const menuActions = this.menuService.getMenuActions(Menus.SessionWorkspaceManage, this.contextKeyService, { renderShortTitle: true });
 		for (const [, actions] of menuActions) {
 			for (const menuAction of actions) {
@@ -852,15 +805,6 @@ export class WorkspacePicker extends Disposable {
 		}
 
 		return items;
-	}
-
-	private _showRemoteHostOptionsDelayed(provider: IAgentHostSessionsProvider): void {
-		// Defer one tick so the action widget fully tears down (focus/DOM cleanup)
-		// before the QuickPick opens and claims focus.
-		const timeout = setTimeout(() => {
-			this.instantiationService.invokeFunction(accessor => showRemoteHostOptions(accessor, provider));
-		}, 1);
-		this._renderDisposables.add({ dispose: () => clearTimeout(timeout) });
 	}
 
 	private _updateTriggerLabel(): void {

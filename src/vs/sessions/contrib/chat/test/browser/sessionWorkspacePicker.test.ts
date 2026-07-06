@@ -13,7 +13,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { runWithFakedTimers } from '../../../../../base/test/common/timeTravelScheduler.js';
 import { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
-import { RemoteAgentHostConnectionStatus, IRemoteAgentHostService, RemoteAgentHostsEnabledSettingId } from '../../../../../platform/agentSessionState/common/remoteAgentHostService.js';
+import { RemoteAgentHostConnectionStatus } from '../../../../../platform/agentSessionState/common/remoteAgentHostService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -233,12 +233,11 @@ function createTestPicker(
 	instantiationService.stub(IStorageService, storage);
 	instantiationService.stub(IUriIdentityService, { extUri });
 	instantiationService.stub(ISessionsProvidersService, providersService);
-	instantiationService.stub(IRemoteAgentHostService, {});
 	instantiationService.stub(IQuickInputService, {});
 	instantiationService.stub(IClipboardService, {});
 	instantiationService.stub(IPreferencesService, {});
 	instantiationService.stub(IOutputService, {});
-	instantiationService.stub(IConfigurationService, new TestConfigurationService({ [RemoteAgentHostsEnabledSettingId]: true }));
+	instantiationService.stub(IConfigurationService, new TestConfigurationService());
 	instantiationService.stub(ICommandService, { executeCommand: async () => { } });
 	instantiationService.stub(IFileDialogService, {});
 	instantiationService.stub(IContextKeyService, new MockContextKeyService());
@@ -649,19 +648,18 @@ function makeBrowseAction(providerId: string, group: string | undefined, label =
 	};
 }
 
-function createTestablePicker(disposables: DisposableStore, providersService: MockSessionsProvidersService, remoteAgentHostsEnabled = true): TestablePicker {
+function createTestablePicker(disposables: DisposableStore, providersService: MockSessionsProvidersService): TestablePicker {
 	const instantiationService = disposables.add(new TestInstantiationService());
 	instantiationService.stub(IActionWidgetService, { isVisible: false, hide: () => { }, show: () => { } });
 	instantiationService.stub(IContextViewService, { showContextView: () => ({ close: () => { } }), hideContextView: () => { }, layout: () => { } });
 	instantiationService.stub(IStorageService, disposables.add(new TestStorageService()));
 	instantiationService.stub(IUriIdentityService, { extUri });
 	instantiationService.stub(ISessionsProvidersService, providersService);
-	instantiationService.stub(IRemoteAgentHostService, {});
 	instantiationService.stub(IQuickInputService, {});
 	instantiationService.stub(IClipboardService, {});
 	instantiationService.stub(IPreferencesService, {});
 	instantiationService.stub(IOutputService, {});
-	instantiationService.stub(IConfigurationService, new TestConfigurationService({ [RemoteAgentHostsEnabledSettingId]: remoteAgentHostsEnabled }));
+	instantiationService.stub(IConfigurationService, new TestConfigurationService());
 	instantiationService.stub(ICommandService, { executeCommand: async () => { } });
 	instantiationService.stub(IFileDialogService, {});
 	instantiationService.stub(IContextKeyService, new MockContextKeyService());
@@ -689,17 +687,17 @@ suite('WorkspacePicker - Tab discovery', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('returns Remote group even when no providers contribute groups', () => {
+	test('returns no tabs when no providers contribute groups', () => {
 		providersService.setProviders([createMockProvider('p1')]);
 		const picker = createTestablePicker(disposables, providersService);
-		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_REMOTE]);
+		assert.deepStrictEqual(picker.getAvailableTabs(), []);
 	});
 
-	test('hides Remote group when remote agent hosts are disabled', () => {
+	test('never surfaces the Remote group', () => {
 		providersService.setProviders([
 			createMockProvider('p1', { browseActions: [makeBrowseAction('p1', SESSION_WORKSPACE_GROUP_REMOTE)] }),
 		]);
-		const picker = createTestablePicker(disposables, providersService, false);
+		const picker = createTestablePicker(disposables, providersService);
 		assert.deepStrictEqual(picker.getAvailableTabs(), []);
 	});
 
@@ -710,7 +708,7 @@ suite('WorkspacePicker - Tab discovery', () => {
 			createMockProvider('local', { browseActions: [makeBrowseAction('local', SESSION_WORKSPACE_GROUP_LOCAL)] }),
 		]);
 		const picker = createTestablePicker(disposables, providersService);
-		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_LOCAL, 'Cloud', SESSION_WORKSPACE_GROUP_REMOTE]);
+		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_LOCAL, 'Cloud']);
 	});
 
 	test('deduplicates groups contributed by multiple providers / actions', () => {
@@ -719,7 +717,7 @@ suite('WorkspacePicker - Tab discovery', () => {
 			createMockProvider('p2', { browseActions: [makeBrowseAction('p2', SESSION_WORKSPACE_GROUP_LOCAL), makeBrowseAction('p2', SESSION_WORKSPACE_GROUP_LOCAL)] }),
 		]);
 		const picker = createTestablePicker(disposables, providersService);
-		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_LOCAL, SESSION_WORKSPACE_GROUP_REMOTE]);
+		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_LOCAL]);
 	});
 
 	test('appends custom group labels after Local', () => {
@@ -730,7 +728,7 @@ suite('WorkspacePicker - Tab discovery', () => {
 		const picker = createTestablePicker(disposables, providersService);
 		const tabs = picker.getAvailableTabs();
 		assert.strictEqual(tabs[0], SESSION_WORKSPACE_GROUP_LOCAL);
-		assert.deepStrictEqual(tabs.slice(1).sort(), ['Custom A', 'Custom B', SESSION_WORKSPACE_GROUP_REMOTE]);
+		assert.deepStrictEqual(tabs.slice(1).sort(), ['Custom A', 'Custom B']);
 	});
 
 	test('ignores browse actions without a group', () => {
@@ -738,7 +736,7 @@ suite('WorkspacePicker - Tab discovery', () => {
 			createMockProvider('p1', { browseActions: [makeBrowseAction('p1', undefined), makeBrowseAction('p1', SESSION_WORKSPACE_GROUP_LOCAL)] }),
 		]);
 		const picker = createTestablePicker(disposables, providersService);
-		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_LOCAL, SESSION_WORKSPACE_GROUP_REMOTE]);
+		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_LOCAL]);
 	});
 
 	test('discovers groups from recent workspaces does not add extra tabs', () => {
@@ -770,12 +768,11 @@ suite('WorkspacePicker - Tab discovery', () => {
 		instantiationService.stub(IStorageService, storage);
 		instantiationService.stub(IUriIdentityService, { extUri });
 		instantiationService.stub(ISessionsProvidersService, providersService);
-		instantiationService.stub(IRemoteAgentHostService, {});
 		instantiationService.stub(IQuickInputService, {});
 		instantiationService.stub(IClipboardService, {});
 		instantiationService.stub(IPreferencesService, {});
 		instantiationService.stub(IOutputService, {});
-		instantiationService.stub(IConfigurationService, new TestConfigurationService({ [RemoteAgentHostsEnabledSettingId]: true }));
+		instantiationService.stub(IConfigurationService, new TestConfigurationService());
 		instantiationService.stub(ICommandService, { executeCommand: async () => { } });
 		instantiationService.stub(IFileDialogService, {});
 		instantiationService.stub(IContextKeyService, new MockContextKeyService());
@@ -787,7 +784,7 @@ suite('WorkspacePicker - Tab discovery', () => {
 		instantiationService.stub(ITelemetryService, NullTelemetryService);
 		const picker = disposables.add(instantiationService.createInstance(TestablePicker));
 		// Recent workspace group ('Cloud') is not added as a tab — only
-		// browse actions and the always-present Remote group contribute tabs.
-		assert.deepStrictEqual(picker.getAvailableTabs(), [SESSION_WORKSPACE_GROUP_REMOTE]);
+		// browse actions contribute tabs.
+		assert.deepStrictEqual(picker.getAvailableTabs(), []);
 	});
 });

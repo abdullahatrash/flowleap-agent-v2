@@ -65,7 +65,6 @@ import { IWorkbenchAssignmentService } from '../../../../../workbench/services/a
 // =============================================================================
 // eslint-disable-next-line no-restricted-imports
 import { IAgentSessionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
-import { IAgentHostFilterService } from '../../../../services/agentHostFilter/common/agentHostFilter.js';
 import { LocalSelectionTransfer } from '../../../../../platform/dnd/browser/dnd.js';
 import { DraggedSessionIdentifier, SessionsDataTransfers } from '../../../../browser/dnd.js';
 import { IDragAndDropData } from '../../../../../base/browser/dnd.js';
@@ -1438,7 +1437,6 @@ export class SessionsList extends Disposable implements ISessionsList {
 		@ISessionsListModelService private readonly _sessionsListModelService: ISessionsListModelService,
 		@ISessionGroupsService private readonly _sessionGroupsService: ISessionGroupsService,
 		@ISessionSectionOrderService private readonly _sessionSectionOrderService: ISessionSectionOrderService,
-		@IAgentHostFilterService private readonly _agentHostFilterService: IAgentHostFilterService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
@@ -1709,12 +1707,6 @@ export class SessionsList extends Disposable implements ISessionsList {
 			}
 		}));
 
-		this._register(this._agentHostFilterService.onDidChange(() => {
-			if (this.visible) {
-				this.update();
-			}
-		}));
-
 		// Re-update when the active session changes so that a filtered-out
 		// session becomes visible while active and hides again when unselected.
 		// Also mark the newly active session as read.
@@ -1770,10 +1762,6 @@ export class SessionsList extends Disposable implements ISessionsList {
 
 		// Filter by session type and status
 		let filtered = this.sessions;
-		const hostFilter = this._agentHostFilterService.selectedProviderId;
-		if (hostFilter !== undefined) {
-			filtered = filtered.filter(s => s.providerId === hostFilter);
-		}
 		if (this.excludedSessionTypes.size > 0) {
 			filtered = filtered.filter(s => !this.excludedSessionTypes.has(s.sessionType));
 		}

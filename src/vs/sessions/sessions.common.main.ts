@@ -143,7 +143,6 @@ import '../workbench/services/chat/common/chatEntitlementService.js';
 import '../workbench/services/log/common/defaultLogLevels.js';
 import '../workbench/services/agentHost/common/agentHostResourceService.js';
 import '../platform/agentSessionState/browser/agentHostConnectionsService.js';
-import './services/agentHost/browser/agentHostCustomizationService.js';
 
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { GlobalExtensionEnablementService } from '../platform/extensionManagement/common/extensionEnablementService.js';
@@ -463,7 +462,6 @@ import './contrib/sessions/browser/sessions.contribution.js';
 import './services/sessions/browser/sessionsListModelService.js';
 import './services/sessions/browser/sessionGroupsService.js';
 import './services/sessions/browser/sessionSectionOrderService.js';
-import './services/agentHostFilter/browser/agentHostFilterService.js';
 import './contrib/sessions/browser/customizationsToolbar.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/files/browser/files.contribution.js';
