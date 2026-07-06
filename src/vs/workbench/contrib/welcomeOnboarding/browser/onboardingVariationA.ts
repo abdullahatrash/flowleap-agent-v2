@@ -96,8 +96,9 @@ const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
  * 5. Model — connect a BYO AI model (OpenRouter recommended); reflects an already-connected model.
  *
  * The legacy Personalize (theme/keymap) and AiPreference steps are no longer in the flow; their
- * render code is retained (referenced by the `_renderStep` switch) but never reached, and a sensible
- * default theme is applied silently instead of asking (issue #79 principle 4).
+ * render code is retained (referenced by the `_renderStep` switch) but never reached. The wizard
+ * never touches the theme: the product default (Light Modern) already is the sensible default
+ * (issue #79 principle 4), and theme selection stays available in Settings.
  */
 export class OnboardingVariationA extends Disposable implements IOnboardingService {
 
@@ -195,7 +196,6 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		this._modelKeyAddedLogged = false;
 		this._userSignedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
 		this._recomputeSteps();
-		this._applySilentThemeDefault();
 		this._logAction('wizard_started', this.steps[0]);
 		this.previouslyFocusedElement = getActiveWindow().document.activeElement as HTMLElement | undefined;
 
@@ -377,21 +377,6 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 				break;
 			default:
 				this._logAction('next');
-		}
-	}
-
-	/**
-	 * Apply the brand default theme silently on first onboarding. The Personalize step was removed
-	 * (issue #79), so instead of asking we set the default once; a re-trigger (a role is already
-	 * stored) leaves the user's later theme choice untouched.
-	 */
-	private _applySilentThemeDefault(): void {
-		if (this.storageService.get(ONBOARDING_ROLE_STORAGE_KEY, StorageScope.APPLICATION)) {
-			return;
-		}
-		const defaultTheme = (product.onboardingThemes ?? []).find(t => t.id === this.selectedThemeId);
-		if (defaultTheme) {
-			void this._selectTheme(defaultTheme);
 		}
 	}
 
