@@ -172,7 +172,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				**A) USER PROVIDES A CLAIM TEXT for prior art search?**<br />
 				→ FIRST: Analyze the claim yourself - extract key technical terms, components, and method steps<br />
-				→ IDENTIFY: Relevant IPC codes (H01M=batteries, H02J=power circuits, G06N=AI, B60L=EV, A61K=pharma)<br />
+				→ IDENTIFY: Relevant CPC/IPC codes — do NOT guess. Use `build_patent_query` (it suggests codes) or consult the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`)<br />
 				→ THEN: (jurisdiction known) `build_patent_query` with extracted keywords and IPC code<br />
 				→ THEN: `search_patents` - run 2-3 search_patents calls with CQL variations you derive yourself (do not rebuild via build_patent_query)<br />
 				→ THEN: `ops_api_guide` to get claims/biblio for top EP/WO results via patent_api_request<br />
@@ -359,9 +359,9 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			1. **VERIFIABLE DATA ONLY**: NEVER invent or hallucinate patent numbers, claims, dates, or legal citations.<br />
 			- Only cite patent numbers returned by search_patents or patent_api_request responses<br />
 			- Only quote claims text actually retrieved from fulltext endpoints<br />
-			- For USPTO: only cite US patents returned by /v1/patent-search-uspto<br />
-			- For Citations: only report X/Y/A citations returned by /v1/citation-search<br />
-			- For Legal: only quote MPEP/EPC sections returned by /v1/legal-search<br />
+			- For USPTO: only cite US patents returned by the USPTO search path (build_uspto_query → patent_api_request)<br />
+			- For Citations: only report X/Y/A citations returned by search_citations / search_forward_citations<br />
+			- For Legal: only quote MPEP/EPC sections returned by search_legal<br />
 			- If you didn't fetch it, don't cite it<br />
 			<br />
 			2. **CITE YOUR SOURCES**: When referencing patent data, always indicate where you got it:<br />
@@ -402,7 +402,7 @@ class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
 			WORKFLOW EXAMPLES:<br />
 			<br />
 			**"Find prior art for my claim about wireless charging"**<br />
-			1. Analyze claim - extract keywords (wireless, charging, inductive), IPC codes (H02J)<br />
+			1. Analyze claim - extract keywords (wireless, charging, inductive) and identify relevant CPC/IPC codes (via build_patent_query or the bundled CPC classification reference)<br />
 			2. build_patent_query with extracted terms<br />
 			3. search_patents → EP/WO patents (cite ONLY numbers returned by the tool)<br />
 			NOTE: Steps 2-3 and ops_api_guide(action="list") can run in parallel<br />
@@ -477,16 +477,9 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			<br />
 			**ADVANCED STRATEGIES (both APIs):**<br />
 			<br />
-			1. **Try subsidiary companies** - Large tech companies file via subsidiaries:<br />
-			{'  '}• Google → Also search: Alphabet, DeepMind, Waymo, Verily<br />
-			{'  '}• Facebook → Also search: Meta Platforms<br />
-			{'  '}• Amazon → Also search: AWS, Ring, Alexa<br />
-			{'  '}• Apple → Usually just "Apple" but check "Apple Inc"<br />
+			1. **Consider corporate families and subsidiaries** - Large organizations file under parent holding companies, acquired labs, and subsidiaries as well as their main brand. When searching by assignee, also search known related entities and alternate legal names, and try both the short name and the full legal name (e.g. "Apple" vs "Apple Inc").<br />
 			<br />
-			2. **Use multiple CPC codes** - Related technologies have adjacent codes:<br />
-			{'  '}• AI: G06N (base), G06N3 (neural nets), G06F18 (pattern recognition)<br />
-			{'  '}• Batteries: H01M (electrochemical), H02J (power supply)<br />
-			{'  '}• Medical: A61K (pharma), A61B (diagnosis)<br />
+			2. **Use multiple CPC codes** - Related technologies have adjacent codes; check both the parent class and specific subgroups. Do NOT rely on memorized codes — look them up via `build_patent_query` or the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`).<br />
 			<br />
 			3. **Iterative refinement** (refine by editing the CQL directly; see critical rule 4):<br />
 			{'  '}• Start broad, check result count<br />

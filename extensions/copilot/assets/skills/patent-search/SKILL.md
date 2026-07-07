@@ -26,7 +26,7 @@ Before ANY search, determine jurisdiction. If not specified by the user, ask (vi
 ### CQL Syntax Quick Reference
 - Applicant: `pa=Samsung` or `pa="Samsung Electronics"`
 - Title/Abstract: `ti=battery or ab=battery`
-- IPC codes: `ic=H01M` (batteries), `ic=G06N` (AI), `ic=A61K` (pharma)
+- IPC/CPC codes: `ic=H01M` or `cpc=G06N` (for the technology-area → code mapping, see the CPC reference below — do not guess codes)
 - Date: `pd>=2024`
 - Combined: `pa=Tesla and ic=H01M and pd>=2023`
 
