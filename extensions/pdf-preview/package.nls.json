@@ -8,5 +8,5 @@
 	"command.zoomOut": "Zoom Out",
 	"config.defaultZoom": "Default zoom level for PDF preview",
 	"config.scrollMode": "Scroll mode for multi-page PDFs",
-	"config.backendUrl": "FlowLeap backend server URL for OCR and AI features"
+	"config.apiUrl": "The FlowLeap Patent AI backend API base URL (including the `/v1` version suffix), used for OCR and AI features. The `PATENT_API_URL` environment variable, when set, overrides this setting."
 }

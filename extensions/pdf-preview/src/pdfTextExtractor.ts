@@ -54,6 +54,22 @@ interface PDFJSLib {
 	GlobalWorkerOptions: { workerSrc: string };
 }
 
+/**
+ * Resolve the FlowLeap (Patent AI) backend API base URL from environment and settings.
+ *
+ * This mirrors `getPatentAIConfig` in the copilot extension by hand: pdf-preview cannot
+ * import from the copilot extension, so the resolution order (env var > setting > production
+ * default) and the `patent.apiUrl` key must be kept in sync manually.
+ *
+ * The returned base URL includes the `/v1` version suffix (e.g. `https://api.flowleap.co/v1`),
+ * with any trailing slash stripped so callers can safely append `/ocr` etc.
+ */
+function resolvePatentApiUrl(): string {
+	const config = vscode.workspace.getConfiguration('patent');
+	const apiUrl = process.env.PATENT_API_URL || config.get<string>('apiUrl') || 'https://api.flowleap.co/v1';
+	return apiUrl.replace(/\/+$/, '');
+}
+
 let pdfjsLib: PDFJSLib | null = null;
 
 async function getPdfJs(extensionPath: string): Promise<PDFJSLib> {
@@ -91,9 +107,11 @@ export class PdfTextExtractor {
 	private readonly _cache = new Map<string, CachedPdf>();
 	private readonly _maxCacheSize = 10;
 	private readonly _extensionPath: string;
+	private readonly _logger: vscode.LogOutputChannel;
 
-	constructor(extensionPath: string) {
+	constructor(extensionPath: string, logger: vscode.LogOutputChannel) {
 		this._extensionPath = extensionPath;
+		this._logger = logger;
 	}
 
 	/**
@@ -169,9 +187,10 @@ export class PdfTextExtractor {
 	 * Returns markdown-formatted text and extracted images.
 	 */
 	async extractWithOCR(uri: vscode.Uri): Promise<{ markdown: string; images: OcrImage[] }> {
-		// Get backend URL from settings, default to localhost
-		const config = vscode.workspace.getConfiguration('flowleap');
-		const backendUrl = config.get<string>('backendUrl', 'http://localhost:8000');
+		// Resolve the backend API base URL (env var > setting > production default). The base
+		// already includes the `/v1` suffix, so the OCR route is derived by appending `/ocr`.
+		const backendUrl = resolvePatentApiUrl();
+		const ocrUrl = `${backendUrl}/ocr`;
 
 		// Read PDF file and convert to base64
 		const data = await vscode.workspace.fs.readFile(uri);
@@ -180,7 +199,7 @@ export class PdfTextExtractor {
 		// Get filename from URI
 		const filename = uri.path.split('/').pop() || 'document.pdf';
 
-		console.log(`[PDF Preview] Starting OCR for: ${filename}`);
+		this._logger.info(`Starting OCR for: ${filename}`);
 
 		// /v1/ocr sits behind the FlowLeap auth + subscription guard chain, so the
 		// request must carry the FlowLeap session token like every other patent-data call.
@@ -194,7 +213,7 @@ export class PdfTextExtractor {
 
 		try {
 			// Call backend OCR endpoint
-			const response = await fetch(`${backendUrl}/v1/ocr`, {
+			const response = await fetch(ocrUrl, {
 				method: 'POST',
 				headers,
 				body: JSON.stringify({
@@ -222,7 +241,7 @@ export class PdfTextExtractor {
 				throw new Error(result.error?.message || 'OCR processing failed');
 			}
 
-			console.log(`[PDF Preview] OCR completed: ${result.pageCount} pages, ${result.images?.length || 0} images in ${result.processingTimeMs}ms`);
+			this._logger.info(`OCR completed: ${result.pageCount} pages, ${result.images?.length || 0} images in ${result.processingTimeMs}ms`);
 
 			return {
 				markdown: result.markdown,
@@ -230,7 +249,7 @@ export class PdfTextExtractor {
 			};
 
 		} catch (error) {
-			console.error('[PDF Preview] OCR error:', error);
+			this._logger.error(`OCR error: ${error instanceof Error ? error.message : String(error)}`);
 
 			if (error instanceof Error && error.message.includes('fetch')) {
 				throw new Error(`Cannot connect to FlowLeap backend at ${backendUrl}. Make sure the backend is running.`);
@@ -244,11 +263,10 @@ export class PdfTextExtractor {
 	 * Check if OCR service is available
 	 */
 	async isOCRAvailable(): Promise<boolean> {
-		const config = vscode.workspace.getConfiguration('flowleap');
-		const backendUrl = config.get<string>('backendUrl', 'http://localhost:8000');
+		const backendUrl = resolvePatentApiUrl();
 
 		try {
-			const response = await fetch(`${backendUrl}/v1/ocr/health`, {
+			const response = await fetch(`${backendUrl}/ocr/health`, {
 				method: 'GET',
 			});
 

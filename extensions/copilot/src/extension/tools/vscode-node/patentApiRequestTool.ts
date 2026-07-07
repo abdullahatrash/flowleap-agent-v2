@@ -12,9 +12,7 @@ import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHin
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { normaliseToRelativePath } from './curlToApiRequest';
-
-/** Maximum response size returned to the LLM before truncation. */
-const MAX_RESPONSE_CHARS = 50_000;
+import { formatJsonForModel, ToolResponseBudgets } from './patentResponseFormatter';
 
 /**
  * Input parameters for the patent_api_request tool.
@@ -88,12 +86,12 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 				result = await this.patentBackendClient.get<unknown>(normalisedPath, token);
 			}
 
-			const pretty = JSON.stringify(result, null, 2);
-			const truncated = pretty.length > MAX_RESPONSE_CHARS
-				? pretty.substring(0, MAX_RESPONSE_CHARS) + '\n…[truncated]'
-				: pretty;
+			// Route through the shared budget-aware formatter: under budget the output is the same
+			// pretty-printed JSON as before; oversized responses come back as valid, parseable JSON with
+			// whole array items dropped and an explicit omitted-count note (never sliced mid-structure).
+			const formatted = formatJsonForModel(result, ToolResponseBudgets.PatentApiRequest);
 
-			return new LanguageModelToolResult([new LanguageModelTextPart(truncated)]);
+			return new LanguageModelToolResult([new LanguageModelTextPart(formatted.content)]);
 
 		} catch (error) {
 			if (error instanceof PatentBackendError) {

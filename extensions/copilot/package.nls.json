@@ -360,6 +360,7 @@
 	"github.copilot.config.cli.sessionControllerForSessionsApp.enabled": "Enable the new session controller API for Sessions App. Requires VS Code reload.",
 	"github.copilot.config.cli.terminalLinks.enabled": "Enable advanced clickable file links in Copilot CLI terminals. Resolves relative paths against session state directories. Requires VS Code reload.",
 	"github.copilot.config.cli.remote.enabled": "Enable the /remote command for Copilot CLI sessions, allowing you to view and steer from GitHub.com and the GitHub mobile app.",
+	"patent.config.apiUrl": "The FlowLeap Patent AI backend API base URL (including the `/v1` version suffix). The `PATENT_API_URL` environment variable, when set, overrides this setting.",
 	"github.copilot.config.backgroundAgent.enabled": "Enable the Copilot CLI. When disabled, the Copilot CLI will not be available in 'Continue In' context menus.",
 	"github.copilot.config.cloudAgent.enabled": "Enable the Cloud Agent. When disabled, the Cloud Agent will not be available in 'Continue In' context menus.",
 	"github.copilot.config.gpt5AlternativePatch": "Enable GPT-5 alternative patch format.",

@@ -84,5 +84,15 @@ export function getSessionWorkflowTemplates(): readonly ISessionWorkflowTemplate
 				'recipe-patent-to-report'
 			),
 		},
+		{
+			id: 'academic-literature-review',
+			label: localize('sessionTemplate.academic.label', "Academic Literature Review"),
+			description: localize('sessionTemplate.academic.description', "Academic literature review combined with patent analysis"),
+			prompt: localize(
+				'sessionTemplate.academic.prompt',
+				"Literature review: <research topic>\n\nUse the {0} skill to run an academic literature review combined with patent analysis for the topic above. Write the findings as a Markdown report in the working directory.",
+				'recipe-academic-literature-review'
+			),
+		},
 	];
 }

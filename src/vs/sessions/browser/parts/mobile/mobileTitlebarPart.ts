@@ -27,7 +27,6 @@ import { SideBarVisibleContext } from '../../../../workbench/common/contextkeys.
 import { Menus } from '../../menus.js';
 import { ChatEntitlement, ChatEntitlementService, IChatEntitlementService } from '../../../../workbench/services/chat/common/chatEntitlementService.js';
 import { getAccountTitleBarState, getAccountProfileImageUrl, getAccountTitleBarBadgeKey, resolveAccountInfo } from '../../accountTitleBarState.js';
-import { IChatDashboardService } from '../../chatDashboardService.js';
 import { MOBILE_OPEN_CHANGES_VIEW_COMMAND_ID } from './contributions/mobileChangesView.js';
 
 /**
@@ -56,7 +55,7 @@ import { MOBILE_OPEN_CHANGES_VIEW_COMMAND_ID } from './contributions/mobileChang
  * and the account indicator (on welcome / new session). The account
  * indicator shows the user's avatar or a person icon with an optional
  * dot badge for quota/status warnings. Tapping it opens a panel with
- * account info, copilot status dashboard, and sign-in/sign-out actions.
+ * account info and sign-in/sign-out actions.
  */
 export class MobileTitlebarPart extends Disposable {
 
@@ -92,7 +91,6 @@ export class MobileTitlebarPart extends Disposable {
 	private dismissedBadgeKey: string | undefined;
 	private readonly accountPanelDisposable = this._register(new MutableDisposable<DisposableStore>());
 	private readonly avatarLoadDisposable = this._register(new MutableDisposable());
-	private readonly copilotDashboardStore = this._register(new MutableDisposable<DisposableStore>());
 
 	// Changes pill state — kept here so the click handler can read the
 	// latest set without re-deriving it on each tap.
@@ -107,7 +105,6 @@ export class MobileTitlebarPart extends Disposable {
 		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
 		@IChatEntitlementService private readonly chatEntitlementService: ChatEntitlementService,
 		@IMenuService private readonly menuService: IMenuService,
-		@IChatDashboardService private readonly chatDashboardService: IChatDashboardService,
 		@ICommandService private readonly commandService: ICommandService,
 	) {
 		super();
@@ -439,7 +436,6 @@ export class MobileTitlebarPart extends Disposable {
 		panelStore.add({
 			dispose: () => {
 				this.isAccountMenuVisible = false;
-				this.copilotDashboardStore.clear();
 				this.renderAccountState();
 			}
 		});
@@ -484,25 +480,6 @@ export class MobileTitlebarPart extends Disposable {
 			}
 		} else {
 			append(profileInfo, $('div.mobile-account-sheet-name')).textContent = localize('mobileAccount.signedOut', "Not signed in");
-		}
-
-		// Copilot status dashboard — only when signed in AND entitlements
-		// have resolved. When entitlement is Unknown or Available (setup
-		// pending), the dashboard shows a "Set up Copilot" prompt that
-		// doesn't apply in the agents app.
-		const entitlement = this.chatEntitlementService.entitlement;
-		const showDashboard = !this.chatEntitlementService.sentiment.hidden
-			&& !!this.accountName
-			&& entitlement !== ChatEntitlement.Unknown
-			&& entitlement !== ChatEntitlement.Available;
-		if (showDashboard) {
-			const dashboardSection = append(content, $('div.mobile-account-sheet-section'));
-			const store = new DisposableStore();
-			this.copilotDashboardStore.value = store;
-			const dashboardElement = this.chatDashboardService.createDashboardElement(store);
-			if (dashboardElement) {
-				append(dashboardSection, dashboardElement);
-			}
 		}
 
 		// Actions list

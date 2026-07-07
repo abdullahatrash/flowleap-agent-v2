@@ -102,10 +102,10 @@
 			{
 				"title": "FlowLeap Backend",
 				"properties": {
-					"flowleap.backendUrl": {
+					"patent.apiUrl": {
 						"type": "string",
-						"default": "https://api.flowleap.co",
-						"description": "%config.backendUrl%",
+						"default": "https://api.flowleap.co/v1",
+						"description": "%config.apiUrl%",
 						"format": "uri"
 					}
 				}

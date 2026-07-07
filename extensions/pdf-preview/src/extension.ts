@@ -54,10 +54,12 @@ export interface PdfMetadata {
 let textExtractor: PdfTextExtractor;
 
 export function activate(context: vscode.ExtensionContext): PdfPreviewAPI {
-	console.log('[PDF Preview] Activating extension');
+	const logger = vscode.window.createOutputChannel('PDF Preview', { log: true });
+	context.subscriptions.push(logger);
+	logger.info('Activating extension');
 
 	// Initialize the text extractor with the extension path for loading PDF.js
-	textExtractor = new PdfTextExtractor(context.extensionPath);
+	textExtractor = new PdfTextExtractor(context.extensionPath, logger);
 
 	// Register the custom editor provider
 	const provider = new PdfEditorProvider(context, textExtractor);
@@ -129,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): PdfPreviewAPI {
 		})
 	);
 
-	console.log('[PDF Preview] Extension activated');
+	logger.info('Extension activated');
 
 	// Return the API for other extensions
 	const api: PdfPreviewAPI = {

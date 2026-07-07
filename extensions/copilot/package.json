@@ -1893,7 +1893,16 @@
             },
             "content": {
               "type": "string",
-              "description": "The content to write to the file (markdown, plain text, JSON, etc.)"
+              "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section."
+            },
+            "template": {
+              "type": "string",
+              "enum": [
+                "prior-art-report",
+                "fto-memo",
+                "office-action-scaffold"
+              ],
+              "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses. Omit for a free-form save of the raw content."
             }
           },
           "required": [
@@ -3277,6 +3286,18 @@
       }
     ],
     "configuration": [
+      {
+        "title": "Patent AI",
+        "id": "patent-ai",
+        "properties": {
+          "patent.apiUrl": {
+            "type": "string",
+            "default": "https://api.flowleap.co/v1",
+            "format": "uri",
+            "markdownDescription": "%patent.config.apiUrl%"
+          }
+        }
+      },
       {
         "title": "GitHub Copilot Chat",
         "id": "stable",
