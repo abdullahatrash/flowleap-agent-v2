@@ -45,6 +45,9 @@ interface FiguresApiResponse {
 /** Default number of figure pages to fetch when the caller does not specify `pages`. */
 const DEFAULT_MAX_PAGES = 8;
 
+/** Maximum number of pages a caller may request via `pages`, matching the tool's input schema. */
+const MAX_REQUESTED_PAGES = 20;
+
 /** PNG rendering on the backend can be slow, so allow a longer timeout for the image fetch. */
 const FIGURE_RENDER_TIMEOUT_MS = 60_000;
 
@@ -100,7 +103,13 @@ class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
 			const userSelected = !!pages?.trim();
 			const startPage = (!userSelected && drawingStartPage && drawingStartPage <= totalFigures) ? drawingStartPage : 1;
 			const pagesParam = userSelected
-				? pages!.trim()
+				// The schema documents a max of MAX_REQUESTED_PAGES; keep only valid page
+				// numbers and cap the count so an over-long request can't be forwarded raw.
+				? pages!.split(',')
+					.map(p => p.trim())
+					.filter(p => /^\d+$/.test(p))
+					.slice(0, MAX_REQUESTED_PAGES)
+					.join(',')
 				: Array.from(
 					{ length: Math.min(DEFAULT_MAX_PAGES, totalFigures - startPage + 1) },
 					(_, i) => startPage + i

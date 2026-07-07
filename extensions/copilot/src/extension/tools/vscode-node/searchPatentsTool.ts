@@ -117,8 +117,11 @@ class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 			return `No patents found for query: ${result.query}`;
 		}
 
+		// `total` is optional in the backend response; fall back to the number of
+		// returned docs so the summary never reads "Found undefined patents".
+		const total = result.total ?? result.docs.length;
 		const lines: string[] = [
-			`Found ${result.total} patents matching query: "${result.query}"`,
+			`Found ${total} patents matching query: "${result.query}"`,
 			`Showing results ${result.range?.begin}-${result.range?.end}:`,
 			''
 		];

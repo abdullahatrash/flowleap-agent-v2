@@ -119,9 +119,9 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 **ALWAYS search BOTH patents AND academic sources unless explicitly told otherwise.**
 
 - Search EPO via #tool:search_patents with CQL queries
-- Search USPTO via #tool:build_uspto_query, executed with #tool:patentApiRequest (endpoint shapes from #tool:usptoApiGuide)
+- Search USPTO via #tool:build_uspto_query, executed with #tool:patent_api_request (endpoint shapes from #tool:uspto_api_guide)
 - Search academic via #tool:search_academic for papers and non-patent literature
-- Use #tool:fetch for web-based sources when needed
+- Use #tool:fetch_webpage for web-based sources when needed
 
 ### 4. Analyze & Synthesize
 - Assess relevance of each result to the target invention
@@ -145,7 +145,7 @@ Structure results as:
 - ALWAYS build optimized queries before searching — don't use raw keywords
 - Search multiple jurisdictions (EP, US, WO at minimum)
 - Include academic/NPL sources in every search
-- Save comprehensive results via #tool:writePatentResults
+- Save comprehensive results via #tool:write_patent_results
 - Use Explore subagents for parallel research when spanning multiple technology areas`;
 	}
 
