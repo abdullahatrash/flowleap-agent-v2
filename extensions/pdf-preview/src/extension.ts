@@ -83,8 +83,9 @@ export function activate(context: vscode.ExtensionContext): PdfPreviewAPI {
 			if (!editor) {
 				// Try to get the active custom editor
 				const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-				if (activeTab?.input && typeof activeTab.input === 'object' && 'uri' in activeTab.input) {
-					const uri = (activeTab.input as { uri: vscode.Uri }).uri;
+				const tabInput = activeTab?.input as { uri?: vscode.Uri } | undefined;
+				if (tabInput?.uri) {
+					const uri = tabInput.uri;
 					if (uri.path.endsWith('.pdf')) {
 						const text = await textExtractor.extractAllText(uri);
 						const doc = await vscode.workspace.openTextDocument({
