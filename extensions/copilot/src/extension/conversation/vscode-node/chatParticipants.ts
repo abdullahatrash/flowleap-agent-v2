@@ -26,6 +26,7 @@ import { IFeedbackReporter } from '../../prompt/node/feedbackReporter';
 import { IPromptCategorizerService } from '../../prompt/node/promptCategorizer';
 import { ChatSummarizerProvider } from '../../prompt/node/summarizer';
 import { ChatTitleProvider } from '../../prompt/node/title';
+import { PatentFollowupProvider } from './patentFollowups';
 import { IUserFeedbackService } from './userActions';
 import { getAdditionalWelcomeMessage } from './welcomeMessageProvider';
 
@@ -140,6 +141,7 @@ class ChatAgents implements IDisposable {
 	private registerEditsAgent(): IDisposable {
 		const editingAgent = this.createAgent(editsAgentName, Intent.Agent);
 		editingAgent.iconPath = new vscode.ThemeIcon('tools');
+		editingAgent.followupProvider = new PatentFollowupProvider();
 		editingAgent.additionalWelcomeMessage = this.additionalWelcomeMessage;
 		editingAgent.titleProvider = this.instantiationService.createInstance(ChatTitleProvider);
 		return editingAgent;
@@ -154,6 +156,7 @@ class ChatAgents implements IDisposable {
 		};
 		const defaultAgent = this.createAgent(defaultAgentName, intentGetter);
 		defaultAgent.iconPath = new vscode.ThemeIcon('copilot');
+		defaultAgent.followupProvider = new PatentFollowupProvider();
 
 		defaultAgent.helpTextPrefix = vscode.l10n.t('You can ask me general programming questions, or chat with the following participants which have specialized expertise and can perform actions:');
 		const helpPostfix = vscode.l10n.t({

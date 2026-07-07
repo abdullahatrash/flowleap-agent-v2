@@ -223,28 +223,6 @@ export const startEntries: GettingStartedStartEntryContent = [
 	},
 	// Patent IDE start entries
 	{
-		id: 'patentNewProject',
-		title: localize('gettingStarted.patentNewProject.title', "New Patent Project..."),
-		description: localize('gettingStarted.patentNewProject.description', "Create a new patent analysis project with AI-powered tools"),
-		icon: Codicon.beaker,
-		when: 'patentIdeMode',
-		content: {
-			type: 'startEntry',
-			command: 'command:flowleap.newPatentProject',
-		}
-	},
-	{
-		id: 'patentOpenProject',
-		title: localize('gettingStarted.patentOpenProject.title', "Open Patent Project..."),
-		description: localize('gettingStarted.patentOpenProject.description', "Open an existing patent analysis project"),
-		icon: Codicon.folderOpened,
-		when: 'patentIdeMode',
-		content: {
-			type: 'startEntry',
-			command: 'command:flowleap.openPatentProject',
-		}
-	},
-	{
 		id: 'patentSearchPriorArt',
 		title: localize('gettingStarted.patentSearchPriorArt.title', "Search Prior Art..."),
 		description: localize('gettingStarted.patentSearchPriorArt.description', "Search patent databases for prior art references"),

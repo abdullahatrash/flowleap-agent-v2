@@ -237,6 +237,7 @@ import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
 
 // FlowLeap (Patent)
 import './contrib/patent/browser/patentAuth.contribution.js';
+import './contrib/patent/browser/patentWalkthrough.contribution.js';
 
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';

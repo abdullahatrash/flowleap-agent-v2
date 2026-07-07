@@ -1306,8 +1306,8 @@
         "when": "!isWeb",
         "canBeReferencedInPrompt": true,
         "icon": "$(graph)",
-        "userDescription": "Generate patent analytics with Python visualization code",
-        "modelDescription": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Builds a query from your criteria, searches EPO OPS live, and returns analytics DATA: the exact total match count, plus yearly trend, geographic distribution, and top assignees aggregated over the 100 most relevant matches (sample-based). After getting data, CREATE a Python visualization script and RUN it. For exact per-year counts, call this tool once per dateFrom/dateTo window. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis', 'patent portfolio'. DO NOT use build_patent_query for analytics - use THIS tool directly. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
+        "userDescription": "Full-corpus patent analytics: filing trends, top assignees, country and CPC breakdowns as tables",
+        "modelDescription": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis', 'patent portfolio'. DO NOT use build_patent_query for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1326,43 +1326,35 @@
               },
               "description": "Exact phrase matches. Use for multi-word terms that must appear together. Example: ['machine learning', 'deep learning', 'neural network']"
             },
-            "query": {
-              "type": "string",
-              "description": "Legacy: Free-form search query. Prefer 'keywords' and 'phrases' arrays instead for better control."
-            },
             "assignee": {
               "type": "string",
-              "description": "Filter by company/assignee name (e.g., 'Tesla', 'Toyota', 'Apple')"
+              "description": "Filter by harmonized assignee name (substring match, e.g. 'Tesla', 'Toyota', 'Apple')"
             },
             "cpc": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Filter by CPC classification codes. Example: ['G06N', 'A61B', 'H04L']"
+              "description": "Filter by CPC classification codes (prefix match). Example: ['G06N', 'A61B', 'H04L']"
             },
             "ipc": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Filter by IPC classification codes. Example: ['G06F', 'H01M']"
-            },
-            "classification": {
-              "type": "string",
-              "description": "Legacy: Single classification code. Prefer 'cpc' or 'ipc' arrays instead."
+              "description": "Filter by IPC classification codes (prefix match). Example: ['G06F', 'H01M']"
             },
             "countryCode": {
               "type": "string",
-              "description": "Filter by country code (e.g., 'US', 'CN', 'EP', 'JP', 'KR')"
+              "description": "Filter by publication country code (e.g., 'US', 'CN', 'EP', 'JP', 'KR')"
             },
             "dateFrom": {
               "type": "string",
-              "description": "Start date filter in YYYY-MM-DD format (e.g., '2020-01-01')"
+              "description": "Publication-date lower bound in YYYY-MM-DD format (e.g., '2020-01-01')"
             },
             "dateTo": {
               "type": "string",
-              "description": "End date filter in YYYY-MM-DD format (e.g., '2024-12-31')"
+              "description": "Publication-date upper bound in YYYY-MM-DD format (e.g., '2024-12-31')"
             }
           }
         }
@@ -2022,7 +2014,7 @@
       {
         "id": "github.copilot.default",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "FlowLeap Patent AI",
         "description": "%copilot.description%",
         "isDefault": true,
         "locations": [
@@ -2066,7 +2058,7 @@
       {
         "id": "github.copilot.editingSession",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "FlowLeap Patent AI",
         "description": "%copilot.edits.description%",
         "isDefault": true,
         "locations": [
@@ -2079,7 +2071,7 @@
       {
         "id": "github.copilot.editingSessionEditor",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "FlowLeap Patent AI",
         "description": "%copilot.edits.description%",
         "isDefault": true,
         "locations": [
@@ -2090,7 +2082,7 @@
       {
         "id": "github.copilot.editsAgent",
         "name": "agent",
-        "fullName": "GitHub Copilot",
+        "fullName": "FlowLeap Patent AI",
         "description": "%copilot.agent.description%",
         "locations": [
           "panel"
@@ -2123,7 +2115,7 @@
       {
         "id": "github.copilot.notebook",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "FlowLeap Patent AI",
         "description": "%copilot.description%",
         "isDefault": true,
         "locations": [
@@ -2144,7 +2136,7 @@
       {
         "id": "github.copilot.notebookEditorAgent",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "FlowLeap Patent AI",
         "description": "%copilot.description%",
         "isDefault": true,
         "locations": [
