@@ -6,9 +6,10 @@
 /*---------------------------------------------------------------------------------------------
  *  Patent Analytics Tool
  *
- *  Builds a CQL query from structured criteria, runs it against EPO OPS via the FlowLeap
- *  backend (`/ops/search`), and aggregates the results client-side. The agent uses this data
- *  to create visualizations.
+ *  Sends a structured search contract to the FlowLeap backend's full-corpus analytics route
+ *  (`/v1/patent-analytics`, DuckDB-backed over a quarterly-refreshed slice of the Google Patents
+ *  corpus) and renders the returned aggregates (filing trend, top assignees, country and CPC
+ *  breakdowns) as markdown tables. The aggregates ARE the deliverable — no client-side sampling.
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
@@ -19,58 +20,53 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { renderMarkdownTable, ToolResponseBudgets } from './patentResponseFormatter';
 
 interface IPatentAnalyticsParams {
-	query?: string;           // Legacy - deprecated, use keywords/phrases instead
-	keywords?: string[];      // Individual keywords with OR logic (e.g., ["AI", "5G", "healthcare"])
-	phrases?: string[];       // Exact phrase matches (e.g., ["machine learning", "deep learning"])
+	keywords?: string[];      // Individual keywords, OR logic, matched against EN title + abstract
+	phrases?: string[];       // Exact phrase matches, matched against EN title + abstract
+	assignee?: string;        // Harmonized-assignee-name substring match
+	cpc?: string[];           // CPC classification codes, prefix match (e.g. ["G06N", "A61B"])
+	ipc?: string[];           // IPC classification codes, prefix match
+	countryCode?: string;     // Publication country (e.g. "US", "CN", "EP")
+	dateFrom?: string;        // Publication-date lower bound, YYYY-MM-DD
+	dateTo?: string;          // Publication-date upper bound, YYYY-MM-DD
+}
+
+/** The structured request body accepted by `/v1/patent-analytics`. Every field is optional; at least one is required. */
+interface IPatentAnalyticsRequest {
+	keywords?: string[];
+	phrases?: string[];
 	assignee?: string;
-	cpc?: string[];           // CPC classification codes (e.g., ["G06N", "A61B"])
-	ipc?: string[];           // IPC classification codes
-	classification?: string;  // Legacy - deprecated, use cpc/ipc instead
+	cpc?: string[];
+	ipc?: string[];
+	countryCode?: string;
 	dateFrom?: string;
 	dateTo?: string;
-	countryCode?: string;
 }
 
-interface OpsEnvelope<T> {
-	success: boolean;
-	data?: T;
-	error?: string;
-}
-
-interface OpsSearchResultItem {
-	docId: string;
-	title: string | null;
-	abstract: string | null;
-	applicants: string[];
-	publicationDate: string | null;
-}
-
-interface OpsSearchData {
-	total: number;
-	range: { begin: number; end: number };
-	docs: string[] | OpsSearchResultItem[];
-}
-
-interface AnalyticsData {
+interface AnalyticsAggregates {
 	byYear: { year: number; count: number }[];
 	byCountry: { country: string; count: number }[];
 	topAssignees: { assignee: string; count: number }[];
+	topCPC: { cpc: string; count: number }[];
 }
 
-/** Sample size for the distribution aggregations — the OPS search page we fetch with biblio details. */
-const SAMPLE_SIZE = 100;
-
-/** The backend staggers per-doc biblio fetches for the sample, so allow well beyond the 30s default. */
-const SEARCH_TIMEOUT_MS = 90_000;
+interface AnalyticsResponse {
+	success: boolean;
+	searchDescription?: string;
+	request?: IPatentAnalyticsRequest;
+	analytics?: AnalyticsAggregates;
+	error?: string;
+}
 
 /**
- * Tool for fetching patent analytics. Builds a CQL query from the structured criteria, searches
- * EPO OPS via the FlowLeap backend (through the shared {@link IPatentBackendClient} seam, so it
- * inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating), and aggregates
- * yearly/country/assignee distributions from the top matches. The exact total match count comes
- * from OPS; the distributions are computed over the first {@link SAMPLE_SIZE} results.
+ * Tool for fetching patent analytics over the full backend corpus. Maps the structured search
+ * criteria to the `/v1/patent-analytics` contract and calls it through the shared
+ * {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` / `429 → rate-limited` gating. The backend computes each aggregate
+ * (filing trend, top assignees, country and CPC breakdowns) over the whole matching corpus and
+ * caps each list at its top 20; this tool renders those aggregates as markdown tables.
  */
 export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsParams> {
 
@@ -92,40 +88,23 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IPatentAnalyticsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[PatentAnalyticsTool] Fetching analytics');
 
-		const cql = this.buildCql(options.input);
-		if (!cql) {
+		const request = this.buildRequest(options.input);
+		if (!request) {
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart('Error: Provide at least one of: keywords, phrases, assignee, cpc, ipc, or query')
+				new LanguageModelTextPart('Error: Provide at least one search criterion: keywords, phrases, assignee, cpc, ipc, countryCode, dateFrom, or dateTo.')
 			]);
 		}
 
-		this.logService.info(`[PatentAnalyticsTool] CQL: ${cql}`);
-
 		try {
-			const params = new URLSearchParams({ q: cql, range: `1-${SAMPLE_SIZE}`, details: 'true' });
-			if (options.input.countryCode) {
-				params.set('countries', options.input.countryCode.toUpperCase());
-			}
+			const result = await this.patentBackendClient.post<AnalyticsResponse>('/patent-analytics', request, token);
 
-			const result = await this.patentBackendClient.get<OpsEnvelope<OpsSearchData>>(`/ops/search?${params.toString()}`, token, { timeoutMs: SEARCH_TIMEOUT_MS });
-
-			if (!result.success || !result.data) {
+			if (!result.success || !result.analytics) {
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`Error: ${result.error || 'Unknown error'}`)
 				]);
 			}
 
-			const items = result.data.docs.filter((d): d is OpsSearchResultItem => typeof d !== 'string');
-			this.logService.info(`[PatentAnalyticsTool] ${result.data.total} total matches, aggregating over ${items.length}`);
-
-			if (result.data.total === 0 || items.length === 0) {
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`No patents matched the query \`${cql}\`. Try broader keywords or fewer filters.`)
-				]);
-			}
-
-			const analytics = this.aggregate(items);
-			const formattedResponse = this.formatAnalytics(cql, result.data.total, items.length, analytics);
+			const formattedResponse = this.formatAnalytics(result.searchDescription, result.analytics);
 
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(formattedResponse)
@@ -149,142 +128,96 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 	}
 
 	/**
-	 * Build an EPO OPS CQL query from the structured search criteria. Returns undefined when no
-	 * criterion is given. `ta` searches title+abstract, `pa` applicant, `cpc`/`ic` classifications,
-	 * `pd` publication date.
+	 * Map the tool inputs onto the `/v1/patent-analytics` request contract, dropping empty fields.
+	 * Returns undefined when no criterion is given, so the caller can short-circuit before the network
+	 * call (the backend would reject an empty body with `400 no-criterion`).
 	 */
-	private buildCql(input: IPatentAnalyticsParams): string | undefined {
-		const { query, keywords, phrases, assignee, cpc, ipc, classification, dateFrom, dateTo } = input;
-		const clauses: string[] = [];
+	private buildRequest(input: IPatentAnalyticsParams): IPatentAnalyticsRequest | undefined {
+		const request: IPatentAnalyticsRequest = {};
 
-		const quote = (s: string) => `"${s.replace(/"/g, '')}"`;
-
-		const termClauses: string[] = [];
-		for (const phrase of phrases ?? []) {
-			termClauses.push(`ta=${quote(phrase)}`);
+		if (input.keywords && input.keywords.length > 0) {
+			request.keywords = input.keywords;
 		}
-		for (const keyword of keywords ?? []) {
-			termClauses.push(`ta=${quote(keyword)}`);
+		if (input.phrases && input.phrases.length > 0) {
+			request.phrases = input.phrases;
 		}
-		if (termClauses.length === 0 && query) {
-			termClauses.push(`ta=${quote(query)}`);
+		if (input.assignee) {
+			request.assignee = input.assignee;
 		}
-		if (termClauses.length === 1) {
-			clauses.push(termClauses[0]);
-		} else if (termClauses.length > 1) {
-			clauses.push(`(${termClauses.join(' or ')})`);
+		if (input.cpc && input.cpc.length > 0) {
+			request.cpc = input.cpc;
 		}
-
-		if (assignee) {
-			clauses.push(`pa=${quote(assignee)}`);
+		if (input.ipc && input.ipc.length > 0) {
+			request.ipc = input.ipc;
 		}
-
-		const cpcCodes = cpc && cpc.length > 0 ? cpc : (classification ? [classification] : []);
-		if (cpcCodes.length === 1) {
-			clauses.push(`cpc=${cpcCodes[0]}`);
-		} else if (cpcCodes.length > 1) {
-			clauses.push(`(${cpcCodes.map(c => `cpc=${c}`).join(' or ')})`);
+		if (input.countryCode) {
+			request.countryCode = input.countryCode.toUpperCase();
+		}
+		if (input.dateFrom) {
+			request.dateFrom = input.dateFrom;
+		}
+		if (input.dateTo) {
+			request.dateTo = input.dateTo;
 		}
 
-		if (ipc && ipc.length === 1) {
-			clauses.push(`ic=${ipc[0]}`);
-		} else if (ipc && ipc.length > 1) {
-			clauses.push(`(${ipc.map(c => `ic=${c}`).join(' or ')})`);
-		}
-
-		const toOpsDate = (d: string) => d.replace(/-/g, '');
-		if (dateFrom && dateTo) {
-			clauses.push(`pd within "${toOpsDate(dateFrom)} ${toOpsDate(dateTo)}"`);
-		} else if (dateFrom) {
-			clauses.push(`pd >= "${toOpsDate(dateFrom)}"`);
-		} else if (dateTo) {
-			clauses.push(`pd <= "${toOpsDate(dateTo)}"`);
-		}
-
-		return clauses.length > 0 ? clauses.join(' and ') : undefined;
+		return Object.keys(request).length > 0 ? request : undefined;
 	}
 
 	/**
-	 * Aggregate year/country/assignee distributions from the sampled search results.
+	 * Render the backend aggregates as markdown tables. Each aggregate is already capped at its top 20
+	 * by the backend; the assembled body is bounded by {@link ToolResponseBudgets.PatentAnalyticsViz} as
+	 * a defensive whole-response ceiling.
 	 */
-	private aggregate(items: OpsSearchResultItem[]): AnalyticsData {
-		const byYear = new Map<number, number>();
-		const byCountry = new Map<string, number>();
-		const byAssignee = new Map<string, number>();
+	private formatAnalytics(searchDescription: string | undefined, analytics: AnalyticsAggregates): string {
+		const { byYear, byCountry, topAssignees, topCPC } = analytics;
 
-		for (const item of items) {
-			const year = item.publicationDate ? parseInt(item.publicationDate.substring(0, 4), 10) : NaN;
-			if (!isNaN(year)) {
-				byYear.set(year, (byYear.get(year) || 0) + 1);
-			}
-
-			const country = item.docId?.substring(0, 2).toUpperCase();
-			if (country) {
-				byCountry.set(country, (byCountry.get(country) || 0) + 1);
-			}
-
-			for (const applicant of item.applicants ?? []) {
-				const name = applicant.trim().toUpperCase().replace(/[.,]+$/, '');
-				if (name) {
-					byAssignee.set(name, (byAssignee.get(name) || 0) + 1);
-				}
-			}
+		if (byYear.length === 0 && byCountry.length === 0 && topAssignees.length === 0 && topCPC.length === 0) {
+			return `No patents matched${searchDescription ? ` ${searchDescription}` : ' the given criteria'}. Try broader keywords or fewer filters.`;
 		}
 
-		return {
-			byYear: [...byYear.entries()].map(([year, count]) => ({ year, count })).sort((a, b) => a.year - b.year),
-			byCountry: [...byCountry.entries()].map(([country, count]) => ({ country, count })).sort((a, b) => b.count - a.count),
-			topAssignees: [...byAssignee.entries()].map(([assignee, count]) => ({ assignee, count })).sort((a, b) => b.count - a.count).slice(0, 10),
-		};
-	}
+		const lines: string[] = ['## Patent Analytics Results', ''];
+		if (searchDescription) {
+			lines.push(`**Search**: ${searchDescription}`, '');
+		}
+		lines.push('Coverage: full-corpus counts over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus). Each list below is capped at its top 20.', '');
 
-	/**
-	 * Format analytics data for LLM consumption
-	 */
-	private formatAnalytics(cql: string, total: number, sampleSize: number, analytics: AnalyticsData): string {
-		const peakYear = analytics.byYear.reduce((max, y) => y.count > max.count ? y : max, analytics.byYear[0] || { year: 0, count: 0 });
+		// Filing trend, oldest year first so the table reads as a time series.
+		const yearsAscending = [...byYear].sort((a, b) => a.year - b.year);
+		lines.push('### Filing Trend (by publication year)');
+		lines.push(renderMarkdownTable(yearsAscending, [
+			{ header: 'Year', cell: y => String(y.year) },
+			{ header: 'Patents', cell: y => y.count.toLocaleString(), align: 'right' },
+		]));
+		lines.push('');
 
-		const lines: string[] = [
-			'## Patent Analytics Results',
-			'',
-			`**Query (EPO OPS CQL)**: \`${cql}\``,
-			`**Total Matches**: ${total.toLocaleString()} (exact count from EPO OPS)`,
-			`**Sample**: distributions below are computed over the ${sampleSize} most relevant matches`,
-			'',
-			'### Summary',
-			`- Peak Year (in sample): ${peakYear.year} (${peakYear.count} patents)`,
-			`- Top Country (in sample): ${analytics.byCountry[0]?.country || 'N/A'}`,
-			`- Top Assignee (in sample): ${analytics.topAssignees[0]?.assignee || 'N/A'}`,
-			'',
-			'### Yearly Trend (sample)',
-		];
+		lines.push('### Top Assignees');
+		lines.push(renderMarkdownTable(topAssignees, [
+			{ header: 'Assignee', cell: a => a.assignee },
+			{ header: 'Patents', cell: a => a.count.toLocaleString(), align: 'right' },
+		]));
+		lines.push('');
 
-		analytics.byYear.forEach(y => {
-			lines.push(`- ${y.year}: ${y.count}`);
-		});
+		lines.push('### By Country');
+		lines.push(renderMarkdownTable(byCountry, [
+			{ header: 'Country', cell: c => c.country },
+			{ header: 'Patents', cell: c => c.count.toLocaleString(), align: 'right' },
+		]));
+		lines.push('');
 
-		lines.push('', '### Countries (sample)');
-		analytics.byCountry.slice(0, 10).forEach(c => {
-			lines.push(`- ${c.country}: ${c.count}`);
-		});
+		lines.push('### Top CPC Sections');
+		lines.push(renderMarkdownTable(topCPC, [
+			{ header: 'CPC', cell: c => c.cpc },
+			{ header: 'Patents', cell: c => c.count.toLocaleString(), align: 'right' },
+		]));
+		lines.push('');
 
-		lines.push('', '### Top Assignees (sample)');
-		analytics.topAssignees.forEach(a => {
-			lines.push(`- ${a.assignee}: ${a.count}`);
-		});
+		lines.push('Highlight for the user: the peak filing years, the leading assignees, the geographic concentration, and the dominant CPC sections. The tables above are the deliverable — present them directly rather than re-deriving the numbers.');
 
-		lines.push(
-			'',
-			'---',
-			'Use this data to create visualizations. You can:',
-			'1. Create a Python script with matplotlib/plotly to visualize trends',
-			'2. Generate a markdown report with the analysis',
-			'3. Build interactive dashboards',
-			'',
-			'For per-year exact counts, rerun this tool with dateFrom/dateTo buckets (each run returns the exact total for its window). For CPC breakdowns, fetch biblio for specific patents via patent_api_request (GET /ops/biblio?doc=...).'
-		);
-
-		return lines.join('\n');
+		const body = lines.join('\n');
+		const budget = ToolResponseBudgets.PatentAnalyticsViz;
+		return body.length > budget
+			? body.substring(0, budget) + '\n\n(Output truncated to fit the response budget.)'
+			: body;
 	}
 }
 
