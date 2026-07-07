@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
@@ -14,11 +14,14 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { buildPatentReport, PatentReportTemplate } from '../common/patentReportTemplates';
 import { assertFileOkForTool } from '../node/toolUtils';
 
 interface IWritePatentResultsParams {
 	filePath: string;
 	content: string;
+	/** Optional report template. Omitted = free-form save of `content` unchanged. */
+	template?: PatentReportTemplate;
 }
 
 /**
@@ -54,7 +57,7 @@ class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IWritePatentResultsParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[WritePatentResultsTool] Invoking write patent results');
 
-		const { filePath, content } = options.input;
+		const { filePath, content, template } = options.input;
 
 		// Resolve relative paths against the workspace (and reject invalid input) rather than
 		// mapping them to the filesystem root via `URI.file`.
@@ -70,12 +73,24 @@ class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> 
 		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
 
 		try {
+			// Wrap the model's content in the chosen professional report structure, or write it
+			// verbatim when no template is requested.
+			const document = buildPatentReport(content, template);
+
 			// Ensure the parent directory exists before writing.
 			await createDirectoryIfNotExists(this.fileSystemService, dirname(uri));
 
-			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(content));
+			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(document));
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
+
+			// Surface the deliverable by opening it in the editor. A failure to open must not fail
+			// the write, so it is logged and swallowed.
+			try {
+				await vscode.commands.executeCommand('vscode.open', vscode.Uri.from(uri));
+			} catch (openError) {
+				this.logService.warn(`[WritePatentResultsTool] Wrote file but failed to open it: ${openError instanceof Error ? openError.message : String(openError)}`);
+			}
 
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}`)
