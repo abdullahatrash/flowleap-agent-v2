@@ -9,6 +9,7 @@ import { IEnvService } from '../../../platform/env/common/envService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService, Response } from '../../../platform/networking/common/fetcherService';
 import { INotificationService } from '../../../platform/notification/common/notificationService';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { createServiceIdentifier } from '../../../util/common/services';
 import { URI } from '../../../util/vs/base/common/uri';
@@ -94,6 +95,21 @@ export class DataKeysRequiredError extends PatentBackendError {
 }
 
 /**
+ * Thrown when the backend answers `429` and the request could not be transparently retried within a
+ * short {@link https://developer.mozilla.org/docs/Web/HTTP/Headers/Retry-After Retry-After} budget —
+ * the caller is being rate-limited. Kept distinct from the generic non-2xx path so tools surface a
+ * clear "wait and retry" message instead of a raw body. `retryAfterSeconds` carries the server's hint
+ * when it supplied one. Extends {@link PatentBackendError} so tool catch paths keep working.
+ */
+export class RateLimitError extends PatentBackendError {
+	readonly code = 'rate_limited';
+	constructor(message: string, readonly retryAfterSeconds: number | undefined) {
+		super(429, message);
+		this.name = 'RateLimitError';
+	}
+}
+
+/**
  * Model-facing recovery hint for an auth/setup failure from the backend. Tools append this to
  * their error result so the assistant can tell the user the concrete next step in-chat — the
  * actionable notification the seam fires is easy to miss mid-conversation. Empty for every
@@ -113,6 +129,10 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	if (error instanceof DataKeysRequiredError) {
 		const providerClause = error.provider ? `${error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP'} ` : 'EPO OPS or USPTO ';
 		return ` Patent data now requires the user's own ${providerClause}key (a notification with an "Add Patent Data Keys" button was shown). Ask the user to run the "FlowLeap: Patent Data Keys" command to add it, then retry this tool.`;
+	}
+	if (error instanceof RateLimitError) {
+		const waitClause = error.retryAfterSeconds ? `Wait at least ${error.retryAfterSeconds} seconds` : 'Wait a few seconds';
+		return ` The FlowLeap backend is rate-limiting requests (HTTP 429). ${waitClause} before retrying this tool.`;
 	}
 	return '';
 }
@@ -183,6 +203,39 @@ interface DataKeysRequiredInfo {
 	readonly provider: 'epo' | 'uspto' | undefined;
 }
 
+// ── Hardening tunables ───────────────────────────────────────────────────────────
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+/** Extra attempts after the first for retryable failures (network errors, 5xx, short-Retry-After 429). */
+const MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 250;
+const RETRY_MAX_DELAY_MS = 4_000;
+/** A 429's `Retry-After` is only honored inline (retry) when it is within this budget; longer waits surface a {@link RateLimitError}. */
+const RATE_LIMIT_MAX_RETRY_WAIT_MS = 5_000;
+/** Short TTL for the per-session read cache — long enough to dedupe a burst of identical tool calls, short enough to stay fresh. */
+const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_ENTRIES = 100;
+/** Internal funnel event: one per public request. Endpoint/method/status only — never request bodies or keys. */
+const REQUEST_TELEMETRY_EVENT = 'flowleap.patentBackend.request';
+
+/** One cached read: the parsed value and the wall-clock time it stops being served. */
+interface CacheEntry {
+	readonly value: unknown;
+	readonly expiresAt: number;
+}
+
+/** Per-request telemetry, split into the string dimensions and numeric measures the sink expects. */
+interface RequestTelemetry {
+	readonly endpoint: string;
+	readonly method: 'GET' | 'POST';
+	readonly statusClass: string;
+	readonly latencyMs: number;
+	readonly responseBytes: number;
+	readonly retries: number;
+	readonly servedFromCache: boolean;
+	readonly backendCached: boolean;
+}
+
 /**
  * DI implementation of {@link IPatentBackendClient}.
  *
@@ -204,11 +257,19 @@ export class PatentBackendClient implements IPatentBackendClient {
 	 */
 	private readonly _dataKeysRequiredPrompted = new Set<string>();
 
+	/**
+	 * Per-session read cache keyed by method+path+body. All patent routes are read-only (#89), so an
+	 * identical repeated call within {@link CACHE_TTL_MS} can be served without re-hitting the backend.
+	 * Bounded to {@link CACHE_MAX_ENTRIES} with oldest-first eviction — a dedupe buffer, not a store.
+	 */
+	private readonly _cache = new Map<string, CacheEntry>();
+
 	constructor(
 		@ILogService private readonly _logService: ILogService,
 		@INotificationService private readonly _notificationService: INotificationService,
 		@IEnvService private readonly _envService: IEnvService,
 		@IFetcherService private readonly _fetcherService: IFetcherService,
+		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 	) { }
 
 	post<T>(path: string, body: unknown, token: CancellationToken, options?: IPatentBackendRequestOptions): Promise<T> {
@@ -220,33 +281,68 @@ export class PatentBackendClient implements IPatentBackendClient {
 	}
 
 	/**
-	 * Internal implementation for all HTTP requests to the FlowLeap backend. Handles auth, timeout,
-	 * cancellation, and error normalisation (including the centralized `401`/`402` gating).
+	 * Internal implementation for all HTTP requests to the FlowLeap backend. Orchestrates the
+	 * per-session read cache, retry-with-backoff, the centralized `401`/`402`/`400`/`429` gating, and
+	 * one telemetry event per public request. The single network attempt lives in {@link _attempt}.
 	 */
 	private async _request<T>(method: 'GET' | 'POST', path: string, body: unknown, token: CancellationToken, options?: IPatentBackendRequestOptions): Promise<T> {
+		const startedAt = Date.now();
+		const endpoint = endpointLabel(path);
+		const cacheKey = cacheKeyFor(method, path, body);
+
+		const cached = this._cacheGet(cacheKey);
+		if (cached) {
+			this._sendRequestTelemetry({ endpoint, method, statusClass: 'cache', latencyMs: Date.now() - startedAt, responseBytes: 0, retries: 0, servedFromCache: true, backendCached: true });
+			return cached.value as T;
+		}
+
 		const config = getPatentAIConfig();
 		const url = `${config.apiUrl}${path}`;
-		const timeoutMs = options?.timeoutMs ?? 30_000;
+		const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+		// Bearer token comes from the registry seam (FlowLeapAuthenticationProvider registers its accessor there),
+		// keeping the request path decoupled from the auth service. Read once so retries reuse it; the client
+		// knows whether a token existed *before* the request to disambiguate 401 (see the auth gate below).
+		const accessToken = getPatentAccessToken();
+		const headers = this._buildHeaders(method, accessToken);
 
-		// The fetcher service enforces the timeout natively; we only wire the CancellationToken to an
-		// abort controller so a cancelled request aborts the in-flight fetch.
-		const abort = this._fetcherService.makeAbortController();
-		const cancelSub = token.onCancellationRequested(() => abort.abort());
+		let statusClass = 'network-error';
+		let responseBytes = 0;
+		let retries = 0;
+		let backendCached = false;
+		try {
+			const { response, retries: usedRetries } = await this._fetchWithRetry(method, url, headers, body, timeoutMs, token);
+			retries = usedRetries;
+			statusClass = classifyStatus(response.status);
 
+			const text = await response.text();
+			responseBytes = byteLength(text);
+
+			if (!response.ok) {
+				this._throwForErrorResponse(response, text, accessToken);
+			}
+
+			const value = text ? JSON.parse(text) as T : undefined as T;
+			backendCached = backendCachedFlag(value);
+			this._cacheSet(cacheKey, value);
+			return value;
+		} finally {
+			this._sendRequestTelemetry({ endpoint, method, statusClass, latencyMs: Date.now() - startedAt, responseBytes, retries, servedFromCache: false, backendCached });
+		}
+	}
+
+	/**
+	 * Build the request headers: JSON content type for POST, the Bearer token (when one is registered),
+	 * and the BYO patent-data key headers (#31, ADR 0005) forwarded per the #30 wire contract. The two
+	 * providers are independent (EPO-only / USPTO-only are valid). Never log these values.
+	 */
+	private _buildHeaders(method: 'GET' | 'POST', accessToken: string | undefined): Record<string, string> {
 		const headers: Record<string, string> = {};
 		if (method === 'POST') {
 			headers['Content-Type'] = 'application/json';
 		}
-		// Bearer token comes from the registry seam (FlowLeapAuthenticationProvider registers its accessor there),
-		// keeping the request path decoupled from the auth service. No apiKey fallback exists — FlowLeap
-		// is BYOK for inference and the backend is the Clerk-gated paid path (ADR 0002/0004).
-		const accessToken = getPatentAccessToken();
 		if (accessToken) {
 			headers['Authorization'] = `Bearer ${accessToken}`;
 		}
-		// BYO patent-data keys (#31, ADR 0005): forwarded per the #30 wire contract when the
-		// user configured them; absent headers mean the backend's FlowLeap-key behavior. The
-		// two providers are independent (EPO-only / USPTO-only are valid). Never log these.
 		const dataKeys = getPatentDataKeys();
 		if (dataKeys?.epo) {
 			headers[EPO_OPS_KEY_HEADER] = dataKeys.epo.key;
@@ -255,87 +351,220 @@ export class PatentBackendClient implements IPatentBackendClient {
 		if (dataKeys?.usptoOdp) {
 			headers[USPTO_ODP_KEY_HEADER] = dataKeys.usptoOdp;
 		}
+		return headers;
+	}
 
-		try {
-			this._logService.debug(`[PatentBackendClient] ${method} ${url}`);
-
+	/**
+	 * Run {@link _attempt} with exponential backoff (jittered) on the retryable failures every patent
+	 * route can safely repeat: network errors, `5xx`, and a `429` whose `Retry-After` is within
+	 * {@link RATE_LIMIT_MAX_RETRY_WAIT_MS}. Timeouts and cancellations are NOT retried — they surface as
+	 * the same {@link PatentBackendError} messages as before. Returns the final response (which may be a
+	 * non-2xx the caller then gates) together with how many retries it took.
+	 */
+	private async _fetchWithRetry(method: 'GET' | 'POST', url: string, headers: Record<string, string>, body: unknown, timeoutMs: number, token: CancellationToken): Promise<{ response: Response; retries: number }> {
+		let attempt = 0;
+		for (; ;) {
 			let response: Response;
 			try {
-				response = await this._fetcherService.fetch(url, {
-					callSite: 'patentBackendClient',
-					method,
-					headers,
-					body: method === 'POST' ? JSON.stringify(body) : undefined,
-					timeout: timeoutMs,
-					signal: abort.signal,
-				});
+				response = await this._attempt(method, url, headers, body, timeoutMs, token);
 			} catch (err) {
 				// A timeout (enforced by the fetcher) and a cancellation (our abort) both surface as abort
-				// errors; disambiguate via the token to preserve the original error messages.
+				// errors; disambiguate via the token to preserve the original messages, and never retry them.
 				if (this._fetcherService.isAbortError(err)) {
 					if (token.isCancellationRequested) {
 						throw new PatentBackendError(undefined, 'Request cancelled.');
 					}
 					throw new PatentBackendError(undefined, `Request timed out after ${timeoutMs} ms.`);
 				}
+				// A genuine network error is transient — retry it while budget remains.
+				if (attempt < MAX_RETRIES && !token.isCancellationRequested) {
+					this._logService.debug(`[PatentBackendClient] network error on ${url}; retry ${attempt + 1}/${MAX_RETRIES}`);
+					await this._backoffDelay(attempt, token);
+					attempt++;
+					continue;
+				}
 				throw err;
 			}
 
-			this._logService.debug(`[PatentBackendClient] ${response.status} ${url} (${response.headers.get('content-length') ?? '?'} bytes)`);
-
-			if (!response.ok) {
-				const text = await response.text();
-
-				// Centralized subscription gate: gated patent routes answer
-				// `402 { error: { code: 'subscription_required', upgradeUrl } }` when the user has no
-				// active/trialing subscription. Detect it once here so every tool surfaces a clean
-				// upgrade prompt and a "Start free trial" notification instead of a raw JSON body.
-				if (response.status === 402) {
-					const info = parseSubscriptionRequired(text);
-					if (info) {
-						this._fireSubscriptionRequiredUx(info);
-						throw new SubscriptionRequiredError(info.message, info.upgradeUrl);
-					}
+			// A short `Retry-After` on a 429 is honored inline: wait it out and retry once more.
+			if (response.status === 429) {
+				const retryAfterMs = parseRetryAfterMs(response);
+				if (retryAfterMs !== undefined && retryAfterMs <= RATE_LIMIT_MAX_RETRY_WAIT_MS && attempt < MAX_RETRIES) {
+					void response.body.destroy().catch(() => { /* discarded body */ });
+					this._logService.debug(`[PatentBackendClient] 429 on ${url}; honoring Retry-After ${retryAfterMs} ms (retry ${attempt + 1}/${MAX_RETRIES})`);
+					await this._delay(retryAfterMs, token);
+					attempt++;
+					continue;
 				}
-
-				// Centralized data-key gate: `400 patent_provider_key_invalid` means EPO/USPTO
-				// rejected the USER's forwarded key (#30 contract). Prompt the keys UI once here
-				// so every tool inherits the "update your keys" action.
-				if (response.status === 400) {
-					const info = parseDataKeyInvalid(text);
-					if (info) {
-						this._fireDataKeyInvalidUx(info);
-						throw new DataKeyInvalidError(info.message, info.provider);
-					}
-					// Post-trial: patent data now runs on the user's own keys and none was forwarded
-					// (`data_keys_required`, ADR 0008). Prompt the keys UI once per provider per session.
-					const required = parseDataKeysRequired(text);
-					if (required) {
-						this._fireDataKeysRequiredUx(required);
-						throw new DataKeysRequiredError(required.message, required.provider);
-					}
-				}
-
-				// Centralized auth gate: a `401` means the Clerk token is missing, expired, or invalid.
-				// The client knows *before* the request whether a local token existed, so it can tell
-				// never-signed-in apart from an expired session without trusting the backend body: no
-				// token → a sign-in invitation; token sent but rejected → the expired-session prompt.
-				if (response.status === 401) {
-					const info: AuthRequiredInfo = accessToken
-						? parseAuthRequired(text)
-						: { message: SIGNED_OUT_MESSAGE, signedOut: true };
-					this._fireAuthRequiredUx(info);
-					throw new AuthRequiredError(info.message);
-				}
-
-				const truncated = text.length > 500 ? text.substring(0, 500) + '…' : text;
-				throw new PatentBackendError(response.status, truncated);
+				return { response, retries: attempt };
 			}
 
-			return await response.json() as T;
+			// `5xx` is retryable — the read can be safely repeated.
+			if (response.status >= 500 && response.status <= 599 && attempt < MAX_RETRIES) {
+				response.body.destroy();
+				this._logService.debug(`[PatentBackendClient] ${response.status} on ${url}; retry ${attempt + 1}/${MAX_RETRIES}`);
+				await this._backoffDelay(attempt, token);
+				attempt++;
+				continue;
+			}
+
+			return { response, retries: attempt };
+		}
+	}
+
+	/**
+	 * A single network attempt: wires the {@link CancellationToken} to an abort controller (so a
+	 * cancelled request aborts the in-flight fetch) and delegates the native timeout to the fetcher.
+	 * Throws the fetcher's raw error (including abort errors) for {@link _fetchWithRetry} to classify.
+	 */
+	private async _attempt(method: 'GET' | 'POST', url: string, headers: Record<string, string>, body: unknown, timeoutMs: number, token: CancellationToken): Promise<Response> {
+		const abort = this._fetcherService.makeAbortController();
+		const cancelSub = token.onCancellationRequested(() => abort.abort());
+		try {
+			this._logService.debug(`[PatentBackendClient] ${method} ${url}`);
+			const response = await this._fetcherService.fetch(url, {
+				callSite: 'patentBackendClient',
+				method,
+				headers,
+				body: method === 'POST' ? JSON.stringify(body) : undefined,
+				timeout: timeoutMs,
+				signal: abort.signal,
+			});
+			this._logService.debug(`[PatentBackendClient] ${response.status} ${url} (${response.headers.get('content-length') ?? '?'} bytes)`);
+			return response;
 		} finally {
 			cancelSub.dispose();
 		}
+	}
+
+	/**
+	 * Apply the centralized error gating for a non-2xx response — `402` subscription, `400` data-key,
+	 * `401` auth, and `429` rate-limit — always throwing. Preserves the exact typed errors and
+	 * notification UX every tool already depends on; only the `429` branch is new (#89).
+	 */
+	private _throwForErrorResponse(response: Response, text: string, accessToken: string | undefined): never {
+		// Centralized subscription gate: gated patent routes answer
+		// `402 { error: { code: 'subscription_required', upgradeUrl } }` when the user has no
+		// active/trialing subscription. Detect it once here so every tool surfaces a clean
+		// upgrade prompt and a "Start free trial" notification instead of a raw JSON body.
+		if (response.status === 402) {
+			const info = parseSubscriptionRequired(text);
+			if (info) {
+				this._fireSubscriptionRequiredUx(info);
+				throw new SubscriptionRequiredError(info.message, info.upgradeUrl);
+			}
+		}
+
+		// Centralized data-key gate: `400 patent_provider_key_invalid` means EPO/USPTO
+		// rejected the USER's forwarded key (#30 contract). Prompt the keys UI once here
+		// so every tool inherits the "update your keys" action.
+		if (response.status === 400) {
+			const info = parseDataKeyInvalid(text);
+			if (info) {
+				this._fireDataKeyInvalidUx(info);
+				throw new DataKeyInvalidError(info.message, info.provider);
+			}
+			// Post-trial: patent data now runs on the user's own keys and none was forwarded
+			// (`data_keys_required`, ADR 0008). Prompt the keys UI once per provider per session.
+			const required = parseDataKeysRequired(text);
+			if (required) {
+				this._fireDataKeysRequiredUx(required);
+				throw new DataKeysRequiredError(required.message, required.provider);
+			}
+		}
+
+		// Centralized auth gate: a `401` means the Clerk token is missing, expired, or invalid.
+		// The client knows *before* the request whether a local token existed, so it can tell
+		// never-signed-in apart from an expired session without trusting the backend body: no
+		// token → a sign-in invitation; token sent but rejected → the expired-session prompt.
+		if (response.status === 401) {
+			const info: AuthRequiredInfo = accessToken
+				? parseAuthRequired(text)
+				: { message: SIGNED_OUT_MESSAGE, signedOut: true };
+			this._fireAuthRequiredUx(info);
+			throw new AuthRequiredError(info.message);
+		}
+
+		// Rate-limit gate: a `429` that survived the inline Retry-After retry (too long a wait, or
+		// budget exhausted). Surface a distinct, clear "wait and retry" error carrying the server hint.
+		if (response.status === 429) {
+			const retryAfterMs = parseRetryAfterMs(response);
+			const retryAfterSeconds = retryAfterMs !== undefined ? Math.ceil(retryAfterMs / 1000) : undefined;
+			throw new RateLimitError(rateLimitMessage(text, retryAfterSeconds), retryAfterSeconds);
+		}
+
+		const truncated = text.length > 500 ? text.substring(0, 500) + '…' : text;
+		throw new PatentBackendError(response.status, truncated);
+	}
+
+	// ── Retry timing ────────────────────────────────────────────────────────────
+
+	/** Exponential backoff (base doubles per attempt, capped) with full jitter, cancellation-aware. */
+	private _backoffDelay(attempt: number, token: CancellationToken): Promise<void> {
+		const capped = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * 2 ** attempt);
+		const jittered = capped / 2 + Math.random() * (capped / 2);
+		return this._delay(jittered, token);
+	}
+
+	/** Resolve after `ms`, or reject with the cancellation {@link PatentBackendError} if the token fires first. */
+	private _delay(ms: number, token: CancellationToken): Promise<void> {
+		return new Promise<void>((resolve, reject) => {
+			if (token.isCancellationRequested) {
+				reject(new PatentBackendError(undefined, 'Request cancelled.'));
+				return;
+			}
+			const timer = setTimeout(() => {
+				sub.dispose();
+				resolve();
+			}, ms);
+			const sub = token.onCancellationRequested(() => {
+				clearTimeout(timer);
+				reject(new PatentBackendError(undefined, 'Request cancelled.'));
+			});
+		});
+	}
+
+	// ── Session read cache ──────────────────────────────────────────────────────
+
+	/** Return a live (non-expired) cache entry, pruning it if the TTL has passed. */
+	private _cacheGet(key: string): CacheEntry | undefined {
+		const entry = this._cache.get(key);
+		if (!entry) {
+			return undefined;
+		}
+		if (entry.expiresAt <= Date.now()) {
+			this._cache.delete(key);
+			return undefined;
+		}
+		return entry;
+	}
+
+	/** Store a successful read, evicting the oldest entry when the bound is reached (Map keeps insertion order). */
+	private _cacheSet(key: string, value: unknown): void {
+		if (this._cache.size >= CACHE_MAX_ENTRIES && !this._cache.has(key)) {
+			const oldest = this._cache.keys().next().value;
+			if (oldest !== undefined) {
+				this._cache.delete(oldest);
+			}
+		}
+		this._cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+	}
+
+	// ── Telemetry ───────────────────────────────────────────────────────────────
+
+	/** Emit the single per-request funnel event: endpoint/method/status dimensions, latency/size measures. */
+	private _sendRequestTelemetry(t: RequestTelemetry): void {
+		this._telemetryService.sendInternalMSFTTelemetryEvent(
+			REQUEST_TELEMETRY_EVENT,
+			{ endpoint: t.endpoint, method: t.method, statusClass: t.statusClass },
+			{
+				latencyMs: t.latencyMs,
+				responseBytes: t.responseBytes,
+				retries: t.retries,
+				servedFromCache: t.servedFromCache ? 1 : 0,
+				backendCached: t.backendCached ? 1 : 0,
+			},
+		);
 	}
 
 	/**
@@ -417,6 +646,70 @@ export class PatentBackendClient implements IPatentBackendClient {
 			await vscode.commands.executeCommand('patent-ai.signIn');
 		}
 	}
+}
+
+// ── Request-shaping helpers ───────────────────────────────────────────────────────
+
+/** Coarse endpoint label for telemetry: the first path segment, query stripped (low cardinality, no IDs beyond the route). */
+function endpointLabel(path: string): string {
+	const query = path.indexOf('?');
+	const clean = query >= 0 ? path.slice(0, query) : path;
+	return clean.split('/').filter(Boolean)[0] ?? '';
+}
+
+/** Cache key for a read: method + path + serialized body (identical inputs → identical key). */
+function cacheKeyFor(method: 'GET' | 'POST', path: string, body: unknown): string {
+	return body === undefined ? `${method} ${path}` : `${method} ${path} ${JSON.stringify(body)}`;
+}
+
+/** Bucket an HTTP status for telemetry: `429` kept distinct, everything else by hundreds (`2xx`, `4xx`, `5xx`). */
+function classifyStatus(status: number): string {
+	return status === 429 ? '429' : `${Math.floor(status / 100)}xx`;
+}
+
+/** UTF-8 byte length of a response body (measured, not the maybe-absent `content-length` header). */
+function byteLength(text: string): number {
+	return new TextEncoder().encode(text).length;
+}
+
+/** True when the backend marked this response as served from its own cache (`{ cached: true }`). */
+function backendCachedFlag(value: unknown): boolean {
+	return typeof value === 'object' && value !== null && (value as { cached?: unknown }).cached === true;
+}
+
+/**
+ * Parse a `Retry-After` header into milliseconds. Supports both forms: an integer delta-seconds and an
+ * HTTP date. Returns `undefined` when absent or unparseable (never negative).
+ */
+function parseRetryAfterMs(response: Response): number | undefined {
+	const raw = response.headers.get('retry-after');
+	if (!raw) {
+		return undefined;
+	}
+	const seconds = Number(raw.trim());
+	if (Number.isFinite(seconds)) {
+		return Math.max(0, seconds * 1000);
+	}
+	const dateMs = Date.parse(raw);
+	if (!Number.isNaN(dateMs)) {
+		return Math.max(0, dateMs - Date.now());
+	}
+	return undefined;
+}
+
+/** Clean, user-facing rate-limit message: the backend's own message when present, else a clear fallback with the wait hint. */
+function rateLimitMessage(body: string, retryAfterSeconds: number | undefined): string {
+	try {
+		const parsed = JSON.parse(body) as { error?: { message?: string } };
+		if (parsed?.error?.message) {
+			return parsed.error.message;
+		}
+	} catch {
+		// Not JSON — fall through to the default message.
+	}
+	return retryAfterSeconds
+		? `The FlowLeap backend is rate-limiting requests. Please wait ${retryAfterSeconds} seconds and try again.`
+		: 'The FlowLeap backend is rate-limiting requests. Please wait a few seconds and try again.';
 }
 
 // ── Body parsing ────────────────────────────────────────────────────────────────

@@ -20,13 +20,14 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, SubscriptionRequiredError } from '../patentBackendClient';
+import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError } from '../patentBackendClient';
 import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import { FetchOptions, HeadersImpl, IFetcherService, isAbortError, Response } from '../../../../platform/networking/common/fetcherService';
 import type { INotificationService } from '../../../../platform/notification/common/notificationService';
+import type { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
 import { Event } from '../../../../util/vs/base/common/event';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 
@@ -60,6 +61,11 @@ function makeEnvService() {
 	return { service: { openExternal } as unknown as IEnvService, openExternal };
 }
 
+function makeTelemetryService() {
+	const sendInternalMSFTTelemetryEvent = vi.fn();
+	return { service: { sendInternalMSFTTelemetryEvent } as unknown as ITelemetryService, sendInternalMSFTTelemetryEvent };
+}
+
 /**
  * A real (no `any`-cast) {@link IFetcherService} whose `fetch` is scripted per test. Members the
  * client never exercises are no-ops/throwers — an acceptable test fake that still implements the
@@ -89,8 +95,9 @@ function makeFetcherService(impl: FetchImpl): IFetcherService {
 function makeClient(fetchImpl: FetchImpl) {
 	const notification = makeNotificationService();
 	const env = makeEnvService();
-	const client = new PatentBackendClient(makeLogService(), notification.service, env.service, makeFetcherService(fetchImpl));
-	return { client, notification, env };
+	const telemetry = makeTelemetryService();
+	const client = new PatentBackendClient(makeLogService(), notification.service, env.service, makeFetcherService(fetchImpl), telemetry.service);
+	return { client, notification, env, telemetry };
 }
 
 /** Stub CancellationToken that is never cancelled. */
@@ -145,9 +152,9 @@ function hangingFetch(): FetchImpl {
 	});
 }
 
-/** Build a platform Response with a JSON body. */
-function makeResponse(status: number, body: unknown): Response {
-	return Response.fromText(status, '', new HeadersImpl({ 'content-type': 'application/json' }), JSON.stringify(body), 'test-stub');
+/** Build a platform Response with a JSON body and optional extra headers (e.g. Retry-After). */
+function makeResponse(status: number, body: unknown, extraHeaders?: Record<string, string>): Response {
+	return Response.fromText(status, '', new HeadersImpl({ 'content-type': 'application/json', ...extraHeaders }), JSON.stringify(body), 'test-stub');
 }
 
 /** Flush pending microtasks/timers so fire-and-forget UX promises settle before assertions. */
@@ -247,9 +254,11 @@ describe('BYO patent-data key forwarding (#31)', () => {
 			undefined,
 		];
 
-		for (const keys of configs) {
+		// Distinct body per config so the #89 session cache (keyed on method+path+body) does not
+		// dedupe these otherwise-identical calls — each must reach the network to forward its headers.
+		for (const [i, keys] of configs.entries()) {
 			registerPatentDataKeysProvider(() => keys);
-			await client.post('/patent-search', {}, makeToken());
+			await client.post('/patent-search', { i }, makeToken());
 		}
 
 		expect(captured.map(h => [h?.['X-EPO-OPS-Key'], h?.['X-EPO-OPS-Secret'], h?.['X-USPTO-ODP-Key']])).toEqual([
@@ -584,5 +593,156 @@ describe('patentBackendErrorRecoveryHint', () => {
 	it('the data-keys-required hint names the provider when known and is generic otherwise', () => {
 		expect(patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', 'epo'))).toContain('EPO OPS');
 		expect(patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', undefined))).toContain('EPO OPS or USPTO');
+	});
+
+	it('maps a RateLimitError to a "wait and retry" hint, naming the wait when known', () => {
+		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', 12))).toContain('12 seconds');
+		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', undefined))).toContain('a few seconds');
+	});
+});
+
+// ── #89 hardening: retry, 429, telemetry, session cache ─────────────────────────
+
+/** A fetch that returns the given responses/throws in sequence, one per call, exposing the call count. */
+function scriptedFetch(steps: Array<Response | Error>): FetchImpl & { calls: () => number } {
+	let call = 0;
+	const impl: FetchImpl = async () => {
+		const step = steps[Math.min(call, steps.length - 1)];
+		call++;
+		if (step instanceof Error) {
+			throw step;
+		}
+		return step;
+	};
+	return Object.assign(impl, { calls: () => call });
+}
+
+describe('retry with backoff (#89)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => undefined));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('retries a transient network error and then succeeds', async () => {
+		const fetch = scriptedFetch([new Error('ECONNRESET'), makeResponse(200, { success: true, results: [1] })]);
+		const { client } = makeClient(fetch);
+
+		const result = await client.post<{ success: boolean; results: number[] }>('/patent-search', { query: 'AI' }, makeToken());
+
+		expect(result).toEqual({ success: true, results: [1] });
+		expect(fetch.calls()).toBe(2);
+	}, 5000);
+
+	it('retries a 5xx and then succeeds', async () => {
+		const fetch = scriptedFetch([makeResponse(503, { error: 'unavailable' }), makeResponse(200, { success: true })]);
+		const { client } = makeClient(fetch);
+
+		const result = await client.get<{ success: boolean }>('/patent-search-bq/EP-1-A1', makeToken());
+
+		expect(result).toEqual({ success: true });
+		expect(fetch.calls()).toBe(2);
+	}, 5000);
+
+	it('surfaces the error once retries are exhausted (persistent 5xx)', async () => {
+		const fetch = scriptedFetch([makeResponse(500, { error: 'boom' })]);
+		const { client } = makeClient(fetch);
+
+		const thrown = await captureThrow(() => client.get('/patent-search-bq/EP-1-A1', makeToken()));
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect((thrown as PatentBackendError).status).toBe(500);
+		expect(fetch.calls()).toBe(3); // initial + 2 retries
+	}, 5000);
+});
+
+describe('rate-limit gate (429, #89)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => undefined));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('honors a short Retry-After: waits and retries once, then succeeds', async () => {
+		const fetch = scriptedFetch([
+			makeResponse(429, { error: { message: 'slow down' } }, { 'retry-after': '1' }),
+			makeResponse(200, { success: true }),
+		]);
+		const { client } = makeClient(fetch);
+
+		const started = Date.now();
+		const result = await client.get<{ success: boolean }>('/patent-search-bq/EP-1-A1', makeToken());
+
+		expect(result).toEqual({ success: true });
+		expect(fetch.calls()).toBe(2);
+		expect(Date.now() - started).toBeGreaterThanOrEqual(800); // actually waited out Retry-After
+	}, 5000);
+
+	it('surfaces a typed RateLimitError (with retryAfterSeconds) when Retry-After exceeds the inline budget', async () => {
+		const fetch = scriptedFetch([makeResponse(429, { error: { message: 'rate limited' } }, { 'retry-after': '30' })]);
+		const { client } = makeClient(fetch);
+
+		const thrown = await captureThrow(() => client.get('/patent-search-bq/EP-1-A1', makeToken()));
+
+		// Subclass of PatentBackendError so existing tool catch blocks still match.
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).toBeInstanceOf(RateLimitError);
+		const err = thrown as RateLimitError;
+		expect(err.status).toBe(429);
+		expect(err.code).toBe('rate_limited');
+		expect(err.retryAfterSeconds).toBe(30);
+		expect(fetch.calls()).toBe(1); // not retried inline
+	}, 5000);
+});
+
+describe('per-request telemetry (#89)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => undefined));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('emits one event per request with endpoint, status class, latency, and size', async () => {
+		const { client, telemetry } = makeClient(async () => makeResponse(200, { success: true, cached: true, results: [1, 2] }));
+
+		await client.post('/patent-search', { query: 'AI' }, makeToken());
+
+		expect(telemetry.sendInternalMSFTTelemetryEvent).toHaveBeenCalledTimes(1);
+		const [event, properties, measurements] = telemetry.sendInternalMSFTTelemetryEvent.mock.calls[0];
+		expect(event).toBe('flowleap.patentBackend.request');
+		expect(properties).toEqual(expect.objectContaining({ endpoint: 'patent-search', method: 'POST', statusClass: '2xx' }));
+		expect(measurements).toEqual(expect.objectContaining({
+			latencyMs: expect.any(Number),
+			responseBytes: expect.any(Number),
+			retries: 0,
+			servedFromCache: 0,
+			backendCached: 1, // backend `cached: true` flag surfaced
+		}));
+		expect(measurements.responseBytes).toBeGreaterThan(0);
+	});
+});
+
+describe('session read cache (#89)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => undefined));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('serves an identical repeated read from cache without a second fetch', async () => {
+		const fetch = scriptedFetch([makeResponse(200, { success: true, results: [7] })]);
+		const { client, telemetry } = makeClient(fetch);
+
+		const first = await client.post<{ results: number[] }>('/patent-search', { query: 'AI' }, makeToken());
+		const second = await client.post<{ results: number[] }>('/patent-search', { query: 'AI' }, makeToken());
+
+		expect(second).toEqual(first);
+		expect(fetch.calls()).toBe(1);
+		// Second request reports served-from-cache in telemetry.
+		const measurements = telemetry.sendInternalMSFTTelemetryEvent.mock.calls[1][2];
+		expect(measurements).toEqual(expect.objectContaining({ servedFromCache: 1 }));
+	});
+
+	it('does not cache across a differing request body', async () => {
+		const fetch = scriptedFetch([makeResponse(200, { r: 1 }), makeResponse(200, { r: 2 })]);
+		const { client } = makeClient(fetch);
+
+		const a = await client.post<{ r: number }>('/patent-search', { query: 'AI' }, makeToken());
+		const b = await client.post<{ r: number }>('/patent-search', { query: 'ML' }, makeToken());
+
+		expect([a, b]).toEqual([{ r: 1 }, { r: 2 }]);
+		expect(fetch.calls()).toBe(2);
 	});
 });
