@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { formatJsonForModel, IMarkdownColumn, renderMarkdownTable, ToolResponseBudgets } from '../patentResponseFormatter';
+import { formatJsonForModel, IMarkdownColumn, renderMarkdownTable, ToolResponseBudgets, truncatePreview } from '../patentResponseFormatter';
 
 // `patentResponseFormatter` is the shared, budget-aware formatter the patent tools route their results
 // through. It is pure (no service dependencies), so it is tested in isolation here.
@@ -134,5 +134,19 @@ describe('renderMarkdownTable', () => {
 				'| a \\| b c |',
 			].join('\n')
 		);
+	});
+});
+
+describe('truncatePreview', () => {
+	it('returns short text unchanged and appends an ellipsis only when text exceeds the limit', () => {
+		expect({
+			short: truncatePreview('solar cell', ToolResponseBudgets.SearchPatentsAbstract),
+			exact: truncatePreview('abcde', 5),
+			long: truncatePreview('abcdefghij', 5),
+		}).toEqual({
+			short: 'solar cell',
+			exact: 'abcde',
+			long: 'abcde...',
+		});
 	});
 });

@@ -11,6 +11,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
 
 interface ISearchCitationsParams {
 	applicationNumber: string;
@@ -52,13 +53,35 @@ const CATEGORY_LABELS: Record<string, string> = {
 	A: 'A (background reference)',
 };
 
+/** Renders a cited document with its country and non-patent-literature tags for a table cell. */
+function citedDocumentLabel(doc: CitationDoc): string {
+	if (!doc.citedDocument) {
+		return '—';
+	}
+	const nplTag = doc.isNPL ? ' (non-patent literature)' : '';
+	const countryTag = doc.country && !doc.isNPL ? ` [${doc.country}]` : '';
+	return `${doc.citedDocument}${countryTag}${nplTag}`;
+}
+
+/** Renders which parties cited a reference (examiner and/or applicant) for a table cell. */
+function citingPartiesLabel(doc: CitationDoc): string {
+	const parties: string[] = [];
+	if (doc.examinerCited) {
+		parties.push('examiner');
+	}
+	if (doc.applicantCited) {
+		parties.push('applicant');
+	}
+	return parties.length > 0 ? parties.join(', ') : '—';
+}
+
 /**
  * Tool for backward citation search: finds prior-art references the USPTO examiner cited against a
  * given application, tagged with the X/Y/A relevance categories (X = novelty-destroying/102,
  * Y = obviousness/103, A = background). Routes through the shared {@link IPatentBackendClient} seam,
  * so it inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating.
  */
-class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams> {
+export class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams> {
 
 	public static readonly toolName = ToolName.SearchCitations;
 
@@ -163,52 +186,39 @@ class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams> {
 			return lines.join('\n');
 		}
 
-		let index = 1;
-		for (const doc of result.data) {
-			lines.push(`Citation ${index++}`);
-			if (doc.citedDocument) {
-				const nplTag = doc.isNPL ? ' (non-patent literature)' : '';
-				const countryTag = doc.country && !doc.isNPL ? ` [${doc.country}]` : '';
-				lines.push(`  Cited document: ${doc.citedDocument}${countryTag}${nplTag}`);
-			}
-			if (doc.category) {
-				lines.push(`  Category: ${CATEGORY_LABELS[doc.category] ?? doc.category}`);
-			}
-			if (doc.rejectedClaims) {
-				lines.push(`  Rejected claims: ${doc.rejectedClaims}`);
-			}
-			const citingParties: string[] = [];
-			if (doc.examinerCited) {
-				citingParties.push('examiner');
-			}
-			if (doc.applicantCited) {
-				citingParties.push('applicant');
-			}
-			if (citingParties.length > 0) {
-				lines.push(`  Cited by: ${citingParties.join(', ')}`);
-			}
-			if (doc.officeActionDate) {
-				lines.push(`  Office action date: ${doc.officeActionDate}`);
-			}
-			if (doc.officeActionType) {
-				lines.push(`  Office action type: ${doc.officeActionType}`);
-			}
-			if (doc.inventor) {
-				lines.push(`  Inventor: ${doc.inventor}`);
-			}
-			if (doc.citedPassages && doc.citedPassages.length > 0) {
-				const joined = doc.citedPassages.join(' | ');
-				const preview = joined.length > 200 ? joined.substring(0, 200) + '...' : joined;
-				lines.push(`  Cited passages: ${preview}`);
-			}
+		const rows = result.data.map((doc, i) => ({ doc, n: i + 1 }));
+
+		lines.push(renderMarkdownTable(rows, [
+			{ header: '#', cell: r => String(r.n), align: 'right' },
+			{ header: 'Cited Document', cell: r => citedDocumentLabel(r.doc) },
+			{ header: 'Category', cell: r => r.doc.category ?? '—' },
+			{ header: 'Rejected Claims', cell: r => r.doc.rejectedClaims ?? '—' },
+			{ header: 'Cited By', cell: r => citingPartiesLabel(r.doc) },
+			{ header: 'OA Date', cell: r => r.doc.officeActionDate ?? '—' },
+			{ header: 'OA Type', cell: r => r.doc.officeActionType ?? '—' },
+			{ header: 'Inventor', cell: r => r.doc.inventor ?? '—' },
+		]));
+		lines.push('');
+		lines.push(`Categories: ${Object.values(CATEGORY_LABELS).join('; ')}.`);
+
+		// Cited passages are too long for a table cell; render them as per-row snippets below the table.
+		const withPassages = rows.filter(r => r.doc.citedPassages && r.doc.citedPassages.length > 0);
+		if (withPassages.length > 0) {
 			lines.push('');
+			lines.push('### Cited Passages');
+			for (const r of withPassages) {
+				const joined = r.doc.citedPassages!.join(' | ');
+				const label = r.doc.citedDocument ?? `Citation ${r.n}`;
+				lines.push(`- **${label}** (#${r.n}): ${truncatePreview(joined, ToolResponseBudgets.SearchCitationsPassages)}`);
+			}
 		}
 
 		if (total > result.data.length) {
-			lines.push(`Showing first ${result.data.length} of ${total}. Re-call with a larger size to see more.`);
 			lines.push('');
+			lines.push(`Showing first ${result.data.length} of ${total}. Re-call with a larger size to see more.`);
 		}
 
+		lines.push('');
 		lines.push('For forward citations, citation statistics, or date-range filtering, use citation_api_guide.');
 
 		return lines.join('\n');

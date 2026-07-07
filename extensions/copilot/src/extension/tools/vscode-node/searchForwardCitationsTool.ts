@@ -11,6 +11,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
 
 interface ISearchForwardCitationsParams {
 	citedDocument: string;
@@ -52,13 +53,25 @@ const CATEGORY_LABELS: Record<string, string> = {
 	A: 'A (background reference)',
 };
 
+/** Renders which parties cited a reference (examiner and/or applicant) for a table cell. */
+function citingPartiesLabel(doc: CitationDoc): string {
+	const parties: string[] = [];
+	if (doc.examinerCited) {
+		parties.push('examiner');
+	}
+	if (doc.applicantCited) {
+		parties.push('applicant');
+	}
+	return parties.length > 0 ? parties.join(', ') : '—';
+}
+
 /**
  * Tool for forward citation impact analysis: finds patents that CITE a given document, tagged with
  * the X/Y/A relevance categories. Distinct from {@link SearchCitationsTool} (prior art cited AGAINST
  * an application); this takes a cited document and returns the citing patents. Routes through the
  * shared {@link IPatentBackendClient} seam, inheriting the centralized `401`/`402` gating.
  */
-class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCitationsParams> {
+export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCitationsParams> {
 
 	public static readonly toolName = ToolName.SearchForwardCitations;
 
@@ -161,45 +174,40 @@ class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCitations
 			return lines.join('\n');
 		}
 
-		let index = 1;
-		for (const doc of result.data) {
-			lines.push(`Citing patent ${index++}`);
-			if (doc.applicationNumber) {
-				lines.push(`  Application: ${doc.applicationNumber}`);
-			}
-			if (doc.category) {
-				lines.push(`  Category: ${CATEGORY_LABELS[doc.category] ?? doc.category}`);
-			}
-			if (doc.rejectedClaims) {
-				lines.push(`  Rejected claims: ${doc.rejectedClaims}`);
-			}
-			const citingParties: string[] = [];
-			if (doc.examinerCited) {
-				citingParties.push('examiner');
-			}
-			if (doc.applicantCited) {
-				citingParties.push('applicant');
-			}
-			if (citingParties.length > 0) {
-				lines.push(`  Cited by: ${citingParties.join(', ')}`);
-			}
-			if (doc.officeActionDate) {
-				lines.push(`  Office action date: ${doc.officeActionDate}`);
-			}
-			if (doc.officeActionType) {
-				lines.push(`  Office action type: ${doc.officeActionType}`);
-			}
-			if (doc.inventor) {
-				lines.push(`  Inventor: ${doc.inventor}`);
-			}
+		const rows = result.data.map((doc, i) => ({ doc, n: i + 1 }));
+
+		lines.push(renderMarkdownTable(rows, [
+			{ header: '#', cell: r => String(r.n), align: 'right' },
+			{ header: 'Citing Application', cell: r => r.doc.applicationNumber ?? '—' },
+			{ header: 'Category', cell: r => r.doc.category ?? '—' },
+			{ header: 'Rejected Claims', cell: r => r.doc.rejectedClaims ?? '—' },
+			{ header: 'Cited By', cell: r => citingPartiesLabel(r.doc) },
+			{ header: 'OA Date', cell: r => r.doc.officeActionDate ?? '—' },
+			{ header: 'OA Type', cell: r => r.doc.officeActionType ?? '—' },
+			{ header: 'Inventor', cell: r => r.doc.inventor ?? '—' },
+		]));
+		lines.push('');
+		lines.push(`Categories: ${Object.values(CATEGORY_LABELS).join('; ')}.`);
+
+		// Cited passages are too long for a table cell; render them as per-row snippets below the table.
+		// (Parity with the backward citation tool, which previously included passages this tool omitted.)
+		const withPassages = rows.filter(r => r.doc.citedPassages && r.doc.citedPassages.length > 0);
+		if (withPassages.length > 0) {
 			lines.push('');
+			lines.push('### Cited Passages');
+			for (const r of withPassages) {
+				const joined = r.doc.citedPassages!.join(' | ');
+				const label = r.doc.applicationNumber ?? `Citing patent ${r.n}`;
+				lines.push(`- **${label}** (#${r.n}): ${truncatePreview(joined, ToolResponseBudgets.SearchForwardCitationsPassages)}`);
+			}
 		}
 
 		if (total > result.data.length) {
-			lines.push(`Showing first ${result.data.length} of ${total}. Re-call with a larger size to see more.`);
 			lines.push('');
+			lines.push(`Showing first ${result.data.length} of ${total}. Re-call with a larger size to see more.`);
 		}
 
+		lines.push('');
 		lines.push('For citation statistics or date-range filtering, use citation_api_guide.');
 
 		return lines.join('\n');

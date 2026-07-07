@@ -25,12 +25,23 @@
  * Per-tool character budgets for responses handed back to the language model.
  *
  * One named table replaces the magic numbers that were previously scattered across the individual
- * tools. Values are the maximum number of characters a formatted response may contain before
- * {@link formatJsonForModel} starts dropping array items to fit.
+ * tools. Two kinds of entry live here:
+ * - whole-response budgets — the maximum number of characters a formatted response may contain before
+ *   {@link formatJsonForModel} starts dropping array items to fit (e.g. {@link ToolResponseBudgets.PatentApiRequest});
+ * - per-field preview limits — the maximum number of characters of a single long field (an abstract, a
+ *   joined passage list) rendered alongside a markdown table via {@link truncatePreview}.
  */
 export const ToolResponseBudgets = {
 	/** `patent_api_request`: raw backend JSON passed straight through to the model. */
 	PatentApiRequest: 50_000,
+	/** `search_patents`: max characters of each result's abstract preview rendered below the results table. */
+	SearchPatentsAbstract: 200,
+	/** `search_citations`: max characters of the joined cited-passages preview rendered per row below the table. */
+	SearchCitationsPassages: 200,
+	/** `search_forward_citations`: max characters of the joined cited-passages preview rendered per row below the table. */
+	SearchForwardCitationsPassages: 200,
+	/** `patent_analytics_viz`: defensive whole-response ceiling for the assembled aggregate tables. */
+	PatentAnalyticsViz: 20_000,
 } as const;
 
 /** Key inserted into a truncated JSON object/array to carry the omitted-count note. */
@@ -164,6 +175,16 @@ function findLargestArray(node: unknown): unknown[] | undefined {
 	};
 	visit(node);
 	return best;
+}
+
+/**
+ * Truncates `text` to at most `maxLength` characters for inline preview, appending an ellipsis when the
+ * text was cut. Used for the long free-text fields (abstracts, joined cited passages) that the list
+ * tools render alongside a markdown table rather than inside a table cell. The per-tool `maxLength`
+ * comes from {@link ToolResponseBudgets}.
+ */
+export function truncatePreview(text: string, maxLength: number): string {
+	return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
 }
 
 /**

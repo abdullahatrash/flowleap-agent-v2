@@ -11,6 +11,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
 
 interface ISearchPatentsParams {
 	query: string;
@@ -43,7 +44,7 @@ interface PatentSearchResult {
  * backend (which handles EPO OPS API authentication) through the shared {@link IPatentBackendClient}
  * seam, so it inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating.
  */
-class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
+export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 	public static readonly toolName = ToolName.SearchPatents;
 
@@ -126,32 +127,24 @@ class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 			''
 		];
 
-		for (const doc of result.docs) {
-			lines.push(`${doc.docId}`);
+		lines.push(renderMarkdownTable(result.docs, [
+			{ header: 'Publication', cell: doc => doc.docId },
+			{ header: 'Title', cell: doc => doc.title ?? '—' },
+			{ header: 'Assignee', cell: doc => doc.applicants.length > 0 ? doc.applicants.join(', ') : '—' },
+			{ header: 'Published', cell: doc => doc.publicationDate ?? '—' },
+		]));
 
-			if (doc.title) {
-				lines.push(`  Title: ${doc.title}`);
+		// Abstracts are too long for a table cell; render them as per-row snippets below the table.
+		const withAbstract = result.docs.filter(doc => doc.abstract);
+		if (withAbstract.length > 0) {
+			lines.push('');
+			lines.push('### Abstracts');
+			for (const doc of withAbstract) {
+				lines.push(`- **${doc.docId}**: ${truncatePreview(doc.abstract!, ToolResponseBudgets.SearchPatentsAbstract)}`);
 			}
-
-			if (doc.applicants && doc.applicants.length > 0) {
-				lines.push(`  Applicants: ${doc.applicants.join(', ')}`);
-			}
-
-			if (doc.publicationDate) {
-				lines.push(`  Published: ${doc.publicationDate}`);
-			}
-
-			if (doc.abstract) {
-				// Truncate abstract to first 200 chars for readability
-				const abstractPreview = doc.abstract.length > 200
-					? doc.abstract.substring(0, 200) + '...'
-					: doc.abstract;
-				lines.push(`  Abstract: ${abstractPreview}`);
-			}
-
-			lines.push(''); // Empty line between patents
 		}
 
+		lines.push('');
 		lines.push('Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed.');
 
 		return lines.join('\n');
