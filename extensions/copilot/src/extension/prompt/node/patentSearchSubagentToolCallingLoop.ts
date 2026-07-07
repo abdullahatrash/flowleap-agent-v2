@@ -129,6 +129,13 @@ export class PatentSearchSubagentToolCallingLoop extends ToolCallingLoop<IPatent
 			ToolName.USPTOApiGuide,
 			ToolName.CitationApiGuide,
 			ToolName.LegalSearchGuide,
+			// Executors for the guide tools above, so every guide the subagent can read has its
+			// executor available (e.g. build a USPTO query then run it via PatentApiRequest).
+			ToolName.PatentApiRequest,
+			ToolName.SearchCitations,
+			ToolName.SearchForwardCitations,
+			ToolName.SearchLegal,
+			ToolName.GetPatentDetails,
 		]);
 
 		return allTools.filter(tool => allowedPatentTools.has(tool.name as ToolName));
