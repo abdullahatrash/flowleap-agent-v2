@@ -64,7 +64,7 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 
 describe('claim-analysis tools', () => {
 
-	it('AnalyzeClaimTool POSTs /analyze-claim and renders structured markdown', async () => {
+	it('AnalyzeClaimTool POSTs /analyze-claim and renders a structured element-breakdown table', async () => {
 		const { client, calls } = makeBackendClient({
 			success: true,
 			analysis: {
@@ -75,6 +75,7 @@ describe('claim-analysis tools', () => {
 				claimElements: [
 					{ element: 'A photovoltaic device comprising', type: 'preamble' },
 					{ element: 'a light-absorbing layer', type: 'component' },
+					{ element: 'wherein the layer is flexible', type: 'limitation' },
 				],
 			},
 		});
@@ -100,8 +101,11 @@ describe('claim-analysis tools', () => {
 			1. \`ti=("solar cell") and ic=H01L\`
 
 			### Claim Elements
-			1. **[preamble]** A photovoltaic device comprising
-			2. **[component]** a light-absorbing layer
+			| # | Claim Element | Type |
+			| ---: | --- | --- |
+			| 1 | A photovoltaic device comprising | preamble |
+			| 2 | a light-absorbing layer | limitation (component) |
+			| 3 | wherein the layer is flexible | limitation |
 
 			---
 			Use the suggested CQL queries with the \`search_patents\` tool to find prior art.
@@ -109,7 +113,7 @@ describe('claim-analysis tools', () => {
 		`);
 	});
 
-	it('CompareClaimsTool GETs /ops/fulltext/claims per patent and renders the comparison package', async () => {
+	it('CompareClaimsTool GETs /ops/fulltext/claims per patent and renders an element-by-element claim chart', async () => {
 		const { client, calls } = makeBackendClient(undefined, {
 			success: true,
 			data: {
@@ -131,7 +135,15 @@ describe('claim-analysis tools', () => {
 			A flexible photovoltaic device.
 			\`\`\`
 
-			### Prior Art Claims
+			### Element-by-Element Claim Chart
+			Rows are the elements of the reference patent (US-7654321-B2); \`—\` means that patent's independent claim has no element at that position. Correspondence is positional — verify it against the full claim text below.
+
+			| Claim Element | US-7654321-B2 |
+			| --- | --- |
+			| Preamble | A photovoltaic module comprising |
+			| Element 1 | a rigid substrate and a light-absorbing layer |
+
+			### Full Claim Text
 
 			#### US-7654321-B2
 			\`\`\`
@@ -140,7 +152,78 @@ describe('claim-analysis tools', () => {
 
 			---
 			### Analysis Instructions
-			Now perform an element-by-element comparison of the user claim against each prior-art claim set above. For each patent, report:
+			The chart above is a positional decomposition scaffold; confirm the actual element correspondence against the full claim text, then perform an element-by-element comparison of the user claim against each prior-art claim set. For each patent, report:
+			1. **Relevance** — HIGH (anticipates most/all elements), MEDIUM (discloses several elements), or LOW.
+			2. **Overlapping elements** — user-claim elements disclosed by the prior art, citing the specific claim number.
+			3. **Missing elements** — user-claim elements NOT found in the prior art (potential novelty).
+			4. **Key differences** — material differences in scope or implementation.
+
+			Then summarize: HIGH-relevance patents raise §102 (anticipation) risk; combinations of MEDIUM-relevance patents may support §103 (obviousness) rejections. Use get_patent_details for full descriptions of specific patents if needed."
+		`);
+	});
+
+	it('CompareClaimsTool charts elements across multiple patents, aligning columns positionally', async () => {
+		// Two patents, each an independent multi-limitation claim, plus a dependent claim that must be
+		// skipped in favour of the independent one. The reference (first) patent has three elements; the
+		// second has two, so the third row's second column falls back to "—".
+		const client: IPatentBackendClient = {
+			_serviceBrand: undefined,
+			async post<T>(): Promise<T> {
+				throw new Error('compare_claims does not POST');
+			},
+			async get<T>(pathWithQuery: string): Promise<T> {
+				const claimsByDoc: Record<string, string[]> = {
+					EP1000000A1: [
+						'1. A battery pack comprising: a housing; a plurality of cells arranged within the housing; and a controller coupled to the cells.',
+						'2. The battery pack of claim 1, wherein the controller balances the cells.',
+					],
+					EP2000000A1: [
+						'1. An energy storage device comprising a casing and a set of cells disposed inside the casing.',
+					],
+				};
+				const doc = new URLSearchParams(pathWithQuery.split('?')[1]).get('doc') ?? '';
+				return { success: true, data: { docId: doc, lang: 'en', claims: claimsByDoc[doc] ?? [] } } as T;
+			},
+		};
+		const tool = new CompareClaimsTool(makeLogService(), client);
+
+		const result = await tool.invoke(makeOptions({ userClaim: 'A modular battery.', patentNumbers: ['EP-1000000-A1', 'EP-2000000-A1'] }), makeToken());
+
+		expect(textOf(result)).toMatchInlineSnapshot(`
+			"## Prior Art Claim Comparison Package
+
+			### User Claim
+			\`\`\`
+			A modular battery.
+			\`\`\`
+
+			### Element-by-Element Claim Chart
+			Rows are the elements of the reference patent (EP-1000000-A1); \`—\` means that patent's independent claim has no element at that position. Correspondence is positional — verify it against the full claim text below.
+
+			| Claim Element | EP-1000000-A1 | EP-2000000-A1 |
+			| --- | --- | --- |
+			| Preamble | A battery pack comprising | An energy storage device comprising |
+			| Element 1 | a housing | a casing and a set of cells disposed inside the casing |
+			| Element 2 | a plurality of cells arranged within the housing | — |
+			| Element 3 | a controller coupled to the cells | — |
+
+			### Full Claim Text
+
+			#### EP-1000000-A1
+			\`\`\`
+			1. A battery pack comprising: a housing; a plurality of cells arranged within the housing; and a controller coupled to the cells.
+
+			2. The battery pack of claim 1, wherein the controller balances the cells.
+			\`\`\`
+
+			#### EP-2000000-A1
+			\`\`\`
+			1. An energy storage device comprising a casing and a set of cells disposed inside the casing.
+			\`\`\`
+
+			---
+			### Analysis Instructions
+			The chart above is a positional decomposition scaffold; confirm the actual element correspondence against the full claim text, then perform an element-by-element comparison of the user claim against each prior-art claim set. For each patent, report:
 			1. **Relevance** — HIGH (anticipates most/all elements), MEDIUM (discloses several elements), or LOW.
 			2. **Overlapping elements** — user-claim elements disclosed by the prior art, citing the specific claim number.
 			3. **Missing elements** — user-claim elements NOT found in the prior art (potential novelty).

@@ -11,6 +11,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { IMarkdownColumn, renderMarkdownTable } from './patentResponseFormatter';
 
 interface IAnalyzeClaimParams {
 	claimText: string;
@@ -131,9 +132,17 @@ export class AnalyzeClaimTool implements ICopilotTool<IAnalyzeClaimParams> {
 		});
 
 		lines.push('', '### Claim Elements');
-		analysis.claimElements.forEach((elem, i) => {
-			lines.push(`${i + 1}. **[${elem.type}]** ${elem.element}`);
-		});
+		const elementRows = analysis.claimElements.map((elem, i) => ({
+			num: i + 1,
+			element: elem.element,
+			type: elem.type === 'preamble' || elem.type === 'limitation' ? elem.type : `limitation (${elem.type})`,
+		}));
+		const elementColumns: IMarkdownColumn<typeof elementRows[number]>[] = [
+			{ header: '#', cell: r => String(r.num), align: 'right' },
+			{ header: 'Claim Element', cell: r => r.element },
+			{ header: 'Type', cell: r => r.type },
+		];
+		lines.push(renderMarkdownTable(elementRows, elementColumns));
 
 		lines.push('', '---');
 		lines.push('Use the suggested CQL queries with the `search_patents` tool to find prior art.');

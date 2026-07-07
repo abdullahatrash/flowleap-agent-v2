@@ -11,10 +11,94 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { IMarkdownColumn, renderMarkdownTable, truncationNotice } from './patentResponseFormatter';
 
 interface ICompareClaimsParams {
 	userClaim: string;
 	patentNumbers: string[];
+}
+
+/** Max characters of an element's text shown inside a claim-chart cell before it is elided. */
+const CLAIM_CHART_CELL_LIMIT = 120;
+
+/** Per-patent cap on the full claim text rendered below the element-by-element chart. */
+const CLAIM_TEXT_BUDGET = 4_000;
+
+/** Truncates `text` to at most `max` characters, appending an ellipsis when the text was cut. */
+function truncate(text: string, max: number): string {
+	return text.length > max ? text.substring(0, max) + '…' : text;
+}
+
+/**
+ * One decomposed segment of a claim. The preamble is the introductory phrase up to and including the
+ * transitional word (`comprising`, `consisting of`, …); each subsequent limitation is a clause of the
+ * claim body.
+ */
+interface IClaimElement {
+	/** Stable row label, e.g. `Preamble` or `Element 1`. */
+	readonly label: string;
+	/** The segment text. */
+	readonly text: string;
+	/** Whether this is the preamble or a body limitation. */
+	readonly type: 'preamble' | 'limitation';
+}
+
+/** A single row of the element-by-element claim chart: one reference element mapped across every patent. */
+interface IClaimChartRow {
+	readonly label: string;
+	/** Per-patent cell text, positionally aligned to the chart's patent columns. */
+	readonly cells: readonly string[];
+}
+
+/** Regexes shared by claim decomposition; declared once so the deterministic split has no per-call cost. */
+const CLAIM_NUMBER_PREFIX = /^\s*\(?\d+\)?[.)]\s*/;
+const CLAIM_TRANSITION = /\b(consisting essentially of|consisting of|comprising|including|containing|having|characterized in that|characterised in that)\b/i;
+const CLAIM_DEPENDENCY = /\b(?:of|according to|as (?:claimed|recited|set forth|defined) in|as in)\s+(?:any\s+)?(?:one\s+of\s+)?(?:preceding\s+)?claims?\b/i;
+const CLAIM_CLAUSE_LABEL = /^\(?[a-z0-9]{1,3}\)[.)]?\s+/i;
+
+/**
+ * Picks the claim to chart for a patent: the first claim that does not depend on another claim, falling
+ * back to the first claim when every claim looks dependent (or the set has only one entry).
+ */
+function selectIndependentClaim(claims: readonly string[]): string {
+	return claims.find(c => !CLAIM_DEPENDENCY.test(c)) ?? claims[0];
+}
+
+/**
+ * Deterministically decomposes a single claim into its elements — no language-model call. The preamble
+ * is split off at the transitional phrase; the body is then split into limitations on semicolons (the
+ * standard claim-drafting delimiter), with leading clause labels like `(a)`/`1.` and trailing
+ * conjunctions stripped so each row reads as a self-contained limitation.
+ */
+function decomposeClaim(rawClaim: string): IClaimElement[] {
+	const claim = rawClaim.replace(CLAIM_NUMBER_PREFIX, '').trim();
+	if (!claim) {
+		return [];
+	}
+
+	const elements: IClaimElement[] = [];
+	let body = claim;
+
+	const transition = CLAIM_TRANSITION.exec(claim);
+	if (transition) {
+		const cut = transition.index + transition[0].length;
+		elements.push({ label: 'Preamble', text: claim.slice(0, cut).trim(), type: 'preamble' });
+		body = claim.slice(cut).replace(/^[:\s]+/, '').trim();
+	}
+
+	const limitations = body
+		.split(/;\s*(?:and\b|or\b)?/i)
+		.map(part => part.replace(CLAIM_CLAUSE_LABEL, '').replace(/[.,;]+\s*$/, '').trim())
+		.filter(part => part.length > 0);
+
+	limitations.forEach((text, i) => {
+		elements.push({ label: `Element ${i + 1}`, text, type: 'limitation' });
+	});
+
+	if (elements.length === 0) {
+		elements.push({ label: 'Element 1', text: claim, type: 'limitation' });
+	}
+	return elements;
 }
 
 interface OpsEnvelope<T> {
@@ -153,10 +237,14 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 	}
 
 	/**
-	 * Assemble the user claim and the fetched prior-art claims into a comparison package with an
-	 * analysis rubric for the agent.
+	 * Assemble the user claim and the fetched prior-art claims into a comparison package: an
+	 * element-by-element claim chart (deterministic decomposition of each patent's independent claim,
+	 * rendered through the shared {@link renderMarkdownTable} primitive), the bounded full claim text
+	 * per patent, and an analysis rubric for the agent.
 	 */
 	private formatComparisonPackage(userClaim: string, fetched: FetchedClaims[]): string {
+		const withClaims = fetched.filter((f): f is FetchedClaims & { claims: string[] } => !!f.claims && f.claims.length > 0);
+
 		const lines: string[] = [
 			'## Prior Art Claim Comparison Package',
 			'',
@@ -165,16 +253,15 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 			userClaim.trim(),
 			'```',
 			'',
-			'### Prior Art Claims',
-			'',
 		];
 
+		lines.push(...this.renderClaimChart(withClaims));
+
+		lines.push('', '### Full Claim Text', '');
 		for (const f of fetched) {
 			lines.push(`#### ${f.patentNumber}`);
 			if (f.claims && f.claims.length > 0) {
-				lines.push('```');
-				lines.push(f.claims.join('\n\n'));
-				lines.push('```');
+				lines.push(this.renderBoundedClaims(f.claims));
 			} else {
 				lines.push(`Claims unavailable via EPO OPS (${f.failureReason}). For US patents, fetch via patent_api_request (POST /patent-search-uspto/search).`);
 			}
@@ -184,7 +271,7 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 		lines.push(
 			'---',
 			'### Analysis Instructions',
-			'Now perform an element-by-element comparison of the user claim against each prior-art claim set above. For each patent, report:',
+			'The chart above is a positional decomposition scaffold; confirm the actual element correspondence against the full claim text, then perform an element-by-element comparison of the user claim against each prior-art claim set. For each patent, report:',
 			'1. **Relevance** — HIGH (anticipates most/all elements), MEDIUM (discloses several elements), or LOW.',
 			'2. **Overlapping elements** — user-claim elements disclosed by the prior art, citing the specific claim number.',
 			'3. **Missing elements** — user-claim elements NOT found in the prior art (potential novelty).',
@@ -194,6 +281,67 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 		);
 
 		return lines.join('\n');
+	}
+
+	/**
+	 * Render the element-by-element claim chart: one row per element of the reference patent (the first
+	 * patent with claims), one column per patent, each cell holding the positionally-aligned element of
+	 * that patent's independent claim (bounded snippet) or `—` when it has no element at that position.
+	 */
+	private renderClaimChart(withClaims: readonly (FetchedClaims & { claims: string[] })[]): string[] {
+		const decompositions = withClaims.map(f => ({
+			patentNumber: f.patentNumber,
+			elements: decomposeClaim(selectIndependentClaim(f.claims)),
+		}));
+		const reference = decompositions[0];
+
+		const rows: IClaimChartRow[] = reference.elements.map((_element, i) => ({
+			label: reference.elements[i].label,
+			cells: decompositions.map(d => (d.elements[i] ? truncate(d.elements[i].text, CLAIM_CHART_CELL_LIMIT) : '—')),
+		}));
+
+		const columns: IMarkdownColumn<IClaimChartRow>[] = [
+			{ header: 'Claim Element', cell: r => r.label },
+			...decompositions.map((d, colIndex): IMarkdownColumn<IClaimChartRow> => ({
+				header: d.patentNumber,
+				cell: r => r.cells[colIndex],
+			})),
+		];
+
+		return [
+			'### Element-by-Element Claim Chart',
+			`Rows are the elements of the reference patent (${reference.patentNumber}); \`—\` means that patent's independent claim has no element at that position. Correspondence is positional — verify it against the full claim text below.`,
+			'',
+			renderMarkdownTable(rows, columns),
+		];
+	}
+
+	/**
+	 * Render a patent's full claim text as a fenced block bounded by the per-patent
+	 * {@link CLAIM_TEXT_BUDGET}: whole claims are kept in order until the budget is reached, and the
+	 * shared {@link truncationNotice} reports how many were dropped.
+	 */
+	private renderBoundedClaims(claims: readonly string[]): string {
+		const budget = CLAIM_TEXT_BUDGET;
+		const kept: string[] = [];
+		let used = 0;
+		let omitted = 0;
+		for (let i = 0; i < claims.length; i++) {
+			const addition = claims[i].length + (kept.length > 0 ? 2 : 0);
+			if (kept.length > 0 && used + addition > budget) {
+				omitted = claims.length - i;
+				break;
+			}
+			kept.push(claims[i]);
+			used += addition;
+		}
+
+		const text = truncate(kept.join('\n\n'), budget);
+		const block = ['```', text, '```'];
+		if (omitted > 0) {
+			block.push('', `> ${truncationNotice(omitted, budget)}`);
+		}
+		return block.join('\n');
 	}
 }
 
