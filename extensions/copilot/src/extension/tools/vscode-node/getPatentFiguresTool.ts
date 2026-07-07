@@ -9,7 +9,8 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { decodeBase64 } from '../../../util/vs/base/common/buffer';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 
@@ -160,19 +161,7 @@ class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
 			return new LanguageModelToolResult(parts);
 
 		} catch (error) {
-			if (error instanceof PatentBackendError) {
-				if (error.message === 'Request cancelled.') {
-					return new LanguageModelToolResult([new LanguageModelTextPart('Request cancelled.')]);
-				}
-				this.logService.error(`[GetPatentFiguresTool] Backend error ${error.status}: ${error.message}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error fetching figures for ${publicationNumber}: ${error.status} - ${error.message}` + patentBackendErrorRecoveryHint(error))
-				]);
-			}
-			this.logService.error(`[GetPatentFiguresTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
-			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
-			]);
+			return handlePatentToolError(error, this.logService, '[GetPatentFiguresTool]', err => `Error fetching figures for ${publicationNumber}: ${err.status} - ${err.message}`);
 		}
 	}
 }

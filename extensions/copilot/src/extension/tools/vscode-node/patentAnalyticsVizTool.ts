@@ -17,7 +17,8 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { renderMarkdownTable, ToolResponseBudgets } from './patentResponseFormatter';
@@ -111,19 +112,7 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 			]);
 
 		} catch (error) {
-			if (error instanceof PatentBackendError) {
-				if (error.message === 'Request cancelled.') {
-					return new LanguageModelToolResult([new LanguageModelTextPart('Request cancelled.')]);
-				}
-				this.logService.error(`[PatentAnalyticsTool] Backend error ${error.status}: ${error.message}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error: Patent analytics returned ${error.status}: ${error.message}` + patentBackendErrorRecoveryHint(error))
-				]);
-			}
-			this.logService.error(`[PatentAnalyticsTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
-			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
-			]);
+			return handlePatentToolError(error, this.logService, '[PatentAnalyticsTool]', err => `Error: Patent analytics returned ${err.status}: ${err.message}`);
 		}
 	}
 

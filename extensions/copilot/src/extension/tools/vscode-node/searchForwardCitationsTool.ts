@@ -8,34 +8,18 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { CitationDoc } from './patentCitationTypes';
 import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
+import { handlePatentToolError } from './patentToolError';
 
 interface ISearchForwardCitationsParams {
 	citedDocument: string;
 	category?: 'X' | 'Y' | 'A';
 	examinerOnly?: boolean;
 	size?: number;
-}
-
-interface CitationDoc {
-	id?: string;
-	applicationNumber?: string;
-	citedDocument?: string;
-	country?: string;
-	category?: string;
-	categoryDescription?: string;
-	rejectedClaims?: string;
-	citedPassages?: string[];
-	examinerCited?: boolean;
-	applicantCited?: boolean;
-	isNPL?: boolean;
-	officeActionDate?: string;
-	officeActionType?: string;
-	inventor?: string;
-	techCenter?: string;
 }
 
 interface ForwardCitationSearchResult {
@@ -135,19 +119,7 @@ export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCi
 				new LanguageModelTextPart(formatted)
 			]);
 		} catch (error) {
-			if (error instanceof PatentBackendError) {
-				if (error.message === 'Request cancelled.') {
-					return new LanguageModelToolResult([new LanguageModelTextPart('Request cancelled.')]);
-				}
-				this.logService.error(`[SearchForwardCitationsTool] Backend error ${error.status}: ${error.message}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error: Forward citation backend returned ${error.status}: ${error.message}` + patentBackendErrorRecoveryHint(error))
-				]);
-			}
-			this.logService.error(`[SearchForwardCitationsTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
-			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
-			]);
+			return handlePatentToolError(error, this.logService, '[SearchForwardCitationsTool]', err => `Error: Forward citation backend returned ${err.status}: ${err.message}`);
 		}
 	}
 

@@ -8,10 +8,11 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { IPatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { IMarkdownColumn, renderMarkdownTable, truncationNotice } from './patentResponseFormatter';
+import { IMarkdownColumn, renderMarkdownTable, ToolResponseBudgets, truncationNotice } from './patentResponseFormatter';
+import { handlePatentToolError } from './patentToolError';
 
 interface ICompareClaimsParams {
 	userClaim: string;
@@ -20,9 +21,6 @@ interface ICompareClaimsParams {
 
 /** Max characters of an element's text shown inside a claim-chart cell before it is elided. */
 const CLAIM_CHART_CELL_LIMIT = 120;
-
-/** Per-patent cap on the full claim text rendered below the element-by-element chart. */
-const CLAIM_TEXT_BUDGET = 4_000;
 
 /** Truncates `text` to at most `max` characters, appending an ellipsis when the text was cut. */
 function truncate(text: string, max: number): string {
@@ -195,19 +193,7 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 			]);
 
 		} catch (error) {
-			if (error instanceof PatentBackendError) {
-				if (error.message === 'Request cancelled.') {
-					return new LanguageModelToolResult([new LanguageModelTextPart('Request cancelled.')]);
-				}
-				this.logService.error(`[CompareClaimsTool] Backend error ${error.status}: ${error.message}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error: Claim comparison backend returned ${error.status}: ${error.message}` + patentBackendErrorRecoveryHint(error))
-				]);
-			}
-			this.logService.error(`[CompareClaimsTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
-			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
-			]);
+			return handlePatentToolError(error, this.logService, '[CompareClaimsTool]', err => `Error: Claim comparison backend returned ${err.status}: ${err.message}`);
 		}
 	}
 
@@ -318,11 +304,11 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 
 	/**
 	 * Render a patent's full claim text as a fenced block bounded by the per-patent
-	 * {@link CLAIM_TEXT_BUDGET}: whole claims are kept in order until the budget is reached, and the
-	 * shared {@link truncationNotice} reports how many were dropped.
+	 * {@link ToolResponseBudgets.CompareClaimsText}: whole claims are kept in order until the budget is
+	 * reached, and the shared {@link truncationNotice} reports how many were dropped.
 	 */
 	private renderBoundedClaims(claims: readonly string[]): string {
-		const budget = CLAIM_TEXT_BUDGET;
+		const budget = ToolResponseBudgets.CompareClaimsText;
 		const kept: string[] = [];
 		let used = 0;
 		let omitted = 0;
