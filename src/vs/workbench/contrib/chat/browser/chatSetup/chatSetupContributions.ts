@@ -436,7 +436,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super(
 					ChatConfiguration.TitleBarSignInEnabled,
-					localize('toggle.chatSignIn', 'Copilot Sign In'),
+					localize('toggle.chatSignIn', 'FlowLeap Sign In'),
 					localize('toggle.chatSignInDescription', "Toggle visibility of the FlowLeap Sign In button in title bar"),
 					3,
 					ContextKeyExpr.and(
