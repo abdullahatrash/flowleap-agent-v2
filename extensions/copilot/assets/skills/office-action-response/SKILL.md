@@ -69,4 +69,4 @@ Save via `write_patent_results`:
 - NEVER characterize a cited reference without retrieving its text first
 - NEVER propose an amendment without citing its support in the application as filed
 - Quote the examiner and the references verbatim where the argument turns on wording
-- Always close with: "Draft response strategy for review by a registered patent attorney — not legal advice. Response deadlines are statutory; confirm them independently."
+- Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice. Response deadlines are statutory; confirm them independently."

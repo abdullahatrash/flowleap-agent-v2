@@ -9,7 +9,7 @@ user-invocable: true
 One patent, one accused product, element-by-element. FTO in reverse: there, the product is yours and the patents are the threat; here, the patent is yours and the product is the target.
 
 ## IMPORTANT DISCLAIMER
-Always include: "This claim chart is for informational purposes only and does not constitute legal advice or an infringement opinion. Consult a registered patent attorney before any enforcement or licensing action."
+Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice."
 
 ## Phase 1: The Patent
 

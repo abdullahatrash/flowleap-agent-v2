@@ -63,4 +63,4 @@ Save via `write_patent_results`:
 - ALL art must predate the priority date — state each reference's publication date in the chart
 - Always distinguish new art from art of record
 - NEVER invent references or stretch a teaching — the other side WILL read the cited passage
-- Always close with: "Invalidity assessment for review by patent counsel — not legal advice or a formal opinion."
+- Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice."

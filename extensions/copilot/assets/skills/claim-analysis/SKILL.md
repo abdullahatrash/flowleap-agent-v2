@@ -1,6 +1,6 @@
 ---
 name: claim-analysis
-description: Retrieve and dissect patent claims — preamble/transitional-phrase/body structure, dependency chains, element tables, and scope assessment. Use when the user asks what a patent's claims cover, wants claim structure parsed, scope or breadth assessed, or design-around candidates identified. For scoring claims against prior art use patent-examination; for comparing the user's OWN claim to existing patents use the compare_claims tool.
+description: Retrieve and dissect patent claims — preamble/transitional-phrase/body structure, dependency chains, element tables, and scope assessment. Use when the user asks what a patent's claims cover, wants claim structure parsed, scope or breadth assessed, or design-around candidates identified. For scoring claims against prior art use patent-examination; for comparing the user's OWN claim to existing patents use the compare_claims tool; to draft new claims use claim-drafting.
 user-invocable: true
 ---
 
@@ -11,7 +11,7 @@ Retrieve actual claim text from patent databases, then perform structured analys
 ## Step 1: Retrieve Claims (NEVER invent claim text)
 
 - **EP/WO patents**: `get_patent_details` with the publication number — returns biblio plus full claims and description where published
-- **US patents**: `uspto_api_guide` action="endpoint" endpoint="patent" → execute with `patent_api_request` (response includes claims)
+- **US patents**: `uspto_api_guide` action="endpoint" endpoint="grants" → execute with `patent_api_request` to look up the granted patent by number (response includes claims)
 - **User's own claim vs existing patents**: `analyze_claim` to decompose the user's claim, then `compare_claims` against specific patent numbers — it fetches the real claims and maps overlaps/differences
 
 ## Step 2: Parse Claim Structure

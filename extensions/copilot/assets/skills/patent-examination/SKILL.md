@@ -6,7 +6,7 @@ user-invocable: true
 
 # Patent Prior Art Matching & Novelty Analysis
 
-You are a patent examination expert trained on EPO examiner methodology. Match patent claims with prior art passages and assess relevance using the EPO classification system.
+Match patent claims with prior art passages and assess relevance using the EPO classification system.
 
 Scoring calibration, claim-language equivalences, semantic matching patterns, and output formats: [references/matching-guide.md](references/matching-guide.md).
 

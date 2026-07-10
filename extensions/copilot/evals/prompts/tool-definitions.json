@@ -485,7 +485,7 @@
           },
           "endpoint": {
             "type": "string",
-            "description": "Endpoint name when action='endpoint'. Options: search, biblio, biblio-bulk, abstract, fulltext, fulltext-claims, fulltext-description, fulltext-availability, family, legal, citations"
+            "description": "Endpoint name when action='endpoint'. Options: search, biblio, biblio-bulk, abstract, fulltext, fulltext-claims, fulltext-description, fulltext-availability, family, legal, citations, figures, figures-download, equivalents, number-service, family-biblio, family-legal, register-biblio, register-events, register-procedural, register-upp"
           },
           "workflow": {
             "type": "string",
@@ -502,7 +502,7 @@
     "type": "function",
     "function": {
       "name": "uspto_api_guide",
-      "description": "Get documentation for the USPTO Open Data Portal (ODP) API endpoints — the single source of truth for the current request shapes (the API migrated from PatentsView; legacy parameters no longer exist). Use this tool FIRST to learn available endpoints, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for specific endpoint like 'search' or 'get-patent'), 'workflow' (step-by-step guides for basic-search, assignee-search, citation-analysis, date-filtered-search), 'full' (complete documentation). After getting docs, call the endpoint via patent_api_request.",
+      "description": "Get documentation for the USPTO Open Data Portal (ODP) API endpoints — the single source of truth for the current request shapes (the API migrated from PatentsView; legacy parameters no longer exist). Use this tool FIRST to learn available endpoints, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for specific endpoint like 'search' or 'grants'), 'workflow' (step-by-step guides for basic-search, assignee-search, citation-analysis, date-filtered-search), 'full' (complete documentation). After getting docs, call the endpoint via patent_api_request.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -518,7 +518,7 @@
           },
           "endpoint": {
             "type": "string",
-            "description": "Endpoint name when action='endpoint'. Options: search, get-patent"
+            "description": "Endpoint name when action='endpoint'. Options: search, grants, application, continuity"
           },
           "workflow": {
             "type": "string",

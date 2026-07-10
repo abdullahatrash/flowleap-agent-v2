@@ -53,7 +53,7 @@ Start broad, narrow progressively. Document hit counts at every step:
 4. For top 3-5 results: `get_patent_details` → full claims and description
 
 ### 2c. USPTO (US)
-1. `build_uspto_query` with the invention description → ODP Lucene search body (do NOT hand-write legacy PatentsView parameters — they no longer exist)
+1. `build_uspto_query` with the invention description → ODP Lucene search body
 2. `patent_api_request` (POST) with the generated body → record hit counts
 3. Run keyword + CPC + assignee variations; filter to before the critical date
 4. For endpoint details beyond search: `uspto_api_guide` action="list"

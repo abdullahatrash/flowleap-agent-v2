@@ -34,7 +34,7 @@ Common CPC/IPC codes by domain: see the prior-art skill's `references/cpc-classi
 
 ## USPTO Search (US Patents)
 
-The USPTO API is the **Open Data Portal (ODP)** with Lucene query syntax. Legacy PatentsView parameters (`query`/`assignee`/`cpcCode`/`dateRange`) **no longer exist** — never hand-write them.
+The USPTO API is the **Open Data Portal (ODP)** with Lucene query syntax.
 
 ### Tool Chain
 1. `build_uspto_query` with a natural-language description → returns the current ODP Lucene search body

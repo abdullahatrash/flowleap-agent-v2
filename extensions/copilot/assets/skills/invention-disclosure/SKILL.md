@@ -46,8 +46,8 @@ Run the **prior-art** skill using the invention record as input:
 ## Phase 3: Patentability Assessment
 
 Map the top references against the **novel features list** (not claims — none exist yet) using the **patent-examination** skill's feature-mapping discipline:
-- Any single reference teaching all novel features → novelty problem (X-equivalent)
-- Combinations covering all features with plausible motivation → obviousness risk (Y-equivalent)
+- Any single reference teaching all novel features → novelty problem (X)
+- Combinations covering all features with plausible motivation → obviousness risk (Y)
 
 Conclude with a **novelty gap statement**: which feature or combination of features was NOT found in the art. This sentence is the input to claim drafting — if there is no gap, say so and stop; do not draft claims around nothing.
 
@@ -69,4 +69,4 @@ Save via `write_patent_results`, as separate files:
 - Bar-date triage comes BEFORE searching — a barred invention changes everything
 - NEVER skip the inventor-cited references; they carry duty-of-candor weight
 - No novelty gap → no claim drafting; report the negative result honestly
-- Always close with: "This is AI-assisted preparatory analysis, not legal advice. Filing decisions, inventorship, and final claims require a registered patent attorney."
+- Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice."

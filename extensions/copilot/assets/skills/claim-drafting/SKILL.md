@@ -60,7 +60,7 @@ Save via `write_patent_results`:
 4. **Self-examination result** — final feature mapping vs the top references, with the non-obviousness rationale
 
 ## Rules
-- NEVER present output as filing-ready: every deliverable states "Draft claims for review by a registered patent attorney — not legal advice"
+- NEVER present output as filing-ready. Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice."
 - NEVER invent support — a claim element without disclosure basis is a spec gap, not a drafting liberty
 - ALWAYS run the self-examination loop before delivering; a claim set without the Step 5 mapping is incomplete
 - Keep the inventors' terminology; introduce new terms only with a definition

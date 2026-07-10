@@ -1,6 +1,6 @@
 ---
 name: citation-analysis
-description: Analyze examiner citations from office actions — prior art cited against applications with X/Y/A categories, forward-citation impact, and citation networks. Use when the user asks what prior art was cited against a patent or application, wants novelty-destroying (X) references, asks "who cites this patent", or wants a citation network or impact analysis. For classifying NEW prior art yourself use patent-examination.
+description: Analyze examiner citations from office actions — prior art cited against applications with X/Y/A categories, forward-citation impact, and citation networks. Use when the user asks what prior art was cited against a patent or application, wants novelty-destroying (X) references, asks "who cites this patent", or wants a citation network or impact analysis. For classifying NEW prior art yourself use patent-examination; for responding to an office action that cites this art use office-action-response.
 user-invocable: true
 ---
 

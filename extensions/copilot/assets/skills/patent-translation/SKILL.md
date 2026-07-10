@@ -8,11 +8,7 @@ user-invocable: true
 
 Strategy for finding patents in Chinese, Japanese, Korean, and other non-English jurisdictions.
 
-## Why This Matters
-- China (CNIPA) files more patents than any other country
-- Japan (JPO) has deep prior art in electronics, automotive, materials
-- Korea (KIPO) dominates semiconductor, display, battery patents
-- Missing these jurisdictions = incomplete prior art search
+CN/JP/KR carry prior art that never surfaces in English — China (CNIPA) files more patents than any other country, Japan (JPO) is deep in electronics, automotive, and materials, and Korea (KIPO) dominates semiconductor, display, and battery — so skipping these jurisdictions leaves the prior art search incomplete.
 
 ## Search Strategy by Jurisdiction
 

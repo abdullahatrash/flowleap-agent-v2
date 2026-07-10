@@ -29,9 +29,9 @@ Where you need precise per-slice counts beyond the analytics sample:
 - Year-over-year: `ic=G06N and pd>=2020 and pd<=2020` → 2020 count; repeat per year
 
 ### 2c. US Data (USPTO)
-- `build_uspto_query` (ODP Lucene — never legacy PatentsView parameters) → `patent_api_request` (POST)
+- `build_uspto_query` (ODP Lucene) → `patent_api_request` (POST)
 - Vary by CPC code + date range for volume, by assignee for top-filer analysis
-- Bulk detail retrieval: `uspto_api_guide` action="endpoint" endpoint="bulk" → `patent_api_request` POST with up to 100 patent IDs
+- Bulk detail retrieval: `ops_api_guide` action="endpoint" endpoint="biblio-bulk" → `patent_api_request` (OPS carries US publications too)
 
 ## Phase 3: Analysis
 
