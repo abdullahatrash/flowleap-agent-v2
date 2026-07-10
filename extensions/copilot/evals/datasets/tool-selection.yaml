@@ -1,0 +1,366 @@
+# Tool Selection Tests - Paths A through I from the decision tree
+# Verifies the agent selects the correct first tool for each query type
+
+- vars:
+    prompt: >
+      Here is my claim: "A method for wirelessly charging a mobile device using
+      resonant inductive coupling between a transmitter coil and a receiver coil,
+      wherein the transmitter adjusts its operating frequency based on real-time
+      impedance measurements." Find prior art for this claim.
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'vscode_askQuestions';
+      metric: path_a_claim_prior_art
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!call) return true; // ask-first flow: build_patent_query is not expected in single-turn output
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        return d.includes('wireless') || d.includes('inductive') || d.includes('charging') || d.includes('impedance');
+      metric: path_a_claim_args_contain_technical_terms
+    # Converted from llm-rubric (2026-06-12): ask-before-search ordering and
+    # no fabricated patent numbers are both mechanically checkable.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
+        const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
+        const asksBeforeSearch = askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
+        const text = parsed.text || '';
+        const noFabricatedNumbers = !/\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
+        return asksBeforeSearch && noFabricatedNumbers;
+      metric: path_a_asks_before_search_no_fabricated_numbers
+
+- vars:
+    prompt: "Find EP patents about autonomous drone delivery systems"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'build_patent_query';
+      metric: path_b_general_search
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: path_b_no_jurisdiction_ask
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        return d.includes('drone') || d.includes('uav') || d.includes('unmanned') || d.includes('delivery');
+      metric: path_b_args_contain_domain_terms
+
+- vars:
+    prompt: >
+      I invented a solar-powered water purifier that uses UV-C LED arrays with
+      automatic flow control based on turbidity sensor readings. Check if this
+      is patentable.
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'build_patent_query' || firstTool === 'vscode_askQuestions';
+      metric: path_c_invention_patentability
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!call) return true; // vscode_askQuestions path is also valid
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        return d.includes('solar') || d.includes('uv') || d.includes('water') || d.includes('purif') || d.includes('turbidity');
+      metric: path_c_args_contain_invention_terms
+
+- vars:
+    prompt: "Get the full claims text for patent EP1234567"
+  assert:
+    # Branch D routes claims/full-text to ops_api_guide; get_patent_details is the
+    # typed equivalent added post-migration (typed-tools-first doctrine, critical
+    # rule 5), so accept either — the prompt branch predates the typed tool.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'ops_api_guide' || firstTool === 'get_patent_details';
+      metric: path_d_detailed_patent_data
+
+- vars:
+    prompt: "Search US patents by Tesla about battery thermal management systems"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'uspto_api_guide' || firstTool === 'build_uspto_query';
+      metric: path_e_us_patent_search
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_uspto_query');
+        if (!call) return true; // uspto_api_guide first-step path is also valid
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        return d.includes('tesla') && (d.includes('battery') || d.includes('thermal'));
+      metric: path_e_args_contain_assignee_and_topic
+
+- vars:
+    prompt: "What prior art was cited against US patent application US2020/0123456?"
+  assert:
+    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'search_citations';
+      metric: path_f_office_action_citations_typed_first
+
+- vars:
+    prompt: "What does MPEP say about obviousness under 35 USC 103?"
+  assert:
+    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'search_legal';
+      metric: path_g_legal_research_typed_first
+
+- vars:
+    prompt: "Create a Python script that parses patent XML files and extracts claim text into a CSV"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const patentSearchTools = ['build_patent_query', 'search_patents',
+          'ops_api_guide', 'uspto_api_guide', 'citation_api_guide', 'legal_search_guide'];
+        return !(parsed.tool_calls || []).some(tc => patentSearchTools.includes(tc.function?.name));
+      metric: path_h_coding_task
+
+- vars:
+    prompt: "Find Chinese patents about solid-state batteries from CATL"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const text = parsed.text || '';
+        const usesWebSearch = toolCalls.some(tc => tc.function?.name === 'web_search');
+        const mentionsGooglePatents = text.includes('patents.google.com');
+        return usesWebSearch || mentionsGooglePatents;
+      metric: path_i_web_search_cn_patents
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'web_search');
+        if (!call) return true; // text response mentioning google patents is also valid
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const q = String(args.query || '').toLowerCase();
+        return q.includes('battery') || q.includes('catl') || q.includes('solid') || q.includes('lithium');
+      metric: path_i_web_search_args_contain_topic
+
+- vars:
+    prompt: "What does the EPC say about inventive step?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: legal_lookup_skips_jurisdiction_gate
+    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'search_legal';
+      metric: legal_lookup_first_tool_typed_first
+
+- vars:
+    prompt: "What prior art did the examiner cite against application 16123456?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: citation_lookup_skips_jurisdiction_gate
+    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          ['search_citations'].includes(tc.function?.name)
+        );
+      metric: citation_lookup_uses_search_citations_typed_first
+
+- vars:
+    prompt: "give me info about the patent US6021533A"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        // get_patent_details biblio/abstract resolves for all jurisdictions (incl. US) per its modelDescription.
+        return firstTool === 'ops_api_guide' || firstTool === 'uspto_api_guide' || firstTool === 'get_patent_details';
+      metric: number_lookup_routes_to_lookup
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).length > 0;
+      metric: number_lookup_requires_tool
+
+# --- NEW-TOOL COVERAGE (task #5) ---
+# The typed tools added post-migration (analyze_claim, compare_claims,
+# get_patent_details, get_patent_figures, patent_analytics_viz) and
+# search_forward_citations had no dataset coverage. patentAIPrompt.tsx does NOT
+# name the first five in its decision tree, so their routing is driven by the
+# tool modelDescriptions; prompts below are phrased to hit those descriptions
+# without tripping branch A's prior-art path or the jurisdiction gate.
+
+# analyze_claim: structural element extraction (NOT a prior-art search, so no
+# jurisdiction gate and no build_patent_query). Trigger: analyze_claim
+# modelDescription "extract searchable elements ... claim element breakdown".
+- vars:
+    prompt: >
+      Here's claim 1 of my draft application. Extract the individual claim
+      elements and technical keywords so I understand its structure — don't
+      search anything yet: "A system comprising a lidar sensor, a processor
+      configured to detect obstacles, and an actuator that adjusts a flight path."
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'analyze_claim';
+      metric: analyze_claim_first_for_element_extraction
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'analyze_claim');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const t = String(args.claimText || '').toLowerCase();
+        return t.includes('lidar') || t.includes('obstacle') || t.includes('flight');
+      metric: analyze_claim_args_carry_claim_text
+
+# compare_claims: user supplies their claim AND explicit patent numbers to
+# compare against (no search needed). Trigger: compare_claims modelDescription.
+- vars:
+    prompt: >
+      Compare my claim against these existing patents to find overlaps. My claim:
+      "A battery pack with a liquid cooling channel integrated into the cell
+      housing." Compare it against US-7654321-B2 and EP-1234567-A1.
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'compare_claims';
+      metric: compare_claims_first_for_claim_vs_patents
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'compare_claims');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const blob = JSON.stringify(args).toLowerCase();
+        return blob.includes('7654321') && (blob.includes('cooling') || blob.includes('battery'));
+      metric: compare_claims_args_carry_patents_and_claim
+
+# get_patent_details: full document (biblio + claims + description) of a specific
+# patent. Branch D names ops_api_guide; get_patent_details is the typed
+# equivalent, so accept either. Must NOT open the jurisdiction gate or search.
+- vars:
+    prompt: >
+      I want the complete patent document for EP2000000 — bibliographic data,
+      abstract, all claims, and the full description.
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_patent_details' || firstTool === 'ops_api_guide';
+      metric: get_patent_details_routes_to_detail_path
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const asked = toolCalls.some(tc => tc.function?.name === 'vscode_askQuestions');
+        const searched = toolCalls.some(tc => ['build_patent_query', 'search_patents', 'build_uspto_query'].includes(tc.function?.name));
+        return !asked && !searched;
+      metric: get_patent_details_skips_gate_and_search
+
+# get_patent_figures: no prompt branch for figures — routing driven purely by the
+# get_patent_figures modelDescription ("USE WHEN: user asks to see/show/view ...
+# figures, drawings, images").
+- vars:
+    prompt: "Show me the drawings of US10123456."
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_patent_figures';
+      metric: get_patent_figures_first_for_drawings
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'get_patent_figures');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        return String(args.publicationNumber || '').includes('10123456');
+      metric: get_patent_figures_args_carry_number
+
+# patent_analytics_viz: analytics/trends intent — modelDescription is PRIORITY
+# TOOL FOR ANALYTICS and explicitly says DO NOT use build_patent_query; it is not
+# a jurisdiction-scoped search, so no vscode_askQuestions gate.
+- vars:
+    prompt: >
+      Chart the filing trends in quantum computing over the last decade, and show
+      me the top companies and countries.
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'patent_analytics_viz';
+      metric: analytics_viz_first_for_trends
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'patent_analytics_viz');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        return JSON.stringify(args).toLowerCase().includes('quantum');
+      metric: analytics_viz_args_contain_topic
+
+# search_forward_citations: who-cites-this / impact analysis. Branch F names it
+# PRIMARY for who-cites (input: citedDocument); not jurisdiction-gated.
+- vars:
+    prompt: "Who cites US10123456, and how impactful is it as prior art?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'search_forward_citations';
+      metric: forward_citations_first_for_who_cites
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_forward_citations');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        return String(args.citedDocument || '').includes('10123456');
+      metric: forward_citations_args_carry_document

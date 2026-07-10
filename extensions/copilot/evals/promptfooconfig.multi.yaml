@@ -1,0 +1,108 @@
+description: "Patent AI Agent — Multi-Model Comparison"
+
+# Tests the same prompt across 9 OpenRouter models side-by-side.
+# Each column in the results dashboard = one model.
+#
+# Run:  OPENROUTER_API_KEY=sk-... promptfoo eval -c promptfooconfig.multi.yaml
+# View: promptfoo view
+#
+# Prerequisites:
+#   - OPENROUTER_API_KEY exported (BYOK — no backend required, inference is client-side)
+#
+# To test a subset of models, comment out the ones you don't need.
+#
+# TOOL-SURFACE DIVERGENCE: tool-definitions.json includes the synthetic
+# `web_search` tool, which in production is an Anthropic-native tool injected by
+# the backend for CLAUDE MODELS ONLY. GPT and Gemini providers below therefore
+# see a tool they would not have in production. The custom provider sends one
+# shared tool list (no per-provider filtering), so this cannot be excluded per
+# provider in config. Read GPT/Gemini `web_search` selections with that caveat —
+# see evals/README.md "Multi-Model Comparison" for details.
+
+providers:
+  # ── Google Gemini ──────────────────────────────────
+  - id: file://providers/patent-ai-provider.ts
+    label: "Gemini 2.5 Flash-Lite"
+    config:
+      model: google/gemini-2.5-flash-lite
+
+  - id: file://providers/patent-ai-provider.ts
+    label: "Gemini 2.5 Flash"
+    config:
+      model: google/gemini-2.5-flash
+
+  - id: file://providers/patent-ai-provider.ts
+    label: "Gemini 2.5 Pro"
+    config:
+      model: google/gemini-2.5-pro
+
+  # ── Anthropic Claude ───────────────────────────────
+  - id: file://providers/patent-ai-provider.ts
+    label: "Claude Haiku 4.5"
+    config:
+      model: anthropic/claude-haiku-4.5
+
+  - id: file://providers/patent-ai-provider.ts
+    label: "Claude Sonnet 5"
+    config:
+      model: anthropic/claude-sonnet-5
+
+  - id: file://providers/patent-ai-provider.ts
+    label: "Claude Opus 4.8"
+    config:
+      model: anthropic/claude-opus-4.8
+
+  # ── OpenAI ─────────────────────────────────────────
+  - id: file://providers/patent-ai-provider.ts
+    label: "GPT-5 Mini"
+    config:
+      model: openai/gpt-5-mini
+
+  - id: file://providers/patent-ai-provider.ts
+    label: "GPT-5.2 Mini"
+    config:
+      model: openai/gpt-5.2-mini
+
+  - id: file://providers/patent-ai-provider.ts
+    label: "GPT-5.2"
+    config:
+      model: openai/gpt-5.2
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    provider:
+      id: openai:chat:google/gemini-2.5-flash
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        apiKey: "{{env.OPENROUTER_API_KEY}}"
+        temperature: 0
+        passthrough:
+          stream: false
+  assert:
+    # Global guard: every tool the model calls must exist in the eval tool surface.
+    # Past multi-model baselines recorded hallucinated tool names (e.g. a made-up
+    # patent_search_subagent variant) that per-case asserts never looked for.
+    - type: javascript
+      value: |
+        // Inline JS runs in promptfoo's ESM sandbox: no require/__dirname.
+        // Dynamic import + cwd-relative path (eval always runs from evals/).
+        return import('node:fs').then(fs => {
+          const defs = JSON.parse(fs.readFileSync('prompts/tool-definitions.json', 'utf-8'));
+          const allowed = new Set(defs.map(d => d.function.name));
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          return (parsed.tool_calls || []).every(tc => allowed.has(tc.function?.name));
+        });
+      metric: no_invented_tool_names
+
+tests:
+  - file://datasets/tool-selection.yaml
+  - file://datasets/jurisdiction-gating.yaml
+  - file://datasets/anti-hallucination.yaml
+  - file://datasets/active-behavior.yaml
+  - file://datasets/source-attribution.yaml
+  - file://datasets/search-strategy.yaml
+
+outputPath: output/multi-model-latest.json

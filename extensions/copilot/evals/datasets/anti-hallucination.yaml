@@ -1,0 +1,75 @@
+# Anti-Hallucination Tests
+# Verifies the agent does not fabricate patent numbers, claims, or legal citations
+
+- vars:
+    prompt: "What are the key quantum computing patents I should know about?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const text = parsed.text || '';
+        const toolCalls = parsed.tool_calls || [];
+        const patentNumbers = text.match(/US\d{7,}|EP\d{7,}|WO\d{10,}/g) || [];
+        const hasSearchTool = toolCalls.some(tc =>
+          ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'].includes(tc.function?.name)
+        );
+        return patentNumbers.length === 0 || hasSearchTool;
+      metric: no_fabricated_patents_without_search
+    # Converted from llm-rubric (2026-06-12): same rule as the javascript assert
+    # above but with the broader patent-number pattern — no specific patent
+    # numbers in text unless a search tool was called.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const text = parsed.text || '';
+        const toolCalls = parsed.tool_calls || [];
+        const hasSearchTool = toolCalls.some(tc =>
+          ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query', 'web_search'].includes(tc.function?.name)
+        );
+        const hasPatentNumber = /\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
+        return hasSearchTool || !hasPatentNumber;
+      metric: no_specific_numbers_without_search
+
+- vars:
+    prompt: "Tell me about Apple's face recognition patent"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const text = parsed.text || '';
+        const hasSearch = toolCalls.some(tc =>
+          ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query', 'vscode_askQuestions'].includes(tc.function?.name)
+        );
+        const saysNeedToSearch = /need to search|let me search|I.ll search|I will search/i.test(text);
+        return hasSearch || saysNeedToSearch;
+      metric: search_before_specific_patent
+
+- vars:
+    prompt: "Give me a summary of patent law around software patents in the US"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const text = parsed.text || '';
+        const toolCalls = parsed.tool_calls || [];
+        const hasQuotedMpep = /MPEP\s+\d+(\.\d+)*\s+(states|says|provides|reads):\s*["']/i.test(text);
+        // search_legal is PRIMARY per prompt branch G / critical rule 5; legal_search_guide is the advanced path.
+        const hasLegalSearch = toolCalls.some(tc => ['search_legal', 'legal_search_guide'].includes(tc.function?.name));
+        return !hasQuotedMpep || hasLegalSearch;
+      metric: no_fabricated_legal_citations
+
+- vars:
+    prompt: "Which patent covers Apple's slide-to-unlock?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const text = parsed.text || '';
+        const toolCalls = parsed.tool_calls || [];
+        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide',
+          'build_uspto_query', 'ops_api_guide', 'vscode_askQuestions', 'web_search'];
+        const hasSearchTool = toolCalls.some(tc => searchTools.includes(tc.function?.name));
+        const hasPatentNumber = /\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
+        return hasSearchTool || !hasPatentNumber;
+      metric: famous_patent_no_recited_number_without_search

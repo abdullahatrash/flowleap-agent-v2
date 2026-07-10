@@ -1,0 +1,8 @@
+{
+	"updated": "2026-06-12",
+	"config": "promptfooconfig.yaml",
+	"totalTests": 34,
+	"passing": 34,
+	"passRate": 1.0,
+	"notes": "Post plans 001-010. Re-baseline deliberately, in its own commit, after intentional prompt changes."
+}

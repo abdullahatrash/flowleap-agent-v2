@@ -1,0 +1,46 @@
+description: "Patent AI Agent Evaluation — Default Model"
+
+# Single model (EVAL_MODEL env default, google/gemini-2.5-flash if unset). For multi-model comparison use promptfooconfig.multi.yaml
+
+providers:
+  - id: file://providers/patent-ai-provider.ts
+    label: "Patent AI (default)"
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    provider:
+      id: openai:chat:google/gemini-2.5-flash
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        apiKey: "{{env.OPENROUTER_API_KEY}}"
+        temperature: 0
+        passthrough:
+          stream: false
+  assert:
+    # Global guard: every tool the model calls must exist in the eval tool surface.
+    # Catches hallucinated tool names that per-case asserts (which only check the
+    # expected tool) would miss.
+    - type: javascript
+      value: |
+        // Inline JS runs in promptfoo's ESM sandbox: no require/__dirname.
+        // Dynamic import + cwd-relative path (eval always runs from evals/).
+        return import('node:fs').then(fs => {
+          const defs = JSON.parse(fs.readFileSync('prompts/tool-definitions.json', 'utf-8'));
+          const allowed = new Set(defs.map(d => d.function.name));
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          return (parsed.tool_calls || []).every(tc => allowed.has(tc.function?.name));
+        });
+      metric: no_invented_tool_names
+
+tests:
+  - file://datasets/tool-selection.yaml
+  - file://datasets/jurisdiction-gating.yaml
+  - file://datasets/anti-hallucination.yaml
+  - file://datasets/active-behavior.yaml
+  - file://datasets/source-attribution.yaml
+  - file://datasets/search-strategy.yaml
+
+outputPath: output/latest.json

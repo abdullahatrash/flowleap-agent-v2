@@ -1,0 +1,52 @@
+# Source Attribution Tests
+# Verifies the agent cites sources when referencing patent data
+
+- vars:
+    prompt: "Search EP patents about mRNA vaccine delivery and summarize what you find"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          ['build_patent_query', 'search_patents'].includes(tc.function?.name)
+        );
+      metric: attribution_has_search
+    # Kept as llm-rubric (2026-06-12 de-flake pass): judging whether prose
+    # "clearly indicates" attribution is genuinely qualitative — phrase lists
+    # are open-ended and a string match would miss valid attributions.
+    - type: llm-rubric
+      value: >
+        If the response mentions specific patents, it must attribute them to
+        search results. Look for phrases like "According to search results",
+        "Retrieved from", "Search returned", "Found via", or similar source
+        attribution. Any patent data should clearly indicate it came from
+        a search tool, not from the agent's own knowledge.
+      metric: patent_attribution_rubric
+
+- vars:
+    prompt: "What does the EPC say about novelty requirements? Search the legal database."
+  assert:
+    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          ['search_legal'].includes(tc.function?.name)
+        );
+      metric: legal_attribution_calls_tool_typed_first
+    # Converted from llm-rubric (2026-06-12): the rubric text already stated a
+    # mechanical rule — pass if the legal search tool is called; fail only if
+    # legal text is quoted without any search tool call.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const text = parsed.text || '';
+        const hasLegalSearch = toolCalls.some(tc =>
+          ['search_legal'].includes(tc.function?.name)
+        );
+        if (hasLegalSearch) return true;
+        const anySearch = toolCalls.length > 0;
+        const quotesLegalText = /article\s+\d+|EPC\s+art|novelty\s+(is\s+)?defined|"[^"]{40,}"/i.test(text);
+        return anySearch || !quotesLegalText;
+      metric: legal_lookup_no_fabricated_text_without_tool

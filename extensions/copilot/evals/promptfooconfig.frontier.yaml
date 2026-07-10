@@ -1,0 +1,40 @@
+description: "Patent AI Agent Evaluation — FRONTIER probes (NON-GATING: failures are findings, not red builds)"
+
+# Quarantined probe set for suspected-broken behaviors. Never merge these tests
+# into promptfooconfig.yaml — see evals/README.md "Frontier suite" for the promotion rule.
+
+providers:
+  - id: file://providers/patent-ai-provider.ts
+    label: "Patent AI (default)"
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    provider:
+      id: openai:chat:google/gemini-2.5-flash
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        apiKey: "{{env.OPENROUTER_API_KEY}}"
+        temperature: 0
+        passthrough:
+          stream: false
+  assert:
+    # Global guard: every tool the model calls must exist in the eval tool surface.
+    - type: javascript
+      value: |
+        // Inline JS runs in promptfoo's ESM sandbox: no require/__dirname.
+        // Dynamic import + cwd-relative path (eval always runs from evals/).
+        return import('node:fs').then(fs => {
+          const defs = JSON.parse(fs.readFileSync('prompts/tool-definitions.json', 'utf-8'));
+          const allowed = new Set(defs.map(d => d.function.name));
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          return (parsed.tool_calls || []).every(tc => allowed.has(tc.function?.name));
+        });
+      metric: no_invented_tool_names
+
+tests:
+  - file://datasets/frontier.yaml
+
+outputPath: output/frontier-latest.json

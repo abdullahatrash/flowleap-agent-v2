@@ -1,0 +1,4 @@
+# ignore eval run output, but track the committed pass-rate baseline
+!output/
+output/*
+!output/baseline.json

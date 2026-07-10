@@ -1,0 +1,123 @@
+# Jurisdiction Gating Tests
+# Verifies the agent asks for jurisdiction when ambiguous and skips when explicit
+
+- vars:
+    prompt: "Find patents about machine learning for medical imaging"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: ambiguous_asks_jurisdiction
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
+        const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
+        return askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
+      metric: ambiguous_asks_before_search
+
+- vars:
+    prompt: "Find Samsung patents about display technology"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: company_name_still_asks_jurisdiction
+    # Converted from llm-rubric (2026-06-12): "do not infer jurisdiction from the
+    # company name" is mechanically checkable — no search tool may run before the ask.
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
+        const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
+        return askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
+      metric: company_name_asks_before_any_search
+
+- vars:
+    prompt: "Find US patents about quantum computing error correction"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: explicit_us_skips_ask
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'build_uspto_query'
+        );
+      metric: explicit_us_uses_uspto
+
+- vars:
+    prompt: "Search European patents about hydrogen fuel cell membranes"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: explicit_ep_skips_ask
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
+      metric: explicit_ep_uses_epo
+
+- vars:
+    prompt: "Do a comprehensive worldwide patent search for CRISPR gene editing delivery methods"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: explicit_worldwide_skips_ask
+
+- vars:
+    prompt: "Find prior art for my claim: a drone with obstacle avoidance using lidar"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: claim_without_jurisdiction_asks
+
+- vars:
+    prompt: "Is my idea patentable? A toothbrush that detects cavities with ultrasound"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: own_invention_without_jurisdiction_asks
+
+# Mixed jurisdictions explicitly named — must not ask, must search
+- vars:
+    prompt: "Compare US and European patents on perovskite solar cells"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: mixed_jurisdictions_skip_ask
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return ['build_patent_query', 'uspto_api_guide', 'build_uspto_query'].includes(firstTool);
+      metric: mixed_jurisdictions_first_tool_is_search
+
+# "all patent offices" Both-scope synonym — must not ask
+- vars:
+    prompt: "Search all patent offices for graphene battery anodes"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: all_offices_synonym_skips_ask

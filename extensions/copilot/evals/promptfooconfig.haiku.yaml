@@ -1,0 +1,31 @@
+description: "Patent AI Agent Evaluation — Claude Haiku (plan-007 baseline)"
+
+providers:
+  - id: file://providers/patent-ai-provider.ts
+    label: "Patent AI (claude-haiku)"
+    config:
+      model: anthropic/claude-haiku-4.5
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    provider:
+      id: openai:chat:anthropic/claude-haiku-4.5
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        apiKey: "{{env.OPENROUTER_API_KEY}}"
+        temperature: 0
+        passthrough:
+          stream: false
+
+tests:
+  - file://datasets/tool-selection.yaml
+  - file://datasets/jurisdiction-gating.yaml
+  - file://datasets/anti-hallucination.yaml
+  - file://datasets/active-behavior.yaml
+  - file://datasets/source-attribution.yaml
+  - file://datasets/search-strategy.yaml
+
+outputPath: output/latest.json

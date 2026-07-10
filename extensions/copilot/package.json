@@ -6616,7 +6616,13 @@
     "package": "vsce package",
     "web": "vscode-test-web --headless --extensionDevelopmentPath=. .",
     "test:prompt": "mocha \"src/extension/completions-core/vscode-node/prompt/**/test/**/*.test.{ts,tsx}\"",
-    "test:completions-core": "tsx src/extension/completions-core/vscode-node/extension/test/runTest.ts"
+    "test:completions-core": "tsx src/extension/completions-core/vscode-node/extension/test/runTest.ts",
+    "eval": "bash evals/scripts/run-evals.sh",
+    "eval:multi": "cd evals && promptfoo eval -c promptfooconfig.multi.yaml",
+    "eval:view": "cd evals && promptfoo view",
+    "eval:extract-tools": "npx tsx evals/prompts/extract-tools.ts",
+    "eval:check-baseline": "npx tsx evals/scripts/compare-baseline.ts",
+    "eval:check-drift": "npx tsx evals/scripts/check-prompt-drift.ts"
   },
   "devDependencies": {
     "@azure/identity": "4.9.1",

@@ -1,0 +1,823 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "create_file",
+      "description": "This is a tool for creating a new file in the workspace. The file will be created with the specified content. The directory will be created if it does not already exist. Never use this tool to edit a file that already exists.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "The absolute path to the file to create."
+          },
+          "content": {
+            "type": "string",
+            "description": "The content to write to the file."
+          }
+        },
+        "required": [
+          "filePath",
+          "content"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "fetch_webpage",
+      "description": "Fetches the main content from a web page. This tool is useful for summarizing or analyzing the content of a webpage. You should use this tool when you think the user is looking for information from a specific webpage.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "An array of URLs to fetch content from."
+          },
+          "query": {
+            "type": "string",
+            "description": "The query to search for in the web page's content. This should be a clear and concise description of the content you want to find."
+          }
+        },
+        "required": [
+          "urls",
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_patents",
+      "description": "Executes an EPO OPS CQL patent search for EP/WO patents; returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents — not US patents (for those, use build_uspto_query then patent_api_request; see uspto_api_guide for advanced options). Use after build_patent_query to run the generated CQL. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (e.g. 'EP,WO' to restrict to fulltext-available patents). No wildcards on ic/cpc fields; max 100 results per request.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "CQL query string (preferably from build_patent_query tool). Examples: 'pa=Pfizer* AND ic=A61K AND ti=cancer', 'pa=Vestas* AND ic=F03D AND ti=\"wind turbine\"'. IMPORTANT: No wildcards on ic/cpc fields."
+          },
+          "range": {
+            "type": "string",
+            "description": "Result range in format 'start-end', e.g., '1-25', '26-50'. Max 100 results per request. Use pagination for more results.",
+            "default": "1-25"
+          },
+          "countries": {
+            "type": "string",
+            "description": "Filter by country codes (optional). Use 'EP,WO' to get only European/WIPO patents with fulltext available. Default: all countries.",
+            "examples": [
+              "EP,WO",
+              "US,EP,WO",
+              "all"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "analyze_claim",
+      "description": "Analyze user's invention/claim to extract searchable elements. USE WHEN: User describes THEIR OWN invention, claim, or idea and wants prior art analysis or patentability assessment. TRIGGER PHRASES: 'my invention', 'my idea', 'analyze my claim', 'is my idea patentable', 'prior art for my concept'. Returns: keywords, synonyms, IPC codes, suggested CQL queries, claim element breakdown. WORKFLOW: After analysis, use suggested queries with search_patents, then compare_claims to assess overlaps.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "claimText": {
+            "type": "string",
+            "description": "The patent claim or invention description to analyze. Can be a formal claim or informal description of the invention."
+          },
+          "focus": {
+            "type": "string",
+            "enum": [
+              "search",
+              "elements",
+              "full"
+            ],
+            "description": "What to extract: 'search' returns keywords, synonyms, IPC codes and suggested queries only; 'elements' returns the claim element breakdown only; 'full' (default) returns both."
+          }
+        },
+        "required": [
+          "claimText"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "compare_claims",
+      "description": "Compare a user's patent claim against one or more existing patents to identify overlaps and differences. WORKFLOW: (1) First use analyze_claim to understand the user's claim, (2) Use search_patents to find potentially relevant patents, (3) Then use THIS tool to compare the user's claim against specific patent numbers. Fetches the actual claims of each cited patent from EPO OPS and returns them alongside the user's claim with an analysis rubric — YOU then perform the element-by-element comparison: relevance (HIGH/MEDIUM/LOW), overlapping elements, missing elements (potential novelty), key differences, and a 102/103 risk summary. NOTE: EPO OPS full text covers mainly EP/WO publications; for US patents whose claims are unavailable, fetch them via patent_api_request (POST /patent-search-uspto/search). Useful for patentability assessment, freedom-to-operate analysis, and prior art evaluation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "userClaim": {
+            "type": "string",
+            "description": "The user's patent claim or invention description to compare"
+          },
+          "patentNumbers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Array of patent publication numbers to compare against (e.g., ['US-7654321-B2', 'EP-1234567-A1'])"
+          }
+        },
+        "required": [
+          "userClaim",
+          "patentNumbers"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "patent_analytics_viz",
+      "description": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis', 'patent portfolio'. DO NOT use build_patent_query for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "PREFERRED: Individual keywords with OR logic. Each keyword is searched independently. Preserves short terms like 'AI', '5G', 'ML'. Example: ['AI', 'healthcare', '5G']"
+          },
+          "phrases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exact phrase matches. Use for multi-word terms that must appear together. Example: ['machine learning', 'deep learning', 'neural network']"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Filter by harmonized assignee name (substring match, e.g. 'Tesla', 'Toyota', 'Apple')"
+          },
+          "cpc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by CPC classification codes (prefix match). Example: ['G06N', 'A61B', 'H04L']"
+          },
+          "ipc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by IPC classification codes (prefix match). Example: ['G06F', 'H01M']"
+          },
+          "countryCode": {
+            "type": "string",
+            "description": "Filter by publication country code (e.g., 'US', 'CN', 'EP', 'JP', 'KR')"
+          },
+          "dateFrom": {
+            "type": "string",
+            "description": "Publication-date lower bound in YYYY-MM-DD format (e.g., '2020-01-01')"
+          },
+          "dateTo": {
+            "type": "string",
+            "description": "Publication-date upper bound in YYYY-MM-DD format (e.g., '2024-12-31')"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_patent_details",
+      "description": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use build_patent_query + search_patents to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "publicationNumber": {
+            "type": "string",
+            "description": "Patent publication number (e.g., 'US-7654321-B2', 'EP-1234567-A1', 'WO-2020123456-A1')"
+          }
+        },
+        "required": [
+          "publicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_patent_figures",
+      "description": "Retrieve patent figure/drawing IMAGES and return them as inline PNG images you can SEE and analyze. USE WHEN: the user asks to see, show, view, or analyze the figures, drawings, or images of a specific patent. The backend fetches the drawings from EPO and rasterizes them to PNG, so they render directly in chat. INPUT: a patent publication number (e.g. 'EP1234567', 'US10000000B2'; hyphens optional). By default returns the actual DRAWING pages (EPO scans put cover/biblio/description pages first, so they are skipped automatically); pass 'pages' (e.g. '1,2,3') to override and fetch specific pages. Do NOT use this for full claims/description text — use get_patent_details for text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "publicationNumber": {
+            "type": "string",
+            "description": "Patent publication number, e.g. 'EP1234567', 'US10000000B2', 'WO2020123456A1' (hyphens optional)."
+          },
+          "pages": {
+            "type": "string",
+            "description": "Optional comma-separated page numbers to fetch, e.g. '1,2,3' (max 20). If omitted, returns the first several figure pages."
+          }
+        },
+        "required": [
+          "publicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "read_pdf",
+      "description": "Extract text content from a local PDF file. Use this tool when users reference PDF documents (patent PDFs, research papers, technical documents) and need to analyze their content. Reads all pages by default, a single page via 'pageNumber', or a range via 'startPage'/'endPage'. Returns extracted text plus metadata (title, author, page count). The PDF must be a local file accessible from the workspace.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "The absolute path of the PDF file to read."
+          },
+          "startPage": {
+            "type": "number",
+            "description": "Optional: the 1-based page number to start reading from. If omitted, reads from page 1."
+          },
+          "endPage": {
+            "type": "number",
+            "description": "Optional: the 1-based page number to stop reading at (inclusive). If omitted, reads to the last page."
+          },
+          "pageNumber": {
+            "type": "number",
+            "description": "Optional: read only this specific page number (1-based). Takes precedence over startPage/endPage."
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_citations",
+      "description": "PRIMARY TOOL for backward citation search: finds prior-art references cited by examiners against a USPTO application (X = novelty-destroying/102, Y = obviousness/103, A = background). Use whenever the user asks about citations against an application, examiner prior art, or X/Y/A rejection references. Prefer this over citation_api_guide + patent_api_request for standard citation lookups — use citation_api_guide only for date-range filtering or citation statistics. Input: applicationNumber (numeric string, no slashes — normalize '16/000,001' to '16000001'); category ('X'/'Y'/'A', omit for all); examinerOnly (boolean); size (default 100).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicationNumber": {
+            "type": "string",
+            "description": "USPTO application number, numeric only, no slashes or commas. If the user writes '16/000,001' or '16,000,001', normalize to '16000001'."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "X",
+              "Y",
+              "A"
+            ],
+            "description": "Optional filter. X = novelty-destroying (35 USC 102), Y = obviousness (35 USC 103), A = background. Omit to return all categories."
+          },
+          "examinerOnly": {
+            "type": "boolean",
+            "description": "Optional. If true, return only examiner-cited references (exclude applicant-cited). Default: false.",
+            "default": false
+          },
+          "size": {
+            "type": "number",
+            "description": "Optional. Maximum number of citations to return. Default: 100.",
+            "default": 100
+          }
+        },
+        "required": [
+          "applicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_forward_citations",
+      "description": "PRIMARY TOOL for forward citation impact analysis: finds patents that CITE a given document, measuring its influence as prior art. Use when asked 'who cites this patent', 'forward citations', 'impact analysis', or 'how influential is X'. Distinct from search_citations (which finds prior art cited against an application): this tool takes a document being cited and returns the citing patents. Prefer this over citation_api_guide + patent_api_request for standard forward lookups. Input: citedDocument (patent/publication number in any standard format, e.g. 'US 20150284881 A1' or 'EP 1234567 A1'); category ('X'/'Y'/'A', omit for all); examinerOnly (boolean); size (default 100).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "citedDocument": {
+            "type": "string",
+            "description": "The document being cited - patent or publication number. Accepted formats: 'US 20150284881 A1', 'US-10000001-B2', 'EP 1234567 A1', 'WO 2020123456 A1'. Pass as the user provided it - do not aggressively normalize."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "X",
+              "Y",
+              "A"
+            ],
+            "description": "Optional filter. X = novelty-destroying (35 USC 102), Y = obviousness (35 USC 103), A = background. Omit for all categories. X-rated forward citations indicate the document is strong prior art."
+          },
+          "examinerOnly": {
+            "type": "boolean",
+            "description": "Optional. If true, return only examiner-cited references (more significant than applicant-cited). Default: false.",
+            "default": false
+          },
+          "size": {
+            "type": "number",
+            "description": "Optional. Maximum number of citing patents to return. Default: 100.",
+            "default": 100
+          }
+        },
+        "required": [
+          "citedDocument"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "citation_api_guide",
+      "description": "Documentation for the USPTO Citation Search API. DEFER TO TYPED TOOLS for the common cases: use search_citations for prior art cited AGAINST an application (input: applicationNumber), use search_forward_citations for patents that CITE a given document (input: citedDocument, impact analysis). Use THIS guide tool ONLY for advanced cases not covered by either typed tool: (1) citation statistics aggregations (/stats endpoint), (2) novelty-only convenience endpoint, (3) date-range filtering, (4) general API exploration. X = novelty-destroying (102), Y = obviousness (103), A = background. Available actions: 'list', 'endpoint' (search, forward, stats, novelty), 'workflow' (prior-art-analysis, impact-analysis, claim-analysis), 'full'. After getting docs, call the endpoint via patent_api_request.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "endpoint",
+              "workflow",
+              "full"
+            ],
+            "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Endpoint name when action='endpoint'. Options: search, forward, stats, novelty"
+          },
+          "workflow": {
+            "type": "string",
+            "description": "Workflow name when action='workflow'. Options: prior-art-analysis, impact-analysis, claim-analysis"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "build_patent_query",
+      "description": "Translates a natural-language invention or topic description into an EPO CQL query for EP/WO prior-art search. Use for prior-art research, patentability assessment, and EP/WO patent landscape searches — prefer this over manual CQL when the search involves technical keywords, IPC/CPC codes, or applicant names. Call ONCE per search intent, then immediately call search_patents with the returned CQL. For US patent searches use build_uspto_query instead. Input: description (free text of the invention or topic); focus ('broad'/'precise'/'comprehensive'). EPO CQL limits: no wildcards on ic/cpc fields, max ~10 terms per query.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Natural language description of what patents to search for. Examples: 'Pfizer patents about cancer treatment', 'wind turbine patents from Vestas or Siemens', 'Tesla battery technology patents', 'agricultural drone patents', 'Boeing aircraft wing designs'"
+          },
+          "focus": {
+            "type": "string",
+            "enum": [
+              "broad",
+              "precise",
+              "comprehensive"
+            ],
+            "description": "Search focus: 'broad' for exploratory searches, 'precise' for specific known-item searches, 'comprehensive' for thorough research. Default: comprehensive",
+            "default": "comprehensive"
+          }
+        },
+        "required": [
+          "description"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "build_uspto_query",
+      "description": "Translates a natural-language description into a USPTO Open Data Portal (ODP) Lucene search body for US patent searches. Use before every USPTO search — it knows the current ODP field names and avoids the legacy PatentsView parameters (query/assignee/cpcCode/dateRange no longer exist). Prefer this over manual ODP body construction for any query beyond a trivial single keyword. For EP/WO patents use build_patent_query instead. Input: description (free text); focus ('broad'/'precise'/'comprehensive'). Call ONCE per intent, then use the result with uspto_api_guide.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Natural language description of US patents to search for. Examples: 'Google AI patents from 2023', 'Tesla battery technology patents', 'Apple face recognition patents'"
+          },
+          "focus": {
+            "type": "string",
+            "enum": [
+              "broad",
+              "precise",
+              "comprehensive"
+            ],
+            "description": "Search focus: 'broad' for exploratory, 'precise' for specific, 'comprehensive' for thorough. Default: comprehensive",
+            "default": "comprehensive"
+          }
+        },
+        "required": [
+          "description"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "patent_api_request",
+      "description": "Make an authenticated request to the Patent AI backend and get the JSON result directly. Use this for ANY backend endpoint shown by the *_api_guide tools (OPS, USPTO, citation, legal) — supply the `path` (e.g. /ops/biblio?doc=EP1234566), optional `method` (GET default, or POST), and optional `body` (a JSON string for POST). Prefer this over running curl in the terminal: it authenticates automatically and returns structured results. Do NOT put the backend host or /v1 in the path.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative path to the backend endpoint, e.g. \"/ops/biblio?doc=EP1234566\" or \"/patent-search-uspto\". Do NOT include the host or /v1 prefix."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST"
+            ],
+            "description": "HTTP method. Defaults to GET. Use POST when the endpoint expects a request body."
+          },
+          "body": {
+            "type": "string",
+            "description": "JSON-serialised request body for POST requests. Must be valid JSON, e.g. '{\"q\":\"battery\",\"filters\":{}}'. Omit or leave empty for GET requests."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ops_api_guide",
+      "description": "Get documentation for EPO OPS (Open Patent Services) API endpoints. Use this tool FIRST to learn available endpoints and request shapes, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for specific endpoint), 'workflow' (step-by-step guides for common tasks like prior-art-search, citation-analysis, competitor-analysis), 'full' (complete documentation). After getting docs, call the endpoint via patent_api_request; respect the documented rate limits between sequential calls.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "endpoint",
+              "workflow",
+              "full"
+            ],
+            "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Endpoint name when action='endpoint'. Options: search, biblio, biblio-bulk, abstract, fulltext, fulltext-claims, fulltext-description, fulltext-availability, family, legal, citations"
+          },
+          "workflow": {
+            "type": "string",
+            "description": "Workflow name when action='workflow'. Options: prior-art-search, citation-analysis, competitor-analysis, freedom-to-operate"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "uspto_api_guide",
+      "description": "Get documentation for the USPTO Open Data Portal (ODP) API endpoints — the single source of truth for the current request shapes (the API migrated from PatentsView; legacy parameters no longer exist). Use this tool FIRST to learn available endpoints, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for specific endpoint like 'search' or 'get-patent'), 'workflow' (step-by-step guides for basic-search, assignee-search, citation-analysis, date-filtered-search), 'full' (complete documentation). After getting docs, call the endpoint via patent_api_request.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "endpoint",
+              "workflow",
+              "full"
+            ],
+            "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Endpoint name when action='endpoint'. Options: search, get-patent"
+          },
+          "workflow": {
+            "type": "string",
+            "description": "Workflow name when action='workflow'. Options: basic-search, assignee-search, citation-analysis, date-filtered-search"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_legal",
+      "description": "PRIMARY TOOL for patent law and procedure lookups: searches MPEP (USPTO), EPC, and EPO Guidelines using hybrid semantic + keyword search. Use whenever the user asks about patent law, examination procedure, statutory bases (35 USC, EPC Articles), or wants to look up MPEP sections or EPO Guidelines. Prefer this over legal_search_guide + patent_api_request for standard queries; use legal_search_guide only for advanced cases (custom search modes, similarity thresholds). Input: query (free text, e.g. 'obviousness 103 prima facie Graham factors'); jurisdiction ('USPTO' for MPEP, 'EPO' for EPC/Guidelines, omit for all); comprehensive (true = full section content for quoting, false = matched chunks); limit (default 10).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Free-text legal search query, minimum 3 characters. Examples: 'obviousness 103 prima facie', 'MPEP 2143 Graham factors', 'EPC Article 54 novelty', 'inventive step problem-solution approach'."
+          },
+          "jurisdiction": {
+            "type": "string",
+            "enum": [
+              "EPO",
+              "USPTO",
+              "EU",
+              "WIPO"
+            ],
+            "description": "Optional filter. Omit to search across all jurisdictions. Use USPTO for MPEP, EPO for EPC and EPO Guidelines."
+          },
+          "comprehensive": {
+            "type": "boolean",
+            "description": "Optional. If true, returns full section content grouped by document (better for quoting full rules). If false (default), returns matched chunks with similarity scores (better for quick lookup).",
+            "default": false
+          },
+          "limit": {
+            "type": "number",
+            "description": "Optional. Maximum results to return. Default: 10.",
+            "default": 10
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "legal_search_guide",
+      "description": "Documentation for the Legal RAG Search API (MPEP, EPC, EPO Guidelines). DEFER TO search_legal for basic legal lookup queries — that typed tool covers the common case (search MPEP/EPC/EPO Guidelines with optional jurisdiction filter and comprehensive mode). Use THIS guide tool ONLY for advanced cases not covered by search_legal: (1) specific source filters (e.g., restrict to MPEP only and exclude EPC), (2) custom search modes (semantic-only or keyword-only instead of hybrid), (3) semantic-weight tuning, (4) similarity threshold tuning, (5) stats and jurisdictions meta endpoints, (6) general API exploration. Available actions: 'list', 'endpoint' (search, stats, jurisdictions), 'workflow' (mpep-lookup, epc-research, cross-jurisdiction), 'full'. After getting docs, call the endpoint via patent_api_request.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "endpoint",
+              "workflow",
+              "full"
+            ],
+            "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "Endpoint name when action='endpoint'. Options: search, stats, jurisdictions"
+          },
+          "workflow": {
+            "type": "string",
+            "description": "Workflow name when action='workflow'. Options: mpep-lookup, epc-research, cross-jurisdiction"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_academic",
+      "description": "Searches academic research papers (Google Scholar, arXiv, PubMed) for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (build_uspto_query + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. Input: query (free text, e.g. 'CRISPR gene editing off-target effects'); sources (['scholar','arxiv','pubmed'], default ['scholar','arxiv']); maxResults (default 10, max 50).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query for academic papers (e.g., 'neural networks image classification', 'CRISPR gene editing')"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "scholar",
+                "arxiv",
+                "pubmed"
+              ]
+            },
+            "description": "Which academic sources to search (default: ['scholar', 'arxiv'])",
+            "default": [
+              "scholar",
+              "arxiv"
+            ]
+          },
+          "maxResults": {
+            "type": "number",
+            "description": "Maximum number of results to return (default: 10, max: 50)",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "write_patent_results",
+      "description": "Write patent search results or analysis to a local file. Use this tool when the user asks to save patent search results to a file. This tool does not require GitHub Copilot authentication and works directly with the file system.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "Absolute path to the file to write (e.g., '/Users/username/Desktop/patents.md')"
+          },
+          "content": {
+            "type": "string",
+            "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section."
+          },
+          "template": {
+            "type": "string",
+            "enum": [
+              "prior-art-report",
+              "fto-memo",
+              "office-action-scaffold"
+            ],
+            "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses. Omit for a free-form save of the raw content."
+          }
+        },
+        "required": [
+          "filePath",
+          "content"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "patent_search_subagent",
+      "description": "Autonomous patent search subagent. Delegates patent and academic literature searching to a specialized subagent that runs in its own context. The subagent searches EPO (via CQL), USPTO, and academic sources (arXiv, Google Scholar) using optimized queries. Use this when you need comprehensive patent research without cluttering the main conversation. The subagent will search multiple databases in parallel and return structured findings including patent numbers, titles, abstracts, and relevance assessments.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Natural language description of the technology or invention to search for"
+          },
+          "description": {
+            "type": "string",
+            "description": "Short user-visible description shown while searching"
+          },
+          "details": {
+            "type": "string",
+            "description": "Detailed instructions for the search including jurisdictions, classification codes, date ranges, or specific aspects to focus on"
+          }
+        },
+        "required": [
+          "query",
+          "description",
+          "details"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "vscode_askQuestions",
+      "description": "Present interactive questions to the user via a carousel UI. Use for jurisdiction clarification before patent searches.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "description": "List of questions to ask the user. Order is preserved.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "header": {
+                  "type": "string",
+                  "description": "Short identifier for the question. Must be unique so answers can be mapped back to the question. Maximum 50 characters.",
+                  "maxLength": 50
+                },
+                "question": {
+                  "type": "string",
+                  "description": "The question text to display to the user. Keep it concise, ideally one sentence. Maximum 200 characters.",
+                  "maxLength": 200
+                },
+                "multiSelect": {
+                  "type": "boolean",
+                  "description": "Allow selecting multiple options when options are provided."
+                },
+                "allowFreeformInput": {
+                  "type": "boolean",
+                  "description": "Allow freeform text answers in addition to option selection. Defaults to true; set to false to restrict to predefined options only."
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Optional markdown message to display below the question text, providing additional context or details."
+                },
+                "options": {
+                  "type": "array",
+                  "description": "Optional list of selectable answers. If omitted, the question is free text.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "description": "Display label and value for the option."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Optional secondary text shown with the option."
+                      },
+                      "recommended": {
+                        "type": "boolean",
+                        "description": "Mark this option as the recommended default."
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "header",
+                "question"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "questions"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_in_terminal",
+      "description": "Execute a shell command in the terminal. Do not use this to call the patent backend — use patent_api_request instead.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Shell command to execute"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "web_search",
+      "description": "Search the web (Anthropic native tool, injected by the backend for Claude models). Use for CN/JP/KR patents and academic papers not covered by dedicated tools.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  }
+]

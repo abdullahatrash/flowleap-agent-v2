@@ -1,0 +1,144 @@
+# Search Strategy Tests
+# Verifies the agent uses correct tools and includes key search parameters
+# Note: build_patent_query and build_uspto_query only have a "description" field,
+# so we verify the description contains the right elements (assignee, dates, CPC codes).
+# When the model calls uspto_api_guide first (to get docs before searching), that's
+# also valid first-step behavior — we just check the tool is correct.
+
+- vars:
+    prompt: "Find US patents by Google about neural network inference optimization"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          tc.function?.name === 'build_uspto_query' || tc.function?.name === 'uspto_api_guide'
+        );
+      metric: uspto_uses_correct_tool
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const directSearch = toolCalls.find(tc => tc.function?.name === 'build_uspto_query');
+        if (directSearch) {
+          const args = JSON.parse(directSearch.function.arguments || '{}');
+          const allArgs = JSON.stringify(args).toLowerCase();
+          return allArgs.includes('google') && allArgs.includes('neural network');
+        }
+        // If using uspto_api_guide, that's a valid first step (get docs then search)
+        // Check that text or args mention the search intent
+        const guideCall = toolCalls.find(tc => tc.function?.name === 'uspto_api_guide');
+        if (guideCall) return true;
+        return false;
+      metric: uspto_includes_assignee_and_keywords
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_uspto_query');
+        if (!call) return true; // guide-first path is valid
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        // Must mention the assignee (Google)
+        return d.includes('google') || d.includes('alphabet');
+      metric: uspto_args_include_assignee
+
+- vars:
+    prompt: "Search European patents by Samsung about wireless power transfer filed after 2023"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          tc.function?.name === 'build_patent_query'
+        );
+      metric: epo_uses_build_query
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const buildQuery = (parsed.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!buildQuery) return false;
+        const args = JSON.parse(buildQuery.function.arguments || '{}');
+        const desc = (args.description || '').toLowerCase();
+        return desc.includes('samsung') && desc.includes('wireless');
+      metric: epo_includes_key_terms
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        // Must mention the date constraint (2023 or "after 2023")
+        return d.includes('2023') || d.includes('after') || d.includes('recent');
+      metric: epo_args_include_date_constraint
+
+- vars:
+    prompt: "Find US patents about autonomous vehicles from 2024 to present with CPC code G05D"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return (parsed.tool_calls || []).some(tc =>
+          tc.function?.name === 'build_uspto_query' || tc.function?.name === 'uspto_api_guide'
+        );
+      metric: date_filter_uses_correct_tool
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const directSearch = toolCalls.find(tc => tc.function?.name === 'build_uspto_query');
+        if (directSearch) {
+          const args = JSON.parse(directSearch.function.arguments || '{}');
+          const allArgs = JSON.stringify(args).toLowerCase();
+          return allArgs.includes('2024') && allArgs.includes('g05d');
+        }
+        // uspto_api_guide is valid first step — accept it
+        const guideCall = toolCalls.find(tc => tc.function?.name === 'uspto_api_guide');
+        if (guideCall) return true;
+        return false;
+      metric: includes_date_and_cpc_filters
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_uspto_query');
+        if (!call) return true; // guide-first path is valid
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        // Must mention autonomous vehicles or driving
+        return d.includes('autonomous') || d.includes('self-driving') || d.includes('vehicle') || d.includes('driving');
+      metric: date_cpc_args_include_technical_domain
+
+- vars:
+    prompt: "Find EP patents about pharmaceutical drug delivery using nanoparticles filed by Pfizer"
+  assert:
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        return (out.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
+      metric: pharma_epo_uses_build_query
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = String(args.description || args.query || '').toLowerCase();
+        return (d.includes('drug') || d.includes('pharma') || d.includes('nanoparticle')) && d.includes('pfizer');
+      metric: pharma_args_contain_core_technical_terms
+
+- vars:
+    prompt: "Find European patents by Siemens about wind turbine blade de-icing filed after 2022, classification F03D"
+  assert:
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = JSON.stringify(args).toLowerCase();
+        const hasAssignee = d.includes('siemens');
+        const hasTopic = d.includes('de-icing') || d.includes('deicing') || d.includes('de-ice') || d.includes('blade') || d.includes('turbine');
+        const hasDate = d.includes('2022');
+        const hasClassification = d.includes('f03d');
+        return hasAssignee && hasTopic && hasDate && hasClassification;
+      metric: four_constraint_query_carries_all_constraints
