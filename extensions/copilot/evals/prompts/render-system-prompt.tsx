@@ -52,6 +52,11 @@ const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.PatentApiRequest,
 	ToolName.SearchCitations,
 	ToolName.SearchForwardCitations,
+	ToolName.GetContinuity,
+	ToolName.GetProsecutionTimeline,
+	ToolName.GetLegalStatus,
+	ToolName.GetPatentFamily,
+	ToolName.GetRegisterEvents,
 	ToolName.OpsApiGuide,
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
@@ -64,6 +69,9 @@ const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.AnalyzeClaim,
 	ToolName.CompareClaims,
 	ToolName.PatentAnalyticsViz,
+	ToolName.GetPatentSummary,
+	ToolName.GetPatentTerm,
+	ToolName.ComparePatents,
 ];
 
 /** Builds the synthetic tool surface that activates PatentAIInstructions. */

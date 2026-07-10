@@ -23,7 +23,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const OUTPUT = path.join(__dirname, 'tool-definitions.json');
 
 /**
- * The 20 patent tools the model can call directly (patentai overlay), referenced
+ * The patent tools the model can call directly (patentai overlay), referenced
  * as enum members rather than their string values — a rename or removal in
  * toolNames.ts is caught by the missing-name guard in {@link buildToolDefinitions}
  * instead of silently shrinking the eval tool surface.
@@ -37,6 +37,11 @@ const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.PatentApiRequest,
 	ToolName.SearchCitations,
 	ToolName.SearchForwardCitations,
+	ToolName.GetContinuity,
+	ToolName.GetProsecutionTimeline,
+	ToolName.GetLegalStatus,
+	ToolName.GetPatentFamily,
+	ToolName.GetRegisterEvents,
 	ToolName.OpsApiGuide,
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
@@ -49,6 +54,9 @@ const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.AnalyzeClaim,
 	ToolName.CompareClaims,
 	ToolName.PatentAnalyticsViz,
+	ToolName.GetPatentSummary,
+	ToolName.GetPatentTerm,
+	ToolName.ComparePatents,
 ];
 
 /** Core coding tools that patentAIPrompt.tsx references by name. */

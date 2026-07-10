@@ -71,15 +71,25 @@ export const PATENT_TOOLS: readonly string[] = [
 	// Citation tracking
 	'citations',
 	'forwardCitations',
+	// US prosecution (continuity chain + legal-event timeline)
+	'continuity',
+	'prosecutionTimeline',
 	// Reading patent content
+	'patentSummary',
 	'patentDetails',
 	'patentFigures',
+	'patentTerm',
 	'readPdf',
+	// Legal status, patent family & register events (known patent number)
+	'legalStatus',
+	'patentFamily',
+	'registerEvents',
 	// Legal research
 	'legal',
 	// Claim assessment & landscape analytics
 	'analyzeClaim',
 	'compareClaims',
+	'comparePatents',
 	'patentAnalytics',
 	// Raw backend access & API guides
 	'patentApiRequest',

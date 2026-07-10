@@ -197,6 +197,66 @@
   {
     "type": "function",
     "function": {
+      "name": "get_patent_summary",
+      "description": "DEFAULT entry point for a single-patent OVERVIEW question. One call returns a compound snapshot from multiple backend sources: bibliographic data (title, applicants, inventors, dates, IPC/CPC), the abstract, the latest legal-status events, patent-family size, and the estimated term — collapsing what used to take 3-4 separate round-trips. USE WHEN the user asks about ONE known patent in general terms: 'tell me about patent X', 'what is US10123456 about', 'give me an overview/summary of EP1234567', 'summarize this patent'. INPUT: a publication number (e.g. 'EP1234567', 'US10123456'; hyphens optional). Does NOT return full claims or description text — for those use get_patent_details; for drawings use get_patent_figures; for a dedicated expiry estimate use get_patent_term.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "patentNumber": {
+            "type": "string",
+            "description": "Patent publication number (e.g., 'EP1234567', 'US10123456', 'WO2020123456'; hyphens optional)."
+          }
+        },
+        "required": [
+          "patentNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_patent_term",
+      "description": "Estimate a patent's TERM / EXPIRY. Returns the filing date, the estimated base expiry date (20 years from filing), the basis, and a disclaimer covering the adjustments the base estimate does NOT include (PTA/PTE, SPCs, terminal disclaimers, annuity lapses). USE WHEN the user asks about a patent's lifespan: 'when does US10123456 expire', 'patent term', 'expiration date', 'is EP1234567 still in force', 'how long until this patent expires'. INPUT: a publication number (hyphens optional). This is a base estimate, not the enforceable expiry — for lapse/adjustment data point the user to get_patent_summary (legal-status events).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "patentNumber": {
+            "type": "string",
+            "description": "Patent publication number (e.g., 'EP1234567', 'US10123456', 'WO2020123456'; hyphens optional)."
+          }
+        },
+        "required": [
+          "patentNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "compare_patents",
+      "description": "Data-grounded, side-by-side comparison of 2 to 10 PUBLISHED patent documents. Fetches each document's bibliographic record from the backend and renders an attribute-by-patent comparison table (title, applicants, inventors, filing/publication/priority dates, IPC/CPC) plus bounded abstracts, so YOU can read off the similarities and differences. USE WHEN the user wants to compare EXISTING patents to each other: 'compare patents US10123456 and EP1234567', 'what's the difference between these patents', 'how do these two patents relate'. INPUT: an array of 2-10 publication numbers. IMPORTANT — this is DOCUMENT-to-DOCUMENT: do NOT use it for a user's own DRAFTED claim text against references (that is compare_claims, which builds an element-by-element claim chart). For a single patent use get_patent_summary or get_patent_details.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "patentNumbers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Array of 2-10 published patent publication numbers to compare (e.g., ['US10123456', 'EP1234567', 'WO2020123456']; hyphens optional)."
+          }
+        },
+        "required": [
+          "patentNumbers"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "get_patent_details",
       "description": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use build_patent_query + search_patents to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
       "parameters": {
@@ -228,6 +288,63 @@
           "pages": {
             "type": "string",
             "description": "Optional comma-separated page numbers to fetch, e.g. '1,2,3' (max 20). If omitted, returns the first several figure pages."
+          }
+        },
+        "required": [
+          "publicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_legal_status",
+      "description": "PRIMARY tool for the LEGAL STATUS of a known patent: returns the INPADOC legal-status event history (grants, lapses, withdrawals, renewal-fee payments, oppositions) from EPO OPS as a per-jurisdiction chronological table, from which in-force vs. lapsed/expired is read. Use whenever the user asks whether a patent is still in force / valid / active, whether it has lapsed or expired, about maintenance/renewal fees, or whether it was opposed. Prefer this over ops_api_guide + patent_api_request legal endpoints for standard legal-status lookups; use the raw path only for advanced cases the typed tool doesn't cover. Input: publicationNumber in epodoc format (e.g. 'EP1000000', 'US10000000B2'; hyphens normalized). For the patent family across jurisdictions use get_patent_family; for EP register prosecution events use get_register_events.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "publicationNumber": {
+            "type": "string",
+            "description": "Patent publication number, e.g. 'EP1000000', 'US10000000B2', 'WO2020123456A1' (hyphens optional)."
+          }
+        },
+        "required": [
+          "publicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_patent_family",
+      "description": "PRIMARY tool for the PATENT FAMILY of a known patent: returns the INPADOC family members (equivalents/counterparts filed in other jurisdictions) from EPO OPS as a table of country, publication number and kind code. Use whenever the user asks about a patent's family, INPADOC family, foreign equivalents/counterparts, or where a patent was also filed or granted in other countries. Prefer this over ops_api_guide + patent_api_request family endpoints for standard family lookups; use the raw path only for advanced cases the typed tool doesn't cover. Input: publicationNumber in epodoc format (e.g. 'EP1000000', 'US10000000B2'; hyphens normalized). For the legal status of a member use get_legal_status; for EP register prosecution events use get_register_events.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "publicationNumber": {
+            "type": "string",
+            "description": "Patent publication number, e.g. 'EP1000000', 'US10000000B2', 'WO2020123456A1' (hyphens optional)."
+          }
+        },
+        "required": [
+          "publicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_register_events",
+      "description": "PRIMARY tool for the EP REGISTER prosecution events of a known patent: returns the EPO Register event history (oppositions, transfers of rights, amendments, lapses, procedural steps) as a chronological table. Use whenever the user asks about a patent's register events, opposition proceedings, transfers or assignments of rights, or EP prosecution/procedural history. EP applications/patents only. Prefer this over ops_api_guide + patent_api_request register endpoints for standard register lookups; use the raw path only for advanced cases the typed tool doesn't cover. Input: publicationNumber in epodoc format (e.g. 'EP1000000'; hyphens normalized). For INPADOC legal-status events across all jurisdictions use get_legal_status; for the patent family use get_patent_family.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "publicationNumber": {
+            "type": "string",
+            "description": "EP patent publication number, e.g. 'EP1000000', 'EP1234567B1' (hyphens optional)."
           }
         },
         "required": [
@@ -339,6 +456,44 @@
         },
         "required": [
           "citedDocument"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_continuity",
+      "description": "PRIMARY TOOL for the USPTO parent/child continuity chain of a US application: the divisionals, continuations, and continuations-in-part that make up a patent family, with each relationship (CON/DIV/CIP/PRO), filing date, patent number, and status. Use whenever the user asks about continuity, the parent application, child/divisional/continuation applications, the priority chain, or double patenting (the parent it runs over). This returns the applicant's OWN related filings — NOT prior art. Do NOT confuse with search_citations (examiner-cited prior art X/Y/A) or get_prosecution_timeline (legal-event chronology). Prefer this over the raw uspto_api_guide continuity path for standard continuity lookups. Input: applicationNumber (numeric string, no slashes — normalize '16/123,456' to '16123456').",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "applicationNumber": {
+            "type": "string",
+            "description": "USPTO application number, numeric only, no slashes or commas. If the user writes '16/123,456', normalize to '16123456'."
+          }
+        },
+        "required": [
+          "applicationNumber"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_prosecution_timeline",
+      "description": "PRIMARY TOOL for a chronological prosecution / legal-status timeline of a patent: merges EP Register events and INPADOC legal-status events (filing, search report, grant, oppositions, assignments, renewals/maintenance-fee payments, lapse) into one dated chronology. Use whenever the user asks about the prosecution history, the file wrapper / legal-event timeline, what happened during prosecution, grant/opposition/lapse history, or maintenance status over time. Most complete for EP/WO; for US patents it surfaces the INPADOC legal events (assignment, grant, maintenance fees). Do NOT confuse with search_citations (examiner-cited prior art X/Y/A) or get_continuity (parent/child application chain). Input: publicationNumber — a PUBLICATION number (US10123456, EP1000000, WO2020123456; hyphens optional), NOT an application number.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "publicationNumber": {
+            "type": "string",
+            "description": "Patent publication number, e.g. 'US10123456', 'EP1000000', 'WO2020123456' (hyphens optional)."
+          }
+        },
+        "required": [
+          "publicationNumber"
         ]
       }
     }

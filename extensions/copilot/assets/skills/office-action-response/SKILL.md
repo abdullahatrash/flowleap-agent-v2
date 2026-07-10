@@ -20,6 +20,7 @@ Read the office action (`read_pdf` for PDFs, or pasted text). Extract:
 - `search_citations` with the application number → the X/Y/A citation record
 - `get_patent_details` for EACH cited reference → the actual claims/description text the examiner relies on
 - If the examiner cites specific paragraphs/figures, read those exact passages; pull drawings with `get_patent_figures` when the rejection leans on structure
+- If any rejection is obviousness-type double patenting (or you need the file history), use the typed tools rather than raw ODP paths: `get_continuity` on the application → the parent/child chain identifying the commonly-owned earlier application the ODP runs over; `get_prosecution_timeline` on the publication number → the dated legal-event history. Fall back to `uspto_api_guide` (continuity / file-wrapper endpoints) → `patent_api_request` only for fields those typed tools do not return.
 
 ## Step 2: Test the Rejection (patent-examination discipline)
 

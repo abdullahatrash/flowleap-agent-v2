@@ -23,6 +23,11 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.PatentApiRequest,
 	ToolName.SearchCitations,
 	ToolName.SearchForwardCitations,
+	ToolName.GetContinuity,
+	ToolName.GetProsecutionTimeline,
+	ToolName.GetLegalStatus,
+	ToolName.GetPatentFamily,
+	ToolName.GetRegisterEvents,
 	ToolName.OpsApiGuide,
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
@@ -32,7 +37,10 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.WritePatentResults,
 	ToolName.AnalyzeClaim,
 	ToolName.CompareClaims,
+	ToolName.ComparePatents,
 	ToolName.PatentAnalyticsViz,
+	ToolName.GetPatentSummary,
+	ToolName.GetPatentTerm,
 ];
 
 function toolInfo(name: string): vscode.LanguageModelToolInformation {
@@ -66,13 +74,27 @@ suite('PatentAIInstructions', () => {
 		const expectedFragments = [
 			'TRENDS / LANDSCAPE / MARKET ANALYTICS',
 			'patent_analytics_viz',
-			'COMPARE a user',
+			'COMPARE — pick the tool by WHAT is being compared',
 			'compare_claims',
+			'compare_patents',
+			'DEFAULT for an OVERVIEW',
+			'get_patent_summary',
+			'EXPIRY / TERM',
+			'get_patent_term',
 			'the FIGURES or DRAWINGS',
 			'get_patent_figures',
 			'one call returns biblio, abstract, full claims and description',
 			'analyze_claim',
 			'write_patent_results',
+			'US PROSECUTION HISTORY',
+			'get_continuity',
+			'get_prosecution_timeline',
+			'LEGAL STATUS in depth',
+			'get_legal_status',
+			'PATENT FAMILY in depth',
+			'get_patent_family',
+			'EP REGISTER EVENTS',
+			'get_register_events',
 		];
 		expect(expectedFragments.filter(f => !output.includes(f))).toEqual([]);
 	});
@@ -82,10 +104,18 @@ suite('PatentAIInstructions', () => {
 	// fallback appears instead) so the prompt never advertises a tool it can't call.
 	const gatedSignatures: readonly [ToolName, string, string | undefined][] = [
 		[ToolName.PatentAnalyticsViz, 'TRENDS / LANDSCAPE / MARKET ANALYTICS', undefined],
-		[ToolName.CompareClaims, 'COMPARE a user', undefined],
+		[ToolName.CompareClaims, 'The USER\'s OWN DRAFTED claim text vs specific patents', undefined],
+		[ToolName.ComparePatents, 'TWO OR MORE PUBLISHED patents vs each other', undefined],
+		[ToolName.GetPatentSummary, 'DEFAULT for an OVERVIEW', undefined],
+		[ToolName.GetPatentTerm, 'EXPIRY / TERM', undefined],
 		[ToolName.GetPatentFigures, 'the FIGURES or DRAWINGS', undefined],
 		[ToolName.GetPatentDetails, 'one call returns biblio, abstract, full claims and description', undefined],
 		[ToolName.AnalyzeClaim, 'analyze_claim', 'analyze the claim yourself'],
+		[ToolName.GetContinuity, 'CONTINUITY (parent/child family)', undefined],
+		[ToolName.GetProsecutionTimeline, 'PROSECUTION / LEGAL-EVENT TIMELINE', undefined],
+		[ToolName.GetLegalStatus, 'LEGAL STATUS in depth', undefined],
+		[ToolName.GetPatentFamily, 'PATENT FAMILY in depth', undefined],
+		[ToolName.GetRegisterEvents, 'EP REGISTER EVENTS', undefined],
 	];
 
 	for (const [tool, signature, fallback] of gatedSignatures) {

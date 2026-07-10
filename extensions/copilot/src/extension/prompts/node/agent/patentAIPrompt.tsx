@@ -48,6 +48,14 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
 		hasGetPatentDetails: toolNames.has(ToolName.GetPatentDetails),
 		hasGetPatentFigures: toolNames.has(ToolName.GetPatentFigures),
+		hasGetLegalStatus: toolNames.has(ToolName.GetLegalStatus),
+		hasGetPatentFamily: toolNames.has(ToolName.GetPatentFamily),
+		hasGetRegisterEvents: toolNames.has(ToolName.GetRegisterEvents),
+		hasGetContinuity: toolNames.has(ToolName.GetContinuity),
+		hasGetProsecutionTimeline: toolNames.has(ToolName.GetProsecutionTimeline),
+		hasGetPatentSummary: toolNames.has(ToolName.GetPatentSummary),
+		hasGetPatentTerm: toolNames.has(ToolName.GetPatentTerm),
+		hasComparePatents: toolNames.has(ToolName.ComparePatents),
 	};
 	const patentToolFlags = [
 		base.hasBuildPatentQuery,
@@ -63,6 +71,14 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasPatentAnalyticsViz,
 		base.hasGetPatentDetails,
 		base.hasGetPatentFigures,
+		base.hasGetLegalStatus,
+		base.hasGetPatentFamily,
+		base.hasGetRegisterEvents,
+		base.hasGetContinuity,
+		base.hasGetProsecutionTimeline,
+		base.hasGetPatentSummary,
+		base.hasGetPatentTerm,
+		base.hasComparePatents,
 	];
 	return {
 		...base,
@@ -189,7 +205,9 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Keywords: my claim, this claim, analyze claim, prior art for claim<br />
 				<br />
 				**B) SEARCH for patents (general topic, no specific claim)?**<br />
-				→ `build_patent_query` (ONCE) → `search_patents` with CQL<br />
+				→ Jurisdiction gate FIRST: a company or technology name alone does NOT specify jurisdiction — vscode_askQuestions before any search call<br />
+				→ `build_patent_query` (ONCE) → `search_patents` with CQL — always start from build_patent_query, never hand-write your first CQL<br />
+				→ Carry EVERY user constraint into the query: assignee, classification, and dates ("filed after 2023" → pd{'>='}2023)<br />
 				→ Save a report file if many results<br />
 				→ Keywords: find patents, search, look for patents, patents about<br />
 				<br />
@@ -198,6 +216,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					→ `patent_analytics_viz` DIRECTLY (keywords/phrases plus optional assignee/cpc/ipc/country/date filters) — do NOT call build_patent_query, do NOT write Python or generate charts<br />
 					→ It returns ready-made markdown TABLES (filing trend by year, top assignees, country breakdown, top CPC sections); present those tables directly — they ARE the deliverable<br />
 					→ Keywords: trends, landscape, top companies, top assignees, market analysis, filing trends, geographic breakdown, competitive analysis, patent portfolio<br />
+					→ NOT analytics: any request to FIND or COMPARE specific patent documents ("compare US and European patents on X", "find patents about Y") is a SEARCH — branch B (both paths when multiple offices are named), never this tool. Analytics answers aggregate-statistics questions only.<br />
 					<br />
 				</>}
 				**D) USER'S OWN invention/idea description (not a formal claim)?**<br />
@@ -206,20 +225,26 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ CREATE a prior art report<br />
 				→ Keywords: my invention, my idea, patentability<br />
 				<br />
-				{tools.hasCompareClaims && <>
-					**E) COMPARE a user's claim against SPECIFIC patents (overlap, FTO, 102/103 risk)?**<br />
-					→ `compare_claims` (userClaim + the patentNumbers to compare against) — it fetches each cited patent's actual claims and renders a deterministic element-by-element claim chart; YOU then read off relevance, overlapping/missing elements and the 102/103 summary. Do NOT build the chart by hand<br />
-					→ If the user has not yet named the patents to compare against, first `search_patents` (branch A/B) to find candidates, then compare<br />
-					→ Keywords: compare my claim, does my claim overlap, freedom to operate, FTO, is my claim novel over<br />
+				{(tools.hasCompareClaims || tools.hasComparePatents) && <>
+					**E) COMPARE — pick the tool by WHAT is being compared:**<br />
+					{tools.hasCompareClaims && <>→ The USER's OWN DRAFTED claim text vs specific patents (overlap, FTO, 102/103 risk): `compare_claims` (userClaim + the patentNumbers to compare against) — it fetches each cited patent's actual claims and renders a deterministic element-by-element claim chart; YOU then read off relevance, overlapping/missing elements and the 102/103 summary. Do NOT build the chart by hand. If the user has not yet named the patents, first `search_patents` (branch A/B) to find candidates, then compare<br /></>}
+					{tools.hasComparePatents && <>→ TWO OR MORE PUBLISHED patents vs each other (how do these documents relate or differ): `compare_patents` (patentNumbers, 2-10) — it returns a side-by-side biblio / classification / date table with abstracts; YOU summarize the similarities and differences. Document-to-document, NOT a user-drafted claim<br /></>}
+					{(tools.hasCompareClaims && tools.hasComparePatents) && <>→ DISTINCTION (do not mix these up): `compare_claims` = the user's OWN claim text against references (builds an element chart). `compare_patents` = published document against published document (biblio comparison). Never route a user's drafted claim to compare_patents, and never use compare_claims just to contrast two already-published patents<br /></>}
+					→ Keywords: {tools.hasCompareClaims ? <>compare my claim, does my claim overlap, freedom to operate, FTO, is my claim novel over</> : <></>}{(tools.hasCompareClaims && tools.hasComparePatents) ? <>; </> : <></>}{tools.hasComparePatents ? <>compare these patents, difference between patents, how do patents X and Y relate</> : <></>}<br />
 					<br />
 				</>}
-				**F) DETAILED PATENT DATA for a KNOWN patent — its OWN biblio, claims, or description?**<br />
-				→ FIRST CHECK: "what prior art / which references were CITED AGAINST" a patent or application, or "who cites" it → that is branch I (citations), NOT this branch. This branch is only for a patent's own text.<br />
+				**F) DATA about a KNOWN patent — overview, full text, or expiry?**<br />
+				→ FIRST CHECK: "what prior art / which references were CITED AGAINST" a patent or application, or "who cites" it → that is branch I (citations), NOT this branch. This branch is only for a patent's own data.<br />
+				{tools.hasGetPatentSummary && <>→ DEFAULT for an OVERVIEW ("tell me about X", "what is US… about", "summarize / give me an overview of EP…"): `get_patent_summary` — ONE call returns biblio + abstract + latest legal status + family + estimated term. Prefer it over get_patent_details for general "about this patent" questions; it is cheaper and collapses several round-trips into one<br /></>}
 				{tools.hasGetPatentDetails
-					? <>→ PREFERRED when the user wants a patent's OWN text (NOT its citations — "cited against"/"who cites" is branch I): `get_patent_details` — one call returns biblio, abstract, full claims and description (epodoc format, no hyphens; use AFTER search_patents)<br /></>
+					? <>→ FULL TEXT (the actual claims and/or description — infringement/validity work, quoting claim language): `get_patent_details` — one call returns biblio, abstract, full claims and description (epodoc format, no hyphens; use AFTER search_patents).{tools.hasGetPatentSummary ? <> Use this only when the user needs the full text, not for a plain overview (that is get_patent_summary)</> : <></>}<br /></>
 					: <></>}
-				→ ADVANCED / edge cases (bulk, patent family, legal-status events, citations endpoints): `ops_api_guide` action="list"/"endpoint" → `patent_api_request` (authenticated, no terminal needed)<br />
-				→ Keywords: claims, full text, description, legal status, patent family, biblio<br />
+				{tools.hasGetPatentTerm && <>→ EXPIRY / TERM ("when does X expire", "expiration date", "patent term", "is it still in force"): `get_patent_term` — returns the filing date, the estimated base expiry (20 years from filing) and the adjustment caveats. It is a base estimate, not the enforceable date; for lapse/adjustment data use get_patent_summary's legal-status events<br /></>}
+				{tools.hasGetLegalStatus && <>→ LEGAL STATUS in depth ("is it still in force / valid", "has it lapsed / expired", renewal/maintenance fees, oppositions): `get_legal_status` (publicationNumber) — the full INPADOC legal-status event history as a per-jurisdiction table.{tools.hasGetPatentSummary ? <> Use this, not get_patent_summary, when the user wants the detailed status history rather than a one-line snapshot</> : <></>}<br /></>}
+					{tools.hasGetPatentFamily && <>→ PATENT FAMILY in depth (equivalents/counterparts across jurisdictions, "where else was it filed / granted"): `get_patent_family` (publicationNumber) — the full INPADOC family member list as a table.{tools.hasGetPatentSummary ? <> Use this, not get_patent_summary, when the user wants the enumerated members rather than a count</> : <></>}<br /></>}
+					{tools.hasGetRegisterEvents && <>→ EP REGISTER EVENTS (opposition proceedings, transfers/assignments of rights, amendments, procedural history — EP applications/patents only): `get_register_events` (publicationNumber) — the EP Register event chronology as a table<br /></>}
+					→ ADVANCED / edge cases only (bulk retrieval, or endpoints without a dedicated typed tool): `ops_api_guide` action="list"/"endpoint" → `patent_api_request` (authenticated, no terminal needed).{(tools.hasGetLegalStatus || tools.hasGetPatentFamily || tools.hasGetRegisterEvents) ? <> For standard legal-status, family and register lookups PREFER the typed tools above over this raw path.</> : <></>}<br />
+				→ Keywords: tell me about, overview, summarize, claims, full text, description, when does it expire, expiration date, patent term, legal status, patent family, biblio<br />
 				→ NUMBER FORMATS: for OPS endpoints, kind codes are stripped automatically (US6021533A ≡ US6021533). For USPTO /grants lookups, use the bare numeric patent number only (6021533 — no "US" prefix, no kind code).<br />
 				→ If a direct lookup returns 404: verify the format via the ops number-service endpoint (see ops_api_guide), and for US patents try the USPTO grants endpoint — do NOT fall back to web data without trying both.<br />
 				<br />
@@ -242,6 +267,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ NUMBER FORMATS: given an APPLICATION number (e.g. 16/123,456), call `search_citations` directly — separators are normalized for you, no lookup call first. Given a PUBLICATION number (US YYYY/NNNNNNN), resolve the application number first (get_patent_details or the USPTO application endpoint), then `search_citations`.<br />
 				→ Use `citation_api_guide` + `patent_api_request` ONLY for advanced cases: citation statistics, date-range filtering, novelty-only endpoint<br />
 				→ Citation categories: X=novelty-destroying (102), Y=obviousness (103), A=background<br />
+				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>→ NOT this branch: the applicant's own parent/child chain or a prosecution/legal-event chronology is branch M (`get_continuity` / `get_prosecution_timeline`), not citations.<br /></>}
 				→ Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited<br />
 				<br />
 				**J) PATENT LAW RESEARCH (MPEP, EPC, Guidelines)?**<br />
@@ -274,6 +300,15 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					→ No web-search tool is available to this model. Use search_academic for NPL, and fetch_webpage only when you have a concrete URL.<br />
 					→ When CN/JP/KR coverage cannot be obtained with available tools, state that limitation explicitly in your report instead of guessing.<br />
 				</>}
+				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>
+					<br />
+					**M) US PROSECUTION HISTORY — continuity chain or legal-event timeline (typed tools, NOT the raw uspto_api_guide path)?**<br />
+					{tools.hasGetContinuity && <>→ CONTINUITY (parent/child family): `get_continuity` (input: applicationNumber) for divisionals, continuations, continuations-in-part, the priority chain, and the commonly-owned parent that obviousness-type double patenting runs over. Returns the applicant's OWN related filings, NOT prior art.<br /></>}
+					{tools.hasGetProsecutionTimeline && <>→ PROSECUTION / LEGAL-EVENT TIMELINE: `get_prosecution_timeline` (input: publicationNumber) for a dated chronology of filing, grant, oppositions, assignments, renewals/maintenance and lapse (EP Register + INPADOC legal events; most complete for EP/WO, INPADOC-only for US).<br /></>}
+					→ DISAMBIGUATION: examiner-cited prior art (X/Y/A, "what was cited against this") → branch I (`search_citations`), NOT this branch. A patent's own claims/description text → branch F (`get_patent_details`).{tools.hasGetLegalStatus && <> The CURRENT status verdict ("is it still in force / has it lapsed or expired") → `get_legal_status` (branch F), NOT the timeline — use `get_prosecution_timeline` only when the user wants the dated HISTORY of events.</>} Use these typed tools instead of the raw `uspto_api_guide` continuity / file-wrapper path for standard lookups.<br />
+					→ Keywords: continuity, parent application, child application, divisional, continuation, continuation-in-part, priority chain, double patenting, prosecution history, file wrapper, prosecution timeline, event history<br />
+					<br />
+				</>}
 			</Tag>
 			{tools.hasOpsApiGuide && <Tag name='opsApiGuideUsage'>
 				<br />
@@ -285,6 +320,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				• Forward citations (who cites this patent)<br />
 				• Patent family members (related patents in other countries)<br />
 				• Legal status events (grants, lapses, oppositions)<br />
+				{(tools.hasGetLegalStatus || tools.hasGetPatentFamily || tools.hasGetRegisterEvents) && <>For standard patent-family, legal-status and EP-register lookups, prefer the typed tools (get_patent_family / get_legal_status / get_register_events); use this raw guide only for advanced cases they don't cover.<br /></>}
 				<br />
 				**Actions:**<br />
 				• action="list" → Get compact list of all endpoints<br />

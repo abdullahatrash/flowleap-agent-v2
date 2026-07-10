@@ -214,8 +214,10 @@
       value: |
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        // get_patent_details biblio/abstract resolves for all jurisdictions (incl. US) per its modelDescription.
-        return firstTool === 'ops_api_guide' || firstTool === 'uspto_api_guide' || firstTool === 'get_patent_details';
+        // "give me info about" is an OVERVIEW ask: get_patent_summary is now the preferred
+        // one-call entry point (#106). get_patent_details (full text) and the ops/uspto guide
+        // paths remain acceptable, since biblio/abstract resolves for all jurisdictions.
+        return firstTool === 'get_patent_summary' || firstTool === 'ops_api_guide' || firstTool === 'uspto_api_guide' || firstTool === 'get_patent_details';
       metric: number_lookup_routes_to_lookup
     - type: javascript
       value: |
@@ -418,16 +420,20 @@
         return !asked && !searched;
       metric: pasted_claim_analysis_skips_gate_and_search
 
-# Branch F: "tell me about <patent>" prefers the one-shot get_patent_details tool.
+# Branch F: "tell me about <patent>" now prefers the one-call get_patent_summary
+# overview tool. This REPLACES the prior expectation that get_patent_details was
+# first for overview questions (#106): summary is the DEFAULT entry point for a
+# single-patent overview (biblio + abstract + status + family + term in one call),
+# and get_patent_details is reserved for the FULL claims/description text.
 - vars:
-    prompt: "Tell me about patent EP3000000 — what is it about and what does it claim?"
+    prompt: "Tell me about patent EP3000000 — give me an overview of what it is and its status."
   assert:
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'get_patent_details';
-      metric: tell_me_about_patent_prefers_get_patent_details
+        return firstTool === 'get_patent_summary';
+      metric: tell_me_about_patent_prefers_get_patent_summary
 
 # Branch G: an explicit figures/drawings request routes to get_patent_figures.
 - vars:
@@ -447,3 +453,130 @@
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
         return String(args.publicationNumber || '').includes('9999999');
       metric: figures_args_carry_number
+
+- vars:
+    # Branch M continuity: the applicant's OWN parent/child family is get_continuity,
+    # NOT examiner-cited prior art (search_citations) or the raw uspto_api_guide path.
+    prompt: "Show me the continuity chain — parent and child applications, divisionals and continuations — for US application 16/123,456."
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_continuity';
+      metric: continuity_question_routes_to_get_continuity_first
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'search_citations');
+      metric: continuity_not_confused_with_search_citations
+
+- vars:
+    # Branch M prosecution timeline: the dated legal-event chronology is
+    # get_prosecution_timeline (input: publication number), not the citation tools.
+    prompt: "Walk me through the prosecution history and legal-status timeline of US10123456 — grants, assignments, maintenance fees, oppositions."
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_prosecution_timeline';
+      metric: prosecution_history_routes_to_get_prosecution_timeline_first
+
+- vars:
+    # Branch F legal status: an in-force / lapsed / expired question about a known
+    # patent routes to the typed get_legal_status, NOT the raw ops_api_guide path.
+    prompt: "What is the current legal status of EP1000000 — is it still in force, has it lapsed or expired, and were any oppositions filed?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_legal_status';
+      metric: legal_status_question_routes_to_get_legal_status_first
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'get_legal_status');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        return String(args.publicationNumber || '').includes('1000000');
+      metric: legal_status_args_carry_number
+
+- vars:
+    # Branch F patent family: an INPADOC family / foreign-equivalents question routes
+    # to the typed get_patent_family, NOT the raw ops_api_guide family endpoints.
+    prompt: "What other patents are in the same family as EP1000000? Show me the INPADOC family members and foreign equivalents."
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_patent_family';
+      metric: family_question_routes_to_get_patent_family_first
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'get_patent_family');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        return String(args.publicationNumber || '').includes('1000000');
+      metric: family_args_carry_number
+
+- vars:
+    # Branch F register events: an EP-register opposition/transfer question routes to
+    # the typed get_register_events, NOT the raw ops_api_guide register endpoints.
+    prompt: "What opposition proceedings and transfer-of-rights events are recorded on the EP register for EP1000000?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_register_events';
+      metric: register_events_question_routes_to_get_register_events_first
+
+# --- #106 COMPOUND-TOOL BRANCHES (summary / term / compare_patents) ---
+
+# Branch F expiry: "when does <patent> expire" routes to the dedicated
+# get_patent_term tool, not the general summary/details path.
+- vars:
+    prompt: "When does patent EP1234567 expire?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_patent_term';
+      metric: expiry_question_routes_to_get_patent_term_first
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
+      metric: expiry_question_skips_jurisdiction_gate
+
+# Branch E compare_patents: comparing TWO PUBLISHED documents to each other is
+# compare_patents, NOT compare_claims (which charts a user's OWN drafted claim
+# text). No jurisdiction gate, no search first.
+- vars:
+    prompt: "What are the differences between patents US10123456 and EP1000000?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'compare_patents';
+      metric: compare_published_patents_routes_to_compare_patents_first
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'compare_claims');
+      metric: compare_patents_not_confused_with_compare_claims
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'compare_patents');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const blob = JSON.stringify(args);
+        return blob.includes('10123456') && blob.includes('EP1000000');
+      metric: compare_patents_args_carry_both_numbers

@@ -59,8 +59,11 @@ const PATENT_TOOL_PREFIXES = [
 	'patent_analytics',
 	'analyze_claim',
 	'compare_claims',
+	'compare_patents',
 	'read_pdf',
 	'get_patent',
+	'get_legal',
+	'get_register',
 ];
 
 function extractPatentToolNames(tsxSource: string): string[] {
