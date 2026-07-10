@@ -26,10 +26,10 @@ For EACH feature, search for active patents:
 
 1. **EPO OPS**: `build_patent_query` → `search_patents` for EP/WO
    - Focus on GRANTED patents (kind codes B1/B2)
-   - Verify EP grant status: `ops_api_guide` action="endpoint" endpoint="register-biblio" → `patent_api_request`
-   - Legal status: `ops_api_guide` endpoint="legal" → `patent_api_request`
+   - Legal status (grant, lapse, expiry, opposition — is it still in force?): `get_legal_status` (publicationNumber)
+   - EP register events (oppositions, transfers of rights, amendments): `get_register_events` (publicationNumber)
 2. **USPTO**: `build_uspto_query` → `patent_api_request` (POST) for US granted patents
-3. **Target-market coverage**: patent families via `ops_api_guide` endpoint="family" → `patent_api_request`
+3. **Target-market coverage**: patent family across jurisdictions via `get_patent_family` (publicationNumber) — the INPADOC members show where the patent is (or is not) filed
 
 ### Key Filters
 - Only ACTIVE patents matter (not expired, lapsed, or abandoned)
@@ -59,11 +59,11 @@ Retrieve claims with `get_patent_details` (EP/WO). For each potentially blocking
 ## Phase 4: Legal Status Verification
 
 For each HIGH/MEDIUM risk patent:
-1. **Multi-market status in one call**: `ops_api_guide` endpoint="family-legal" → `patent_api_request` — legal events for ALL family members, shows which jurisdictions are active/lapsed
-2. Check the expiration date (20 years from filing + any extensions)
+1. **Which jurisdictions are active/lapsed**: `get_patent_family` (publicationNumber) to enumerate the INPADOC members, then `get_legal_status` on each member for its grant/lapse/expiry status. For whole-family legal status in one call, raw `ops_api_guide` endpoint="family-legal" → `patent_api_request` remains the advanced path
+2. Check the expiration date with `get_patent_term` (publicationNumber) — the base 20-years-from-filing estimate plus the adjustment caveats (PTA/PTE, terminal disclaimers); treat it as an estimate, not the enforceable date
 3. Check if the patent was narrowed during prosecution
-4. Check for ongoing oppositions or IPR proceedings
-5. **EU Unitary Patent**: `ops_api_guide` endpoint="register-upp" → `patent_api_request` — if the patent has Unitary Patent Protection it covers all participating EU member states
+4. Check for ongoing oppositions or IPR proceedings — `get_register_events` (publicationNumber) surfaces EP opposition and transfer events
+5. **EU Unitary Patent**: if the patent has Unitary Patent Protection it covers all participating EU member states; the raw `ops_api_guide` endpoint="register-upp" → `patent_api_request` reports UPP status (no typed tool for this niche endpoint yet)
 
 ## Phase 5: Design-Around Options
 

@@ -28,15 +28,15 @@ Ask (via the `vscode_askQuestions` tool):
 Identify the patents that carry the portfolio's weight:
 1. Rank candidates by forward-citation count: `search_forward_citations` on the most-cited/oldest core patents — high forward citations = foundational
 2. For the top 5-10: `get_patent_details` → claim breadth (broad, clean independent claims = enforceable value)
-3. Family breadth: `ops_api_guide` endpoint="family-biblio" → `patent_api_request` — wide international families show where the company spent money, which is a strong self-assessment of value
-4. In-force check: `ops_api_guide` endpoint="family-legal" → `patent_api_request` — which family members are alive, where
+3. Family breadth: `get_patent_family` per crown-jewel publication number → the INPADOC members across jurisdictions; wide international families show where the company spent money, a strong self-assessment of value (raw `ops_api_guide` endpoint="family-biblio" → `patent_api_request` remains the advanced path for full member biblio). For US crown jewels, also run `get_continuity` on the application to map the divisional/continuation chain (a deep US continuity family is itself a value signal)
+4. In-force / legal history check: `get_prosecution_timeline` per crown-jewel publication number → its grant, opposition, renewal/maintenance and lapse chronology; for a member's per-jurisdiction status use `get_legal_status`. Use raw `ops_api_guide` endpoint="family-legal" → `patent_api_request` only for whole-family legal status across every member at once
 
 ## Phase 4: Risk & Signal Analysis
 
 - **Expiration timeline**: filing date + 20 years per key patent — how much term is left on the crown jewels? A portfolio whose best assets expire in 3 years is worth far less than its count suggests
 - **Lapses**: family members abandoned in major markets = deliberate cost-cutting; recent widespread lapses = distress signal
 - **Filing velocity**: rising/falling applications per year = R&D investment direction (from the Phase 2 trend data)
-- **Disputes**: opposition or litigation events in `register-events` on the crown jewels
+- **Disputes**: opposition, transfer and lapse events via `get_register_events` on the crown jewels (EP Register; oppositions, assignments, procedural history)
 - **Concentration risk**: does value sit in 2-3 patents (fragile) or spread across a thicket (robust)?
 
 ## Phase 5: Report
