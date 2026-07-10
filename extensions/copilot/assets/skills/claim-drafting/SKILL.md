@@ -14,7 +14,7 @@ You need prior art search results and a **novelty gap statement** — which feat
 
 ## Step 1: Independent Claim Construction
 
-- **Category**: pick per statutory class — method, apparatus/system, and (for software) computer-readable medium. Draft one independent claim per category that makes commercial sense.
+- **Category**: pick per statutory class — method, apparatus/system, and (for software) NON-TRANSITORY computer-readable medium ("computer-readable medium" alone reads on transitory signals, which are 101-ineligible under In re Nuijten). Draft one independent claim per category that makes commercial sense.
 - **Preamble**: what the invention IS, kept broad ("A method for charging a battery...").
 - **Transitional phrase**: "comprising" (open-ended) unless there is a specific reason to close it.
 - **Body**: the MINIMUM set of elements that (a) makes the claim novel over every found reference — the novelty gap features go here — and (b) is essential for the invention to work. Every additional element narrows scope and is a gift to infringers: for each element ask "does the claim survive examination without this?" If yes, move it to a dependent claim.

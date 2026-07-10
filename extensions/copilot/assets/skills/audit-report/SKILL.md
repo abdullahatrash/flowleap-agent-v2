@@ -9,10 +9,9 @@ user-invocable: true
 Create a comprehensive audit trail of all patent research activities for governance and compliance.
 
 ## Why Audit Trails Matter
-- Patent offices (USPTO, EPO) increasingly require disclosure of AI tool usage
+- Existing duty-of-candor/disclosure obligations (37 CFR 1.56, 11.18) apply to AI-assisted work when the AI's role is material to inventorship or patentability — there is no per-se duty to disclose AI use, but a documented trail is what lets counsel make that materiality call (USPTO guidance, 89 Fed. Reg. 25609)
 - Law firms need documented search methodologies for due diligence
 - Reduces hallucination risk — forces verification of every data point
-- AIPPI recommends comprehensive audit trails for all AI-assisted patent work
 
 ## When to Generate
 After ANY prior art search, FTO analysis, landscape analysis, or research that may be relied upon for legal decisions.

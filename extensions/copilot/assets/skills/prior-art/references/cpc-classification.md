@@ -11,7 +11,7 @@ B62K3/00 → Main Group
 B62K3/12 → Subgroup
 ```
 
-## 8 CPC Sections
+## 9 CPC Sections
 
 | Section | Domain |
 |---------|--------|
@@ -20,9 +20,10 @@ B62K3/12 → Subgroup
 | **C** | Chemistry; Metallurgy (organic, inorganic, polymers, fuels, glass) |
 | **D** | Textiles; Paper |
 | **E** | Fixed Constructions (buildings, roads, bridges, locks, tunnels) |
-| **F** | Mechanical Engineering; Lighting; Heating; Weapons; Engines/Pumps |
+| **F** | Mechanical Engineering; Lighting; Heating; Weapons; Blasting (engines/pumps live in F01–F04) |
 | **G** | Physics (instruments, optics, computing, control, nuclear) |
 | **H** | Electricity (generation, conversion, distribution, circuits, communication) |
+| **Y** | CPC-ONLY tagging section (emerging tech, climate mitigation — Y02, Y04, Y10); has NO IPC equivalent |
 
 ## Common CPC Codes by Domain
 
@@ -55,7 +56,7 @@ B62K3/12 → Subgroup
 | G06Q | Business methods, fintech |
 | G06T | Image processing, computer vision |
 | G06V | Image/video recognition |
-| G10L | Speech processing, NLP |
+| G10L | Speech/audio processing (text NLP is G06F 40/00) |
 | G16B | Bioinformatics |
 | G16H | Healthcare informatics |
 | H01L | Semiconductor devices |
@@ -72,7 +73,7 @@ B62K3/12 → Subgroup
 
 1. Start with the section (A-H) matching the technology domain
 2. Use `web_search` with `"cpc scheme [technology term]"` to find specific codes
-3. Check both the **parent class** (e.g., G06N) and **specific subgroups** (e.g., G06N3/08 for backpropagation)
+3. Check both the **parent class** (e.g., G06N) and **specific subgroups** (e.g., G06N3/084 for backpropagation; G06N3/08 is the broader "learning methods" group)
 4. Use EPO's CPC browser: `web_search "espacenet cpc [term]"`
 5. Look at CPC codes assigned to similar known patents — they reveal the right codes
 6. `analyze_claim` also suggests IPC/CPC codes when the user describes their own invention
@@ -83,3 +84,5 @@ Combine classification codes with text for precision:
 - `ic=B62K3 AND (backpack OR rucksack)` — bicycles + carrying
 - `ic=G06N3 AND (transformer OR attention)` — neural networks + transformer architecture
 - Use `$` wildcard for subgroups: `B62K15/$` matches all foldable bicycle subgroups
+
+**Field choice — `ic=` vs `cpc=`**: `ic=` searches the IPC field. CPC-ONLY codes — the entire Y section (Y02E, Y02T, …) and codes like B33Y, G06V, G16B, G16H, F24S — do NOT exist in the IPC, so `ic=Y02E` returns zero results silently. Query CPC-only codes with the CPC field (`cpc=Y02E…`); codes that exist in both systems can use either.

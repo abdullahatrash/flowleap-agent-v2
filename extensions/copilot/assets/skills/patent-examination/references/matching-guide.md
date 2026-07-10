@@ -14,8 +14,8 @@
 |---|---|
 | "comprising" | Open-ended — additional features allowed |
 | "consisting of" | Closed — only these features |
-| "means for [function]" | Any structure performing that function |
-| "configured to" | Capable of performing the function |
+| "means for [function]" | NARROW: only the structure disclosed in the specification for that function, plus equivalents (35 U.S.C. 112(f), MPEP 2181) — do not read as any structure performing the function |
+| "configured to" | Actually designed/programmed/set up to perform the function — narrower than merely "capable of" |
 | "a" / "an" | One or more (not limited to single) |
 | "substantially" | Approximately, within normal tolerances |
 
@@ -26,6 +26,7 @@
 - Specific embodiment falls within claim scope
 - All method steps have one-to-one correspondence
 - Prior art is more specific than claim (specific anticipates generic)
+- Single document + common general knowledge renders the claim obvious with no second document needed (X also covers single-reference inventive step, not only novelty)
 
 ### Strong Y Indicators
 - Most but not all features disclosed

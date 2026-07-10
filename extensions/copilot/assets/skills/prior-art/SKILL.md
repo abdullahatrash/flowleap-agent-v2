@@ -79,12 +79,7 @@ For very broad sweeps, `patent_search_subagent` can run the multi-database searc
 
 ## Phase 3: Relevance Assessment
 
-For each reference, map elements (✅ teaches / ⚠️ similar / ❌ missing) against each claim element, then classify:
-- **102 (Novelty)**: ANY single reference disclosing ALL elements → X document
-- **103 (Obviousness)**: 2+ references combined covering all elements, with motivation to combine → Y documents
-- **Background**: same field, different approach → A document
-
-For rigorous feature-by-feature classification, use the **patent-examination** skill.
+For each reference, map elements (✅ teaches / ⚠️ similar / ❌ missing) against each claim element, then classify X/Y/A per the **patent-examination** skill — the short version: X = one reference defeats the claim alone (all elements disclosed, or obvious over that single reference); Y = defeats it only in combination with another reference plus a motivation to combine; A = background. Use patent-examination for the rigorous feature-by-feature classification and scoring.
 
 ## Phase 4: Report
 

@@ -14,7 +14,7 @@ Always include: "This claim chart is for informational purposes only and does no
 ## Phase 1: The Patent
 
 1. `get_patent_details` with the publication number → claims and description
-2. **In-force check first**: `ops_api_guide` endpoint="family-legal" → `patent_api_request`, plus expiry (filing + 20 years). An expired or lapsed patent ends the analysis — say so and stop.
+2. **In-force check first**: `ops_api_guide` endpoint="family-legal" → `patent_api_request`, plus expiry (filing + 20 years). An expired or lapsed patent forecloses FORWARD enforcement — but past infringement during the term remains actionable for back damages within the 6-year lookback (35 U.S.C. 286). If expired, say so, ask whether historical damages are of interest, and chart against the historical product only if yes.
 3. Pick the **assertion claims**: the broadest independent claims. Chart independents first; dependents only where the independent charts cleanly.
 4. **Construction notes** before mapping:
    - Prosecution history (`ops_api_guide` endpoint="register-events" → `patent_api_request`; `search_citations` for US): arguments and amendments made to win allowance NARROW how elements can be read now — note each constraint

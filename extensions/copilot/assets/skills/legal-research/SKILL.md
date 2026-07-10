@@ -22,7 +22,7 @@ Search and cite patent law using the hybrid semantic + keyword legal search engi
 - Key EPC: Art. 52(2)(c) — programs for computers
 
 ### Novelty (35 USC 102 / EPC Art. 54)
-- MPEP 2131 (anticipation), 2132 (102(a)(1) prior art); EPC Art. 54
+- MPEP 2131 (anticipation), 2152 (AIA 102(a)(1) prior art — 2132 is the PRE-AIA section, wrong for first-inventor-to-file applications); EPC Art. 54
 - query="novelty anticipation single reference", jurisdiction="USPTO"
 
 ### Obviousness (35 USC 103 / EPC Art. 56)
@@ -36,7 +36,7 @@ Search and cite patent law using the hybrid semantic + keyword legal search engi
 - query="written description requirement functional claim", jurisdiction="USPTO"
 
 ### Claim Construction
-- MPEP 2111 (broadest reasonable interpretation)
+- MPEP 2111 (broadest reasonable interpretation — examination of PENDING applications only; granted patents in litigation/IPR use the *Phillips* ordinary-meaning standard)
 - query="broadest reasonable interpretation claim construction", jurisdiction="USPTO"
 
 ## Citation Format

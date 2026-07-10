@@ -13,6 +13,7 @@ The adversarial mirror of a prior art search: the target is a granted patent's c
 1. `get_patent_details` with the publication number → granted claims (independent claims are the targets), description, and classification
 2. Confirm it IS granted (kind code B1/B2) and in force: `ops_api_guide` endpoint="family-legal" → `patent_api_request`
 3. **Critical date**: the earliest priority date, not the filing date — check the family (`ops_api_guide` endpoint="family-biblio" → `patent_api_request`). ALL invalidating art must predate it.
+   - **Attack the priority claim itself**: priority entitlement is challengeable per claim. If the priority document doesn't fully support a claim, that claim's critical date shifts to the actual filing date — opening intervening art, often including the patentee's own publications. Compare the claim against the priority document's disclosure.
 4. **Prosecution history** (`ops_api_guide` endpoint="register-events" → `patent_api_request`, plus `search_citations` for US applications):
    - Art already of record — a challenge built on already-considered art is much weaker; you want NEW art
    - What was amended or argued to get allowance — the distinguishing feature the applicant relied on is exactly where to aim, and their arguments constrain how broadly they can now construe the claims
@@ -20,7 +21,7 @@ The adversarial mirror of a prior art search: the target is a granted patent's c
 ## Phase 2: Venue & Window (verify with `search_legal` — never from memory)
 
 - **EPO opposition**: 9 months from grant mention; any ground (novelty, inventive step, added matter, insufficiency)
-- **US IPR**: after 9 months post-grant; grounds limited to patents and printed publications under 102/103
+- **US IPR**: after 9 months post-grant; grounds limited to patents and printed publications under 102/103. **35 U.S.C. 315(b) time bar**: an IPR petition is BARRED more than one year after the petitioner (or a privy) was served with an infringement complaint — for a user holding a demand letter or complaint, check this clock FIRST.
 - **US PGR**: within 9 months of grant; any ground
 - **District court**: any time as a defense; clear-and-convincing standard
 Note which of the user's goals fit which venue, and whether the clock has run.
@@ -37,7 +38,7 @@ Run the **prior-art** skill's broad-to-narrow engine with these overrides:
 
 ## Phase 4: Invalidity Chart
 
-Per target claim, using the **patent-examination** X/Y discipline:
+Per target claim, using the **patent-examination** X/Y discipline. Construction standard: this is a GRANTED patent — use the *Phillips* ordinary-meaning standard (PTAB and district courts; NOT examination-style broadest reasonable interpretation, which overstates invalidity), and let the prosecution-history arguments from Phase 1.4 narrow it further:
 
 | Target Claim | Ground | Reference(s) | Element Mapping | Strength |
 |--------------|--------|--------------|-----------------|----------|

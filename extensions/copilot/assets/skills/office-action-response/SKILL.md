@@ -12,7 +12,7 @@ Turn a rejection into a response strategy. Never argue against a reference you h
 
 Read the office action (`read_pdf` for PDFs, or pasted text). Extract:
 - Application number, examiner, mailing date, and the **response deadline** — flag it immediately (US: typically 3 months shortened statutory, extendable to 6 with fees; EPO: usually 4 months). Verify current periods with `search_legal` if the user's deadline math matters.
-- Per claim: which ground (35 USC 102/103/101/112, or EPC Art. 54/56/84/123(2)) and which cited references
+- Per claim: which ground (35 USC 102/103/101/112, obviousness-type double patenting, or EPC Art. 54/56/84/123(2)) and which cited references
 - The examiner's actual reasoning — quote it, don't summarize from memory
 
 ## Step 1: Retrieve the Cited Art
@@ -27,6 +27,7 @@ Decompose each rejected claim into features and map the examiner's citation(s) a
 - **Mapping fails** — a claim element is missing from the reference, or the examiner mischaracterized a teaching → **argue** (quote the reference's actual text against the assertion)
 - **Mapping holds** — the reference genuinely teaches every element → **amend** (or cancel)
 - **103/Art. 56 combination is weak** — elements are scattered across references but the motivation to combine is conclusory, hindsight-driven, or the references teach away → **argue non-obviousness**
+- **Obviousness-type double patenting (ODP)** over the applicant's own earlier patent/application is different: it is usually resolved by filing a TERMINAL DISCLAIMER (37 CFR 1.321), not by argue/amend — flag it as its own strategy row and note the common-ownership requirement and patent-term consequence for the attorney
 
 ## Step 3: Ground the Arguments in Law
 

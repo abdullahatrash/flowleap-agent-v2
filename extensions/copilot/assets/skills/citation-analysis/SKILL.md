@@ -18,13 +18,13 @@ Deep-dive into office action citations — what prior art examiners used and why
 
 | Category | Legal Basis | Meaning |
 |----------|------------|---------|
-| **X** | 35 USC 102 (novelty) | Single reference destroys novelty — alone anticipates the claim |
+| **X** | 102 novelty OR single-ref 103 | Particularly relevant ALONE — destroys novelty or renders the claim obvious by itself |
 | **Y** | 35 USC 103 (obviousness) | Combined with other Y refs, makes claims obvious |
 | **A** | Background | State of the art, not blocking — cited for context |
 | **D** | In application | Document cited by the applicant themselves |
-| **E** | Earlier filing | Earlier application with later publication date |
+| **E** | Potentially conflicting | Patent document with an earlier filing/priority date, published on/after the target's filing date — relevant to NOVELTY only |
 
-Same X/Y/A scheme as EPO search reports — for the full classification methodology, use the patent-examination skill.
+Categories follow the WIPO ST.14 / PCT Rule 33.1 search-report standard (also used by the EPO) — for the full classification methodology, use the patent-examination skill.
 
 ## Workflows
 

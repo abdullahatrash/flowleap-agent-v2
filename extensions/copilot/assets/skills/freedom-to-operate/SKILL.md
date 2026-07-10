@@ -36,6 +36,9 @@ For EACH feature, search for active patents:
 - Only patents in TARGET MARKETS matter
 - Only patents with claims covering YOUR features matter
 
+### Pending applications — future risk, not a skip
+Granted claims decide today's risk, but PENDING applications (kind codes A1/A2) and open continuations in the same families are tomorrow's: claims can still be amended to cover the product before launch, and US published applications carry provisional rights (35 U.S.C. 154(d)) back to publication if substantially identical claims grant. Flag high-relevance pending applications and open continuity chains in a separate "monitor" list with their projected grant timelines — do not silently drop them.
+
 ## Phase 3: Claim Mapping
 
 Retrieve claims with `get_patent_details` (EP/WO). For each potentially blocking patent:
@@ -50,6 +53,8 @@ Retrieve claims with `get_patent_details` (EP/WO). For each potentially blocking
 - **MEDIUM**: most elements match, one may be arguable
 - **LOW**: significant differences in key elements
 - **NONE**: clear non-infringement
+
+**Doctrine of equivalents caveat**: escaping LITERAL infringement is not the end — an element performing substantially the same function, in substantially the same way, for substantially the same result can still infringe under the doctrine of equivalents. When a rating rests on ONE differing element, say whether the difference is substantive or merely verbal, and keep the patent at MEDIUM rather than LOW/NONE if it is arguably equivalent.
 
 ## Phase 4: Legal Status Verification
 

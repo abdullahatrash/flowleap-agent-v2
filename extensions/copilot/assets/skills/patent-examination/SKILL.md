@@ -23,9 +23,11 @@ If the user provides raw text directly, skip retrieval and proceed to analysis.
 
 ## EPO Document Classification System
 
-- **X (novelty-destroying)**: the single document **alone** discloses ALL essential features of the claim. One X document rejects the claim for lack of novelty. Threshold: the passage describes the COMPLETE invention as claimed ("directly and unambiguously discloses", "anticipates").
-- **Y (inventive step / obviousness)**: **combined** with one or more other Y documents, renders the claim obvious. Alone it does not destroy novelty. Requires a motivation argument for why the skilled person would combine.
+- **X (particularly relevant alone)**: the single document **alone** defeats the claim — either it discloses ALL essential features (novelty: subject matter derivable "directly and unambiguously" from the document, prejudicial to novelty) OR it renders the claim obvious by itself, e.g. combined only with common general knowledge. Single-reference obviousness is X, not Y.
+- **Y (obvious in combination)**: **combined** with one or more other Y documents, renders the claim obvious. Alone it does not defeat the claim. Requires a motivation argument for why the skilled person would combine.
 - **A (background)**: general technological background — same field but does NOT disclose the specific features claimed. Not relevant to novelty or inventive step.
+
+(Categories per WIPO Standard ST.14 / PCT Rule 33.1, used by EPO and PCT search reports.)
 
 ## Analysis Workflow
 
@@ -55,14 +57,15 @@ F3: ❌ NOT disclosed (convolutional codes ≠ turbo codes)
 F4: ❌ NOT disclosed (fixed-size ≠ variable size)
 F5: ✅ Disclosed (OFDM modulation)
 
-Result: 3/5 features disclosed → Y document
+Result: 3/5 features disclosed → Y candidate — confirm by identifying
+a second document supplying F3/F4 and the motivation to combine
 ```
 
 ### Step 3: Classification & Confidence
 
 | Features Disclosed | Category | Confidence |
 |---|---|---|
-| All essential features | **X** | High if exact match |
+| All essential features (or obvious over this document alone) | **X** | High if exact match |
 | Most features, 1-2 missing but obvious to combine | **Y** | Depends on combination argument |
 | Same field, few specific features | **A** | High if clearly different approach |
 
@@ -82,7 +85,7 @@ If Y: [Which documents to combine and why the skilled person would]
 For multi-passage jobs and batch comparison tables, follow the formats in [references/matching-guide.md](references/matching-guide.md).
 
 ## Important Caveats
-- Use **broadest reasonable interpretation** of claim terms
+- **Claim construction depends on forum**: broadest reasonable interpretation (BRI) applies to USPTO *examination* of pending applications; GRANTED patents (litigation, IPR/PGR since Nov 2018, invalidity work) are construed under the *Phillips* ordinary-meaning standard; the EPO reads claims as the skilled person would in context (Art. 84/69). State which standard you are applying.
 - **Implicit disclosure**: features necessarily present count as disclosed (inherent anticipation)
 - **Enabling disclosure**: mere mention without implementation details may be insufficient
 - **Date matters**: prior art must predate the priority/filing date — note if dates are unknown
