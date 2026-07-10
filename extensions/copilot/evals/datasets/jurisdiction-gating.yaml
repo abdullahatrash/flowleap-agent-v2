@@ -107,9 +107,19 @@
       metric: mixed_jurisdictions_skip_ask
     - type: javascript
       value: |
+        // Outcome over path: "compare US and European patents on X" is validly
+        // answered either by searching both offices or by a corpus-level
+        // patent_analytics_viz comparison — but the analytics route only counts
+        // when its calls actually cover BOTH jurisdictions.
         const parsed = JSON.parse(output);
-        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return ['build_patent_query', 'uspto_api_guide', 'build_uspto_query'].includes(firstTool);
+        const toolCalls = parsed.tool_calls || [];
+        const firstTool = toolCalls[0]?.function?.name;
+        if (['build_patent_query', 'uspto_api_guide', 'build_uspto_query'].includes(firstTool)) return true;
+        if (firstTool !== 'patent_analytics_viz') return false;
+        const countries = toolCalls
+          .filter(tc => tc.function?.name === 'patent_analytics_viz')
+          .map(tc => { try { return JSON.parse(tc.function.arguments).countryCode; } catch { return undefined; } });
+        return countries.includes('US') && countries.includes('EP');
       metric: mixed_jurisdictions_first_tool_is_search
 
 # "all patent offices" Both-scope synonym — must not ask

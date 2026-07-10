@@ -1,8 +1,8 @@
 {
-	"updated": "2026-06-12",
+	"updated": "2026-07-10",
 	"config": "promptfooconfig.yaml",
-	"totalTests": 34,
-	"passing": 34,
+	"totalTests": 40,
+	"passing": 40,
 	"passRate": 1.0,
-	"notes": "Post plans 001-010. Re-baseline deliberately, in its own commit, after intentional prompt changes."
+	"notes": "First BYOK-era baseline (issue #27): provider on OpenRouter, default model google/gemini-2.5-pro, 20-tool migrated surface, 6 new-tool cases. Re-baseline deliberately, in its own commit, after intentional prompt changes."
 }

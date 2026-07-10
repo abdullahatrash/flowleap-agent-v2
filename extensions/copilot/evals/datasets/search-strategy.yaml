@@ -131,8 +131,11 @@
   assert:
     - type: javascript
       value: |
+        // Outcome over path: build_patent_query is the doctrinal route, but a
+        // direct search_patents call whose CQL carries all four constraints
+        // achieves the same outcome (observed on gemini-2.5-flash baselining).
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        const call = (out.tool_calls || []).find(tc => ['build_patent_query', 'search_patents'].includes(tc.function?.name));
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
         const d = JSON.stringify(args).toLowerCase();

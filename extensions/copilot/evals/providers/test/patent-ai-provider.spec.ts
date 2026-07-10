@@ -124,7 +124,7 @@ describe('PatentAIProvider', () => {
 		await new PatentAIProvider(undefined, { fetch: fallback.fetchFn, env }).callApi('p');
 
 		const bodies = [configured, fromEnv, fallback].map(run => JSON.parse(String(run.calls[0].init.body)).model);
-		expect(bodies).toStrictEqual(['anthropic/claude-sonnet-4.5', 'openai/gpt-5.2', 'google/gemini-2.5-flash']);
+		expect(bodies).toStrictEqual(['anthropic/claude-sonnet-4.5', 'openai/gpt-5.2', 'google/gemini-2.5-pro']);
 	});
 
 	it('sends a request body with the system prompt first, the full tool surface, and fixed sampling options', async () => {

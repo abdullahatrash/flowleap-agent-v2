@@ -166,7 +166,7 @@ The dashboard shows a column per model so you can compare tool selection, reason
 |---|---|
 | Google Gemini | `google/gemini-2.5-flash-lite`, `google/gemini-2.5-flash`, `google/gemini-2.5-pro` |
 | Anthropic Claude | `anthropic/claude-haiku-4.5`, `anthropic/claude-sonnet-5`, `anthropic/claude-opus-4.8` |
-| OpenAI | `openai/gpt-5-mini`, `openai/gpt-5.2-mini`, `openai/gpt-5.2` |
+| OpenAI | `openai/gpt-5-mini`, `openai/gpt-5.4-mini`, `openai/gpt-5.2` |
 
 To test a subset, comment out providers in `promptfooconfig.multi.yaml`.
 

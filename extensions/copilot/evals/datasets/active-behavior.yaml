@@ -45,7 +45,10 @@
         return toolCalls.some(tc =>
           ['build_patent_query', 'build_uspto_query', 'search_patents',
            'search_academic', 'vscode_askQuestions', 'uspto_api_guide',
-           'write_patent_results', 'create_file'].includes(tc.function?.name)
+           'write_patent_results', 'create_file',
+           // patent_search_subagent IS the designed route for "search all
+           // relevant databases and produce a report" delegation.
+           'patent_search_subagent'].includes(tc.function?.name)
         );
       metric: landscape_initiates_action
     # Converted from llm-rubric (2026-06-12): "do not just describe — act" is
