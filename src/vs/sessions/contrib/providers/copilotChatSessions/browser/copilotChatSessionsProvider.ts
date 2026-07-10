@@ -1226,7 +1226,7 @@ export class CopilotChatSessionsProvider extends Disposable implements ISessions
 
 	readonly id = COPILOT_PROVIDER_ID;
 	readonly label = localize('copilotChatSessionsProvider', "FlowLeap Chat");
-	readonly icon = Codicon.copilot;
+	readonly icon = Codicon.robot;
 	readonly order = 0;
 
 	get sessionTypes(): readonly ISessionType[] {

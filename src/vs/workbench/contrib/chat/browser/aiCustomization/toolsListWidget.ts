@@ -286,7 +286,7 @@ export class ToolsListWidget extends Disposable {
 		const copilotCliSet: IToolSet = {
 			id: 'copilot-cli',
 			referenceName: 'copilotCli',
-			icon: Codicon.copilot,
+			icon: Codicon.robot,
 			source: ToolDataSource.Internal,
 			description: localize('clientToolSet.copilotCli.description', "CLI Agent"),
 			detail: localize('clientToolSet.copilotCli.detail', "Built-in tools the CLI Agent runs inside its own runtime."),

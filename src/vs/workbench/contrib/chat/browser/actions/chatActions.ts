@@ -692,7 +692,7 @@ export function registerChatActions() {
 			super({
 				id: ACTION_ID_OPEN_CHAT + '.copilotIcon',
 				title: localize2('interactiveSession.open', "New Chat Editor"),
-				icon: Codicon.copilot,
+				icon: Codicon.robot,
 				f1: false,
 				category: CHAT_CATEGORY,
 				precondition: ChatContextKeys.enabled,

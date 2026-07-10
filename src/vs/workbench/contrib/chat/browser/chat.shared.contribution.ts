@@ -575,7 +575,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[ChatConfiguration.SessionSyncEnabled]: {
 			default: false,
-			markdownDescription: nls.localize('chat.sessionSync.enabled', "Enable session sync to GitHub.com. When enabled, FlowLeap session data is synced to your GitHub account for cross-device access and richer insights. Requires `#github.copilot.chat.localIndex.enabled#` to also be enabled."),
+			markdownDescription: nls.localize('chat.sessionSync.enabled', "Enable session sync. When enabled, FlowLeap session data is synced to your FlowLeap account for cross-device access and richer insights. Requires `#github.copilot.chat.localIndex.enabled#` to also be enabled."),
 			type: 'boolean',
 			tags: ['experimental'],
 			experiment: {
@@ -589,7 +589,7 @@ configurationRegistry.registerConfiguration({
 				localization: {
 					description: {
 						key: 'chat.sessionSync.enabled.policy',
-						value: nls.localize('chat.sessionSync.enabled.policy', "Enable session sync to GitHub.com for cross-device FlowLeap session history. When disabled by organization policy, session data is kept local only."),
+						value: nls.localize('chat.sessionSync.enabled.policy', "Enable session sync for cross-device FlowLeap session history. When disabled by organization policy, session data is kept local only."),
 					}
 				},
 			}
@@ -1791,7 +1791,7 @@ configurationRegistry.registerConfiguration({
 		'chat.approvedAccountOrganizations': {
 			type: 'array',
 			items: { type: 'string' },
-			description: nls.localize('chat.approvedAccountOrganizations', "List of GitHub organization logins whose members are permitted to use AI features. When set to a non-empty list, AI features are disabled until the user signs into a GitHub account that belongs to one of the specified organizations and account-level policy data has been resolved. Set to '*' to allow any authenticated GitHub or GitHub Enterprise account."),
+			description: nls.localize('chat.approvedAccountOrganizations', "List of organization logins whose members are permitted to use AI features. When set to a non-empty list, AI features are disabled until the user signs into an account that belongs to one of the specified organizations and account-level policy data has been resolved. Set to '*' to allow any authenticated account."),
 			default: [],
 			included: false,
 			policy: {
@@ -1801,7 +1801,7 @@ configurationRegistry.registerConfiguration({
 				localization: {
 					description: {
 						key: 'chat.approvedAccountOrganizations.policy.description',
-						value: nls.localize('chat.approvedAccountOrganizations.policy.description', "Setting this policy to a non-empty list activates the Approved Account gate: all AI features are disabled until the user signs into a GitHub account whose organizations intersect this list AND the account-side policy data has resolved. Comparison is case-insensitive. Use '*' as a wildcard to accept any signed-in GitHub or GHE account (use this for GHE deployments where the organization list is not surfaced).")
+						value: nls.localize('chat.approvedAccountOrganizations.policy.description', "Setting this policy to a non-empty list activates the Approved Account gate: all AI features are disabled until the user signs into an account whose organizations intersect this list AND the account-side policy data has resolved. Comparison is case-insensitive. Use '*' as a wildcard to accept any signed-in account (use this for deployments where the organization list is not surfaced).")
 					}
 				}
 			}

@@ -11,5 +11,5 @@ import { ISessionType } from '../../../../services/sessions/common/session.js';
 export const CopilotCLISessionType: ISessionType = {
 	id: 'copilotcli',
 	label: localize('copilotCLI', "CLI Agent"),
-	icon: Codicon.copilot,
+	icon: Codicon.robot,
 };

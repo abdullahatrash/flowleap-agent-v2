@@ -2161,7 +2161,7 @@ suite('AgentSessions', () => {
 
 		test('should return correct icon for Background provider', () => {
 			const icon = getAgentSessionProviderIcon(AgentSessionProviders.Background);
-			assert.strictEqual(icon.id, Codicon.copilot.id);
+			assert.strictEqual(icon.id, Codicon.robot.id);
 		});
 
 		test('should return correct icon for Cloud provider', () => {
@@ -2171,7 +2171,7 @@ suite('AgentSessions', () => {
 
 		test('should return correct icon for AgentHostCopilot provider', () => {
 			const icon = getAgentSessionProviderIcon(AgentSessionProviders.AgentHostCopilot);
-			assert.strictEqual(icon.id, Codicon.copilot.id);
+			assert.strictEqual(icon.id, Codicon.robot.id);
 		});
 
 		test('should return simplified AgentHostCopilot name', () => {
@@ -2256,7 +2256,7 @@ suite('AgentSessions', () => {
 
 				const session = viewModel.sessions[0];
 				assert.strictEqual(session.providerType, AgentSessionProviders.Background);
-				assert.strictEqual(session.icon.id, Codicon.copilot.id);
+				assert.strictEqual(session.icon.id, Codicon.robot.id);
 				assert.strictEqual(session.providerLabel, getAgentSessionProviderName(AgentSessionProviders.Background));
 			});
 		});

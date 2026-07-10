@@ -72,8 +72,7 @@ import { ReviewServiceImpl } from '../../../platform/review/vscode/reviewService
 import { ISimulationTestContext, NulSimulationTestContext } from '../../../platform/simulationTestContext/common/simulationTestContext';
 import { ISnippyService } from '../../../platform/snippy/common/snippyService';
 import { SnippyService } from '../../../platform/snippy/common/snippyServiceImpl';
-import { ISurveyService } from '../../../platform/survey/common/surveyService';
-import { SurveyService } from '../../../platform/survey/vscode/surveyServiceImpl';
+import { ISurveyService, NullSurveyService } from '../../../platform/survey/common/surveyService';
 import { ITabsAndEditorsService } from '../../../platform/tabs/common/tabsAndEditorsService';
 import { TabsAndEditorsServiceImpl } from '../../../platform/tabs/vscode/tabsAndEditorsServiceImpl';
 import { ITasksService } from '../../../platform/tasks/common/tasksService';
@@ -157,7 +156,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(IMultiFileEditInternalTelemetryService, new SyncDescriptor(MultiFileEditInternalTelemetryService));
 	builder.define(ICustomInstructionsService, new SyncDescriptor(CustomInstructionsService));
 	builder.define(ILaunchConfigService, new SyncDescriptor(LaunchConfigService));
-	builder.define(ISurveyService, new SyncDescriptor(SurveyService));
+	builder.define(ISurveyService, new SyncDescriptor(NullSurveyService));
 	builder.define(IEditSurvivalTrackerService, new SyncDescriptor(EditSurvivalTrackerService));
 	builder.define(IPromptPathRepresentationService, new SyncDescriptor(PromptPathRepresentationService));
 	builder.define(IReleaseNotesService, new SyncDescriptor(ReleaseNotesService));
