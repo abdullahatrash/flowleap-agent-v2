@@ -1,4 +1,4 @@
-# Tool Selection Tests - Paths A through I from the decision tree
+# Tool Selection Tests - Paths A through L from the decision tree
 # Verifies the agent selects the correct first tool for each query type
 
 - vars:
@@ -87,9 +87,8 @@
 - vars:
     prompt: "Get the full claims text for patent EP1234567"
   assert:
-    # Branch D routes claims/full-text to ops_api_guide; get_patent_details is the
-    # typed equivalent added post-migration (typed-tools-first doctrine, critical
-    # rule 5), so accept either — the prompt branch predates the typed tool.
+    # Branch F routes claims/full-text; get_patent_details is now the PREFERRED
+    # one-shot route (ops_api_guide is the advanced path), so accept either.
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
@@ -117,7 +116,11 @@
       metric: path_e_args_contain_assignee_and_topic
 
 - vars:
-    prompt: "What prior art was cited against US patent application US2020/0123456?"
+    # Application-number format on purpose: search_citations takes a numeric USPTO
+    # application number (schema constraint). A publication number (US YYYY/NNNNNNN)
+    # legitimately requires resolving the application number first, so it cannot
+    # anchor a first-tool assertion.
+    prompt: "What prior art was cited against US patent application 16/123,456?"
   assert:
     # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
     - type: javascript
@@ -279,7 +282,7 @@
       metric: compare_claims_args_carry_patents_and_claim
 
 # get_patent_details: full document (biblio + claims + description) of a specific
-# patent. Branch D names ops_api_guide; get_patent_details is the typed
+# patent. Branch F now PREFERS get_patent_details; ops_api_guide is the
 # equivalent, so accept either. Must NOT open the jurisdiction gate or search.
 - vars:
     prompt: >
@@ -345,7 +348,7 @@
         return JSON.stringify(args).toLowerCase().includes('quantum');
       metric: analytics_viz_args_contain_topic
 
-# search_forward_citations: who-cites-this / impact analysis. Branch F names it
+# search_forward_citations: who-cites-this / impact analysis. Branch I names it
 # PRIMARY for who-cites (input: citedDocument); not jurisdiction-gated.
 - vars:
     prompt: "Who cites US10123456, and how impactful is it as prior art?"
@@ -364,3 +367,83 @@
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
         return String(args.citedDocument || '').includes('10123456');
       metric: forward_citations_args_carry_document
+
+# --- #101 PROMPT-ALIGNMENT BRANCHES ---
+# These assert the routing that patentAIPrompt.tsx now teaches explicitly
+# (analytics branch C, claim-analysis in A/D, one-shot details branch F, figures
+# branch G) rather than relying on tool modelDescriptions alone.
+
+# Branch C: landscape/analytics wording must route to patent_analytics_viz and
+# must NOT trip the query builder (the prompt and tool both say "DO NOT use
+# build_patent_query for analytics").
+- vars:
+    prompt: >
+      Give me the patent landscape for solid-state battery technology — who are
+      the top assignees and how have filings trended over the past decade?
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'patent_analytics_viz';
+      metric: landscape_routes_to_analytics_viz
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
+      metric: landscape_does_not_call_query_builder
+
+# Branch A/D claim analysis: a pasted claim asked for structural breakdown routes
+# through analyze_claim first, before any search and without the jurisdiction gate.
+- vars:
+    prompt: >
+      Here's claim 1 of my draft application: "A wearable device comprising a
+      photoplethysmography sensor, a processor configured to derive a heart-rate
+      variability metric, and a haptic actuator triggered when the metric crosses
+      a threshold." Break it into its individual elements and pull out the key
+      technical keywords.
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'analyze_claim';
+      metric: pasted_claim_routes_to_analyze_claim_first
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const toolCalls = parsed.tool_calls || [];
+        const asked = toolCalls.some(tc => tc.function?.name === 'vscode_askQuestions');
+        const searched = toolCalls.some(tc => ['build_patent_query', 'search_patents', 'build_uspto_query'].includes(tc.function?.name));
+        return !asked && !searched;
+      metric: pasted_claim_analysis_skips_gate_and_search
+
+# Branch F: "tell me about <patent>" prefers the one-shot get_patent_details tool.
+- vars:
+    prompt: "Tell me about patent EP3000000 — what is it about and what does it claim?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_patent_details';
+      metric: tell_me_about_patent_prefers_get_patent_details
+
+# Branch G: an explicit figures/drawings request routes to get_patent_figures.
+- vars:
+    prompt: "Can you show me figures 1 and 2 of US9999999?"
+  assert:
+    - type: javascript
+      value: |
+        const parsed = JSON.parse(output);
+        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
+        return firstTool === 'get_patent_figures';
+      metric: figures_request_routes_to_get_patent_figures
+    - type: javascript
+      value: |
+        const out = JSON.parse(output);
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'get_patent_figures');
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        return String(args.publicationNumber || '').includes('9999999');
+      metric: figures_args_carry_number

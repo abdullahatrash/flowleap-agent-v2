@@ -221,7 +221,7 @@ Verifies the jurisdiction gate behavior:
 - Explicit "European patents" → skip ask, use EPO tools
 - Explicit "worldwide" → skip ask
 - Claim text without jurisdiction → must ask (branch A)
-- Own-invention patentability without jurisdiction → must ask (branch C)
+- Own-invention patentability without jurisdiction → must ask (branch D)
 - Multiple offices named ("US and European") → skip ask, first tool is a search tool
 - "All patent offices" Both-scope synonym → skip ask
 

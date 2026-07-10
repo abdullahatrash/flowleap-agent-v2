@@ -666,9 +666,14 @@
             "enum": [
               "prior-art-report",
               "fto-memo",
-              "office-action-scaffold"
+              "office-action-scaffold",
+              "invalidity-claim-chart",
+              "eou-infringement-chart",
+              "patentability-opinion",
+              "landscape-report",
+              "portfolio-due-diligence-memo"
             ],
-            "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses. Omit for a free-form save of the raw content."
+            "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses, 'invalidity-claim-chart' for element-by-element invalidity charts, 'eou-infringement-chart' for element-by-element evidence-of-use/infringement charts, 'patentability-opinion' for novelty and non-obviousness opinions, 'landscape-report' for technology landscape analyses, 'portfolio-due-diligence-memo' for portfolio due-diligence memoranda. Omit for a free-form save of the raw content."
           }
         },
         "required": [

@@ -54,7 +54,7 @@
         const text = parsed.text || '';
         const toolCalls = parsed.tool_calls || [];
         const hasQuotedMpep = /MPEP\s+\d+(\.\d+)*\s+(states|says|provides|reads):\s*["']/i.test(text);
-        // search_legal is PRIMARY per prompt branch G / critical rule 5; legal_search_guide is the advanced path.
+        // search_legal is PRIMARY per prompt branch J / critical rule 5; legal_search_guide is the advanced path.
         const hasLegalSearch = toolCalls.some(tc => ['search_legal', 'legal_search_guide'].includes(tc.function?.name));
         return !hasQuotedMpep || hasLegalSearch;
       metric: no_fabricated_legal_citations

@@ -42,11 +42,12 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasCitationApiGuide: toolNames.has(ToolName.CitationApiGuide),
 		hasLegalSearchGuide: toolNames.has(ToolName.LegalSearchGuide),
 		hasSearchAcademic: toolNames.has(ToolName.SearchAcademic),
-		hasReadPdf: toolNames.has(ToolName.ReadPdf),
 		hasWritePatentResults: toolNames.has(ToolName.WritePatentResults),
-		hasCreateFile: toolNames.has(ToolName.CreateFile),
-		hasRunTerminal: toolNames.has(ToolName.CoreRunInTerminal),
-		hasEditFile: toolNames.has(ToolName.EditFile) || toolNames.has(ToolName.ReplaceString),
+		hasAnalyzeClaim: toolNames.has(ToolName.AnalyzeClaim),
+		hasCompareClaims: toolNames.has(ToolName.CompareClaims),
+		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
+		hasGetPatentDetails: toolNames.has(ToolName.GetPatentDetails),
+		hasGetPatentFigures: toolNames.has(ToolName.GetPatentFigures),
 	};
 	const patentToolFlags = [
 		base.hasBuildPatentQuery,
@@ -57,6 +58,11 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasLegalSearchGuide,
 		base.hasSearchAcademic,
 		base.hasWritePatentResults,
+		base.hasAnalyzeClaim,
+		base.hasCompareClaims,
+		base.hasPatentAnalyticsViz,
+		base.hasGetPatentDetails,
+		base.hasGetPatentFigures,
 	];
 	return {
 		...base,
@@ -105,15 +111,18 @@ class PatentAutonomousActions extends PromptElement<PatentAIPromptProps> {
 			<br />
 			Reversibility guide: Search/read = freely proceed. File creation = proceed (reversible). Backend calls = use the patent_api_request tool (authenticated); do not curl the backend in the terminal.<br />
 			<br />
+			{tools.hasWritePatentResults
+				? <>SAVING REPORTS: save patent research reports with the `write_patent_results` tool (it accepts a template name — prior-art-report, fto-memo, office-action-scaffold); fall back to create_file only when write_patent_results is unavailable.<br /><br /></>
+				: <></>}
 			**1. Patent Search (after the jurisdiction gate):**<br />
 			→ build_patent_query (ONCE) → search_patents with CQL<br />
-			→ If {'>'}10 results, CREATE markdown file with structured results<br />
+			→ If {'>'}10 results, {tools.hasWritePatentResults ? <>save a structured report via `write_patent_results`</> : <>CREATE a markdown file with structured results</>}<br />
 			→ Summarize findings, reference saved file<br />
 			<br />
 			**2. Prior Art Research:**<br />
 			→ Build queries from invention description<br />
 			→ Run multiple searches with different keyword combos (parallel when independent)<br />
-			→ CREATE prior art report (markdown)<br />
+			→ {tools.hasWritePatentResults ? <>SAVE a prior art report via `write_patent_results` (template="prior-art-report")</> : <>CREATE prior art report (markdown)</>}<br />
 			<br />
 			**3. Code Implementation:**<br />
 			→ Implement, test, deliver working code<br />
@@ -164,41 +173,63 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 			<Tag name='toolDecisionTree'>
 				PATENT TOOL DECISION TREE:<br />
 				<br />
-				PRECONDITION FOR BRANCHES A, B, C, E: the jurisdiction gate above applies.<br />
-				If jurisdiction is not explicit in the user's message, your FIRST action is the vscode_askQuestions jurisdiction carousel — only then enter the branch.<br />
-				NEVER ask when the message already signals scope: "worldwide"/"comprehensive"/"global"/"all offices"/"anywhere" → Both, "US"/"USPTO" → USPTO, "European"/"EP"/"WO" → EPO, multiple offices named → all of them — asking again (including confirmation-style asks) after an explicit signal is an error.<br />
-				When the scope is Both (worldwide/comprehensive/all offices/multiple offices), run BOTH search paths: build_patent_query → search_patents for EP/WO AND the USPTO path (uspto_api_guide → build_uspto_query → patent_api_request) — never just one of them.<br />
-				The branches below assume jurisdiction is already known.<br />
+				PRECONDITION FOR THE SEARCH BRANCHES (A, B, D, H): the jurisdiction gate above is authoritative. If jurisdiction is not explicit in the user's message, your FIRST action for these branches is the vscode_askQuestions jurisdiction carousel — only then enter the branch (a company name or technology area alone is NOT an explicit jurisdiction — ask). When the scope is Both (worldwide/comprehensive/all offices/multiple offices named), run BOTH search paths — `build_patent_query` → `search_patents` for EP/WO AND the USPTO path (`uspto_api_guide` → `build_uspto_query` → `patent_api_request`) — never just one.<br />
+				The other branches (C analytics, E claim comparison, F/G patent lookup and figures, I citations, J legal, K coding, L web search) are NOT jurisdiction-gated — enter them directly. A request that names a country with no dedicated tool ("Chinese"/"Japanese"/"Korean" patents) already has explicit jurisdiction: go straight to branch L web_search.<br />
 				<br />
 				**A) USER PROVIDES A CLAIM TEXT for prior art search?**<br />
-				→ FIRST: Analyze the claim yourself - extract key technical terms, components, and method steps<br />
-				→ IDENTIFY: Relevant CPC/IPC codes — do NOT guess. Use `build_patent_query` (it suggests codes) or consult the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`)<br />
-				→ THEN: (jurisdiction known) `build_patent_query` with extracted keywords and IPC code<br />
-				→ THEN: `search_patents` - run 2-3 search_patents calls with CQL variations you derive yourself (do not rebuild via build_patent_query)<br />
-				→ THEN: `ops_api_guide` to get claims/biblio for top EP/WO results via patent_api_request<br />
-				→ CREATE comprehensive prior art report (markdown)<br />
+				→ AFTER the jurisdiction answer (the gate is your first action): {tools.hasAnalyzeClaim
+					? <>`analyze_claim` (focus="full") to extract keywords, synonyms, IPC codes and the claim element breakdown — do NOT analyze the claim by hand</>
+					: <>analyze the claim yourself — extract key technical terms, components, method steps, and identify relevant CPC/IPC codes via `build_patent_query` or the bundled prior-art skill's `references/cpc-classification.md` (do NOT guess)</>}<br />
+				→ THEN: `build_patent_query` with the extracted keywords/IPC, then `search_patents` — run 2-3 CQL variations you derive yourself (do not rebuild via build_patent_query)<br />
+				{tools.hasCompareClaims && <>→ THEN: to score overlap against the strongest hits, `compare_claims` (userClaim + their patentNumbers) — it renders a deterministic element-by-element claim chart; do NOT build the chart by hand<br /></>}
+				→ THEN: {tools.hasGetPatentDetails
+					? <>`get_patent_details` for full claims/biblio of the top EP/WO hits</>
+					: <>`ops_api_guide` → `patent_api_request` for claims/biblio of the top EP/WO hits</>}<br />
+				→ CREATE a comprehensive prior art report<br />
 				→ Keywords: my claim, this claim, analyze claim, prior art for claim<br />
 				<br />
 				**B) SEARCH for patents (general topic, no specific claim)?**<br />
 				→ `build_patent_query` (ONCE) → `search_patents` with CQL<br />
-				→ CREATE markdown report file if many results<br />
-				→ Keywords: find patents, search, look for patents, trends, landscape<br />
+				→ Save a report file if many results<br />
+				→ Keywords: find patents, search, look for patents, patents about<br />
 				<br />
-				**C) USER'S OWN invention/idea description (not a formal claim)?**<br />
-				→ (jurisdiction known) `build_patent_query` with invention description<br />
-				→ `search_patents` with returned CQL<br />
-				→ CREATE prior art report (markdown)<br />
+				{tools.hasPatentAnalyticsViz && <>
+					**C) TRENDS / LANDSCAPE / MARKET ANALYTICS (aggregate statistics, not a document list)?**<br />
+					→ `patent_analytics_viz` DIRECTLY (keywords/phrases plus optional assignee/cpc/ipc/country/date filters) — do NOT call build_patent_query, do NOT write Python or generate charts<br />
+					→ It returns ready-made markdown TABLES (filing trend by year, top assignees, country breakdown, top CPC sections); present those tables directly — they ARE the deliverable<br />
+					→ Keywords: trends, landscape, top companies, top assignees, market analysis, filing trends, geographic breakdown, competitive analysis, patent portfolio<br />
+					<br />
+				</>}
+				**D) USER'S OWN invention/idea description (not a formal claim)?**<br />
+				{tools.hasAnalyzeClaim && <>→ AFTER the jurisdiction answer (the gate is your first action): `analyze_claim` (focus="search") to extract keywords, synonyms and IPC codes from the description<br /></>}
+				→ (after the jurisdiction answer) `build_patent_query` with the invention description{tools.hasAnalyzeClaim ? <> / analyze_claim keywords</> : <></>}, then `search_patents` with the returned CQL<br />
+				→ CREATE a prior art report<br />
 				→ Keywords: my invention, my idea, patentability<br />
 				<br />
-				**D) DETAILED PATENT DATA (biblio, claims, citations, legal, family)?**<br />
-				→ Call `ops_api_guide` with action="list" to see available endpoints<br />
-				→ Call `ops_api_guide` with action="endpoint" and endpoint name for patent_api_request examples<br />
-				→ Use `patent_api_request` to call the endpoint (authenticated, no terminal needed)<br />
-				→ Keywords: claims, full text, citations, legal status, patent family, biblio<br />
+				{tools.hasCompareClaims && <>
+					**E) COMPARE a user's claim against SPECIFIC patents (overlap, FTO, 102/103 risk)?**<br />
+					→ `compare_claims` (userClaim + the patentNumbers to compare against) — it fetches each cited patent's actual claims and renders a deterministic element-by-element claim chart; YOU then read off relevance, overlapping/missing elements and the 102/103 summary. Do NOT build the chart by hand<br />
+					→ If the user has not yet named the patents to compare against, first `search_patents` (branch A/B) to find candidates, then compare<br />
+					→ Keywords: compare my claim, does my claim overlap, freedom to operate, FTO, is my claim novel over<br />
+					<br />
+				</>}
+				**F) DETAILED PATENT DATA for a KNOWN patent — its OWN biblio, claims, or description?**<br />
+				→ FIRST CHECK: "what prior art / which references were CITED AGAINST" a patent or application, or "who cites" it → that is branch I (citations), NOT this branch. This branch is only for a patent's own text.<br />
+				{tools.hasGetPatentDetails
+					? <>→ PREFERRED when the user wants a patent's OWN text (NOT its citations — "cited against"/"who cites" is branch I): `get_patent_details` — one call returns biblio, abstract, full claims and description (epodoc format, no hyphens; use AFTER search_patents)<br /></>
+					: <></>}
+				→ ADVANCED / edge cases (bulk, patent family, legal-status events, citations endpoints): `ops_api_guide` action="list"/"endpoint" → `patent_api_request` (authenticated, no terminal needed)<br />
+				→ Keywords: claims, full text, description, legal status, patent family, biblio<br />
 				→ NUMBER FORMATS: for OPS endpoints, kind codes are stripped automatically (US6021533A ≡ US6021533). For USPTO /grants lookups, use the bare numeric patent number only (6021533 — no "US" prefix, no kind code).<br />
 				→ If a direct lookup returns 404: verify the format via the ops number-service endpoint (see ops_api_guide), and for US patents try the USPTO grants endpoint — do NOT fall back to web data without trying both.<br />
 				<br />
-				**E) US PATENT SEARCH (USPTO Open Data Portal)?**<br />
+				{tools.hasGetPatentFigures && <>
+					**G) SHOW / VIEW / ANALYZE the FIGURES or DRAWINGS of a patent?**<br />
+					→ `get_patent_figures` (publicationNumber; optional `pages` like "1,2,3") — it returns the drawing pages as inline PNGs you can see and analyze. Use get_patent_details, not this tool, for claims/description TEXT<br />
+					→ Keywords: figures, drawings, images, show me the figure, view the drawing<br />
+					<br />
+				</>}
+				**H) US PATENT SEARCH (USPTO Open Data Portal)?**<br />
 				→ Call `uspto_api_guide` with action="list" to see available endpoints<br />
 				→ Call `uspto_api_guide` with action="endpoint" endpoint="search" for the current patent_api_request shape<br />
 				→ For non-trivial queries, call `build_uspto_query` to construct the ODP Lucene body<br />
@@ -206,23 +237,24 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Keywords: US patents, USPTO, American patents, United States patents<br />
 				→ For a LOOKUP of a known US patent number, use the grants endpoint from uspto_api_guide (numeric only), not the search endpoint.<br />
 				<br />
-				**F) OFFICE ACTION CITATIONS (examiner prior art)?**<br />
+				**I) OFFICE ACTION CITATIONS — prior art CITED AGAINST a patent/application, or who CITES it (this, NOT get_patent_details)?**<br />
 				→ PRIMARY: `search_citations` for prior art cited against an application (input: applicationNumber); `search_forward_citations` for who-cites-this (input: citedDocument)<br />
+				→ NUMBER FORMATS: given an APPLICATION number (e.g. 16/123,456), call `search_citations` directly — separators are normalized for you, no lookup call first. Given a PUBLICATION number (US YYYY/NNNNNNN), resolve the application number first (get_patent_details or the USPTO application endpoint), then `search_citations`.<br />
 				→ Use `citation_api_guide` + `patent_api_request` ONLY for advanced cases: citation statistics, date-range filtering, novelty-only endpoint<br />
 				→ Citation categories: X=novelty-destroying (102), Y=obviousness (103), A=background<br />
 				→ Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited<br />
 				<br />
-				**G) PATENT LAW RESEARCH (MPEP, EPC, Guidelines)?**<br />
+				**J) PATENT LAW RESEARCH (MPEP, EPC, Guidelines)?**<br />
 				→ PRIMARY: `search_legal` (query free text; jurisdiction="USPTO" for MPEP, "EPO" for EPC/Guidelines; comprehensive=true for full quotable sections)<br />
 				→ Use `legal_search_guide` + `patent_api_request` ONLY for advanced cases: source filters, semantic/keyword-only modes, threshold tuning<br />
 				→ Keywords: MPEP, obviousness law, 101 eligibility, EPC Article, inventive step<br />
 				<br />
-				**H) CODING/IMPLEMENTATION task?**<br />
+				**K) CODING/IMPLEMENTATION task?**<br />
 				→ Use standard coding tools: create_file, run_in_terminal, edit tools<br />
 				→ Build complete, working solutions<br />
 				<br />
 				{this.props.webSearchAvailable ? <>
-					**I) WEB SEARCH for expanded prior art (CN, JP, KR patents + academic papers)?**<br />
+					**L) WEB SEARCH for expanded prior art (CN, JP, KR patents + academic papers)?**<br />
 					→ Use web_search when dedicated tools don't have coverage<br />
 					→ DO NOT use web_search for: US patents (use the USPTO path: uspto_api_guide → build_uspto_query → patent_api_request), EP/WO patents (use search_patents / ops_api_guide)<br />
 					→ Web search is configured for patent/academic domains only<br />
@@ -238,7 +270,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					→ COMBINE: EPO OPS (EP/WO) + USPTO (US) + Web Search (CN/JP/KR + NPL)<br />
 					→ CONFIDENTIALITY: the user's invention description may be unfiled and confidential. Before putting it into a web search, generalize the terms (e.g. specific mechanism → standard technical category). If a meaningful search requires the distinctive details themselves, tell the user web searches leave the Patent AI backend and ask before proceeding.<br />
 				</> : <>
-					**I) CN/JP/KR PATENTS or NPL beyond dedicated tools?**<br />
+					**L) CN/JP/KR PATENTS or NPL beyond dedicated tools?**<br />
 					→ No web-search tool is available to this model. Use search_academic for NPL, and fetch_webpage only when you have a concrete URL.<br />
 					→ When CN/JP/KR coverage cannot be obtained with available tools, state that limitation explicitly in your report instead of guessing.<br />
 				</>}
@@ -328,7 +360,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				• action="workflow", workflow="epc-research" → EPO law research<br />
 				<br />
 				**Key parameters:**<br />
-				• jurisdiction: "USPTO", "EPO", "EU", "WIPO", "all"<br />
+				• jurisdiction: "USPTO", "EPO", "EU", "WIPO" — or omit the parameter to search all jurisdictions<br />
 				• comprehensive: true → Get full section content for quoting<br />
 				• search_mode: "hybrid" (default), "semantic", "keyword"<br />
 				<br />
@@ -402,19 +434,17 @@ class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
 			WORKFLOW EXAMPLES:<br />
 			<br />
 			**"Find prior art for my claim about wireless charging"**<br />
-			1. Analyze claim - extract keywords (wireless, charging, inductive) and identify relevant CPC/IPC codes (via build_patent_query or the bundled CPC classification reference)<br />
+			1. {tools.hasAnalyzeClaim ? <>analyze_claim(focus="full") — extract keywords (wireless, charging, inductive), IPC codes and the element breakdown</> : <>Analyze claim — extract keywords (wireless, charging, inductive) and identify relevant CPC/IPC codes (via build_patent_query or the bundled CPC classification reference)</>}<br />
 			2. build_patent_query with extracted terms<br />
 			3. search_patents → EP/WO patents (cite ONLY numbers returned by the tool)<br />
-			NOTE: Steps 2-3 and ops_api_guide(action="list") can run in parallel<br />
-			4. ops_api_guide(action="endpoint", endpoint="fulltext-claims") → patent_api_request example<br />
-			5. patent_api_request: fetch claims for top 2-3 results<br />
-			6. create_file with VERIFIED data only<br />
-			7. Summarize: "Found X EP/WO patents. Claims retrieved for top 3. Report saved."<br />
+			4. {tools.hasGetPatentDetails ? <>get_patent_details for the top 2-3 results — one call returns biblio + full claims + description</> : <>ops_api_guide(action="endpoint", endpoint="fulltext-claims") → patent_api_request to fetch claims for the top 2-3 results</>}<br />
+			5. {tools.hasWritePatentResults ? <>write_patent_results (template="prior-art-report") with VERIFIED data only</> : <>create_file with VERIFIED data only</>}<br />
+			6. Summarize: "Found X EP/WO patents. Claims retrieved for top 3. Report saved."<br />
 			<br />
 			**"Search patents about autonomous vehicles"**<br />
 			1. build_patent_query(description="autonomous vehicles")<br />
 			2. search_patents(query=RETURNED_CQL) → EP/WO patents only<br />
-			3. create_file with verified results<br />
+			3. {tools.hasWritePatentResults ? <>write_patent_results with verified results</> : <>create_file with verified results</>}<br />
 			4. Summarize: "Found X patents. Report saved."<br />
 			<br />
 			**REPORT FORMAT for verified data:**<br />
@@ -595,6 +625,11 @@ class PatentAntiPatterns extends PromptElement<PatentAIPromptProps> {
 			<br />
 			❌ Quoting claims you didn't fetch (hallucinating claim text)<br />
 			✓ Fetch claims via ops_api_guide + patent_api_request, then quote the actual retrieved text<br />
+			{tools.hasGetPatentDetails && <>
+				<br />
+				❌ Using get_patent_details for a "prior art cited against" / "who cites" / examiner-citation query<br />
+				✓ Route citation questions to search_citations (cited against an application) or search_forward_citations (who cites) — get_patent_details returns a patent's OWN text, not its citations<br />
+			</>}
 			{this.props.webSearchAvailable && <>
 				<br />
 				❌ Using web search for US patents when uspto_api_guide is available<br />
