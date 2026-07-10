@@ -41,7 +41,7 @@ Identify the patents that carry the portfolio's weight:
 
 ## Phase 5: Report
 
-Save via `write_patent_results`:
+Save via `write_patent_results` (`template: 'portfolio-due-diligence-memo'`):
 1. **Executive summary** — portfolio size, trajectory, and the 3 findings that matter
 2. **Portfolio map** — counts by subsidiary, technology (CPC), jurisdiction, granted/pending; state which figures are exact counts vs the analytics sample
 3. **Crown jewels table** — top 5-10: claim-breadth note, forward citations, family breadth, in-force status, expiry

@@ -51,7 +51,7 @@ Per target claim, using the **patent-examination** X/Y discipline. Construction 
 
 ## Phase 5: Report
 
-Save via `write_patent_results`:
+Save via `write_patent_results` (`template: 'invalidity-claim-chart'` for the invalidity charts deliverable):
 1. **Target summary** — claims, priority date, legal status, prosecution-history findings
 2. **Venue assessment** — which challenges are still open, on which grounds
 3. **Invalidity charts** — per claim, best grounds first

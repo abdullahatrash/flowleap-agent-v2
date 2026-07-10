@@ -61,7 +61,7 @@ Save via `write_patent_results`, as separate files:
 1. **Invention record** (Phase 0 table)
 2. **Bar-date memo** (Phase 1 — dates, jurisdictions affected, deadlines)
 3. **Prior art search report** (per the prior-art skill's report format)
-4. **Patentability assessment** with the novelty gap statement
+4. **Patentability assessment** with the novelty gap statement (`template: 'patentability-opinion'`)
 5. **Draft claim set** (from claim-drafting)
 6. **Audit trail** (run the audit-report skill — mandatory for IDF work relied on for filing decisions)
 

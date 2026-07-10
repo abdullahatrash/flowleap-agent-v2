@@ -10,11 +10,35 @@
  * content lands, and a not-legal-advice disclaimer footer).
  *
  * Kept free of any `vscode` dependency so the pure document shaping is unit-testable in isolation.
+ *
+ * The `invalidity-claim-chart` and `eou-infringement-chart` templates present element-by-element charts,
+ * the same shape `compareClaimsTool.ts` renders via {@link renderMarkdownTable}. That renderer cannot be
+ * called from here directly — it lives in `tools/vscode-node`, one layer above this `tools/common` module,
+ * and this module wraps opaque model-produced text rather than the structured row/column data the renderer
+ * needs. Instead, the template's guidance text instructs the model to produce a table using the identical
+ * `| Claim Element | ... |` column convention, so charts read the same wherever they appear.
  */
-export type PatentReportTemplate = 'prior-art-report' | 'fto-memo' | 'office-action-scaffold';
+export type PatentReportTemplate =
+	| 'prior-art-report'
+	| 'fto-memo'
+	| 'office-action-scaffold'
+	| 'invalidity-claim-chart'
+	| 'eou-infringement-chart'
+	| 'patentability-opinion'
+	| 'landscape-report'
+	| 'portfolio-due-diligence-memo';
 
 /** The template identifiers accepted by the tool's input schema. Keep in sync with package.json. */
-export const PATENT_REPORT_TEMPLATES: readonly PatentReportTemplate[] = ['prior-art-report', 'fto-memo', 'office-action-scaffold'];
+export const PATENT_REPORT_TEMPLATES: readonly PatentReportTemplate[] = [
+	'prior-art-report',
+	'fto-memo',
+	'office-action-scaffold',
+	'invalidity-claim-chart',
+	'eou-infringement-chart',
+	'patentability-opinion',
+	'landscape-report',
+	'portfolio-due-diligence-memo',
+];
 
 /** Footer appended to every templated report. */
 const DISCLAIMER = 'This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.';
@@ -105,6 +129,123 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'',
 				'## 4. Conclusion',
 				'_Request for allowance and any remaining issues._',
+				'',
+				'---',
+				`*${DISCLAIMER}*`,
+				'',
+			].join('\n');
+
+		case 'invalidity-claim-chart':
+			return [
+				'# Invalidity Claim Chart',
+				'',
+				fieldTable(['Patent No. / Claim(s) at Issue', 'Prior Art Reference(s)', 'Date', 'Prepared By']),
+				'',
+				'## 1. Overview',
+				'_Identify the challenged patent, the claim(s) at issue, and the prior art reference(s) applied against them._',
+				'',
+				'## 2. Element-by-Element Invalidity Chart',
+				'_Render as a markdown table with one row per claim element and one column per prior art reference, mirroring the element-by-element chart produced by compare_claims: `| Claim Element | <Reference 1> | <Reference 2> | ... |`. Each cell quotes or paraphrases the disclosing passage and notes the applicable basis (X/§102 anticipation or Y/§103 obviousness, alone or in combination)._',
+				results,
+				'',
+				'## 3. Basis Summary',
+				'_For each ground raised, list the statute (§102 or §103), the claim(s) affected, and the reference(s) or combination relied upon._',
+				'',
+				'## 4. Claim Language',
+				'_Verbatim text of the challenged claim(s), for reference._',
+				'',
+				'---',
+				`*${DISCLAIMER}*`,
+				'',
+			].join('\n');
+
+		case 'eou-infringement-chart':
+			return [
+				'# Evidence-of-Use (EoU) Infringement Chart',
+				'',
+				fieldTable(['Patent No. / Claim(s) Asserted', 'Accused Product / Service', 'Date', 'Prepared By']),
+				'',
+				'## 1. Overview',
+				'_Identify the asserted patent, the claim(s) asserted, and the accused product or service being mapped._',
+				'',
+				'## 2. Element-by-Element Evidence-of-Use Chart',
+				'_Render as a markdown table with one row per claim element and columns for the accused product/feature and supporting evidence, mirroring the element-by-element chart produced by compare_claims: `| Claim Element | Accused Product Feature | Supporting Evidence |`. Cite specifications, teardown reports, marketing materials, or source documentation for each mapped element._',
+				results,
+				'',
+				'## 3. Infringement Theory',
+				'_Literal infringement vs. doctrine of equivalents for any elements not literally met, with rationale._',
+				'',
+				'## 4. Evidentiary Sources',
+				'_Documents, specifications, or public materials relied upon for the evidence-of-use mapping._',
+				'',
+				'---',
+				`*${DISCLAIMER}*`,
+				'',
+			].join('\n');
+
+		case 'patentability-opinion':
+			return [
+				'# Patentability Opinion',
+				'',
+				fieldTable(['Matter / Reference', 'Invention Title', 'Date', 'Prepared By']),
+				'',
+				'## 1. Invention Summary',
+				'_Describe the invention, its key features, and the claim(s) or claim concepts under evaluation._',
+				'',
+				'## 2. Prior Art Discussed',
+				'_References considered, with publication/application numbers and a brief description of each._',
+				'',
+				'## 3. Novelty and Inventive-Step Analysis',
+				results,
+				'',
+				'## 4. Conclusion and Risk Assessment',
+				'_Overall patentability conclusion with a risk rating (low/medium/high) and recommended next steps._',
+				'',
+				'---',
+				`*${DISCLAIMER}*`,
+				'',
+			].join('\n');
+
+		case 'landscape-report':
+			return [
+				'# Patent Landscape Report',
+				'',
+				fieldTable(['Technology Area / Scope', 'Search Criteria', 'Date', 'Prepared By']),
+				'',
+				'## 1. Scope & Methodology',
+				'_Technology area covered, search criteria (keywords, CPC/IPC codes, jurisdictions, date range), and data source._',
+				'',
+				'## 2. Filing Trends, Assignees & Classification Breakdown',
+				results,
+				'',
+				'## 3. White-Space Observations',
+				'_Underexplored technology intersections, declining vs. emerging filing activity, and potential opportunity areas suggested by the data._',
+				'',
+				'---',
+				`*${DISCLAIMER}*`,
+				'',
+			].join('\n');
+
+		case 'portfolio-due-diligence-memo':
+			return [
+				'# Portfolio Due Diligence Memorandum',
+				'',
+				fieldTable(['Target / Portfolio', 'Transaction / Purpose', 'Date', 'Prepared By']),
+				'',
+				'## 1. Portfolio Overview',
+				'_Scope of the portfolio reviewed: number of assets, families, jurisdictions, and technology areas._',
+				'',
+				'## 2. Legal-Status Summary',
+				'_Status of each asset (granted, pending, abandoned, expired) and maintenance-fee/annuity standing._',
+				'',
+				'## 3. Key Asset Analysis',
+				results,
+				'',
+				'## 4. Encumbrances and Risks',
+				'_Liens, licenses, litigation history, inventorship or ownership issues, and any other encumbrances identified._',
+				'',
+				'## 5. Valuation-Relevant Observations',
+				'_Factors bearing on portfolio value: claim breadth, remaining term, citation activity, and market relevance._',
 				'',
 				'---',
 				`*${DISCLAIMER}*`,

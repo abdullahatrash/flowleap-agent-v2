@@ -52,7 +52,7 @@ Element-by-element per asserted claim (the all-elements rule: EVERY element must
 
 ## Output
 
-Save via `write_patent_results`: patent status summary and construction notes, the chart per asserted claim with evidence citations, the assessment, missing-evidence list, and the disclaimer. For diligence-grade work, add the audit-report skill's trail.
+Save via `write_patent_results` (`template: 'eou-infringement-chart'`): patent status summary and construction notes, the chart per asserted claim with evidence citations, the assessment, missing-evidence list, and the disclaimer. For diligence-grade work, add the audit-report skill's trail.
 
 ## Rules
 - Verify the patent is in force BEFORE charting

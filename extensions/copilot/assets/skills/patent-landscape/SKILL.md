@@ -52,7 +52,7 @@ Which filing offices are most active? (EP, US, CN, JP, KR)
 
 ## Phase 4: Report
 
-Save via `write_patent_results`:
+Save via `write_patent_results` (`template: 'landscape-report'`):
 1. **Executive Summary**: key findings in 3-5 bullets
 2. **Methodology**: IPC codes used, date range, databases searched, whether figures are exact counts or the 100-result analytics sample
 3. **Filing Volume & Trends**: year-over-year data
