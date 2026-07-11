@@ -36,6 +36,15 @@
 	"urlProtocol": "flowleap",
 	"agentsTelemetryAppName": "agents",
 	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
+	"mcpGallery": {
+		"serviceUrl": "https://www.flowleap.co/api/mcp",
+		"itemWebUrl": "https://www.flowleap.co/en/marketplace/mcp/{name}",
+		"publisherUrl": "https://www.flowleap.co/en/marketplace",
+		"supportUrl": "https://www.flowleap.co/en/contact",
+		"privacyPolicyUrl": "https://www.flowleap.co/en/privacy",
+		"termsOfServiceUrl": "https://www.flowleap.co/en/terms",
+		"reportUrl": "https://www.flowleap.co/en/contact"
+	},
 	"builtInExtensions": [],
 	"defaultHiddenViewContainers": [
 		"workbench.view.debug",
