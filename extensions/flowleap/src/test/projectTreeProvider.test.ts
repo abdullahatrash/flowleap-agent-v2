@@ -11,7 +11,8 @@ import {
 	PatentProject,
 	DisplayStatus,
 	mapLegacyStatus,
-	displayStatusOf
+	displayStatusOf,
+	isProjectType
 } from '../projectSidebar/projectTreeProvider';
 
 suite('ProjectTreeProvider', () => {
@@ -36,6 +37,34 @@ suite('ProjectTreeProvider', () => {
 			created: '2026-07-01T00:00:00Z',
 			...overrides
 		};
+	}
+
+	// Reduce a rendered tree item to a stable snapshot. The volatile "age" tail of a project
+	// description is stripped so the assertion does not depend on wall-clock time.
+	function snapshot(item: vscode.TreeItem): Record<string, unknown> {
+		const icon = item.iconPath as vscode.ThemeIcon | undefined;
+		switch (item.contextValue) {
+			case 'flowleapProject':
+			case 'flowleapArchivedProject':
+				return {
+					kind: 'project',
+					label: item.label,
+					description: String(item.description).replace(/ · (now|\d+[mhdw])$/, ''),
+					iconId: icon?.id,
+					iconColor: icon?.color?.id,
+					contextValue: item.contextValue
+				};
+			case 'flowleapProjectGroup':
+				return {
+					kind: 'group',
+					label: item.label,
+					collapsed: item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed
+				};
+			case 'flowleapNewProject':
+				return { kind: 'action', label: item.label, iconId: icon?.id, command: item.command?.command };
+			default:
+				return { kind: 'unknown', label: item.label };
+		}
 	}
 
 	test('mapLegacyStatus collapses every stored value onto the ratified set', () => {
@@ -70,53 +99,35 @@ suite('ProjectTreeProvider', () => {
 		});
 	});
 
-	test('tree groups projects by status and renders each row shape from the public interface', async () => {
+	test('isProjectType accepts only real type keys and rejects stale/non-string values', () => {
+		const cases: unknown[] = ['patent-analysis', 'custom', 'freedom-to-operate', 'prior-art', '', 'undefined', undefined, 42, {}];
+		assert.deepStrictEqual(cases.map(isProjectType), [true, true, true, false, false, false, false, false, false]);
+	});
+
+	test('tree renders a flat list sorted by last-opened, an archived group, and a pinned New Project row', async () => {
 		const projects: PatentProject[] = [
-			makeProject({ id: 'a', path: 'a', name: 'Alpha', type: 'patent-analysis', status: 'active' }),
-			makeProject({ id: 'b', path: 'b', name: 'Bravo', type: 'prior-art-search', status: 'review' as PatentProject['status'] }),
-			makeProject({ id: 'c', path: 'c', name: 'Charlie', type: 'claim-analysis', status: 'complete' }),
-			makeProject({ id: 'd', path: 'd', name: 'Delta', type: 'custom', status: 'active', archived: true })
+			makeProject({ id: 'b', path: 'b', name: 'Bravo', type: 'prior-art-search', status: 'review' as PatentProject['status'], lastAccessed: new Date('2026-07-10T00:00:00Z') }),
+			makeProject({ id: 'a', path: 'a', name: 'Alpha', type: 'patent-analysis', status: 'active', lastAccessed: new Date('2026-07-11T09:00:00Z') }),
+			makeProject({ id: 'c', path: 'c', name: 'Charlie', type: 'claim-analysis', status: 'complete', lastAccessed: new Date('2026-07-11T08:00:00Z') }),
+			makeProject({ id: 'd', path: 'd', name: 'Delta', type: 'custom', status: 'active', archived: true, lastAccessed: new Date('2026-07-05T00:00:00Z') })
 		];
 		const provider = new ProjectTreeProvider(makeContext(projects));
 
-		const groups = await provider.getChildren();
-		const snapshot = [];
-		for (const group of groups) {
-			const groupItem = provider.getTreeItem(group);
-			const rows = await provider.getChildren(group);
-			snapshot.push({
-				group: groupItem.label,
-				rows: rows.map(row => {
-					const item = provider.getTreeItem(row);
-					const icon = item.iconPath as vscode.ThemeIcon;
-					return {
-						label: item.label,
-						description: item.description,
-						iconId: icon.id,
-						iconColor: icon.color?.id,
-						contextValue: item.contextValue
-					};
-				})
-			});
-		}
+		const root = await provider.getChildren();
+		const rootShape = root.map(node => snapshot(provider.getTreeItem(node)));
 
-		assert.deepStrictEqual(snapshot, [
-			{
-				group: 'Active (1)',
-				rows: [{ label: 'Alpha', description: 'Patent Analysis', iconId: 'circle-filled', iconColor: 'charts.green', contextValue: 'flowleapProject' }]
-			},
-			{
-				group: 'In Review (1)',
-				rows: [{ label: 'Bravo', description: 'Prior-Art Search', iconId: 'eye', iconColor: 'charts.yellow', contextValue: 'flowleapProject' }]
-			},
-			{
-				group: 'Complete (1)',
-				rows: [{ label: 'Charlie', description: 'Claim Analysis', iconId: 'pass-filled', iconColor: 'charts.blue', contextValue: 'flowleapProject' }]
-			},
-			{
-				group: 'Archived (1)',
-				rows: [{ label: 'Delta', description: 'Custom', iconId: 'archive', iconColor: undefined, contextValue: 'flowleapArchivedProject' }]
-			}
+		assert.deepStrictEqual(rootShape, [
+			{ kind: 'project', label: 'Alpha', description: 'Patent Analysis', iconId: 'circle-filled', iconColor: 'charts.green', contextValue: 'flowleapProject' },
+			{ kind: 'project', label: 'Charlie', description: 'Claim Analysis · Complete', iconId: 'pass-filled', iconColor: 'charts.blue', contextValue: 'flowleapProject' },
+			{ kind: 'project', label: 'Bravo', description: 'Prior-Art Search · In Review', iconId: 'eye', iconColor: 'charts.yellow', contextValue: 'flowleapProject' },
+			{ kind: 'group', label: 'Archived (1)', collapsed: true },
+			{ kind: 'action', label: 'New Project', iconId: 'add', command: 'flowleap.newProject' }
+		]);
+
+		const archivedGroup = root.find(node => provider.getTreeItem(node).contextValue === 'flowleapProjectGroup')!;
+		const archivedRows = await provider.getChildren(archivedGroup);
+		assert.deepStrictEqual(archivedRows.map(node => snapshot(provider.getTreeItem(node))), [
+			{ kind: 'project', label: 'Delta', description: 'Custom', iconId: 'archive', iconColor: undefined, contextValue: 'flowleapArchivedProject' }
 		]);
 	});
 });

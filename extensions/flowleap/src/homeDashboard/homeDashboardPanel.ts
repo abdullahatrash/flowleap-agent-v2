@@ -501,12 +501,27 @@ export class HomeDashboardPanel {
 				<div class="type-card" data-action="newProject" data-type="patent-analysis">
 					<div class="type-card-icon">\u{1F4C4}</div>
 					<div class="type-card-title">Patent Analysis</div>
-					<div class="type-card-desc">Analyze a specific patent or application</div>
+					<div class="type-card-desc">Work on a specific patent, including invalidity</div>
 				</div>
 				<div class="type-card" data-action="newProject" data-type="prior-art-search">
 					<div class="type-card-icon">\u{1F50D}</div>
-					<div class="type-card-title">Prior Art Search</div>
-					<div class="type-card-desc">Search from an invention disclosure</div>
+					<div class="type-card-title">Prior-Art Search</div>
+					<div class="type-card-desc">Search prior art from an invention disclosure</div>
+				</div>
+				<div class="type-card" data-action="newProject" data-type="freedom-to-operate">
+					<div class="type-card-icon">\u{2696}\u{FE0F}</div>
+					<div class="type-card-title">Freedom-to-Operate</div>
+					<div class="type-card-desc">Clear a product against in-force patents</div>
+				</div>
+				<div class="type-card" data-action="newProject" data-type="patent-landscape">
+					<div class="type-card-icon">\u{1F4CA}</div>
+					<div class="type-card-title">Patent Landscape</div>
+					<div class="type-card-desc">Map the activity across a technology area</div>
+				</div>
+				<div class="type-card" data-action="newProject" data-type="claim-analysis">
+					<div class="type-card-icon">\u{1F4CB}</div>
+					<div class="type-card-title">Claim Analysis</div>
+					<div class="type-card-desc">Extract and analyze the claims of a patent</div>
 				</div>
 				<div class="type-card" data-action="newProject" data-type="custom">
 					<div class="type-card-icon">\u{1F4C1}</div>

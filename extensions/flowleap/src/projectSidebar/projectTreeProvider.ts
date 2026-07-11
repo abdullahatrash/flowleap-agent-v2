@@ -92,6 +92,14 @@ export function displayStatusOf(project: Pick<PatentProject, 'status' | 'archive
 	return mapLegacyStatus(project.status);
 }
 
+/**
+ * Type guard for a project-type key. Used to reject stale/unchecked `preselectedType` values that
+ * arrive from webview callers so the creation dialog can never render an "undefined" label.
+ */
+export function isProjectType(value: unknown): value is ProjectType {
+	return typeof value === 'string' && Object.prototype.hasOwnProperty.call(PROJECT_TYPE_LABELS, value);
+}
+
 interface StatusIconSpec {
 	readonly icon: string;
 	readonly color?: string;
@@ -105,40 +113,34 @@ const STATUS_ICONS: Record<DisplayStatus, StatusIconSpec> = {
 	'archived': { icon: 'archive' }
 };
 
-/** Fixed top-to-bottom order of the status groups in the tree. */
-const STATUS_ORDER: readonly DisplayStatus[] = ['active', 'in-review', 'complete', 'archived'];
-
-const MAX_ROWS_PER_GROUP = 10;
-
-interface ProjectGroupItem {
-	readonly kind: 'group';
-	readonly id: DisplayStatus;
-	readonly projects: PatentProject[];
-}
-
 interface ProjectRowItem {
 	readonly kind: 'project';
 	readonly project: PatentProject;
 }
 
-interface MoreItem {
-	readonly kind: 'more';
-	readonly groupId: DisplayStatus;
+interface ArchivedGroupItem {
+	readonly kind: 'archivedGroup';
+	readonly projects: PatentProject[];
 }
 
-type TreeNode = ProjectGroupItem | ProjectRowItem | MoreItem;
+interface NewProjectItem {
+	readonly kind: 'newProject';
+}
+
+type TreeNode = ProjectRowItem | ArchivedGroupItem | NewProjectItem;
 
 /**
- * Native tree for the Projects view. Groups stored projects under the four ratified statuses,
- * renders the project type as the row description, and exposes inline / context-menu actions
- * through the extension's commands (wired in `package.json` `view/item/context`).
+ * Native tree for the Projects view. Live projects render as one flat list sorted newest-first;
+ * archived projects sit under a single collapsed group at the bottom; a pinned "New Project" row
+ * is always visible below everything. Row actions are wired through the extension's commands
+ * (`package.json` `view/item/context`).
  */
 export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
 	private readonly _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | null | void>();
 	readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> = this._onDidChangeTreeData.event;
 
-	private groups: ProjectGroupItem[] = [];
-	private readonly expandedGroups: Set<DisplayStatus> = new Set(['active', 'in-review', 'complete']);
+	private liveProjects: PatentProject[] = [];
+	private archivedProjects: PatentProject[] = [];
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.loadProjects();
@@ -155,62 +157,61 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
 	private loadProjects(): void {
 		const stored = this.context.globalState.get<PatentProject[]>('flowleap.projects', []);
-		this.groups = STATUS_ORDER
-			.map(id => ({
-				kind: 'group' as const,
-				id,
-				projects: stored.filter(p => displayStatusOf(p) === id)
-			}))
-			.filter(group => group.projects.length > 0);
+		this.liveProjects = this.sortByLastOpened(stored.filter(p => !p.archived));
+		this.archivedProjects = this.sortByLastOpened(stored.filter(p => p.archived));
+	}
+
+	private sortByLastOpened(projects: PatentProject[]): PatentProject[] {
+		return [...projects].sort((a, b) => new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime());
 	}
 
 	getTreeItem(element: TreeNode): vscode.TreeItem {
 		switch (element.kind) {
-			case 'group':
-				return this.createGroupItem(element);
-			case 'more':
-				return this.createMoreItem(element);
 			case 'project':
 				return this.createProjectItem(element.project);
+			case 'archivedGroup':
+				return this.createArchivedGroupItem(element);
+			case 'newProject':
+				return this.createNewProjectItem();
 		}
 	}
 
 	getChildren(element?: TreeNode): Thenable<TreeNode[]> {
 		if (!element) {
-			return Promise.resolve(this.groups);
-		}
-		if (element.kind === 'group') {
-			const rows: TreeNode[] = element.projects
-				.slice(0, MAX_ROWS_PER_GROUP)
-				.map(project => ({ kind: 'project' as const, project }));
-			if (element.projects.length > MAX_ROWS_PER_GROUP) {
-				rows.push({ kind: 'more' as const, groupId: element.id });
+			// Empty tree renders the views-welcome content (its own New Project button), so only
+			// pin the New Project row once there is at least one project to sit above.
+			if (this.liveProjects.length === 0 && this.archivedProjects.length === 0) {
+				return Promise.resolve([]);
 			}
-			return Promise.resolve(rows);
+			const nodes: TreeNode[] = this.liveProjects.map(project => ({ kind: 'project' as const, project }));
+			if (this.archivedProjects.length > 0) {
+				nodes.push({ kind: 'archivedGroup' as const, projects: this.archivedProjects });
+			}
+			nodes.push({ kind: 'newProject' as const });
+			return Promise.resolve(nodes);
+		}
+		if (element.kind === 'archivedGroup') {
+			return Promise.resolve(element.projects.map(project => ({ kind: 'project' as const, project })));
 		}
 		return Promise.resolve([]);
 	}
 
-	private createGroupItem(group: ProjectGroupItem): vscode.TreeItem {
-		const label = `${PROJECT_STATUS_LABELS[group.id]} (${group.projects.length})`;
+	private createArchivedGroupItem(group: ArchivedGroupItem): vscode.TreeItem {
 		const item = new vscode.TreeItem(
-			label,
-			this.expandedGroups.has(group.id)
-				? vscode.TreeItemCollapsibleState.Expanded
-				: vscode.TreeItemCollapsibleState.Collapsed
+			`Archived (${group.projects.length})`,
+			vscode.TreeItemCollapsibleState.Collapsed
 		);
 		item.contextValue = 'flowleapProjectGroup';
 		return item;
 	}
 
-	private createMoreItem(element: MoreItem): vscode.TreeItem {
-		const item = new vscode.TreeItem('More…', vscode.TreeItemCollapsibleState.None);
-		item.iconPath = new vscode.ThemeIcon('ellipsis');
-		item.contextValue = 'flowleapMore';
+	private createNewProjectItem(): vscode.TreeItem {
+		const item = new vscode.TreeItem('New Project', vscode.TreeItemCollapsibleState.None);
+		item.iconPath = new vscode.ThemeIcon('add');
+		item.contextValue = 'flowleapNewProject';
 		item.command = {
-			command: 'flowleap.showAllProjects',
-			title: 'Show All Projects',
-			arguments: [element.groupId]
+			command: 'flowleap.newProject',
+			title: 'New Project'
 		};
 		return item;
 	}
@@ -219,7 +220,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 		const item = new vscode.TreeItem(project.name, vscode.TreeItemCollapsibleState.None);
 		const display = displayStatusOf(project);
 
-		item.description = PROJECT_TYPE_LABELS[project.type] ?? '';
+		item.description = this.describe(project, display);
 
 		const statusIcon = STATUS_ICONS[display];
 		item.iconPath = new vscode.ThemeIcon(
@@ -238,6 +239,19 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 		return item;
 	}
 
+	/**
+	 * Row description: "Type · Status · age". The status word is omitted for Active (it is the
+	 * common case and the timestamp already conveys idleness) and for Archived (the group says it).
+	 */
+	private describe(project: PatentProject, display: DisplayStatus): string {
+		const parts: string[] = [PROJECT_TYPE_LABELS[project.type] ?? project.type];
+		if (display !== 'active' && display !== 'archived') {
+			parts.push(PROJECT_STATUS_LABELS[display]);
+		}
+		parts.push(this.shortAge(new Date(project.lastAccessed)));
+		return parts.join(' · ');
+	}
+
 	private createTooltip(project: PatentProject, display: DisplayStatus): vscode.MarkdownString {
 		const lines: string[] = [`**${project.name}**`];
 		const parts: string[] = [
@@ -248,27 +262,27 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 			parts.push(`Tags: ${project.tags.join(', ')}`);
 		}
 		const lastAccessed = new Date(project.lastAccessed);
-		parts.push(`Last opened: ${this.getTimeAgo(lastAccessed)} (${lastAccessed.toLocaleString()})`);
+		parts.push(`Last opened: ${lastAccessed.toLocaleString()}`);
 		lines.push(parts.join('\n\n'));
 		lines.push(project.path);
 		return new vscode.MarkdownString(lines.join('\n\n'));
 	}
 
-	private getTimeAgo(date: Date): string {
+	private shortAge(date: Date): string {
 		const diff = Date.now() - date.getTime();
 		const minutes = Math.floor(diff / 60000);
 		if (minutes < 1) {
-			return 'just now';
+			return 'now';
 		}
 		if (minutes < 60) {
-			return `${minutes}m ago`;
+			return `${minutes}m`;
 		}
 		if (minutes < 60 * 24) {
-			return `${Math.floor(minutes / 60)}h ago`;
+			return `${Math.floor(minutes / 60)}h`;
 		}
 		if (minutes < 60 * 24 * 7) {
-			return `${Math.floor(minutes / (60 * 24))}d ago`;
+			return `${Math.floor(minutes / (60 * 24))}d`;
 		}
-		return `${Math.floor(minutes / (60 * 24 * 7))}w ago`;
+		return `${Math.floor(minutes / (60 * 24 * 7))}w`;
 	}
 }

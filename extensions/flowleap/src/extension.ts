@@ -14,7 +14,8 @@ import {
 	ProjectStatus,
 	DisplayStatus,
 	PROJECT_TYPE_LABELS,
-	PROJECT_STATUS_LABELS
+	PROJECT_STATUS_LABELS,
+	isProjectType
 } from './projectSidebar/projectTreeProvider';
 import { ChatBarController, ChatInputPanel } from './chatBar/chatBarController';
 import { registerUpdateNotifier } from './updateNotifier/updateNotifier';
@@ -194,10 +195,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// New Project — type picker + name + auto-location
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.newProject', async (preselectedType?: ProjectType) => {
+		vscode.commands.registerCommand('flowleap.newProject', async (preselectedType?: unknown) => {
 			let projectType: ProjectType;
 
-			if (preselectedType) {
+			// Only trust a preselected type that is a real key of the type map. Webview callers and
+			// menu wiring can pass stale/unchecked strings (or a non-string arg); an unvalidated
+			// value flows straight into the dialog title/placeholder and renders "undefined".
+			if (isProjectType(preselectedType)) {
 				projectType = preselectedType;
 			} else {
 				// Pick project type
@@ -318,6 +322,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('flowleap.refreshProjects', () => {
 			refreshProjectViews();
+		})
+	);
+
+	// Filter projects — focus the tree and open the built-in type-to-filter, so the native
+	// filter is discoverable from the view title bar rather than only on keypress.
+	context.subscriptions.push(
+		vscode.commands.registerCommand('flowleap.filterProjects', async () => {
+			await vscode.commands.executeCommand('flowleap.projectSidebar.focus');
+			await vscode.commands.executeCommand('list.find');
 		})
 	);
 

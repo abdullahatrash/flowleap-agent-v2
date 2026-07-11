@@ -109,6 +109,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "flowleap.filterProjects",
+        "title": "Filter Projects",
+        "category": "FlowLeap",
+        "icon": "$(search)"
+      },
+      {
         "command": "flowleap.openNotes",
         "title": "Open Project Notes",
         "category": "FlowLeap",
@@ -170,12 +176,17 @@
         {
           "command": "flowleap.newProject",
           "when": "view == flowleap.projectSidebar",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowleap.filterProjects",
+          "when": "view == flowleap.projectSidebar",
+          "group": "navigation@2"
         },
         {
           "command": "flowleap.refreshProjects",
           "when": "view == flowleap.projectSidebar",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
