@@ -21,6 +21,7 @@ import { maybeShowSetupOnStartup, PatentDataKeysViewProvider, registerPatentData
 import { registerPatentSetupView } from './patentSetupView';
 import { registerOnboardingBridgeCommands } from './onboardingBridge';
 import { TrialCountdownStatusBar, TrialPillTelemetry } from './trialCountdownStatusBar';
+import { SessionExpiryStatusBar } from './sessionExpiryStatusBar';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -97,6 +98,19 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 					() => provider.getSubscriptionSnapshot(),
 					provider.onDidChangeSessions,
 					this._trialPillTelemetry(),
+					this._logService,
+				));
+			}
+		});
+		this._safeStep('register session-expiry nudge', () => {
+			// Status-bar "session expires in N days" nudge (issue #121, P2). Visible only when a
+			// signed-in session has ≤3 days left; clicking it re-runs sign-in. Reads the token
+			// expiry straight off the provider (no backend call).
+			if (this._authProvider) {
+				const provider = this._authProvider;
+				this._register(new SessionExpiryStatusBar(
+					() => provider.getSessionExpiry(),
+					provider.onDidChangeSessions,
 					this._logService,
 				));
 			}

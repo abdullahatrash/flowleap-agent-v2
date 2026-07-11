@@ -424,6 +424,16 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	}
 
 	/**
+	 * The current session's token-expiry epoch-ms for the expiry nudge (#121), or `undefined` when no
+	 * token is held (signed out). Unlike {@link getAccessToken} this does NOT gate on expiry and never
+	 * prunes: a token still held in memory but already past its lifetime reports its (past) timestamp,
+	 * so the nudge can show the "expired" variant before the next {@link getSessions} clears it.
+	 */
+	public getSessionExpiry(): number | undefined {
+		return this._clerkToken ? this._tokenExpiresAt : undefined;
+	}
+
+	/**
 	 * The signed-in user's identity for account UI, or `undefined` when signed out. Derived from the
 	 * current token's JWT claims, falling back to the backend profile cached by {@link _fetchUserInfo}.
 	 * Sync and side-effect free apart from kicking a one-time profile fetch when nothing is cached yet;
