@@ -45,13 +45,22 @@ import { ACTIVITY_BAR_BADGE_BACKGROUND, ACTIVITY_BAR_BADGE_FOREGROUND } from '..
 import { IBaseActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 
+/** Action id for the activity-bar Command Palette entry (not a registered command; drives the local ActionBar item). */
+const COMMAND_PALETTE_ACTIVITY_ID = 'workbench.actions.activityBarCommandPalette';
+/** The command opened when the activity-bar Command Palette icon is clicked (same as ⇧⌘P). */
+const SHOW_COMMANDS_COMMAND_ID = 'workbench.action.showCommands';
+
 export class GlobalCompositeBar extends Disposable {
 
-	private static readonly ACCOUNTS_ACTION_INDEX = 0;
+	// The Command Palette action sits at the top of the bottom zone, directly above Accounts and Manage.
+	private static readonly COMMAND_PALETTE_ACTION_INDEX = 0;
+	private static readonly ACCOUNTS_ACTION_INDEX = 1;
 	static readonly ACCOUNTS_ICON = registerIcon('accounts-view-bar-icon', Codicon.account, localize('accountsViewBarIcon', "Accounts icon in the view bar."));
+	static readonly COMMAND_PALETTE_ICON = registerIcon('command-palette-view-bar-icon', Codicon.listSelection, localize('commandPaletteViewBarIcon', "Command Palette icon in the view bar."));
 
 	readonly element: HTMLElement;
 
+	private readonly commandPaletteAction = this._register(new Action(COMMAND_PALETTE_ACTIVITY_ID));
 	private readonly globalActivityAction = this._register(new Action(GLOBAL_ACTIVITY_ID));
 	private readonly accountAction = this._register(new Action(ACCOUNTS_ACTIVITY_ID));
 	private readonly globalActivityActionBar: ActionBar;
@@ -74,6 +83,10 @@ export class GlobalCompositeBar extends Disposable {
 		});
 		this.globalActivityActionBar = this._register(new ActionBar(this.element, {
 			actionViewItemProvider: (action, options) => {
+				if (action.id === COMMAND_PALETTE_ACTIVITY_ID) {
+					return this.instantiationService.createInstance(CommandPaletteActivityActionViewItem, this.contextMenuActionsProvider, { ...options, colors: this.colors, hoverOptions: this.activityHoverOptions });
+				}
+
 				if (action.id === GLOBAL_ACTIVITY_ID) {
 					return this.instantiationService.createInstance(GlobalActivityActionViewItem, this.contextMenuActionsProvider, { ...options, colors: this.colors, hoverOptions: this.activityHoverOptions }, contextMenuAlignmentOptions);
 				}
@@ -101,6 +114,8 @@ export class GlobalCompositeBar extends Disposable {
 			ariaLabel: localize('manage', "Manage"),
 			preventLoopNavigation: true
 		}));
+
+		this.globalActivityActionBar.push(this.commandPaletteAction, { index: GlobalCompositeBar.COMMAND_PALETTE_ACTION_INDEX });
 
 		if (this.accountsVisibilityPreference) {
 			this.globalActivityActionBar.push(this.accountAction, { index: GlobalCompositeBar.ACCOUNTS_ACTION_INDEX });
@@ -136,10 +151,13 @@ export class GlobalCompositeBar extends Disposable {
 	}
 
 	private toggleAccountsActivity() {
-		if (this.globalActivityActionBar.length() === 2 && this.accountsVisibilityPreference) {
+		// The Command Palette and Manage items are always present, so the bar holds 3 items when
+		// Accounts is also shown and 2 when it is hidden.
+		const accountsShown = this.globalActivityActionBar.length() === 3;
+		if (accountsShown && this.accountsVisibilityPreference) {
 			return;
 		}
-		if (this.globalActivityActionBar.length() === 2) {
+		if (accountsShown) {
 			this.globalActivityActionBar.pull(GlobalCompositeBar.ACCOUNTS_ACTION_INDEX);
 		} else {
 			this.globalActivityActionBar.push(this.accountAction, { index: GlobalCompositeBar.ACCOUNTS_ACTION_INDEX });
@@ -252,6 +270,74 @@ abstract class AbstractGlobalActivityActionViewItem extends CompositeBarActionVi
 
 	protected async resolveMainMenuActions(menu: IMenu, _disposable: DisposableStore): Promise<IAction[]> {
 		return getActionBarActions(menu.getActions({ renderShortTitle: true })).secondary;
+	}
+}
+
+/**
+ * Bottom-zone activity-bar item that opens the Command Palette on click (same as the
+ * `workbench.action.showCommands` command / ⇧⌘P). Unlike Accounts and Manage it has no popup
+ * menu of its own; right-click falls back to the shared activity-bar context menu.
+ */
+class CommandPaletteActivityActionViewItem extends CompositeBarActionViewItem {
+
+	constructor(
+		private readonly contextMenuActionsProvider: () => IAction[],
+		options: ICompositeBarActionViewItemOptions,
+		@IThemeService themeService: IThemeService,
+		@IHoverService hoverService: IHoverService,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IKeybindingService keybindingService: IKeybindingService,
+		@ICommandService private readonly commandService: ICommandService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		const action = instantiationService.createInstance(CompositeBarAction, {
+			id: COMMAND_PALETTE_ACTIVITY_ID,
+			name: localize('commandPalette', "Command Palette"),
+			classNames: ThemeIcon.asClassNameArray(GlobalCompositeBar.COMMAND_PALETTE_ICON),
+			keybindingId: SHOW_COMMANDS_COMMAND_ID,
+		});
+		super(action, { draggable: false, icon: true, hasPopup: false, ...options }, () => true, themeService, hoverService, configurationService, keybindingService);
+		this._register(action);
+	}
+
+	private open(): void {
+		this.commandService.executeCommand(SHOW_COMMANDS_COMMAND_ID);
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+
+		// Left-click / tap / keyboard opens the Command Palette (same as ⇧⌘P).
+		this._register(addDisposableListener(this.container, EventType.MOUSE_DOWN, (e: MouseEvent) => {
+			EventHelper.stop(e, true);
+			if (e.button !== 2) {
+				this.open();
+			}
+		}));
+
+		this._register(addDisposableListener(this.container, EventType.KEY_UP, (e: KeyboardEvent) => {
+			const event = new StandardKeyboardEvent(e);
+			if (event.equals(KeyCode.Enter) || event.equals(KeyCode.Space)) {
+				EventHelper.stop(e, true);
+				this.open();
+			}
+		}));
+
+		this._register(addDisposableListener(this.container, TouchEventType.Tap, (e: GestureEvent) => {
+			EventHelper.stop(e, true);
+			this.open();
+		}));
+
+		// Right-click shows the shared activity-bar context menu (hide/show entries), matching the rest of the bar.
+		this._register(addDisposableListener(this.container, EventType.CONTEXT_MENU, (e: MouseEvent) => {
+			e.stopPropagation();
+			const event = new StandardMouseEvent(getWindow(this.container), e);
+			this.contextMenuService.showContextMenu({
+				getAnchor: () => event,
+				getActions: () => this.contextMenuActionsProvider(),
+			});
+		}));
 	}
 }
 
