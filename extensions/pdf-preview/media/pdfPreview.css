@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) FlowLeap. All rights reserved.
- *  Licensed under the MIT License.
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 * {
@@ -159,7 +159,6 @@ html, body {
 	right: 0;
 	bottom: 0;
 	overflow: hidden;
-	opacity: 0.2;
 	line-height: 1.0;
 	pointer-events: auto;
 }
@@ -178,6 +177,85 @@ html, body {
 
 .pdf-page .text-layer > span::-moz-selection {
 	background: var(--vscode-editor-selectionBackground);
+}
+
+/* Find-in-document highlights: glyphs stay transparent (canvas shows the real text), only the highlight background is painted from theme find tokens. */
+.pdf-page .text-layer .find-highlight {
+	background-color: var(--vscode-editor-findMatchHighlightBackground);
+	border-radius: 2px;
+}
+
+.pdf-page .text-layer .find-highlight.current {
+	background-color: var(--vscode-editor-findMatchBackground);
+	outline: 1px solid var(--vscode-editor-findMatchBorder, transparent);
+}
+
+/* Find bar */
+#find-bar {
+	position: absolute;
+	top: 52px;
+	right: 20px;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px;
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--vscode-editorWidget-foreground);
+	border: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border));
+	border-radius: 4px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+#find-bar.hidden {
+	display: none;
+}
+
+#find-input {
+	width: 180px;
+	padding: 3px 6px;
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 2px;
+	background-color: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	font-size: 12px;
+}
+
+#find-input:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	border-color: var(--vscode-focusBorder);
+}
+
+#find-count {
+	min-width: 56px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+#find-count.no-results {
+	color: var(--vscode-errorForeground);
+}
+
+#find-bar button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--vscode-icon-foreground, var(--vscode-foreground));
+	cursor: pointer;
+}
+
+#find-bar button:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+#find-bar button:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 
 /* Loading indicator */

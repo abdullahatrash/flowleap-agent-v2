@@ -48,6 +48,25 @@
 	const extractTextButton = document.getElementById('extract-text');
 	const extractOcrButton = document.getElementById('extract-ocr');
 	const viewerContainer = document.getElementById('viewer-container');
+	const findToggleButton = document.getElementById('find-toggle');
+	const findBar = document.getElementById('find-bar');
+	const findInput = document.getElementById('find-input');
+	const findCount = document.getElementById('find-count');
+	const findPrevButton = document.getElementById('find-prev');
+	const findNextButton = document.getElementById('find-next');
+	const findCloseButton = document.getElementById('find-close');
+
+	// Find-in-document state
+	let searchQuery = '';
+	/** @type {Array<{ pageNum: number, start: number, end: number, globalIndex: number }>} */
+	let matches = [];
+	/** @type {Record<number, Array<{ pageNum: number, start: number, end: number, globalIndex: number }>>} */
+	let matchesByPage = {};
+	let currentMatchIndex = -1;
+	/** Page text, cached so search and highlighting share one source of truth. @type {Record<number, { items: any[], text: string }>} */
+	const pageTextCache = {};
+	/** Bumped on every new search so a slow scan can detect it has been superseded. */
+	let searchSeq = 0;
 
 	// Load PDF.js dynamically
 	let pdfjsLib = null;
@@ -306,8 +325,29 @@
 	}
 
 	/**
-	 * Build (or rebuild) the selectable text layer for a rendered page.
-	 * Caches the page's text items on the state for reuse by find-in-document.
+	 * Fetch and cache a page's text content. The concatenation used here (item strings
+	 * joined with no separator) is the single source of truth for both search offsets
+	 * and highlight placement, so the two never disagree.
+	 * @param {number} num
+	 */
+	async function buildPageText(num) {
+		if (pageTextCache[num]) {
+			return pageTextCache[num];
+		}
+		const page = pageStates[num] ? pageStates[num].page : await pdfDoc.getPage(num);
+		const textContent = await page.getTextContent();
+		let text = '';
+		for (const item of textContent.items) {
+			text += item.str || '';
+		}
+		const entry = { items: textContent.items, text: text.toLowerCase() };
+		pageTextCache[num] = entry;
+		return entry;
+	}
+
+	/**
+	 * Build (or rebuild) the selectable text layer for a rendered page, wrapping any
+	 * active find matches in highlight spans.
 	 * @param {typeof pageStates[number]} state
 	 * @param {any} viewport
 	 */
@@ -317,8 +357,8 @@
 			existing.remove();
 		}
 
-		const textContent = await state.page.getTextContent();
-		state.textItems = textContent.items;
+		const entry = await buildPageText(state.num);
+		state.textItems = entry.items;
 
 		const textLayer = document.createElement('div');
 		textLayer.className = 'text-layer';
@@ -326,13 +366,19 @@
 		textLayer.style.height = `${viewport.height}px`;
 		state.container.appendChild(textLayer);
 
-		for (const item of textContent.items) {
-			if (!item.str) {
+		const pageMatches = searchQuery ? matchesByPage[state.num] : null;
+		let offset = 0;
+
+		for (const item of entry.items) {
+			const str = item.str || '';
+			const itemStart = offset;
+			offset += str.length;
+
+			if (!str) {
 				continue;
 			}
 
 			const span = document.createElement('span');
-			span.textContent = item.str;
 
 			const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
 
@@ -348,7 +394,191 @@
 				span.style.transform = `rotate(${angle}rad)`;
 			}
 
+			if (pageMatches && pageMatches.length) {
+				appendItemContent(span, str, itemStart, pageMatches);
+			} else {
+				span.textContent = str;
+			}
+
 			textLayer.appendChild(span);
+		}
+	}
+
+	/**
+	 * Fill a text-layer span, splitting out any characters covered by a find match
+	 * into highlight sub-spans (the current match gets an extra class).
+	 * @param {HTMLElement} span
+	 * @param {string} str original-case glyph string for this item
+	 * @param {number} itemStart char offset of this item within the page text
+	 * @param {Array<{ start: number, end: number, globalIndex: number }>} pageMatches
+	 */
+	function appendItemContent(span, str, itemStart, pageMatches) {
+		const itemEnd = itemStart + str.length;
+		const overlapping = pageMatches
+			.filter(m => m.start < itemEnd && m.end > itemStart)
+			.sort((a, b) => a.start - b.start);
+
+		if (!overlapping.length) {
+			span.textContent = str;
+			return;
+		}
+
+		let cursor = 0;
+		for (const match of overlapping) {
+			const segStart = Math.max(match.start, itemStart) - itemStart;
+			const segEnd = Math.min(match.end, itemEnd) - itemStart;
+
+			if (segStart > cursor) {
+				span.appendChild(document.createTextNode(str.slice(cursor, segStart)));
+			}
+
+			const highlight = document.createElement('span');
+			highlight.className = match.globalIndex === currentMatchIndex ? 'find-highlight current' : 'find-highlight';
+			highlight.textContent = str.slice(segStart, segEnd);
+			span.appendChild(highlight);
+
+			cursor = segEnd;
+		}
+
+		if (cursor < str.length) {
+			span.appendChild(document.createTextNode(str.slice(cursor)));
+		}
+	}
+
+	/**
+	 * Rebuild the text layer (with current highlights) for every rendered page.
+	 */
+	async function refreshRenderedHighlights() {
+		const jobs = [];
+		for (let num = 1; num <= pdfDoc.numPages; num++) {
+			const state = pageStates[num];
+			if (state && state.rendered) {
+				jobs.push(buildTextLayer(state, state.page.getViewport({ scale })));
+			}
+		}
+		await Promise.all(jobs);
+	}
+
+	/**
+	 * Run a case-insensitive substring search across the whole document. Text content
+	 * is read per page (getTextContent) without requiring the page to be rendered, so
+	 * matches on lazily-rendered pages are found. Jumps to the first match.
+	 * @param {string} query
+	 */
+	async function runSearch(query) {
+		const seq = ++searchSeq;
+		searchQuery = query;
+		matches = [];
+		matchesByPage = {};
+		currentMatchIndex = -1;
+
+		if (!query || !pdfDoc) {
+			updateFindCount();
+			await refreshRenderedHighlights();
+			return;
+		}
+
+		const needle = query.toLowerCase();
+
+		for (let num = 1; num <= pdfDoc.numPages; num++) {
+			const { text } = await buildPageText(num);
+			if (seq !== searchSeq) {
+				return; // superseded by a newer search
+			}
+
+			const pageMatches = [];
+			let idx = text.indexOf(needle);
+			while (idx !== -1) {
+				const match = { pageNum: num, start: idx, end: idx + needle.length, globalIndex: matches.length };
+				matches.push(match);
+				pageMatches.push(match);
+				idx = text.indexOf(needle, idx + needle.length);
+			}
+			if (pageMatches.length) {
+				matchesByPage[num] = pageMatches;
+			}
+		}
+
+		updateFindCount();
+
+		if (matches.length) {
+			await goToMatch(0);
+		} else {
+			await refreshRenderedHighlights();
+		}
+	}
+
+	/**
+	 * Select and reveal a match by its document-order index (wraps around). Renders the
+	 * match's page if it is not yet rendered, then scrolls the highlight into view.
+	 * @param {number} index
+	 */
+	async function goToMatch(index) {
+		if (!matches.length) {
+			return;
+		}
+
+		currentMatchIndex = ((index % matches.length) + matches.length) % matches.length;
+		const match = matches[currentMatchIndex];
+
+		currentPage = match.pageNum;
+		pageInput.value = currentPage.toString();
+		updateNavigation();
+
+		const state = pageStates[match.pageNum];
+		await renderPage(state);
+		await refreshRenderedHighlights();
+
+		const current = state.container.querySelector('.find-highlight.current');
+		if (current) {
+			current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		} else {
+			state.container.scrollIntoView({ block: 'start' });
+		}
+
+		updateFindCount();
+	}
+
+	/**
+	 * Update the "n of m" match counter.
+	 */
+	function updateFindCount() {
+		if (!searchQuery) {
+			findCount.textContent = '';
+			findCount.classList.remove('no-results');
+			return;
+		}
+		if (!matches.length) {
+			findCount.textContent = 'No results';
+			findCount.classList.add('no-results');
+			return;
+		}
+		findCount.classList.remove('no-results');
+		findCount.textContent = `${currentMatchIndex + 1} of ${matches.length}`;
+	}
+
+	/**
+	 * Open the find bar and focus its input.
+	 */
+	function openFind() {
+		findBar.classList.remove('hidden');
+		findInput.focus();
+		findInput.select();
+	}
+
+	/**
+	 * Close the find bar and clear all highlights.
+	 */
+	async function closeFind() {
+		findBar.classList.add('hidden');
+		searchQuery = '';
+		matches = [];
+		matchesByPage = {};
+		currentMatchIndex = -1;
+		++searchSeq;
+		updateFindCount();
+		if (pdfDoc) {
+			await refreshRenderedHighlights();
 		}
 	}
 
@@ -528,8 +758,62 @@
 		vscode.postMessage({ type: 'extractTextOCR' });
 	});
 
+	// Find-in-document
+	findToggleButton.addEventListener('click', () => {
+		if (findBar.classList.contains('hidden')) {
+			openFind();
+		} else {
+			closeFind();
+		}
+	});
+
+	let findDebounce = null;
+	findInput.addEventListener('input', () => {
+		if (findDebounce) {
+			clearTimeout(findDebounce);
+		}
+		findDebounce = setTimeout(() => runSearch(findInput.value), 150);
+	});
+
+	findInput.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			if (matches.length) {
+				goToMatch(currentMatchIndex + (e.shiftKey ? -1 : 1));
+			} else {
+				runSearch(findInput.value);
+			}
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			closeFind();
+			viewerContainer.focus();
+		}
+	});
+
+	findPrevButton.addEventListener('click', () => goToMatch(currentMatchIndex - 1));
+	findNextButton.addEventListener('click', () => goToMatch(currentMatchIndex + 1));
+	findCloseButton.addEventListener('click', () => closeFind());
+
 	// Keyboard navigation
 	document.addEventListener('keydown', (e) => {
+		// Standard find keybinding opens the find bar when the preview has focus.
+		if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+			openFind();
+			e.preventDefault();
+			return;
+		}
+
+		// The find input handles its own keys (Enter/Shift+Enter/Escape).
+		if (e.target === findInput) {
+			return;
+		}
+
+		if (e.key === 'Escape' && !findBar.classList.contains('hidden')) {
+			closeFind();
+			e.preventDefault();
+			return;
+		}
+
 		if (e.target === pageInput) {
 			return;
 		}

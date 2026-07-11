@@ -234,6 +234,12 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 			</button>
 			<button id="zoom-fit" title="Fit to Width">Fit</button>
 		</div>
+		<div class="toolbar-group">
+			<button id="find-toggle" title="Find in Document (${process.platform === 'darwin' ? '⌘F' : 'Ctrl+F'})">
+				<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M11 6.5a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04-1.06 1.06-3.04-3.04z"/></svg>
+				Find
+			</button>
+		</div>
 		<div class="toolbar-group extract-group">
 			<button id="extract-text" title="Quick Extract (PDF.js) - Free, local">
 				<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M2 2h12v2H2zM2 5h12v2H2zM2 8h8v2H2zM2 11h10v2H2z"/></svg>
@@ -244,6 +250,19 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 				OCR Extract
 			</button>
 		</div>
+	</div>
+	<div id="find-bar" class="hidden" role="search">
+		<input type="text" id="find-input" placeholder="Find" aria-label="Find in document" />
+		<span id="find-count"></span>
+		<button id="find-prev" title="Previous Match (Shift+Enter)">
+			<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M8 5l5 5H3l5-5z"/></svg>
+		</button>
+		<button id="find-next" title="Next Match (Enter)">
+			<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M8 11L3 6h10l-5 5z"/></svg>
+		</button>
+		<button id="find-close" title="Close (Escape)">
+			<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M8 8.7l3.3 3.3.7-.7L8.7 8l3.3-3.3-.7-.7L8 7.3 4.7 4l-.7.7L7.3 8 4 11.3l.7.7L8 8.7z"/></svg>
+		</button>
 	</div>
 	<div id="viewer-container">
 		<div id="viewer"></div>
