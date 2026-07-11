@@ -143,6 +143,16 @@
         "icon": "$(inbox)"
       },
       {
+        "command": "flowleap.renameProject",
+        "title": "Rename Project",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.deleteProject",
+        "title": "Delete Project",
+        "category": "FlowLeap"
+      },
+      {
         "command": "flowleap.checkForUpdates",
         "title": "Check for Updates",
         "category": "FlowLeap"
@@ -200,6 +210,11 @@
           "group": "2_modify@1"
         },
         {
+          "command": "flowleap.renameProject",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "2_modify@0"
+        },
+        {
           "command": "flowleap.addTag",
           "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
           "group": "2_modify@2"
@@ -218,6 +233,11 @@
           "command": "flowleap.unarchiveProject",
           "when": "view == flowleap.projectSidebar && viewItem == flowleapArchivedProject",
           "group": "3_lifecycle@1"
+        },
+        {
+          "command": "flowleap.deleteProject",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "9_danger@1"
         }
       ],
       "commandPalette": [

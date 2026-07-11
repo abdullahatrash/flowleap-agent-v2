@@ -548,6 +548,128 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	// Rename project — renames the folder and updates config + stored state together.
+	context.subscriptions.push(
+		vscode.commands.registerCommand('flowleap.renameProject', async (projectOrPath?: PatentProject | string) => {
+			const projectPath = resolveProjectPath(projectOrPath);
+			if (!projectPath) {
+				vscode.window.showWarningMessage('No project selected');
+				return;
+			}
+
+			const storedProjects = getStoredProjects(context);
+			const stored = storedProjects.find(p => p.path === projectPath);
+			const currentName = stored?.name ?? path.basename(projectPath);
+
+			const newName = await vscode.window.showInputBox({
+				prompt: 'New project name',
+				title: 'Rename Project',
+				value: currentName,
+				validateInput: value => validateProjectName(value, storedProjects, projectPath)
+			});
+
+			if (!newName || newName.trim() === currentName) {
+				return;
+			}
+
+			const newPath = path.join(getProjectsDirectory(), toFolderName(newName));
+
+			try {
+				if (newPath !== projectPath) {
+					// Guard against a folder that exists on disk but is not a tracked project.
+					let exists = true;
+					try {
+						await vscode.workspace.fs.stat(vscode.Uri.file(newPath));
+					} catch {
+						exists = false;
+					}
+					if (exists) {
+						vscode.window.showErrorMessage(`A folder named "${toFolderName(newName)}" already exists`);
+						return;
+					}
+					await vscode.workspace.fs.rename(vscode.Uri.file(projectPath), vscode.Uri.file(newPath), { overwrite: false });
+				}
+
+				// Update config.json.
+				const config = await readProjectConfig(newPath) ?? {};
+				config.name = newName;
+				await writeProjectConfig(newPath, config);
+
+				// Update globalState (name + path + id all move together).
+				if (stored) {
+					stored.name = newName;
+					stored.path = newPath;
+					stored.id = newPath;
+					await saveStoredProjects(context, storedProjects);
+				}
+
+				refreshProjectViews();
+
+				const isOpenWorkspace = vscode.workspace.workspaceFolders?.some(f => f.uri.fsPath === projectPath) ?? false;
+				if (isOpenWorkspace && newPath !== projectPath) {
+					const choice = await vscode.window.showInformationMessage(
+						`Renamed to "${newName}". Reopen the folder to continue working in it.`,
+						'Reopen'
+					);
+					if (choice === 'Reopen') {
+						await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(newPath));
+					}
+				} else {
+					vscode.window.showInformationMessage(`Project renamed to "${newName}"`);
+				}
+			} catch (error) {
+				vscode.window.showErrorMessage(`Failed to rename project: ${error}`);
+			}
+		})
+	);
+
+	// Delete project — moves the folder to the OS trash (never a hard delete) after confirmation.
+	context.subscriptions.push(
+		vscode.commands.registerCommand('flowleap.deleteProject', async (projectOrPath?: PatentProject | string) => {
+			const projectPath = resolveProjectPath(projectOrPath);
+			if (!projectPath) {
+				vscode.window.showWarningMessage('No project selected');
+				return;
+			}
+
+			const storedProjects = getStoredProjects(context);
+			const stored = storedProjects.find(p => p.path === projectPath);
+			const name = stored?.name ?? path.basename(projectPath);
+
+			const confirm = await vscode.window.showWarningMessage(
+				`Delete "${name}"? The project folder will be moved to the trash.`,
+				{ modal: true },
+				'Delete'
+			);
+			if (confirm !== 'Delete') {
+				return;
+			}
+
+			try {
+				await vscode.workspace.fs.delete(vscode.Uri.file(projectPath), { recursive: true, useTrash: true });
+			} catch (error) {
+				vscode.window.showErrorMessage(`Failed to delete project: ${error}`);
+				return;
+			}
+
+			await saveStoredProjects(context, storedProjects.filter(p => p.path !== projectPath));
+			refreshProjectViews();
+
+			const isOpenWorkspace = vscode.workspace.workspaceFolders?.some(f => f.uri.fsPath === projectPath) ?? false;
+			if (isOpenWorkspace) {
+				const choice = await vscode.window.showInformationMessage(
+					`"${name}" was moved to the trash. Close this folder?`,
+					'Close Folder'
+				);
+				if (choice === 'Close Folder') {
+					await vscode.commands.executeCommand('workbench.action.closeFolder');
+				}
+			} else {
+				vscode.window.showInformationMessage(`"${name}" moved to the trash`);
+			}
+		})
+	);
+
 	// Sign in is owned end-to-end by the copilot extension's `flowleap` auth provider, which
 	// registers the canonical `flowleap.signIn` command (and the `patent-ai.signIn` alias) and runs
 	// the Clerk deep-link OAuth flow (ADR 0002). The UI shell must NOT register `flowleap.signIn`:
