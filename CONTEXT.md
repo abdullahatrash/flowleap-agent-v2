@@ -29,8 +29,10 @@ deliverable. Registered in `package.json` → `chatSkills`.
 _Avoid_: building patent-analysis as coded "intents" — that duplicates the Skills.
 
 **FlowLeap Settings Sidebar**:
-The webview view behind the gear icon in the Activity Bar (owned by the Patent Agent
-extension, since it owns the key store) where the user enters BYO patent-data keys — the EPO
+The webview view behind the FlowLeap brand-mark icon in the Activity Bar (owned by the Patent
+Agent extension, since it owns the key store) holding the user's **Account section** (signed-in
+identity, subscription status, Manage-subscription link) and where the user enters BYO
+patent-data keys — the EPO
 OPS **Consumer Key + Consumer Secret** pair and the USPTO ODP **API Key** — and reaches the
 BYOK model picker ("Add AI Model"). Keys go straight to SecretStorage; the view only ever sees
 presence booleans, never stored values. It is the single front door for "Settings" in FlowLeap
@@ -43,6 +45,56 @@ ADR 0005); quick-pick/input-box chains for key entry (the pre-sidebar UX this re
 A lightweight, **user-typed slash command** that helps the user *operate the file-rich patent
 project* — not analysis. Distinct from a Patent Skill (a command is a shortcut, not a deliverable).
 _Avoid_: conflating with Patent Skill.
+
+**Project Type**:
+The investigation kind a Patent Project was created as — one of **Patent Analysis** (a specific
+patent/application is the subject, including invalidity work), **Prior-Art Search**,
+**Freedom-to-Operate**, **Patent Landscape**, **Claim Analysis**, or **Custom**. An
+organizational label and notes-template seed only; it does not change agent behavior.
+_Avoid_: adding an "Invalidity" type (that's Patent Analysis); coupling type to skill/recipe
+invocation.
+
+**Project Status**:
+The lifecycle state of a Patent Project: **Active** (default for new projects; being worked on
+or merely idle — idleness is shown by timestamps, not status), **In Review** (deliverable
+drafted, awaiting attorney/client review), **Complete**, **Archived**. Exactly these four.
+_Avoid_: "Draft" as a project status (in patent practice "draft" describes documents — draft
+application, draft claims — not investigations; the legacy `draft` status maps to Active);
+adding statuses for rare states like "on hold" (that's Active + an old timestamp).
+
+## Marketplace & ecosystem
+
+**FlowLeap Marketplace**:
+The umbrella for FlowLeap's curated, free-to-install extension ecosystem: the Plugin
+Marketplace, the MCP Registry, and the website marketplace hub that fronts both. v1 is
+FlowLeap-curated only (no third-party publishing) and carries no Pro gating; paid packs would
+arrive later over a separate authenticated channel, never via the public surfaces below.
+_Avoid_: using "marketplace" bare when the Plugin Marketplace repo vs the MCP Registry matters —
+they are different artifacts with different consumers.
+
+**Plugin Marketplace**:
+The single public git monorepo of FlowLeap plugins (`marketplace.json` at root, one directory
+per plugin). It is both the discovery catalog and the update channel the app polls. The app
+ships with this as its only default marketplace, pre-trusted; user-added marketplaces keep the
+trust confirmation.
+_Avoid_: hosting plugins inside the website repo; keeping the upstream Copilot marketplaces as
+defaults.
+
+**MCP Registry**:
+The public read-only endpoint (hosted by the website) implementing the standard MCP Registry
+v0 API, which the app's built-in Browse Marketplace UI consumes. Curated entries: vetted
+third-party MCP servers useful for patent work, plus FlowLeap's own MCP server.
+_Avoid_: conflating with the Plugin Marketplace (a git repo, not an API); treating it as
+auth-gated (it is public in v1).
+
+**Skill Pack**:
+A plugin whose payload is a set of skills (`skills/<name>/SKILL.md`). Skills are distributed
+**inside plugins only** — there is no standalone skill installer; "install a skill" always means
+"install the plugin that carries it". Launch packs repackage the proven multi-harness CLI skill
+families (personas, recipes, CLI tool skills), which work in Claude sessions because they use
+the backend facade rather than in-app typed tools.
+_Avoid_: "skill store" / standalone skill installs; unbundling the built-in Patent Skills into
+packs (they stay bundled and are panel-chat-only).
 
 ## Authentication & model path
 
