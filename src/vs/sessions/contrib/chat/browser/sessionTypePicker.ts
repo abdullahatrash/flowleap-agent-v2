@@ -16,7 +16,6 @@ import { ISessionsProvidersService } from '../../../services/sessions/browser/se
 import { autorun, IObservable } from '../../../../base/common/observable.js';
 import { ISession } from '../../../services/sessions/common/session.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { isWeb } from '../../../../base/common/platform.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
@@ -415,14 +414,15 @@ export class SessionTypePicker extends Disposable {
 
 		dom.clearNode(this._triggerElement);
 
-		// In web (vscode.dev/agents) the host filter already scopes the
-		// workbench to a single agent host, so when that host advertises only
-		// one harness there is nothing to pick — hide the trigger entirely.
-		// Note: the existing CSS rule on `.session-workspace-picker-with-label`
-		// uses `:has(+ .sessions-chat-session-type-picker .action-label.hidden)`
-		// to also hide the "with" connector when the trigger is hidden.
-		const hideForSingleHarness = isWeb && this._folderSessionTypes.length <= 1;
-		if (this._folderSessionTypes.length === 0 || hideForSingleHarness) {
+		// When at most one session type is available there is nothing to pick — the
+		// trigger click is already a no-op (see `_showPicker`) — so hide the trigger
+		// entirely instead of showing a lone chip (e.g. "Local") that distinguishes
+		// nothing. This previously applied only on web, where the host filter scopes
+		// the workbench to a single agent host; it now applies on every platform.
+		// Note: the existing CSS rule on `.session-workspace-picker-with-label` uses
+		// `:has(+ .sessions-chat-session-type-picker .action-label.hidden)` to also
+		// hide the "with" connector when the trigger is hidden.
+		if (this._folderSessionTypes.length <= 1) {
 			this._triggerElement.classList.add('hidden');
 			return;
 		}

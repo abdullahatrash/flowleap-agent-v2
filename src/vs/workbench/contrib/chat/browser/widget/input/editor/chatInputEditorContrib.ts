@@ -14,9 +14,12 @@ import { Position } from '../../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../../editor/common/core/range.js';
 import { IDecorationOptions } from '../../../../../../../editor/common/editorCommon.js';
 import { TrackedRangeStickiness } from '../../../../../../../editor/common/model.js';
+import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
 import { ILabelService } from '../../../../../../../platform/label/common/label.js';
 import { inputPlaceholderForeground } from '../../../../../../../platform/theme/common/colorRegistry.js';
 import { IThemeService } from '../../../../../../../platform/theme/common/themeService.js';
+import { ChatModeKind } from '../../../../common/constants.js';
+import { PatentIdeContextKeys } from '../../../../../../common/patent/patentIdeContextKeys.js';
 import { IChatAgentCommand, IChatAgentData, IChatAgentService } from '../../../../common/participants/chatAgents.js';
 import { localize } from '../../../../../../../nls.js';
 import { chatSlashCommandBackground, chatSlashCommandForeground } from '../../../../common/widget/chatColors.js';
@@ -58,6 +61,28 @@ function exactlyOneSpaceAfterPart(parsedRequest: readonly IParsedChatRequestPart
 	return nextPart && nextPart instanceof ChatRequestTextPart && nextPart.text === ' ';
 }
 
+/**
+ * Returns the patent-voice chat input placeholder for the given mode when Patent IDE mode is
+ * enabled, or `undefined` to fall back to the upstream mode description. Mirrors the per-mode
+ * welcome-title override in {@link ChatWidget} so the input strip speaks the same voice.
+ *
+ * @param modeKind The kind of the currently active chat mode.
+ * @param isPatentMode Whether Patent IDE mode is enabled (from the `patentIdeMode` context key).
+ */
+export function getPatentModeInputPlaceholder(modeKind: ChatModeKind, isPatentMode: boolean): string | undefined {
+	if (!isPatentMode) {
+		return undefined;
+	}
+	switch (modeKind) {
+		case ChatModeKind.Ask:
+			return localize('patentChatInputPlaceholder.ask', "Ask about patents, claims, or prior art");
+		case ChatModeKind.Edit:
+			return localize('patentChatInputPlaceholder.edit', "Describe the document changes to make");
+		default:
+			return localize('patentChatInputPlaceholder.agent', "Describe a patent research task");
+	}
+}
+
 function getRangeForPlaceholder(part: IParsedChatRequestPart) {
 	return {
 		startLineNumber: part.editorRange.startLineNumber,
@@ -90,6 +115,7 @@ class InputEditorDecorations extends Disposable {
 		@ILabelService private readonly labelService: ILabelService,
 		@ICustomizationHarnessService private readonly customizationHarnessService: ICustomizationHarnessService,
 		@IEditorService private readonly editorService: IEditorService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 	) {
 		super();
 
@@ -222,7 +248,9 @@ class InputEditorDecorations extends Disposable {
 
 		if (!inputValue) {
 			const mode = this.widget.input.currentModeObs.get();
-			const placeholder = mode.argumentHint?.get() ?? mode.description.get() ?? '';
+			// FlowLeap Patent IDE: use patent-voice per-mode placeholders instead of the coding-copilot mode description.
+			const isPatentMode = PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false;
+			const placeholder = getPatentModeInputPlaceholder(mode.kind, isPatentMode) ?? mode.argumentHint?.get() ?? mode.description.get() ?? '';
 			const displayPlaceholder = viewModel.inputPlaceholder || placeholder;
 
 			const decoration: IDecorationOptions[] = [

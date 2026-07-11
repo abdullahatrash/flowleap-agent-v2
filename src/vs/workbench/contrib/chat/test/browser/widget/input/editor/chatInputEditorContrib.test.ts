@@ -10,7 +10,8 @@ import { Range } from '../../../../../../../../editor/common/core/range.js';
 import { withTestCodeEditor } from '../../../../../../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidget } from '../../../../../browser/chat.js';
 import { ChatWidget } from '../../../../../browser/widget/chatWidget.js';
-import '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
+import { getPatentModeInputPlaceholder } from '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
+import { ChatModeKind } from '../../../../../common/constants.js';
 
 suite('ChatTokenDeleter', () => {
 
@@ -103,5 +104,38 @@ suite('ChatTokenDeleter', () => {
 				store.dispose();
 			}
 		});
+	});
+});
+
+suite('getPatentModeInputPlaceholder', () => {
+
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('returns the ratified patent-voice placeholder per mode when patent mode is enabled', () => {
+		assert.deepStrictEqual(
+			{
+				agent: getPatentModeInputPlaceholder(ChatModeKind.Agent, true),
+				ask: getPatentModeInputPlaceholder(ChatModeKind.Ask, true),
+				edit: getPatentModeInputPlaceholder(ChatModeKind.Edit, true),
+			},
+			{
+				agent: 'Describe a patent research task',
+				ask: 'Ask about patents, claims, or prior art',
+				edit: 'Describe the document changes to make',
+			});
+	});
+
+	test('returns undefined for every mode when patent mode is disabled (upstream fallback)', () => {
+		assert.deepStrictEqual(
+			{
+				agent: getPatentModeInputPlaceholder(ChatModeKind.Agent, false),
+				ask: getPatentModeInputPlaceholder(ChatModeKind.Ask, false),
+				edit: getPatentModeInputPlaceholder(ChatModeKind.Edit, false),
+			},
+			{
+				agent: undefined,
+				ask: undefined,
+				edit: undefined,
+			});
 	});
 });

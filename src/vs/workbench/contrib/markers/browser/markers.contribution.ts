@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './markersFileDecorations.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { Extensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -39,6 +39,7 @@ import { problemsConfigurationNodeBase } from '../../../common/configuration.js'
 import { MarkerChatContextContribution } from './markersChatContext.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ProblemsAccessibilityHelp } from './markersAccessibilityHelp.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 KeybindingsRegistry.registerCommandAndKeybindingRule({
 	id: Markers.MARKER_OPEN_ACTION_ID,
@@ -571,15 +572,22 @@ registerAction2(class extends Action2 {
 
 class MarkersStatusBarContributions extends Disposable implements IWorkbenchContribution {
 
-	private markersStatusItem: IStatusbarEntryAccessor;
+	private markersStatusItem!: IStatusbarEntryAccessor;
 	private markersStatusItemOff: IStatusbarEntryAccessor | undefined;
 
 	constructor(
 		@IMarkerService private readonly markerService: IMarkerService,
 		@IStatusbarService private readonly statusbarService: IStatusbarService,
-		@IConfigurationService private readonly configurationService: IConfigurationService
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService
 	) {
 		super();
+
+		// FlowLeap Patent IDE: the Problems counter is developer residue; do not register it in patent mode.
+		if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false) {
+			return;
+		}
+
 		this.markersStatusItem = this._register(this.statusbarService.addEntry(this.getMarkersItem(), 'status.problems', StatusbarAlignment.LEFT, 50 /* Medium Priority */));
 
 		const addStatusBarEntry = () => {
