@@ -153,6 +153,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Register Project Sidebar (native tree)
 	projectSidebarProvider = new ProjectTreeProvider(context);
 	context.subscriptions.push(
+		projectSidebarProvider,
 		vscode.window.registerTreeDataProvider('flowleap.projectSidebar', projectSidebarProvider)
 	);
 

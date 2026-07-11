@@ -133,7 +133,7 @@ type TreeNode = ProjectGroupItem | ProjectRowItem | MoreItem;
  * renders the project type as the row description, and exposes inline / context-menu actions
  * through the extension's commands (wired in `package.json` `view/item/context`).
  */
-export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
+export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
 	private readonly _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | null | void>();
 	readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> = this._onDidChangeTreeData.event;
 
@@ -147,6 +147,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 	refresh(): void {
 		this.loadProjects();
 		this._onDidChangeTreeData.fire();
+	}
+
+	dispose(): void {
+		this._onDidChangeTreeData.dispose();
 	}
 
 	private loadProjects(): void {

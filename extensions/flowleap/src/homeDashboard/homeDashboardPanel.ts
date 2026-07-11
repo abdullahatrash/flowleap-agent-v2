@@ -395,10 +395,10 @@ export class HomeDashboardPanel {
 		}
 
 		.project-summary-status:hover { opacity: 0.8; }
-		.project-summary-status.draft { background: color-mix(in srgb, var(--text-muted) 20%, transparent); color: var(--text-secondary); }
-		.project-summary-status.in-progress { background: color-mix(in srgb, var(--accent-green) 20%, transparent); color: var(--accent-green); }
-		.project-summary-status.review { background: color-mix(in srgb, var(--accent-yellow) 20%, transparent); color: var(--accent-yellow); }
+		.project-summary-status.active { background: color-mix(in srgb, var(--accent-green) 20%, transparent); color: var(--accent-green); }
+		.project-summary-status.in-review { background: color-mix(in srgb, var(--accent-yellow) 20%, transparent); color: var(--accent-yellow); }
 		.project-summary-status.complete { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+		.project-summary-status.archived { background: color-mix(in srgb, var(--text-muted) 20%, transparent); color: var(--text-secondary); }
 
 		.project-summary-details {
 			display: flex;
