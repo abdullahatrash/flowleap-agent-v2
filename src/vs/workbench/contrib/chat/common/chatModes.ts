@@ -461,9 +461,18 @@ function isCachedChatModeData(data: unknown): data is IChatModeData {
 		(mode.sessionTypes === undefined || Array.isArray(mode.sessionTypes));
 }
 
+/**
+ * Converts an optional icon id from a custom agent's header (a codicon id such as `search`)
+ * into a {@link ThemeIcon}, or `undefined` when no icon was specified.
+ */
+function toChatModeIcon(iconId: string | undefined): ThemeIcon | undefined {
+	return iconId ? ThemeIcon.fromId(iconId) : undefined;
+}
+
 export class CustomChatMode implements IChatMode {
 	private readonly _nameObservable: ISettableObservable<string>;
 	private readonly _descriptionObservable: ISettableObservable<string | undefined>;
+	private readonly _iconObservable: ISettableObservable<ThemeIcon | undefined>;
 	private readonly _customToolsObservable: ISettableObservable<readonly string[] | undefined>;
 	private readonly _modeInstructions: ISettableObservable<IChatModeInstructions>;
 	private readonly _uriObservable: ISettableObservable<URI>;
@@ -487,7 +496,7 @@ export class CustomChatMode implements IChatMode {
 	}
 
 	get icon(): IObservable<ThemeIcon | undefined> {
-		return constObservable(undefined);
+		return this._iconObservable;
 	}
 
 	public get isBuiltin(): boolean {
@@ -550,6 +559,7 @@ export class CustomChatMode implements IChatMode {
 		this.id = customChatMode.uri.toString();
 		this._nameObservable = observableValue('name', customChatMode.name);
 		this._descriptionObservable = observableValue('description', customChatMode.description);
+		this._iconObservable = observableValue('icon', toChatModeIcon(customChatMode.icon));
 		this._customToolsObservable = observableValue('customTools', customChatMode.tools);
 		this._modelObservable = observableValue('model', customChatMode.model);
 		this._argumentHintObservable = observableValue('argumentHint', customChatMode.argumentHint);
@@ -578,6 +588,7 @@ export class CustomChatMode implements IChatMode {
 			};
 			update(this._nameObservable, newData.name);
 			update(this._descriptionObservable, newData.description);
+			update(this._iconObservable, toChatModeIcon(newData.icon), (a, b) => a?.id === b?.id);
 			update(this._customToolsObservable, newData.tools, arraysEqual);
 			update(this._modelObservable, newData.model, arraysEqual);
 			update(this._argumentHintObservable, newData.argumentHint);

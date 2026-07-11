@@ -112,6 +112,10 @@ export const customAgentAttributes: Record<string, IAttributeDefinition> = {
 		type: 'scalar',
 		description: localize('promptHeader.agent.description', 'The description of the custom agent, what it does and when to use it.'),
 	},
+	[PromptHeaderAttributes.icon]: {
+		type: 'scalar',
+		description: localize('promptHeader.agent.icon', 'The icon (a codicon id such as `search`) shown next to the agent in the chat mode picker.'),
+	},
 	[PromptHeaderAttributes.argumentHint]: {
 		type: 'scalar',
 		description: localize('promptHeader.agent.argumentHint', 'The argument-hint describes what inputs the custom agent expects or supports.'),

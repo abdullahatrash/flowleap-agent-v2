@@ -277,6 +277,11 @@ export interface ICustomAgent {
 	readonly description?: string;
 
 	/**
+	 * Optional icon id (a codicon id such as `search`) shown next to the agent in the chat mode picker.
+	 */
+	readonly icon?: string;
+
+	/**
 	 * Tools metadata in the prompt header.
 	 */
 	readonly tools?: readonly string[];

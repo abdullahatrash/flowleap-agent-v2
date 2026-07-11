@@ -17,8 +17,9 @@ import { AgentConfig, AgentHandoff, buildAgentMarkdown, DEFAULT_READ_TOOLS, PATE
  * User-invocable agent for comprehensive patent research with subagent delegation.
  */
 const BASE_PATENT_RESEARCH_AGENT_CONFIG: AgentConfig = {
-	name: 'PatentResearch',
+	name: 'Patent Research',
 	description: 'Comprehensive patent research agent for prior art, landscape analysis, and citation tracking across EPO, USPTO, and academic sources',
+	icon: 'search',
 	argumentHint: 'Describe the invention or technology to research',
 	target: 'vscode',
 	agents: ['Explore'],

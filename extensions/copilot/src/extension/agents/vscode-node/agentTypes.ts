@@ -22,6 +22,7 @@ export interface AgentHandoff {
 export interface AgentConfig {
 	readonly name: string;
 	readonly description: string;
+	readonly icon?: string;
 	readonly argumentHint: string;
 	readonly tools: string[];
 	readonly model?: string | readonly string[];
@@ -112,6 +113,9 @@ export function buildAgentMarkdown(config: AgentConfig): string {
 	// Simple scalar fields
 	lines.push(`name: ${config.name}`);
 	lines.push(`description: ${config.description}`);
+	if (config.icon) {
+		lines.push(`icon: ${config.icon}`);
+	}
 	lines.push(`argument-hint: ${config.argumentHint}`);
 
 	// Model (optional) — supports a single string or a priority list of models

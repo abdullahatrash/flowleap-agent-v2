@@ -1545,6 +1545,7 @@ export namespace CustomAgent {
 
 		const name = ast.header?.name ?? extra.name ?? getCleanPromptName(uri);
 		const description = ast.header?.description ?? extra.description;
+		const icon = ast.header?.icon;
 		const target = getTarget(PromptsType.agent, ast.header ?? uri);
 		const id = uri.toString();
 
@@ -1565,7 +1566,7 @@ export namespace CustomAgent {
 		if (target === Target.Claude && tools) {
 			tools = mapClaudeTools(tools);
 		}
-		return { id, uri, name, description, model, tools, handOffs, argumentHint, target, visibility, agents, agentInstructions, source, sessionTypes, hooks, enabled };
+		return { id, uri, name, description, ...(icon !== undefined ? { icon } : {}), model, tools, handOffs, argumentHint, target, visibility, agents, agentInstructions, source, sessionTypes, hooks, enabled };
 
 	}
 }

@@ -1033,6 +1033,60 @@ suite('PromptsService', () => {
 			);
 		});
 
+		test('header with icon', async () => {
+			const rootFolderName = 'custom-agents-with-icon';
+			const rootFolder = `/${rootFolderName}`;
+			const rootFolderUri = URI.file(rootFolder);
+
+			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
+
+			await mockFiles(fileService, [
+				{
+					path: `${rootFolder}/.github/agents/agent1.agent.md`,
+					contents: [
+						'---',
+						'description: \'Patent research agent.\'',
+						'icon: search',
+						'---',
+						'I research patents.',
+					]
+				}
+			]);
+
+			const result = (await service.getCustomAgents(CancellationToken.None)).map(agent => ({ ...agent, uri: URI.from(agent.uri) }));
+			const expected: ICustomAgent[] = [
+				{
+					id: URI.joinPath(rootFolderUri, '.github/agents/agent1.agent.md').toString(),
+					name: 'agent1',
+					description: 'Patent research agent.',
+					icon: 'search',
+					agentInstructions: {
+						content: 'I research patents.',
+						toolReferences: [],
+						metadata: undefined
+					},
+					handOffs: undefined,
+					model: undefined,
+					argumentHint: undefined,
+					tools: undefined,
+					target: Target.Undefined,
+					visibility: { userInvocable: true, agentInvocable: true },
+					agents: undefined,
+					hooks: undefined,
+					sessionTypes: undefined,
+					uri: URI.joinPath(rootFolderUri, '.github/agents/agent1.agent.md'),
+					source: { storage: PromptsStorage.local },
+					enabled: true,
+				},
+			];
+
+			assert.deepEqual(
+				result,
+				expected,
+				'Must get custom agents with icon.',
+			);
+		});
+
 		test('header with target', async () => {
 			const rootFolderName = 'custom-agents-with-target';
 			const rootFolder = `/${rootFolderName}`;

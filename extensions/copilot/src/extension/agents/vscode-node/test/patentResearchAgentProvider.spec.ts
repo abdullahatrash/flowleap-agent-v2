@@ -84,7 +84,8 @@ suite('PatentResearchAgentProvider', () => {
 		const agents = await provider.provideCustomAgents({}, {} as any);
 		const content = await getAgentContent(agents[0]);
 
-		assert.ok(content.includes('name: PatentResearch'));
+		assert.ok(content.includes('name: Patent Research'), 'should emit the human-readable display name');
+		assert.ok(content.includes('icon: search'), 'should emit the mode-picker icon');
 		assert.ok(content.includes('agents: [\'Explore\']'), 'should delegate to the Explore subagent');
 		assert.ok(content.includes('You are a PATENT RESEARCH AGENT'), 'should carry the patent research body');
 		assert.ok(content.includes('handoffs:'));
