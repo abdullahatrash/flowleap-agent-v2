@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) FlowLeap. All rights reserved.
- *  Licensed under the MIT License.
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 // @ts-check
@@ -17,9 +17,6 @@
 	let pdfDoc = null;
 	let currentPage = 1;
 	let scale = 1.0;
-	let rendering = false;
-	let pendingPage = null;
-
 	// DOM Elements
 	const viewer = document.getElementById('viewer');
 	const loading = document.getElementById('loading');
@@ -89,11 +86,14 @@
 				bytes[i] = binaryString.charCodeAt(i);
 			}
 
-			// Load the PDF
+			// Load the PDF. Character maps and standard fonts are served from the
+			// extension's bundled pdfjs-dist assets (see window.pdfCMapUrl); the webview
+			// CSP blocks external hosts, so CJK patents would otherwise render blank.
 			const loadingTask = pdfjsLib.getDocument({
 				data: bytes,
-				cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
+				cMapUrl: window.pdfCMapUrl,
 				cMapPacked: true,
+				standardFontDataUrl: window.pdfStandardFontUrl,
 			});
 
 			pdfDoc = await loadingTask.promise;
@@ -179,7 +179,9 @@
 
 		// Render text layer
 		for (const item of textContent.items) {
-			if (!item.str) continue;
+			if (!item.str) {
+				continue;
+			}
 
 			const span = document.createElement('span');
 			span.textContent = item.str;
@@ -209,7 +211,9 @@
 	 * Re-render all pages with new scale
 	 */
 	async function rerender() {
-		if (!pdfDoc) return;
+		if (!pdfDoc) {
+			return;
+		}
 
 		const pages = viewer.querySelectorAll('.pdf-page');
 		for (const pageContainer of pages) {
@@ -232,7 +236,9 @@
 	 * @param {number} pageNum
 	 */
 	function goToPage(pageNum) {
-		if (!pdfDoc) return;
+		if (!pdfDoc) {
+			return;
+		}
 
 		pageNum = Math.max(1, Math.min(pageNum, pdfDoc.numPages));
 		currentPage = pageNum;
@@ -263,7 +269,9 @@
 	 * Fit to container width
 	 */
 	function fitToWidth() {
-		if (!pdfDoc) return;
+		if (!pdfDoc) {
+			return;
+		}
 
 		const container = document.getElementById('viewer-container');
 		const containerWidth = container.clientWidth - 60; // Account for padding
@@ -279,7 +287,9 @@
 	 * Update navigation button states
 	 */
 	function updateNavigation() {
-		if (!pdfDoc) return;
+		if (!pdfDoc) {
+			return;
+		}
 
 		prevButton.disabled = currentPage <= 1;
 		nextButton.disabled = currentPage >= pdfDoc.numPages;
@@ -351,7 +361,9 @@
 
 	// Keyboard navigation
 	document.addEventListener('keydown', (e) => {
-		if (e.target === pageInput) return;
+		if (e.target === pageInput) {
+			return;
+		}
 
 		switch (e.key) {
 			case 'ArrowLeft':
@@ -393,7 +405,9 @@
 	// Scroll tracking to update current page
 	const viewerContainer = document.getElementById('viewer-container');
 	viewerContainer.addEventListener('scroll', () => {
-		if (!pdfDoc) return;
+		if (!pdfDoc) {
+			return;
+		}
 
 		const pages = viewer.querySelectorAll('.pdf-page');
 		const containerRect = viewerContainer.getBoundingClientRect();

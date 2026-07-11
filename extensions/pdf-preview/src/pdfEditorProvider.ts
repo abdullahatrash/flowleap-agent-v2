@@ -48,7 +48,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 		// Handle messages from the webview
 		webviewPanel.webview.onDidReceiveMessage(async (message) => {
 			switch (message.type) {
-				case 'ready':
+				case 'ready': {
 					// Send the PDF data to the webview
 					const pdfData = await this._getPdfData(document.uri);
 					webviewPanel.webview.postMessage({
@@ -56,6 +56,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 						data: pdfData
 					});
 					break;
+				}
 
 				case 'extractText':
 					try {
@@ -188,6 +189,17 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 			vscode.Uri.joinPath(this._context.extensionUri, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs')
 		);
 
+		// Character maps and standard fonts are bundled from the pdfjs-dist package and
+		// served through the webview asset scheme. The webview CSP blocks external hosts,
+		// so a CDN cMapUrl would leave CJK (JP/CN/KR) patents blank — these must be local.
+		const cMapUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this._context.extensionUri, 'node_modules', 'pdfjs-dist', 'cmaps')
+		);
+
+		const standardFontUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this._context.extensionUri, 'node_modules', 'pdfjs-dist', 'standard_fonts')
+		);
+
 		const nonce = this._getNonce();
 
 		return `<!DOCTYPE html>
@@ -244,6 +256,8 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 	<script nonce="${nonce}">
 		window.pdfJsUrl = "${pdfJsUri}";
 		window.pdfWorkerUrl = "${pdfWorkerUri}";
+		window.pdfCMapUrl = "${cMapUri}/";
+		window.pdfStandardFontUrl = "${standardFontUri}/";
 	</script>
 	<script nonce="${nonce}" src="${scriptUri}" type="module"></script>
 </body>
