@@ -183,10 +183,11 @@ export class PdfTextExtractor {
 	}
 
 	/**
-	 * Extract text using Mistral OCR via backend API.
-	 * Returns markdown-formatted text and extracted images.
+	 * Extract text using the backend OCR service.
+	 * Returns markdown-formatted text, extracted images, and the processed page count.
+	 * When a cancellation token is supplied, cancelling aborts the in-flight request.
 	 */
-	async extractWithOCR(uri: vscode.Uri): Promise<{ markdown: string; images: OcrImage[] }> {
+	async extractWithOCR(uri: vscode.Uri, token?: vscode.CancellationToken): Promise<{ markdown: string; images: OcrImage[]; pageCount: number }> {
 		// Resolve the backend API base URL (env var > setting > production default). The base
 		// already includes the `/v1` suffix, so the OCR route is derived by appending `/ocr`.
 		const backendUrl = resolvePatentApiUrl();
@@ -211,6 +212,10 @@ export class PdfTextExtractor {
 			headers['Authorization'] = `Bearer ${session.accessToken}`;
 		}
 
+		// Abort the request if the caller cancels the surrounding progress.
+		const controller = new AbortController();
+		const cancelSubscription = token?.onCancellationRequested(() => controller.abort());
+
 		try {
 			// Call backend OCR endpoint
 			const response = await fetch(ocrUrl, {
@@ -220,25 +225,26 @@ export class PdfTextExtractor {
 					file: base64Data,
 					filename: filename,
 				}),
+				signal: controller.signal,
 			});
 
 			if (!response.ok) {
 				if (response.status === 401) {
 					throw new Error(session
-						? 'Your FlowLeap session has expired. Please sign in again to use OCR.'
-						: 'OCR requires a FlowLeap account. Please sign in to FlowLeap and try again.');
+						? 'Your FlowLeap session has expired. Please sign in again to extract text.'
+						: 'Text extraction requires a FlowLeap account. Please sign in to FlowLeap and try again.');
 				}
 				if (response.status === 402) {
-					throw new Error('OCR requires an active FlowLeap subscription or trial.');
+					throw new Error('Text extraction requires an active FlowLeap subscription or trial.');
 				}
 				const errorText = await response.text();
-				throw new Error(`OCR request failed: ${response.status} ${errorText}`);
+				throw new Error(`Text extraction failed: ${response.status} ${errorText}`);
 			}
 
 			const result = await response.json() as OcrResponse;
 
 			if (!result.success) {
-				throw new Error(result.error?.message || 'OCR processing failed');
+				throw new Error(result.error?.message || 'Text extraction failed');
 			}
 
 			this._logger.info(`OCR completed: ${result.pageCount} pages, ${result.images?.length || 0} images in ${result.processingTimeMs}ms`);
@@ -246,9 +252,15 @@ export class PdfTextExtractor {
 			return {
 				markdown: result.markdown,
 				images: result.images || [],
+				pageCount: result.pageCount,
 			};
 
 		} catch (error) {
+			// A cancelled request surfaces as an abort — normalise it to a cancellation.
+			if (token?.isCancellationRequested) {
+				throw new vscode.CancellationError();
+			}
+
 			this._logger.error(`OCR error: ${error instanceof Error ? error.message : String(error)}`);
 
 			if (error instanceof Error && error.message.includes('fetch')) {
@@ -256,6 +268,8 @@ export class PdfTextExtractor {
 			}
 
 			throw error;
+		} finally {
+			cancelSubscription?.dispose();
 		}
 	}
 

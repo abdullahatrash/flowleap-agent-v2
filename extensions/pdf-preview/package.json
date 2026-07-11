@@ -61,8 +61,7 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "pdf-preview.extractText",
-					"when": "activeCustomEditorId == 'flowleap.pdfPreview'"
+					"command": "pdf-preview.extractText"
 				},
 				{
 					"command": "pdf-preview.goToPage",

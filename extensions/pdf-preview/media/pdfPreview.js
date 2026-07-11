@@ -715,13 +715,30 @@
 	 * @param {string} message
 	 */
 	function showError(title, message) {
-		viewer.innerHTML = `
-			<div class="error-message">
-				<svg viewBox="0 0 16 16"><path fill="currentColor" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM7 4h2v5H7V4zm0 6h2v2H7v-2z"/></svg>
-				<h2>${title}</h2>
-				<p>${message}</p>
-			</div>
-		`;
+		// Build the card with textContent so message strings (which may contain
+		// markup-like characters, e.g. from PDF error text) render literally.
+		viewer.innerHTML = '';
+
+		const card = document.createElement('div');
+		card.className = 'error-message';
+
+		const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+		icon.setAttribute('viewBox', '0 0 16 16');
+		const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+		path.setAttribute('fill', 'currentColor');
+		path.setAttribute('d', 'M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM7 4h2v5H7V4zm0 6h2v2H7v-2z');
+		icon.appendChild(path);
+		card.appendChild(icon);
+
+		const heading = document.createElement('h2');
+		heading.textContent = title;
+		card.appendChild(heading);
+
+		const paragraph = document.createElement('p');
+		paragraph.textContent = message;
+		card.appendChild(paragraph);
+
+		viewer.appendChild(card);
 	}
 
 	// Event Listeners
@@ -916,7 +933,7 @@
 				console.log('[PDF Preview] OCR completed successfully');
 				if (extractOcrButton) {
 					extractOcrButton.disabled = false;
-					extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> OCR Extract';
+					extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> Extract with OCR';
 				}
 				break;
 
@@ -924,7 +941,7 @@
 				console.error('[PDF Preview] OCR failed:', message.message);
 				if (extractOcrButton) {
 					extractOcrButton.disabled = false;
-					extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> OCR Extract';
+					extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> Extract with OCR';
 				}
 				break;
 		}

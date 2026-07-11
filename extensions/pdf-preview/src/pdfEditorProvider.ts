@@ -73,7 +73,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 						});
 					} catch (err) {
 						const errorMessage = err instanceof Error ? err.message : String(err);
-						vscode.window.showErrorMessage(`Failed to extract text: ${errorMessage}`);
+						vscode.window.showErrorMessage(vscode.l10n.t('Failed to extract text: {0}', errorMessage));
 					}
 					break;
 
@@ -83,36 +83,57 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 						await vscode.window.withProgress(
 							{
 								location: vscode.ProgressLocation.Notification,
-								title: 'Extracting text with OCR (Mistral)...',
-								cancellable: false,
+								title: vscode.l10n.t('Extracting text…'),
+								cancellable: true,
 							},
-							async () => {
-								const result = await this._textExtractor.extractWithOCR(document.uri);
-								// Save markdown file next to the PDF with same name
-								const pdfPath = document.uri.fsPath;
-								const pdfDir = pdfPath.substring(0, pdfPath.lastIndexOf('/'));
-								const mdPath = pdfPath.replace(/\.pdf$/i, '.md');
-								const mdUri = vscode.Uri.file(mdPath);
+							async (progress, token) => {
+								const result = await this._textExtractor.extractWithOCR(document.uri, token);
+								if (token.isCancellationRequested) {
+									throw new vscode.CancellationError();
+								}
 
-								// Save images alongside the markdown
-								if (result.images && result.images.length > 0) {
-									for (const img of result.images) {
-										const ext = img.mimeType.split('/')[1] || 'jpeg';
-										const imgFilename = img.id.includes('.') ? img.id : `${img.id}.${ext}`;
-										const imgPath = `${pdfDir}/${imgFilename}`;
-										const imgUri = vscode.Uri.file(imgPath);
-										const imgData = Buffer.from(img.base64, 'base64');
-										await vscode.workspace.fs.writeFile(imgUri, imgData);
+								// Build output paths portably from the PDF's own folder (no '/'
+								// string surgery, which breaks on Windows).
+								const pdfDir = vscode.Uri.joinPath(document.uri, '..');
+								const mdName = this._basename(document.uri).replace(/\.pdf$/i, '.md');
+								const mdUri = vscode.Uri.joinPath(pdfDir, mdName);
+
+								const imageTargets = (result.images ?? []).map(img => {
+									const ext = img.mimeType.split('/')[1] || 'jpeg';
+									const imgFilename = img.id.includes('.') ? img.id : `${img.id}.${ext}`;
+									return { data: Buffer.from(img.base64, 'base64'), uri: vscode.Uri.joinPath(pdfDir, imgFilename) };
+								});
+
+								// Prompt before clobbering any existing extraction output.
+								if (await this._anyExists([mdUri, ...imageTargets.map(t => t.uri)])) {
+									const overwrite = vscode.l10n.t('Overwrite');
+									const choice = await vscode.window.showWarningMessage(
+										vscode.l10n.t("Extraction output already exists for '{0}'. Overwrite it?", mdName),
+										{ modal: true },
+										overwrite
+									);
+									if (choice !== overwrite) {
+										throw new vscode.CancellationError();
 									}
-									console.log(`[PDF Preview] Saved ${result.images.length} images`);
+								}
+
+								progress.report({ message: vscode.l10n.t('Saving {0} page(s)…', result.pageCount) });
+
+								for (const target of imageTargets) {
+									await vscode.workspace.fs.writeFile(target.uri, target.data);
+								}
+								if (imageTargets.length > 0) {
+									console.log(`[PDF Preview] Saved ${imageTargets.length} images`);
 								}
 
 								await vscode.workspace.fs.writeFile(mdUri, Buffer.from(result.markdown, 'utf-8'));
+
 								// Open the saved file beside the PDF
 								const extractedDoc = await vscode.workspace.openTextDocument(mdUri);
 								await vscode.window.showTextDocument(extractedDoc, { viewColumn: vscode.ViewColumn.Beside });
-								const imageMsg = result.images.length > 0 ? ` + ${result.images.length} images` : '';
-								vscode.window.showInformationMessage(`OCR complete: ${mdPath.split('/').pop()}${imageMsg}`);
+								vscode.window.showInformationMessage(imageTargets.length > 0
+									? vscode.l10n.t('Text extracted to {0} (+{1} images)', mdName, imageTargets.length)
+									: vscode.l10n.t('Text extracted to {0}', mdName));
 								webviewPanel.webview.postMessage({
 									type: 'ocrComplete',
 									text: result.markdown
@@ -120,14 +141,19 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 							}
 						);
 					} catch (err) {
-						const errorMessage = err instanceof Error ? err.message : String(err);
-						vscode.window.showErrorMessage(`OCR failed: ${errorMessage}`);
-						webviewPanel.webview.postMessage({ type: 'ocrError', message: errorMessage });
+						// Cancellation (progress cancel or overwrite declined) just resets the button.
+						if (err instanceof vscode.CancellationError) {
+							webviewPanel.webview.postMessage({ type: 'ocrError', message: '' });
+						} else {
+							const errorMessage = err instanceof Error ? err.message : String(err);
+							vscode.window.showErrorMessage(vscode.l10n.t('Text extraction failed: {0}', errorMessage));
+							webviewPanel.webview.postMessage({ type: 'ocrError', message: errorMessage });
+						}
 					}
 					break;
 
 				case 'error':
-					vscode.window.showErrorMessage(`PDF Error: ${message.message}`);
+					vscode.window.showErrorMessage(vscode.l10n.t('PDF error: {0}', message.message));
 					break;
 
 				case 'pageChanged':
@@ -169,6 +195,29 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 		const data = await vscode.workspace.fs.readFile(uri);
 		// Convert to base64 for sending to webview
 		return Buffer.from(data).toString('base64');
+	}
+
+	/**
+	 * Last path segment of a URI. Operates on the URI path (always '/'-separated),
+	 * so it is portable across platforms.
+	 */
+	private _basename(uri: vscode.Uri): string {
+		return uri.path.substring(uri.path.lastIndexOf('/') + 1);
+	}
+
+	/**
+	 * Whether any of the given files already exists.
+	 */
+	private async _anyExists(uris: vscode.Uri[]): Promise<boolean> {
+		for (const uri of uris) {
+			try {
+				await vscode.workspace.fs.stat(uri);
+				return true;
+			} catch {
+				// Does not exist — keep checking.
+			}
+		}
+		return false;
 	}
 
 	private async _getHtmlForWebview(webview: vscode.Webview, _uri: vscode.Uri): Promise<string> {
@@ -241,13 +290,13 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 			</button>
 		</div>
 		<div class="toolbar-group extract-group">
-			<button id="extract-text" title="Quick Extract (PDF.js) - Free, local">
+			<button id="extract-text" title="${vscode.l10n.t('Extract selectable text (fast, local)')}">
 				<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M2 2h12v2H2zM2 5h12v2H2zM2 8h8v2H2zM2 11h10v2H2z"/></svg>
-				Quick Extract
+				${vscode.l10n.t('Extract text')}
 			</button>
-			<button id="extract-ocr" title="OCR Extract (Mistral) - Better quality for scanned docs">
+			<button id="extract-ocr" title="${vscode.l10n.t('Extract text with OCR (best for scanned documents)')}">
 				<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg>
-				OCR Extract
+				${vscode.l10n.t('Extract with OCR')}
 			</button>
 		</div>
 	</div>

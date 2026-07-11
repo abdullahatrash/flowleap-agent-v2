@@ -53,6 +53,33 @@ export interface PdfMetadata {
 
 let textExtractor: PdfTextExtractor;
 
+/**
+ * Find an open PDF to operate on. Prefers the active tab when it is a PDF, otherwise
+ * returns the first PDF tab found across all groups — so the command works even when a
+ * text editor currently has focus.
+ */
+function findActivePdfUri(): vscode.Uri | undefined {
+	const isPdf = (input: unknown): input is { uri: vscode.Uri } => {
+		const uri = (input as { uri?: vscode.Uri } | undefined)?.uri;
+		return !!uri && uri.path.toLowerCase().endsWith('.pdf');
+	};
+
+	const activeInput = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+	if (isPdf(activeInput)) {
+		return activeInput.uri;
+	}
+
+	for (const group of vscode.window.tabGroups.all) {
+		for (const tab of group.tabs) {
+			if (isPdf(tab.input)) {
+				return tab.input.uri;
+			}
+		}
+	}
+
+	return undefined;
+}
+
 export function activate(context: vscode.ExtensionContext): PdfPreviewAPI {
 	const logger = vscode.window.createOutputChannel('PDF Preview', { log: true });
 	context.subscriptions.push(logger);
@@ -79,26 +106,19 @@ export function activate(context: vscode.ExtensionContext): PdfPreviewAPI {
 	// Register commands
 	context.subscriptions.push(
 		vscode.commands.registerCommand('pdf-preview.extractText', async () => {
-			const editor = vscode.window.activeTextEditor;
-			if (!editor) {
-				// Try to get the active custom editor
-				const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-				const tabInput = activeTab?.input as { uri?: vscode.Uri } | undefined;
-				if (tabInput?.uri) {
-					const uri = tabInput.uri;
-					if (uri.path.endsWith('.pdf')) {
-						const text = await textExtractor.extractAllText(uri);
-						const doc = await vscode.workspace.openTextDocument({
-							content: text,
-							language: 'plaintext'
-						});
-						await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
-						return;
-					}
-				}
-				vscode.window.showWarningMessage('No PDF file is currently active');
+			// Resolve a PDF from the open tabs. This must work even when a text editor
+			// (e.g. previously extracted output) currently has focus rather than the PDF.
+			const uri = findActivePdfUri();
+			if (!uri) {
+				vscode.window.showWarningMessage(vscode.l10n.t('No PDF file is currently active'));
 				return;
 			}
+			const text = await textExtractor.extractAllText(uri);
+			const doc = await vscode.workspace.openTextDocument({
+				content: text,
+				language: 'plaintext'
+			});
+			await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
 		})
 	);
 
