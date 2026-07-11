@@ -618,12 +618,12 @@ export class ProjectSidebarViewProvider implements vscode.WebviewViewProvider {
 						html += '</div></div>';
 						html += '<div class="project-time">' + p.time + '</div>';
 						html += '<div class="project-actions">';
-						html += '<button class="action-btn" data-btn="notes" title="Notes">\u{1F4DD}</button>';
-						html += '<button class="action-btn" data-btn="status" title="Status">\u25CF</button>';
+						html += '<button class="action-btn" data-btn="notes" title="Open Notes">\u{1F4DD}</button>';
+						html += '<button class="action-btn" data-btn="status" title="Change Status">\u25CF</button>';
 						if (p.archived) {
-							html += '<button class="action-btn" data-btn="unarchive" title="Unarchive">\u{21A9}</button>';
+							html += '<button class="action-btn" data-btn="unarchive" title="Restore Project">\u{21A9}</button>';
 						} else {
-							html += '<button class="action-btn" data-btn="archive" title="Archive">\u{1F4E6}</button>';
+							html += '<button class="action-btn" data-btn="archive" title="Archive Project">\u{1F4E6}</button>';
 						}
 						html += '</div>';
 						html += '</div>';
