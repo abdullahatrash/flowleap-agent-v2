@@ -370,7 +370,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		}
 		.card-desc { color: var(--vscode-descriptionForeground); margin-bottom: 12px; }
 		.field { margin-bottom: 10px; }
-		.field label { display: block; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+		.field label { display: block; font-size: 12px; color: var(--vscode-foreground); margin-bottom: 3px; }
+			.field-hint { display: block; font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 5px; line-height: 1.4; }
 		.field input {
 			width: 100%; padding: 6px 8px; border-radius: 3px;
 			background: var(--vscode-input-background);
@@ -416,11 +417,11 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			</div>
 			<p class="card-desc">Chat runs on your own AI provider key (Anthropic, OpenAI, OpenRouter, …).</p>
 			<div class="buttons">
-				<button id="add-model">Add AI Model (BYOK)</button>
+				<button id="add-model">Add AI Model</button>
 			</div>
 		</div>
 
-		<p class="privacy">Patent-data keys stay on this machine in secure storage and are only sent to reach the patent offices. They are never shown again once saved — entering a new value replaces the stored one.</p>
+		<p class="privacy">The patent-office keys below stay on this machine in secure storage and are only sent to reach the patent offices. They are never shown again once saved — entering a new value replaces the stored one.</p>
 
 		<div class="card" id="card-epo">
 			<div class="card-header">
@@ -430,11 +431,13 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<p class="card-desc">European patent data. Needs the Consumer Key and Consumer Secret of an app on your EPO OPS account.</p>
 			<div class="field">
 				<label for="epo-key">Consumer Key</label>
-				<input type="password" id="epo-key" placeholder="From developers.epo.org — My Apps → your app → Consumer Key">
+					<span class="field-hint">Find it at developers.epo.org — My Apps → your app → Consumer Key.</span>
+				<input type="password" id="epo-key" placeholder="Paste your Consumer Key">
 			</div>
 			<div class="field">
 				<label for="epo-secret">Consumer Secret</label>
-				<input type="password" id="epo-secret" placeholder="The matching Consumer Secret for that app">
+					<span class="field-hint">The matching Consumer Secret for that same app.</span>
+				<input type="password" id="epo-secret" placeholder="Paste your Consumer Secret">
 			</div>
 			<div class="buttons">
 				<button id="save-epo" disabled>Save</button>
@@ -453,7 +456,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<p class="card-desc">US patent data and citation analysis. Needs an Open Data Portal API key.</p>
 			<div class="field">
 				<label for="uspto-key">API Key</label>
-				<input type="password" id="uspto-key" placeholder="From data.uspto.gov/myodp — My ODP → API key">
+					<span class="field-hint">Find it at data.uspto.gov/myodp — My ODP → API key.</span>
+				<input type="password" id="uspto-key" placeholder="Paste your API key">
 			</div>
 			<div class="buttons">
 				<button id="save-uspto" disabled>Save</button>

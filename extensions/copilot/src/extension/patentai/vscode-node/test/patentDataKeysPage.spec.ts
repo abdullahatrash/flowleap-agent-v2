@@ -70,8 +70,11 @@ describe('renderPatentDataKeysPageHtml', () => {
 		expect(html).toContain('Consumer Key');
 		expect(html).toContain('Consumer Secret');
 		expect(html).toContain('API Key');
-		// The LLM BYOK entry point rendered alongside the data-key cards.
-		expect(html).toContain('Add AI Model (BYOK)');
+		// The LLM BYOK entry point rendered alongside the data-key cards — no acronym on the button.
+		expect(html).toContain('Add AI Model');
+		expect(html).not.toContain('Add AI Model (BYOK)');
+		// Key-source guidance is a persistent caption, not a load-bearing placeholder.
+		expect(html).toContain('field-hint');
 		expect(html).toContain('developers.epo.org');
 		expect(html).toContain('data.uspto.gov/myodp');
 		// Masked inputs only; no value attributes — key material never reaches the markup.
