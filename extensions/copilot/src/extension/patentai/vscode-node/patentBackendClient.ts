@@ -142,6 +142,12 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 export interface IPatentBackendRequestOptions {
 	/** Request timeout in milliseconds. Defaults to 30 000. */
 	readonly timeoutMs?: number;
+	/**
+	 * Target the backend ROOT host (the api origin with the `/v1` patent-tools suffix stripped) rather
+	 * than the `/v1` prefix — for account routes such as `/api/invoices` and `/billing/*` that live
+	 * outside `/v1`. Defaults to false (the normal `/v1` patent-data path).
+	 */
+	readonly rootHost?: boolean;
 }
 
 export const IPatentBackendClient = createServiceIdentifier<IPatentBackendClient>('IPatentBackendClient');
@@ -168,6 +174,14 @@ export interface IPatentBackendClient {
 	 * body. Same return/throw contract as {@link post}.
 	 */
 	get<T>(pathWithQuery: string, token: CancellationToken, options?: IPatentBackendRequestOptions): Promise<T>;
+
+	/**
+	 * Fetches the user's Polar customer-portal URL from `GET /api/invoices` (an account route on the
+	 * backend ROOT, outside the `/v1` patent-tools prefix). Returns the `portalUrl`. Inherits the seam's
+	 * typed errors — {@link AuthRequiredError} on `401`, {@link SubscriptionRequiredError} on a gated
+	 * `402` — and throws {@link PatentBackendError} when the backend returns no URL.
+	 */
+	getCustomerPortalUrl(token: CancellationToken): Promise<string>;
 }
 
 // ── Internal UX payloads ───────────────────────────────────────────────────────
@@ -280,6 +294,14 @@ export class PatentBackendClient implements IPatentBackendClient {
 		return this._request<T>('GET', pathWithQuery, undefined, token, options);
 	}
 
+	async getCustomerPortalUrl(token: CancellationToken): Promise<string> {
+		const res = await this.get<{ portalUrl?: string }>('/api/invoices', token, { rootHost: true });
+		if (!res?.portalUrl) {
+			throw new PatentBackendError(undefined, 'The FlowLeap backend did not return a customer portal URL.');
+		}
+		return res.portalUrl;
+	}
+
 	/**
 	 * Internal implementation for all HTTP requests to the FlowLeap backend. Orchestrates the
 	 * per-session read cache, retry-with-backoff, the centralized `401`/`402`/`400`/`429` gating, and
@@ -297,7 +319,10 @@ export class PatentBackendClient implements IPatentBackendClient {
 		}
 
 		const config = getPatentAIConfig();
-		const url = `${config.apiUrl}${path}`;
+		// Account routes (`/api/*`, `/billing/*`) live on the api origin without the `/v1` patent-tools
+		// suffix; patent-data routes keep the `/v1` prefix. Same gating/retry/telemetry either way.
+		const base = options?.rootHost ? config.apiUrl.replace(/\/v1\/?$/, '') : config.apiUrl;
+		const url = `${base}${path}`;
 		const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 		// Bearer token comes from the registry seam (FlowLeapAuthenticationProvider registers its accessor there),
 		// keeping the request path decoupled from the auth service. Read once so retries reuse it; the client

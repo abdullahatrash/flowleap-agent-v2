@@ -14,6 +14,7 @@ import {
 import { PatentDataKeysStore } from './patentDataKeysStore';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { NON_BYOK_VENDORS } from './patentEndpointProvider';
+import { computeAccountState } from '../common/accountSection';
 
 /**
  * The FlowLeap Settings sidebar (see CONTEXT.md): a webview VIEW in its own activity-bar
@@ -129,7 +130,10 @@ type PageInMessage =
 	| { readonly type: 'clear'; readonly provider: Provider }
 	| { readonly type: 'openSignup'; readonly provider: Provider }
 	| { readonly type: 'openModelPicker' }
-	| { readonly type: 'openPreferences' };
+	| { readonly type: 'openPreferences' }
+	| { readonly type: 'accountSignIn' }
+	| { readonly type: 'accountSignOut' }
+	| { readonly type: 'accountManageSubscription' };
 
 /** Register the `flowleap.patentDataKeys` command: reveals the FlowLeap Settings sidebar. An
  *  optional provider argument (e.g. from the Setup view or the invalid-key toast) focuses
@@ -192,6 +196,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly _store: PatentDataKeysStore,
 		private readonly _client: IPatentBackendClient,
+		private readonly _authProvider: FlowLeapAuthenticationProvider,
 		private readonly _logService: ILogService,
 	) { }
 
@@ -200,6 +205,8 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 			vscode.window.registerWebviewViewProvider(SETTINGS_VIEW_ID, this, { webviewOptions: { retainContextWhenHidden: true } }),
 			// Keep the badges live if keys change elsewhere (e.g. the store's initial async load).
 			this._store.onDidChange(() => this._postState()),
+			// Keep the Account section live across sign-in/out and the late profile-fetch `{changed}`.
+			this._authProvider.onDidChangeSessions(() => void this._postAccountState()),
 		);
 		return vscode.Disposable.from(...this._disposables);
 	}
@@ -245,6 +252,33 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		this._post({ type: 'status', provider, kind, message });
 	}
 
+	/**
+	 * Compute and post the Account section state (identity + subscription pill). Reads only data the
+	 * auth provider already fetches; the pure {@link computeAccountState} owns the mapping so the view
+	 * stays a reflector. Signed-out short-circuits without a subscription fetch.
+	 */
+	private async _postAccountState(): Promise<void> {
+		const identity = this._authProvider.getIdentity();
+		const snapshot = identity ? await this._authProvider.getSubscriptionSnapshot() : { status: 'unknown' as const };
+		const state = computeAccountState(identity, snapshot, Date.now());
+		this._post({ type: 'account', ...state });
+	}
+
+	/**
+	 * Open the user's Polar customer portal in the browser. Fetches the URL through the backend-client
+	 * seam (inheriting its typed 401/402 errors) and surfaces a friendly toast on failure so the button
+	 * never appears broken.
+	 */
+	private async _openCustomerPortal(): Promise<void> {
+		try {
+			const portalUrl = await this._client.getCustomerPortalUrl(CancellationToken.None);
+			await vscode.env.openExternal(vscode.Uri.parse(portalUrl));
+		} catch (error) {
+			this._logService.error(`[Patent AI] Manage subscription failed: ${error instanceof Error ? error.message : String(error)}`);
+			void vscode.window.showErrorMessage('Could not open the FlowLeap subscription portal. Please try again in a moment.');
+		}
+	}
+
 	private async _onMessage(message: PageInMessage): Promise<void> {
 		try {
 			switch (message.type) {
@@ -252,6 +286,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					const focus = this._pendingFocus;
 					this._pendingFocus = undefined;
 					this._postState(focus);
+					void this._postAccountState();
 					return;
 				}
 				case 'saveEpo': {
@@ -293,6 +328,16 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					return;
 				case 'openPreferences':
 					await vscode.commands.executeCommand('workbench.action.openSettings', '@flowleap');
+					return;
+				case 'accountSignIn':
+					// The canonical user-facing sign-in command owned by the FlowLeap auth provider.
+					await vscode.commands.executeCommand('flowleap.signIn');
+					return;
+				case 'accountSignOut':
+					await vscode.commands.executeCommand('patent-ai.signOut');
+					return;
+				case 'accountManageSubscription':
+					await this._openCustomerPortal();
 					return;
 			}
 		} catch (error) {
@@ -357,6 +402,24 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			outline: 2px solid transparent;
 		}
 		.card.focused { outline-color: var(--vscode-focusBorder); }
+		.account-identity { margin-bottom: 10px; }
+		.account-name { font-size: 14px; font-weight: 600; }
+		.account-email { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 2px; word-break: break-all; }
+		.pill {
+			display: inline-block; font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-bottom: 10px;
+			background: color-mix(in srgb, var(--vscode-descriptionForeground) 18%, transparent);
+			color: var(--vscode-descriptionForeground);
+		}
+		.pill.trial, .pill.active {
+			background: color-mix(in srgb, var(--vscode-testing-iconPassed, #22c55e) 18%, transparent);
+			color: var(--vscode-testing-iconPassed, #22c55e);
+		}
+		.pill.warn {
+			background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #f59e0b) 20%, transparent);
+			color: var(--vscode-editorWarning-foreground, #f59e0b);
+		}
+		.account-signout { margin-left: auto; font-size: 12px; }
+		[hidden] { display: none !important; }
 		.card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
 		.card-title { font-size: 14px; font-weight: 600; flex: 1; }
 		.badge {
@@ -411,6 +474,29 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 </head>
 <body>
 	<div class="container">
+		<div class="card" id="card-account">
+			<div class="card-header">
+				<div class="card-title">Account</div>
+			</div>
+			<div id="account-signed-out" hidden>
+				<p class="card-desc">Sign in to FlowLeap to sync your subscription and patent access.</p>
+				<div class="buttons">
+					<button id="account-signin">Sign In</button>
+				</div>
+			</div>
+			<div id="account-signed-in" hidden>
+				<div class="account-identity">
+					<div class="account-name" id="account-name" hidden></div>
+					<div class="account-email" id="account-email" hidden></div>
+				</div>
+				<span class="pill" id="account-pill" hidden></span>
+				<div class="buttons">
+					<button class="secondary" id="account-manage" hidden>Manage Subscription</button>
+					<a href="#" class="account-signout" id="account-signout">Sign out</a>
+				</div>
+			</div>
+		</div>
+
 		<div class="card" id="card-model">
 			<div class="card-header">
 				<div class="card-title">AI Model</div>
@@ -494,6 +580,30 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			el.textContent = (kind === 'ok' ? '✓ ' : kind === 'error' ? '✗ ' : kind === 'warn' ? '⚠ ' : '') + message;
 		}
 
+		function renderAccount(state) {
+			const signedIn = state.signedIn === true;
+			$('account-signed-out').hidden = signedIn;
+			$('account-signed-in').hidden = !signedIn;
+			if (!signedIn) {
+				return;
+			}
+			const name = $('account-name');
+			name.textContent = state.name || '';
+			name.hidden = !state.name;
+			const email = $('account-email');
+			email.textContent = state.email || '';
+			email.hidden = !state.email;
+			const pill = $('account-pill');
+			if (state.pill) {
+				pill.textContent = state.pill.label;
+				pill.className = 'pill ' + state.pill.tone;
+				pill.hidden = false;
+			} else {
+				pill.hidden = true;
+			}
+			$('account-manage').hidden = !state.canManageSubscription;
+		}
+
 		function focusCard(provider) {
 			const card = $('card-' + provider);
 			card.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -526,9 +636,14 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				setStatus(m.provider, m.kind, m.message);
 			} else if (m.type === 'focus') {
 				focusCard(m.provider);
+			} else if (m.type === 'account') {
+				renderAccount(m);
 			}
 		});
 
+		$('account-signin').addEventListener('click', () => vscode.postMessage({ type: 'accountSignIn' }));
+		$('account-manage').addEventListener('click', () => vscode.postMessage({ type: 'accountManageSubscription' }));
+		$('account-signout').addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'accountSignOut' }); });
 		$('add-model').addEventListener('click', () => vscode.postMessage({ type: 'openModelPicker' }));
 		$('save-epo').addEventListener('click', () => {
 			vscode.postMessage({ type: 'saveEpo', key: $('epo-key').value, secret: $('epo-secret').value });

@@ -67,6 +67,8 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	// used to enrich its Accounts-menu label.
 	private _currentSession: vscode.AuthenticationSession | undefined;
 	private _cachedUserInfo: { email?: string; name?: string } | undefined;
+	// Dedup guard so repeated getIdentity()/session builds don't fan out concurrent profile fetches.
+	private _userInfoFetchInFlight = false;
 
 	// Pending auth callback state
 	private _pendingAuthResolve?: (data: TokenCallbackData) => void;
@@ -422,6 +424,27 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	}
 
 	/**
+	 * The signed-in user's identity for account UI, or `undefined` when signed out. Derived from the
+	 * current token's JWT claims, falling back to the backend profile cached by {@link _fetchUserInfo}.
+	 * Sync and side-effect free apart from kicking a one-time profile fetch when nothing is cached yet;
+	 * that fetch fires `{changed}` on {@link onDidChangeSessions} when it resolves, so a caller listening
+	 * to session changes re-reads and picks up the email that arrived late.
+	 */
+	public getIdentity(): { name?: string; email?: string } | undefined {
+		const token = this.getAccessToken();
+		if (!token) {
+			return undefined;
+		}
+		const claims = this._parseJwtClaims(token);
+		const email = claims.email || this._cachedUserInfo?.email;
+		const name = claims.name || this._cachedUserInfo?.name;
+		if (!email && !this._cachedUserInfo) {
+			void this._fetchUserInfo(token);
+		}
+		return { name, email };
+	}
+
+	/**
 	 * Resolve once stored-token restoration has completed, so callers can read
 	 * {@link isAuthenticated} reliably during activation.
 	 */
@@ -524,6 +547,10 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 * Fetch the user profile from the backend and refresh the session label.
 	 */
 	private async _fetchUserInfo(token: string): Promise<void> {
+		if (this._userInfoFetchInFlight) {
+			return;
+		}
+		this._userInfoFetchInFlight = true;
 		try {
 			const config = getPatentAIConfig();
 			const profileUrl = `${config.apiUrl.replace(/\/v1\/?$/, '')}/api/profile`;
@@ -545,6 +572,8 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 			}
 		} catch {
 			// Silently fail — label stays as fallback.
+		} finally {
+			this._userInfoFetchInFlight = false;
 		}
 	}
 
@@ -625,13 +654,17 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 			if (!res.ok) {
 				return { status: 'unknown' };
 			}
-			const data = await res.json() as { hasSubscription?: boolean; subscription?: { status?: string; currentPeriodEnd?: string | null } | null };
+			const data = await res.json() as { hasSubscription?: boolean; subscription?: { status?: string; currentPeriodEnd?: string | null; cancelAtPeriodEnd?: boolean } | null };
 			const rawStatus = data.subscription?.status;
 			const status: FlowLeapSubscriptionStatus =
 				rawStatus === 'active' ? 'active'
 					: rawStatus === 'trialing' ? 'trialing'
 						: 'inactive';
-			return { status, currentPeriodEnd: data.subscription?.currentPeriodEnd ?? null };
+			return {
+				status,
+				currentPeriodEnd: data.subscription?.currentPeriodEnd ?? null,
+				cancelAtPeriodEnd: data.subscription?.cancelAtPeriodEnd ?? false,
+			};
 		} catch (error) {
 			this._logService.warn(`[Patent AI Auth] Failed to determine subscription access: ${error}`);
 			return { status: 'unknown' };

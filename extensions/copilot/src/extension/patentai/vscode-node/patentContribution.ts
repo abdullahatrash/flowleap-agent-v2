@@ -74,8 +74,8 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// The FlowLeap Settings sidebar (own activity-bar gear icon): patent-data key
 			// fields + the Add AI Model (BYOK) entry point. The flowleap.patentDataKeys
 			// command reveals it, so all deep links land there.
-			if (this._dataKeysStore) {
-				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._logService);
+			if (this._dataKeysStore && this._authProvider) {
+				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService);
 				this._register(viewProvider.register());
 				this._register(registerPatentDataKeysCommand(viewProvider, this._logService));
 			}

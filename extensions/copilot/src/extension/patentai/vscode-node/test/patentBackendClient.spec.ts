@@ -746,3 +746,39 @@ describe('session read cache (#89)', () => {
 		expect(fetch.calls()).toBe(2);
 	});
 });
+
+describe('getCustomerPortalUrl (#118)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-portal'));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('returns the portalUrl and targets the ROOT host (no /v1 prefix)', async () => {
+		let capturedUrl: string | undefined;
+		const { client } = makeClient(async url => {
+			capturedUrl = url;
+			return makeResponse(200, { portalUrl: 'https://polar.sh/portal/abc' });
+		});
+
+		const url = await client.getCustomerPortalUrl(makeToken());
+
+		expect(url).toBe('https://polar.sh/portal/abc');
+		// apiUrl is https://api.test/v1; the account route drops the /v1 suffix.
+		expect(capturedUrl).toBe('https://api.test/api/invoices');
+	});
+
+	it('throws PatentBackendError when the backend returns no URL', async () => {
+		const { client } = makeClient(async () => makeResponse(200, {}));
+
+		const thrown = await captureThrow(() => client.getCustomerPortalUrl(makeToken()));
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+	});
+
+	it('inherits the seam typed error on 401', async () => {
+		const { client } = makeClient(async () => makeResponse(401, { error: { message: 'expired' } }));
+
+		const thrown = await captureThrow(() => client.getCustomerPortalUrl(makeToken()));
+
+		expect(thrown).toBeInstanceOf(AuthRequiredError);
+	});
+});

@@ -20,6 +20,12 @@ export type FlowLeapSubscriptionStatus = 'active' | 'trialing' | 'inactive' | 'u
 export interface FlowLeapSubscriptionSnapshot {
 	readonly status: FlowLeapSubscriptionStatus;
 	readonly currentPeriodEnd?: string | null;
+	/**
+	 * True when the backend reports the subscription is set to cancel at the end of the current
+	 * period (Polar `cancelAtPeriodEnd`) — still `active` today, but ending on `currentPeriodEnd`.
+	 * Lets the Account pill distinguish "Active" from "Cancels on {date}". Absent/false otherwise.
+	 */
+	readonly cancelAtPeriodEnd?: boolean;
 }
 
 /**

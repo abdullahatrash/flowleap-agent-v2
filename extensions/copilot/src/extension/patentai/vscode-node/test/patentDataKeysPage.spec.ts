@@ -13,6 +13,7 @@ function makeClient(behavior: { get?: () => Promise<unknown>; post?: () => Promi
 		_serviceBrand: undefined,
 		get: behavior.get ?? (async () => ({})),
 		post: behavior.post ?? (async () => ({})),
+		getCustomerPortalUrl: async () => '',
 	} as IPatentBackendClient;
 }
 

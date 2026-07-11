@@ -27,6 +27,7 @@ function makeBackendClient(postPayload?: unknown, getPayload?: unknown) {
 	const calls: { path: string; body?: unknown }[] = [];
 	const client: IPatentBackendClient = {
 		_serviceBrand: undefined,
+		async getCustomerPortalUrl(): Promise<string> { return ''; },
 		async post<T>(path: string, body: unknown, _token: CancellationToken, _options?: IPatentBackendRequestOptions): Promise<T> {
 			calls.push({ path, body });
 			return postPayload as T;
@@ -168,6 +169,7 @@ describe('claim-analysis tools', () => {
 		// second has two, so the third row's second column falls back to "—".
 		const client: IPatentBackendClient = {
 			_serviceBrand: undefined,
+			async getCustomerPortalUrl(): Promise<string> { return ''; },
 			async post<T>(): Promise<T> {
 				throw new Error('compare_claims does not POST');
 			},

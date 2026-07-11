@@ -20,6 +20,7 @@ function makeBackendClient(postPayload?: unknown) {
 	const calls: { path: string; body?: unknown }[] = [];
 	const client: IPatentBackendClient = {
 		_serviceBrand: undefined,
+		async getCustomerPortalUrl(): Promise<string> { return ''; },
 		async post<T>(path: string, body: unknown, _token: CancellationToken, _options?: IPatentBackendRequestOptions): Promise<T> {
 			calls.push({ path, body });
 			return postPayload as T;
@@ -122,6 +123,7 @@ describe('GetContinuityTool', () => {
 		const calls: string[] = [];
 		const client: IPatentBackendClient = {
 			_serviceBrand: undefined,
+			async getCustomerPortalUrl(): Promise<string> { return ''; },
 			async post<T>(path: string): Promise<T> { calls.push(path); throw new PatentBackendError(404, 'not found'); },
 			async get<T>(): Promise<T> { return undefined as T; },
 		};
