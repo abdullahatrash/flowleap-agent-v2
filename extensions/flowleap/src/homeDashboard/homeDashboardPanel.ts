@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { PatentProject } from '../projectSidebar/projectTreeProvider';
+import { PatentProject, ProjectType, DisplayStatus, PROJECT_TYPE_LABELS, PROJECT_STATUS_LABELS, mapLegacyStatus, displayStatusOf } from '../projectSidebar/projectTreeProvider';
 
 export class HomeDashboardPanel {
 	public static currentPanel: HomeDashboardPanel | undefined;
@@ -299,10 +299,10 @@ export class HomeDashboardPanel {
 			flex-shrink: 0;
 		}
 
-		.project-status-dot.draft { background: var(--text-muted); }
-		.project-status-dot.in-progress { background: var(--accent-green); }
-		.project-status-dot.review { background: var(--accent-yellow); }
+		.project-status-dot.active { background: var(--accent-green); }
+		.project-status-dot.in-review { background: var(--accent-yellow); }
 		.project-status-dot.complete { background: var(--accent); }
+		.project-status-dot.archived { background: var(--text-muted); }
 
 		.project-info {
 			flex: 1;
@@ -552,26 +552,16 @@ export class HomeDashboardPanel {
 	}
 
 	private _renderProjectView(project: CurrentProject): string {
-		const statusLabels: Record<string, string> = {
-			'draft': 'Draft',
-			'in-progress': 'In Progress',
-			'review': 'Under Review',
-			'complete': 'Complete'
-		};
-		const typeLabels: Record<string, string> = {
-			'patent-analysis': 'Patent Analysis',
-			'prior-art-search': 'Prior Art Search',
-			'custom': 'Custom'
-		};
+		const display: DisplayStatus = project.archived ? 'archived' : mapLegacyStatus(project.status);
 
 		return `
 		<div class="project-summary">
 			<div class="project-summary-header">
 				<div class="project-summary-name">${this._escapeHtml(project.name)}</div>
-				<div class="project-summary-status ${project.status}" data-action="setStatus" data-path="${this._escapeHtml(project.path)}">${statusLabels[project.status] ?? 'Draft'}</div>
+				<div class="project-summary-status ${display}" data-action="setStatus" data-path="${this._escapeHtml(project.path)}">${PROJECT_STATUS_LABELS[display]}</div>
 			</div>
 			<div class="project-summary-details">
-				<span>${typeLabels[project.type] ?? 'Project'}</span>
+				<span>${PROJECT_TYPE_LABELS[project.type as ProjectType] ?? 'Project'}</span>
 				${project.created ? `<span>Created ${this._formatDate(project.created)}</span>` : ''}
 			</div>
 			${(project.tags ?? []).length > 0 ? `
@@ -612,7 +602,8 @@ export class HomeDashboardPanel {
 				name: config.name || path.basename(workspacePath),
 				path: workspacePath,
 				type: config.type || 'custom',
-				status: config.status || 'draft',
+				status: config.status || 'active',
+				archived: config.archived ?? false,
 				tags: config.tags || [],
 				created: config.created
 			};
@@ -624,11 +615,6 @@ export class HomeDashboardPanel {
 
 	private async _getRecentProjects(): Promise<RecentProject[]> {
 		const storedProjects = this._context.globalState.get<PatentProject[]>('flowleap.projects', []);
-		const typeLabels: Record<string, string> = {
-			'patent-analysis': 'Patent',
-			'prior-art-search': 'Prior Art',
-			'custom': 'Custom'
-		};
 
 		// Mirror the project sidebar: only real FlowLeap projects, archived hidden,
 		// sorted newest-first by last access.
@@ -640,8 +626,8 @@ export class HomeDashboardPanel {
 				name: p.name,
 				path: p.path,
 				type: p.type,
-				typeLabel: typeLabels[p.type] ?? '',
-				status: p.status ?? 'draft',
+				typeLabel: PROJECT_TYPE_LABELS[p.type] ?? '',
+				status: displayStatusOf(p),
 				tags: p.tags ?? [],
 				time: this._getTimeAgo(new Date(p.lastAccessed))
 			}));
@@ -701,6 +687,7 @@ interface CurrentProject {
 	path: string;
 	type: string;
 	status: string;
+	archived: boolean;
 	tags: string[];
 	created?: string;
 }

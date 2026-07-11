@@ -7,39 +7,75 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { HomeDashboardPanel } from './homeDashboard/homeDashboardPanel';
-import { ProjectSidebarViewProvider, PatentProject, ProjectType, ProjectStatus } from './projectSidebar/projectTreeProvider';
+import {
+	ProjectTreeProvider,
+	PatentProject,
+	ProjectType,
+	ProjectStatus,
+	DisplayStatus,
+	PROJECT_TYPE_LABELS,
+	PROJECT_STATUS_LABELS
+} from './projectSidebar/projectTreeProvider';
 import { ChatBarController, ChatInputPanel } from './chatBar/chatBarController';
 import { registerUpdateNotifier } from './updateNotifier/updateNotifier';
 
 let chatBarController: ChatBarController;
-let projectSidebarProvider: ProjectSidebarViewProvider;
+let projectSidebarProvider: ProjectTreeProvider;
 
-const PROJECT_TYPE_LABELS: Record<ProjectType, { label: string; icon: string; placeholder: string; description: string }> = {
+/**
+ * Per-type creation metadata: the icon, a name placeholder example, and a one-line description
+ * for the "New Project" quick-pick. The human-readable label lives in {@link PROJECT_TYPE_LABELS}
+ * (shared with the tree), so the type name has a single source of truth.
+ */
+const PROJECT_TYPE_INFO: Record<ProjectType, { icon: string; placeholder: string; description: string }> = {
 	'patent-analysis': {
-		label: 'Patent Analysis',
 		icon: '$(file-text)',
-		placeholder: 'e.g., EP1234567 — Valve mechanism',
-		description: 'Analyze a specific patent or application'
+		placeholder: 'e.g., US10123456B2 — invalidity study',
+		description: 'Work on a specific granted patent or application, including invalidity'
 	},
 	'prior-art-search': {
-		label: 'Prior Art Search',
 		icon: '$(search)',
 		placeholder: 'e.g., Self-healing concrete disclosure',
 		description: 'Search prior art from an invention disclosure'
 	},
+	'freedom-to-operate': {
+		icon: '$(law)',
+		placeholder: 'e.g., Drone delivery gimbal — US launch',
+		description: 'Clear a product or feature against in-force patents'
+	},
+	'patent-landscape': {
+		icon: '$(graph)',
+		placeholder: 'e.g., Solid-state battery electrolytes 2018-2025',
+		description: 'Map the patent activity across a technology area'
+	},
+	'claim-analysis': {
+		icon: '$(list-tree)',
+		placeholder: 'e.g., EP1234567 claim 1 — element mapping',
+		description: 'Extract and analyze the claims of a patent'
+	},
 	'custom': {
-		label: 'Custom Project',
 		icon: '$(folder)',
-		placeholder: 'e.g., Client ABC landscape study',
+		placeholder: 'e.g., Client ABC portfolio review',
 		description: 'Blank project — organize it your way'
 	}
 };
 
-const STATUS_LABELS: Record<ProjectStatus, { label: string; icon: string }> = {
-	'draft': { label: 'Draft', icon: '$(circle-outline)' },
-	'in-progress': { label: 'In Progress', icon: '$(circle-filled)' },
-	'review': { label: 'Under Review', icon: '$(eye)' },
-	'complete': { label: 'Complete', icon: '$(check)' }
+/** Codicon shown against each display status in the "Set Project Status" quick-pick. */
+const STATUS_PICK_ICONS: Record<DisplayStatus, string> = {
+	'active': '$(circle-filled)',
+	'in-review': '$(eye)',
+	'complete': '$(pass-filled)',
+	'archived': '$(archive)'
+};
+
+/** H2 sections seeded into `notes.md` for each project type. */
+const NOTES_SECTIONS: Record<ProjectType, string[]> = {
+	'patent-analysis': ['Patent Under Analysis', 'Claim Map', 'Prior Art of Record', 'Findings', 'Open Questions'],
+	'prior-art-search': ['Search Scope', 'Search Queries', 'Relevant References', 'Gaps', 'References'],
+	'freedom-to-operate': ['Product / Feature', 'Blocking Patents', 'Claim Charts', 'Design-Arounds', 'Conclusion'],
+	'patent-landscape': ['Technology Scope', 'Key Players', 'Trends', 'Notable Patents', 'References'],
+	'claim-analysis': ['Claims', 'Element Breakdown', 'Support in Specification', 'Findings', 'Open Questions'],
+	'custom': ['Key Findings', 'Open Questions', 'References']
 };
 
 function getProjectsDirectory(): string {
@@ -52,20 +88,35 @@ function getProjectsDirectory(): string {
 }
 
 function getNotesTemplate(projectName: string, projectType: ProjectType): string {
-	const typeLabel = PROJECT_TYPE_LABELS[projectType].label;
-	return `# ${projectName}
+	const typeLabel = PROJECT_TYPE_LABELS[projectType];
+	const body = NOTES_SECTIONS[projectType].map(section => `## ${section}\n\n`).join('\n');
+	return `# ${projectName}\n\n> ${typeLabel}\n\n${body}`;
+}
 
-> ${typeLabel}
+/** Convert a project name into a filesystem-safe folder name. */
+function toFolderName(name: string): string {
+	return name.replace(/[<>:"/\\|?*]/g, '-').trim();
+}
 
-## Key Findings
-
-
-## Open Questions
-
-
-## References
-
-`;
+/**
+ * Validate a project name for the creation and rename input boxes: non-empty, yields a usable
+ * folder name, and does not collide with an existing project's folder (excluding `currentPath`,
+ * so renaming a project to its own name is allowed).
+ */
+function validateProjectName(value: string, existing: PatentProject[], currentPath?: string): string | undefined {
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return 'Project name cannot be empty';
+	}
+	const folderName = toFolderName(trimmed);
+	if (!folderName) {
+		return 'Project name must contain a usable character';
+	}
+	const targetPath = path.join(getProjectsDirectory(), folderName);
+	if (existing.some(p => p.path === targetPath && p.path !== currentPath)) {
+		return `A project named "${folderName}" already exists`;
+	}
+	return undefined;
 }
 
 function getStoredProjects(context: vscode.ExtensionContext): PatentProject[] {
@@ -99,13 +150,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	// extension's patent-ai service; this shell only *consumes* sign-in state via
 	// `vscode.authentication.getSession('flowleap', …)` and aliases sign-in to `patent-ai.signIn`.
 
-	// Register Project Sidebar
-	projectSidebarProvider = new ProjectSidebarViewProvider(context.extensionUri, context);
+	// Register Project Sidebar (native tree)
+	projectSidebarProvider = new ProjectTreeProvider(context);
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(
-			ProjectSidebarViewProvider.viewType,
-			projectSidebarProvider
-		)
+		vscode.window.registerTreeDataProvider('flowleap.projectSidebar', projectSidebarProvider)
 	);
 
 	// Register Chat Input Panel
@@ -152,10 +200,10 @@ export async function activate(context: vscode.ExtensionContext) {
 				projectType = preselectedType;
 			} else {
 				// Pick project type
-				const typeItems = Object.entries(PROJECT_TYPE_LABELS).map(([type, info]) => ({
-					label: `${info.icon} ${info.label}`,
-					description: info.description,
-					type: type as ProjectType
+				const typeItems = (Object.keys(PROJECT_TYPE_INFO) as ProjectType[]).map(type => ({
+					label: `${PROJECT_TYPE_INFO[type].icon} ${PROJECT_TYPE_LABELS[type]}`,
+					description: PROJECT_TYPE_INFO[type].description,
+					type
 				}));
 
 				const picked = await vscode.window.showQuickPick(typeItems, {
@@ -170,11 +218,11 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 
 			// Ask for project name
-			const typeInfo = PROJECT_TYPE_LABELS[projectType];
 			const projectName = await vscode.window.showInputBox({
 				prompt: 'Project name',
-				placeHolder: typeInfo.placeholder,
-				title: `New ${typeInfo.label}`
+				placeHolder: PROJECT_TYPE_INFO[projectType].placeholder,
+				title: `New ${PROJECT_TYPE_LABELS[projectType]}`,
+				validateInput: value => validateProjectName(value, getStoredProjects(context))
 			});
 
 			if (!projectName) {
@@ -182,7 +230,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 
 			// Sanitize folder name
-			const folderName = projectName.replace(/[<>:"/\\|?*]/g, '-').trim();
+			const folderName = toFolderName(projectName);
 			const projectsDir = getProjectsDirectory();
 			const projectPath = path.join(projectsDir, folderName);
 			const projectUri = vscode.Uri.file(projectPath);
@@ -202,7 +250,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				const config = {
 					name: projectName,
 					type: projectType,
-					status: 'draft' as ProjectStatus,
+					status: 'active' as ProjectStatus,
 					tags: [],
 					archived: false,
 					created: new Date().toISOString()
@@ -223,7 +271,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					name: projectName,
 					path: projectPath,
 					type: projectType,
-					status: 'draft',
+					status: 'active',
 					tags: [],
 					archived: false,
 					lastAccessed: new Date(),
@@ -314,9 +362,9 @@ export async function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			const statusItems = Object.entries(STATUS_LABELS).map(([status, info]) => ({
-				label: `${info.icon} ${info.label}`,
-				status: status as ProjectStatus
+			const statusItems = (Object.keys(PROJECT_STATUS_LABELS) as DisplayStatus[]).map(status => ({
+				label: `${STATUS_PICK_ICONS[status]} ${PROJECT_STATUS_LABELS[status]}`,
+				status
 			}));
 
 			const picked = await vscode.window.showQuickPick(statusItems, {
@@ -327,21 +375,31 @@ export async function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
+			// "Archived" is persisted through the separate `archived` flag; the three working
+			// statuses clear it. Writing here also lazily rewrites any legacy stored status.
+			const nowArchived = picked.status === 'archived';
+
 			// Update config.json
 			const config = await readProjectConfig(projectPath) ?? {};
-			config.status = picked.status;
+			config.archived = nowArchived;
+			if (picked.status !== 'archived') {
+				config.status = picked.status;
+			}
 			await writeProjectConfig(projectPath, config);
 
 			// Update globalState
 			const storedProjects = getStoredProjects(context);
 			const stored = storedProjects.find(p => p.path === projectPath);
 			if (stored) {
-				stored.status = picked.status;
+				stored.archived = nowArchived;
+				if (picked.status !== 'archived') {
+					stored.status = picked.status;
+				}
 				await saveStoredProjects(context, storedProjects);
 			}
 
 			refreshProjectViews();
-			vscode.window.showInformationMessage(`Status set to ${STATUS_LABELS[picked.status].label}`);
+			vscode.window.showInformationMessage(`Status set to ${PROJECT_STATUS_LABELS[picked.status]}`);
 		})
 	);
 

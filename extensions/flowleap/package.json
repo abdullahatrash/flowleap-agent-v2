@@ -29,7 +29,7 @@
         {
           "id": "flowleap-sidebar",
           "title": "FlowLeap",
-          "icon": "$(beaker)"
+          "icon": "$(briefcase)"
         }
       ],
       "panel": [
@@ -43,10 +43,9 @@
     "views": {
       "flowleap-sidebar": [
         {
-          "type": "webview",
           "id": "flowleap.projectSidebar",
           "name": "Projects",
-          "icon": "$(folder-library)",
+          "icon": "$(briefcase)",
           "contextualTitle": "FlowLeap Projects"
         }
       ],
@@ -118,7 +117,8 @@
       {
         "command": "flowleap.setProjectStatus",
         "title": "Set Project Status",
-        "category": "FlowLeap"
+        "category": "FlowLeap",
+        "icon": "$(pulse)"
       },
       {
         "command": "flowleap.addTag",
@@ -133,12 +133,14 @@
       {
         "command": "flowleap.archiveProject",
         "title": "Archive Project",
-        "category": "FlowLeap"
+        "category": "FlowLeap",
+        "icon": "$(archive)"
       },
       {
         "command": "flowleap.unarchiveProject",
         "title": "Unarchive Project",
-        "category": "FlowLeap"
+        "category": "FlowLeap",
+        "icon": "$(inbox)"
       },
       {
         "command": "flowleap.checkForUpdates",
@@ -164,6 +166,58 @@
           "command": "flowleap.refreshProjects",
           "when": "view == flowleap.projectSidebar",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "flowleap.openNotes",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowleap.setProjectStatus",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "flowleap.archiveProject",
+          "when": "view == flowleap.projectSidebar && viewItem == flowleapProject",
+          "group": "inline@3"
+        },
+        {
+          "command": "flowleap.unarchiveProject",
+          "when": "view == flowleap.projectSidebar && viewItem == flowleapArchivedProject",
+          "group": "inline@3"
+        },
+        {
+          "command": "flowleap.openNotes",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "flowleap.setProjectStatus",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "2_modify@1"
+        },
+        {
+          "command": "flowleap.addTag",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "2_modify@2"
+        },
+        {
+          "command": "flowleap.removeTag",
+          "when": "view == flowleap.projectSidebar && viewItem =~ /^flowleap(Archived)?Project$/",
+          "group": "2_modify@3"
+        },
+        {
+          "command": "flowleap.archiveProject",
+          "when": "view == flowleap.projectSidebar && viewItem == flowleapProject",
+          "group": "3_lifecycle@1"
+        },
+        {
+          "command": "flowleap.unarchiveProject",
+          "when": "view == flowleap.projectSidebar && viewItem == flowleapArchivedProject",
+          "group": "3_lifecycle@1"
         }
       ],
       "commandPalette": [
