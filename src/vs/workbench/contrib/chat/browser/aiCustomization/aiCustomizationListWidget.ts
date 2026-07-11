@@ -21,7 +21,7 @@ import { IListVirtualDelegate, IListRenderer, IListContextMenuEvent } from '../.
 import { IPromptsService, PromptsStorage } from '../../common/promptSyntax/service/promptsService.js';
 import { PromptsType } from '../../common/promptSyntax/promptTypes.js';
 import { agentIcon, instructionsIcon, promptIcon, skillIcon, hookIcon, userIcon, workspaceIcon, extensionIcon, pluginIcon, builtinIcon } from './aiCustomizationIcons.js';
-import { AI_CUSTOMIZATION_ITEM_STORAGE_KEY, AI_CUSTOMIZATION_ITEM_TYPE_KEY, AI_CUSTOMIZATION_ITEM_URI_KEY, AI_CUSTOMIZATION_ITEM_PLUGIN_URI_KEY, AICustomizationManagementItemMenuId, AICustomizationManagementCreateMenuId, AICustomizationManagementSection, BUILTIN_STORAGE, AI_CUSTOMIZATION_ITEM_DISABLED_KEY, sectionToPromptType } from './aiCustomizationManagement.js';
+import { AI_CUSTOMIZATION_ITEM_STORAGE_KEY, AI_CUSTOMIZATION_ITEM_TYPE_KEY, AI_CUSTOMIZATION_ITEM_URI_KEY, AI_CUSTOMIZATION_ITEM_PLUGIN_URI_KEY, AICustomizationManagementItemMenuId, AICustomizationManagementCreateMenuId, AICustomizationManagementCommands, AICustomizationManagementSection, BUILTIN_STORAGE, AI_CUSTOMIZATION_ITEM_DISABLED_KEY, sectionToPromptType } from './aiCustomizationManagement.js';
 import { IAgentPluginService } from '../../common/plugins/agentPluginService.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputBox.js';
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
@@ -573,6 +573,7 @@ export class AICustomizationListWidget extends Disposable {
 
 	private sectionTitleHeader!: HTMLElement;
 	private sectionTitle!: HTMLElement;
+	private browseSkillPacksButton!: Button;
 	private sectionTitleDescription!: HTMLElement;
 	private sectionTitleDescriptionText!: HTMLElement;
 	private sectionLink!: HTMLAnchorElement;
@@ -661,6 +662,20 @@ export class AICustomizationListWidget extends Disposable {
 		this.sectionTitleHeader = DOM.append(this.element, $('.section-title-header'));
 		const titleRow = DOM.append(this.sectionTitleHeader, $('.section-title-row'));
 		this.sectionTitle = DOM.append(titleRow, $('h2.section-title'));
+
+		// "Browse Skill Packs" action in the section header. Skill Packs are distributed
+		// as plugins, so this deep-links into the Plugins section's marketplace browse mode.
+		// Only shown for the Skills section (toggled in `updateSectionHeader`).
+		this.browseSkillPacksButton = this._register(new Button(titleRow, {
+			...defaultButtonStyles,
+			secondary: true,
+			supportIcons: true,
+		}));
+		this.browseSkillPacksButton.element.classList.add('section-title-browse-button');
+		this.browseSkillPacksButton.label = `$(${Codicon.library.id}) ${localize('browseSkillPacks', "Browse Skill Packs")}`;
+		this._register(this.browseSkillPacksButton.onDidClick(() => {
+			this.commandService.executeCommand(AICustomizationManagementCommands.OpenMarketplace, AICustomizationManagementSection.Plugins);
+		}));
 		this.sectionTitleDescription = DOM.append(this.sectionTitleHeader, $('p.section-title-description'));
 		this.sectionTitleDescriptionText = DOM.append(this.sectionTitleDescription, $('span.section-title-description-text'));
 		// Real whitespace text node between description and link so the gap collapses
@@ -988,6 +1003,11 @@ export class AICustomizationListWidget extends Disposable {
 		this.sectionTitleDescriptionText.textContent = description;
 		this.sectionLink.textContent = learnMoreLabel;
 		this.sectionLink.href = docsUrl;
+
+		// Skill Packs are installed from the Plugins marketplace, so surface the
+		// "Browse Skill Packs" action only on the Skills section.
+		this.browseSkillPacksButton.element.style.display =
+			this.currentSection === AICustomizationManagementSection.Skills ? '' : 'none';
 	}
 
 	/**

@@ -299,7 +299,7 @@ All commands and UI respect `ChatContextKeys.enabled`.
 | Command ID | Purpose |
 |-----------|---------|
 | `aiCustomization.openManagementEditor` | Opens the management editor, optionally accepting an `AICustomizationManagementSection` to deep-link |
-| `aiCustomization.openMarketplace` | Opens the management editor with marketplace browse mode active. Accepts an optional section (`mcpServers` or `plugins`); defaults to `mcpServers` |
+| `aiCustomization.openMarketplace` | Opens the management editor with marketplace browse mode active. Accepts an optional section (`mcpServers` or `plugins`); defaults to `plugins` (Skill Packs). The Skills section's "Browse Skill Packs" action invokes this with the `plugins` section |
 
 ## Settings
 

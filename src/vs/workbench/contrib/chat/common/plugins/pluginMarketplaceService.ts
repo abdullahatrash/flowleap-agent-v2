@@ -28,11 +28,11 @@ import { IAgentPluginRepositoryService } from './agentPluginRepositoryService.js
 import { FileBackedInstalledPluginsStore, IStoredInstalledPlugin } from './fileBackedInstalledPluginsStore.js';
 import { IWorkspacePluginSettingsService } from './workspacePluginSettingsService.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
-import { type IMarketplaceReference, deduplicateMarketplaceReferences, MarketplaceReferenceKind, parseMarketplaceObjectEntry, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
+import { type IMarketplaceReference, deduplicateMarketplaceReferences, isDefaultMarketplaceReference, MarketplaceReferenceKind, parseMarketplaceObjectEntry, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
 import { getStrictKnownMarketplaces, isMarketplaceReferenceAllowed } from './strictKnownMarketplaces.js';
 
 // Re-export marketplace reference types for downstream consumers.
-export { deduplicateMarketplaceReferences, extraKnownMarketplacesToConfigDict, MarketplaceReferenceKind, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
+export { deduplicateMarketplaceReferences, DEFAULT_PLUGIN_MARKETPLACES, extraKnownMarketplacesToConfigDict, isDefaultMarketplaceReference, MarketplaceReferenceKind, parseMarketplaceReference, parseMarketplaceReferences, readConfiguredMarketplaces } from './marketplaceReference.js';
 export type { IConfiguredMarketplaces, IMarketplaceReference } from './marketplaceReference.js';
 
 export const enum MarketplaceType {
@@ -628,6 +628,13 @@ export class PluginMarketplaceService extends Disposable implements IPluginMarke
 		const allowlist = getStrictKnownMarketplaces(this._configurationService.getValue(ChatConfiguration.StrictMarketplaces));
 		if (allowlist !== undefined) {
 			return isMarketplaceReferenceAllowed(allowlist, ref);
+		}
+		// The product-default marketplace is first-party curated content and is
+		// implicitly trusted, so installing FlowLeap's own packs skips the trust
+		// dialog. Marketplaces the user adds themselves are not covered here and
+		// keep the standard confirmation flow.
+		if (isDefaultMarketplaceReference(ref)) {
+			return true;
 		}
 		return this._trustedMarketplacesStore.get().includes(ref.canonicalId);
 	}

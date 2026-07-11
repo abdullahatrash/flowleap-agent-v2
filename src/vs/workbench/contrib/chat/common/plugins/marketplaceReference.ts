@@ -44,6 +44,30 @@ export interface IConfiguredMarketplaces {
 	readonly effectiveValues: readonly unknown[];
 }
 
+/**
+ * The FlowLeap plugin marketplace(s) shipped as the app's out-of-box default source
+ * for {@link ChatConfiguration.PluginMarketplaces}. This is first-party curated content,
+ * so it is implicitly trusted (see {@link isDefaultMarketplaceReference}); marketplaces the
+ * user adds themselves keep the standard trust-confirmation flow.
+ */
+export const DEFAULT_PLUGIN_MARKETPLACES: readonly string[] = ['abdullahatrash/flowleap-plugins'];
+
+/** Canonical IDs of the product-default marketplaces, computed once at load. */
+const _defaultMarketplaceCanonicalIds = new Set(
+	parseMarketplaceReferences(DEFAULT_PLUGIN_MARKETPLACES).map(reference => reference.canonicalId)
+);
+
+/**
+ * Whether a marketplace reference resolves to one of the app's product-default
+ * marketplaces ({@link DEFAULT_PLUGIN_MARKETPLACES}). Default marketplaces are
+ * first-party curated content and are implicitly trusted, so installing from them
+ * skips the "plugins can run code" confirmation. This is a check against the shipped
+ * default rather than mutated trust state, so it never writes storage.
+ */
+export function isDefaultMarketplaceReference(reference: IMarketplaceReference): boolean {
+	return _defaultMarketplaceCanonicalIds.has(reference.canonicalId);
+}
+
 /** Shorthand-or-URI regex used to detect GitHub `owner/repo[#ref]` entries. */
 const _githubShorthandRe = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:#.+)?$/;
 

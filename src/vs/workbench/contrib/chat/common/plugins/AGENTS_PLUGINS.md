@@ -127,7 +127,7 @@ Manages the catalog of available and installed plugins:
 
 - **Fetch** — reads `chat.pluginMarketplaces` config (GitHub shorthand, Git URLs, or file URIs), fetches `marketplace.json` from each, and returns parsed `IMarketplacePlugin` entries.
 - **Installed storage** — persists installed plugins in application-scoped storage (`chat.plugins.installed.v1`). Each entry tracks `{ pluginUri, plugin, enabled }`.
-- **Trust** — marketplace canonical IDs must be explicitly trusted before install proceeds (`chat.plugins.trustedMarketplaces.v1`).
+- **Trust** — marketplace canonical IDs must be explicitly trusted before install proceeds (`chat.plugins.trustedMarketplaces.v1`). The product-default marketplace (`DEFAULT_PLUGIN_MARKETPLACES` in `marketplaceReference.ts`) is first-party and implicitly trusted via `isDefaultMarketplaceReference`, so installing FlowLeap's own packs skips the confirmation; user-added marketplaces keep the dialog.
 - **Auto-update** — checks for upstream changes approximately every 24 hours when `extensions.autoUpdate` is enabled; sets `hasUpdatesAvailable` observable.
 - **GitHub caching** — caches raw GitHub API responses with an 8-hour TTL to avoid repeated fetches.
 

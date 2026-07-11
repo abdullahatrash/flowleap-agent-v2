@@ -8,6 +8,9 @@ import { timeout } from '../../../../../../base/common/async.js';
 import { bufferToStream, VSBuffer } from '../../../../../../base/common/buffer.js';
 import { CancellationToken } from '../../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../../base/common/event.js';
+import { Schemas } from '../../../../../../base/common/network.js';
+import { FileService } from '../../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
@@ -23,7 +26,7 @@ import { IEnvironmentService } from '../../../../../../platform/environment/comm
 import { IExtensionsWorkbenchService } from '../../../../extensions/common/extensions.js';
 import { ChatConfiguration } from '../../../common/constants.js';
 import { IAgentPluginRepositoryService } from '../../../common/plugins/agentPluginRepositoryService.js';
-import { IMarketplacePlugin, IMarketplaceReference, IPluginSourceDescriptor, MarketplaceReferenceKind, MarketplaceType, PluginMarketplaceService, PluginSourceKind, extraKnownMarketplacesToConfigDict, getPluginSourceLabel, parseMarketplaceReference, parseMarketplaceReferences, parsePluginSource, readConfiguredMarketplaces } from '../../../common/plugins/pluginMarketplaceService.js';
+import { DEFAULT_PLUGIN_MARKETPLACES, IMarketplacePlugin, IMarketplaceReference, IPluginSourceDescriptor, MarketplaceReferenceKind, MarketplaceType, PluginMarketplaceService, PluginSourceKind, extraKnownMarketplacesToConfigDict, getPluginSourceLabel, isDefaultMarketplaceReference, parseMarketplaceReference, parseMarketplaceReferences, parsePluginSource, readConfiguredMarketplaces } from '../../../common/plugins/pluginMarketplaceService.js';
 import { IWorkspacePluginSettingsService } from '../../../common/plugins/workspacePluginSettingsService.js';
 
 suite('PluginMarketplaceService', () => {
@@ -1021,5 +1024,91 @@ suite('getPluginSourceLabel', () => {
 
 	test('formats pip source with version', () => {
 		assert.strictEqual(getPluginSourceLabel({ kind: PluginSourceKind.Pip, package: 'my-plugin', version: '2.0' }), 'my-plugin==2.0');
+	});
+});
+
+suite('PluginMarketplaceService - FlowLeap default marketplace (config defaults seam)', () => {
+	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	// The FlowLeap plugins monorepo shipped as the app's sole default marketplace.
+	const defaultRef = parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACES[0])!;
+	// A marketplace the user would add themselves — not first-party, not pre-trusted.
+	const userAddedRef = parseMarketplaceReference('acme/patent-plugins')!;
+
+	function createService(fileService: IFileService, configuredMarketplaces: string[]): PluginMarketplaceService {
+		const instantiationService = store.add(new TestInstantiationService());
+		instantiationService.stub(IConfigurationService, new TestConfigurationService({
+			[ChatConfiguration.PluginMarketplaces]: configuredMarketplaces,
+			[ChatConfiguration.PluginsEnabled]: true,
+		}));
+		instantiationService.stub(IEnvironmentService, { cacheHome: URI.file('/cache') } as Partial<IEnvironmentService> as IEnvironmentService);
+		instantiationService.stub(IFileService, fileService);
+		instantiationService.stub(IAgentPluginRepositoryService, { agentPluginsHome: URI.file('/agent-plugins') } as unknown as IAgentPluginRepositoryService);
+		instantiationService.stub(ILogService, new NullLogService());
+		instantiationService.stub(IRequestService, {} as unknown as IRequestService);
+		instantiationService.stub(IStorageService, store.add(new InMemoryStorageService()));
+		instantiationService.stub(IWorkspacePluginSettingsService, {
+			extraMarketplaces: observableValue('test.extraMarketplaces', []),
+			enabledPlugins: observableValue('test.enabledPlugins', new Map()),
+		} as Partial<IWorkspacePluginSettingsService> as IWorkspacePluginSettingsService);
+		instantiationService.stub(IWorkspaceTrustManagementService, {
+			isWorkspaceTrusted: () => true,
+			onDidChangeTrust: Event.None,
+		} as Partial<IWorkspaceTrustManagementService> as IWorkspaceTrustManagementService);
+		instantiationService.stub(IExtensionsWorkbenchService, {
+			getAutoUpdateValue: () => 'off',
+		} as Partial<IExtensionsWorkbenchService> as IExtensionsWorkbenchService);
+		return store.add(instantiationService.createInstance(PluginMarketplaceService));
+	}
+
+	test('shipped default is the FlowLeap monorepo with no Copilot marketplace refs', () => {
+		assert.deepStrictEqual([...DEFAULT_PLUGIN_MARKETPLACES], ['abdullahatrash/flowleap-plugins']);
+		assert.ok(!DEFAULT_PLUGIN_MARKETPLACES.some(ref => /copilot/i.test(ref)));
+	});
+
+	test('isDefaultMarketplaceReference recognizes the default but not user-added refs', () => {
+		assert.strictEqual(isDefaultMarketplaceReference(defaultRef), true);
+		assert.strictEqual(isDefaultMarketplaceReference(userAddedRef), false);
+		// GitHub URI form of the default collapses to the same canonical id, so it is also recognized.
+		assert.strictEqual(isDefaultMarketplaceReference(parseMarketplaceReference('https://github.com/abdullahatrash/flowleap-plugins.git')!), true);
+	});
+
+	test('the default marketplace is pre-trusted while a user-added ref requires confirmation', () => {
+		const fileService = store.add(new FileService(new NullLogService()));
+		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
+		const service = createService(fileService, [...DEFAULT_PLUGIN_MARKETPLACES]);
+
+		// Pre-trusted default skips the "plugins can run code" dialog with no prior trust.
+		assert.strictEqual(service.isMarketplaceTrusted(defaultRef), true);
+		// A user-added marketplace is untrusted until the user confirms.
+		assert.strictEqual(service.isMarketplaceTrusted(userAddedRef), false);
+		service.trustMarketplace(userAddedRef);
+		assert.strictEqual(service.isMarketplaceTrusted(userAddedRef), true);
+	});
+
+	test('enumerates plugins from a file:// fixture marketplace directory', async () => {
+		const fileService = store.add(new FileService(new NullLogService()));
+		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
+
+		const repoDir = URI.from({ scheme: Schemas.inMemory, path: '/fixture/flowleap-plugins' });
+		const marketplaceJson = JSON.stringify({
+			metadata: { pluginRoot: 'plugins' },
+			plugins: [
+				{ name: 'patent-personas', description: 'Patent personas pack', version: '1.0.0', source: 'personas' },
+				{ name: 'patent-recipes', description: 'Patent workflow recipes', version: '2.1.0', source: 'recipes' },
+			],
+		});
+		await fileService.writeFile(URI.joinPath(repoDir, 'marketplace.json'), VSBuffer.fromString(marketplaceJson));
+
+		const service = createService(fileService, [...DEFAULT_PLUGIN_MARKETPLACES]);
+		const plugins = await service.readPluginsFromDirectory(repoDir, defaultRef);
+
+		assert.deepStrictEqual(
+			plugins.map(p => ({ name: p.name, description: p.description, version: p.version, source: p.source, marketplaceType: p.marketplaceType })),
+			[
+				{ name: 'patent-personas', description: 'Patent personas pack', version: '1.0.0', source: 'plugins/personas', marketplaceType: MarketplaceType.OpenPlugin },
+				{ name: 'patent-recipes', description: 'Patent workflow recipes', version: '2.1.0', source: 'plugins/recipes', marketplaceType: MarketplaceType.OpenPlugin },
+			],
+		);
 	});
 });
