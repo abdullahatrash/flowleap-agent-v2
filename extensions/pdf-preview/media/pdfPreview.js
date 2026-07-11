@@ -7,7 +7,12 @@
 
 /**
  * PDF Preview Webview Script
- * Uses PDF.js to render PDF documents in VS Code webview
+ * Uses PDF.js to render PDF documents in VS Code webview.
+ *
+ * Pages render lazily: a placeholder box sized to each page's real dimensions is
+ * created up-front so scroll geometry and the page indicator are correct, and the
+ * canvas + text layer are produced only when a page scrolls near the viewport
+ * (IntersectionObserver). Far-offscreen pages are released to keep memory bounded.
  */
 (async function () {
 	// @ts-ignore
@@ -17,6 +22,18 @@
 	let pdfDoc = null;
 	let currentPage = 1;
 	let scale = 1.0;
+
+	/**
+	 * Per-page render state, indexed by 1-based page number.
+	 * @type {Array<{ num: number, container: HTMLElement, canvas: HTMLCanvasElement, page: any, baseViewport: { width: number, height: number }, textItems: any[] | null, rendered: boolean, renderTask: any }>}
+	 */
+	const pageStates = [];
+
+	/** @type {IntersectionObserver | null} */
+	let renderObserver = null;
+	/** @type {IntersectionObserver | null} */
+	let releaseObserver = null;
+
 	// DOM Elements
 	const viewer = document.getElementById('viewer');
 	const loading = document.getElementById('loading');
@@ -30,6 +47,7 @@
 	const zoomFitButton = document.getElementById('zoom-fit');
 	const extractTextButton = document.getElementById('extract-text');
 	const extractOcrButton = document.getElementById('extract-ocr');
+	const viewerContainer = document.getElementById('viewer-container');
 
 	// Load PDF.js dynamically
 	let pdfjsLib = null;
@@ -103,8 +121,10 @@
 			pageCount.textContent = pdfDoc.numPages.toString();
 			pageInput.max = pdfDoc.numPages.toString();
 
-			// Render all pages
-			await renderAllPages();
+			// Build placeholder boxes for every page, then render only what is visible.
+			await buildPagePlaceholders();
+			setupObservers();
+			await renderVisiblePages();
 
 			showLoading(false);
 			updateNavigation();
@@ -118,35 +138,134 @@
 	}
 
 	/**
-	 * Render all pages of the PDF
+	 * Create a correctly-sized placeholder box for every page without rendering it.
+	 * Placeholder dimensions come from each page's own viewport (not page 1), so
+	 * scroll geometry and the page-number indicator are accurate before render.
 	 */
-	async function renderAllPages() {
+	async function buildPagePlaceholders() {
 		viewer.innerHTML = '';
+		pageStates.length = 0;
 
-		for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-			const pageContainer = document.createElement('div');
-			pageContainer.className = 'pdf-page';
-			pageContainer.id = `page-${pageNum}`;
-			pageContainer.dataset.pageNumber = pageNum.toString();
+		for (let num = 1; num <= pdfDoc.numPages; num++) {
+			const page = await pdfDoc.getPage(num);
+			const viewport = page.getViewport({ scale: 1 });
+
+			const container = document.createElement('div');
+			container.className = 'pdf-page';
+			container.id = `page-${num}`;
+			container.dataset.pageNumber = num.toString();
 
 			const canvas = document.createElement('canvas');
-			pageContainer.appendChild(canvas);
+			container.appendChild(canvas);
 
-			viewer.appendChild(pageContainer);
+			viewer.appendChild(container);
 
-			await renderPage(pageNum, canvas);
+			const state = {
+				num,
+				container,
+				canvas,
+				page,
+				baseViewport: { width: viewport.width, height: viewport.height },
+				textItems: null,
+				rendered: false,
+				renderTask: null,
+			};
+
+			applyPlaceholderSize(state);
+			pageStates[num] = state;
 		}
 	}
 
 	/**
-	 * Render a single page
-	 * @param {number} pageNum
-	 * @param {HTMLCanvasElement} canvas
+	 * Size a page's placeholder box to its scaled dimensions so the box holds space
+	 * whether or not the page is currently rendered.
+	 * @param {{ container: HTMLElement, baseViewport: { width: number, height: number } }} state
 	 */
-	async function renderPage(pageNum, canvas) {
-		const page = await pdfDoc.getPage(pageNum);
+	function applyPlaceholderSize(state) {
+		const width = Math.floor(state.baseViewport.width * scale);
+		const height = Math.floor(state.baseViewport.height * scale);
+		state.container.style.width = `${width}px`;
+		state.container.style.height = `${height}px`;
+	}
 
-		const viewport = page.getViewport({ scale: scale });
+	/**
+	 * Wire up the render/release observers against the scroll container.
+	 * Pages within ~2 viewports of the visible area render; pages beyond ~4
+	 * viewports are released to bound memory (hysteresis avoids thrashing).
+	 */
+	function setupObservers() {
+		if (renderObserver) {
+			renderObserver.disconnect();
+		}
+		if (releaseObserver) {
+			releaseObserver.disconnect();
+		}
+
+		renderObserver = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				if (entry.isIntersecting) {
+					const state = pageStates[Number(entry.target.dataset.pageNumber)];
+					if (state) {
+						renderPage(state);
+					}
+				}
+			}
+		}, { root: viewerContainer, rootMargin: '200% 0px' });
+
+		releaseObserver = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				if (!entry.isIntersecting) {
+					const state = pageStates[Number(entry.target.dataset.pageNumber)];
+					if (state) {
+						releasePage(state);
+					}
+				}
+			}
+		}, { root: viewerContainer, rootMargin: '400% 0px' });
+
+		for (let num = 1; num <= pdfDoc.numPages; num++) {
+			renderObserver.observe(pageStates[num].container);
+			releaseObserver.observe(pageStates[num].container);
+		}
+	}
+
+	/**
+	 * Render every page whose placeholder is currently within one viewport of the
+	 * visible area. Used for the first paint and after a scale change (where the
+	 * observer would not re-fire for pages that were already intersecting).
+	 */
+	async function renderVisiblePages() {
+		if (!pdfDoc) {
+			return;
+		}
+
+		const rootRect = viewerContainer.getBoundingClientRect();
+		const margin = rootRect.height;
+		const promises = [];
+
+		for (let num = 1; num <= pdfDoc.numPages; num++) {
+			const state = pageStates[num];
+			const rect = state.container.getBoundingClientRect();
+			if (rect.bottom >= rootRect.top - margin && rect.top <= rootRect.bottom + margin) {
+				promises.push(renderPage(state));
+			}
+		}
+
+		await Promise.all(promises);
+	}
+
+	/**
+	 * Render a single page's canvas and text layer at the current scale.
+	 * Guards against concurrent/duplicate renders of the same page.
+	 * @param {typeof pageStates[number]} state
+	 */
+	async function renderPage(state) {
+		if (state.rendered || state.renderTask) {
+			return;
+		}
+
+		const viewport = state.page.getViewport({ scale });
+		const canvas = state.canvas;
 
 		// Render the canvas bitmap at the device's physical resolution so the
 		// output stays crisp on HiDPI / Retina displays, while keeping the CSS
@@ -166,18 +285,47 @@
 			transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined
 		};
 
-		await page.render(renderContext).promise;
+		const task = state.page.render(renderContext);
+		state.renderTask = task;
 
-		// Add text layer for selection
-		const textContent = await page.getTextContent();
+		try {
+			await task.promise;
+		} catch (error) {
+			state.renderTask = null;
+			// A cancelled render (e.g. released or re-scaled mid-render) is expected.
+			if (error && error.name === 'RenderingCancelledException') {
+				return;
+			}
+			throw error;
+		}
+
+		state.renderTask = null;
+		state.rendered = true;
+
+		await buildTextLayer(state, viewport);
+	}
+
+	/**
+	 * Build (or rebuild) the selectable text layer for a rendered page.
+	 * Caches the page's text items on the state for reuse by find-in-document.
+	 * @param {typeof pageStates[number]} state
+	 * @param {any} viewport
+	 */
+	async function buildTextLayer(state, viewport) {
+		const existing = state.container.querySelector('.text-layer');
+		if (existing) {
+			existing.remove();
+		}
+
+		const textContent = await state.page.getTextContent();
+		state.textItems = textContent.items;
+
 		const textLayer = document.createElement('div');
 		textLayer.className = 'text-layer';
 		textLayer.style.width = `${viewport.width}px`;
 		textLayer.style.height = `${viewport.height}px`;
+		state.container.appendChild(textLayer);
 
-		canvas.parentElement.appendChild(textLayer);
-
-		// Render text layer
 		for (const item of textContent.items) {
 			if (!item.str) {
 				continue;
@@ -186,10 +334,7 @@
 			const span = document.createElement('span');
 			span.textContent = item.str;
 
-			const tx = pdfjsLib.Util.transform(
-				viewport.transform,
-				item.transform
-			);
+			const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
 
 			const fontHeight = Math.sqrt((tx[2] * tx[2]) + (tx[3] * tx[3]));
 			const angle = Math.atan2(tx[1], tx[0]);
@@ -208,27 +353,60 @@
 	}
 
 	/**
-	 * Re-render all pages with new scale
+	 * Release a page's canvas and text layer to bound memory. The placeholder box
+	 * keeps its dimensions, so scroll geometry is preserved.
+	 * @param {typeof pageStates[number]} state
 	 */
-	async function rerender() {
-		if (!pdfDoc) {
+	function releasePage(state) {
+		if (state.renderTask) {
+			state.renderTask.cancel();
+			state.renderTask = null;
+		}
+
+		if (!state.rendered) {
 			return;
 		}
 
-		const pages = viewer.querySelectorAll('.pdf-page');
-		for (const pageContainer of pages) {
-			const pageNum = parseInt(pageContainer.dataset.pageNumber);
-			const canvas = pageContainer.querySelector('canvas');
-			const textLayer = pageContainer.querySelector('.text-layer');
+		state.canvas.width = 0;
+		state.canvas.height = 0;
+		state.canvas.style.width = '';
+		state.canvas.style.height = '';
 
-			if (textLayer) {
-				textLayer.remove();
-			}
+		const textLayer = state.container.querySelector('.text-layer');
+		if (textLayer) {
+			textLayer.remove();
+		}
 
-			await renderPage(pageNum, canvas);
+		state.rendered = false;
+	}
+
+	/**
+	 * Apply a new scale: resize every placeholder, drop rendered canvases (they are
+	 * re-rendered lazily), and re-render the pages currently in view.
+	 * @param {number} newScale
+	 */
+	async function setScale(newScale) {
+		newScale = Math.max(0.25, Math.min(4.0, newScale));
+		if (!pdfDoc || newScale === scale) {
+			return;
+		}
+
+		scale = newScale;
+
+		for (let num = 1; num <= pdfDoc.numPages; num++) {
+			const state = pageStates[num];
+			applyPlaceholderSize(state);
+			releasePage(state);
 		}
 
 		updateZoomDisplay();
+		await renderVisiblePages();
+
+		// Keep the page the user was looking at anchored after the reflow.
+		const anchor = document.getElementById(`page-${currentPage}`);
+		if (anchor) {
+			anchor.scrollIntoView({ block: 'start' });
+		}
 	}
 
 	/**
@@ -258,29 +436,20 @@
 	 * @param {number} delta
 	 */
 	function zoom(delta) {
-		const newScale = Math.max(0.25, Math.min(4.0, scale + delta));
-		if (newScale !== scale) {
-			scale = newScale;
-			rerender();
-		}
+		setScale(scale + delta);
 	}
 
 	/**
 	 * Fit to container width
 	 */
 	function fitToWidth() {
-		if (!pdfDoc) {
+		if (!pdfDoc || !pageStates[currentPage]) {
 			return;
 		}
 
-		const container = document.getElementById('viewer-container');
-		const containerWidth = container.clientWidth - 60; // Account for padding
-
-		pdfDoc.getPage(1).then(page => {
-			const viewport = page.getViewport({ scale: 1.0 });
-			scale = containerWidth / viewport.width;
-			rerender();
-		});
+		const containerWidth = viewerContainer.clientWidth - 60; // Account for padding
+		const base = pageStates[currentPage].baseViewport;
+		setScale(containerWidth / base.width);
 	}
 
 	/**
@@ -403,7 +572,6 @@
 	});
 
 	// Scroll tracking to update current page
-	const viewerContainer = document.getElementById('viewer-container');
 	viewerContainer.addEventListener('scroll', () => {
 		if (!pdfDoc) {
 			return;
