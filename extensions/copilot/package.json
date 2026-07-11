@@ -6293,7 +6293,7 @@
           "type": "webview",
           "id": "flowleap.settingsView",
           "name": "FlowLeap Settings",
-          "icon": "$(settings-gear)",
+          "icon": "assets/flowleap-mark.svg",
           "contextualTitle": "FlowLeap Settings"
         }
       ],
@@ -6319,7 +6319,7 @@
         {
           "id": "flowleap-settings",
           "title": "FlowLeap Settings",
-          "icon": "$(settings-gear)"
+          "icon": "assets/flowleap-mark.svg"
         },
         {
           "id": "copilot-chat",
