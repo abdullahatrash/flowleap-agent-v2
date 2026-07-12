@@ -325,7 +325,7 @@ suite('ChatStatusDashboard', () => {
 
 		assert.deepStrictEqual(getIncludedLabels(dashboard.element), ['Premium Requests']);
 		assert.deepStrictEqual(getIncludedDescriptions(dashboard.element), ['Organization limit reached.']);
-		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
 	});
 
 	test('Enterprise — pooled exhausted (no overages): shows exhausted indicator and enterprise callout', () => {
@@ -338,7 +338,7 @@ suite('ChatStatusDashboard', () => {
 
 		assert.deepStrictEqual(getIncludedLabels(dashboard.element), ['Premium Requests']);
 		assert.deepStrictEqual(getIncludedDescriptions(dashboard.element), ['Organization limit reached.']);
-		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
 	});
 
 	test('Enterprise — pooled exhausted TBB (no overages): shows Credits exhausted', () => {
@@ -363,7 +363,7 @@ suite('ChatStatusDashboard', () => {
 
 		assert.deepStrictEqual(getIncludedLabels(dashboard.element), ['Premium Requests']);
 		assert.deepStrictEqual(getIncludedDescriptions(dashboard.element), ['Organization limit reached.']);
-		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its Copilot budget. Contact your admin to resume usage.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'Your organization or enterprise has exceeded its FlowLeap budget. Contact your admin to resume usage.');
 	});
 
 	test('Enterprise — TBB (multi-quota): shows only Credits, not Chat messages or Inline Suggestions', () => {
@@ -515,7 +515,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Pro,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets.');
 	});
 
 	test('Callout: Free — no paused message when only inline suggestions limit is reached', () => {
@@ -537,7 +537,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Free,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets.');
 	});
 
 	test('Callout: shows budget active when quota exhausted and overage permitted but no overage used yet', () => {
@@ -584,7 +584,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Pro,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot will pause when the limit is reached.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap will pause when the limit is reached.');
 	});
 
 	test('Callout: shows paused for enterprise when quota exhausted', () => {
@@ -594,7 +594,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Enterprise,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets. Contact your administrator for more information.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets. Contact your administrator for more information.');
 	});
 
 	test('Callout: TBB — shows additional budget active when exhausted with overage permitted but no usage yet', () => {
@@ -627,7 +627,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Enterprise,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot will pause when your limits are reached. Please contact your admin to increase your limits.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap will pause when your limits are reached. Please contact your admin to increase your limits.');
 	});
 
 	test('Callout: Business — shows org-specific wording when approaching limit with additional usage', () => {
@@ -638,7 +638,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Business,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot will pause when your limits are reached. Please contact your admin to increase your limits.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap will pause when your limits are reached. Please contact your admin to increase your limits.');
 	});
 
 	test('Callout: Enterprise — shows org-specific wording when quota exhausted with additional usage', () => {
@@ -650,7 +650,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Enterprise,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot has paused because your limits are reached. Please contact your admin to increase your limits.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap has paused because your limits are reached. Please contact your admin to increase your limits.');
 	});
 
 	test('Callout: Business — shows org-specific wording when quota exhausted with additional usage', () => {
@@ -662,7 +662,7 @@ suite('ChatStatusDashboard', () => {
 			entitlement: ChatEntitlement.Business,
 		}));
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot has paused because your limits are reached. Please contact your admin to increase your limits.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap has paused because your limits are reached. Please contact your admin to increase your limits.');
 	});
 
 	// --- LIVE UPDATES ---
@@ -727,7 +727,7 @@ suite('ChatStatusDashboard', () => {
 		};
 		svc.fireQuotaExceeded();
 
-		assert.strictEqual(getCalloutText(dashboard.element), 'Copilot is paused until the limit resets.');
+		assert.strictEqual(getCalloutText(dashboard.element), 'FlowLeap is paused until the limit resets.');
 	});
 
 	test('Live update: header button visibility updates when quota changes', () => {

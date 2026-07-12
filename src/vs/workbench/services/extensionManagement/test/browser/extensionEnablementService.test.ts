@@ -1186,7 +1186,11 @@ suite('ExtensionEnablementService Test', () => {
 		assert.deepStrictEqual((<IExtension>target.args[0][0][0]).identifier, { id: 'pub.a' });
 	});
 
-	test('test chat extension is disabled on profile switch when setup is not completed', async () => {
+	test('test patent chat extension stays enabled on profile switch even when setup is not completed', async () => {
+		// FlowLeap: `defaultChatAgent.alwaysEnabled` makes the patent chat extension this product's core
+		// agent, so unlike upstream it is never disabled by the chat-setup migration. The BYOK build has no
+		// GitHub chat setup to complete (`state.completed` is never true), and disabling the extension would
+		// keep the agent out of the registry forever. See ensureChatExtensionInitialDisabledState().
 		const chatExtensionId = productService.defaultChatAgent!.chatExtensionId;
 		const chatExtension = aLocalExtension(chatExtensionId, undefined, ExtensionType.System);
 		installed.push(chatExtension);
@@ -1202,19 +1206,15 @@ suite('ExtensionEnablementService Test', () => {
 		testObject = disposableStore.add(new TestExtensionEnablementService(instantiationService, chatEntitlementService));
 		await testObject.waitUntilInitialized();
 
-		// Chat extension should be disabled after initial setup
-		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.DisabledGlobally);
-
-		// Enable the chat extension to simulate it being enabled in a previous profile
-		await testObject.setEnablement([chatExtension], EnablementState.EnabledGlobally);
+		// Chat extension remains enabled after initial setup despite setup not being completed
 		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.EnabledGlobally);
 
-		// Simulate switching to a fresh profile by clearing the migration flag
+		// Simulate switching to a fresh profile by clearing the migration flag; the extension must stay enabled
 		storageService = instantiationService.get(IStorageService);
 		storageService.store('builtinChatExtensionEnablementMigration', false, StorageScope.PROFILE, StorageTarget.MACHINE);
 
-		// Chat extension should be disabled again after computing enablement state
-		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.DisabledGlobally);
+		// Chat extension is still enabled after computing enablement state in the new profile
+		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.EnabledGlobally);
 	});
 
 	test('test extension is disabled by allowed list', async () => {

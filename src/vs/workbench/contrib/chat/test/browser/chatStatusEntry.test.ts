@@ -9,10 +9,12 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IInlineCompletionsService } from '../../../../../editor/browser/services/inlineCompletionsService.js';
 import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { ChatEntitlement, IChatEntitlementService, IChatSentiment } from '../../../../services/chat/common/chatEntitlementService.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { ChatQuotaResumeState, ChatStatusBarEntry, computeQuotaResumeState } from '../../browser/chatStatus/chatStatusEntry.js';
 import { IChatStatusItemService } from '../../browser/chatStatus/chatStatusItemService.js';
 
@@ -114,6 +116,11 @@ suite('ChatStatusBarEntry', () => {
 		const instantiationService = workbenchInstantiationService(undefined, store);
 		const svc = createEntitlement(opts);
 
+		// The entry hides itself entirely while in Patent IDE mode (the product default);
+		// these tests exercise the Copilot/FlowLeap quota status entry, so opt out of it.
+		const contextKeyService = instantiationService.get(IContextKeyService);
+		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
+
 		const statusbar = {
 			current: undefined as IStatusbarEntry | undefined,
 			addEntry(entry: IStatusbarEntry): IStatusbarEntryAccessor {
@@ -172,7 +179,7 @@ suite('ChatStatusBarEntry', () => {
 		svc.quotas = { premiumChat: available };
 		svc.fireQuotaExceeded();
 
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
 		assert.strictEqual(persistedState(storageService), 'resumed');
 	});
 
@@ -181,7 +188,7 @@ suite('ChatStatusBarEntry', () => {
 
 		await flushTimers();
 
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
 		assert.strictEqual(persistedState(storageService), 'resumed');
 	});
 
@@ -190,14 +197,14 @@ suite('ChatStatusBarEntry', () => {
 
 		await flushTimers();
 
-		assert.notStrictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.notStrictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
 		assert.strictEqual(persistedState(storageService), undefined);
 	});
 
 	test('clears resumed when the dashboard is opened', async () => {
 		const { statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'blocked' });
 		await flushTimers();
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
 
 		// Opening the dashboard happens through the status entry tooltip element factory.
 		const tooltip = statusbar.current?.tooltip as { element: (token: CancellationToken) => HTMLElement };
@@ -212,7 +219,7 @@ suite('ChatStatusBarEntry', () => {
 
 	test('resumed is overridden when the user becomes blocked again', () => {
 		const { svc, statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'resumed' });
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) FlowLeap Resumed');
 
 		svc.quotas = { premiumChat: exhausted };
 		svc.fireQuotaExceeded();

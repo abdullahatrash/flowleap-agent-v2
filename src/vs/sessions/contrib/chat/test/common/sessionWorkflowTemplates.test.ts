@@ -59,6 +59,13 @@ suite('sessionWorkflowTemplates', () => {
 				invokesSkill: true,
 				hasParameterToken: true,
 			},
+			{
+				id: 'academic-literature-review',
+				label: 'Academic Literature Review',
+				promptLead: 'Literature review',
+				invokesSkill: true,
+				hasParameterToken: true,
+			},
 		]);
 	});
 });
