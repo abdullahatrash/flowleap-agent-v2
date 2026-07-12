@@ -1187,7 +1187,14 @@ export class McpListWidget extends Disposable {
 		}
 		const headerHeight = this.sectionTitleHeader.offsetHeight;
 		this.lastHeaderHeight = headerHeight;
-		const listHeight = Math.max(0, height - searchBarHeight - headerHeight);
+		// The widget is rendered inside a content container with padding and
+		// `overflow: hidden`, so the passed-in `height` overestimates the space
+		// actually available to the list (it does not account for that padding).
+		// Measure the element's real rendered height — which the flex/overflow
+		// container has already clamped to the visible area — so the list gets a
+		// correctly bounded viewport and can scroll instead of clipping its last row.
+		const availableHeight = this.element.clientHeight || height;
+		const listHeight = Math.max(0, availableHeight - searchBarHeight - headerHeight);
 
 		this.listContainer.style.height = `${listHeight}px`;
 		this.list.layout(listHeight, width);

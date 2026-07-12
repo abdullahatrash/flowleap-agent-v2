@@ -357,8 +357,15 @@ export class ToolsListWidget extends Disposable {
 		this._searchInput.layout();
 		this._treeScrollable.scanDomNode();
 
+		// The widget is rendered inside a content container with padding and
+		// `overflow: hidden`, so the passed-in `height` overestimates the space
+		// actually available (it does not account for that padding). Measure the
+		// element's real rendered height — which the flex/overflow container has
+		// already clamped to the visible area — so the gallery list gets a
+		// correctly bounded viewport and can scroll instead of clipping its last row.
+		const availableHeight = this.element.clientHeight || height;
 		const galleryOffset = this._galleryContainer.getBoundingClientRect().top - this.element.getBoundingClientRect().top;
-		this._galleryList.layout(Math.max(0, height - galleryOffset), width);
+		this._galleryList.layout(Math.max(0, availableHeight - galleryOffset), width);
 	}
 
 	/** Enters/leaves marketplace browse mode, swapping the tree for the gallery list. */
