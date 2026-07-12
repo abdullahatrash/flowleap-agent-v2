@@ -99,6 +99,49 @@ describe('ClaudeAgentManager', () => {
 		expect(mockService.queryCallCount).toBe(1);
 	});
 
+	it('recovers from a resume-miss by restarting without resume instead of wedging', async () => {
+		const manager = instantiationService.createInstance(ClaudeAgentManager);
+		// The first (resume) start fails as the SDK cannot find the transcript; the
+		// fresh restart (sessionId) succeeds.
+		mockService.resumeMissMode = 'onResume';
+
+		commitTestState(sessionStateService, TEST_SESSION_ID);
+		const stream = new MockChatResponseStream();
+		const req = new TestChatRequest('Continue please');
+		// isNewSession=false → the session's first start resumes, triggering the miss.
+		await manager.handleRequest(TEST_SESSION_ID, req, stream, CancellationToken.None, false);
+
+		const output = stream.output.join('\n');
+		// The turn still produced a real answer after the automatic restart.
+		expect(output).toContain('Hello from mock!');
+		// The user was told what happened rather than seeing a bare execution error.
+		expect(output).toContain('could not be resumed');
+		expect(output).not.toContain('Error during execution');
+		// Two SDK queries: the failed resume, then the fresh restart.
+		expect(mockService.queryCallCount).toBe(2);
+		// The recovery restart dropped the stale resume pointer.
+		expect(mockService.lastQueryOptions?.resume).toBeUndefined();
+		expect(mockService.lastQueryOptions?.sessionId).toBe(TEST_SESSION_ID);
+	});
+
+	it('surfaces a descriptive error naming cause and recovery when a resume-miss cannot be recovered', async () => {
+		const manager = instantiationService.createInstance(ClaudeAgentManager);
+		// Every start fails, so even the recovery restart misses.
+		mockService.resumeMissMode = 'always';
+
+		commitTestState(sessionStateService, TEST_SESSION_ID);
+		const stream = new MockChatResponseStream();
+		const req = new TestChatRequest('Continue please');
+		const result = await manager.handleRequest(TEST_SESSION_ID, req, stream, CancellationToken.None, false);
+
+		// One recovery attempt, then give up — no infinite restart loop.
+		expect(mockService.queryCallCount).toBe(2);
+		// The surfaced error names the cause and the recovery, not the generic
+		// "Error during execution".
+		expect(result.errorDetails?.message).toContain('could not be resumed');
+		expect(stream.output.join('\n')).not.toContain('Error during execution');
+	});
+
 	it('resolves image references as ImageBlockParam content blocks', async () => {
 		const manager = instantiationService.createInstance(ClaudeAgentManager);
 		const stream = new MockChatResponseStream();

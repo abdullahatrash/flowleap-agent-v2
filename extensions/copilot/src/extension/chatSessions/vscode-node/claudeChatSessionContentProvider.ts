@@ -161,7 +161,7 @@ export class ClaudeChatSessionContentProvider extends Disposable implements vsco
 			}
 			const permissionMode = selectedPermissionId;
 			const selectedFolderUri = getSelectedFolderUri(chatSessionContext.inputState);
-			const folderInfo = await this._controller.getFolderInfoForSession(effectiveSessionId, selectedFolderUri);
+			const folderInfo = await this._controller.getFolderInfoForSession(effectiveSessionId, selectedFolderUri, existingSession?.cwd);
 
 			// Commit UI state to session state service before invoking agent manager
 			this.sessionStateService.setModelIdForSession(effectiveSessionId, modelId);
@@ -677,7 +677,7 @@ export class ClaudeChatSessionItemController extends Disposable {
 
 	// #region Folder Resolution
 
-	async getFolderInfoForSession(sessionId: string, selectedFolderUri?: URI): Promise<ClaudeFolderInfo> {
+	async getFolderInfoForSession(sessionId: string, selectedFolderUri?: URI, existingSessionCwd?: string): Promise<ClaudeFolderInfo> {
 		const workspaceFolders = this._workspaceService.getWorkspaceFolders();
 
 		if (workspaceFolders.length === 1) {
@@ -687,8 +687,18 @@ export class ClaudeChatSessionItemController extends Disposable {
 			};
 		}
 
-		// Multi-root or empty workspace: resolve selected folder from inputState, sessionStateService, or session file
-		const folderUri = selectedFolderUri ?? await this._resolveSessionFolder(sessionId);
+		// A Claude session's working directory is fixed once its transcript exists
+		// on disk: the SDK resumes by looking for the transcript under the project
+		// directory derived from `cwd`, so resuming with any other directory yields
+		// "No conversation found with session ID" and wedges the session. In
+		// multi-root or empty workspaces the folder is otherwise re-resolved every
+		// turn from the UI selection / MRU, which can drift to a different root
+		// (e.g. after an extension-host restart clears in-memory session state).
+		// For an existing session we therefore pin `cwd` to the transcript's
+		// recorded directory and ignore any (possibly stale) selection.
+		const folderUri = (existingSessionCwd ? URI.file(existingSessionCwd) : undefined)
+			?? selectedFolderUri
+			?? await this._resolveSessionFolder(sessionId);
 
 		if (workspaceFolders.length > 1) {
 			const cwd = folderUri?.fsPath ?? workspaceFolders[0].fsPath;

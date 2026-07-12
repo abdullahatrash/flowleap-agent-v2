@@ -38,6 +38,14 @@ import { ParsedClaudeModelId } from '../common/claudeModelId';
 import { IClaudeSessionStateService } from '../common/claudeSessionStateService';
 import { ClaudeOTelTracker } from './claudeOTelTracker';
 
+/**
+ * Marker the Claude CLI writes to stderr when it cannot resume a session because
+ * the transcript for that id does not exist under the working directory it was
+ * launched with. The full line is "No conversation found with session ID: <id>".
+ * We use it to distinguish a recoverable resume-miss from a genuine failure.
+ */
+const RESUME_MISS_STDERR_MARKER = 'No conversation found with session ID';
+
 // Manages Claude Code agent interactions
 export class ClaudeAgentManager extends Disposable {
 	private _sessions = this._register(new DisposableMap<string, ClaudeCodeSession>());
@@ -142,6 +150,10 @@ export class ClaudeCodeSession extends Disposable {
 	private _currentEffort: EffortLevel | undefined;
 	private _isResumed: boolean;
 	private _pendingRestart = false;
+	/** Set when the SDK reports it could not resume this session's transcript (see {@link RESUME_MISS_STDERR_MARKER}). */
+	private _resumeMissDetected = false;
+	/** Guards against looping: we auto-recover from a resume-miss at most once per failure. */
+	private _resumeRecoveryAttempted = false;
 	private _sessionStarting: Promise<void> | undefined;
 	private _currentToolNames: ReadonlySet<string> | undefined;
 	private _gateway: vscode.McpGateway | undefined;
@@ -393,6 +405,10 @@ export class ClaudeCodeSession extends Disposable {
 			throw new Error(`No queued request to start session ${this.sessionId} with.`);
 		}
 
+		// Reset the resume-miss signal for this start; the stderr handler sets it
+		// again if the SDK cannot find the transcript for this working directory.
+		this._resumeMissDetected = false;
+
 		// Seed session state from the head request's metadata
 		this._currentModelId = headRequest.modelId;
 		this._currentPermissionMode = headRequest.permissionMode;
@@ -495,7 +511,15 @@ export class ClaudeCodeSession extends Disposable {
 				preset: 'claude_code'
 			},
 			settingSources: ['user', 'project', 'local'],
-			stderr: data => this.logService.error(`claude-agent-sdk stderr: ${data}`)
+			stderr: data => {
+				const text = String(data);
+				// Detect the resume-miss signal so the message loop can recover
+				// gracefully instead of surfacing a generic execution error.
+				if (text.includes(RESUME_MISS_STDERR_MARKER)) {
+					this._resumeMissDetected = true;
+				}
+				this.logService.error(`claude-agent-sdk stderr: ${text}`);
+			}
 		};
 
 		this.logService.trace(`claude-agent-sdk: Starting query`);
@@ -654,6 +678,9 @@ export class ClaudeCodeSession extends Disposable {
 				}
 
 				if (result?.requestComplete) {
+					// A turn completed, so any earlier resume-miss recovery is fully
+					// resolved; allow a future miss to be recovered on its own.
+					this._resumeRecoveryAttempted = false;
 					// End the invoke_agent span for this request
 					this._otelTracker.endRequest();
 					// Clear the capturing token so subsequent requests get their own
@@ -683,6 +710,22 @@ export class ClaudeCodeSession extends Disposable {
 				return;
 			}
 
+			// Graceful recovery: the SDK could not resume this session's persisted
+			// conversation (its transcript was not found under the working directory
+			// we resumed with). Rather than wedging the session on every turn, drop
+			// the stale resume pointer and restart with a fresh SDK conversation.
+			// The earlier turns remain visible in the chat UI (they are rendered from
+			// the on-disk transcript), so the user is not stuck. We do this at most
+			// once per failure to avoid an error loop.
+			if (this._resumeMissDetected && !this._resumeRecoveryAttempted) {
+				this._recoverFromResumeMiss();
+				const headToken = this._queuedRequests[0]?.token;
+				if (headToken) {
+					await this._startSession(headToken);
+				}
+				return;
+			}
+
 			// Clear the capturing token so it doesn't leak across sessions or error boundaries
 			this.sessionStateService.setCapturingTokenForSession(this.sessionId, undefined);
 			// End invoke_agent span with error if still open
@@ -694,22 +737,29 @@ export class ClaudeCodeSession extends Disposable {
 			this._queryGenerator = undefined;
 			this._abortController = new AbortController();
 
+			// If the failure was a resume-miss that we could not auto-recover from,
+			// replace the generic execution error with one that names the cause and
+			// the recovery so the user is not left with "Error during execution".
+			const surfacedError = this._resumeMissDetected
+				? new KnownClaudeError(l10n.t("This session's conversation could not be resumed and could not be recovered automatically. Start a new session to continue; this conversation's history remains visible above."))
+				: error;
+
 			// Rejects all pending requests and clears the queues.
 
 			this._inFlightRequests.forEach(req => {
 				if (!req.deferred.isSettled) {
-					req.deferred.error(error);
+					req.deferred.error(surfacedError);
 				}
 			});
 			this._inFlightRequests = [];
 			this._queuedRequests.forEach(req => {
 				if (!req.deferred.isSettled) {
-					req.deferred.error(error);
+					req.deferred.error(surfacedError);
 				}
 			});
 			this._queuedRequests = [];
 			if (this._pendingPrompt && !this._pendingPrompt.isSettled) {
-				this._pendingPrompt.error(error);
+				this._pendingPrompt.error(surfacedError);
 			}
 			this._pendingPrompt = undefined;
 		} finally {
@@ -727,6 +777,45 @@ export class ClaudeCodeSession extends Disposable {
 			// End any lingering invoke_agent span
 			this._otelTracker.endRequestWithError('session ended');
 		}
+	}
+
+	/**
+	 * Recovers from a resume-miss: the SDK could not find this session's transcript
+	 * under the working directory we resumed with, so every subsequent turn would
+	 * fail. Instead of wedging, we drop the stale resume pointer and prepare to
+	 * restart with a fresh SDK conversation, re-driving any pending requests. The
+	 * prior turns stay visible in the chat UI (rendered from the on-disk
+	 * transcript), and the user is told what happened.
+	 */
+	private _recoverFromResumeMiss(): void {
+		this.logService.warn('[ClaudeCodeSession] Could not resume the persisted conversation (transcript not found for this working directory); starting a fresh conversation.');
+
+		// Tell the user on the active request's stream, before re-driving it.
+		this._currentRequest?.stream.warning(l10n.t("This session's previous conversation could not be resumed, so a fresh conversation was started. Your earlier messages remain visible above."));
+
+		// Move any in-flight requests back to the front of the queue so the fresh
+		// session re-drives them; their deferreds stay pending until they complete.
+		this._queuedRequests = [...this._inFlightRequests, ...this._queuedRequests];
+		this._inFlightRequests = [];
+
+		// Drop the stale resume pointer: the next start uses `sessionId` (fresh
+		// conversation) rather than `resume`.
+		this._isResumed = false;
+		this._resumeMissDetected = false;
+		this._resumeRecoveryAttempted = true;
+
+		// Tear down the old prompt iterable so it cannot wake up later and steal a
+		// request from the queue after we have restarted.
+		if (this._pendingPrompt && !this._pendingPrompt.isSettled) {
+			this._pendingPrompt.error(new Error('Session restarted for resume recovery'));
+		}
+		this._pendingPrompt = undefined;
+
+		// Clear the capturing token and reset the SDK connection.
+		this.sessionStateService.setCapturingTokenForSession(this.sessionId, undefined);
+		this._queryGenerator = undefined;
+		this._abortController.abort();
+		this._abortController = new AbortController();
 	}
 
 	/**

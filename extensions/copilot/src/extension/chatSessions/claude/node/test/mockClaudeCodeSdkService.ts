@@ -26,12 +26,27 @@ export class MockClaudeCodeSdkService implements IClaudeCodeSdkService {
 	public mockSubagentIds: string[] = [];
 	public mockSubagentMessages: Map<string, SessionMessage[]> = new Map();
 
+	/**
+	 * Simulates the SDK failing to resume a session's transcript.
+	 * - 'onResume': fail only when the query is launched with `resume` (the real
+	 *   resume-miss); a subsequent `sessionId` (fresh) start succeeds. Models a
+	 *   session that recovers.
+	 * - 'always': fail on every start regardless of resume/sessionId. Models a
+	 *   session where recovery itself keeps failing.
+	 */
+	public resumeMissMode: 'off' | 'onResume' | 'always' = 'off';
+
 	public async query(options: {
 		prompt: AsyncIterable<SDKUserMessage>;
 		options: Options;
 	}): Promise<Query> {
 		this.queryCallCount++;
 		this.lastQueryOptions = options.options;
+		const shouldMiss = this.resumeMissMode === 'always'
+			|| (this.resumeMissMode === 'onResume' && options.options.resume !== undefined);
+		if (shouldMiss) {
+			return this.createResumeMissQuery(options.prompt, options.options);
+		}
 		return this.createMockQuery(options.prompt);
 	}
 
@@ -90,6 +105,47 @@ export class MockClaudeCodeSdkService implements IClaudeCodeSdkService {
 			},
 			abort: () => { /* no-op for mock */ },
 		} as unknown as Query;
+	}
+
+	private createResumeMissQuery(prompt: AsyncIterable<SDKUserMessage>, options: Options): Query {
+		const generator = this.createResumeMissGenerator(prompt, options);
+		return {
+			[Symbol.asyncIterator]: () => generator,
+			setModel: async () => { /* no-op for mock */ },
+			setPermissionMode: async () => { /* no-op for mock */ },
+			applyFlagSettings: async () => { /* no-op for mock */ },
+			abort: () => { /* no-op for mock */ },
+		} as unknown as Query;
+	}
+
+	/**
+	 * Emits the same signals the real Claude CLI produces when it cannot resume a
+	 * session: the "No conversation found with session ID" line on stderr, followed
+	 * by an `error_during_execution` result. The prompt is pulled first so that the
+	 * session host has a current in-flight request (mirroring the real timing where
+	 * the resume fails after the turn is under way).
+	 */
+	private async* createResumeMissGenerator(prompt: AsyncIterable<SDKUserMessage>, options: Options): AsyncGenerator<SDKAssistantMessage | SDKResultMessage, void, unknown> {
+		for await (const msg of prompt) {
+			this.receivedMessages.push(msg);
+			const sessionId = options.resume ?? options.sessionId ?? 'unknown';
+			options.stderr?.(`No conversation found with session ID: ${sessionId}`);
+			yield {
+				type: 'result',
+				subtype: 'error_during_execution',
+				uuid: 'mock-resume-miss-uuid',
+				session_id: sessionId,
+				duration_ms: 0,
+				duration_api_ms: 0,
+				is_error: true,
+				num_turns: 0,
+				total_cost_usd: 0,
+				usage: { input_tokens: 0, output_tokens: 0 },
+				permission_denials: [],
+				errors: [`No conversation found with session ID: ${sessionId}`],
+			} as unknown as SDKResultMessage;
+			return;
+		}
 	}
 
 	private async* createMockGenerator(prompt: AsyncIterable<SDKUserMessage>): AsyncGenerator<SDKAssistantMessage | SDKResultMessage, void, unknown> {
