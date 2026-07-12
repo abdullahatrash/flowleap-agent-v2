@@ -570,8 +570,12 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
 	return async () => {
 		const versionedResourcesFolder = util.getVersionedResourcesFolder('win32', commit!);
 		const deps = (await Promise.all([
-			glob('**/*.node', { cwd, ignore: 'extensions/node_modules/@parcel/watcher/**' }),
-			glob('**/rg.exe', { cwd }),
+			// The claude-agent-sdk vendor tree ships prebuilt binaries for every
+			// platform (incl. darwin/linux Mach-O/ELF .node files rcedit cannot
+			// load) and third-party signed executables that must not be
+			// signature-stripped or version-patched.
+			glob('**/*.node', { cwd, ignore: ['extensions/node_modules/@parcel/watcher/**', '**/@anthropic-ai/claude-agent-sdk/vendor/**'] }),
+			glob('**/rg.exe', { cwd, ignore: '**/@anthropic-ai/claude-agent-sdk/vendor/**' }),
 			glob('**/tgrep.exe', { cwd }),
 			glob('**/*explorer_command*.dll', { cwd }),
 		])).flatMap(o => o);
