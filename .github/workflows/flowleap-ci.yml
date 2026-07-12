@@ -44,6 +44,13 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # Native modules built during npm ci need system headers:
+      # kerberos -> libkrb5-dev, native-keymap -> libxkbfile-dev.
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev
+
       - name: Install dependencies
         run: npm ci
 
