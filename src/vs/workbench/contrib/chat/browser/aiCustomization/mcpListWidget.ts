@@ -33,7 +33,7 @@ import { IContextMenuService, IContextViewService } from '../../../../../platfor
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Delayer } from '../../../../../base/common/async.js';
 import { Action, IAction, Separator } from '../../../../../base/common/actions.js';
-import { getContextMenuActions } from '../../../../contrib/mcp/browser/mcpServerActions.js';
+import { getContextMenuActions, McpServerAction } from '../../../../contrib/mcp/browser/mcpServerActions.js';
 import { LocalMcpServerScope } from '../../../../services/mcp/common/mcpWorkbenchManagementService.js';
 import { IAgentPluginService } from '../../common/plugins/agentPluginService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -1368,13 +1368,24 @@ export class McpListWidget extends Disposable {
 		const groups: IAction[][] = getContextMenuActions(mcpServer, false, this.instantiationService);
 		const actions: IAction[] = [];
 		for (const menuActions of groups) {
+			const visibleActions: IAction[] = [];
 			for (const menuAction of menuActions) {
-				actions.push(menuAction);
 				if (isDisposable(menuAction)) {
 					disposables.add(menuAction);
 				}
+				// Only surface actions that apply to the server's current state. An
+				// McpServerAction hides itself (hidden === true) when it does not
+				// apply — e.g. Start Server while the server is already running, or
+				// Enable while it is already enabled. This custom menu must honor
+				// that, otherwise it presents disabled entries that silently do
+				// nothing when clicked (the reported "Start does nothing" symptom).
+				if (!(menuAction instanceof McpServerAction) || !menuAction.hidden) {
+					visibleActions.push(menuAction);
+				}
 			}
-			actions.push(new Separator());
+			if (visibleActions.length > 0) {
+				actions.push(...visibleActions, new Separator());
+			}
 		}
 		// Remove trailing separator
 		if (actions.length > 0 && actions[actions.length - 1] instanceof Separator) {
