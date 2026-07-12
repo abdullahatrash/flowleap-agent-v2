@@ -335,6 +335,17 @@ jobs:
           npm run gulp compile-extension:flowleap
           npm run gulp compile-extension:docx-viewer
 
+      # The win32 package task shells out to bare `signtool.exe` (strips stale
+      # Authenticode signatures before rcedit patches version resources). It's
+      # installed with the Windows SDK but not on PATH on GitHub-hosted runners.
+      - name: Add signtool to PATH
+        shell: pwsh
+        run: |
+          $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $st) { Write-Error "signtool.exe not found under Windows Kits"; exit 1 }
+          Write-Host "Using signtool at: $($st.FullName)"
+          $st.DirectoryName >> $env:GITHUB_PATH
+
       - name: Build Windows x64
         run: npm run gulp vscode-win32-x64
         env:
