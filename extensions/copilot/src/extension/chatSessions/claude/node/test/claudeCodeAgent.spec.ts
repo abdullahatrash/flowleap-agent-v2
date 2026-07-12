@@ -14,6 +14,8 @@ import { IInstantiationService } from '../../../../../util/vs/platform/instantia
 import { ChatReferenceBinaryData } from '../../../../../vscodeTypes';
 import { LanguageModelToolMCPSource } from '../../../../../util/common/test/shims/chatTypes';
 import { IFileSystemService } from '../../../../../platform/filesystem/common/fileSystemService';
+import { FileType } from '../../../../../platform/filesystem/common/fileTypes';
+import { INativeEnvService } from '../../../../../platform/env/common/envService';
 import type { MockFileSystemService } from '../../../../../platform/filesystem/node/test/mockFileSystemService';
 import { createExtensionUnitTestingServices } from '../../../../test/node/services';
 import { MockChatResponseStream, TestChatRequest } from '../../../../test/node/testHelpers';
@@ -744,6 +746,75 @@ describe('ClaudeCodeSession - settings change restart', () => {
 		const stream2 = new MockChatResponseStream();
 		await session.invoke(createMockChatRequest('Hello again'), stream2, undefined, CancellationToken.None);
 		expect(mockService.queryCallCount).toBe(1);
+	});
+});
+
+describe('ClaudeCodeSession - cwd resolution', () => {
+	const store = new DisposableStore();
+	let instantiationService: IInstantiationService;
+	let sessionStateService: IClaudeSessionStateService;
+	let mockService: MockClaudeCodeSdkService;
+	let mockFs: MockFileSystemService;
+	let userHome: URI;
+
+	beforeEach(() => {
+		const services = store.add(createExtensionUnitTestingServices());
+		const accessor = services.createTestingAccessor();
+		instantiationService = accessor.get(IInstantiationService);
+		sessionStateService = accessor.get(IClaudeSessionStateService);
+		mockService = accessor.get(IClaudeCodeSdkService) as MockClaudeCodeSdkService;
+		mockService.queryCallCount = 0;
+		mockFs = accessor.get(IFileSystemService) as MockFileSystemService;
+		userHome = accessor.get(INativeEnvService).userHome;
+	});
+
+	afterEach(() => {
+		store.clear();
+		vi.resetAllMocks();
+	});
+
+	function mockTranscript(projectDir: string, sessionId: string, recordedCwd: string, padTo: number): void {
+		const line = JSON.stringify({ type: 'user', sessionId, cwd: recordedCwd });
+		const content = line + '\n' + 'x'.repeat(Math.max(0, padTo - line.length));
+		mockFs.mockFile(URI.joinPath(userHome, '.claude', 'projects', projectDir, `${sessionId}.jsonl`), content);
+	}
+
+	it('resumes using the transcript cwd found across project dirs, ignoring a root-cwd stub', async () => {
+		const sessionId = 'cwd-recovery-session';
+		const realCwd = '/Users/test/FlowLeap Projects/test-agent-v2';
+		// Two project dirs hold a transcript for this id: the real conversation
+		// (usable cwd, larger) and a tiny recovery stub written under "-" (cwd "/").
+		mockFs.mockDirectory(URI.joinPath(userHome, '.claude', 'projects'), [
+			['-Users-test-FlowLeap-Projects-test-agent-v2', FileType.Directory],
+			['-', FileType.Directory],
+		]);
+		mockTranscript('-Users-test-FlowLeap-Projects-test-agent-v2', sessionId, realCwd, 4000);
+		mockTranscript('-', sessionId, '/', 200);
+
+		// The committed folderInfo points at the WRONG directory (the drift).
+		commitTestState(sessionStateService, sessionId, undefined, undefined, { cwd: '/some/wrong/dir', additionalDirectories: [] });
+		// isNewSession=false → the first start resumes → triggers the lookup.
+		const session = store.add(instantiationService.createInstance(ClaudeCodeSession, sessionId, false));
+		await session.invoke(createMockChatRequest('Continue'), new MockChatResponseStream(), undefined, CancellationToken.None);
+
+		// The SDK is launched against the transcript's real directory, not the
+		// drifted one and not the root-cwd stub.
+		expect(mockService.lastQueryOptions?.cwd).toBe(realCwd);
+		expect(mockService.lastQueryOptions?.resume).toBe(sessionId);
+	});
+
+	it('never launches the SDK with a root cwd', async () => {
+		const sessionId = 'new-root-cwd-session';
+		mockFs.mockDirectory(URI.joinPath(userHome, '.claude', 'projects'), []);
+		// A cold resolve produced a root cwd for a brand-new session.
+		commitTestState(sessionStateService, sessionId, undefined, undefined, { cwd: '/', additionalDirectories: [] });
+		const session = store.add(instantiationService.createInstance(ClaudeCodeSession, sessionId, true));
+		await session.invoke(createMockChatRequest('Hello'), new MockChatResponseStream(), undefined, CancellationToken.None);
+
+		const cwd = mockService.lastQueryOptions?.cwd;
+		expect(cwd).toBeDefined();
+		expect(cwd).not.toBe('/');
+		expect(cwd?.length).toBeGreaterThan(1);
 	});
 });
 

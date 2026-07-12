@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import type * as vscode from 'vscode';
 import { IChatDebugFileLoggerService } from '../../../../platform/chat/common/chatDebugFileLoggerService';
 import { INativeEnvService } from '../../../../platform/env/common/envService';
+import { IFileSystemService } from '../../../../platform/filesystem/common/fileSystemService';
 import { IGitService } from '../../../../platform/git/common/gitService';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { IMcpService } from '../../../../platform/mcp/common/mcpService';
@@ -24,6 +25,7 @@ import { URI } from '../../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelToolMCPSource } from '../../../../vscodeTypes';
 import { IClaudePluginService } from './claudeSkills';
+import { findRecordedCwdForSession, isUsableSessionCwd } from './claudeProjectFolders';
 import { ExternalEditTracker } from '../../common/externalEditTracker';
 import { buildMcpServersFromRegistry } from '../common/claudeMcpServerRegistry';
 import { dispatchMessage, ClaudeProxyError, KnownClaudeError } from '../common/claudeMessageDispatch';
@@ -222,6 +224,7 @@ export class ClaudeCodeSession extends Disposable {
 		@IClaudeRuntimeDataService private readonly runtimeDataService: IClaudeRuntimeDataService,
 		@IMcpService private readonly mcpService: IMcpService,
 		@IClaudePluginService private readonly claudePluginService: IClaudePluginService,
+		@IFileSystemService private readonly fileSystemService: IFileSystemService,
 		@IOTelService private readonly _otelService: IOTelService,
 		@IChatDebugFileLoggerService private readonly _debugFileLogger: IChatDebugFileLoggerService,
 		@IGitService private readonly _gitService: IGitService,
@@ -395,6 +398,47 @@ export class ClaudeCodeSession extends Disposable {
 		}
 	}
 
+	/**
+	 * Determines the working directory to launch the Claude SDK with.
+	 *
+	 * The SDK resumes a session by locating its transcript under the project
+	 * directory derived from this cwd, so it must match the directory the
+	 * transcript was written in — and it must never be root/empty (which makes the
+	 * SDK write under a "-" project dir and permanently break resume).
+	 *
+	 * Resolution order:
+	 * 1. When resuming (or when the requested cwd is unusable) scan every project
+	 *    directory for this session's transcript and use its recorded cwd. This is
+	 *    immune to a cold or wrong workspace-cwd guess.
+	 * 2. Otherwise, the requested cwd, as long as it is usable.
+	 * 3. Fallbacks when the requested cwd is root/empty: first open workspace
+	 *    folder, then the user's home directory.
+	 */
+	private async _resolveLaunchCwd(requestedCwd: string): Promise<string> {
+		const shouldLookup = this._isResumed || !isUsableSessionCwd(requestedCwd);
+		if (shouldLookup) {
+			const lookup = await findRecordedCwdForSession(this.fileSystemService, this.envService.userHome, this.sessionId);
+			this.logService.info(`[ClaudeCodeSession] cwd lookup for session ${this.sessionId}: requested='${requestedCwd}', recorded='${lookup.cwd ?? '<none>'}', searchedProjectDirs=[${lookup.searchedProjectDirs.join(', ')}], matches=[${lookup.matches.map(m => `${m.projectDir}(cwd=${m.cwd ?? '?'}, size=${m.size})`).join(', ')}]`);
+			if (isUsableSessionCwd(lookup.cwd)) {
+				return lookup.cwd;
+			}
+		}
+
+		if (isUsableSessionCwd(requestedCwd)) {
+			return requestedCwd;
+		}
+
+		// Guard: never launch the SDK with a root/empty cwd.
+		const workspaceFolder = this.workspaceService.getWorkspaceFolders()[0]?.fsPath;
+		if (isUsableSessionCwd(workspaceFolder)) {
+			this.logService.warn(`[ClaudeCodeSession] Requested cwd '${requestedCwd}' is unusable; falling back to workspace folder '${workspaceFolder}' for session ${this.sessionId}`);
+			return workspaceFolder;
+		}
+		const home = this.envService.userHome.fsPath;
+		this.logService.warn(`[ClaudeCodeSession] Requested cwd '${requestedCwd}' is unusable and no workspace folder is open; falling back to home '${home}' for session ${this.sessionId}`);
+		return home;
+	}
+
 	private async _doStartSession(token: vscode.CancellationToken): Promise<void> {
 		const folderInfo = this.sessionStateService.getFolderInfoForSession(this.sessionId);
 		if (!folderInfo) {
@@ -415,7 +459,12 @@ export class ClaudeCodeSession extends Disposable {
 		this._currentEffort = headRequest.effort;
 		this._currentToolNames = headRequest.toolsSnapshot;
 
-		const { cwd, additionalDirectories } = folderInfo;
+		// Resolve the working directory the SDK will launch with. This must be the
+		// directory the session's transcript lives in (resume only works against
+		// that directory) and must never be root/empty.
+		const cwd = await this._resolveLaunchCwd(folderInfo.cwd);
+		// Keep additional directories consistent with the resolved cwd.
+		const additionalDirectories = folderInfo.additionalDirectories.filter(dir => dir !== cwd);
 
 		// Build options for the Claude Code SDK
 		this.logService.trace(`appRoot: ${this.envService.appRoot}`);
