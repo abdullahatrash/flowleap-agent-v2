@@ -409,12 +409,19 @@ async function main() {
 		// Run postinstall to copy static build assets (wasm, tiktoken, cli) to dist/.
 		// This is needed because in CI, node_modules may be restored from cache,
 		// skipping npm ci and thus the postinstall script.
+		//
+		// Pass `--dist-assets-only`: this build step runs while the copilot packaging
+		// stream concurrently reads `node_modules` production dependencies, so the
+		// postinstall must not re-materialize `@github/copilot/sdk` here (that
+		// delete-and-recreate races the read and drops the SDK from the package).
+		// The SDK layout is already materialized by `npm ci` / the node_modules cache.
 		const child_process = await import('child_process');
 		child_process.execFileSync(
 			process.execPath,
 			[
 				path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
 				path.join(REPO_ROOT, 'script', 'postinstall.ts'),
+				'--dist-assets-only',
 			],
 			{ cwd: REPO_ROOT, stdio: 'inherit' },
 		);

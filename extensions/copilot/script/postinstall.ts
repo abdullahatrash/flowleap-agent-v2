@@ -261,9 +261,23 @@ async function createClaudeSymlinks() {
 }
 
 async function main() {
+	// `--dist-assets-only` regenerates only the generated `dist/` build assets
+	// (compressed tiktoken files, tree-sitter wasm, the agent SDK cli) and skips
+	// the `node_modules/@github/copilot` SDK materialization. The build's copilot
+	// packaging step (`packageCopilotExtensionStream`) re-invokes this script from
+	// `.esbuild.mts` while it concurrently reads those same `node_modules`
+	// production dependencies; letting the SDK materialization delete and recreate
+	// `@github/copilot/sdk` there races that read and can drop the SDK from the
+	// packaged extension. The SDK layout is already materialized by the `npm ci`
+	// postinstall (or restored from the node_modules cache), so this run must not
+	// touch it.
+	const distAssetsOnly = process.argv.includes('--dist-assets-only');
+
 	await fs.promises.mkdir(path.join(REPO_ROOT, '.build'), { recursive: true });
 
-	await createClaudeSymlinks();
+	if (!distAssetsOnly) {
+		await createClaudeSymlinks();
+	}
 
 	const vendoredTiktokenFiles = ['src/platform/tokenizer/node/cl100k_base.tiktoken', 'src/platform/tokenizer/node/o200k_base.tiktoken'];
 
@@ -278,14 +292,16 @@ async function main() {
 		'node_modules/@github/blackbird-external-ingest-utils/pkg/nodejs/external_ingest_utils_bg.wasm',
 	], 'dist');
 
-	const copilotCliSourceDir = await materializeCopilotCliSdkLayout();
-	await removeCopilotCLIShim();
-	await removeCopilotCliWorkerFiles();
-	await copyCopilotCliDefinitionFiles(copilotCliSourceDir);
-	await copyCopilotCliSkillsFiles(copilotCliSourceDir);
-	await copyCopilotCliTGrepFiles(copilotCliSourceDir);
-	await copyCopilotCliQueryFiles(copilotCliSourceDir);
-	await copyCopilotCliPrebuildFiles(copilotCliSourceDir);
+	if (!distAssetsOnly) {
+		const copilotCliSourceDir = await materializeCopilotCliSdkLayout();
+		await removeCopilotCLIShim();
+		await removeCopilotCliWorkerFiles();
+		await copyCopilotCliDefinitionFiles(copilotCliSourceDir);
+		await copyCopilotCliSkillsFiles(copilotCliSourceDir);
+		await copyCopilotCliTGrepFiles(copilotCliSourceDir);
+		await copyCopilotCliQueryFiles(copilotCliSourceDir);
+		await copyCopilotCliPrebuildFiles(copilotCliSourceDir);
+	}
 
 	// Check if the base cache file exists (dev-only sanity check, non-fatal in CI)
 	const baseCachePath = path.join('test', 'simulation', 'cache', 'base.sqlite');
