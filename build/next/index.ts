@@ -582,6 +582,7 @@ async function copyResources(outDir: string, target: BuildTarget): Promise<void>
 	for (const pattern of resourcePatterns) {
 		const files = await globAsync(pattern, {
 			cwd: path.join(REPO_ROOT, SRC_DIR),
+			nodir: true,
 			ignore: ignorePatterns,
 		});
 

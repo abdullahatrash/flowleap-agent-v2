@@ -286,7 +286,9 @@ jobs:
 
   # Build for Windows (unsigned in CI; signed locally afterwards — see below)
   build-windows:
-    runs-on: windows-latest
+    # Pinned: windows-latest now resolves to a VS 2026 image, but build/npm/preinstall.ts
+    # only recognizes VS 2022/2019 install paths. windows-2025 still ships VS 2022.
+    runs-on: windows-2025
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -297,6 +299,19 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: 'npm'
+
+      # Belt-and-braces for future image drift: point vs2022_install at whatever VS
+      # vswhere finds, so preinstall.ts's toolchain check passes even if the default
+      # install path changes again.
+      - name: Locate Visual Studio for preinstall toolchain check
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { $vs = & $vswhere -latest -products * -property installationPath }
+          if (-not $vs) { Write-Error "vswhere found no Visual Studio installation"; exit 1 }
+          Write-Host "Using Visual Studio at: $vs"
+          "vs2022_install=$vs" >> $env:GITHUB_ENV
 
       # As on macOS, root `npm ci` installs the per-extension node_modules via
       # build/npm/dirs.ts, so no separate extension `npm install` steps are needed.
