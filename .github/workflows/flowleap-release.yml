@@ -1,0 +1,484 @@
+# FlowLeap Release Workflow
+#
+# Ported and modernized from the old fork's release-flowleap.yml (issue #81).
+# Builds "Flow Leap, AI patent agent" for macOS (x64 + arm64) and Windows (x64),
+# then drafts a GitHub release with checksums.
+#
+# Modernizations vs. the old workflow:
+#   - macOS DMGs are notarized SYNCHRONOUSLY (notarytool --wait), the job FAILS on
+#     rejection, and the DMG is stapled + Gatekeeper-verified before upload, so the
+#     artifact attached to the release is final.
+#   - Per-extension build steps trimmed to only what this fork actually needs
+#     (see the "Compile FlowLeap legacy extensions" step comment).
+#   - Windows stays unsigned in CI; signing is a documented local step.
+name: FlowLeap Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+# Only one release build per ref at a time; a newer push supersedes an in-flight run.
+concurrency:
+  group: flowleap-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VSCODE_QUALITY: stable
+  # Memory optimization for large builds
+  NODE_OPTIONS: --max-old-space-size=8192
+
+jobs:
+  # Build for macOS (both architectures)
+  build-macos:
+    runs-on: macos-14
+    # Larger than the old 90m budget: notarytool --wait can add up to 45m to the job.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+
+      # Root `npm ci` also installs each built-in extension's node_modules (they are
+      # listed in build/npm/dirs.ts, including pdf-preview / flowleap / markdown-pdf /
+      # docx-viewer). That is why the old per-extension `npm install --production`
+      # steps for markdown-pdf and docx-viewer are gone — they were redundant.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_arch: ${{ matrix.arch }}
+
+      # Stamp BEFORE packaging so the version lands in the bundled extension's
+      # package.json (the `vscode-darwin-*` task copies it in via vsce.listFiles).
+      - name: Stamp FlowLeap version
+        run: node build/flowleap/stamp-flowleap-version.mjs
+        env:
+          FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
+
+      # All *standard* built-in extensions (git, typescript, markdown, ...) use esbuild
+      # and self-compile during the `vscode-darwin-*` package task, so they need no step
+      # here. The FlowLeap-specific extensions are the exception: pdf-preview, flowleap
+      # and docx-viewer are legacy TS extensions (main -> ./out/extension) that the
+      # packaging stream only *bundles* (via vsce.listFiles reading out/) — it does not
+      # compile them — so their out/ must exist first. markdown-pdf is pure JS and needs
+      # no compile. NOTE: the old workflow compiled only pdf-preview + flowleap and
+      # missed docx-viewer; that omission is fixed here.
+      - name: Compile FlowLeap legacy extensions
+        run: |
+          npm run gulp compile-extension:pdf-preview
+          npm run gulp compile-extension:flowleap
+          npm run gulp compile-extension:docx-viewer
+
+      - name: Build macOS ${{ matrix.arch }}
+        run: |
+          ulimit -n 65536 2>/dev/null || true
+          npm run gulp vscode-darwin-${{ matrix.arch }}
+        env:
+          VSCODE_ARCH: ${{ matrix.arch }}
+
+      # Code Signing — uses the user's standard electron-builder secret names:
+      #   CSC_LINK          base64-encoded .p12 "Developer ID Application" certificate
+      #   CSC_KEY_PASSWORD  the .p12 password
+      # The temporary keychain password is generated per-run (no secret), and the
+      # signing identity is auto-discovered from the imported cert (no MACOS_DEVELOPER_ID
+      # secret). The discovered identity is exported for the signing step.
+      - name: Import Code Signing Certificate
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          # Create variables
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          # Ephemeral, per-run keychain password (never stored as a secret).
+          KEYCHAIN_PWD=$(openssl rand -base64 24)
+
+          # Import certificate from secret
+          echo -n "$CSC_LINK" | base64 --decode -o "$CERTIFICATE_PATH"
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+
+          # Import certificate to keychain
+          security import "$CERTIFICATE_PATH" -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Auto-discover the "Developer ID Application" identity from the imported cert.
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"' || true)
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No 'Developer ID Application' signing identity found in the imported certificate (check CSC_LINK / CSC_KEY_PASSWORD)."
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+            exit 1
+          fi
+          echo "Discovered signing identity: $IDENTITY"
+          echo "SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      # Comprehensive Electron codesign (kept verbatim from the old fork — this ordering
+      # worked in production): all Mach-O binaries first, then frameworks deepest-first,
+      # then helper apps with entitlements, then the main app with entitlements.
+      - name: Sign Application
+        run: |
+          APP_PATH="../VSCode-darwin-${{ matrix.arch }}/Flow Leap, AI patent agent.app"
+
+          # $SIGNING_IDENTITY is exported by the certificate-import step.
+          if [ -z "${SIGNING_IDENTITY:-}" ]; then
+            echo "::error::SIGNING_IDENTITY is not set; certificate import must have failed."
+            exit 1
+          fi
+
+          echo "=== Signing Electron app (comprehensive) with: $SIGNING_IDENTITY ==="
+
+          # Step 1: Sign ALL executable files in the entire app bundle
+          # This catches everything: rg, spawn-helper, chrome_crashpad_handler, ShipIt, etc.
+          echo "Step 1: Signing all executables and binaries..."
+          find "$APP_PATH" -type f \( \
+            -name "*.dylib" -o \
+            -name "*.so" -o \
+            -name "*.node" -o \
+            -perm +111 \
+          \) | while read -r binary; do
+            # Skip directories and non-macho files
+            if file "$binary" | grep -q "Mach-O"; then
+              echo "  Signing: $binary"
+              codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$binary" 2>&1 || echo "  Warning: Failed to sign $binary"
+            fi
+          done
+
+          # Step 2: Sign all .framework bundles (deepest first by sorting by path length)
+          echo "Step 2: Signing framework bundles..."
+          find "$APP_PATH" -type d -name "*.framework" | awk '{print length, $0}' | sort -rn | cut -d' ' -f2- | while read -r framework; do
+            echo "  Signing framework: $framework"
+            codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$framework" 2>&1 || echo "  Warning: Failed to sign $framework"
+          done
+
+          # Step 3: Sign all helper .app bundles WITH ENTITLEMENTS (required for JIT in renderer)
+          echo "Step 3: Signing helper apps with entitlements..."
+          find "$APP_PATH/Contents/Frameworks" -type d -name "*.app" | while read -r helper; do
+            echo "  Signing helper: $helper"
+            codesign --force --options runtime --timestamp --entitlements build/entitlements.plist --sign "$SIGNING_IDENTITY" "$helper" 2>&1 || echo "  Warning: Failed to sign $helper"
+          done
+
+          # Step 4: Sign the main app bundle with entitlements
+          echo "Step 4: Signing main app bundle with entitlements..."
+          codesign --force --options runtime --timestamp --entitlements build/entitlements.plist --sign "$SIGNING_IDENTITY" "$APP_PATH"
+
+          # Verify signature
+          echo "=== Verifying signature ==="
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Create DMG
+        run: |
+          npm install -g create-dmg
+          mkdir -p dist
+          APP_NAME="Flow Leap, AI patent agent.app"
+          APP_PATH="../VSCode-darwin-${{ matrix.arch }}/$APP_NAME"
+          DMG_NAME="FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.dmg"
+          ZIP_NAME="FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.zip"
+
+          if [ ! -e "$APP_PATH" ]; then
+            echo "::error::App bundle not found at $APP_PATH"
+            exit 1
+          fi
+
+          # Preferred path: create-dmg. It can exit non-zero even on success (e.g. when it
+          # cannot re-sign), so we decide success by whether a .dmg actually appeared.
+          echo "Attempting create-dmg..."
+          create-dmg "$APP_PATH" --overwrite --dmg-title="FlowLeap" || echo "::warning::create-dmg exited non-zero; checking for output before deciding"
+
+          if ls ./*.dmg >/dev/null 2>&1; then
+            mv ./*.dmg "dist/$DMG_NAME"
+            echo "DMG path taken: create-dmg -> dist/$DMG_NAME"
+          else
+            echo "::warning::create-dmg produced no .dmg; falling back to a plain zip archive (this build will NOT be notarized)"
+            ( cd "../VSCode-darwin-${{ matrix.arch }}" && zip -qr "$GITHUB_WORKSPACE/dist/$ZIP_NAME" "$APP_NAME" )
+            echo "Fallback path taken: zip -> dist/$ZIP_NAME"
+          fi
+
+          ls -la dist/
+
+      # Notarization: submit SYNCHRONOUSLY and staple, so the uploaded DMG is final.
+      # The job FAILS if Apple rejects notarization (the notarytool log is printed for
+      # diagnosis). A missing DMG (only the zip fallback exists) is a soft-skip, not a
+      # failure, because the build itself succeeded.
+      - name: Notarize and Staple DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          DMG_PATH="dist/FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.dmg"
+
+          if [ ! -f "$DMG_PATH" ]; then
+            echo "::warning::No DMG found (zip fallback was used); skipping notarization. The zip is un-notarized and users will see a Gatekeeper prompt."
+            exit 0
+          fi
+
+          echo "Submitting $DMG_PATH to the Apple notary service (waiting up to 45m)..."
+          set +e
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 45m 2>&1)
+          SUBMIT_STATUS=$?
+          set -e
+
+          echo "$SUBMIT_OUTPUT"
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep -oE 'id: [a-f0-9-]+' | head -1 | awk '{print $2}')
+
+          # notarytool --wait may exit 0 even when the submission is Invalid, so check the
+          # status text as well as the exit code.
+          if [ $SUBMIT_STATUS -ne 0 ] || echo "$SUBMIT_OUTPUT" | grep -qiE 'status:[[:space:]]*(Invalid|Rejected)'; then
+            echo "::error::Notarization was not accepted for $DMG_PATH"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "=== notarytool log ($SUBMISSION_ID) ==="
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          echo "Notarization accepted. Stapling..."
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+
+          echo "Gatekeeper assessment of the stapled DMG..."
+          spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
+
+          echo "DMG is signed, notarized and stapled: $DMG_PATH"
+
+      - name: Cleanup Keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: warn
+
+  # Build for Windows (unsigned in CI; signed locally afterwards — see below)
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+
+      # As on macOS, root `npm ci` installs the per-extension node_modules via
+      # build/npm/dirs.ts, so no separate extension `npm install` steps are needed.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stamp FlowLeap version
+        run: node build/flowleap/stamp-flowleap-version.mjs
+        env:
+          FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
+
+      # See the macOS job's equivalent step for the full rationale: only the legacy
+      # TS FlowLeap extensions need pre-compilation before packaging.
+      - name: Compile FlowLeap legacy extensions
+        run: |
+          npm run gulp compile-extension:pdf-preview
+          npm run gulp compile-extension:flowleap
+          npm run gulp compile-extension:docx-viewer
+
+      - name: Build Windows x64
+        run: npm run gulp vscode-win32-x64
+        env:
+          VSCODE_ARCH: x64
+
+      - name: Package Windows Build
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.version || github.ref_name }}"
+
+          # Create a zip of the build output
+          $buildPath = "..\VSCode-win32-x64"
+          if (Test-Path $buildPath) {
+            Compress-Archive -Path "$buildPath\*" -DestinationPath "FlowLeap-$version-win32-x64.zip" -Force
+          }
+
+      # Build Windows Installer (.exe)
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Copy Inno Updater Files
+        run: npm run gulp vscode-win32-x64-inno-updater
+
+      - name: Build Installers
+        continue-on-error: true
+        run: |
+          npm run gulp vscode-win32-x64-system-setup
+          npm run gulp vscode-win32-x64-user-setup
+
+      # Windows artifacts ship UNSIGNED from CI. Signing uses Certum SimplySign, which
+      # requires a local desktop app, so it is done after the fact:
+      #   build/flowleap/sign-windows-release.ps1  (signs the .exe files and regenerates
+      #   their SHA256 hashes) — see docs/release/RELEASE.md for the full procedure.
+      - name: Rename Installers
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $version = "${{ inputs.version || github.ref_name }}"
+          if (Test-Path ".build\win32-x64\system-setup\*.exe") {
+            Move-Item ".build\win32-x64\system-setup\*.exe" "FlowLeap-Setup-$version-x64.exe" -Force
+          }
+          if (Test-Path ".build\win32-x64\user-setup\*.exe") {
+            Move-Item ".build\win32-x64\user-setup\*.exe" "FlowLeap-UserSetup-$version-x64.exe" -Force
+          }
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            FlowLeap-*.exe
+            FlowLeap-*.zip
+          retention-days: 7
+          if-no-files-found: warn
+
+  # Linux build disabled for now - TODO: fix AppImage binary name
+  # build-linux:
+  #   runs-on: ubuntu-22.04
+  #   ... (disabled)
+
+  # Create GitHub Release
+  create-release:
+    needs: [build-macos, build-windows]
+    if: always() && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+        continue-on-error: true
+
+      - name: List Downloaded Artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f 2>/dev/null || echo "No artifacts found"
+
+      # macOS artifacts are final at upload time (signed + notarized + stapled), so these
+      # checksums are correct for them. The Windows .exe entries here are for the UNSIGNED
+      # builds; after local signing, build/flowleap/sign-windows-release.ps1 regenerates
+      # the .exe hashes and the SHASUMS256.txt must be updated on the release (see
+      # docs/release/RELEASE.md).
+      - name: Generate Checksums
+        run: |
+          mkdir -p artifacts
+          cd artifacts
+          find . -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" \) -exec sha256sum {} \; > SHASUMS256.txt 2>/dev/null || echo "No files to checksum" > SHASUMS256.txt
+          cat SHASUMS256.txt
+
+      - name: Extract Release Notes from CHANGELOG
+        id: release_notes
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Extracting release notes for version $VERSION"
+
+          # Extract changelog section for this version
+          if [ -f CHANGELOG.md ]; then
+            awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '1d;$d' > release-notes.md
+          fi
+
+          # If no changelog entry, create default notes
+          if [ ! -s release-notes.md ]; then
+            cat > release-notes.md << EOF
+          ## FlowLeap Patent IDE ${{ inputs.version || github.ref_name }}
+
+          AI-powered patent analysis IDE based on VS Code.
+
+          ### Downloads
+          Download the appropriate package for your platform below.
+
+          ### Installation
+          - **macOS**: Download .dmg, open and drag to Applications
+          - **Windows**: Download .zip and extract, or use installer .exe
+
+          ---
+          See full changelog at https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
+          EOF
+          fi
+
+          echo "Release notes:"
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          # On tag pushes this is the tag itself; on workflow_dispatch (no tag ref)
+          # derive it from the version input so the release step doesn't fail.
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+          body_path: release-notes.md
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.tar.gz
+            artifacts/SHASUMS256.txt
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post-Release Summary
+        run: |
+          echo "Release draft created for ${{ inputs.version || github.ref_name }}"
+          echo "  - macOS:   ${{ needs.build-macos.result }} (signed + notarized + stapled)"
+          echo "  - Windows: ${{ needs.build-windows.result }} (UNSIGNED)"
+          echo ""
+          echo "Next steps:"
+          echo "  1. Sign the Windows .exe files locally with build/flowleap/sign-windows-release.ps1"
+          echo "     then re-upload them and refresh SHASUMS256.txt on the release."
+          echo "  2. Full procedure: docs/release/RELEASE.md"
+          echo "  3. Review and publish the draft at https://github.com/${{ github.repository }}/releases"

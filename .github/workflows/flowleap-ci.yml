@@ -1,0 +1,73 @@
+# Fork-owned PR gate for flowleap-agent-v2.
+#
+# Deliberately minimal and cheap: catches TypeScript errors and layering
+# violations without a full product build. Runs on ubuntu-latest (no
+# Microsoft-internal self-hosted pools) and uses no secrets beyond the
+# default GITHUB_TOKEN.
+name: FlowLeap CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: flowleap-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compile-and-layers:
+    name: Compile & Layers
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # @vscode/ripgrep's postinstall hits the GitHub API to download a
+      # release asset; anonymous requests are rate-limited and flake on
+      # shared runners.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Compile gate: two lightweight tsgo type-check passes instead of the
+      # full `npm run compile` (which esbuild-bundles the client and the
+      # copilot extension — much heavier and not needed just to catch type
+      # errors).
+      #   1. typecheck-client type-checks src/tsconfig.json (main VS Code
+      #      sources under src/vs/*).
+      #   2. `gulp compile-extensions` type-checks every built-in extension
+      #      under extensions/ (via tsgo, no bundling) except extensions/copilot,
+      #      which ships its own dedicated `typecheck` script covering its
+      #      multiple tsconfig projects.
+      # Together these cover TypeScript errors in both src/ and extensions/
+      # without producing a bundled build artifact.
+      - name: Type-check client (src/)
+        run: npm run typecheck-client
+
+      - name: Type-check built-in extensions
+        run: npm run gulp compile-extensions
+
+      - name: Type-check copilot extension
+        run: npm run typecheck
+        working-directory: extensions/copilot
+
+      - name: Validate layers
+        run: npm run valid-layers-check
