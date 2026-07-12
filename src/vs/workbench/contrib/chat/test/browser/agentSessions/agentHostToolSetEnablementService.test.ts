@@ -64,15 +64,16 @@ suite('AgentHostToolSetEnablementService', () => {
 		assert.deepStrictEqual([...sut.getState(SESSION).tools], []);
 	});
 
-	test('countEnabledCustomizationTools counts effective members and skips deprecated sets', () => {
+	test('countEnabledCustomizationTools counts distinct effective members across the given sets', () => {
 		const { sut } = createSut();
 		sut.setToolSetEnabled(SESSION, SET, TOOLS, false);
 		sut.setToolEnabled(SESSION, SET, 't1', true);
 		const toolSets = [
 			{ id: SET, getTools: () => TOOLS.map(id => ({ id })) },
-			{ id: 'dep', deprecated: true, getTools: () => [{ id: 'x' }] },
+			{ id: 'other', getTools: () => [{ id: 'x' }] },
 		];
-		assert.strictEqual(countEnabledCustomizationTools(toolSets, sut.getState(SESSION)), 1);
+		// SET contributes only its per-tool override (t1); 'other' contributes its member (x).
+		assert.strictEqual(countEnabledCustomizationTools(toolSets, sut.getState(SESSION)), 2);
 	});
 
 	test('enablement is isolated per session type', () => {

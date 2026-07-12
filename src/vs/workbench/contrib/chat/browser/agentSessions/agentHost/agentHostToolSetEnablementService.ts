@@ -55,17 +55,17 @@ export function getToolSetTriState(state: IToolEnablementState, toolSetId: strin
 /** The subset of a tool set needed to count its enabled tools. {@link IToolSet} satisfies this shape. */
 export interface ICountableToolSet {
 	readonly id: string;
-	readonly deprecated?: boolean;
 	getTools(reader?: IReader): Iterable<{ readonly id: string }>;
 }
 
-/** Counts the enabled tools across the non-deprecated tool sets surfaced in Chat Customizations → Tools. */
+/**
+ * Counts the distinct enabled tools across the given tool sets. The caller decides which sets belong
+ * in the section — pass `getCustomizationToolSets(...)` so this count matches what the section
+ * renders (the "Count Consistency" rule in `vs/sessions/AI_CUSTOMIZATIONS.md`).
+ */
 export function countEnabledCustomizationTools(toolSets: Iterable<ICountableToolSet>, state: IToolEnablementState, reader?: IReader): number {
 	const enabled = new Set<string>();
 	for (const ts of toolSets) {
-		if (ts.deprecated) {
-			continue;
-		}
 		for (const tool of ts.getTools(reader)) {
 			if (isToolEnabledInSet(state, ts.id, tool.id)) {
 				enabled.add(tool.id);

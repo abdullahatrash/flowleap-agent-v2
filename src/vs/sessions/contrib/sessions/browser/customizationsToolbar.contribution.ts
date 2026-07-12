@@ -20,6 +20,7 @@ import { IAICustomizationItemsModel, ItemsModelSection } from '../../../../workb
 import { IMcpService } from '../../../../workbench/contrib/mcp/common/mcpTypes.js';
 import { ILanguageModelToolsService } from '../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { AGENT_HOST_COPILOT_CLI_SESSION_TYPE, countEnabledCustomizationTools, IAgentHostToolSetEnablementService } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
+import { getCustomizationToolSets } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.js';
 import { Menus } from '../../../browser/menus.js';
 import { agentIcon, instructionsIcon, mcpServerIcon, pluginIcon, skillIcon, hookIcon, toolsIcon } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationIcons.js';
 import { ActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -216,7 +217,7 @@ export class CustomizationLinkViewItem extends ActionViewItem {
 		}
 		if (this._config.isTools) {
 			const state = this._toolEnablementService.observe(AGENT_HOST_COPILOT_CLI_SESSION_TYPE).read(reader);
-			const toolSets = this._toolsService.toolSets.read(reader);
+			const toolSets = getCustomizationToolSets(this._toolsService, reader);
 			return countEnabledCustomizationTools(toolSets, state, reader);
 		}
 		return 0;
