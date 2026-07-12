@@ -37,6 +37,8 @@ suite('Sessions ConfigurationService', () => {
 	let fileService: FileService;
 	let userDataProfileService: IUserDataProfileService;
 	let workspaceConfigResource: URI;
+	let uriIdentityService: UriIdentityService;
+	let logService: NullLogService;
 	const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -89,13 +91,13 @@ suite('Sessions ConfigurationService', () => {
 	});
 
 	setup(async () => {
-		const logService = new NullLogService();
+		logService = new NullLogService();
 		fileService = disposables.add(new FileService(logService));
 		const fileSystemProvider = disposables.add(new InMemoryFileSystemProvider());
 		disposables.add(fileService.registerProvider(ROOT.scheme, fileSystemProvider));
 
 		const environmentService = TestEnvironmentService;
-		const uriIdentityService = disposables.add(new UriIdentityService(fileService));
+		uriIdentityService = disposables.add(new UriIdentityService(fileService));
 		const userDataProfilesService = disposables.add(new UserDataProfilesService(environmentService, fileService, uriIdentityService, logService));
 		disposables.add(fileService.registerProvider(Schemas.vscodeUserData, disposables.add(new FileUserDataProvider(ROOT.scheme, fileSystemProvider, Schemas.vscodeUserData, userDataProfilesService, uriIdentityService, logService))));
 		userDataProfileService = disposables.add(new UserDataProfileService(userDataProfilesService.defaultProfile));
@@ -526,6 +528,44 @@ suite('Sessions ConfigurationService', () => {
 			() => testObject.updateValue('sessionsConfigurationService.dynamicReadOnly', 'newValue'),
 			/read-only in the Agents window/
 		);
+	}));
+
+	// #endregion
+
+	// #region MCP standalone configuration (inputs resolution)
+
+	// Shape written by the gallery installer: a server whose env references an
+	// `${input:...}` variable, plus the `inputs` section that the configuration
+	// resolver reads to prompt for and substitute that variable. If the `mcp`
+	// configuration (and its `inputs`) is not loaded, starting the server throws
+	// "Variable '...' must be defined in an 'inputs' section".
+	const mcpConfigWithInputs = {
+		servers: {
+			'co.flowleap/flowleap': {
+				type: 'stdio',
+				command: 'npx',
+				args: ['flowleap@0.3.1', 'mcp'],
+				env: { FLOWLEAP_API_KEY: '${input:FLOWLEAP_API_KEY}' }
+			}
+		},
+		inputs: [
+			{ id: 'FLOWLEAP_API_KEY', type: 'promptString', password: true, description: 'FlowLeap API key' }
+		]
+	};
+
+	test('mcp.json inputs are loaded on reload so ${input:} variables can resolve', () => runWithFakedTimers<void>({ useFakeTimers: true }, async () => {
+		await fileService.writeFile(userDataProfileService.currentProfile.mcpResource, VSBuffer.fromString(JSON.stringify(mcpConfigWithInputs)));
+		await testObject.reloadConfiguration();
+		assert.deepStrictEqual(testObject.getValue('mcp'), mcpConfigWithInputs);
+		assert.deepStrictEqual(testObject.inspect('mcp').userValue, mcpConfigWithInputs);
+	}));
+
+	test('mcp.json inputs are loaded on initialize so ${input:} variables can resolve', () => runWithFakedTimers<void>({ useFakeTimers: true }, async () => {
+		await fileService.writeFile(userDataProfileService.currentProfile.mcpResource, VSBuffer.fromString(JSON.stringify(mcpConfigWithInputs)));
+		const freshService = disposables.add(new ConfigurationService(userDataProfileService, workspaceService, uriIdentityService, fileService, new NullPolicyService(), logService));
+		await freshService.initialize();
+		assert.deepStrictEqual(freshService.getValue('mcp'), mcpConfigWithInputs);
+		assert.deepStrictEqual(freshService.inspect('mcp').userValue, mcpConfigWithInputs);
 	}));
 
 	// #endregion

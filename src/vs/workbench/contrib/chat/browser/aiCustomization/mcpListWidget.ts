@@ -14,6 +14,7 @@ import { IListVirtualDelegate, IListRenderer, IListContextMenuEvent } from '../.
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -145,6 +146,8 @@ interface IMcpServerItemTemplateData {
 	readonly typeIcon: HTMLElement;
 	readonly name: HTMLElement;
 	readonly description: HTMLElement;
+	readonly actionsContainer: HTMLElement;
+	readonly actionBar: ActionBar;
 	readonly status: HTMLElement;
 	readonly disposables: DisposableStore;
 }
@@ -173,13 +176,23 @@ class McpServerItemRenderer implements IListRenderer<IMcpServerItemEntry | IMcpS
 
 		const description = DOM.append(details, $('.mcp-server-description'));
 
+		// Inline start/stop affordance (hover-visible), rendered before the status
+		// badge so the badge stays anchored at the row's trailing edge. The context
+		// menu remains the full set of actions; this is a quick primary control.
+		const actionsContainer = DOM.append(container, $('.mcp-server-actions'));
+		const actionBar = new ActionBar(actionsContainer);
+
 		const status = DOM.append(container, $('.mcp-server-status'));
 
-		return { container, typeIcon, name, description, status, disposables: new DisposableStore() };
+		return { container, typeIcon, name, description, actionsContainer, actionBar, status, disposables: new DisposableStore() };
 	}
 
 	renderElement(element: IMcpServerItemEntry | IMcpSessionServerItemEntry | IMcpBuiltinItemEntry, index: number, templateData: IMcpServerItemTemplateData): void {
 		templateData.disposables.clear();
+		// Inline start/stop is only offered for installed local servers (below);
+		// hide it by default so builtin/session rows keep their read-only presentation.
+		templateData.actionBar.clear();
+		templateData.actionsContainer.style.display = 'none';
 
 		if (element.type === 'builtin-item') {
 			templateData.container.classList.add('builtin');
@@ -247,6 +260,43 @@ class McpServerItemRenderer implements IListRenderer<IMcpServerItemEntry | IMcpS
 				this.updateStatus(templateData.status, disabled ? 'disabled' : connectionState?.state);
 			}));
 		}
+
+		// Installed local servers get an inline start/stop control (gallery rows use
+		// their own renderer, so `element` here is always an installed server).
+		if (element.localServer) {
+			this.renderStartStopAction(templateData, element.localServer);
+		}
+	}
+
+	/**
+	 * Renders a single inline action on the row that starts the server when it can
+	 * be started and stops it otherwise, mirroring the context menu's Start/Stop
+	 * commands. The icon and tooltip track the server's connection state.
+	 */
+	private renderStartStopAction(templateData: IMcpServerItemTemplateData, localServer: IMcpServer): void {
+		templateData.actionsContainer.style.display = '';
+
+		const action = new Action('mcpServer.inline.toggle', '', undefined, true, async () => {
+			if (McpConnectionState.canBeStarted(localServer.connectionState.get().state)) {
+				await localServer.start({ promptType: 'all-untrusted' });
+				localServer.showOutput();
+			} else {
+				await localServer.stop();
+			}
+		});
+		templateData.disposables.add(action);
+		templateData.actionBar.push(action, { icon: true, label: false });
+
+		templateData.disposables.add(autorun(reader => {
+			const state = localServer.connectionState.read(reader).state;
+			const canStart = McpConnectionState.canBeStarted(state);
+			action.class = ThemeIcon.asClassName(canStart ? Codicon.play : Codicon.debugStop);
+			action.label = canStart ? localize('startServer', "Start Server") : localize('stopServer', "Stop Server");
+			action.tooltip = action.label;
+			// Disable the toggle while the connection is transitioning to avoid
+			// issuing a start/stop against a server that is mid-start or mid-stop.
+			action.enabled = canStart || state === McpConnectionState.Kind.Running;
+		}));
 	}
 
 	private updateKnownServerStatus(templateData: IMcpServerItemTemplateData, localServer: IMcpServer | undefined, activeSessionServer: AgentHostMcpServer | undefined): void {
@@ -278,6 +328,7 @@ class McpServerItemRenderer implements IListRenderer<IMcpServerItemEntry | IMcpS
 	}
 
 	disposeTemplate(templateData: IMcpServerItemTemplateData): void {
+		templateData.actionBar.dispose();
 		templateData.disposables.dispose();
 	}
 }

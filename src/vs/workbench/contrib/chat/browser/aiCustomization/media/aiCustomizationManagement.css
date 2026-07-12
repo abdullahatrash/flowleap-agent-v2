@@ -1414,6 +1414,24 @@
 	line-height: 14px;
 }
 
+/* Inline start/stop control — hidden until the row is hovered or focused (mirrors the .item-right affordance used by the customization list). */
+.mcp-server-item .mcp-server-actions {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	visibility: hidden;
+}
+
+.mcp-server-item:hover .mcp-server-actions,
+.mcp-server-item:focus-within .mcp-server-actions,
+.monaco-list-row.focused .mcp-server-item .mcp-server-actions {
+	visibility: visible;
+}
+
+.mcp-server-item .mcp-server-actions .action-label.codicon {
+	color: var(--vscode-icon-foreground);
+}
+
 .mcp-server-item .mcp-server-status {
 	flex-shrink: 0;
 	font-size: var(--vscode-agents-fontSize-label2);

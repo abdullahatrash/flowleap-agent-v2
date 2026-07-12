@@ -115,7 +115,13 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
 		const [defaultModel, policyModel, userModel] = await Promise.all([
 			this.defaultConfiguration.initialize(),
 			this.policyConfiguration.initialize(),
-			this.userConfiguration.initialize(),
+			// `reload()` (not `initialize()`) so the profile's standalone user
+			// configuration files — tasks.json and mcp.json — are parsed and their
+			// directories watched from the start. mcp.json carries the `inputs`
+			// section that `${input:...}` variables in MCP server env resolve
+			// against; without it, starting a gallery-installed server in this
+			// window throws "Variable '...' must be defined in an 'inputs' section".
+			this.userConfiguration.reload(),
 			this.workspaceConfiguration.initialize(workspaceIdentifier, true),
 		]);
 		this.workspaceConfiguration.reparseWorkspaceSettings({ exclude: [...this.agentsWindowReadOnlyKeys] });
@@ -271,7 +277,10 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
 	}
 
 	async reloadConfiguration(_target?: ConfigurationTarget | IWorkspaceFolder): Promise<void> {
-		const userModel = await this.userConfiguration.initialize();
+		// `reload()` re-reads settings.json plus the standalone tasks.json and
+		// mcp.json; `initialize()` would only re-read settings.json and drop the
+		// mcp `inputs` section needed for MCP server variable resolution.
+		const userModel = await this.userConfiguration.reload();
 		const previousData = this._configuration.toData();
 		const change = this._configuration.compareAndUpdateLocalUserConfiguration(userModel);
 
