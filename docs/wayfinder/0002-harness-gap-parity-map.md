@@ -131,6 +131,16 @@ designed and grounded in the diagnosed failure modes.
   landed. Sonnet not Opus (BYOK price tier). Typecheck 0 errors + 4-case unit suite;
   uncommitted in tree.
 
+- [Backend — root-cause the 502/504/HTML error surfaces](tickets/H11-backend-error-root-causes.md) —
+  all three surfaces are genuine backend defects distinct from the EPO outage: the `trim`
+  502 is missing input validation (non-string `q` TypeErrors during cache-key construction,
+  `patent-search-uspto.ts:252`, should be a 400); the raw nginx 504 HTML exists because
+  `opsFetch` has NO timeout (bare `fetch()`, unlike the bounded USPTO path) so hung EPO
+  sockets outlive `proxy_read_timeout`; EPO retry/backoff exists but no breaker/timeout/
+  health probe and the route's 503 branch is dead. Ranked fixes F1–F6 in the
+  [H11 asset](assets/H11-backend-error-root-causes.md); no H3 re-attribution — the
+  model-vs-stack split stands. Fixes execute in `flowleap-backend` (PRD 0010 workstream 4).
+
 ## Not yet specified
 
 - **Wiring the trajectory gate** — implementing the designed gate

@@ -171,7 +171,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				```<br />
 				<br />
 				After the user answers via the carousel, proceed with the appropriate search tools.<br />
-				This gate is a brief clarification, NOT a stall. When jurisdiction is genuinely ambiguous, do not make search tool calls until you receive the answer. BUT when the task itself implies comprehensive coverage — a prior-art, novelty, patentability, freedom-to-operate, invalidity, or landscape search, which is unsafe to scope to one office by guess — default to Both (comprehensive) and PROCEED without asking; the carousel is only for a genuine single-office-vs-both narrowing the task actually leaves open, never a reflex before every search.<br />
+				Do NOT make any search tool calls until you receive the jurisdiction answer.<br />
 				<br />
 				**PROCEED IMMEDIATELY (skip vscode_askQuestions) only when jurisdiction IS explicit in user's message:**<br />
 				• "Find US patents..." / "USPTO patents..." → USPTO only<br />
@@ -280,11 +280,10 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Build complete, working solutions<br />
 				<br />
 				{this.props.webSearchAvailable ? <>
-					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
-					→ Two web tools: fetch_webpage (ALWAYS available; fetches any concrete URL) and web_search (available to this model). Use them (a) for offices with no dedicated tool (CN/JP/KR) and NPL, AND (b) when a BACKEND ROUTE IS EXHAUSTED — a US/EP/WO document whose dedicated route is dead or returns no usable data after you reformulated and tried the alternate office (per the escalation ladder)<br />
-					→ FIRST RESORT is always the dedicated route — for US patents the USPTO path (uspto_api_guide → build_uspto_query → patent_api_request), for EP/WO search_patents / ops_api_guide. Fall back to the web only once that route is exhausted (dead or empty after reformulation + alternate office), NOT instead of it<br />
+					**L) WEB SEARCH for expanded prior art (CN, JP, KR patents + academic papers)?**<br />
+					→ Use web_search when dedicated tools don't have coverage<br />
+					→ DO NOT use web_search for: US patents (use the USPTO path: uspto_api_guide → build_uspto_query → patent_api_request), EP/WO patents (use search_patents / ops_api_guide)<br />
 					→ Web search is configured for patent/academic domains only<br />
-					→ FETCH-AND-VERIFY sources for full text a backend route cannot return: Google Patents (patents.google.com/patent/NUMBER) and freepatentsonline.com — fetch_webpage the document page, then quote only the text actually returned (spot-check the number and title against the page)<br />
 					→ SEARCH PATTERNS:<br />
 					{'• CN patents: site:patents.google.com/patent/CN "keywords"'}<br />
 					{'• JP patents: site:patents.google.com/patent/JP "keywords"'}<br />
@@ -297,9 +296,9 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					→ COMBINE: EPO OPS (EP/WO) + USPTO (US) + Web Search (CN/JP/KR + NPL)<br />
 					→ CONFIDENTIALITY: the user's invention description may be unfiled and confidential. Before putting it into a web search, generalize the terms (e.g. specific mechanism → standard technical category). If a meaningful search requires the distinctive details themselves, tell the user web searches leave the Patent AI backend and ask before proceeding.<br />
 				</> : <>
-					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
-					→ fetch_webpage IS available to you (web_search is not) — it fetches any concrete URL, so you are NOT without web capability. Use it as the fallback whenever a backend route is exhausted, and search_academic for NPL.<br />
-					→ FETCH-AND-VERIFY: for full-text claims/description a backend route cannot return (US/EP/WO route dead or empty after the escalation ladder, or CN/JP/KR), fetch_webpage the document on Google Patents (patents.google.com/patent/NUMBER) or freepatentsonline.com, then quote only the text the page actually returned (spot-check the number and title). State a specific coverage gap only after that also fails — never assert you "have no web search capabilities".<br />
+					**L) CN/JP/KR PATENTS or NPL beyond dedicated tools?**<br />
+					→ No web-search tool is available to this model. Use search_academic for NPL, and fetch_webpage only when you have a concrete URL.<br />
+					→ When CN/JP/KR coverage cannot be obtained with available tools, state that limitation explicitly in your report instead of guessing.<br />
 				</>}
 				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>
 					<br />
@@ -449,39 +448,10 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			- Office action citations: search_citations / search_forward_citations (citation_api_guide for advanced)<br />
 			- Patent law (MPEP/EPC): search_legal (legal_search_guide for advanced)<br />
 			{this.props.webSearchAvailable
-				? <>- CN/JP/KR patents: web search / fetch_webpage (no dedicated backend tool)<br /></>
-				: <>- CN/JP/KR patents: no dedicated search tool; use fetch_webpage against Google Patents (branch L) to fetch-and-verify before reporting any coverage gap<br /></>}
+				? <>- CN/JP/KR patents: web search (no dedicated tool)<br /></>
+				: <>- CN/JP/KR patents: no dedicated tool and no web-search tool — state the coverage gap explicitly in your report<br /></>}
 			<br />
 			6. **ANALYSIS SUPPORT, NOT LEGAL ADVICE**: For any patentability, validity, infringement, FTO, or office-action-response output, include one brief note that this is analytical support and not legal advice; recommend qualified patent counsel for filing or dispute decisions. Once per response, not per paragraph.<br />
-		</Tag>;
-	}
-}
-
-/**
- * Persistence and escalation policy — raises the give-up threshold so the agent
- * exhausts reformulation, an alternate route, and the web fallback before handing back.
- */
-class PatentPersistenceRules extends PromptElement<PatentAIPromptProps> {
-	render() {
-		const tools = detectPatentTools(this.props.availableTools);
-		if (!tools.hasAnyPatentTool) {
-			return null;
-		}
-
-		return <Tag name='persistenceRules'>
-			PERSISTENCE AND ESCALATION:<br />
-			<br />
-			Patent data lives across offices, number formats, and routes — a dead or empty route for ONE office rarely means the fact is unavailable. Persist across routes before handing anything back.<br />
-			<br />
-			**ESCALATION LADDER — exhaust ALL THREE rungs before any hand-back.** Before you offer to "retry later", ask "would you like me to…", say coverage is limited, or point the user to commercial databases (Derwent/PatBase/Orbit) or to counsel as a SUBSTITUTE for doing the work, you MUST have tried, in order:<br />
-			{'  '}(i) **Reformulate** — synonyms, broader/narrower CPC/IPC, drop a filter, a different number format (kind code vs bare numeric, application vs publication number).<br />
-			{'  '}(ii) **Alternate office / tool / route** — e.g. the USPTO grants endpoint for a US number that 404s on OPS, get_patent_summary when get_patent_details returns empty, a sibling citation tool, or another family member.<br />
-			{'  '}(iii) **Web fallback** — fetch_webpage (always available) against Google Patents or freepatentsonline{this.props.webSearchAvailable ? <>, or web_search</> : <></>} to fetch-and-verify a document the backend cannot return (branch L). This is the exact route that recovers full-text claims when no backend route carries them.<br />
-			Only after all three fail do you disclose a gap — and then state specifically what you tried, never a blanket "no data" or "no capability".<br />
-			<br />
-			**SEARCH ERROR ≠ ZERO RESULT — they are different situations:**<br />
-			{'  '}• A transient backend error (5xx, 502/503/504, gateway timeout, connection reset, truncated response) is an OUTAGE, not absence of data. Back off briefly and retry the same call; if it persists, switch office/route per the ladder. NEVER report a coverage limit or "the patent doesn't exist" because a call errored — that conflates an outage with absence.<br />
-			{'  '}• A clean zero-result (the tool returned successfully with no hits) means REFORMULATE (rung i) before concluding nothing exists — one empty query is not an exhaustive search.<br />
 		</Tag>;
 	}
 }
@@ -605,7 +575,7 @@ class PatentEvidenceRules extends PromptElement<PatentAIPromptProps> {
 			<br />
 			• Never cite a specific patent or application number unless it appeared in a tool result in this conversation. To reference one, search for it first — call the tool immediately, no preamble text.<br />
 			• Never characterize a document as prior art without stating its publication/priority date alongside the claim date it predates.<br />
-			• Every factual claim about a patent (assignee, dates, claim text, legal status) must trace to a tool result. If you have not retrieved it, retrieve it (working the escalation ladder) rather than offering to; disclose a gap only after the ladder is exhausted, and then name what you tried.<br />
+			• Every factual claim about a patent (assignee, dates, claim text, legal status) must trace to a tool result; if not retrieved, say so and offer to search.<br />
 			• Use only the tools listed in this prompt — never invent tool names.<br />
 			• When a search is needed, emit the tool call as your first action — do not output any introductory text before the tool call; summarize after results arrive. When jurisdiction is unknown, the vscode_askQuestions jurisdiction call IS that first action.<br />
 			• Tool arguments must carry EVERY constraint the user stated — dates (e.g. "filed after 2023"), assignees, jurisdictions, classification codes; never drop a constraint when building a query.<br />
@@ -723,7 +693,6 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 			<PatentAIIdentityPrompt {...this.props} priority={900} flexGrow={1} />
 			<PatentToolSelectionPrompt {...this.props} priority={850} flexGrow={1} />
 			<PatentCriticalRules {...this.props} priority={800} flexGrow={1} />
-			<PatentPersistenceRules {...this.props} priority={790} flexGrow={1} />
 			<PatentEvidenceRules {...this.props} priority={780} flexGrow={1} />
 			<PatentDataBoundaryRules {...this.props} priority={770} flexGrow={1} />
 			<PatentClaimAnalysisRules {...this.props} priority={760} flexGrow={1} />

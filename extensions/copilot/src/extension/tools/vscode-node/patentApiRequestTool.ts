@@ -13,7 +13,7 @@ import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { normaliseToRelativePath } from './curlToApiRequest';
-import { formatJsonForModel, isSingleRecordDocumentLookup, ToolResponseBudgets } from './patentResponseFormatter';
+import { formatJsonForModel, ToolResponseBudgets } from './patentResponseFormatter';
 
 /**
  * Input parameters for the patent_api_request tool.
@@ -90,11 +90,7 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 			// Route through the shared budget-aware formatter: under budget the output is the same
 			// pretty-printed JSON as before; oversized responses come back as valid, parseable JSON with
 			// whole array items dropped and an explicit omitted-count note (never sliced mid-structure).
-			// Single-record document lookups (by-number claims/description/grant fetches) instead keep their
-			// sole record intact so the harness offloads the full text to a file — dropping it would return
-			// an empty result with a "refine your query" note that a by-number lookup cannot act on.
-			const singleRecord = isSingleRecordDocumentLookup(normalisedPath);
-			const formatted = formatJsonForModel(result, ToolResponseBudgets.PatentApiRequest, { singleRecord });
+			const formatted = formatJsonForModel(result, ToolResponseBudgets.PatentApiRequest);
 
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted.content)]);
 

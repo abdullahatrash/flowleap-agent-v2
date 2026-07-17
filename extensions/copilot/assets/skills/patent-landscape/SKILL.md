@@ -33,15 +33,6 @@ Where you need precise per-slice counts beyond the analytics sample:
 - Vary by CPC code + date range for volume, by assignee for top-filer analysis
 - Bulk detail retrieval: `ops_api_guide` action="endpoint" endpoint="biblio-bulk" → `patent_api_request` (OPS carries US publications too)
 
-## When a search fails
-
-Landscape counts lean on live search — before reporting a count as zero or a coverage limit, work the ladder in order:
-1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — broaden or narrow the CPC/IPC, drop a filter, widen the date slice, try a different assignee spelling — then try the alternate office/route (`patent_analytics_viz` ↔ `search_patents` ↔ `patent_api_request`).
-2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a real count — back off and retry the same call, then switch office. NEVER report a "0" or a coverage limit from an errored call; a failed slice is a hole in the data, not a finding, so mark it as retry-pending rather than reporting it as trend.
-3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
-
-Report a slice as low-activity or white space only after all three, and note in the methodology what failed.
-
 ## Phase 3: Analysis
 
 ### Filing Trends
@@ -67,6 +58,6 @@ Save via `write_patent_results` (`template: 'landscape-report'`):
 3. **Filing Volume & Trends**: year-over-year data
 4. **Top Filers**: ranked table with counts
 5. **Technology Sub-Clusters**: breakdown by sub-topics
-6. **Key Patents**: the 5-10 most cited/important patents found (`search_forward_citations` on the publication number for who-cites-this-forward counts; for the references cited AGAINST a patent that's `search_citations` on its US **application** number, resolved via `get_patent_family` → `get_continuity`)
+6. **Key Patents**: the 5-10 most cited/important patents found (`search_forward_citations` for citation counts)
 7. **White Spaces**: areas with low filing activity (potential opportunities)
 8. **Data Tables**: raw data for all searches performed

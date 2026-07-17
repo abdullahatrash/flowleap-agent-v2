@@ -142,8 +142,6 @@ export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCi
 		if (!result.data || result.data.length === 0) {
 			lines.push('No forward citations found matching the filters.');
 			lines.push('');
-			lines.push('For prior art cited AGAINST this patent (the examiner X/Y/A references), use search_citations with the US application number — this tool only finds patents that cite this document, not the references cited against it. Resolve the application number via get_patent_family (find the US member) then get_continuity (read its application number).');
-			lines.push('');
 			lines.push('For citation statistics or date-range filtering, use citation_api_guide.');
 			return lines.join('\n');
 		}
