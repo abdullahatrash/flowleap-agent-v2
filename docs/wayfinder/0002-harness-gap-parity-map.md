@@ -60,20 +60,99 @@ designed and grounded in the diagnosed failure modes.
   zero-hit strings + absent zero-result/error rules in prompt & skills, hint-less generic
   backend errors, and a skill-pack mismatch between surfaces — ranked list in the
   [behavior-map asset](assets/H2-loop-behavior-map.md).
+- [Root-cause attribution](tickets/H3-root-cause-attribution.md) — the outage-independent gap
+  is **model-dominated** (Sonnet 4→5 on the same stack closed 2/2 clean-task gaps; zero clean
+  losses for Sonnet 5). Every give-up was a **model choice after a tool result**, never a
+  loop-forced death — this **refutes H2's #1 suspect** (transient model-fetch death: 0/16
+  sessions) and promotes a new top cause: web fallback is endorsed only for no-tool
+  jurisdictions, so on R1 the weak model quit claiming "no web search capabilities" while
+  `fetch_webpage` sat unused. H1's "residual stack effect" is an outage + test-cap artifact,
+  not a same-model loop deficiency. Fixes raise the *weaker-model floor*; six slices
+  graduated to **H5–H10**. Full table + evidence in [attribution asset](assets/H3-attribution.md).
+
+- [Citation tools — empty-result strings that route forward↔backward](tickets/H7-citation-tool-routing-strings.md) —
+  both citation tools' zero-result strings now lead with the sibling-tool + key-chain hint
+  (forward→`search_citations` on the US **application** number via
+  `get_patent_family`→`get_continuity`, and the symmetric pointer back), with the
+  `citation_api_guide` pointer demoted below; targets the S3 route Sonnet 4 never found.
+  Two tool files + spec updated; uncommitted in tree.
+
+- [Design the trajectory eval gate](tickets/H4-trajectory-eval-gate-design.md) — extend the
+  #27 promptfoo tree with a multi-turn **replay provider** driving the loop against scripted
+  mock tools (canned EMPTY/5xx/TRUNCATED fixtures from H3 transcripts; model pinned so the
+  gate fires on prompt/tool/skill drift, not model choice); assertions are
+  trajectory-structural (`reactedAfter`/`reachedTool`) plus a thin LLM-judge for narrated
+  give-ups; 8 cases T1–T8 incl. a bounded-grind negative control; R1/S3/R4 verified to fail
+  red. Shares prompt-render + drift machinery with W7, separate axes. Full spec in
+  [gate design asset](assets/H4-trajectory-gate-design.md). Wiring = fog.
+
+- [Typed-tool errors — actionable transient-error shape](tickets/H8-transient-backend-error-shape.md) —
+  new `TransientBackendError` (any 5xx after the retry budget, + client timeouts) fills the
+  empty recovery-hint branch: raw nginx HTML/exception text replaced by a short status line
+  plus a "this is transient, not a coverage limit — wait and retry, or try USPTO meanwhile"
+  hint; flows to all tools via the existing `handlePatentToolError` path, no
+  `patentToolError.ts` change needed. 43/43 client tests pass incl. new transient cases;
+  uncommitted in tree.
+
+- [Truncation — single-record lookups no longer dropped](tickets/H9-single-record-truncation-offload.md) —
+  root cause was the formatter pre-emptively draining the sole-record array to `[]` BEFORE
+  the harness's existing >8KB disk-offload (`read_file` pointer, default on) could catch it;
+  fix = a `singleRecord` mode (narrow `isSingleRecordDocumentLookup` predicate for
+  `grants/{n}` / fulltext / enrich lookups) that returns the record intact so the offload
+  engages, plus an honest by-number notice replacing the nonsense "narrow the date range".
+  Missing-field path (map 0001 F1/W8) untouched and test-covered; 12/12 formatter tests
+  pass; uncommitted in tree.
+
+- [Prompt — persistence/escalation ladder](tickets/H5-prompt-persistence-escalation-ladder.md) —
+  new `PatentPersistenceRules` element (priority 790): before any hand-back the agent must
+  exhaust reformulate → alternate office/route → web fallback; branch L re-scoped to
+  backend-route-exhausted with always-available `fetch_webpage` named ("you are NOT without
+  web capability" — the direct antidote to R1); transient-5xx-vs-clean-zero rule split;
+  stop-and-disclose lines rewritten to retrieve-first; jurisdiction gate now
+  default-comprehensive/non-blocking for prior-art/FTO-class asks (removes the S1 stall).
+  Eval fixture `system-prompt.txt` regenerated — **40/40 promptfoo baseline needs a
+  re-grade**. Single file + fixture; uncommitted in tree.
+
+- [Skills — adaptive failure branches + citation routing](tickets/H6-skill-adaptive-failure-branches.md) —
+  the five search-recipe skills (prior-art, FTO, invalidity, landscape, office-action) each
+  gained a compact "When a search fails" 3-rung ladder echoing H5 verbatim (clean-zero →
+  reformulate; 5xx → retry not coverage-limit; exhausted → `fetch_webpage` fetch-and-verify),
+  voiced to each skill's stakes (e.g. FTO: a clean zero is not clearance until searched both
+  ways); H7's forward-vs-backward citation routing mirrored into the four citation-discussing
+  skills. No descriptions changed (routing signal preserved); uncommitted in tree.
+
+- [Default/recommend the stronger main-window model](tickets/H10-stronger-default-model.md) —
+  code-level recommended default in core `src/vs` (`findRecommendedDefaultModel`, newest
+  Sonnet by display-name compare since BYOK versions are uniform), inserted as
+  `configuredModel ?? recommended ?? findDefaultModel` at the single fallback choke point in
+  `chatInputPart` — fires only when the user has neither configured nor picked a model, so
+  explicit picks always win. Bonus finding: the old fallback was `models[0]` =
+  alphabetically-first = **Haiku**, the weakest tier — that's where the reversion class
+  landed. Sonnet not Opus (BYOK price tier). Typecheck 0 errors + 4-case unit suite;
+  uncommitted in tree.
 
 ## Not yet specified
 
-- **The fix slices** — which layers get patched (loop retry policy? tool error shapes?
-  empty-result contracts? prompt rules? skill routing?) is unknowable until
-  [Root-cause attribution](tickets/H3-root-cause-attribution.md) lands; expect one ticket
-  per indicted layer.
-- **Wiring the trajectory gate** — running the designed gate in CI and making it green is
-  downstream of the gate design and the fix slices it asserts against.
+- **Wiring the trajectory gate** — implementing the designed gate
+  ([H4](tickets/H4-trajectory-eval-gate-design.md), now closed: replay provider + T1–T8
+  cases) in the evals tree and making it green against the landed H5–H9 fixes.
+- **Promptfoo baseline re-grade** — H5 regenerated `system-prompt.txt`; the 40/40
+  tool-selection baseline needs a paid re-grade run before the eval suite is trustworthy
+  again.
 - **The acceptance head-to-head** — the final same-model judged re-run that declares the
-  gap closed; specifiable only once fixes exist.
-- **Feed-in to the converge decision** — if attribution shows the Claude Code loop is
-  structurally unmatchable from inside the fork, that evidence hands off to a separate
-  convergence effort (it does not widen this map).
+  gap closed; specifiable once the fix slices land. NB: the acceptance re-run must avoid the
+  two artifacts that muddied H1 — capture during an EPO-search outage, and the 25-min driver
+  cap that truncated legitimate grinds (see [attribution asset](assets/H3-attribution.md)).
+- **Feed-in to the converge decision** — attribution found the loop is **not** structurally
+  unmatchable (the gap is model + prompt/tool affordances, all fixable in-fork), so no
+  hand-off to a separate convergence effort is triggered *yet*; revisit only if the same-model
+  gate can't be made green with H5–H9.
+
+<!-- The "fix slices" fog graduated on H3 close (2026-07-17): H5 (prompt escalation ladder),
+     H6 (skill failure branches), H7 (citation routing strings), H8 (transient-error shape),
+     H9 (single-record truncation offload), H10 (stronger default model). See
+     assets/H3-attribution.md for the ranked list and sizing. -->
+
 
 ## Out of scope
 
