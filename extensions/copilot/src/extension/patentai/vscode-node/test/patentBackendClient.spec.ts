@@ -20,7 +20,7 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError } from '../patentBackendClient';
+import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError, TransientBackendError } from '../patentBackendClient';
 import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
@@ -599,6 +599,14 @@ describe('patentBackendErrorRecoveryHint', () => {
 		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', 12))).toContain('12 seconds');
 		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', undefined))).toContain('a few seconds');
 	});
+
+	it('maps a TransientBackendError to a "transient, wait and retry" hint, naming the status when known', () => {
+		const withStatus = patentBackendErrorRecoveryHint(new TransientBackendError('boom', 504));
+		const noStatus = patentBackendErrorRecoveryHint(new TransientBackendError('boom', undefined));
+		expect(withStatus).toContain('temporarily unavailable (HTTP 504)');
+		expect(withStatus).toContain('retry the same query');
+		expect(noStatus).toContain('temporarily unavailable —');
+	});
 });
 
 // ── #89 hardening: retry, 429, telemetry, session cache ─────────────────────────
@@ -689,6 +697,43 @@ describe('rate-limit gate (429, #89)', () => {
 		expect(err.retryAfterSeconds).toBe(30);
 		expect(fetch.calls()).toBe(1); // not retried inline
 	}, 5000);
+});
+
+describe('transient gate (5xx/gateway/timeout, H8)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => undefined));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('maps a persistent gateway 502 to a body-free TransientBackendError (strips the raw nginx/stack body)', async () => {
+		// A real gateway failure: an nginx HTML page wrapping an upstream stack fragment — exactly the
+		// noise the model must not read as a permanent dead end.
+		const rawBody = '<html><head><title>502 Bad Gateway</title></head><body>odpRequest.q?.trim is not a function</body></html>';
+		const fetch = scriptedFetch([Response.fromText(502, '', new HeadersImpl({ 'content-type': 'text/html' }), rawBody, 'test-stub')]);
+		const { client } = makeClient(fetch);
+
+		const thrown = await captureThrow(() => client.get('/patent-search-bq/EP-1-A1', makeToken())) as TransientBackendError;
+
+		// Subclass of PatentBackendError so existing tool catch blocks still match; message is a short
+		// status line with the hint's "transient, retry" steer — no HTML, no internal exception text.
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).toBeInstanceOf(TransientBackendError);
+		expect(thrown.status).toBe(502);
+		expect(thrown.message + patentBackendErrorRecoveryHint(thrown)).toBe(
+			'The patent backend returned HTTP 502 (Bad Gateway). The patent backend is temporarily unavailable (HTTP 502) — this is transient, not a coverage limit. Wait briefly and retry the same query, or try a different office (USPTO) meanwhile.'
+		);
+		expect(thrown.message).not.toContain('odpRequest');
+		expect(fetch.calls()).toBe(3); // initial + 2 retries before the transient error surfaces
+	}, 5000);
+
+	it('maps a request timeout to a TransientBackendError (status undefined, still "timed out")', async () => {
+		const { client } = makeClient(hangingFetch());
+
+		const thrown = await captureThrow(() => client.post('/patent-search', {}, makeToken(), { timeoutMs: 50 })) as TransientBackendError;
+
+		expect(thrown).toBeInstanceOf(TransientBackendError);
+		expect(thrown.status).toBeUndefined();
+		expect(thrown.message).toContain('timed out');
+	}, 3000);
 });
 
 describe('per-request telemetry (#89)', () => {

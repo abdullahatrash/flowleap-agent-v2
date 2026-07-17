@@ -1,0 +1,72 @@
+{
+	"id": "t2-empty-citation-sibling",
+	"description": "S3: cited-AGAINST question; forward citations empty; correct route is search_citations on app 16473445.",
+	"rules": [
+		{
+			"tool": "get_patent_details",
+			"response": {
+				"tag": "OK",
+				"body": "EP3564557A1 — Claim 1: A vibration-damping device comprising ... (independent claim text). Applicant: (JP national-stage). Abstract and bibliography returned."
+			}
+		},
+		{
+			"tool": "get_legal_status",
+			"response": {
+				"tag": "OK",
+				"body": "Legal status for EP3564557A1: application; national phase entries in US (US2019376586A1) and others. US member 16473445 is ABANDONED."
+			}
+		},
+		{
+			"tool": "search_forward_citations",
+			"argMatch": {
+				"citedDocument": "EP3564557"
+			},
+			"response": {
+				"tag": "EMPTY",
+				"body": "Found 0 patents citing EP3564557A1\nCategory filter: X (novelty-destroying, 35 USC 102)\n\nNo forward citations found matching the filters.\n\nFor citation statistics or date-range filtering, use citation_api_guide."
+			}
+		},
+		{
+			"tool": "search_forward_citations",
+			"response": {
+				"tag": "EMPTY",
+				"body": "Found 0 patents citing US2019376586\nCategory filter: X (novelty-destroying, 35 USC 102)\n\nNo forward citations found matching the filters.\n\nFor citation statistics or date-range filtering, use citation_api_guide."
+			}
+		},
+		{
+			"tool": "get_patent_family",
+			"response": {
+				"tag": "OK",
+				"body": "Patent family for EP3564557A1 (WO2018123564): EP3564557A1, WO2018123564A1, US2019376586A1 (US national-stage entry, application 16473445), JP priority."
+			}
+		},
+		{
+			"tool": "get_continuity",
+			"response": {
+				"tag": "OK",
+				"body": "Continuity for application 16473445 (US2019376586A1): 371(c) national stage of PCT/JP2017/044575. No child continuations. Status: abandoned."
+			}
+		},
+		{
+			"tool": "search_citations",
+			"argMatch": {
+				"applicationNumber": "16473445"
+			},
+			"response": {
+				"tag": "OK",
+				"body": "Found 4 X-cited references for application 16473445\n\n| # | Cited Document | Category | Rejected Claims | Cited By | OA Date | OA Type | Inventor |\n| ---: | --- | --- | --- | --- | --- | --- | --- |\n| 1 | US 20060169553 A1 [US] | X | 1-4 | examiner | 2021-03-26T00:00:00 | CTNF | Geyer; Andreas |\n| 2 | — | X | 1-4 | — | 2021-03-26T00:00:00 | CTNF | — |\n| 3 | — | X | 1-4 | — | 2021-11-17T00:00:00 | CTNF | — |\n| 4 | — | X | 1-4 | — | 2021-07-08T00:00:00 | CTFR | — |\n\nCategories: X (novelty-destroying, 35 USC 102); Y (obviousness, 35 USC 103); A (background)."
+			}
+		},
+		{
+			"tool": "search_citations",
+			"response": {
+				"tag": "EMPTY",
+				"body": "Found 0 citations. For US applications, key search_citations on the US application number."
+			}
+		}
+	],
+	"default": {
+		"tag": "OK",
+		"body": "OK. Request acknowledged; results returned."
+	}
+}

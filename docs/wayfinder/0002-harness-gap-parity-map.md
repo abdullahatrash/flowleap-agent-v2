@@ -141,14 +141,45 @@ designed and grounded in the diagnosed failure modes.
   [H11 asset](assets/H11-backend-error-root-causes.md); no H3 re-attribution — the
   model-vs-stack split stands. Fixes execute in `flowleap-backend` (PRD 0010 workstream 4).
 
+- [Backend F1–F3 — validate q→400, opsFetch timeout, structured 503](tickets/H14-backend-error-shape-fixes.md) —
+  landed in `flowleap-backend` on branch `fix/backend-error-shapes` (2 commits, unpushed,
+  main untouched): non-string `q` → structured 400 before the cache-key builder (pattern
+  unique to that handler, siblings audited); `opsFetch` bounded at 30s/attempt with no
+  retry-on-timeout (would exceed nginx's window); new `UpstreamUnavailableError` → JSON
+  503 + Retry-After with upstream HTML stripped, wired through all OPS routes. 566 tests
+  green. Minor H11 correction: the 503 branch wasn't fully dead — the real gaps were
+  timeouts (no throw at all) and non-503 5xx.
+
+- [Re-grade the promptfoo baseline post-H5](tickets/H13-promptfoo-baseline-regrade.md) —
+  graded live on gemini-2.5-pro (grader not downgraded): **51/52 (98.08%), zero prompt
+  edits — H5's policy survived untouched**. Both "failures" were stale assertions (Path A
+  now legitimately opens with `analyze_claim` under the softened gate; the Samsung case was
+  the known pre-existing flake, fixed outcome-over-path). Drift check green
+  (fixture byte-identical). One documented residual red: the known excess-claims
+  single-turn-ungradeable case. New baseline in tree, uncommitted.
+
+- [Implement the trajectory eval gate](tickets/H12-trajectory-gate-implementation.md) —
+  built per the H4 spec in `evals/`: replay provider (loop vs scripted mock table, model
+  pinned, injectable for tests), fixtures **verbatim from H1 transcripts**, cases T1–T8,
+  shared plain-JS predicates so promptfoo and the offline vitest proof run identical logic
+  (26 tests, incl. the offline red-check). Against the fixed tree: **8/9 deterministic
+  green; T5 genuinely flaky ~50%** — the model still sometimes reads the pre-H9 truncation
+  drop as "enough info" (assertion deliberately NOT loosened; run T5 advisory until the
+  fixture adopts H9's offload shape or H10's stronger floor). Judge layer live via
+  OpenRouter, swappable. Run: `npm run eval:trajectory`; offline proof via vitest. Also
+  surfaced: pre-existing stale `extractTools.spec.ts` (asserts 20 tools, tree has 28).
+
 ## Not yet specified
 
-- **Wiring the trajectory gate** — implementing the designed gate
-  ([H4](tickets/H4-trajectory-eval-gate-design.md), now closed: replay provider + T1–T8
-  cases) in the evals tree and making it green against the landed H5–H9 fixes.
-- **Promptfoo baseline re-grade** — H5 regenerated `system-prompt.txt`; the 40/40
-  tool-selection baseline needs a paid re-grade run before the eval suite is trustworthy
-  again.
+- **Prompt precondition reconciliation** — H5 softened the top jurisdiction gate but the
+  `toolDecisionTree` precondition prose (branches A/B/D/H) still says "FIRST action is the
+  vscode_askQuestions carousel"; models resolve the conflict inconsistently. Suite
+  tolerates both readings; reconciling the prose is a deliberate prompt-design decision
+  (flagged by [H13](tickets/H13-promptfoo-baseline-regrade.md)).
+
+- **Backend follow-ups F4–F6** — EPO circuit breaker, `/v1/ops/health` probe,
+  server-level `requestTimeout` backstop; specifiable once
+  [H14](tickets/H14-backend-error-shape-fixes.md)'s F1–F3 land and prove the shape.
 - **The acceptance head-to-head** — the final same-model judged re-run that declares the
   gap closed; specifiable once the fix slices land. NB: the acceptance re-run must avoid the
   two artifacts that muddied H1 — capture during an EPO-search outage, and the 25-min driver

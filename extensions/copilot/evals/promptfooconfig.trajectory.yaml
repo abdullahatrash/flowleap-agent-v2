@@ -1,0 +1,57 @@
+description: "Patent AI — Trajectory Gate (multi-turn replay under scripted failures)"
+
+# The H4 trajectory eval gate. Unlike promptfooconfig.yaml (one round-trip, grades one-shot
+# tool selection), this drives the WHOLE agent loop locally against scripted mock tools and
+# grades tool-call ORDERING under EMPTY / 5xx / TRUNCATED failures. Cases T1–T8 are grounded
+# in the H1 repro corpus / H3 attribution table.
+#
+# Run:  OPENROUTER_API_KEY=sk-... promptfoo eval -c promptfooconfig.trajectory.yaml
+#       (or `npm run eval:trajectory` from extensions/copilot)
+# View: promptfoo view
+#
+# Model pin: gemini-2.5-pro (same as the single-turn suite) — the gate must fire on prompt /
+# tool-string / skill drift, NOT model choice. Override with EVAL_MODEL for a floor check
+# (e.g. anthropic/claude-sonnet-4) as a non-blocking advisory lane.
+#
+# JUDGE LAYER (pluggable): the `llm-rubric` give-up checks are graded by the provider in
+# defaultTest.options.provider below (OpenRouter gemini-2.5-flash). They are the SECONDARY
+# layer. The PRIMARY structural `javascript` asserts are fully deterministic and are also
+# proven offline, without any judge, by assertions/test/trajectory-assertions.spec.ts.
+
+providers:
+  - id: file://providers/trajectory-provider.ts
+    label: "Patent AI (trajectory)"
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    # Grading provider for the llm-rubric give-up checks (the pluggable judge layer).
+    # Swap the model here (or drop the key) without touching the structural gate.
+    provider:
+      id: openai:chat:google/gemini-2.5-flash
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        apiKey: "{{env.OPENROUTER_API_KEY}}"
+        temperature: 0
+        passthrough:
+          stream: false
+  assert:
+    # Global guard: every tool the model calls (across all rounds) must exist in the eval
+    # tool surface — catches hallucinated tool names the per-case asserts wouldn't look for.
+    - type: javascript
+      value: |
+        return import('node:fs').then(fs => {
+          const defs = JSON.parse(fs.readFileSync('prompts/tool-definitions.json', 'utf-8'));
+          const allowed = new Set(defs.map(d => d.function.name));
+          const traj = typeof output === 'string' ? JSON.parse(output) : output;
+          const calls = (traj.rounds || []).flatMap(r => r.toolCalls || []);
+          return calls.every(c => allowed.has(c.name));
+        });
+      metric: no_invented_tool_names
+
+tests:
+  - file://datasets/trajectory/trajectory-cases.yaml
+
+outputPath: output/trajectory-latest.json

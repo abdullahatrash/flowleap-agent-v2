@@ -72,10 +72,19 @@ Prior art is NOT limited to patents:
 
 ### 2f. Family & Citation Expansion
 - Family with biblio in one call: `ops_api_guide` action="endpoint" endpoint="family-biblio" → `patent_api_request`
-- Forward citations of key results: `search_forward_citations` → more recent related art
-- Backward citations: `search_citations` for USPTO applications; follow 2 hops for key nodes
+- Forward citations — "who cites this?": `search_forward_citations` on the publication number → more recent related art
+- Backward citations — the references cited AGAINST a patent: `search_citations` keyed on the US **application** number (resolve it via `get_patent_family` → `get_continuity`, not the publication number); follow 2 hops for key nodes
 
 For very broad sweeps, `patent_search_subagent` can run the multi-database search autonomously — still document its queries and counts in the audit trail.
+
+## When a search fails
+
+Before handing back or recording a coverage gap in the audit trail, work the ladder in order:
+1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — swap synonyms from the concept table, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty).
+2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER record "no results" or "doesn't exist" from an errored call.
+3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
+
+Log a gap in the audit trail only after all three, naming what you tried.
 
 ## Phase 3: Relevance Assessment
 

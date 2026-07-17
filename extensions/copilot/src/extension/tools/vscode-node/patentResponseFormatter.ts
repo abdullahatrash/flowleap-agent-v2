@@ -71,19 +71,67 @@ interface ITruncationNote {
 export interface IFormattedJsonResponse {
 	/** The formatted body. Valid, parseable JSON. */
 	readonly content: string;
-	/** True when array items were dropped to fit the budget. */
+	/**
+	 * True when the response exceeded the budget and a truncation note was attached — either because
+	 * array items were dropped (multi-record) or because a single oversized record was handed back
+	 * intact for the harness to offload (single-record).
+	 */
 	readonly truncated: boolean;
-	/** Number of whole array items dropped; 0 when nothing was truncated. */
+	/** Number of whole array items dropped; 0 when nothing was dropped (including the single-record case). */
 	readonly omittedItems: number;
 }
 
 /**
- * Builds the uniform truncation notice appended (inside the JSON) to any truncated response. The
- * wording is deliberately shared so every tool nudges the model the same way.
+ * Options controlling how {@link formatJsonForModel} handles an over-budget response.
  */
-export function truncationNotice(omittedItems: number, budget: number): string {
+export interface IFormatJsonOptions {
+	/**
+	 * When true, the value is a single-record document lookup (a by-number claims/description/grant fetch)
+	 * rather than a multi-record search result. The sole record is never dropped to fit the budget —
+	 * the full record is handed back intact so the harness's large-tool-result disk offload writes it to
+	 * a file and gives the model a `read_file` pointer, and the attached note carries single-record
+	 * guidance instead of the meaningless "refine your query". See {@link isSingleRecordDocumentLookup}.
+	 */
+	readonly singleRecord?: boolean;
+}
+
+/**
+ * Builds the truncation notice attached (inside the JSON) to an over-budget response.
+ *
+ * For a multi-record search result the note reports how many items were dropped and nudges the model to
+ * narrow the query. For a single-record document lookup nothing is dropped: the note explains the one
+ * record was too large for the inline budget, that the full text is offloaded to a file to be read with
+ * the `read_file` tool, and that refining the query is pointless for a by-number lookup.
+ */
+export function truncationNotice(omittedItems: number, budget: number, singleRecord: boolean = false): string {
+	if (singleRecord) {
+		return `This by-number document lookup returned a single record larger than this tool's ${budget}-character inline budget. ` +
+			`No data was dropped: the full record — including the complete claims/description text — is returned intact and offloaded to a file, ` +
+			`so read it with the read_file tool at the path this result reports. ` +
+			`Do not refine the query or narrow the date range; a by-number lookup has exactly one matching record.`;
+	}
 	return `Response exceeded this tool's ${budget}-character budget. ${omittedItems} result item(s) were omitted to keep the output valid JSON. ` +
 		`Refine your query — add filters, narrow the date range, or request fewer results — to retrieve the omitted items.`;
+}
+
+/**
+ * True when `path` is a single-record document lookup — a by-number fetch that returns exactly one
+ * document (USPTO `grants/{n}`, OPS full-text `claims`/`description`). Such responses must never have
+ * their sole record dropped to fit the budget (see {@link formatJsonForModel}'s single-record handling).
+ *
+ * Multi-record search endpoints (`…/search`, `…/docs`, CQL queries) are deliberately excluded so their
+ * budget-driven item-dropping — and the "refine your query" note that is correct for them — is unaffected.
+ */
+export function isSingleRecordDocumentLookup(path: string): boolean {
+	// USPTO by-number grant fetch: /patent-search-uspto/grants/<number>.
+	if (/\/grants\/[^/?]+/.test(path)) {
+		return true;
+	}
+	// OPS single-document full text: /ops/fulltext/claims|description (keyed on ?doc=), or an explicit enrich= form.
+	if (/\/fulltext\/(claims|description)\b/.test(path) || /[?&]enrich=(claims|description)\b/.test(path)) {
+		return true;
+	}
+	return false;
 }
 
 /**
@@ -99,30 +147,54 @@ export function truncationNotice(omittedItems: number, budget: number): string {
  * The output is never sliced mid-structure, so it always parses. The budget is best-effort: if a value
  * cannot be brought under budget by dropping array items (e.g. one enormous object with no arrays), the
  * still-valid JSON is returned as-is with the note attached.
+ *
+ * Single-record document lookups ({@link IFormatJsonOptions.singleRecord}) are handled differently: the
+ * sole oversized record is never dropped. It is returned intact — deliberately over the inline budget —
+ * so the harness's large-tool-result disk offload (see `toolCalling.tsx`, default on above 8 KB) writes
+ * it to a file and hands the model a `read_file` pointer. This reuses the existing offload path rather
+ * than dropping the data, and attaches a single-record note in place of the multi-record guidance.
  */
-export function formatJsonForModel(value: unknown, budget: number): IFormattedJsonResponse {
+export function formatJsonForModel(value: unknown, budget: number, options?: IFormatJsonOptions): IFormattedJsonResponse {
 	const pretty = JSON.stringify(value, null, 2);
 	if (pretty.length <= budget) {
 		return { content: pretty, truncated: false, omittedItems: 0 };
+	}
+
+	// A by-number document lookup returns exactly one record whose own field (claims/description text) is
+	// oversized. Dropping it leaves an empty result the model cannot act on, so hand the full record back
+	// and let the harness offload it; nothing is omitted.
+	if (options?.singleRecord) {
+		const note: ITruncationNote = { truncated: true, omittedItems: 0, note: truncationNotice(0, budget, true) };
+		const annotated = annotateWithTruncationNote(structuredClone(value), note);
+		return { content: JSON.stringify(annotated, null, 2), truncated: true, omittedItems: 0 };
 	}
 
 	const clone: unknown = structuredClone(value);
 	const target = Math.max(0, budget - TRUNCATION_NOTE_RESERVE);
 	const omittedItems = dropArrayItemsToFit(clone, target);
 	const note: ITruncationNote = { truncated: true, omittedItems, note: truncationNotice(omittedItems, budget) };
-
-	let annotated: unknown;
-	if (Array.isArray(clone)) {
-		clone.push({ [TRUNCATION_KEY]: note });
-		annotated = clone;
-	} else if (clone !== null && typeof clone === 'object') {
-		(clone as Record<string, unknown>)[TRUNCATION_KEY] = note;
-		annotated = clone;
-	} else {
-		annotated = { result: clone, [TRUNCATION_KEY]: note };
-	}
+	const annotated = annotateWithTruncationNote(clone, note);
 
 	return { content: JSON.stringify(annotated, null, 2), truncated: true, omittedItems };
+}
+
+/**
+ * Attaches `note` to a (cloned) value so the overall output stays valid, parseable JSON:
+ * - a top-level array gains a final marker element `{ "_truncation": … }`,
+ * - a top-level object gains a `"_truncation"` key,
+ * - any other top-level value is wrapped as `{ "result": …, "_truncation": … }`.
+ * Mutates `clone` in place (for the array/object cases) and returns the value to serialize.
+ */
+function annotateWithTruncationNote(clone: unknown, note: ITruncationNote): unknown {
+	if (Array.isArray(clone)) {
+		clone.push({ [TRUNCATION_KEY]: note });
+		return clone;
+	}
+	if (clone !== null && typeof clone === 'object') {
+		(clone as Record<string, unknown>)[TRUNCATION_KEY] = note;
+		return clone;
+	}
+	return { result: clone, [TRUNCATION_KEY]: note };
 }
 
 /**

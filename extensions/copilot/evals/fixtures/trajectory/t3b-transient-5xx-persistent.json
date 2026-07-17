@@ -1,0 +1,46 @@
+{
+	"id": "t3b-transient-5xx-persistent",
+	"description": "R4/S2: search endpoint persistently 504s — persistence threshold before any hand-back.",
+	"rules": [
+		{
+			"tool": "build_patent_query",
+			"response": {
+				"tag": "OK",
+				"body": "Built query. CQL/Lucene string prepared from the description and constraints."
+			}
+		},
+		{
+			"tool": "search_patents",
+			"responses": [
+				{
+					"tag": "HTTP_5XX",
+					"body": "Patent search backend returned 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.26.3 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n"
+				},
+				{
+					"tag": "HTTP_5XX",
+					"body": "Patent search backend returned 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.26.3 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n"
+				},
+				{
+					"tag": "HTTP_5XX",
+					"body": "Patent search backend returned 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.26.3 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n"
+				},
+				{
+					"tag": "HTTP_5XX",
+					"body": "Patent search backend returned 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.26.3 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n"
+				},
+				{
+					"tag": "HTTP_5XX",
+					"body": "Patent search backend returned 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.26.3 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n"
+				},
+				{
+					"tag": "HTTP_5XX",
+					"body": "Patent search backend returned 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.26.3 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n"
+				}
+			]
+		}
+	],
+	"default": {
+		"tag": "OK",
+		"body": "OK. Request acknowledged; results returned."
+	}
+}
