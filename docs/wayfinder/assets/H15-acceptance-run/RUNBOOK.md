@@ -6,13 +6,11 @@ Transcripts land in `runs/<task>/{bench,main}/`.
 
 ## Before anything: scope + health
 
-1. **Backend scope decision** (record it in `scope-note.md` here):
-   - Default: both sides hit production `api.flowleap.co`, which does NOT have the
-     F1–F3 fixes (they sit unpushed on `flowleap-backend` `fix/backend-error-shapes`)
-     → note "F1–F3 excluded".
-   - Alternative: run the backend branch locally and point BOTH sides at it
-     (`PATENT_API_URL`-style env for the app; flowleap CLI needs its base-url config
-     changed too). Only do this if both sides can hit the SAME backend.
+1. **Backend scope: RESOLVED** — F1–F3 merged (backend PR #149) and deployed to
+   production 2026-07-20; deploy green, F1 live-verified (object-`q` → structured
+   `400 invalid_query` on `api.flowleap.co`; healthy path confirmed via
+   `flowleap uspto grant`). Both sides hit production; **no scope note needed**.
+   (F2/F3 are outage-path behaviors — not directly probeable in clear weather.)
 2. **EPO health check** — before each batch of tasks (and re-check if a run smells
    like an outage): one cheap live search via the CLI, e.g.
    `flowleap patent search 'ti="wireless power"' --limit 1`

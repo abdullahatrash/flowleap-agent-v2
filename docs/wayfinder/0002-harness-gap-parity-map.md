@@ -142,9 +142,10 @@ designed and grounded in the diagnosed failure modes.
   model-vs-stack split stands. Fixes execute in `flowleap-backend` (PRD 0010 workstream 4).
 
 - [Backend F1–F3 — validate q→400, opsFetch timeout, structured 503](tickets/H14-backend-error-shape-fixes.md) —
-  landed in `flowleap-backend` on branch `fix/backend-error-shapes` (2 commits; pushed
-  2026-07-20 as [PR #149](https://github.com/abdullahatrash/flowleap-backend/pull/149) —
-  **merge auto-deploys**, `deploy.yml` fires on push to main): non-string `q` → structured 400 before the cache-key builder (pattern
+  landed in `flowleap-backend` via
+  [PR #149](https://github.com/abdullahatrash/flowleap-backend/pull/149), **merged +
+  deployed to production 2026-07-20** (deploy green; F1 live-verified: object-`q` →
+  structured 400 on `api.flowleap.co`): non-string `q` → structured 400 before the cache-key builder (pattern
   unique to that handler, siblings audited); `opsFetch` bounded at 30s/attempt with no
   retry-on-timeout (would exceed nginx's window); new `UpstreamUnavailableError` → JSON
   503 + Retry-After with upstream HTML stripped, wired through all OPS routes. 566 tests
