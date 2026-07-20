@@ -189,6 +189,19 @@ designed and grounded in the diagnosed failure modes.
   clean; **51/52 baseline needs re-grade**. Scoped to one element to leave room for H16/H18/H19
   on the same file.
 
+- [Prompt — H16/H18/H19 in one coherent pass](tickets/H16-anti-grind-efficiency-ceiling.md) —
+  the three co-located answer/effort-discipline fixes, designed together so they don't fight:
+  **H16** effort ceiling appended to `PatentPersistenceRules` (a confirmed-dead route/shape isn't
+  re-run — reformulate once, one alternate, then stop; no re-summarizing a held record; one
+  well-formed query over many probes) — the floor/ceiling contradiction with H5 dissolved by
+  "exhaust = try each DISTINCT rung a bounded number of times"; **H18 + H19** in a new
+  `PatentDeliverableRules` element (priority 775, after H17): [verbatim-completeness](tickets/H18-verbatim-completeness-rule.md)
+  (reproduce every item in full or hand back the H9 offload path — no "claims 11–16 mirror 2–7")
+  and [carry-the-selected-target](tickets/H19-subtask-target-selection.md) (operate on the entity
+  your own answer just named, deliver the sub-result, don't merely offer). Coherent stance:
+  retrieve efficiently (H16), reproduce completely (H18), assert only what you retrieved (H17).
+  Fixture regenerated (466→480 lines), drift clean; **51/52 baseline needs re-grade**.
+
 ## Not yet specified
 
 - **Second acceptance run** — after H16–H19 land, re-run the corpus (same protocol: EPO health
