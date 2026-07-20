@@ -202,6 +202,15 @@ designed and grounded in the diagnosed failure modes.
   retrieve efficiently (H16), reproduce completely (H18), assert only what you retrieved (H17).
   Fixture regenerated (466→480 lines), drift clean; **51/52 baseline needs re-grade**.
 
+- [Re-grade the baseline after the prompt fixes](tickets/H20-baseline-regrade-post-prompt-fixes.md) —
+  full 52-row suite re-graded (`--no-cache`) on gemini-2.5-pro post-H16/H17/H18/H19:
+  **52/52 = 100%** (up from 51/52), **zero prompt or assertion edits — all four fix policies
+  survived untouched, no routing regression from any new rule**. Bonus: the long-standing
+  excess-claims residual flipped red→green as a *side-effect of the H16 effort ceiling* (the
+  model now computes the counts directly instead of double-calling `search_legal` to "verify"
+  thresholds, so single-turn grading finally sees them). Drift clean, tool-defs unchanged.
+  New baseline in tree.
+
 ## Not yet specified
 
 - **Second acceptance run** — after H16–H19 land, re-run the corpus (same protocol: EPO health

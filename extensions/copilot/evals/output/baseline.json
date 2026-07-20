@@ -1,8 +1,8 @@
 {
-	"updated": "2026-07-17",
+	"updated": "2026-07-20",
 	"config": "promptfooconfig.yaml",
 	"totalTests": 52,
-	"passing": 51,
-	"passRate": 0.9808,
-	"notes": "Re-graded against the post-H5 prompt (ticket H13, PRD 0010 workstream 2) on default model google/gemini-2.5-pro via OpenRouter. Suite grew from the original 40 to 52 rows; drift check green (fixture byte-matches a fresh render). Two stale assertions relaxed to match H5's softened jurisdiction gate and the file's own outcome-over-path stance: tool-selection path_a (claim prior-art now proceeds via analyze_claim without asking) and search-strategy Samsung EP (accepts search_patents + the >=2024 reading of 'after 2023'). One known residual: filing-fees excess-claims arithmetic — the model looks up fee rules via search_legal first (valid multi-turn step) so single-turn grading never sees the '7'/'2' counts; tracked separately as the excess_claims eval-redesign follow-up, unrelated to H5. Re-baseline deliberately, in its own commit, after intentional prompt changes."
+	"passing": 52,
+	"passRate": 1.0,
+	"notes": "Re-graded against the post-H16/H17/H18/H19 prompt (ticket H20, PRD 0010 workstream 2) on default model google/gemini-2.5-pro via OpenRouter. Suite is 52 rows; drift check green (fixture byte-matches a fresh render). Zero prompt edits and zero assertion edits this round — the four fix policies (H17 final-answer grounding, H16 effort ceiling, H18/H19 deliverable completeness) stand untouched and introduced no routing regression. The H13 residual (filing-fees excess-claims arithmetic, 51/52) resolved as a beneficial side-effect of the H16 effort ceiling: the model now computes the 7/2 counts directly in text instead of double-calling search_legal to 'verify' thresholds first, so single-turn grading sees the counts and the case passes. Re-baseline deliberately, in its own commit, after intentional prompt changes."
 }
