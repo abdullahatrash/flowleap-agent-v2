@@ -171,7 +171,19 @@ designed and grounded in the diagnosed failure modes.
   OpenRouter, swappable. Run: `npm run eval:trajectory`; offline proof via vitest. Also
   surfaced: pre-existing stale `extractTools.spec.ts` (asserts 20 tools, tree has 28).
 
+- [Acceptance head-to-head](tickets/H15-acceptance-head-to-head.md) — **destination NOT reached:
+  main window won 2/8** (R2, R4) vs bench at the same model (claude-sonnet-5), EPO healthy, F1–F3
+  deployed. BUT the original gap class is **gone** — zero give-ups / error-deaths / commercial-DB
+  deflection across all 8 runs (H5–H10 worked; H9's offload delivered US claims on R1). Losses are
+  a new, milder, prompt-surface class: over-grinding a dead route (S2/S3/R4), asserting untraceable
+  patent numbers/quotes (S1/R1/R4), paraphrasing when verbatim asked (R1), wrong sub-task target
+  (S4). Four fixes graduated (H16–H19). Full tally: [VERDICT](assets/H15-acceptance-run/VERDICT.md).
+
 ## Not yet specified
+
+- **Second acceptance run** — after H16–H19 land, re-run the corpus (same protocol: EPO health
+  check, no cap, model-id verify) to re-test the majority bar. The gap is now efficiency +
+  answer-discipline, not persistence, so the rubric weight shifts accordingly.
 
 - **Prompt precondition reconciliation** — H5 softened the top jurisdiction gate but the
   `toolDecisionTree` precondition prose (branches A/B/D/H) still says "FIRST action is the
