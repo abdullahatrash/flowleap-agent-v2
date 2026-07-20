@@ -107,6 +107,8 @@ describe('SearchCitationsTool', () => {
 
 			No citations found matching the filters.
 
+			Backward citations key on the US application number, not the publication number — if you passed a publication number, resolve the application number via get_patent_family (find the US member) then get_continuity (read its application number) and retry. To instead find patents that cite this document forward, use search_forward_citations with the publication number.
+
 			For forward citations, citation statistics, or date-range filtering, use citation_api_guide."
 		`);
 	});

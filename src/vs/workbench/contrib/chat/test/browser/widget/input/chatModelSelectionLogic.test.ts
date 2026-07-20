@@ -12,6 +12,7 @@ import {
 	filterModelsForSession,
 	findBestMatchingModel,
 	findDefaultModel,
+	findRecommendedDefaultModel,
 	hasModelsTargetingSession,
 	isModelSupportedForInlineChat,
 	isModelSupportedForMode,
@@ -453,6 +454,42 @@ suite('ChatModelSelectionLogic', () => {
 			const result = findDefaultModel([terminalDefault, regular], ChatAgentLocation.Chat);
 			// Falls back to first model since none is default for Chat
 			assert.strictEqual(result?.metadata.id, 'terminal-default');
+		});
+	});
+
+	suite('findRecommendedDefaultModel', () => {
+
+		test('prefers the newest Sonnet over older Sonnet, Haiku and Opus', () => {
+			// Alphabetical fallback ordering would pick Haiku first; the recommendation must win.
+			const models = [
+				createVendorModel('anthropic', 'claude-haiku-4-5', 'Claude Haiku 4.5'),
+				createVendorModel('anthropic', 'claude-opus-4-8', 'Claude Opus 4.8'),
+				createVendorModel('anthropic', 'claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5'),
+				createVendorModel('anthropic', 'claude-sonnet-4-6-20260101', 'Claude Sonnet 4.6'),
+			];
+			const result = findRecommendedDefaultModel(models);
+			assert.strictEqual(result?.metadata.id, 'claude-sonnet-4-6-20260101');
+		});
+
+		test('matches Sonnet from an OpenRouter-style prefixed name', () => {
+			const models = [
+				createVendorModel('openrouter', 'anthropic/claude-3.5-haiku', 'Anthropic: Claude 3.5 Haiku'),
+				createVendorModel('openrouter', 'anthropic/claude-sonnet-4.5', 'Anthropic: Claude Sonnet 4.5'),
+			];
+			const result = findRecommendedDefaultModel(models);
+			assert.strictEqual(result?.metadata.id, 'anthropic/claude-sonnet-4.5');
+		});
+
+		test('returns undefined when no model is in the recommended family', () => {
+			const models = [
+				createVendorModel('openai', 'gpt-4o', 'GPT-4o'),
+				createVendorModel('gemini', 'gemini-2.5-pro', 'Gemini 2.5 Pro'),
+			];
+			assert.strictEqual(findRecommendedDefaultModel(models), undefined);
+		});
+
+		test('returns undefined for an empty pool', () => {
+			assert.strictEqual(findRecommendedDefaultModel([]), undefined);
 		});
 	});
 

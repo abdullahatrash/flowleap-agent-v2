@@ -179,6 +179,16 @@ designed and grounded in the diagnosed failure modes.
   patent numbers/quotes (S1/R1/R4), paraphrasing when verbatim asked (R1), wrong sub-task target
   (S4). Four fixes graduated (H16–H19). Full tally: [VERDICT](assets/H15-acceptance-run/VERDICT.md).
 
+- [Prompt — answer-grounding / anti-fabrication](tickets/H17-answer-grounding-anti-fabrication.md) —
+  the trust-critical H15 fix, done solo: one `FINAL-ANSWER GROUNDING` bullet added to the
+  existing `PatentEvidenceRules` element — before sending, sweep the answer and confirm every
+  patent/application number, claim quote, citation, **count**, and figure traces to a real tool
+  result (a lone unverified `fetch_webpage` count doesn't count); unverifiable items get omitted
+  or marked "unverified", never stated as fact. Coordinates with H5 (persist to retrieve, then
+  assert only what you retrieved) — no persistence line weakened. Fixture regenerated, drift
+  clean; **51/52 baseline needs re-grade**. Scoped to one element to leave room for H16/H18/H19
+  on the same file.
+
 ## Not yet specified
 
 - **Second acceptance run** — after H16–H19 land, re-run the corpus (same protocol: EPO health

@@ -132,6 +132,43 @@ export function findDefaultModel(
 }
 
 /**
+ * The model family recommended as the default for a fresh chat when the user has
+ * not configured or explicitly picked a model. Matches the tier the agents window
+ * resolves to (the newest Sonnet), which measurably outperforms the weaker tiers
+ * that alphabetical fallback ordering would otherwise select.
+ */
+const RECOMMENDED_DEFAULT_MODEL_FAMILY = 'sonnet';
+
+function matchesRecommendedFamily(metadata: ILanguageModelChatMetadata): boolean {
+	const haystack = `${metadata.family ?? ''} ${metadata.id ?? ''} ${metadata.name ?? ''}`.toLowerCase();
+	return haystack.includes(RECOMMENDED_DEFAULT_MODEL_FAMILY);
+}
+
+/**
+ * Pick the recommended default model from a pool for a user who has neither
+ * configured nor explicitly selected one. Prefers the newest model in the
+ * {@link RECOMMENDED_DEFAULT_MODEL_FAMILY} tier — deliberately Sonnet rather than
+ * a pricier tier, since under BYOK the user pays per token.
+ *
+ * BYOK models report a uniform `version` and set `family` to the raw (often dated)
+ * model id, so the concrete generation is only legible from the display name / id
+ * (e.g. "Claude Sonnet 4.6"); {@link compareModelVersions} on the name selects the
+ * newest. Returns `undefined` when the pool has no such model, letting the caller
+ * fall back to its normal location default.
+ */
+export function findRecommendedDefaultModel(
+	models: ILanguageModelChatMetadataAndIdentifier[],
+): ILanguageModelChatMetadataAndIdentifier | undefined {
+	const candidates = models.filter(m => matchesRecommendedFamily(m.metadata));
+	if (candidates.length === 0) {
+		return undefined;
+	}
+	return candidates.reduce((best, candidate) =>
+		compareModelVersions(candidate.metadata.name, best.metadata.name) > 0 ? candidate : best
+	);
+}
+
+/**
  * Determine whether a persisted model selection should be restored.
  *
  * A persisted model should be restored if:
