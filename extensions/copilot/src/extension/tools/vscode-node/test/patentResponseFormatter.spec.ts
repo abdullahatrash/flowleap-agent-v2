@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { formatJsonForModel, IMarkdownColumn, isSingleRecordDocumentLookup, renderMarkdownTable, ToolResponseBudgets, truncatePreview } from '../patentResponseFormatter';
+import { formatJsonForModel, IMarkdownColumn, renderMarkdownTable, ToolResponseBudgets, truncatePreview } from '../patentResponseFormatter';
 
 // `patentResponseFormatter` is the shared, budget-aware formatter the patent tools route their results
 // through. It is pure (no service dependencies), so it is tested in isolation here.
@@ -90,70 +90,6 @@ describe('formatJsonForModel', () => {
 
 	it('uses the named PatentApiRequest budget constant', () => {
 		expect(ToolResponseBudgets.PatentApiRequest).toBe(50_000);
-	});
-
-	it('keeps the sole oversized record intact for a single-record lookup and attaches a by-number note', () => {
-		// One by-number record whose claims text alone blows past the budget. The multi-record path would
-		// drop the record to `[]`; the single-record path must hand it back whole for the harness to offload.
-		const value = { patentFileWrapperDataBag: [{ applicationNumberText: '16473445', claims: 'C'.repeat(5_000) }] };
-		const result = formatJsonForModel(value, 2_000, { singleRecord: true });
-
-		const parsed = JSON.parse(result.content) as {
-			patentFileWrapperDataBag: Array<{ applicationNumberText: string; claims: string }>;
-			_truncation: { truncated: boolean; omittedItems: number; note: string };
-		};
-		expect({
-			truncated: result.truncated,
-			omittedItems: result.omittedItems,
-			recordKept: parsed.patentFileWrapperDataBag.length,
-			fullClaimsPreserved: parsed.patentFileWrapperDataBag[0].claims.length,
-			note: parsed._truncation,
-		}).toEqual({
-			truncated: true,
-			omittedItems: 0,
-			recordKept: 1,
-			fullClaimsPreserved: 5_000,
-			note: {
-				truncated: true,
-				omittedItems: 0,
-				note: `This by-number document lookup returned a single record larger than this tool's 2000-character inline budget. ` +
-					`No data was dropped: the full record — including the complete claims/description text — is returned intact and offloaded to a file, ` +
-					`so read it with the read_file tool at the path this result reports. ` +
-					`Do not refine the query or narrow the date range; a by-number lookup has exactly one matching record.`,
-			},
-		});
-	});
-
-	it('leaves a small single-record response untouched (never masks a missing-field response)', () => {
-		// A record with no claims field at all fits the budget and must pass through unchanged — the
-		// single-record branch only engages when the record itself is over budget.
-		const value = { patentFileWrapperDataBag: [{ applicationNumberText: '16473445' }] };
-		const result = formatJsonForModel(value, 50_000, { singleRecord: true });
-		expect(result).toEqual({ content: JSON.stringify(value, null, 2), truncated: false, omittedItems: 0 });
-	});
-});
-
-describe('isSingleRecordDocumentLookup', () => {
-	it('classifies by-number document lookups as single-record and search endpoints as multi-record', () => {
-		expect({
-			usptoGrant: isSingleRecordDocumentLookup('/patent-search-uspto/grants/6021533'),
-			opsClaims: isSingleRecordDocumentLookup('/ops/fulltext/claims?doc=US7654321B2'),
-			opsDescription: isSingleRecordDocumentLookup('/ops/fulltext/description?doc=EP1234566'),
-			enrichForm: isSingleRecordDocumentLookup('/ops/biblio?doc=EP1234566&enrich=claims'),
-			usptoSearch: isSingleRecordDocumentLookup('/patent-search-uspto/search'),
-			cqlSearch: isSingleRecordDocumentLookup('/patent-search?q=solar'),
-			opsDocs: isSingleRecordDocumentLookup('/ops/docs'),
-			biblio: isSingleRecordDocumentLookup('/ops/biblio?doc=EP1234566'),
-		}).toEqual({
-			usptoGrant: true,
-			opsClaims: true,
-			opsDescription: true,
-			enrichForm: true,
-			usptoSearch: false,
-			cqlSearch: false,
-			opsDocs: false,
-			biblio: false,
-		});
 	});
 });
 

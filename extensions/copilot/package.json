@@ -6843,7 +6843,6 @@
     "test:completions-core": "tsx src/extension/completions-core/vscode-node/extension/test/runTest.ts",
     "eval": "bash evals/scripts/run-evals.sh",
     "eval:multi": "cd evals && promptfoo eval -c promptfooconfig.multi.yaml",
-    "eval:trajectory": "cd evals && promptfoo eval -c promptfooconfig.trajectory.yaml",
     "eval:view": "cd evals && promptfoo view",
     "eval:extract-tools": "npx tsx evals/prompts/extract-tools.ts",
     "eval:check-baseline": "npx tsx evals/scripts/compare-baseline.ts",

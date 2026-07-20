@@ -154,8 +154,6 @@ export class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams>
 		if (!result.data || result.data.length === 0) {
 			lines.push('No citations found matching the filters.');
 			lines.push('');
-			lines.push('Backward citations key on the US application number, not the publication number — if you passed a publication number, resolve the application number via get_patent_family (find the US member) then get_continuity (read its application number) and retry. To instead find patents that cite this document forward, use search_forward_citations with the publication number.');
-			lines.push('');
 			lines.push('For forward citations, citation statistics, or date-range filtering, use citation_api_guide.');
 			return lines.join('\n');
 		}
