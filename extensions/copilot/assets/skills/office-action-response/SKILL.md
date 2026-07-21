@@ -17,19 +17,10 @@ Read the office action (`read_pdf` for PDFs, or pasted text). Extract:
 
 ## Step 1: Retrieve the Cited Art
 
-- `search_citations` keyed on the application number → the X/Y/A record of art cited AGAINST it (backward citations; if you only have a publication number, resolve the application number via `get_patent_family` → `get_continuity`). To find who cites a reference forward, that's `search_forward_citations` instead.
+- `search_citations` with the application number → the X/Y/A citation record
 - `get_patent_details` for EACH cited reference → the actual claims/description text the examiner relies on
 - If the examiner cites specific paragraphs/figures, read those exact passages; pull drawings with `get_patent_figures` when the rejection leans on structure
 - If any rejection is obviousness-type double patenting (or you need the file history), use the typed tools rather than raw ODP paths: `get_continuity` on the application → the parent/child chain identifying the commonly-owned earlier application the ODP runs over; `get_prosecution_timeline` on the publication number → the dated legal-event history. Fall back to `uspto_api_guide` (continuity / file-wrapper endpoints) → `patent_api_request` only for fields those typed tools do not return.
-
-### When retrieval fails
-
-You cannot argue against a reference you couldn't read — before flagging a cited reference as unavailable, work the ladder in order:
-1. **Clean zero result** (call succeeded, no hits/empty text): reformulate before concluding — try a different number format (publication ↔ application), the alternate route (`get_patent_summary` when `get_patent_details` is empty, `search_patents` ↔ `patent_api_request`), or the sibling citation tool.
-2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a missing reference — back off and retry the same call, then switch office/route. NEVER report a reference as unretrievable or the citation record as empty from an errored call.
-3. **Route exhausted** (the reference genuinely won't load from any route): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title before relying on it.
-
-Tell the attorney a reference couldn't be retrieved only after all three, and name what you tried.
 
 ## Step 2: Test the Rejection (patent-examination discipline)
 

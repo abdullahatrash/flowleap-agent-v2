@@ -7,7 +7,7 @@
 > open + unblocked + unassigned tickets. **Never resolve more than one ticket per
 > session.** Refer to tickets by name, not id.
 
-## Destination
+## Destination — ✅ REACHED 2026-07-21
 
 The main-window Patent AI agent **wins-or-ties the Claude harness** (agents window,
 flowleap CLI + skills) on **tool strategy** (iterates, reformulates queries, recovers from
@@ -16,6 +16,14 @@ head-to-head** over the repro corpus — and an **automated trajectory eval gate
 loop behavior so this gap class can't ship green again. We arrive when the judged
 head-to-head shows win-or-tie on a clear majority of tasks and the trajectory gate is
 designed and grounded in the diagnosed failure modes.
+
+**Arrived.** Second acceptance run (H21): main window **7/8 win-or-tie** at same model
+(6 wins, 1 tie, 1 loss), up from 2/8 in run 1 — a clear majority. Trajectory gate designed
+(H4) and implemented (H12). Both conditions met. The lone loss (R1, US-claims retrieval
+efficiency) is residual polish charted as [H22](tickets/H22-us-claims-retrieval-ergonomics.md),
+not a destination blocker. Confound noted: 2 of 6 wins ride on bench *harness* failures, but
+main clears the majority (5/6) even excluding them. Verdict:
+[run-2 VERDICT](assets/H15-acceptance-run-2/VERDICT.md).
 
 ## Notes
 
@@ -211,8 +219,21 @@ designed and grounded in the diagnosed failure modes.
   thresholds, so single-turn grading finally sees them). Drift clean, tool-defs unchanged.
   New baseline in tree.
 
+- [Second acceptance head-to-head](tickets/H21-second-acceptance-run.md) — **destination
+  reached: 7/8 win-or-tie** (6 wins, 1 tie, 1 loss) vs 2/8 in run 1; every run-1 loss main
+  now wins/ties maps to a fix (S1→H17, S2/S3→H16, S4→H19, R3→H18, R1 paraphrase→verbatim via
+  H18). Zero give-ups, zero flagged main-side fabrications across 16 transcripts. First
+  attempt was discarded (main re-read run-1 report files from the shared workspace) — fixed
+  with a fresh empty workspace. Confound: 2 wins (S2/R4) ride on bench harness failures;
+  main is 5/6 win-or-tie even excluding them. [VERDICT](assets/H15-acceptance-run-2/VERDICT.md).
+
 ## Not yet specified
 
+- **US-claims retrieval polish** — the lone acceptance loss (R1) is charted as
+  [H22](tickets/H22-us-claims-retrieval-ergonomics.md): `enrich=claims` discoverability + a
+  readable claims offload. Optional (destination already met), not a blocker.
+- **Airtight re-measure (optional)** — re-run the 2 confound-affected bench tasks (S2, R4)
+  with fixed sandbox/allowed-tools to remove the harness confound from the 7/8 number.
 - **Second acceptance run** — after H16–H19 land, re-run the corpus (same protocol: EPO health
   check, no cap, model-id verify) to re-test the majority bar. The gap is now efficiency +
   answer-discipline, not persistence, so the rubric weight shifts accordingly.

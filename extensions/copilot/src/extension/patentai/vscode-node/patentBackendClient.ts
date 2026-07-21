@@ -110,33 +110,10 @@ export class RateLimitError extends PatentBackendError {
 }
 
 /**
- * Thrown when the backend returns a generic server-side failure the client already retried and
- * could not clear — a `5xx` status, a gateway error (`502`/`503`/`504`), or a client-enforced
- * request timeout. These are *transient*: the query itself is fine, the backend is momentarily
- * unavailable, so the recovery action is "wait briefly and retry" — unlike a `4xx`, which needs the
- * user to change something. Kept distinct from the generic {@link PatentBackendError} so a tool
- * surfaces a clear "transient, retry" steer instead of a dead end.
- *
- * The model-facing `message` is a short status line only: raw nginx HTML error pages and internal
- * exception text (e.g. a `502` carrying an upstream stack fragment) are stripped, so the assistant
- * reads "transient, retry" rather than a wall of gateway markup. `status` is the HTTP code, or
- * `undefined` for a client-side timeout. Extends {@link PatentBackendError} so tool catch paths keep
- * working.
- */
-export class TransientBackendError extends PatentBackendError {
-	readonly code = 'transient';
-	constructor(message: string, status: number | undefined) {
-		super(status, message);
-		this.name = 'TransientBackendError';
-	}
-}
-
-/**
- * Model-facing recovery hint for an auth/setup/transient failure from the backend. Tools append
- * this to their error result so the assistant can tell the user (or itself) the concrete next step
- * in-chat — the actionable notification the seam fires is easy to miss mid-conversation, and a
- * transient `5xx`/gateway/timeout needs a "wait and retry" steer, not a give-up. Empty only for the
- * generic {@link PatentBackendError} (an unclassified `4xx`), so tools keep their generic format there.
+ * Model-facing recovery hint for an auth/setup failure from the backend. Tools append this to
+ * their error result so the assistant can tell the user the concrete next step in-chat — the
+ * actionable notification the seam fires is easy to miss mid-conversation. Empty for every
+ * other backend error, so tools keep their generic error format.
  */
 export function patentBackendErrorRecoveryHint(error: PatentBackendError): string {
 	if (error instanceof AuthRequiredError) {
@@ -156,10 +133,6 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	if (error instanceof RateLimitError) {
 		const waitClause = error.retryAfterSeconds ? `Wait at least ${error.retryAfterSeconds} seconds` : 'Wait a few seconds';
 		return ` The FlowLeap backend is rate-limiting requests (HTTP 429). ${waitClause} before retrying this tool.`;
-	}
-	if (error instanceof TransientBackendError) {
-		const statusClause = error.status !== undefined ? ` (HTTP ${error.status})` : '';
-		return ` The patent backend is temporarily unavailable${statusClause} — this is transient, not a coverage limit. Wait briefly and retry the same query, or try a different office (USPTO) meanwhile.`;
 	}
 	return '';
 }
@@ -426,9 +399,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 					if (token.isCancellationRequested) {
 						throw new PatentBackendError(undefined, 'Request cancelled.');
 					}
-					// A timeout is transient (the backend is slow/unreachable right now), so it earns the
-					// same "wait and retry" steer as a 5xx. Message keeps "timed out" for the log/UX.
-					throw new TransientBackendError(`Request timed out after ${timeoutMs} ms.`, undefined);
+					throw new PatentBackendError(undefined, `Request timed out after ${timeoutMs} ms.`);
 				}
 				// A genuine network error is transient — retry it while budget remains.
 				if (attempt < MAX_RETRIES && !token.isCancellationRequested) {
@@ -545,14 +516,6 @@ export class PatentBackendClient implements IPatentBackendClient {
 			const retryAfterMs = parseRetryAfterMs(response);
 			const retryAfterSeconds = retryAfterMs !== undefined ? Math.ceil(retryAfterMs / 1000) : undefined;
 			throw new RateLimitError(rateLimitMessage(text, retryAfterSeconds), retryAfterSeconds);
-		}
-
-		// Transient gate: a `5xx` (incl. gateway `502`/`503`/`504`) that survived the client's retry
-		// budget. The raw body is often an nginx HTML error page or an upstream stack fragment — noise
-		// that reads as a permanent dead end — so surface only a short, body-free status line and let
-		// the recovery hint say "transient, wait and retry."
-		if (response.status >= 500 && response.status <= 599) {
-			throw new TransientBackendError(transientStatusLine(response.status), response.status);
 		}
 
 		const truncated = text.length > 500 ? text.substring(0, 500) + '…' : text;
@@ -772,24 +735,6 @@ function rateLimitMessage(body: string, retryAfterSeconds: number | undefined): 
 	return retryAfterSeconds
 		? `The FlowLeap backend is rate-limiting requests. Please wait ${retryAfterSeconds} seconds and try again.`
 		: 'The FlowLeap backend is rate-limiting requests. Please wait a few seconds and try again.';
-}
-
-/** Human-readable labels for the transient statuses we surface — keeps the model-facing line body-free. */
-const TRANSIENT_STATUS_LABELS: Record<number, string> = {
-	500: 'Internal Server Error',
-	502: 'Bad Gateway',
-	503: 'Service Unavailable',
-	504: 'Gateway Timeout',
-};
-
-/**
- * One-line, body-free status summary for a transient `5xx`. Deliberately does NOT include the raw
- * response body: gateway errors arrive as nginx HTML pages or upstream stack fragments, which are
- * noise to the model and read as a permanent failure. The recovery hint carries the "retry" steer.
- */
-function transientStatusLine(status: number): string {
-	const label = TRANSIENT_STATUS_LABELS[status] ?? 'Server error';
-	return `The patent backend returned HTTP ${status} (${label}).`;
 }
 
 // ── Body parsing ────────────────────────────────────────────────────────────────

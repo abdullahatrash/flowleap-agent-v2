@@ -90,7 +90,7 @@ import { IChatEditingSession, IModifiedFileEntry, ModifiedFileEntryState } from 
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../common/languageModels.js';
 import { ChatModelConfigurationStore } from './chatModelConfigurationStore.js';
 import { IChatModelInputState, IChatRequestModeInfo, IInputModel, logChangesToStateModel } from '../../../common/model/chatModel.js';
-import { filterModelsForSession, findBestMatchingModel, findDefaultModel, findRecommendedDefaultModel, hasModelsTargetingSession, isModelValidForSession, mergeModelsWithCache, resolveConfiguredModel, resolveModelFromSyncState, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
+import { filterModelsForSession, findBestMatchingModel, findDefaultModel, hasModelsTargetingSession, isModelValidForSession, mergeModelsWithCache, resolveConfiguredModel, resolveModelFromSyncState, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
 import { getChatSessionType, LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chatViewModel.js';
 import { IChatAgentService } from '../../../common/participants/chatAgents.js';
@@ -1875,11 +1875,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 		const allModels = this.getModelsForSessionType(sessionType);
 		const configuredModel = this.getConfiguredDefaultModel(allModels);
-		// With nothing configured or explicitly picked, recommend the stronger Claude
-		// tier (newest Sonnet, matching the agents window) rather than the
-		// alphabetically-first model that findDefaultModel would otherwise return.
-		const recommendedModel = configuredModel ? undefined : findRecommendedDefaultModel(allModels);
-		const defaultModel = configuredModel ?? recommendedModel ?? findDefaultModel(allModels, this.location);
+		const defaultModel = configuredModel ?? findDefaultModel(allModels, this.location);
 		logChangesToStateModel(this._inputModel, `[DEFAULT] setCurrentLanguageModelToDefault called (defaultModel=${defaultModel?.identifier}, configuredModel=${configuredModel?.identifier}, currentLm=${this._currentLanguageModel.get()?.identifier}) in ${this._currentSessionKey}`, undefined, this._inputModel?.state.get(), this.logService);
 		if (defaultModel) {
 			this.setCurrentLanguageModel(defaultModel);
