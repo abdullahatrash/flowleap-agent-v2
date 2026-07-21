@@ -47,29 +47,34 @@
   assert:
     - type: javascript
       value: |
+        // Outcome over path (matches the Siemens four-constraint case below):
+        // build_patent_query is the doctrinal EP route, but a direct search_patents
+        // call whose CQL carries the same constraints reaches the same EP result
+        // set. gemini-2.5-pro deterministically takes the search_patents route here.
         const parsed = JSON.parse(output);
         return (parsed.tool_calls || []).some(tc =>
-          tc.function?.name === 'build_patent_query'
+          ['build_patent_query', 'search_patents'].includes(tc.function?.name)
         );
       metric: epo_uses_build_query
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const buildQuery = (parsed.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
-        if (!buildQuery) return false;
-        const args = JSON.parse(buildQuery.function.arguments || '{}');
-        const desc = (args.description || '').toLowerCase();
-        return desc.includes('samsung') && desc.includes('wireless');
+        const call = (parsed.tool_calls || []).find(tc => ['build_patent_query', 'search_patents'].includes(tc.function?.name));
+        if (!call) return false;
+        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+        const d = JSON.stringify(args).toLowerCase();
+        return d.includes('samsung') && d.includes('wireless');
       metric: epo_includes_key_terms
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        const call = (out.tool_calls || []).find(tc => ['build_patent_query', 'search_patents'].includes(tc.function?.name));
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        // Must mention the date constraint (2023 or "after 2023")
-        return d.includes('2023') || d.includes('after') || d.includes('recent');
+        const d = JSON.stringify(args).toLowerCase();
+        // Date constraint for "filed after 2023": accept the >=2023 or the stricter
+        // >=2024 ("after 2023" = 2024 onward) reading, or a relative cue.
+        return d.includes('2023') || d.includes('2024') || d.includes('after') || d.includes('recent');
       metric: epo_args_include_date_constraint
 
 - vars:

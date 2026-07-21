@@ -10,9 +10,16 @@
   assert:
     - type: javascript
       value: |
+        // Branch A has two prompt-sanctioned openers: clarify jurisdiction via the
+        // carousel, OR decompose the claim first with analyze_claim (Branch A: "do
+        // NOT analyze the claim by hand"). H5's softened jurisdiction gate
+        // (2026-07-17) lets a prior-art task — which a supplied claim plainly is —
+        // default to comprehensive coverage and PROCEED without asking, so requiring
+        // vscode_askQuestions first is now stale. Reject only a naive jump to a raw
+        // search or a hand-built analysis.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'vscode_askQuestions';
+        return firstTool === 'vscode_askQuestions' || firstTool === 'analyze_claim';
       metric: path_a_claim_prior_art
     - type: javascript
       value: |
@@ -23,19 +30,20 @@
         const d = String(args.description || args.query || '').toLowerCase();
         return d.includes('wireless') || d.includes('inductive') || d.includes('charging') || d.includes('impedance');
       metric: path_a_claim_args_contain_technical_terms
-    # Converted from llm-rubric (2026-06-12): ask-before-search ordering and
-    # no fabricated patent numbers are both mechanically checkable.
+    # Converted from llm-rubric (2026-06-12); relaxed 2026-07-17 for H5's softened
+    # gate. Guards the real invariants: no fabricated patent numbers, and the model
+    # does not jump straight to a raw keyword search — it first either clarifies
+    # jurisdiction or decomposes the claim via analyze_claim (both prompt-sanctioned
+    # Branch A openers; see path_a_claim_prior_art).
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
-        const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
-        const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
-        const asksBeforeSearch = askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
+        const firstTool = toolCalls[0]?.function?.name;
+        const validOpener = firstTool === 'vscode_askQuestions' || firstTool === 'analyze_claim';
         const text = parsed.text || '';
         const noFabricatedNumbers = !/\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
-        return asksBeforeSearch && noFabricatedNumbers;
+        return validOpener && noFabricatedNumbers;
       metric: path_a_asks_before_search_no_fabricated_numbers
 
 - vars:

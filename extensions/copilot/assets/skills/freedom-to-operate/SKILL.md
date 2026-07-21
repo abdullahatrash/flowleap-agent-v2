@@ -39,6 +39,15 @@ For EACH feature, search for active patents:
 ### Pending applications — future risk, not a skip
 Granted claims decide today's risk, but PENDING applications (kind codes A1/A2) and open continuations in the same families are tomorrow's: claims can still be amended to cover the product before launch, and US published applications carry provisional rights (35 U.S.C. 154(d)) back to publication if substantially identical claims grant. Flag high-relevance pending applications and open continuity chains in a separate "monitor" list with their projected grant timelines — do not silently drop them.
 
+### When a search fails
+
+Before concluding a feature is clear or reporting a coverage gap, work the ladder in order:
+1. **Clean zero result** (call succeeded, no hits): reformulate before concluding no blocking patent exists — swap synonyms, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty). A clean zero is NOT a freedom-to-operate finding until the feature has been searched both ways.
+2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER report "no blocking patents" from an errored call.
+3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
+
+Disclose a gap only after all three, and name what you tried.
+
 ## Phase 3: Claim Mapping
 
 Retrieve claims with `get_patent_details` (EP/WO). For each potentially blocking patent:

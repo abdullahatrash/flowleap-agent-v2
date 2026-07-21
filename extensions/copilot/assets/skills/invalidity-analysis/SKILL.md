@@ -14,7 +14,7 @@ The adversarial mirror of a prior art search: the target is a granted patent's c
 2. Confirm it IS granted (kind code B1/B2) and in force: `ops_api_guide` endpoint="family-legal" → `patent_api_request`
 3. **Critical date**: the earliest priority date, not the filing date — check the family (`ops_api_guide` endpoint="family-biblio" → `patent_api_request`). ALL invalidating art must predate it.
    - **Attack the priority claim itself**: priority entitlement is challengeable per claim. If the priority document doesn't fully support a claim, that claim's critical date shifts to the actual filing date — opening intervening art, often including the patentee's own publications. Compare the claim against the priority document's disclosure.
-4. **Prosecution history** (`ops_api_guide` endpoint="register-events" → `patent_api_request`, plus `search_citations` for US applications):
+4. **Prosecution history** (`ops_api_guide` endpoint="register-events" → `patent_api_request`, plus `search_citations` keyed on the target's US **application** number — the references cited AGAINST it; resolve the application number via `get_patent_family` → `get_continuity` if you only have the publication number. For who-cites-the-target-forward that's `search_forward_citations` instead):
    - Art already of record — a challenge built on already-considered art is much weaker; you want NEW art
    - What was amended or argued to get allowance — the distinguishing feature the applicant relied on is exactly where to aim, and their arguments constrain how broadly they can now construe the claims
 
@@ -35,6 +35,15 @@ Run the **prior-art** skill's broad-to-narrow engine with these overrides:
 - NPL hits hard here (`search_academic`): printed publications are fully usable in IPR, and examiners rarely searched them
 - Check the applicant's own earlier filings and the inventors' own papers — self-collision is common
 - Aim at the allowance-winning feature identified in Phase 1.4
+
+## When a search fails
+
+Prior art rarely sits in one office — before concluding the art isn't there, work the ladder in order:
+1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — rebuild the concept table from other claim elements, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty) and the NPL sweep (`search_academic`). A clean zero on the killer element is not "no invalidating art" until searched every way.
+2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER report a gap in the art from an errored call.
+3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
+
+Record an element as un-anticipated (the patent's real strength) only after all three, and name what you tried.
 
 ## Phase 4: Invalidity Chart
 

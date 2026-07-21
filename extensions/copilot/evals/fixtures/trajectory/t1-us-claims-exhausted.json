@@ -1,0 +1,52 @@
+{
+	"id": "t1-us-claims-exhausted",
+	"description": "R1: US claim full text — every backend route drops the record; recovery is the web fallback.",
+	"rules": [
+		{
+			"tool": "patent_api_request",
+			"response": {
+				"tag": "TRUNCATED",
+				"body": "{\n  \"count\": 1,\n  \"patentFileWrapperDataBag\": [],\n  \"requestIdentifier\": \"8c469ac9-a3b9-4ae5-9b78-2eae8e7785c3\",\n  \"cached\": true,\n  \"_truncation\": {\n    \"truncated\": true,\n    \"omittedItems\": 1,\n    \"note\": \"Response exceeded this tool's 50000-character budget. 1 result item(s) were omitted to keep the output valid JSON. Refine your query — add filters, narrow the date range, or request fewer results — to retrieve the omitted items.\"\n  }\n}"
+			}
+		},
+		{
+			"tool": "get_patent_details",
+			"response": {
+				"tag": "OK",
+				"body": "US10958080B2 — \"Battery charging system and method\". Assignee: Kyung-Woo LEE et al. Grant 2021-03-23. Biblio + abstract available; full claim text is NOT included in this record."
+			}
+		},
+		{
+			"tool": "build_uspto_query",
+			"response": {
+				"tag": "OK",
+				"body": "Built query. CQL/Lucene string prepared from the description and constraints."
+			}
+		},
+		{
+			"tool": "search_patents",
+			"response": {
+				"tag": "HTTP_5XX",
+				"body": "Backend error 502: {\"success\":false,\"error\":{\"code\":\"upstream_error\",\"message\":\"odpRequest.q?.trim is not a function\"},\"status\":502}"
+			}
+		},
+		{
+			"tool": "fetch_webpage",
+			"response": {
+				"tag": "OK",
+				"body": "Fetched patents.google.com/patent/US10958080B2 — Claims: \"1. A battery charging system comprising: a charger configured to ...; 2. The system of claim 1, wherein ...\". Full independent and dependent claim text retrieved from the USPTO grant document."
+			}
+		},
+		{
+			"tool": "web_search",
+			"response": {
+				"tag": "OK",
+				"body": "Web results: Google Patents page for US10958080B2 (patents.google.com/patent/US10958080B2) and the USPTO grant PDF — both carry the full claim text."
+			}
+		}
+	],
+	"default": {
+		"tag": "OK",
+		"body": "OK. Request acknowledged; results returned."
+	}
+}

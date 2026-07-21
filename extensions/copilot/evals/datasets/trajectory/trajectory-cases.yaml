@@ -1,0 +1,209 @@
+# Trajectory gate cases T1–T8 (H4 design §4).
+#
+# Each case = a user prompt + a `mockScript` fixture (fixtures/trajectory/<id>.json) + a
+# trajectory assertion set. The provider (providers/trajectory-provider.ts) runs the whole
+# agent loop against the scripted mock tools and returns a JSON trajectory
+# `{ rounds:[{toolCalls:[{name,args,mockTag}]}], finalText, stoppedReason }`.
+#
+# Assertion style (H4 §3): the `javascript` predicates are the PRIMARY, deterministic gate.
+# Each calls a named predicate in assertions/trajectory-assertions.mjs (`cases.<metric>`) so
+# the promptfoo gate and the offline vitest spec exercise the exact same logic — no drift.
+# The `llm-rubric` give-up checks are the thin SECONDARY layer for the one thing structure
+# can't see: whether finalText narrates surrender. A give-up case fails red if EITHER the
+# structural assert or the judge fires.
+#
+# Inline asserts load the helpers through an absolute file URL (promptfoo runs from evals/;
+# dynamic import needs a URL, not a cwd-relative path). `mkPredicate` is not available in the
+# sandbox, so each assert inlines the same import + parse + cases.<name> call.
+
+# ── T1 — backend claims route exhausted → web fallback (corpus R1). ───────────────
+- description: "T1 — US claim full text: backend route drops the record; recover via the web fallback"
+  vars:
+    prompt: "Get me the full text of the claims of US10958080B2."
+    mockScript: t1-us-claims-exhausted
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t1_reached_web_fallback(H.parseTrajectory(output)));
+      metric: t1_reached_web_fallback
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field (the agent's final
+        message). PASS if finalText does NOT claim the agent lacks web-search / web-browsing
+        capability and does NOT redirect the user to commercial patent databases (Derwent,
+        PatBase, Orbit) as a substitute for doing the lookup. FAIL if finalText narrates that
+        kind of capability limitation or hands the task back without having tried a web fallback.
+      metric: t1_no_web_capability_giveup
+
+# ── T2 — empty forward citation → sibling backward-citation on the app number (corpus S3). ──
+- description: "T2 — cited-AGAINST question: forward citations empty; route to search_citations on the US application number"
+  vars:
+    prompt: "For EP3564557A1: what does claim 1 cover, is the patent still in force, and which prior-art references have been cited as novelty-destroying (X) against its family?"
+    mockScript: t2-empty-citation-sibling
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t2_reached_backward_citation(H.parseTrajectory(output)));
+      metric: t2_reached_backward_citation
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t2_did_not_stop_at_empty_forward(H.parseTrajectory(output)));
+      metric: t2_did_not_stop_at_empty_forward
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. PASS if finalText
+        does NOT conclude that no X-category / novelty-destroying prior-art references were
+        found. FAIL if it declares "no X-category references were found" (or equivalent) as
+        the answer.
+      metric: t2_no_absent_citations_giveup
+
+# ── T3a — transient 5xx then recovery (corpus R4 most-cited leg / R1 round-2 502). ──
+- description: "T3a — search endpoint 504s twice then succeeds: retry through the transient error and use the hits"
+  vars:
+    prompt: "Which 5 EP patents on mRNA lipid nanoparticle vaccines filed between 2020 and 2024 are the most cited? Search for them."
+    mockScript: t3a-transient-5xx-recovers
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t3a_retried_search(H.parseTrajectory(output)));
+      metric: t3a_retried_search
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t3a_continued_past_5xx(H.parseTrajectory(output)));
+      metric: t3a_continued_past_5xx
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. PASS if finalText
+        does NOT present "backend connectivity issues" / a transient gateway error as a
+        terminal reason it could not complete the task. FAIL if it hands back citing a
+        transient connectivity error as the stopping cause.
+      metric: t3a_no_connectivity_giveup
+
+# ── T3b — persistent transient 5xx (corpus R4 / S2). ──────────────────────────────
+- description: "T3b — search endpoint persistently 504s: persistence threshold before any hand-back"
+  vars:
+    prompt: "Search EP patents on solid-state electrolyte separators filed after 2021 and give me the 5 closest."
+    mockScript: t3b-transient-5xx-persistent
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t3b_persisted_3plus(H.parseTrajectory(output)));
+      metric: t3b_persisted_3plus
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. The search backend
+        was returning transient gateway timeouts (5xx), NOT "no results". PASS if finalText
+        does NOT disclose a COVERAGE / capability limitation (i.e. does not tell the user the
+        topic isn't covered or no such patents exist). A message that the backend is
+        temporarily unavailable after repeated retries is acceptable. FAIL if it frames a
+        transient outage as "not covered" / "nothing found".
+      metric: t3b_no_coverage_giveup
+
+# ── T4 — multi-step chain, all OK: reach the terminal tool, don't stop at step 1 (corpus S3/S4). ──
+- description: "T4 — EP → family → continuity → app number → search_citations: reach the terminal tool of the chain"
+  vars:
+    prompt: "For EP3564557A1, walk its patent family to the US member, get that application's continuity chain, and then list the X-category references cited against the US application."
+    mockScript: t4-multistep-chain
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t4_reached_terminal_tool(H.parseTrajectory(output)));
+      metric: t4_reached_terminal_tool
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t4_walked_the_chain(H.parseTrajectory(output)));
+      metric: t4_walked_the_chain
+
+# ── T5 — single-record truncation-drop ≠ no-data (corpus R1 / H9). ────────────────
+- description: "T5 — single-ID document lookup drops the whole record; must offload/narrow/fallback, not stop"
+  vars:
+    prompt: "Summarize the independent claims of US10958080B2 — I need the actual claim language, not just the abstract."
+    mockScript: t5-truncation-not-nodata
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t5_reacted_after_truncation(H.parseTrajectory(output)));
+      metric: t5_reacted_after_truncation
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. A single-record
+        lookup returned an EMPTY result bag (patentFileWrapperDataBag: []) with a "response
+        truncated / refine your query" note — the record was DROPPED for size, so no claim
+        text actually reached the agent. PASS only if finalText handles that honestly: either
+        it recovered the claims another way, or it states plainly that it could not retrieve
+        the full claim text. FAIL on EITHER misread — (a) concluding the patent has no claims /
+        no data exists, OR (b) claiming it successfully retrieved / has the full claim text
+        when the result was empty (fabrication).
+      metric: t5_no_truncation_misread
+
+# ── T6 — true clean zero-hit → reformulate/broaden (corpus S1; outage-masked). ────
+- description: "T6 — first exact-phrase search is a clean zero; reformulate/broaden before any give-up"
+  vars:
+    prompt: "Find prior art for magnetocaloric refrigeration using layered La-Fe-Si alloys. Give me the 5 closest patents with numbers and one-line relevance notes."
+    mockScript: t6-true-zero-reformulate
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t6_reformulated_after_zero(H.parseTrajectory(output)));
+      metric: t6_reformulated_after_zero
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. The first search
+        returned a clean zero-hit result. PASS if finalText does NOT stop at that first zero
+        and declare no prior art exists. FAIL if it reports "no results / nothing found" after
+        only a single un-reformulated search.
+      metric: t6_no_first_zero_giveup
+
+# ── T7 — NEGATIVE CONTROL: correct-null after bounded effort (corpus R2/R3/S2/S4). ──
+- description: "T7 — negative control: a genuinely empty space; bounded reformulation then an honest null is CORRECT (must stay green, no runaway/fabrication)"
+  vars:
+    prompt: "Is there any patent on a piezoresistive smart bandage — a hydrogel wound dressing that senses strain? Find the 3 closest, or tell me plainly if there is genuinely nothing."
+    mockScript: t7-negative-control-bounded
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t7_bounded_engagement(H.parseTrajectory(output)));
+      metric: t7_bounded_engagement
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. Every search
+        returned zero hits — the honest answer is that nothing was found. PASS if finalText
+        reports the null result honestly (says it could not find matching patents / found
+        nothing) AND does NOT fabricate specific patent numbers or claim to have found close
+        matches. FAIL only if finalText fabricates results or claims success it did not have.
+      metric: t7_honest_null_no_fabrication
+
+# ── T8 — comprehensive request must not stall on the jurisdiction question (corpus S1/H5e). ──
+- description: "T8 — an explicitly worldwide/comprehensive request must not ask a jurisdiction question before any search tool call"
+  vars:
+    prompt: "Search all patent databases worldwide — US, EP, and WO — comprehensively for prior art on solid-state battery cathode coatings. Be thorough across every jurisdiction."
+    mockScript: t8-jurisdiction-nonblock
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t8_searched_before_jurisdiction_question(H.parseTrajectory(output)));
+      metric: t8_searched_before_jurisdiction_question
