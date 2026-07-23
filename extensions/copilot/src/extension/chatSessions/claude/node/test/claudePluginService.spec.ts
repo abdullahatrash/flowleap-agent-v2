@@ -255,57 +255,58 @@ describe('ClaudePluginService', () => {
 
 	// #endregion
 
-	// #region Plugin-vs-bundled skill collisions (issue #162)
+	// #region Built-in vs fresher-channel skill collisions (issue #162)
 
-	it('drops a bundled skill when a plugin provides the same name, keeping the plugin copy', async () => {
+	it('rebuilds the built-in root without a skill an installed plugin also provides', async () => {
 		const materializer = new RecordingMaterializer();
 		const service = createService({
 			materializer,
 			skills: [
 				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
 				mockSkill('/app/out/vs/sessions/skills/commit/SKILL.md', 'commit', 'builtin'),
-				mockSkill('/home/user/.flowleap/plugins/recipes/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'plugin'),
+				mockSkill('/plugins/recipes/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'plugin'),
 			],
 		});
 		const locations = await service.getPluginLocations(CancellationToken.None);
-		// The built-in root collides, so it is replaced by a filtered root exposing
-		// only the surviving `commit` skill; the plugin's root passes through.
-		expect(locations.map(l => l.path)).toEqual([
-			'/home/user/.flowleap/plugins/recipes',
-			'/materialized/sessions',
-		]);
+		// The plugin root passes through; the built-in root is rebuilt with only the
+		// surviving `commit`, so the built-in `recipe-patent-landscape` cannot leak.
+		expect(locations.map(l => l.path)).toEqual(['/plugins/recipes', '/materialized/sessions']);
 		expect(materializer.calls).toEqual([{ nameHint: 'sessions', skillNames: ['commit'] }]);
 	});
 
-	it('passes a bundled root through unchanged when no plugin shadows any of its skills', async () => {
+	it('rebuilds the built-in root without a skill a user/harness copy provides, even when the built-in namesake is hidden upstream', async () => {
+		const materializer = new RecordingMaterializer();
+		const service = createService({
+			materializer,
+			skills: [
+				// The built-in `recipe-patent-landscape` is overridden upstream by the
+				// user copy, so it never appears here — only the surviving `commit` does.
+				mockSkill('/app/out/vs/sessions/skills/commit/SKILL.md', 'commit', 'builtin'),
+				mockSkill('/home/user/.copilot/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'user'),
+			],
+		});
+		const locations = await service.getPluginLocations(CancellationToken.None);
+		// The user skill's root passes through; the built-in root is rebuilt with only
+		// `commit`, so the hidden built-in `recipe-patent-landscape` cannot leak.
+		expect(locations.map(l => l.path)).toEqual(['/home/user/.copilot', '/materialized/sessions']);
+		expect(materializer.calls).toEqual([{ nameHint: 'sessions', skillNames: ['commit'] }]);
+	});
+
+	it('passes the built-in root through whole when no fresher skills exist', async () => {
 		const materializer = new RecordingMaterializer();
 		const service = createService({
 			materializer,
 			skills: [
 				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
 				mockSkill('/app/out/vs/sessions/skills/commit/SKILL.md', 'commit', 'builtin'),
-			],
-			plugins: [mockPlugin('/home/user/.flowleap/plugins/tools')],
-		});
-		const locations = await service.getPluginLocations(CancellationToken.None);
-		expect(locations.map(l => l.path)).toEqual([
-			'/app/out/vs/sessions',
-			'/home/user/.flowleap/plugins/tools',
-		]);
-		expect(materializer.calls).toHaveLength(0);
-	});
-
-	it('keeps the bundled skill when the plugin providing the same name is absent', async () => {
-		const service = createService({
-			skills: [
-				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
 			],
 		});
 		const locations = await service.getPluginLocations(CancellationToken.None);
 		expect(locations.map(l => l.path)).toEqual(['/app/out/vs/sessions']);
+		expect(materializer.calls).toHaveLength(0);
 	});
 
-	it('drops a bundled root entirely when every one of its skills is shadowed', async () => {
+	it('drops the built-in root entirely when every built-in skill is superseded', async () => {
 		const materializer = new RecordingMaterializer();
 		const service = createService({
 			materializer,

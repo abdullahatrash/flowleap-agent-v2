@@ -89,22 +89,15 @@ export interface IClaudePluginService {
 	 *    so we walk one level up from each skill location.
 	 * 2. **Plugins** — returned directly by the prompts service as actual plugin root directories.
 	 *
-	 * When an installed plugin and a bundled/built-in root provide a skill with the
-	 * same name, only the plugin copy is exposed — plugins update out of band with
-	 * the app, so a plugin-provided skill is always at-least-as-fresh (issue #162).
+	 * When a fresher channel (an installed plugin, or a user/workspace skill —
+	 * which includes the harness `~/.claude/skills` copies) provides a skill with
+	 * the same name as the app's built-in copy, only the fresher copy is exposed:
+	 * fresher channels update out of band with the app (issue #162).
 	 */
 	getPluginLocations(token: CancellationToken): Promise<Uri[]>;
 }
 
 export const IClaudePluginService = createServiceIdentifier<IClaudePluginService>('IClaudePluginService');
-
-/** A bundled/built-in skills root's contribution, pending collision resolution. */
-interface IBundledRoot {
-	/** Directories of this root's skills whose names are not provided by any plugin. */
-	readonly survivors: URI[];
-	/** Whether any of this root's skills is shadowed by a plugin-provided skill. */
-	hasCollision: boolean;
-}
 
 export class ClaudePluginService extends Disposable implements IClaudePluginService {
 	declare _serviceBrand: undefined;
@@ -134,17 +127,25 @@ export class ClaudePluginService extends Disposable implements IClaudePluginServ
 		// #region Skills as plugin roots
 		const skills = (await this.promptsService.getSkills(token)).filter(s => s.uri.scheme === Schemas.file);
 
-		// Installed plugins update out of band with the app, so a plugin-provided
-		// skill is always at-least-as-fresh as a same-named bundled/built-in copy.
-		// The plugin name wins any collision; the bundled namesake is dropped below.
-		const pluginSkillNames = new Set(skills.filter(s => s.source === 'plugin').map(s => s.name));
+		// Any skill the model already gets from a fresher channel — an installed
+		// plugin, or a user/workspace skill (which includes the harness
+		// `~/.claude/skills` copies, refreshed out of band) — supersedes the app's
+		// built-in copy of the same name. Fresher channels win the upstream name
+		// de-duplication, so their names are always visible here even when the
+		// built-in namesake is hidden (issue #162).
+		const fresherNames = new Set(
+			skills
+				.filter(s => s.source === 'user' || s.source === 'local' || s.source === 'plugin')
+				.map(s => s.name)
+		);
 
-		// Bundled/built-in skills collapse to a shared plugin root (e.g. every built-in
-		// session skill lives under one `skills/` directory), so dropping the root to
-		// hide one colliding skill would take its non-colliding siblings with it. Group
-		// each root's surviving skills and, when a root actually collides, materialize a
-		// filtered root exposing only the survivors; otherwise pass the root through.
-		const bundledRoots = new ResourceMap<IBundledRoot>();
+		// Built-in skills collapse to a single shared root (e.g. every built-in
+		// session skill lives under one `skills/` directory). Passing that root whole
+		// would re-expose every skill it contains on disk — including ones the upstream
+		// de-duplication hid because a fresher copy exists — so we rebuild the root from
+		// only the surviving built-in skill directories. Every other source (user,
+		// workspace, plugin, config) is already the fresh copy and passes through as-is.
+		const builtinSurvivors = new ResourceMap<URI[]>();
 		for (const skill of skills) {
 			// Extension-contributed skills (the patent skills bundled via `chatSkills`)
 			// instruct the model to call panel-chat language-model tools (search_patents,
@@ -157,32 +158,32 @@ export class ClaudePluginService extends Disposable implements IClaudePluginServ
 			if (isClaudeDirectory(root)) {
 				continue;
 			}
-			if (skill.source === 'plugin') {
-				// The plugin copy always wins — pass its root straight through.
+			if (skill.source !== 'builtin') {
+				// A fresh copy — pass its root straight through.
 				pluginRoots.add(root);
 				continue;
 			}
-			let entry = bundledRoots.get(root);
-			if (!entry) {
-				entry = { survivors: [], hasCollision: false };
-				bundledRoots.set(root, entry);
+			// Built-in: keep it only if no fresher channel provides the same name.
+			let survivors = builtinSurvivors.get(root);
+			if (!survivors) {
+				survivors = [];
+				builtinSurvivors.set(root, survivors);
 			}
-			if (pluginSkillNames.has(skill.name)) {
-				entry.hasCollision = true;
-			} else {
-				entry.survivors.push(dirname(skill.uri));
+			if (!fresherNames.has(skill.name)) {
+				survivors.push(dirname(skill.uri));
 			}
 		}
 
-		for (const [root, { survivors, hasCollision }] of bundledRoots) {
-			if (!hasCollision) {
-				// No plugin shadows this root, so exposing it whole is safe.
+		for (const [root, survivors] of builtinSurvivors) {
+			if (fresherNames.size === 0) {
+				// Nothing fresher exists anywhere, so the built-in root hides nothing
+				// and collides with nothing — expose it whole.
 				pluginRoots.add(root);
 			} else if (survivors.length > 0) {
-				// Some skills are shadowed — expose only the survivors via a filtered root.
+				// Rebuild the root exposing only the surviving built-in skills.
 				pluginRoots.add(await this.materializer.materialize(basename(root), survivors));
 			}
-			// else: every skill in this root is shadowed by a plugin — drop it entirely.
+			// else: every built-in skill in this root is superseded — drop it entirely.
 		}
 		// #endregion
 
