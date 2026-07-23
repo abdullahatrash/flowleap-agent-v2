@@ -50,7 +50,7 @@ export interface IConfiguredMarketplaces {
  * so it is implicitly trusted (see {@link isDefaultMarketplaceReference}); marketplaces the
  * user adds themselves keep the standard trust-confirmation flow.
  */
-export const DEFAULT_PLUGIN_MARKETPLACES: readonly string[] = ['abdullahatrash/flowleap-plugins'];
+export const DEFAULT_PLUGIN_MARKETPLACES: readonly string[] = ['flowleap-ai/flowleap-plugins'];
 
 /** Canonical IDs of the product-default marketplaces, computed once at load. */
 const _defaultMarketplaceCanonicalIds = new Set(

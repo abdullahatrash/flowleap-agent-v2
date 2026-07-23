@@ -104,7 +104,7 @@ jobs:
       - name: Checkout flowleap-cli @ pinned ref
         uses: actions/checkout@v6
         with:
-          repository: abdullahatrash/flowleap-cli
+          repository: flowleap-ai/flowleap-cli
           ref: v0.3.6
           path: flowleap-cli
           fetch-depth: 1
