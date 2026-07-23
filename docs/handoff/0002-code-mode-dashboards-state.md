@@ -15,9 +15,8 @@ synced to v0.3.6 and pushed (flowleap-plugins b1ece53): +flowleap-patstat,
 check guards SKILL.md only), plugin versions 1.1.0, full 24-skill re-sync.
 Slice branches and session worktrees deleted after merge.
 
-OPEN ITEMS: (1) npm publish of flowleap@0.3.6 FAILED — E404 on PUT = expired/
-under-scoped granular NPM token (0.3.5 published fine 2026-07-12); fix = new
-npm token → `gh secret set NPM_TOKEN` → `gh run rerun 30011611995 --failed`.
+OPEN ITEMS: (1) RESOLVED — npm token rotated, rerun succeeded, flowleap@0.3.6
+live on the registry.
 (2) Backend main not yet DEPLOYED — data_slice provenance activates on deploy.
 (3) In-app sessions-window HITL (final PRD acceptance) once the app picks up
 plugin 1.1.0. (4) PATSTAT server-side (other workstream) lights up portfolio/
