@@ -1,11 +1,13 @@
 ---
 name: flowleap
-description: Use the installed FlowLeap CLI to inspect FlowLeap Patent AI backend health, authenticate safely, run patent/USPTO/OPS/academic/NPL/legal/citation reads, and use the raw API escape hatch. Trigger when a user asks an agent to use FlowLeap, query the FlowLeap backend, verify local or deployed FlowLeap API health, run patent research commands, or debug FlowLeap CLI/API behavior.
+description: Start here — the umbrella skill for the FlowLeap Patent AI CLI. Maps every command family (patent/USPTO/OPS/academic/NPL/legal/citation reads, analytics, OCR, claim analysis, one-call patent verbs, the tools facade, and the raw API escape hatch) and routes to the specialist skills. Trigger when a user asks an agent to use FlowLeap, query the FlowLeap backend, verify local or deployed FlowLeap API health, run patent research commands, or debug FlowLeap CLI/API behavior.
 ---
 
 # FlowLeap CLI
 
-Use `flowleap` as the command layer for the FlowLeap Patent AI backend. Prefer installed `flowleap` on `PATH`; when working inside this repo before installation, use `target/debug/flowleap` after `cargo build`.
+`flowleap` is the command layer for the FlowLeap Patent AI backend. This is the
+entry-point skill: it verifies the setup and routes to the specialist skills.
+Always pass `--json` for agent parsing; use `--dry-run` before protected calls.
 
 ## Start Here
 
@@ -14,65 +16,34 @@ command -v flowleap || true
 flowleap --json doctor
 ```
 
-For local backend work:
+`doctor` targets the production backend (https://api.flowleap.co) by default —
+no `--base-url` needed. Developing the FlowLeap backend itself? Add
+`--base-url http://localhost:8000` to point at a local server.
 
-```bash
-flowleap --json doctor --base-url http://localhost:8000
-flowleap --json health --base-url http://localhost:8000
-flowleap --json health cache --base-url http://localhost:8000
-```
+## Where Things Live
 
-For production:
-
-```bash
-flowleap --json doctor --base-url https://api.flowleap.co
-```
-
-## Auth
-
-Use env/config auth; avoid credential flags except for explicit one-off tests.
-
-```bash
-export FLOWLEAP_API_KEY=...
-flowleap auth login --api-key ...
-flowleap --json api profile
-```
-
-All credentials are sent as `Authorization: Bearer …` — either a Clerk JWT
-(from `flowleap auth login` OAuth flow) or a personal API token (`fl_pat_…`).
-Mint long-lived tokens for headless use:
-
-```bash
-flowleap auth create-token --name my-agent --store
-flowleap auth tokens
-flowleap auth revoke-token <id>
-```
-
-## Provider Keys (BYOK)
-
-Patent data may need the user's own EPO OPS / USPTO ODP keys. If a command
-fails with a `providerKeysHint` (code `provider_keys_required` /
-`provider_keys_invalid`): **stop — this needs a human** (browser signup).
-Ask the user to run `flowleap setup`, or apply keys they give you with
-`flowleap keys set …`. Details: the `flowleap-keys` skill.
-
-```bash
-flowleap --json keys test    # live per-provider verdicts
-```
-
-## Agent-First Tool Facade
-
-Prefer `flowleap tools` when you want runtime-discoverable, uniformly-shaped
-operations (see the `flowleap-tools` skill for the full inventory):
-
-```bash
-flowleap --json tools list
-flowleap --json tools run get_patent_summary patent_number=EP1000000
-```
+- **Auth, global flags, config, output formats** → `flowleap-shared`; login,
+  token minting, and 401 self-heal → `flowleap-auth`.
+- **Provider keys (EPO OPS / USPTO ODP BYOK)** → `flowleap-keys`. A
+  `provider_keys_required` / `provider_keys_invalid` hint means a human must sign
+  up in a browser — stop and ask.
+- **Patent search & CQL** → `flowleap-patent`; **USPTO ODP** → `flowleap-uspto`.
+- **EPO document data** (biblio, claims, description, family, legal) → `flowleap-ops`.
+- **Academic / non-patent literature** → `flowleap-academic`, `flowleap-npl`.
+- **Patent-law RAG** → `flowleap-legal`; **enriched citations** → `flowleap-citation`.
+- **Portfolio Analytics** (structured criteria — named applicant, CPC/IPC,
+  office, year, family, grant status) → `flowleap-patstat`; free-text
+  keyword analytics (`flowleap analytics`, Topic Analytics) stay below.
+- **Agent-first tool facade** (`flowleap tools list|describe|run …`) and the
+  one-call verbs `summary`, `timeline`, `compare` → `flowleap-tools`.
+- **Document utilities** — `flowleap figures <doc>`, `flowleap convert-number
+  <doc> --to docdb`, `flowleap analytics --keyword …`, `flowleap ocr <file>`,
+  `flowleap analyze-claim --file claim1.txt --focus full`.
+- **Raw API escape hatch** — `flowleap --json api request get /v1/health`. Use
+  high-level commands first; never run a live `post`/`put`/`patch`/`delete`
+  unless the user asked for that specific write, and prefer `--dry-run`.
 
 ## Install Skills
-
-Ship these skills to any agent's skills directory:
 
 ```bash
 flowleap skills install              # → ~/.claude/skills
@@ -80,65 +51,24 @@ flowleap skills install --project    # → .claude/skills
 flowleap skills install --dir <path> # any other agent
 ```
 
-## Safe Read Workflow
+## Keep FlowLeap Updated
 
-Use `--json` for agent parsing. Use `--dry-run` before protected calls when auth or request shape is uncertain.
-
-```bash
-flowleap --json patent search --query "solar panel efficiency" --limit 10
-flowleap --json uspto search --query "wireless charging" --limit 10
-flowleap --json ops biblio EP1234567
-flowleap --json academic search "machine learning patent classification" --limit 10
-flowleap --json npl "lithium-ion battery thermal management" --limit 10
-flowleap --json legal search "doctrine of equivalents" --limit 10
-flowleap --json citation search 16000001 --size 20
-```
-
-Argument shapes differ by command:
+One command upgrades the CLI on any install channel (npm, Homebrew, install.sh
+binary, cargo) — no need to know which one you're on:
 
 ```bash
-# These require --query
-flowleap --json patent search --query "battery cooling system" --limit 3
-flowleap --json uspto search --query "wireless charging" --limit 3
-
-# These use positional text arguments
-flowleap --json patent build-query "battery cooling system for electric vehicles" --dry-run
-flowleap --json academic search "solid state battery electrolyte" --limit 3
+flowleap upgrade --check   # channel + versions, no changes (add --json to branch on it)
+flowleap upgrade           # upgrade in place; skill content refreshes separately
+flowleap skills update     # refresh installed skill files after upgrading
 ```
 
-When checking whether the CLI is sending the intended request, prefer `--dry-run`:
+`upgrade --check --json` returns `{ channel, currentVersion, latestVersion,
+updateAvailable, command }` so an agent can decide whether to act.
 
-```bash
-flowleap --json patent search --query "battery cooling system" --limit 1 --dry-run
-```
+## Skill Map
 
-If dry-run shows the expected JSON body but the live response shape or count differs, treat that as backend behavior to investigate separately.
-
-## Raw Escape Hatch
-
-Use high-level commands first. Use raw requests only when a route is missing or while debugging backend behavior.
-
-```bash
-flowleap --json api request get /v1/health
-flowleap --json api request get /health/cache --base-url http://localhost:8000
-flowleap --json api request post /v1/patent-search --body-file request.json --dry-run
-```
-
-Do not run raw `post`, `put`, `patch`, or `delete` against a live service unless the user asked for that specific write. Prefer `--dry-run` first.
-
-## Install And Validate
-
-```bash
-make install-local
-command -v flowleap
-flowleap --json doctor
-```
-
-Required repo checks before publishing CLI changes:
-
-```bash
-cargo build
-cargo test
-cargo clippy -- -D warnings
-cargo fmt --check
-```
+- Shared reference: `flowleap-shared` (auth, flags, config), `flowleap-auth`, `flowleap-keys`
+- Data sources: `flowleap-patent` (EPO CQL), `flowleap-uspto` (ODP Lucene), `flowleap-ops` (EPO documents), `flowleap-academic`, `flowleap-npl`, `flowleap-legal`, `flowleap-citation`, `flowleap-patstat` (Portfolio Analytics), `flowleap-tools` (facade)
+- Personas: `persona-patent-attorney`, `persona-ip-analyst`, `persona-researcher`, `persona-startup-founder`
+- Recipes (search/analysis): `recipe-prior-art-search`, `recipe-patent-landscape`, `recipe-freedom-to-operate`, `recipe-claim-analysis`, `recipe-patent-to-report`, `recipe-academic-literature-review`
+- Recipes (prosecution/litigation, full pack only): `recipe-office-action-response`, `recipe-invalidity-analysis`, `recipe-infringement-charting`, `recipe-claim-drafting`, `recipe-invention-disclosure`, `recipe-audit-report`

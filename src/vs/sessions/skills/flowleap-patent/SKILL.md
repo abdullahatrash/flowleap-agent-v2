@@ -1,17 +1,11 @@
 ---
 name: flowleap-patent
-version: 1.0.0
-description: "FlowLeap Patent: Search patents and build CQL queries."
-metadata:
-  category: "patent-ai"
-  requires:
-    bins: ["flowleap"]
-  cliHelp: "flowleap patent --help"
+description: Search EPO patents with CQL and build CQL queries from natural language through the FlowLeap backend. Trigger when an agent needs European or worldwide patent search results, needs a plain-English invention description turned into a CQL query, or wants to tune query strategy (broad, precise, comprehensive). For US-specific ODP searches see flowleap-uspto.
 ---
 
 # FlowLeap Patent
 
-Prerequisite: Read `flowleap-shared` for authentication and global flags.
+Auth and global flags: see `flowleap-shared`.
 
 ## Commands
 
@@ -29,7 +23,14 @@ Posts to `/v1/patent-search`. Returns patent results with publication number, ti
 | `--limit` | Maximum results (1-100) | `10` |
 | `--countries` | Country filter, comma-separated (e.g. `EP,WO`) | none |
 
+Jurisdiction is set with `--countries` — `patent search` has no `--source` flag
+(that flag belongs to `academic search`, for `scholar` vs `arxiv`).
+
 For US-specific searches use `flowleap uspto search` (ODP Lucene syntax).
+
+CQL terms must be at least 3 characters — OPS rejects shorter prefixes with a
+`400 CLIENT.PrefixTooShort`. Spell the word out (`ti="ultraviolet"`, not
+`ti="uv"`); this applies to hand-written queries and to CQL from `build-query`.
 
 #### Examples
 
@@ -37,14 +38,14 @@ For US-specific searches use `flowleap uspto search` (ODP Lucene syntax).
 # Basic search
 flowleap patent search --query "solar panel efficiency"
 
-# USPTO source with limit
-flowleap uspto search --query "lithium battery" --limit 20   # USPTO uses ODP Lucene syntax, not CQL
-
 # JSON output for agents
-flowleap patent search --query "CRISPR gene editing" --output json
+flowleap patent search --query "CRISPR gene editing" --json
 ```
 
 #### Response Format (JSON)
+
+Returns an array of results, each carrying a document identifier, title,
+applicant(s), publication date, and abstract, for example:
 
 ```json
 [
@@ -58,6 +59,10 @@ flowleap patent search --query "CRISPR gene editing" --output json
 ]
 ```
 
+Field names are illustrative — inspect a live `--json` response for the exact
+keys. Strip the kind suffix (`EP1234567.A1` → `EP1234567`) to use the document
+identifier as the `<patent-number>` argument to `ops` and the tools facade.
+
 ### Build CQL Query
 
 ```bash
@@ -66,22 +71,25 @@ flowleap patent build-query <description> [flags]
 
 Posts to `/v1/build-patent-query`. Converts natural language to CQL (Common Query Language) for EPO patent searches.
 Use `--dry-run` to verify the request shape without calling the backend model.
+Live calls send the description to FlowLeap and then to Anthropic or OpenAI,
+so they require `--allow-external-processing`.
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--focus` | Strategy: `broad`, `precise`, `comprehensive` | `comprehensive` |
+| `--allow-external-processing` | Consent to FlowLeap and external-LLM processing | `false` |
 
 #### Examples
 
 ```bash
 # Natural language to CQL
-flowleap patent build-query "patents about lithium battery recycling filed by Tesla"
+flowleap patent build-query "patents about lithium battery recycling filed by Tesla" --allow-external-processing
 
 # With a strategy focus
-flowleap patent build-query "renewable energy storage systems" --focus comprehensive
+flowleap patent build-query "renewable energy storage systems" --focus comprehensive --allow-external-processing
 
 # JSON output
-flowleap patent build-query --output json "autonomous vehicle lidar sensors"
+flowleap patent build-query --json "autonomous vehicle lidar sensors" --allow-external-processing
 ```
 
 #### Response Format (JSON)
@@ -95,5 +103,5 @@ flowleap patent build-query --output json "autonomous vehicle lidar sensors"
 
 ## Workflow: Natural Language to Patent Results
 
-1. Build a CQL query: `flowleap patent build-query "your description"`
+1. Build a CQL query: `flowleap patent build-query "your description" --allow-external-processing`
 2. Use the generated CQL in a search: `flowleap patent search --query "<CQL>"`

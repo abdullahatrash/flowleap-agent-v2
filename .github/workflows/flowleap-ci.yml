@@ -78,3 +78,39 @@ jobs:
 
       - name: Validate layers
         run: npm run valid-layers-check
+
+  skills-drift:
+    name: Bundled Skills Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout flowleap-agent-v2
+        uses: actions/checkout@v6
+        with:
+          path: flowleap-agent-v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: flowleap-agent-v2/.nvmrc
+
+      # A shallow checkout pinned to the tag recorded as `refDisplayName` in
+      # the drift manifest (a tag fetches reliably at depth 1; an arbitrary
+      # commit SHA may not, depending on the host's reachable-SHA policy) —
+      # cheap and needs no further network call at check time since
+      # check-skills-drift.ts reads straight out of the local git object
+      # database. Keep this in sync with scripts/skills-drift-manifest.json's
+      # `ref`/`refDisplayName` — they must name the same commit.
+      - name: Checkout flowleap-cli @ pinned ref
+        uses: actions/checkout@v6
+        with:
+          repository: abdullahatrash/flowleap-cli
+          ref: v0.3.6
+          path: flowleap-cli
+          fetch-depth: 1
+
+      - name: Check bundled skills for drift
+        run: npx tsx scripts/check-skills-drift.ts --require-source
+        working-directory: flowleap-agent-v2
+        env:
+          FLOWLEAP_CLI_DIR: ${{ github.workspace }}/flowleap-cli

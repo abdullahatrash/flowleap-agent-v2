@@ -109,6 +109,12 @@ src/vs/platform/files/test/node/fixtures/service/deep/company.js
 src/vs/platform/files/test/node/fixtures/service/deep/conway.js
 src/vs/platform/files/test/node/fixtures/service/deep/employee.js
 src/vs/platform/files/test/node/fixtures/service/deep/small.js
+src/vs/sessions/skills/recipe-custom-dashboard/references/smoke.mjs
+src/vs/sessions/skills/recipe-custom-dashboard/references/stub-flowleap.mjs
+src/vs/sessions/skills/recipe-custom-dashboard/references/template-citation-impact.mjs
+src/vs/sessions/skills/recipe-custom-dashboard/references/template-filing-trends.mjs
+src/vs/sessions/skills/recipe-custom-dashboard/references/template-landscape-whitespace.mjs
+src/vs/sessions/skills/recipe-custom-dashboard/references/template-portfolio.mjs
 src/vs/sessions/test/e2e/common.cjs
 src/vs/sessions/test/e2e/extensions/sessions-e2e-mock/extension.js
 src/vs/sessions/test/e2e/generate.cjs
