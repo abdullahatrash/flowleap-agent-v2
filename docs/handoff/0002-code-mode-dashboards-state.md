@@ -5,7 +5,25 @@ branch). Vocabulary: `CONTEXT.md` → Topic Analytics vs Portfolio Analytics, Da
 Edition, Verified-Data Contract. Issue trail: flowleap-cli #32/#33/#34,
 flowleap-backend #161 — each carries a resolution comment with branch + SHA.
 
-## What exists, where (all LOCAL branches, nothing pushed, nothing on main)
+## SHIPPED 2026-07-23 (same day) — state below updated post-ship
+
+All three repos merged to main and pushed: agent-v2 e817eba140a, flowleap-cli
+4825098 (+ version bump 877e8fe, tag v0.3.6 — GitHub release live with 7
+binaries), flowleap-backend b3741ce. Issues #32/#33/#34/#161 closed. Plugins
+synced to v0.3.6 and pushed (flowleap-plugins b1ece53): +flowleap-patstat,
++recipe-custom-dashboard (first skill shipping its references/ tree; drift
+check guards SKILL.md only), plugin versions 1.1.0, full 24-skill re-sync.
+Slice branches and session worktrees deleted after merge.
+
+OPEN ITEMS: (1) npm publish of flowleap@0.3.6 FAILED — E404 on PUT = expired/
+under-scoped granular NPM token (0.3.5 published fine 2026-07-12); fix = new
+npm token → `gh secret set NPM_TOKEN` → `gh run rerun 30011611995 --failed`.
+(2) Backend main not yet DEPLOYED — data_slice provenance activates on deploy.
+(3) In-app sessions-window HITL (final PRD acceptance) once the app picks up
+plugin 1.1.0. (4) PATSTAT server-side (other workstream) lights up portfolio/
+filing-trends templates.
+
+## What existed pre-merge (historical)
 
 | Repo | Branch | Head | Contents |
 |---|---|---|---|
