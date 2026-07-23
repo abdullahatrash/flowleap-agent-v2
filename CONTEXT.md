@@ -145,6 +145,32 @@ priority interval), **E** (earlier-filed, later-published "secret" prior art). O
 carry several.
 _Avoid_: High/Medium/Low (loses the alone-vs-combination signal).
 
+**Topic Analytics** vs **Portfolio Analytics**:
+The two aggregate-analytics engines, split by *criteria shape*, not by metric. **Topic Analytics**
+(the Google-Patents corpus engine) answers questions whose essential criterion is **free-text
+keywords** over title/abstract ("quantum computing filings over time"); publication-level counts,
+substring name matching, per-query cost. **Portfolio Analytics** (the PATSTAT engine) answers
+questions expressible in **structured criteria** — named applicant (entity-resolved, harmonized
+names), CPC/IPC class, office, year, family, grant status; family-level counting, zero marginal
+cost. Routing rule: if the question needs free text, Topic; otherwise Portfolio. An ambiguous
+applicant name is an interaction step (pick the entity), never a silent merge.
+_Avoid_: "analytics" unqualified when the engines could disagree; presenting numbers from both
+engines in one chart without labeling each source.
+
+**Data Edition**:
+The provenance identifier of the Portfolio Analytics dataset (PATSTAT is published in discrete
+editions, ~twice yearly). Every Portfolio Analytics answer carries its Data Edition; two answers
+are only comparable within one edition.
+_Avoid_: treating Portfolio Analytics as live data — it is a snapshot with a name.
+
+**Verified-Data Contract**:
+The bar a data deliverable (e.g. a dashboard) must meet: every displayed value — chart, table,
+or narrative sentence — is computed by executable code from recorded source responses, and the
+deliverable carries its provenance (sources, parameters, Data Edition, timestamps) plus the raw
+response data alongside it. Chat commentary *cites* a verified deliverable; it is not itself one —
+conversational numbers are quoted from computed output, never re-typed from memory.
+_Avoid_: calling model-transcribed numbers "verified"; treating charts as covered but prose as exempt.
+
 **Effective Filing Date** / **Priority Date**:
 The date a Prior-Art Search is measured against: a document is prior art if it was publicly
 available before the application's effective filing date. A reference's own **publication date**

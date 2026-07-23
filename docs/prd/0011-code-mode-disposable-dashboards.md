@@ -1,0 +1,130 @@
+# PRD 0011: Code mode v1 — disposable dashboards over verified patent data
+
+Thesis: for aggregate patent questions, the best "tool" is a small code-execution
+surface over verified backend data. The agent writes ordinary code against typed
+capabilities; the user gets a bespoke, provenance-stamped dashboard instead of a
+fixed UI we would otherwise have to build and maintain. This PRD ships the
+CLI-first slice of that thesis (Phases 1+2). The IDE exec tool and any slimming
+of the tuned 28-tool catalog are explicitly parked (see Out of Scope).
+
+## Problem Statement
+
+PATSTAT analytics is landing on the backend (`/v1/patstat/portfolio`, #146):
+grounded aggregates for "show me {company}'s portfolio" questions, each response
+carrying a `data_edition` provenance field and a quotable `summary`. But the
+product has no presentation layer for aggregate data, and building one the
+traditional way means committing to fixed dashboards that answer yesterday's
+question — the next user wants the same data split by CPC class, or compared
+against a competitor, and the fixed UI is wrong again.
+
+Meanwhile the agent-facing data surface is fragmented. The backend already owns
+a single agent-first facade — the tool registry behind `/v1/tools` (27 tools:
+name, description, zod schema, handler, plus discovery and an OpenAPI export) —
+but PATSTAT is not in it, and when an agent presents aggregate numbers today those numbers pass through
+the model's "hands": the model reads JSON and re-types figures into prose,
+where transcription errors and hallucinated values are possible and provenance
+is lost.
+
+## Solution
+
+Two coordinated pillars, both riding surfaces that already exist.
+
+1. **Disposable dashboards (skills + templates).** A new dashboard-craft recipe
+   skill teaches any bash-capable harness the pattern: fetch data via the
+   FlowLeap CLI (`--json`), compute every aggregate *in code*, and emit a
+   self-contained HTML dashboard (inline SVG charts, no external resources)
+   with a mandatory provenance footer and a raw-JSON sidecar for audit. The
+   user refines conversationally ("now split by office") and the agent
+   regenerates in seconds. The skill owns presentation craft only — analysis
+   logic stays defined once, in the existing analytical recipes, which gain a
+   "visual deliverable" pointer to it. Starter templates for the four
+   highest-value shapes (portfolio, filing trends, landscape white-space,
+   citation impact) make the first render good instead of generic.
+
+2. **Portfolio Analytics reaches every code-mode surface.** The PATSTAT
+   workstream lands the `patstat_portfolio` registry entry (the contract
+   between workstreams); this PRD adds the dedicated `flowleap patstat` CLI
+   verb on top of it, and closes the provenance gap on the Topic Analytics
+   side (corpus-slice identity stamp), so both analytics engines answer with
+   a named dataset.
+
+The contract that makes "always verified data" honest rather than marketing:
+the model decides *what program to write*; code computes every number from
+fetched JSON; the dashboard displays where each dataset came from (endpoint,
+parameters, data edition, timestamp) and ships with the data that produced it.
+
+## User Stories
+
+1. As a patent professional, I want to ask "show me Siemens's patent portfolio as a dashboard" and get an interactive HTML page, so that I don't need a BI tool or a fixed product dashboard.
+2. As a patent professional, I want to refine a dashboard conversationally ("split by office", "add Bosch for comparison"), so that the presentation always matches my current question.
+3. As a patent professional, I want every figure on a dashboard computed by code from backend responses, so that no number was re-typed (or invented) by a language model.
+4. As a patent professional, I want a provenance footer on every dashboard (data edition, endpoints called, query parameters, generation time), so that I can cite it and a colleague can verify it.
+5. As a patent professional, I want the raw JSON that fed a dashboard saved next to it, so that the numbers are auditable after the fact.
+6. As a patent professional, I want dashboards to open and render with no network access, so that I can archive, email, or present them anywhere.
+7. As a patent professional preparing a filing-strategy meeting, I want a landscape dashboard (CPC × year with white-space highlighting) from a single request, so that analysis that used to need an analyst takes minutes.
+8. As an agent in any bash-capable harness (Claude Code, Cursor, the IDE's sessions window), I want a recipe skill that teaches the fetch → compute → render pattern, so that dashboard quality doesn't depend on improvisation.
+9. As an agent, I want starter templates for common dashboard shapes, so that a working, well-designed program is my starting point instead of a blank file (stabilized mode: successful programs become the default path).
+10. As an agent, I want `flowleap patstat portfolio <applicant> --json` as a first-class verb, so that portfolio data is one call with the same auth, error envelope, and output conventions as every other verb.
+11. As an agent, I want an ambiguous applicant name to return the candidate list (the backend's 422), so that I can ask the user which entity they mean instead of silently merging companies.
+12. As an agent writing a dashboard script, I want all data fetched by spawning the FlowLeap CLI, so that no auth token or base URL ever appears inside model-written code or its output files.
+13. As FlowLeap (the platform), I want the registry to stay the single source of truth for tool names, descriptions, and schemas, so that the CLI facade, the MCP server, and the docs can never disagree with the implementation.
+14. As FlowLeap (the platform), I want PATSTAT reachable through `/v1/tools` and the MCP server, so that every harness gains portfolio analytics without per-harness work.
+15. As FlowLeap (the business), I want the dashboard experience to ship as skill content, so that it improves through the plugins channel without app releases.
+
+## Implementation Decisions
+
+**Backend: PATSTAT registry entry — owned by the PATSTAT workstream (dependency, not scope)**
+- The `patstat_portfolio` registry entry is implemented by the PATSTAT workstream (#141/#146), not this PRD. The registry entry is the contract between the two workstreams: this PRD's CLI verb and skills key off its name and schema. Entry spec handed to that workstream: wrap `src/lib/patstat/portfolio.ts` directly (registry handlers call libs, never HTTP self-calls), input schema mirrors the route's (applicant, fromYear, toYear), feature gating reuses `isPatstatConfigured`, `PatstatUnavailableError` maps to a typed `ToolError` in the same envelope as the route.
+- The PATSTAT workstream likewise owns any IDE typed tools and the prompt routing-tree update encoding the Topic/Portfolio Analytics split (see CONTEXT.md). This PRD makes zero agent-v2 code changes.
+- Sequencing: the dashboard-craft skill and Topic-Analytics-backed templates ship independently of PATSTAT; only the `patstat` CLI verb and Portfolio-Analytics-backed templates block on the entry landing.
+
+**Backend: corpus-slice identity for Topic Analytics (the one backend item this PRD owns)**
+- `patent_analytics` responses gain a dataset-identity field (corpus-slice build date/version) — the Topic Analytics analog of PATSTAT's `data_edition` — so every analytics engine stamps which snapshot answered. Small change in `src/lib/patent-analytics/`; flows to the route, the registry tool, and the MCP server automatically.
+
+**CLI: `flowleap patstat` verb**
+- New `patstat` command family (Rust, `src/commands/patstat.rs`) with `portfolio <applicant> [--from-year] [--to-year]`, following the citation/legal command conventions: hardened client, unified error rendering, `--json` for agents, human table output otherwise, exit codes per the existing contract.
+- The 422 ambiguous-applicant response renders the candidate list explicitly in both output modes — it is an interaction step, not an error to retry. No surface ever auto-picks a candidate (not even "most filings"): interactive flows ask the user; non-interactive runs exit non-zero with the candidate list, and the affected dashboard section is not rendered — a wrong-entity dashboard with a "verified" footer is the worst possible output. Once resolved, the exact applicant name is pinned as a constant in `generate.mjs`, so re-runs (any session, any operator) query the same entity without re-ambiguating; the reproduce block shows the pinned name.
+- `flowleap tools call patstat_portfolio` works automatically once the registry entry lands; the dedicated verb exists for ergonomics and skill-writing.
+
+**Skills: dashboard craft (canonical at flowleap-cli/skills, synced to plugins)**
+- New `flowleap-patstat` data-access skill: when to reach for aggregate analytics vs. search, the ambiguity flow, `data_edition` semantics, feature-gated availability (the `patstat_unavailable` error means the backend has no PATSTAT database — say so, don't retry).
+- New `recipe-custom-dashboard` craft skill — the heart of the PRD. It owns presentation craft only: no analysis logic. Analytical recipes (`recipe-patent-landscape` and friends) each gain a short "Visual deliverable" section pointing at it; triggered standalone ("make me a dashboard of X") it routes to the right analytical recipe for the data, then renders. Its rules:
+  - **Numbers only from code — including prose.** Every data value in the HTML (chart, table, or narrative sentence) is interpolated by the script from computed variables; the model never literal-types a figure. Templates ship a `renderNarrative(computed)` helper and embed backend-authored `summary` strings verbatim, so the correct path is the easy path. In chat, the dashboard is the source of record: the script prints a summary block for the agent to quote; conversational numbers are pasted from computed output, never re-typed (CONTEXT.md: Verified-Data Contract).
+  - **Data via CLI subprocess only.** Scripts fetch by spawning `flowleap … --json` (child_process); auth, base URL, url-guard, and error rendering stay in the CLI's credential store, below model-written code. Scripts never hold tokens, never raw-fetch the backend.
+  - **Node-only, zero-dependency templates**: each template is one self-contained `.mjs` (Node ≥ 18) — no npm install, no build step, no external chart library. If Node is genuinely unavailable, the rules (not the language) are what's mandatory. A genuinely interactive multi-view dashboard app may graduate to a heavier artifact pipeline; the Verified-Data Contract still applies.
+  - **Provenance footer mandatory**, per data source: tool name + parameters, dataset identity (Data Edition for Portfolio Analytics, corpus-slice stamp for Topic Analytics), and retrieved-at; plus one generation timestamp and CLI/backend versions per page. A source with no dataset identity gets an explicit "dataset identity unavailable" row, never omission. Response caches are not surfaced — bounded staleness within a named dataset is harmless.
+  - **Self-contained HTML**: inline CSS and inline SVG charts rendered by the script; no CDN, no external fonts, no runtime JS dependencies. Opens from disk, emails, archives.
+  - **Sidecar audit file**: the raw JSON responses are written next to the HTML; the footer links to it.
+  - **Dashboard bundle**: the on-disk unit is one workspace-relative folder per dashboard — `dashboards/<subject-slug>/` containing `generate.mjs` (the program, the thing refinements edit), `dashboard.html` (regenerated output, never hand-edited), and `data/` (one raw-JSON sidecar per backend call). Refinement re-runs in place; preserving a prior state is an explicit copy (or git). Subject-based slugs, no timestamps in names. The agent never overwrites a bundle it didn't create without showing the user its contents first.
+  - **Reproduce block**: the exact CLI commands (or script) that produced the data, so any run is repeatable (aligns with `recipe-audit-report`).
+  - **Iterate in place**: refinements regenerate the same file; the script is the artifact to edit, not the HTML.
+  - **Local by default, never auto-published**: dashboards can contain pre-filing invention data and competitive analysis. The output is a local file opened in the system browser; publishing to any hosted surface (e.g. claude.ai artifacts) happens only on explicit user request. The IDE's Simple Browser handles only http(s) (no `file://`), so in-IDE viewing is documented as localhost-server + Simple Browser; a native preview command is out of scope.
+- Starter templates in the skill's `references/`: portfolio (filings by year × office, grant ratio), filing trends (multi-applicant comparison), landscape white-space (CPC × year heatmap), citation impact (forward-citation distribution). Each is a complete small script + HTML skeleton with an inline SVG chart helper (bars, lines, heatmap) and the design rules (readable axes, colorblind-safe palette, dark/light-agnostic) baked in — templates are pack-safe (no absolute paths, no repo-relative references).
+- Templates that need search/citation data use existing verbs; only portfolio-shaped templates depend on PATSTAT. The recipe must degrade gracefully when PATSTAT is unavailable (state which templates are usable, don't fail the whole recipe).
+
+**IDE: no code changes**
+- The sessions window already runs bash-capable Claude harness sessions; the skill pack reaches it through the existing plugin/skills path. The BYOK chat's 28 typed tools are untouched.
+
+## Testing Decisions
+
+- Backend: the corpus-slice identity field gets unit coverage in the patent-analytics lib tests (present in responses, stable across cached reads). Registry-entry tests for `patstat_portfolio` belong to the PATSTAT workstream.
+- CLI: `patstat portfolio` integration tests against the mocked backend (success, 422 candidates rendering, `patstat_unavailable`, auth failure), matching the existing command test harness; `--json` output shape snapshot.
+- Skills: the pack validator covers the two new skills; template scripts get a smoke run in CLI CI (execute against recorded fixture JSON, assert the HTML contains the provenance footer and at least one `<svg>`; no live backend in CI).
+- Acceptance (HITL): in a fresh workspace with the pack installed and a PATSTAT-configured backend, ask "show me {company}'s patent portfolio as a dashboard". Verify: the HTML opens from disk with no network, every displayed number matches a direct `flowleap patstat portfolio --json` call, the provenance footer and JSON sidecar exist, and a follow-up refinement ("split by office") regenerates rather than starting over.
+
+## Out of Scope
+
+- **Phase 3 — the IDE exec tool and catalog slimming.** One exec surface in the copilot extension replacing/augmenting the 28 typed tools is deliberately parked: that catalog + prompt was just tuned to a 7/8 trajectory-eval win (map 0002), and any transport change there must ship additively and beat the tool catalog on evals before anything is removed.
+- **The generated TypeScript client.** Cut from this PRD on YAGNI grounds: v1 scripts fetch via the CLI (which owns auth), so a typed client has zero consumers until the IDE exec tool exists. Client generation from the registry becomes Phase 3's first slice, shaped by its real consumer. `/v1/tools/openapi.json` already serves anyone wanting codegen today.
+- Fixed dashboards on flowleap.com or in the app.
+- Live/self-updating dashboards (artifact runtime capabilities); v1 output is static HTML.
+- PATSTAT ETL, hosting, and edition management (owned by #146's parent, #141).
+- New PATSTAT analytics beyond portfolio.
+- Write-path or destructive capabilities of any kind; the whole surface is read + render.
+
+## Further Notes
+
+- Origin: the "code mode" thesis (agents writing code against typed capabilities beats per-action tool calls; enforce security below the model). Our shape is unusually favorable: the domain is ~all reads, provider credentials already live server-side behind the facade, and the CLI + bash already constitutes the execution surface in every harness we target — so v1 needs no sandbox work at all.
+- The security boundary is unchanged: backend auth (session/org token) and BYOK provider keys never leave the server; model-written scripts hold no credentials because all fetching goes through the CLI.
+- Stabilized-mode flywheel: dashboards users keep asking for become new templates in the skill's `references/` via the normal plugins channel — measured demand, not speculation, grows the template library.
+- Cross-repo footprint: flowleap-backend (corpus-slice stamp only), flowleap-cli (verb + skills + templates), flowleap-plugins (sync). No agent-v2 code changes; this PRD lives here as the system-of-record for planning, matching PRD 0002's cross-repo precedent. Depends on the PATSTAT workstream for the `patstat_portfolio` registry entry.
