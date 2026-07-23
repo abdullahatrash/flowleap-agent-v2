@@ -75,7 +75,7 @@ disposable; the branches above are the durable artifacts.
 
 ## Standing decisions a future agent must not silently reverse
 
-- **Phase 3 is parked and eval-gated**: the chat agent's `PATENT_TOOLS`
+- **Phase 3 is parked and eval-gated** (tracked: agent-v2 issue #161): the chat agent's `PATENT_TOOLS`
   allowlist (`extensions/copilot/src/extension/agents/vscode-node/agentTypes.ts`)
   deliberately excludes `run_in_terminal`. Adding exec to the tuned chat agent
   requires beating the 28-tool catalog on the map-0002 evals first. The
