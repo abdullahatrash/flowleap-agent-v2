@@ -15,17 +15,29 @@ import { CancellationToken } from '../../../../../util/vs/base/common/cancellati
 import { Event } from '../../../../../util/vs/base/common/event';
 import { DisposableStore } from '../../../../../util/vs/base/common/lifecycle';
 import { URI } from '../../../../../util/vs/base/common/uri';
+import { basename } from '../../../../../util/vs/base/common/resources';
 import { MockPromptsService } from '../../../../../platform/promptFiles/test/common/mockPromptsService';
 import { createExtensionUnitTestingServices } from '../../../../test/node/services';
-import { ClaudePluginService } from '../claudeSkills';
+import { ClaudePluginService, ISkillRootMaterializer } from '../claudeSkills';
 import { IPromptsService } from '../../../../../platform/promptFiles/common/promptsService';
 
 const ClaudePluginServiceConstructor = ClaudePluginService as unknown as new (
+	materializer: ISkillRootMaterializer,
 	configurationService: IConfigurationService,
 	envService: INativeEnvService,
 	workspaceService: IWorkspaceService,
 	promptsService: IPromptsService,
 ) => ClaudePluginService;
+
+/** Records which skills survive collision filtering without touching the filesystem. */
+class RecordingMaterializer implements ISkillRootMaterializer {
+	declare _serviceBrand: undefined;
+	readonly calls: { nameHint: string; skillNames: string[] }[] = [];
+	async materialize(nameHint: string, skillDirs: readonly URI[]): Promise<URI> {
+		this.calls.push({ nameHint, skillNames: skillDirs.map(dir => basename(dir)) });
+		return URI.file(`/materialized/${nameHint}`);
+	}
+}
 
 function createWorkspaceService(folders: URI[] = [URI.file('/workspace')]): IWorkspaceService {
 	return {
@@ -63,6 +75,7 @@ describe('ClaudePluginService', () => {
 		skills?: readonly ChatSkill[];
 		plugins?: readonly ChatPlugin[];
 		userHome?: URI;
+		materializer?: ISkillRootMaterializer;
 	}): ClaudePluginService {
 		const configService = new InMemoryConfigurationService(baseConfigurationService);
 		if (options?.configLocations) {
@@ -82,6 +95,7 @@ describe('ClaudePluginService', () => {
 		}
 
 		const service = new ClaudePluginServiceConstructor(
+			options?.materializer ?? new RecordingMaterializer(),
 			configService,
 			envService,
 			createWorkspaceService(options?.workspaceFolders),
@@ -237,6 +251,72 @@ describe('ClaudePluginService', () => {
 		expect(paths).toContain('/skill-plugin');
 		expect(paths).toContain('/direct-plugin');
 		expect(locations).toHaveLength(3);
+	});
+
+	// #endregion
+
+	// #region Plugin-vs-bundled skill collisions (issue #162)
+
+	it('drops a bundled skill when a plugin provides the same name, keeping the plugin copy', async () => {
+		const materializer = new RecordingMaterializer();
+		const service = createService({
+			materializer,
+			skills: [
+				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
+				mockSkill('/app/out/vs/sessions/skills/commit/SKILL.md', 'commit', 'builtin'),
+				mockSkill('/home/user/.flowleap/plugins/recipes/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'plugin'),
+			],
+		});
+		const locations = await service.getPluginLocations(CancellationToken.None);
+		// The built-in root collides, so it is replaced by a filtered root exposing
+		// only the surviving `commit` skill; the plugin's root passes through.
+		expect(locations.map(l => l.path)).toEqual([
+			'/home/user/.flowleap/plugins/recipes',
+			'/materialized/sessions',
+		]);
+		expect(materializer.calls).toEqual([{ nameHint: 'sessions', skillNames: ['commit'] }]);
+	});
+
+	it('passes a bundled root through unchanged when no plugin shadows any of its skills', async () => {
+		const materializer = new RecordingMaterializer();
+		const service = createService({
+			materializer,
+			skills: [
+				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
+				mockSkill('/app/out/vs/sessions/skills/commit/SKILL.md', 'commit', 'builtin'),
+			],
+			plugins: [mockPlugin('/home/user/.flowleap/plugins/tools')],
+		});
+		const locations = await service.getPluginLocations(CancellationToken.None);
+		expect(locations.map(l => l.path)).toEqual([
+			'/app/out/vs/sessions',
+			'/home/user/.flowleap/plugins/tools',
+		]);
+		expect(materializer.calls).toHaveLength(0);
+	});
+
+	it('keeps the bundled skill when the plugin providing the same name is absent', async () => {
+		const service = createService({
+			skills: [
+				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
+			],
+		});
+		const locations = await service.getPluginLocations(CancellationToken.None);
+		expect(locations.map(l => l.path)).toEqual(['/app/out/vs/sessions']);
+	});
+
+	it('drops a bundled root entirely when every one of its skills is shadowed', async () => {
+		const materializer = new RecordingMaterializer();
+		const service = createService({
+			materializer,
+			skills: [
+				mockSkill('/app/out/vs/sessions/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'builtin'),
+				mockSkill('/plugins/recipes/skills/recipe-patent-landscape/SKILL.md', 'recipe-patent-landscape', 'plugin'),
+			],
+		});
+		const locations = await service.getPluginLocations(CancellationToken.None);
+		expect(locations.map(l => l.path)).toEqual(['/plugins/recipes']);
+		expect(materializer.calls).toHaveLength(0);
 	});
 
 	// #endregion
