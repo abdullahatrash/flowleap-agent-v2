@@ -51,6 +51,11 @@ Compound (one call, multiple sources): `get_patent_summary`, `compare_patents`
 Reference: `reference_search` (patent-law RAG: EPC, EPO Guidelines, MPEP, …).
 Meta: `server_info`.
 
+Portfolio Analytics (structured-criteria applicant aggregation, PATSTAT):
+`patstat_portfolio` — available once the backend registry entry lands; see
+`flowleap-patstat` for the routing rule against Topic Analytics
+(`flowleap analytics`) and the `data_edition`/`patstat_unavailable` contract.
+
 ## Recipes
 
 Patent snapshot in one call:
@@ -68,20 +73,10 @@ flowleap --json tools run search_uspto_portfolio_by_customer_number customer_num
 Query building still lives in the provider commands:
 
 ```bash
-flowleap --json patent build-query "solid state battery separators" --focus precise
+flowleap --json patent build-query "solid state battery separators" --focus precise --allow-external-processing
 flowleap --json tools run search_patents --input "{\"query\": \"<recommended_cql>\"}"
 ```
 
 ## Auth
 
-Requires a personal API token (`fl_pat_…`) or OAuth login:
-
-```bash
-flowleap auth login                      # OAuth device flow (browser)
-flowleap auth create-token --name my-agent --store   # mint + store fl_pat_ token
-export FLOWLEAP_API_KEY=fl_pat_...       # or pass via env for headless use
-```
-
-All patent tools require an active FlowLeap subscription (402
-`subscription_required` with an `upgradeUrl` otherwise) and share a
-60 requests/minute per-user rate limit (429 + `retryAfterSeconds`).
+Auth, subscription, and rate limits: see `flowleap-shared`.

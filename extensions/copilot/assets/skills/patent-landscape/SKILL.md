@@ -70,3 +70,25 @@ Save via `write_patent_results` (`template: 'landscape-report'`):
 6. **Key Patents**: the 5-10 most cited/important patents found (`search_forward_citations` on the publication number for who-cites-this-forward counts; for the references cited AGAINST a patent that's `search_citations` on its US **application** number, resolved via `get_patent_family` → `get_continuity`)
 7. **White Spaces**: areas with low filing activity (potential opportunities)
 8. **Data Tables**: raw data for all searches performed
+
+## Visual deliverable
+
+If the user wants a shareable dashboard rather than (or in addition to) the
+markdown report, save one with `write_patent_results` — omit `template` and
+give a `filePath` ending in `.html` so the content is written verbatim instead
+of wrapped in the markdown report structure. This surface has no CLI or
+Node-script execution, so the model authors the HTML directly; the contract is
+the same as any other deliverable on this skill:
+
+1. **Numbers only from tool results.** Every figure in the page — chart,
+   table, or narrative sentence — must trace back to a `patent_analytics_viz`,
+   `search_patents`, or `patent_api_request` call already made in this
+   conversation. Never invent or round a number while writing the HTML.
+2. **Self-contained, no external requests.** Inline all CSS and chart markup
+   directly in the file. No `<script src=...>` or `<link>` to a CDN, no
+   external fonts or images — inline SVG (bars/lines built from the `<svg>`
+   element with `<rect>`/`<path>`) for the filing-trend and top-filer charts.
+3. **Provenance footer.** End the page with the queries/tool calls run, the
+   date, and the same sample-basis caveat used in Phase 4's Methodology
+   section (exact counts vs. the 100-result analytics sample), so the
+   dashboard is auditable on its own without the chat transcript.

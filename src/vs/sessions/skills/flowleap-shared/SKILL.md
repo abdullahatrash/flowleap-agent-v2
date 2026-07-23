@@ -1,69 +1,50 @@
 ---
 name: flowleap-shared
-version: 1.0.0
-description: "FlowLeap CLI: Shared authentication, configuration, and global flags."
-metadata:
-  category: "patent-ai"
-  requires:
-    bins: ["flowleap"]
-  cliHelp: "flowleap --help"
+description: Shared reference for every FlowLeap skill — authentication (OAuth device flow, fl_pat_ personal API tokens), credential storage, config precedence, global flags, and output formats. Trigger when a FlowLeap command needs credentials set up, a global flag explained, config file locations, or output-format guidance; for the overall command map start from the `flowleap` skill.
 ---
 
-# FlowLeap CLI — Shared Configuration
+# FlowLeap CLI — Shared Reference
 
-Read this skill first before using any other FlowLeap skill.
-
-## Installation
-
-```bash
-cargo install --path .
-```
+Shared authentication, configuration, and global-flag reference used by every
+other FlowLeap skill. For the overall map of commands, skills, and workflows,
+start from the `flowleap` skill.
 
 ## Authentication
 
-Authenticate before using any command that requires API access.
-
-```bash
-# OAuth 2.0 + PKCE (opens browser)
-flowleap auth login
-
-# Direct API key
-flowleap auth login --api-key sk-...
-
-# Direct token
-flowleap auth login --token eyJ...
-
-# Check status
-flowleap auth status
-
-# Clear credentials
-flowleap auth logout
-```
+Every authenticated request sends `Authorization: Bearer <credential>` — either
+a session JWT from the OAuth device flow or a long-lived personal API token
+(`fl_pat_…`).
 
 Environment variable overrides (highest priority):
-- `FLOWLEAP_API_KEY` — API key
+- `FLOWLEAP_API_KEY` — personal API token (`fl_pat_…`)
 - `FLOWLEAP_TOKEN` — Bearer token
 - `FLOWLEAP_BASE_URL` — API base URL
+
+The login, token minting/listing/revocation, and 401 self-heal commands live in
+`flowleap-auth`. Patent-provider keys (EPO OPS / USPTO ODP BYOK) live in
+`flowleap-keys`.
 
 ## Global Flags
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--json` | Shorthand for `--output json` | `false` |
 | `--output <format>` | Output format: `json`, `table`, `human` | `human` |
 | `--base-url <url>` | API base URL | `https://api.flowleap.co` |
-| `--api-key <key>` | Override stored API key | — |
+| `--api-key <key>` | Override stored API key (`fl_pat_…`) | — |
 | `--token <token>` | Override stored token | — |
 | `--dry-run` | Show request without executing | `false` |
+| `--dry-run-redacted` | Redact sensitive values from dry-run output; requires `--dry-run` | `false` |
 | `--verbose`, `-v` | Show request/response details | `false` |
 
 ## Configuration
 
-Config stored in `~/.config/flowleap/config.toml`. Credentials in `~/.config/flowleap/credentials.toml`.
+Config is stored in `~/.config/flowleap/config.toml`. Credentials live
+separately in `~/.config/flowleap/credentials.toml` (written mode 0600).
 
 ```bash
 flowleap config set base-url https://api.flowleap.co
-flowleap config list
-flowleap config reset
+flowleap config get base-url
 ```
 
 ## Config Precedence
@@ -72,14 +53,58 @@ CLI flags > environment variables > config file
 
 ## Output Formats
 
-- `--output json` — Machine-readable JSON (best for agents)
+- `--json` (or `--output json`) — Machine-readable JSON (best for agents)
 - `--output table` — Formatted table
 - `--output human` — Human-readable text (default)
 
-When using FlowLeap as an AI agent, always use `--output json` for reliable parsing.
+When using FlowLeap as an AI agent, always pass `--json` for reliable parsing.
+
+## Subscription, Rate Limits & Exit Codes
+
+All `/v1` data routes require an active subscription and share a limit of
+60 requests/minute/user. `doctor`, `health`, `auth`, and `keys test` work
+without a subscription, so setup can always be diagnosed. Error envelopes carry
+additive hints — `subscriptionHint` (402, has `upgradeUrl`, needs a human),
+`providerKeysHint` (missing/rejected EPO/USPTO keys, needs a human), and
+`rateLimitHint` (429, has `retryAfterSeconds`).
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | Success |
+| 1 | Generic failure |
+| 2 | Usage error (bad flags/arguments) |
+| 3 | Auth required (HTTP 401) — log in or set `FLOWLEAP_API_KEY` |
+| 4 | Subscription required (HTTP 402) — surface `subscriptionHint.upgradeUrl` to a human |
+| 5 | Not found (HTTP 404) |
+| 6 | Rate limited (HTTP 429) — back off per `rateLimitHint.retryAfterSeconds` |
+| 7 | Network failure reaching the backend |
+
+## Updating the CLI
+
+`flowleap upgrade` (alias `flowleap update`) updates the CLI itself, detecting
+the install channel from the running binary and acting accordingly: npm runs
+`npm i -g flowleap@latest`, Homebrew runs `brew upgrade flowleap`, an
+install.sh/raw binary self-updates in place (downloads the platform release
+asset, verifies its sha256 against `checksums.txt`, atomically swaps), and a
+cargo install prints the `cargo install --git … --force` command. `--check`
+(and `--json`/`--dry-run`) report `{ channel, currentVersion, latestVersion,
+updateAvailable, command }` with no side effects, so agents branch on the
+result. The daily update notice and `flowleap doctor` both point here.
+
+Upgrading the CLI does **not** refresh already-installed skill files — run
+`flowleap skills update` for that (see the `flowleap` umbrella skill).
+
+```bash
+flowleap upgrade --check --json
+flowleap upgrade
+```
 
 ## Safety
 
 - Use `--dry-run` before executing mutating operations
-- Use `--verbose` to inspect request details
+- Add `--dry-run-redacted` when the request contains an unpublished invention,
+  claim, document text, URL, or search query that should not enter logs
+- Never add `--allow-external-processing` unless the user has given informed
+  consent to send the description to FlowLeap and Anthropic or OpenAI
+- Use `--verbose` to inspect request details (credentials are redacted)
 - Never include credentials in commit messages or logs

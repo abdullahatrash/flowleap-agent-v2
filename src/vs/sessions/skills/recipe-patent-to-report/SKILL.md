@@ -1,44 +1,57 @@
 ---
 name: recipe-patent-to-report
-version: 1.0.0
-description: "Recipe: Extract all data from a patent for structured analysis."
+description: Formatted single-patent dossier — pull bibliography, abstract, claims, description, family, legal status, prosecution timeline, figures, and related art into one structured Markdown report. Trigger when the user asks for a complete profile, dossier, or report on a specific patent.
 metadata:
-  category: "recipe"
   requires:
-    bins: ["flowleap"]
     skills: ["flowleap-shared", "flowleap-ops", "flowleap-patent"]
 ---
 
 # Recipe: Patent to Report
 
-Extract all data from a patent document for structured analysis.
+Extract all data from a patent document and assemble it into one structured
+report.
 
 ## Steps
 
-### Step 1: Gather Patent Data
+### Step 1: One-Call Snapshot
 
 ```bash
-flowleap ops biblio <patent-number> --output json
-flowleap ops abstract <patent-number> --output json
-flowleap ops claims <patent-number> --output json
-flowleap ops description <patent-number> --output json
-flowleap ops family <patent-number> --output json
-flowleap ops legal <patent-number> --output json
+flowleap --json summary <patent-number>    # biblio + legal status + family + term
+flowleap --json timeline <patent-number>   # chronological prosecution events
 ```
 
-### Step 2: Find Related Patents
+### Step 2: Gather Full Text
 
 ```bash
-# Search for related patents using key terms from the abstract
-flowleap patent search --query "<key terms from abstract>" --limit 10 --output json
+flowleap --json ops abstract <patent-number>
+flowleap --json ops claims <patent-number>
+flowleap --json ops description <patent-number>
+```
+
+### Step 3: Figures
+
+```bash
+flowleap figures <patent-number>                          # figure metadata
+flowleap figures <patent-number> --out figure.png --page 3  # save one page
+```
+
+### Step 4: Find Related Patents
+
+```bash
+flowleap --json patent search --query "<key terms from abstract>" --limit 10
 ```
 
 ## Output
 
-Complete patent data package including:
-- Bibliographic data (title, applicant, dates, classification)
-- Abstract and description text
-- Full claims text
-- Patent family members across jurisdictions
-- Legal status (active, expired, pending)
-- Related patents in the same field
+A Markdown dossier for the patent with one section per heading below. Done when
+every section is present (or explicitly marked "not available"):
+
+- **Bibliography** — title, applicant/inventor, filing and publication dates, classification
+- **Abstract**
+- **Claims** — independent and dependent
+- **Description summary** — condensed from the full description
+- **Figures** — figure list, with saved pages referenced
+- **Family** — members by jurisdiction
+- **Legal status** — active/expired/abandoned and estimated remaining term
+- **Prosecution timeline** — register + INPADOC legal events
+- **Related art** — patents surfaced from the abstract key terms
