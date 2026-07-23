@@ -163,6 +163,14 @@ editions, ~twice yearly). Every Portfolio Analytics answer carries its Data Edit
 are only comparable within one edition.
 _Avoid_: treating Portfolio Analytics as live data — it is a snapshot with a name.
 
+**Verified-Data Contract**:
+The bar a data deliverable (e.g. a dashboard) must meet: every displayed value — chart, table,
+or narrative sentence — is computed by executable code from recorded source responses, and the
+deliverable carries its provenance (sources, parameters, Data Edition, timestamps) plus the raw
+response data alongside it. Chat commentary *cites* a verified deliverable; it is not itself one —
+conversational numbers are quoted from computed output, never re-typed from memory.
+_Avoid_: calling model-transcribed numbers "verified"; treating charts as covered but prose as exempt.
+
 **Effective Filing Date** / **Priority Date**:
 The date a Prior-Art Search is measured against: a document is prior art if it was publicly
 available before the application's effective filing date. A reference's own **publication date**
