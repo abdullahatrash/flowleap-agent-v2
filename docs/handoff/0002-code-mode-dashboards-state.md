@@ -18,8 +18,12 @@ Slice branches and session worktrees deleted after merge.
 OPEN ITEMS: (1) RESOLVED — npm token rotated, rerun succeeded, flowleap@0.3.6
 live on the registry.
 (2) Backend main not yet DEPLOYED — data_slice provenance activates on deploy.
-(3) In-app sessions-window HITL (final PRD acceptance) once the app picks up
-plugin 1.1.0. (4) PATSTAT server-side (other workstream) lights up portfolio/
+(3) RESOLVED — in-app sessions HITL PASSED 2026-07-23 evening after #162 (skill
+staleness existed in FOUR channels — vendored/plugin/user-level/harness — all
+now drift-guarded or refresh-aware; see issue #162 close-out for the full arc).
+Round-3 artifact fully contract-compliant (bundle + provenance + 0 external
+URLs + sidecar traceability). Session approval gate pauses piped-python
+aggregation commands — one click per command for real users, expected UX. (4) PATSTAT server-side (other workstream) lights up portfolio/
 filing-trends templates.
 
 ## What existed pre-merge (historical)
