@@ -446,12 +446,18 @@ jobs:
       - name: Extract Release Notes from CHANGELOG
         id: release_notes
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          # Works for both triggers: tag push (ref_name = vX.Y.Z) and manual
+          # dispatch (inputs.version). Strip a leading `v` either way.
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION=${VERSION#v}
           echo "Extracting release notes for version $VERSION"
 
-          # Extract changelog section for this version
+          # Extract the changelog section for this version: print from the line
+          # after `## [X.Y.Z]` until the next `## [` header (or EOF). A plain
+          # awk range /start/,/end/ can't be used here — the start line itself
+          # matches the end pattern, collapsing the range to a single line.
           if [ -f CHANGELOG.md ]; then
-            awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '1d;$d' > release-notes.md
+            awk "/^## \[$VERSION\]/{flag=1;next}/^## \[/{flag=0}flag" CHANGELOG.md > release-notes.md
           fi
 
           # If no changelog entry, create default notes
