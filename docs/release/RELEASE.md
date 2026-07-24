@@ -23,7 +23,16 @@ pwsh build/flowleap/sign-windows-release.ps1 -Tag vX.Y.Z   (run locally, Windows
         +-- re-uploads signed .exe files + SHASUMS256.txt to the same draft
         |
         v
-smoke test -> gh release edit vX.Y.Z --draft=false
+smoke test
+        |
+        v
+build/flowleap/publish-public-release.sh vX.Y.Z [--clean-old]
+        |
+        +-- copies the finished assets to the PUBLIC repo
+        |   (abdullahatrash/flowleap-releases) as a published release
+        +-- the website (download page, changelog, /api/latest-version)
+        |   reads ONLY that public repo
+        +-- --clean-old then deletes every other public release + tag
 ```
 
 CI never touches Windows code-signing: the Certum SimplySign certificate lives in
@@ -123,11 +132,26 @@ gh secret list
    - [ ] `SHASUMS256.txt` on the release matches the hashes of the actual
          uploaded files (`sha256sum -c` locally after downloading).
 
-5. Publish the draft:
+5. Publish to the PUBLIC distribution repo. End users and the website never see
+   this repo's draft release — the download page, changelog page and
+   `/api/latest-version` on `flowleap-website-v2` all read the GitHub releases
+   of the public repo `abdullahatrash/flowleap-releases`. Copy the finished
+   artifacts there:
 
    ```bash
-   gh release edit vX.Y.Z --draft=false
+   build/flowleap/publish-public-release.sh vX.Y.Z            # publish only
+   build/flowleap/publish-public-release.sh vX.Y.Z --clean-old # ...and delete every other public release + tag
    ```
+
+   The script downloads the draft's assets, checks the artifact set is complete
+   (both DMGs + both signed installers), regenerates `SHASUMS256.txt` with flat
+   paths and post-signing hashes, creates a **published** release on the public
+   repo with the draft's notes, and verifies `releases/latest` now reports the
+   new tag. `--clean-old` removes the older public releases only AFTER the new
+   one is live, so the website never sees an empty repo.
+
+   The draft on this (source) repo can stay a draft — it serves as the internal
+   build record; publishing it is optional and has no user-facing effect.
 
 ## Troubleshooting
 
