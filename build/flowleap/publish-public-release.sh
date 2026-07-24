@@ -116,7 +116,10 @@ if [ "$CLEAN_OLD" -eq 1 ]; then
 	gh release list --repo "$DST_REPO" --limit 100 --json tagName --jq '.[].tagName' | while IFS= read -r old; do
 		if [ "$old" != "$TAG" ]; then
 			echo "  deleting release + tag: $old"
-			gh release delete "$old" --repo "$DST_REPO" --cleanup-tag --yes
+			# --cleanup-tag exits non-zero for DRAFT releases (they have no git
+			# tag), even though the release itself is deleted — don't abort the
+			# sweep on that; the stray-tag pass below catches real leftovers.
+			gh release delete "$old" --repo "$DST_REPO" --cleanup-tag --yes || echo "  (tag cleanup failed for $old — likely a draft; continuing)"
 		fi
 	done
 	# Tags without releases (e.g. from deleted drafts) linger; sweep those too.
