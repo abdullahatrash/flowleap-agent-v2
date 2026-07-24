@@ -10,7 +10,15 @@ Turn a rejection into a response strategy. Never argue against a reference you h
 
 ## Step 0: Intake & Deadline (FIRST)
 
-Read the office action (`read_pdf` for PDFs, or pasted text). Extract:
+For a US application you do NOT need the user to supply the OA — fetch it from
+the file wrapper: `patent_api_request` GET
+`/patent-search-uspto/applications/{applicationNumberText}/documents` (filter
+documentCode CTNF/CTFR), then the document's `/text` sub-path for the OCR'd
+markdown (see `uspto_api_guide` workflow "read-office-actions"). The
+as-rejected AMENDED claim text also lives only in the wrapper — pull the CLM
+document dated nearest before the OA the same way (the OA's "Responsive to
+communication(s) filed on <date>" line names the filing). Otherwise read the
+office action (`read_pdf` for PDFs, or pasted text). Extract:
 - Application number, examiner, mailing date, and the **response deadline** — flag it immediately (US: typically 3 months shortened statutory, extendable to 6 with fees; EPO: usually 4 months). Verify current periods with `search_legal` if the user's deadline math matters.
 - Per claim: which ground (35 USC 102/103/101/112, obviousness-type double patenting, or EPC Art. 54/56/84/123(2)) and which cited references
 - The examiner's actual reasoning — quote it, don't summarize from memory
