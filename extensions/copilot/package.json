@@ -1300,6 +1300,74 @@
         }
       },
       {
+        "name": "copilot_patstatPortfolio",
+        "displayName": "PATSTAT Patent Portfolio",
+        "toolReferenceName": "patstatPortfolio",
+        "when": "!isWeb",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(organization)",
+        "userDescription": "Aggregate patent portfolio for one company: worldwide counts by filing year, office, and grant status (PATSTAT)",
+        "modelDescription": "AGGREGATE PORTFOLIO ANALYTICS (PATSTAT): USE WHEN the user asks about ONE NAMED company's/applicant's aggregate patent activity — 'show me Siemens' patent portfolio', 'how many patents does Toyota file per year', 'which offices does Bosch file in', grant counts, filing velocity, competitor portfolio size. Returns grounded worldwide counts from the self-hosted PATSTAT analytics layer (EPO worldwide patent statistics database): totals, by filing year, by office, plus a quotable `summary` string and the `data_edition` (e.g. 'PATSTAT 2026 Spring') — ALWAYS quote the summary and name the edition so the user knows data freshness. Applicant matching is fuzzy against harmonized (PSN) names ('Siemens' finds SIEMENS AKTIENGESELLSCHAFT and its variants); distinct entities are never merged silently — an ambiguous name returns the candidate entities: relay them and retry with a more specific name. COUNTING SEMANTICS: patent APPLICATIONS by FILING year — numbers legitimately differ from patent_analytics_viz (publications by publication year); never mix the two in one table. ROUTING RULE: AGGREGATE questions (counts, trends, rankings) → PATSTAT analytics tools; a SPECIFIC document's current text or legal status → the live OPS/USPTO document tools (get_patent_details, get_legal_status, patent_api_request); technology/topic analytics with no named company → patent_analytics_viz. PATSTAT is a twice-yearly snapshot — never present its grant data as an individual patent's CURRENT legal status (that is get_legal_status). TRIGGER KEYWORDS: 'patent portfolio', 'portfolio', 'how many patents does X have', 'filings per year', 'patent count', 'which jurisdictions/offices', competitor patent activity. DO NOT use for: finding or reading specific patent documents (search branches), keyword/technology landscapes without a named applicant (patent_analytics_viz), current legal status of a patent (get_legal_status).",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "applicant": {
+              "type": "string",
+              "description": "Company/applicant name or prefix, matched fuzzily against harmonized PSN names (e.g. 'Siemens', 'Toyota'). At least 2 characters."
+            },
+            "fromYear": {
+              "type": "number",
+              "description": "Earliest filing year, inclusive (e.g. 2015). Default: toYear - 9."
+            },
+            "toYear": {
+              "type": "number",
+              "description": "Latest filing year, inclusive (e.g. 2024). Default: the current year."
+            }
+          },
+          "required": [
+            "applicant"
+          ]
+        }
+      },
+      {
+        "name": "copilot_patstatApiGuide",
+        "displayName": "PATSTAT Analytics API Guide",
+        "toolReferenceName": "patstatApiGuide",
+        "when": "!isWeb",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(book)",
+        "userDescription": "Get PATSTAT analytics API documentation for aggregate patent statistics endpoints",
+        "modelDescription": "Get documentation for the PATSTAT analytics API endpoints — the aggregate-statistics layer (worldwide portfolio, and further analytics routes as they ship) over the self-hosted EPO PATSTAT database. For the standard portfolio question PREFER the typed patstat_portfolio tool — use THIS guide only to discover PATSTAT analytics endpoints that have no typed tool yet, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for one endpoint), 'workflow' (step-by-step guides), 'full' (complete documentation). DO NOT use for individual patent documents (OPS/USPTO guides) or for keyword landscapes (patent_analytics_viz).",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "list",
+                "endpoint",
+                "workflow",
+                "full"
+              ],
+              "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "Endpoint name when action='endpoint' (e.g. 'portfolio')"
+            },
+            "workflow": {
+              "type": "string",
+              "description": "Workflow name when action='workflow'"
+            }
+          },
+          "required": [
+            "action"
+          ]
+        }
+      },
+      {
         "name": "copilot_patentAnalyticsViz",
         "displayName": "Patent Analytics & Visualization",
         "toolReferenceName": "patentAnalytics",
@@ -1307,7 +1375,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(graph)",
         "userDescription": "Full-corpus patent analytics: filing trends, top assignees, country and CPC breakdowns as tables",
-        "modelDescription": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis', 'patent portfolio'. DO NOT use build_patent_query for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
+        "modelDescription": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis'. ROUTING vs patstat_portfolio: THIS tool counts PUBLICATIONS by publication year, matched on keywords/phrases in English titles/abstracts — use it for TECHNOLOGY/TOPIC analytics (free-text tech terms, CPC/IPC landscapes by keyword). For ONE NAMED company's aggregate portfolio (counts by filing year and office, grant counts) PREFER patstat_portfolio — worldwide application-level counts under harmonized applicant names. The two counting semantics legitimately differ; never mix their numbers in one table. DO NOT use build_patent_query for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
         "tags": [],
         "inputSchema": {
           "type": "object",

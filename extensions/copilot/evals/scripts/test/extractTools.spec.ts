@@ -14,7 +14,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')
 const allTools = pkg.contributes?.languageModelTools ?? [];
 
 describe('extract-tools', () => {
-	it('produces the migrated 20-tool patent surface plus referenced core/synthetic tools, with no copilot_ leakage', () => {
+	it('produces the full migrated patent tool surface plus referenced core/synthetic tools, with no copilot_ leakage', () => {
 		const { definitions, missing } = buildToolDefinitions(allTools);
 
 		expect(missing).toHaveLength(0);
@@ -26,15 +26,25 @@ describe('extract-tools', () => {
 			'build_uspto_query',
 			'citation_api_guide',
 			'compare_claims',
+			'compare_patents',
 			'create_file',
 			'fetch_webpage',
+			'get_continuity',
+			'get_legal_status',
 			'get_patent_details',
+			'get_patent_family',
 			'get_patent_figures',
+			'get_patent_summary',
+			'get_patent_term',
+			'get_prosecution_timeline',
+			'get_register_events',
 			'legal_search_guide',
 			'ops_api_guide',
 			'patent_analytics_viz',
 			'patent_api_request',
 			'patent_search_subagent',
+			'patstat_api_guide',
+			'patstat_portfolio',
 			'read_pdf',
 			'run_in_terminal',
 			'search_academic',

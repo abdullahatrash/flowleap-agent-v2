@@ -46,6 +46,8 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasAnalyzeClaim: toolNames.has(ToolName.AnalyzeClaim),
 		hasCompareClaims: toolNames.has(ToolName.CompareClaims),
 		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
+		hasPatstatPortfolio: toolNames.has(ToolName.PatstatPortfolio),
+		hasPatstatApiGuide: toolNames.has(ToolName.PatstatApiGuide),
 		hasGetPatentDetails: toolNames.has(ToolName.GetPatentDetails),
 		hasGetPatentFigures: toolNames.has(ToolName.GetPatentFigures),
 		hasGetLegalStatus: toolNames.has(ToolName.GetLegalStatus),
@@ -69,6 +71,8 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasAnalyzeClaim,
 		base.hasCompareClaims,
 		base.hasPatentAnalyticsViz,
+		base.hasPatstatPortfolio,
+		base.hasPatstatApiGuide,
 		base.hasGetPatentDetails,
 		base.hasGetPatentFigures,
 		base.hasGetLegalStatus,
@@ -211,12 +215,15 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Save a report file if many results<br />
 				→ Keywords: find patents, search, look for patents, patents about<br />
 				<br />
-				{tools.hasPatentAnalyticsViz && <>
+				{(tools.hasPatentAnalyticsViz || tools.hasPatstatPortfolio) && <>
 					**C) TRENDS / LANDSCAPE / MARKET ANALYTICS (aggregate statistics, not a document list)?**<br />
-					→ `patent_analytics_viz` DIRECTLY (keywords/phrases plus optional assignee/cpc/ipc/country/date filters) — do NOT call build_patent_query, do NOT write Python or generate charts<br />
-					→ It returns ready-made markdown TABLES (filing trend by year, top assignees, country breakdown, top CPC sections); present those tables directly — they ARE the deliverable<br />
-					→ Keywords: trends, landscape, top companies, top assignees, market analysis, filing trends, geographic breakdown, competitive analysis, patent portfolio<br />
-					→ NOT analytics: any request to FIND or COMPARE specific patent documents ("compare US and European patents on X", "find patents about Y") is a SEARCH — branch B (both paths when multiple offices are named), never this tool. Analytics answers aggregate-statistics questions only.<br />
+					{tools.hasPatentAnalyticsViz && <>→ **C1 — technology/topic analytics by KEYWORDS** (free-text tech terms, no single named company: "trends in quantum computing", "top companies in solid-state batteries"): `patent_analytics_viz` DIRECTLY (keywords/phrases plus optional assignee/cpc/ipc/country/date filters) — do NOT call build_patent_query, do NOT write Python or generate charts. It returns ready-made markdown TABLES (filing trend by year, top assignees, country breakdown, top CPC sections); present those tables directly — they ARE the deliverable<br /></>}
+					{tools.hasPatstatPortfolio && <>→ **C2 — a NAMED company's/applicant's aggregate portfolio** (portfolio size, filings per year, office/jurisdiction coverage, grant counts: "show me Siemens' patent portfolio", "how many patents does Toyota file per year"): `patstat_portfolio` (applicant + optional fromYear/toYear) — worldwide counts from the PATSTAT analytics layer with fuzzy harmonized-applicant matching. QUOTE the returned `summary` and ALWAYS name the PATSTAT edition (`data_edition`) when presenting the numbers. If it errors with an ambiguous-name candidate list or a not-found suggestion, relay that guidance to the user and retry with a refined name — do not silently give up<br /></>}
+					{(tools.hasPatentAnalyticsViz && tools.hasPatstatPortfolio) && <>→ COUNTING SEMANTICS (C1 vs C2): patent_analytics_viz counts PUBLICATIONS by publication year (keyword match on EN titles/abstracts); patstat_portfolio counts APPLICATIONS by filing year (worldwide, harmonized applicants). The numbers legitimately differ — never mix the two in one table, and say which basis a figure uses<br /></>}
+					{tools.hasPatstatPortfolio && <>→ SNAPSHOT RULE: PATSTAT is a twice-yearly snapshot. When the response defers legal status to the live route, follow that pointer — an individual patent's CURRENT status (in force, lapsed, opposed) is branch F (`get_legal_status` / `get_patent_summary`), never snapshot grant data<br /></>}
+					{tools.hasPatstatApiGuide && <>→ Other PATSTAT analytics endpoints (as they ship, beyond portfolio): `patstat_api_guide` action="list" → `patent_api_request`<br /></>}
+					→ Keywords: trends, landscape, top companies, top assignees, market analysis, filing trends, geographic breakdown, competitive analysis{tools.hasPatstatPortfolio && <>, patent portfolio, patent count, filings per year</>}<br />
+					→ NOT analytics: any request to FIND or COMPARE specific patent documents ("compare US and European patents on X", "find patents about Y") is a SEARCH — branch B (both paths when multiple offices are named), never these tools. Analytics answers aggregate-statistics questions only.<br />
 					<br />
 				</>}
 				**D) USER'S OWN invention/idea description (not a formal claim)?**<br />
