@@ -18,10 +18,11 @@ Ask (via the `vscode_askQuestions` tool):
 
 ## Phase 2: Portfolio Map
 
-- `patent_analytics_viz` per company name → total count, yearly trend, geographic distribution, top co-assignees in one call (note: aggregates over the 100 most relevant matches — report the sample basis)
-- Per-subsidiary counts: `search_patents` with `pa="[name]"` queries; add `ic=` filters for the technology-mix breakdown by CPC class
+- **Headline counts (PREFERRED)**: `patstat_portfolio` per entity (the company AND each subsidiary) → worldwide totals, filings per year, office coverage, and grant counts in one call each, under harmonized (PSN) applicant names. Quote the returned `summary` and name the PATSTAT edition (the response's data_edition field) next to every figure. If the name is ambiguous the error lists the candidate entities — relay them and retry with the specific entity; never merge distinct entities yourself
+- Technology-mix breakdown: `search_patents` with `pa="[name]"` plus `ic=` filters per CPC class; `patent_analytics_viz` (assignee + keywords) for topic slices within the portfolio
 - US sweep: `build_uspto_query` (assignee-focused) → `patent_api_request` (POST)
 - Distinguish **granted vs pending** (kind codes A1/A2 vs B1/B2) — pending applications signal direction; granted patents are the enforceable estate
+- **Counting semantics**: `patstat_portfolio` counts APPLICATIONS by FILING year (worldwide, deduplicated harmonized applicants); `patent_analytics_viz` counts PUBLICATIONS by publication year; live searches count result hits. The bases legitimately differ — never mix them in one table, and state which basis each figure uses
 
 ## Phase 3: Crown Jewels
 
@@ -43,7 +44,7 @@ Identify the patents that carry the portfolio's weight:
 
 Save via `write_patent_results` (`template: 'portfolio-due-diligence-memo'`):
 1. **Executive summary** — portfolio size, trajectory, and the 3 findings that matter
-2. **Portfolio map** — counts by subsidiary, technology (CPC), jurisdiction, granted/pending; state which figures are exact counts vs the analytics sample
+2. **Portfolio map** — counts by subsidiary, technology (CPC), jurisdiction, granted/pending; state each figure's counting basis (PATSTAT applications-by-filing-year vs publication-level vs live-search hits) and the PATSTAT edition
 3. **Crown jewels table** — top 5-10: claim-breadth note, forward citations, family breadth, in-force status, expiry
 4. **Timeline chart data** — filings per year, expirations per year
 5. **Red flags** — lapses, expiring core assets, disputes, concentration
@@ -52,6 +53,7 @@ Save via `write_patent_results` (`template: 'portfolio-due-diligence-memo'`):
 
 ## Rules
 - Enumerate subsidiaries BEFORE searching, and list which were searched
-- Never present the 100-match analytics sample as an exact portfolio count — run count queries for the headline numbers
+- Headline portfolio counts come from `patstat_portfolio` — always name the PATSTAT edition with them, and never mix counting bases (applications-by-filing-year vs publications) in one table
+- PATSTAT data is a twice-yearly snapshot: for any individual patent's CURRENT legal status use `get_legal_status`/`get_prosecution_timeline`, never snapshot grant counts
 - Objective signals only: citations, families, legal status, term. No monetary valuations
 - For diligence purposes always include the audit trail

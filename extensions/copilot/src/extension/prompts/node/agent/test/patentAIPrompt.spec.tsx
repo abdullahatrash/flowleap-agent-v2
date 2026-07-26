@@ -39,6 +39,8 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.CompareClaims,
 	ToolName.ComparePatents,
 	ToolName.PatentAnalyticsViz,
+	ToolName.PatstatPortfolio,
+	ToolName.PatstatApiGuide,
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
 ];
@@ -74,6 +76,10 @@ suite('PatentAIInstructions', () => {
 		const expectedFragments = [
 			'TRENDS / LANDSCAPE / MARKET ANALYTICS',
 			'patent_analytics_viz',
+			'patstat_portfolio',
+			'patstat_api_guide',
+			'COUNTING SEMANTICS',
+			'SNAPSHOT RULE',
 			'COMPARE — pick the tool by WHAT is being compared',
 			'compare_claims',
 			'compare_patents',
@@ -103,7 +109,9 @@ suite('PatentAIInstructions', () => {
 	// absent the branch text disappears (and, for the claim/details tools, the manual
 	// fallback appears instead) so the prompt never advertises a tool it can't call.
 	const gatedSignatures: readonly [ToolName, string, string | undefined][] = [
-		[ToolName.PatentAnalyticsViz, 'TRENDS / LANDSCAPE / MARKET ANALYTICS', undefined],
+		[ToolName.PatentAnalyticsViz, 'technology/topic analytics by KEYWORDS', undefined],
+		[ToolName.PatstatPortfolio, 'NAMED company\'s/applicant\'s aggregate portfolio', undefined],
+		[ToolName.PatstatApiGuide, 'Other PATSTAT analytics endpoints', undefined],
 		[ToolName.CompareClaims, 'The USER\'s OWN DRAFTED claim text vs specific patents', undefined],
 		[ToolName.ComparePatents, 'TWO OR MORE PUBLISHED patents vs each other', undefined],
 		[ToolName.GetPatentSummary, 'DEFAULT for an OVERVIEW', undefined],

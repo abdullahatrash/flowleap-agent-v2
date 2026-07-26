@@ -42,6 +42,8 @@ export const ToolResponseBudgets = {
 	SearchForwardCitationsPassages: 200,
 	/** `patent_analytics_viz`: defensive whole-response ceiling for the assembled aggregate tables. */
 	PatentAnalyticsViz: 20_000,
+	/** `patstat_portfolio`: defensive whole-response ceiling for the assembled portfolio tables. */
+	PatstatPortfolio: 20_000,
 	/** `compare_claims`: per-patent cap on the full claim text rendered below the element-by-element chart. */
 	CompareClaimsText: 4_000,
 } as const;

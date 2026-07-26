@@ -57,6 +57,8 @@ const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
 	ToolName.ComparePatents,
+	ToolName.PatstatPortfolio,
+	ToolName.PatstatApiGuide,
 ];
 
 /** Core coding tools that patentAIPrompt.tsx references by name. */

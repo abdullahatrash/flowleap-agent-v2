@@ -84,7 +84,7 @@ describe('ToolNames', () => {
 	});
 
 	it('locks the full patent tool set (registry parity) so a missing or renamed patent tool fails CI', () => {
-		// Authoritative list of all 20 patent tools, keyed by their shared enum KEY. Each key must resolve to a
+		// Authoritative list of all 22 patent tools, keyed by their shared enum KEY. Each key must resolve to a
 		// ToolName value, a ContributedToolName value (same key), a toolCategories entry, and a matching
 		// `languageModelTools` contribution in package.json — and the contributed<->internal names must round-trip.
 		// `satisfies` pins each key to a real member of BOTH enums, so a renamed/removed enum member fails to
@@ -112,6 +112,8 @@ describe('ToolNames', () => {
 			'USPTOApiGuide',
 			'WritePatentResults',
 			'PatentSearchSubagent',
+			'PatstatPortfolio',
+			'PatstatApiGuide',
 		] as const satisfies readonly (keyof typeof ToolName & keyof typeof ContributedToolName)[];
 
 		const contributedNames = new Set(packageJson.contributes.languageModelTools.map(tool => tool.name));
@@ -132,7 +134,7 @@ describe('ToolNames', () => {
 		}).filter(entry => entry.issues.length > 0);
 
 		expect({ count: PATENT_TOOL_KEYS.length, duplicates: PATENT_TOOL_KEYS.length - new Set(PATENT_TOOL_KEYS).size, problems })
-			.toEqual({ count: 20, duplicates: 0, problems: [] });
+			.toEqual({ count: 22, duplicates: 0, problems: [] });
 	});
 
 	it('returns original name for unmapped core tools', () => {
