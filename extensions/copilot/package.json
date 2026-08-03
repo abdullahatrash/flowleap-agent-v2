@@ -1276,7 +1276,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(diff)",
         "userDescription": "Compare your claim against existing patents to find overlaps",
-        "modelDescription": "Compare a user's patent claim against one or more existing patents to identify overlaps and differences. WORKFLOW: (1) First use analyze_claim to understand the user's claim, (2) Use search_patents to find potentially relevant patents, (3) Then use THIS tool to compare the user's claim against specific patent numbers. Fetches the actual claims of each cited patent from EPO OPS and returns them alongside the user's claim with an analysis rubric \u2014 YOU then perform the element-by-element comparison: relevance (HIGH/MEDIUM/LOW), overlapping elements, missing elements (potential novelty), key differences, and a 102/103 risk summary. NOTE: EPO OPS full text covers mainly EP/WO publications; for US patents whose claims are unavailable, fetch them via patent_api_request (POST /patent-search-uspto/search). Useful for patentability assessment, freedom-to-operate analysis, and prior art evaluation.",
+        "modelDescription": "Compare a user's patent claim against one or more existing patents to identify overlaps and differences. WORKFLOW: (1) First use analyze_claim to understand the user's claim, (2) Use search_patents to find potentially relevant patents, (3) Then use THIS tool to compare the user's claim against specific patent numbers. Fetches the actual claims of each cited patent from EPO OPS and returns them alongside the user's claim with an analysis rubric — YOU then perform the element-by-element comparison: relevance (HIGH/MEDIUM/LOW), overlapping elements, missing elements (potential novelty), key differences, and a 102/103 risk summary. NOTE: EPO OPS full text covers mainly EP/WO publications; for US patents whose claims are unavailable, fetch them via patent_api_request (POST /patent-search-uspto/search). Useful for patentability assessment, freedom-to-operate analysis, and prior art evaluation.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1331,6 +1331,37 @@
         }
       },
       {
+        "name": "copilot_patstatQuery",
+        "displayName": "PATSTAT Guarded SQL Query",
+        "toolReferenceName": "patstatQuery",
+        "when": "!isWeb",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(database)",
+        "userDescription": "Run one guarded SQL SELECT against the PATSTAT analytics views for aggregate patent questions",
+        "modelDescription": "GUARDED SQL OVER PATSTAT (Layer 2): USE WHEN an AGGREGATE patent question has no dedicated tool — technology landscapes by CPC ('who dominates solid-state electrolytes'), filing trends, grant rates, citation impact rankings, inventor analytics, family/jurisdiction coverage, or any combination. You WRITE one SQL SELECT against the flowleap.* semantic views; the backend gates it deterministically (single-SELECT parse check, flowleap-only allowlist, EXPLAIN cost ceiling, 5000-row/5MB hard caps, 20s timeout) and returns rows + data_edition. MANDATORY WORKFLOW (details: patstat_api_guide action='workflow', workflow='guarded-sql'): (1) check patstat_api_guide action='section' section='examples' first — reuse verified SQL, and if an example carries promoted_to, call that tool instead; (2) fetch section='semantic-model' BEFORE writing SQL — schema-qualify every table as flowleap.<view>, apply its interpretation_conventions (count FAMILIES for 'how many patents', applications for office stats; earliest_filing_year for trends), and ALWAYS state the chosen interpretation in your answer plus the data_edition; (3) always send `question` (the user's words, verbatim); (4) on a patstat_sql_* error, the message contains the exact fix instruction — fix the SQL ONCE, resubmit with retryOf, and STOP after a second failure (never loop); patstat_busy means back off and retry the SAME SQL. ROUTING: ONE NAMED company's standard portfolio → patstat_portfolio (preferred); keyword/free-text technology analytics → patent_analytics_viz (publication counts — different semantics, never mix); a specific document's text or CURRENT legal status → OPS/USPTO document tools. Budget: 10 queries/minute. DO NOT use for anything a typed tool already answers.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sql": {
+              "type": "string",
+              "description": "Exactly one SQL SELECT statement. Every table must be schema-qualified as flowleap.<view> (views: applications, applicants, inventors, publications, citations_received, family_members, family_citations, classifications, legal_events, tech_fields — fetch section='semantic-model' for columns). No LIMIT required (the backend caps rows)."
+            },
+            "question": {
+              "type": "string",
+              "description": "The user's question, verbatim (max 1000 chars). Always send it — it feeds the backend's query-review pipeline that turns good queries into verified examples."
+            },
+            "retryOf": {
+              "type": "string",
+              "description": "Set on a retry only: a short marker tying this attempt to the error it fixes (e.g. the rejected attempt's error code). Never retry more than once."
+            }
+          },
+          "required": [
+            "sql"
+          ]
+        }
+      },
+      {
         "name": "copilot_patstatApiGuide",
         "displayName": "PATSTAT Analytics API Guide",
         "toolReferenceName": "patstatApiGuide",
@@ -1338,7 +1369,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(book)",
         "userDescription": "Get PATSTAT analytics API documentation for aggregate patent statistics endpoints",
-        "modelDescription": "Get documentation for the PATSTAT analytics API endpoints — the aggregate-statistics layer (worldwide portfolio, and further analytics routes as they ship) over the self-hosted EPO PATSTAT database. For the standard portfolio question PREFER the typed patstat_portfolio tool — use THIS guide only to discover PATSTAT analytics endpoints that have no typed tool yet, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for one endpoint), 'workflow' (step-by-step guides), 'full' (complete documentation). DO NOT use for individual patent documents (OPS/USPTO guides) or for keyword landscapes (patent_analytics_viz).",
+        "modelDescription": "Get documentation AND data sections for the PATSTAT analytics API — the aggregate-statistics layer over the self-hosted EPO PATSTAT database. Actions: 'list' (endpoints/workflows/sections), 'endpoint' (one endpoint's docs, e.g. 'query'), 'workflow' (step-by-step guides — 'guarded-sql' is the mandatory workflow for the patstat_query tool), 'full' (complete docs), 'section' (served data: section='semantic-model' returns the FULL schema/metrics/interpretation-conventions YAML to read BEFORE writing SQL for patstat_query; section='examples' returns verified question→SQL pairs — reuse these, and prefer their promoted_to tools). For the standard one-company portfolio question PREFER patstat_portfolio; for other aggregate questions fetch the sections here then use patstat_query. DO NOT use for individual patent documents (OPS/USPTO guides) or keyword landscapes (patent_analytics_viz).",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1349,9 +1380,10 @@
                 "list",
                 "endpoint",
                 "workflow",
-                "full"
+                "full",
+                "section"
               ],
-              "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
+              "description": "Action type: 'list' for compact endpoint/workflow/section lists, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs, 'section' for served data sections"
             },
             "endpoint": {
               "type": "string",
@@ -1360,6 +1392,14 @@
             "workflow": {
               "type": "string",
               "description": "Workflow name when action='workflow'"
+            },
+            "section": {
+              "type": "string",
+              "enum": [
+                "semantic-model",
+                "examples"
+              ],
+              "description": "Section name when action='section': 'semantic-model' (full schema + interpretation conventions YAML) or 'examples' (verified question→SQL pairs)"
             }
           },
           "required": [
@@ -1507,7 +1547,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(file-text)",
         "userDescription": "Get full patent details including claims and description",
-        "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use build_patent_query + search_patents to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications \u2014 biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
+        "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use build_patent_query + search_patents to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -4652,7 +4692,10 @@
           "github.copilot.chat.tools.grepSearch.outputFormat": {
             "type": "string",
             "default": "tag",
-            "enum": ["grep", "tag"],
+            "enum": [
+              "grep",
+              "tag"
+            ],
             "markdownDescription": "%github.copilot.chat.tools.grepSearch.outputFormat%",
             "tags": [
               "experimental",
