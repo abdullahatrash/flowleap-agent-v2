@@ -23,6 +23,7 @@ Ask (via the `vscode_askQuestions` tool):
 - US sweep: `build_uspto_query` (assignee-focused) → `patent_api_request` (POST)
 - Distinguish **granted vs pending** (kind codes A1/A2 vs B1/B2) — pending applications signal direction; granted patents are the enforceable estate
 - **Counting semantics**: `patstat_portfolio` counts APPLICATIONS by FILING year (worldwide, deduplicated harmonized applicants); `patent_analytics_viz` counts PUBLICATIONS by publication year; live searches count result hits. The bases legitimately differ — never mix them in one table, and state which basis each figure uses
+- **Aggregates the portfolio shape doesn't cover** (grant rate by office, citation-impact ranking of the portfolio, inventor concentration, family/jurisdiction depth): `patstat_query` — one SELECT against the flowleap.* views. Fetch `patstat_api_guide` section="examples" then section="semantic-model" first; apply its interpretation conventions and cite the data_edition. Fix a `patstat_sql_*` rejection once per its message (resubmit with retryOf), then stop
 
 ## Phase 3: Crown Jewels
 

@@ -47,6 +47,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasCompareClaims: toolNames.has(ToolName.CompareClaims),
 		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
 		hasPatstatPortfolio: toolNames.has(ToolName.PatstatPortfolio),
+		hasPatstatQuery: toolNames.has(ToolName.PatstatQuery),
 		hasPatstatApiGuide: toolNames.has(ToolName.PatstatApiGuide),
 		hasGetPatentDetails: toolNames.has(ToolName.GetPatentDetails),
 		hasGetPatentFigures: toolNames.has(ToolName.GetPatentFigures),
@@ -72,6 +73,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasCompareClaims,
 		base.hasPatentAnalyticsViz,
 		base.hasPatstatPortfolio,
+		base.hasPatstatQuery,
 		base.hasPatstatApiGuide,
 		base.hasGetPatentDetails,
 		base.hasGetPatentFigures,
@@ -221,8 +223,9 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					{tools.hasPatstatPortfolio && <>→ **C2 — a NAMED company's/applicant's aggregate portfolio** (portfolio size, filings per year, office/jurisdiction coverage, grant counts: "show me Siemens' patent portfolio", "how many patents does Toyota file per year"): `patstat_portfolio` (applicant + optional fromYear/toYear) — worldwide counts from the PATSTAT analytics layer with fuzzy harmonized-applicant matching. QUOTE the returned `summary` and ALWAYS name the PATSTAT edition (`data_edition`) when presenting the numbers. If it errors with an ambiguous-name candidate list or a not-found suggestion, relay that guidance to the user and retry with a refined name — do not silently give up<br /></>}
 					{(tools.hasPatentAnalyticsViz && tools.hasPatstatPortfolio) && <>→ COUNTING SEMANTICS (C1 vs C2): patent_analytics_viz counts PUBLICATIONS by publication year (keyword match on EN titles/abstracts); patstat_portfolio counts APPLICATIONS by filing year (worldwide, harmonized applicants). The numbers legitimately differ — never mix the two in one table, and say which basis a figure uses<br /></>}
 					{tools.hasPatstatPortfolio && <>→ SNAPSHOT RULE: PATSTAT is a twice-yearly snapshot. When the response defers legal status to the live route, follow that pointer — an individual patent's CURRENT status (in force, lapsed, opposed) is branch F (`get_legal_status` / `get_patent_summary`), never snapshot grant data<br /></>}
-					{tools.hasPatstatApiGuide && <>→ Other PATSTAT analytics endpoints (as they ship, beyond portfolio): `patstat_api_guide` action="list" → `patent_api_request`<br /></>}
-					→ Keywords: trends, landscape, top companies, top assignees, market analysis, filing trends, geographic breakdown, competitive analysis{tools.hasPatstatPortfolio && <>, patent portfolio, patent count, filings per year</>}<br />
+					{(tools.hasPatstatQuery && tools.hasPatstatApiGuide) && <>→ **C3 — any OTHER PATSTAT aggregate** (technology landscapes by CPC class, grant-rate comparisons, citation-impact rankings, inventor analytics, family/jurisdiction coverage — anything aggregate that C1/C2 don't answer): `patstat_query` — write ONE SQL SELECT against the flowleap.* semantic views; the backend gates it deterministically. MANDATORY ORDER: `patstat_api_guide` action="section" section="examples" FIRST (reuse verified SQL; an example with promoted_to means call that tool instead), then section="semantic-model" BEFORE writing SQL — apply its interpretation_conventions (families for "how many patents", earliest_filing_year for trends) and ALWAYS state the chosen interpretation plus the data_edition in the answer. On a patstat_sql_* error: the message carries the exact fix — fix ONCE, resubmit with retryOf, STOP after a second failure; patstat_busy means back off and retry the SAME SQL<br /></>}
+				{(tools.hasPatstatApiGuide && !tools.hasPatstatQuery) && <>→ Other PATSTAT analytics endpoints (beyond portfolio): `patstat_api_guide` action="list" → `patent_api_request`<br /></>}
+					→ Keywords: trends, landscape, top companies, top assignees, market analysis, filing trends, geographic breakdown, competitive analysis{tools.hasPatstatPortfolio && <>, patent portfolio, patent count, filings per year</>}{tools.hasPatstatQuery && <>, grant rate, citation impact, top inventors, jurisdiction coverage</>}<br />
 					→ NOT analytics: any request to FIND or COMPARE specific patent documents ("compare US and European patents on X", "find patents about Y") is a SEARCH — branch B (both paths when multiple offices are named), never these tools. Analytics answers aggregate-statistics questions only.<br />
 					<br />
 				</>}
