@@ -119,6 +119,7 @@ export enum ToolName {
 	GetPatentSummary = 'get_patent_summary',
 	ComparePatents = 'compare_patents',
 	PatstatPortfolio = 'patstat_portfolio',
+	PatstatQuery = 'patstat_query',
 	PatstatApiGuide = 'patstat_api_guide',
 }
 
@@ -207,6 +208,7 @@ export enum ContributedToolName {
 	SearchLegal = 'copilot_searchLegal',
 	LegalSearchGuide = 'copilot_legalSearchGuide',
 	PatstatPortfolio = 'copilot_patstatPortfolio',
+	PatstatQuery = 'copilot_patstatQuery',
 	PatstatApiGuide = 'copilot_patstatApiGuide',
 }
 
@@ -365,6 +367,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.GetPatentSummary]: ToolCategory.WebInteraction,
 	[ToolName.ComparePatents]: ToolCategory.WebInteraction,
 	[ToolName.PatstatPortfolio]: ToolCategory.WebInteraction,
+	[ToolName.PatstatQuery]: ToolCategory.WebInteraction,
 	[ToolName.PatstatApiGuide]: ToolCategory.WebInteraction,
 } as const;
 

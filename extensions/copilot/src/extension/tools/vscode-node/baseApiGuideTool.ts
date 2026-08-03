@@ -18,9 +18,11 @@ import { handlePatentToolError } from './patentToolError';
  * endpoint's docs, a workflow, or the full documentation.
  */
 export interface IGuideApiParams {
-	action: 'list' | 'endpoint' | 'workflow' | 'full';
+	action: 'list' | 'endpoint' | 'workflow' | 'full' | 'section';
 	endpoint?: string;
 	workflow?: string;
+	/** Served-section name when action='section' (routes that serve data sections, e.g. PATSTAT's 'semantic-model'/'examples'). */
+	section?: string;
 }
 
 /** One documented endpoint. `rateLimitNote`/`note` are route-specific and rendered by the subclass. */
@@ -97,6 +99,13 @@ export interface GuideDocsData {
 		sections?: string[];
 	}>;
 	searchModes?: Record<string, string>;
+	/** Served sections (PATSTAT): compact lists names; full docs carries pointer objects. */
+	sections?: string[] | Record<string, { description: string; url: string }>;
+	/** `?section=semantic-model` payload: the loaded edition + the semantic model YAML, verbatim. */
+	data_edition?: string;
+	yaml?: string;
+	/** `?section=examples` payload: verified question→SQL pairs. */
+	examples?: { question: string; logical_sql: string; promoted_to?: string }[];
 }
 
 /** Envelope for a `/docs` response. */
@@ -138,13 +147,15 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 	protected abstract readonly listInvocationMessage: string;
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGuideApiParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
-		const { action, endpoint, workflow } = options.input;
+		const { action, endpoint, workflow, section } = options.input;
 		let message = this.defaultInvocationMessage;
 
 		if (action === 'endpoint' && endpoint) {
 			message = `Getting docs for endpoint: ${endpoint}`;
 		} else if (action === 'workflow' && workflow) {
 			message = `Getting workflow: ${workflow}`;
+		} else if (action === 'section' && section) {
+			message = `Fetching section: ${section}`;
 		} else if (action === 'list') {
 			message = this.listInvocationMessage;
 		}
@@ -157,7 +168,7 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IGuideApiParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace(`${this.logPrefix} Invoking API guide`);
 
-		const { action, endpoint, workflow } = options.input;
+		const { action, endpoint, workflow, section } = options.input;
 
 		try {
 			let path = this.docsRoute;
@@ -167,6 +178,8 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 				path += `?endpoint=${encodeURIComponent(endpoint)}`;
 			} else if (action === 'workflow' && workflow) {
 				path += `?workflow=${encodeURIComponent(workflow)}`;
+			} else if (action === 'section' && section) {
+				path += `?section=${encodeURIComponent(section)}`;
 			} else if (action === 'list') {
 				path += '?format=compact';
 			}
@@ -183,7 +196,7 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			}
 
 			// Format the docs for LLM consumption
-			const formattedDocs = this.formatDocs(action, result.data, endpoint);
+			const formattedDocs = this.formatDocs(action, result.data, endpoint, section);
 			this.logService.info(`${this.logPrefix} Formatted docs length: ${formattedDocs.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -199,7 +212,7 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 	 * Format the docs response for LLM consumption, dispatching on `action` and letting the subclass
 	 * decorate the body (e.g. with a typed-tool deferral banner).
 	 */
-	protected formatDocs(action: string, data: GuideDocsData | undefined, endpointParam?: string): string {
+	protected formatDocs(action: string, data: GuideDocsData | undefined, endpointParam?: string, sectionParam?: string): string {
 		if (!data) {
 			return 'No documentation available';
 		}
@@ -209,6 +222,8 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			body = this.formatEndpointDoc(data.baseUrl, data.endpoint);
 		} else if (action === 'workflow' && data.workflow) {
 			body = this.formatWorkflowDoc(data.workflow);
+		} else if (action === 'section') {
+			body = this.formatSectionDoc(data, sectionParam);
 		} else if (action === 'list') {
 			body = this.formatCompactList(data);
 		} else {
@@ -216,6 +231,14 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 		}
 
 		return this.decorateBody(action, endpointParam, body);
+	}
+
+	/**
+	 * Render a served data section (`?section=…`). Generic JSON fallback — routes that serve
+	 * sections (PATSTAT) override with a purpose-built rendering.
+	 */
+	protected formatSectionDoc(data: GuideDocsData, sectionParam?: string): string {
+		return `## Section: ${sectionParam ?? 'unknown'}\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``;
 	}
 
 	protected formatEndpointDoc(baseUrl: string, endpoint: GuideEndpointDoc): string {
@@ -299,6 +322,14 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			lines.push('## Available Workflows:');
 			for (const wf of data.workflows) {
 				lines.push(`- ${wf}`);
+			}
+		}
+
+		if (Array.isArray(data.sections) && data.sections.length > 0) {
+			lines.push('');
+			lines.push('## Available Sections (action="section"):');
+			for (const sectionName of data.sections) {
+				lines.push(`- ${sectionName}`);
 			}
 		}
 

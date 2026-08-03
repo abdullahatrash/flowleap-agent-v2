@@ -25,6 +25,9 @@ Map the technology to 2-3 IPC/CPC codes for coverage (see the prior-art skill's 
 ### 2b. Per-Company Slices (PATSTAT)
 Once the top filers emerge, `patstat_portfolio` per named company → worldwide application counts by filing year and office under harmonized applicant names. Quote each `summary` and name the PATSTAT edition (the response's data_edition field) in the report. **Counting semantics**: `patstat_portfolio` counts APPLICATIONS by FILING year; `patent_analytics_viz` counts PUBLICATIONS by publication year — the numbers legitimately differ, so never mix the two bases in one table and label each figure's basis.
 
+### 2b-bis. CPC-Defined Landscape (Guarded SQL — family-level, exact)
+When the technology area is expressible as CPC classes (not free text), `patstat_query` gives the exact family-level answer in one SELECT — "who dominates this CPC area", grant rates, filing trends by earliest_filing_year, citation-impact rankings. Fetch `patstat_api_guide` action="section" section="examples" first (the top-applicants-by-CPC pattern is a verified example — reuse it), then section="semantic-model" for the views and the interpretation conventions. State the interpretation ("counted as DOCDB families…") and the data_edition with every figure. One informed retry per `patstat_sql_*` error (the message says the fix; resubmit with retryOf), then stop.
+
 ### 2c. Targeted Counts (EPO OPS)
 Where you need precise per-slice counts beyond the analytics sample:
 - `build_patent_query` → `search_patents`, note the total count per query

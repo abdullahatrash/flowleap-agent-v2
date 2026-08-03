@@ -40,6 +40,7 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.ComparePatents,
 	ToolName.PatentAnalyticsViz,
 	ToolName.PatstatPortfolio,
+	ToolName.PatstatQuery,
 	ToolName.PatstatApiGuide,
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
@@ -111,7 +112,8 @@ suite('PatentAIInstructions', () => {
 	const gatedSignatures: readonly [ToolName, string, string | undefined][] = [
 		[ToolName.PatentAnalyticsViz, 'technology/topic analytics by KEYWORDS', undefined],
 		[ToolName.PatstatPortfolio, 'NAMED company\'s/applicant\'s aggregate portfolio', undefined],
-		[ToolName.PatstatApiGuide, 'Other PATSTAT analytics endpoints', undefined],
+		[ToolName.PatstatQuery, 'any OTHER PATSTAT aggregate', undefined],
+		[ToolName.PatstatApiGuide, 'section="semantic-model" BEFORE writing SQL', undefined],
 		[ToolName.CompareClaims, 'The USER\'s OWN DRAFTED claim text vs specific patents', undefined],
 		[ToolName.ComparePatents, 'TWO OR MORE PUBLISHED patents vs each other', undefined],
 		[ToolName.GetPatentSummary, 'DEFAULT for an OVERVIEW', undefined],

@@ -44,6 +44,8 @@ export const ToolResponseBudgets = {
 	PatentAnalyticsViz: 20_000,
 	/** `patstat_portfolio`: defensive whole-response ceiling for the assembled portfolio tables. */
 	PatstatPortfolio: 20_000,
+	/** `patstat_query`: whole-response ceiling for the guarded-SQL result table (5,000-row/5MB caps live server-side; this bounds the rendered markdown). */
+	PatstatQuery: 20_000,
 	/** `compare_claims`: per-patent cap on the full claim text rendered below the element-by-element chart. */
 	CompareClaimsText: 4_000,
 } as const;

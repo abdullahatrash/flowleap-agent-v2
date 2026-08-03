@@ -93,6 +93,7 @@ export const PATENT_TOOLS: readonly string[] = [
 	'comparePatents',
 	'patentAnalytics',
 	'patstatPortfolio',
+	'patstatQuery',
 	// Raw backend access & API guides
 	'patentApiRequest',
 	'opsApiGuide',

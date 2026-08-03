@@ -27,6 +27,7 @@ import './patentAnalyticsVizTool';
 import './patentApiRequestTool';
 import './patstatApiGuideTool';
 import './patstatPortfolioTool';
+import './patstatQueryTool';
 import './readPdfTool';
 import './searchAcademicTool';
 import './searchCitationsTool';
