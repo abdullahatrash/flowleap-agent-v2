@@ -20,7 +20,44 @@ backend, prints a user code plus verification URL (and opens the browser),
 then polls until the login is approved. The resulting session JWT is stored
 in `~/.config/flowleap/credentials.toml` (mode 0600). No local callback
 server is involved, so it also works when the browser runs on another
-machine — open the printed URL and enter the user code there.
+machine — open the printed URL and enter the user code there. When stdout is
+not a TTY, the browser auto-open and spinner are suppressed automatically.
+
+### Structured login for agents (--json)
+
+```bash
+flowleap --json auth login
+```
+
+With `--json`, `auth login` becomes a blocking process that speaks NDJSON on
+stdout — one compact JSON object per line, nothing else. It emits the
+device-authorization event immediately, then polls until the human approves
+and emits exactly one terminal event before exiting:
+
+```json
+{"event":"device_authorization","verification_uri":"https://flowleap.co/device","verification_uri_complete":"https://flowleap.co/device?code=ABCD-1234","user_code":"ABCD-1234","expires_in":900,"interval":5}
+{"event":"authorized","stored":true}
+```
+
+Terminal events: `authorized` (exit 0 — the session token is stored, same as
+the human flow) or `failed` with an `error` description (nonzero exit per the
+standard exit-code table — denied, expired, or another error). Structured
+mode has no side effects: no browser auto-open, no clipboard copy, no
+spinner — the agent decides what to do with the URL.
+
+Agent-mediated sign-in sequence:
+
+1. Run `flowleap --json auth login` in the background and read the first
+   NDJSON line (the `device_authorization` event).
+2. Relay `verification_uri` and `user_code` to the human (or open
+   `verification_uri_complete` yourself when running on the human's own
+   machine).
+3. Await the process's terminal event. `authorized` means the session token
+   is stored and authenticated commands work immediately; `failed` means
+   start over.
+4. Session tokens expire. For durability, follow up with
+   `flowleap --json auth create-token --name <name> --store` to mint and
+   store a long-lived `fl_pat_` personal token.
 
 ### Login with a personal API token
 
@@ -50,9 +87,26 @@ requires an OAuth session — API tokens cannot mint further tokens
 
 ```bash
 flowleap auth status
+flowleap --json auth status
 ```
 
-Shows: base URL, authentication method, default model, and user profile (if authenticated).
+Shows base URL, credential source, default model, and — when the credential
+works — the user profile. It **verifies** the credential against the backend
+rather than reporting that one is merely stored, so an expired token is caught
+here instead of at the next data command.
+
+Branch on `verification.state` (or the exit code):
+
+| State | Exit | What to do |
+|-------|------|------------|
+| `valid` | 0 | Proceed. |
+| `rejected` | 3 | The credential is expired, revoked, or wrong. A human must re-run `flowleap auth login`; do not retry. |
+| `absent` | 3 | No credential configured — see the login options above. |
+| `unverified` | 7 | The backend could not be reached, so validity is **unknown**. Retry later; do NOT tell the user their credential is invalid. |
+
+`verification.checked` is `true` only when a live check reached a verdict.
+`unverified` means no conclusion was reached — treat it as "unknown", never as
+a failure of the credential itself.
 
 ### Logout
 
