@@ -37,7 +37,7 @@ export class PatentBackendError extends Error {
  * this clearer message.
  *
  * Security note: this is UX only. The backend `402` is the real, server-enforced gate
- * (Clerk + Polar); never treat the absence of this error as proof of access.
+ * (Clerk + Stripe); never treat the absence of this error as proof of access.
  */
 export class SubscriptionRequiredError extends PatentBackendError {
 	readonly code = 'subscription_required';
@@ -203,7 +203,7 @@ export interface IPatentBackendClient {
 	get<T>(pathWithQuery: string, token: CancellationToken, options?: IPatentBackendRequestOptions): Promise<T>;
 
 	/**
-	 * Fetches the user's Polar customer-portal URL from `GET /api/invoices` (an account route on the
+	 * Fetches the user's Stripe billing-portal URL from `GET /api/invoices` (an account route on the
 	 * backend ROOT, outside the `/v1` patent-tools prefix). Returns the `portalUrl`. Inherits the seam's
 	 * typed errors — {@link AuthRequiredError} on `401`, {@link SubscriptionRequiredError} on a gated
 	 * `402` — and throws {@link PatentBackendError} when the backend returns no URL.

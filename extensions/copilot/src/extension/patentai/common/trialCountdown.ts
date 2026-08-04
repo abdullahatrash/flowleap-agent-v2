@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * The FlowLeap subscription status the client cares about, mapped down from the backend's Polar
+ * The FlowLeap subscription status the client cares about, mapped down from the backend's Stripe
  * status enum (`active` | `canceled` | `past_due` | `trialing` | `incomplete`). `active` and
  * `trialing` are the two access-granting states (mirrors the backend gate, ADR 0004); every other
  * *successful* read collapses to `inactive`; `unknown` means the check was inconclusive (signed
@@ -22,7 +22,7 @@ export interface FlowLeapSubscriptionSnapshot {
 	readonly currentPeriodEnd?: string | null;
 	/**
 	 * True when the backend reports the subscription is set to cancel at the end of the current
-	 * period (Polar `cancelAtPeriodEnd`) — still `active` today, but ending on `currentPeriodEnd`.
+	 * period (Stripe `cancelAtPeriodEnd`) — still `active` today, but ending on `currentPeriodEnd`.
 	 * Lets the Account pill distinguish "Active" from "Cancels on {date}". Absent/false otherwise.
 	 */
 	readonly cancelAtPeriodEnd?: boolean;

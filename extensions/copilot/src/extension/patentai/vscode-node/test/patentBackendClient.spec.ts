@@ -801,12 +801,12 @@ describe('getCustomerPortalUrl (#118)', () => {
 		let capturedUrl: string | undefined;
 		const { client } = makeClient(async url => {
 			capturedUrl = url;
-			return makeResponse(200, { portalUrl: 'https://polar.sh/portal/abc' });
+			return makeResponse(200, { portalUrl: 'https://billing.stripe.com/p/session/abc' });
 		});
 
 		const url = await client.getCustomerPortalUrl(makeToken());
 
-		expect(url).toBe('https://polar.sh/portal/abc');
+		expect(url).toBe('https://billing.stripe.com/p/session/abc');
 		// apiUrl is https://api.test/v1; the account route drops the /v1 suffix.
 		expect(capturedUrl).toBe('https://api.test/api/invoices');
 	});
