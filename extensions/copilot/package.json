@@ -6467,7 +6467,7 @@
         "id": "copilotWelcome",
         "title": "%github.copilot.walkthrough.title%",
         "description": "%github.copilot.walkthrough.description%",
-        "when": "!isWeb",
+        "when": "!isWeb && !patentIdeMode",
         "steps": [
           {
             "id": "copilot.setup.signIn",
