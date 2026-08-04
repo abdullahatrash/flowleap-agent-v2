@@ -24,7 +24,7 @@ export interface AccountPill {
  * The Account section's render state, posted to the webview (asserted directly in tests — the view
  * only reflects it, never re-derives). Signed out is a single "sign in" affordance; signed in carries
  * the identity, the subscription pill (or `null` when the read was inconclusive), and whether a
- * "Manage subscription" button should show (only for users the backend recognises as Polar customers).
+ * "Manage subscription" button should show (only for users the backend recognises as Stripe customers).
  */
 export type AccountState =
 	| { readonly signedIn: false }
@@ -98,7 +98,7 @@ export function computeAccountState(identity: AccountIdentity | undefined, snaps
 		name: identity.name ?? null,
 		email: identity.email ?? null,
 		pill: computePill(snapshot, now),
-		// Manage-subscription (the Polar portal) is only meaningful for a recognised customer —
+		// Manage-subscription (the Stripe billing portal) is only meaningful for a recognised customer —
 		// active or trialing. Inactive/unknown users have no portal to open.
 		canManageSubscription: snapshot.status === 'active' || snapshot.status === 'trialing',
 	};

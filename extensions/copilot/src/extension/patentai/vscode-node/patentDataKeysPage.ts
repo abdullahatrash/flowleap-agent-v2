@@ -265,7 +265,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	/**
-	 * Open the user's Polar customer portal in the browser. Fetches the URL through the backend-client
+	 * Open the user's Stripe billing portal in the browser. Fetches the URL through the backend-client
 	 * seam (inheriting its typed 401/402 errors) and surfaces a friendly toast on failure so the button
 	 * never appears broken.
 	 */
