@@ -145,23 +145,31 @@ priority interval), **E** (earlier-filed, later-published "secret" prior art). O
 carry several.
 _Avoid_: High/Medium/Low (loses the alone-vs-combination signal).
 
-**Topic Analytics** vs **Portfolio Analytics**:
-The two aggregate-analytics engines, split by *criteria shape*, not by metric. **Topic Analytics**
+**Topic Analytics** vs **Portfolio Analytics** vs **Graph Analytics**:
+The three analytics engines, split by *criteria shape*, not by metric. **Topic Analytics**
 (the Google-Patents corpus engine) answers questions whose essential criterion is **free-text
 keywords** over title/abstract ("quantum computing filings over time"); publication-level counts,
-substring name matching, per-query cost. **Portfolio Analytics** (the PATSTAT engine) answers
-questions expressible in **structured criteria** — named applicant (entity-resolved, harmonized
-names), CPC/IPC class, office, year, family, grant status; family-level counting, zero marginal
-cost. Routing rule: if the question needs free text, Topic; otherwise Portfolio. An ambiguous
-applicant name is an interaction step (pick the entity), never a silent merge.
-_Avoid_: "analytics" unqualified when the engines could disagree; presenting numbers from both
-engines in one chart without labeling each source.
+substring name matching, per-query cost. **Portfolio Analytics** (the PATSTAT aggregation
+engine) answers questions expressible in **structured criteria** — named applicant
+(entity-resolved, harmonized names), CPC/IPC class, office, year, family, grant status;
+family-level counting, zero marginal cost. **Graph Analytics** (the PATSTAT relationship
+engine) answers questions about **a named node and the relationships around it** — who cites a
+patent (backward/forward, examiner vs applicant origin), the citation/family path between two
+patents, a patent's family and priority network, an applicant's co-applicant network; every
+relationship carries a confidence tag and row-level provenance. Routing rule: free-text
+keywords → Topic; aggregate counts by structured criteria → Portfolio; a named node and its
+connections → Graph. An ambiguous applicant name or publication number is an interaction step
+(pick the entity/application), never a silent merge.
+_Avoid_: "analytics" unqualified when the engines could disagree; "the PATSTAT engine" (PATSTAT
+backs both Portfolio and Graph Analytics — say which); presenting numbers from multiple engines
+in one chart without labeling each source.
 
 **Data Edition**:
-The provenance identifier of the Portfolio Analytics dataset (PATSTAT is published in discrete
-editions, ~twice yearly). Every Portfolio Analytics answer carries its Data Edition; two answers
-are only comparable within one edition.
-_Avoid_: treating Portfolio Analytics as live data — it is a snapshot with a name.
+The provenance identifier of the PATSTAT snapshot behind Portfolio and Graph Analytics
+(PATSTAT is published in discrete editions, ~twice yearly). Every Portfolio or Graph Analytics
+answer carries its Data Edition; two answers are only comparable within one edition.
+_Avoid_: treating Portfolio or Graph Analytics as live data — each answer is from a snapshot
+with a name.
 
 **Verified-Data Contract**:
 The bar a data deliverable (e.g. a dashboard) must meet: every displayed value — chart, table,
