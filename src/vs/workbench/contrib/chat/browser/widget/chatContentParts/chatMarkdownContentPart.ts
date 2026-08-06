@@ -471,6 +471,15 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		if (reusableRef?.object.hasSameContent(identifier, text, isComplete)) {
 			reusableOutputCodeBlockRefs.delete(reuseKey);
 			this.allRefs.push(reusableRef);
+			// Reuse means this part's element is about to be moved into the freshly rendered
+			// markdown DOM. Moving an iframe reloads it, which wipes the webview's content, so
+			// reinitialize the webview once the element is attached again.
+			const reusedPart = reusableRef.object;
+			this._register(dom.scheduleAtNextAnimationFrame(dom.getWindow(reusedPart.element), () => {
+				if (reusedPart.element.isConnected) {
+					reusedPart.onDidRemount();
+				}
+			}));
 			return reusableRef;
 		}
 
