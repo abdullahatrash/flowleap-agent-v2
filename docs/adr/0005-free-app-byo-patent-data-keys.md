@@ -5,7 +5,9 @@
 subscription with card-required 7-day trial gating patent data (backend ADR 0004; runtime
 402 gate at `IPatentBackendClient`). BYOK **inference** (ADR 0004 of this repo) is
 unaffected. The backend mirror (`flowleap-backend` ADR 0007) and PRD 0002 are rejected
-likewise.
+likewise. **The shipped BYO-keys model is backend ADR 0008**: a trial runs on FlowLeap's
+shared keys, an `active` subscriber brings their own Patent-Data Keys, and the gate answers
+`400 data_keys_required` per provider — there is no `trial_expired` code.
 
 The FlowLeap app is **free to use, forever**. Inference is already BYOK (ADR 0004); we
 extend the same "bring your own key" model to **patent data** — the user supplies their own

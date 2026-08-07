@@ -243,3 +243,108 @@ suite('PatentAIInstructions key state', () => {
 		expect(output.includes('PATENT-DATA KEY STATE')).toBe(false);
 	});
 });
+
+suite('PatentAIInstructions key-gate doctrine', () => {
+	test('classifies a key gate as a user-action stop that the web fallback does not cover', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			userActionStop: output.includes('A KEY GATE IS NEITHER'),
+			neverAnExhaustedRoute: output.includes('not a transient error, not a zero result, and NEVER an exhausted route'),
+			webRungExcluded: output.includes('Rung (iii) does NOT apply to a gated office'),
+			coversSingleDocumentReads: output.includes('NOT for searches and NOT for single-document reads'),
+			namesTheFreeKeyFix: output.includes('the "FlowLeap: Patent Data Keys" command — the office issues the key for free'),
+			refusesWebSubstitution: output.includes('never quietly served from Google Patents or freepatentsonline instead'),
+		}).toEqual({
+			userActionStop: true,
+			neverAnExhaustedRoute: true,
+			webRungExcluded: true,
+			coversSingleDocumentReads: true,
+			namesTheFreeKeyFix: true,
+			refusesWebSubstitution: true,
+		});
+	});
+
+	test('leaves the CN/JP/KR and exhausted-route web fallbacks unchanged', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			carveOutIsScoped: output.includes('the forbid rule covers ONLY an office gated on a missing Patent-Data Key'),
+			cnJpKrUnchanged: output.includes('the CN/JP/KR web fallback works exactly as before'),
+			exhaustedRouteUnchanged: output.includes('the genuinely-exhausted-route web fallback works exactly as before'),
+			persistenceNotWeakened: output.includes('persistence is not weakened'),
+			ladderWebRungStillThere: output.includes('**Web fallback** — fetch_webpage'),
+		}).toEqual({
+			carveOutIsScoped: true,
+			cnJpKrUnchanged: true,
+			exhaustedRouteUnchanged: true,
+			persistenceNotWeakened: true,
+			ladderWebRungStillThere: true,
+		});
+	});
+
+	test('carries proceed-then-ask and forbids silent scope narrowing', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			proceedThenAsk: output.includes('PROCEED, THEN ASK — never stall the whole task on the ask'),
+			completesTheLiveOffice: output.includes('Complete the LIVE office FULLY'),
+			namesTheGapAsAKeyGap: output.includes('"EP coverage is missing because your EPO OPS key is not set"'),
+			asksAtTheEnd: output.includes('Ask for the missing key ONCE, at the END of the turn'),
+			noSilentNarrowing: output.includes('NEVER silently narrow the scope of a prior-art, novelty, patentability, freedom-to-operate, invalidity or landscape task'),
+		}).toEqual({
+			proceedThenAsk: true,
+			completesTheLiveOffice: true,
+			namesTheGapAsAKeyGap: true,
+			asksAtTheEnd: true,
+			noSilentNarrowing: true,
+		});
+	});
+
+	test('offers the keyless pivot as different data, never as a substitute', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			pivotOffered: output.includes('KEYLESS PIVOT — offer it as DIFFERENT data, never as a substitute'),
+			patstatFramedAsSnapshot: output.includes('PATSTAT analytics — aggregate counts from a twice-yearly SNAPSHOT'),
+			legalFramedAsLaw: output.includes('`search_legal` — patent LAW'),
+			academicFramedAsLiterature: output.includes('`search_academic` — scholarly LITERATURE'),
+			notAStandIn: output.includes('not a stand-in for the gated office\'s live search'),
+		}).toEqual({
+			pivotOffered: true,
+			patstatFramedAsSnapshot: true,
+			legalFramedAsLaw: true,
+			academicFramedAsLiterature: true,
+			notAStandIn: true,
+		});
+	});
+
+	test('carries the resume rule: re-run only the gated office and merge, no reload', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			resumeRule: output.includes('RESUME RULE — when the user says they added the missing key'),
+			gatedOfficeOnly: output.includes('re-run ONLY the previously gated office and MERGE its results into the deliverable you already produced'),
+			doesNotRedoLiveWork: output.includes('Do NOT redo the live office\'s searches, reads or analysis'),
+			noReloadNeeded: output.includes('no reload, no restart and no new conversation'),
+		}).toEqual({ resumeRule: true, gatedOfficeOnly: true, doesNotRedoLiveWork: true, noReloadNeeded: true });
+	});
+
+	test('the doctrine renders in every key state and never on a stock configuration', async () => {
+		const [active, trialing, stock] = await Promise.all([
+			renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'active', hasUsptoOdpKey: true }),
+			renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'trialing' }),
+			renderPatentInstructions([]),
+		]);
+		expect({
+			active: active.includes('KEY-GATE DOCTRINE'),
+			trialing: trialing.includes('KEY-GATE DOCTRINE'),
+			stock: stock.includes('KEY-GATE DOCTRINE'),
+		}).toEqual({ active: true, trialing: true, stock: false });
+	});
+
+	test('omits the keyless-pivot rule when no keyless tool is available', async () => {
+		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatApiGuide, ToolName.SearchLegal, ToolName.SearchAcademic];
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => !keylessTools.includes(t)));
+		expect({
+			pivotOffered: output.includes('KEYLESS PIVOT'),
+			doctrineStillRenders: output.includes('KEY-GATE DOCTRINE'),
+			resumeRuleStillRenders: output.includes('RESUME RULE'),
+		}).toEqual({ pivotOffered: false, doctrineStillRenders: true, resumeRuleStillRenders: true });
+	});
+});

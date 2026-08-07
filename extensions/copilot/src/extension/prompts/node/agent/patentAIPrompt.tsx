@@ -70,6 +70,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasOpsApiGuide: toolNames.has(ToolName.OpsApiGuide),
 		hasUSPTOApiGuide: toolNames.has(ToolName.USPTOApiGuide),
 		hasCitationApiGuide: toolNames.has(ToolName.CitationApiGuide),
+		hasSearchLegal: toolNames.has(ToolName.SearchLegal),
 		hasLegalSearchGuide: toolNames.has(ToolName.LegalSearchGuide),
 		hasSearchAcademic: toolNames.has(ToolName.SearchAcademic),
 		hasWritePatentResults: toolNames.has(ToolName.WritePatentResults),
@@ -96,6 +97,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasOpsApiGuide,
 		base.hasUSPTOApiGuide,
 		base.hasCitationApiGuide,
+		base.hasSearchLegal,
 		base.hasLegalSearchGuide,
 		base.hasSearchAcademic,
 		base.hasWritePatentResults,
@@ -573,12 +575,54 @@ class PatentPersistenceRules extends PromptElement<PatentAIPromptProps> {
 			**SEARCH ERROR ≠ ZERO RESULT — they are different situations:**<br />
 			{'  '}• A transient backend error (5xx, 502/503/504, gateway timeout, connection reset, truncated response) is an OUTAGE, not absence of data. Back off briefly and retry the same call; if it persists, switch office/route per the ladder. NEVER report a coverage limit or "the patent doesn't exist" because a call errored — that conflates an outage with absence.<br />
 			{'  '}• A clean zero-result (the tool returned successfully with no hits) means REFORMULATE (rung i) before concluding nothing exists — one empty query is not an exhaustive search.<br />
+			{'  '}• A KEY GATE IS NEITHER — a `data_keys_required` failure (the user's own EPO OPS or USPTO ODP Patent-Data Key is not set for that office) is a USER-ACTION STOP: not a transient error, not a zero result, and NEVER an exhausted route. Rung (iii) does NOT apply to a gated office — do not substitute web data for it, NOT for searches and NOT for single-document reads. "Give me the claims of EP…" with no EPO OPS key is refused FOR THAT OFFICE with the free key named as the one-step fix (the "FlowLeap: Patent Data Keys" command — the office issues the key for free), never quietly served from Google Patents or freepatentsonline instead. Only the user adding the key opens that office.<br />
+			{'  '}• UNCHANGED by that carve-out — the forbid rule covers ONLY an office gated on a missing Patent-Data Key: (a) the CN/JP/KR web fallback works exactly as before (those offices have no backend route at all, so branch L is their normal path and key state is irrelevant to them); (b) the genuinely-exhausted-route web fallback works exactly as before (a route that is dead or empty WITH a working key, after the ladder) — persistence is not weakened.<br />
 			<br />
 			**EFFORT CEILING — the ladder is a floor to reach, not a loop to spin.** Exhausting the ladder means trying each DISTINCT rung (reformulate → alternate route → web) a small, bounded number of times, then stopping to conclude or disclose — it does NOT mean repeating any one rung. Persistence is reaching the web fallback, not firing the same call dozens of times:<br />
 			{'  '}• A route, query shape, or citation direction already confirmed to return nothing for this document — whether by a *_api_guide or by a prior empty/errored-then-cleared call — is NOT re-run in the same shape. Reformulate it once and try one alternate route; if both come back empty, treat it as dead and move on. Do not keep firing a route a guide already said yields 0 (e.g. dozens of search_forward_citations after citation_api_guide confirms the EP forward route returns nothing).<br />
 			{'  '}• Do not re-retrieve or re-summarize a record you already have — one successful summary/detail fetch per document is enough; re-running it or re-summarizing the same result adds cost, not information.<br />
 			{'  '}• Prefer one well-formed query (build_patent_query / build_uspto_query with combined terms and filters) over many redundant single-term probes stitched together, and do not take local grep/file detours to re-derive a result a tool already returned.<br />
 			{'  '}• Once each distinct rung has genuinely been tried, STOP and conclude or disclose the gap (naming what you tried) — continuing past that point is grind, not diligence.<br />
+		</Tag>;
+	}
+}
+
+/**
+ * What the agent DOES once an office is gated on a missing Patent-Data Key: finish the live
+ * office and name the gap (proceed-then-ask), offer the keyless tools as different data, and
+ * merge — not redo — when the user adds the key mid-conversation. The classification itself
+ * (a key gate is a user-action stop, never an exhausted route) lives in {@link PatentPersistenceRules},
+ * next to the ladder it carves out of.
+ */
+class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
+	render() {
+		const tools = detectPatentTools(this.props.availableTools);
+		if (!tools.hasAnyPatentTool) {
+			return null;
+		}
+
+		const hasPatstat = tools.hasPatstatPortfolio || tools.hasPatstatQuery || tools.hasPatstatApiGuide;
+		const hasKeylessTool = hasPatstat || tools.hasSearchLegal || tools.hasSearchAcademic;
+
+		return <Tag name='keyGateDoctrine'>
+			KEY-GATE DOCTRINE — what you do when an office answers data_keys_required:<br />
+			<br />
+			**PROCEED, THEN ASK — never stall the whole task on the ask.** When one office is gated and the other is live:<br />
+			{'  '}1. Complete the LIVE office FULLY — every search, read and analysis the task asks of it. A missing key for one office is not a reason to do less work in the other.<br />
+			{'  '}2. Deliver those results as the normal deliverable (report, chart, summary) — the user gets full value from this turn.<br />
+			{'  '}3. Name the gap EXPLICITLY as a MISSING-KEY gap, never as a data or coverage gap: "EP coverage is missing because your EPO OPS key is not set" — not "no EP results were found", not "EP coverage is limited", not silence.<br />
+			{'  '}4. Ask for the missing key ONCE, at the END of the turn, after the results — naming the "FlowLeap: Patent Data Keys" command and that the key is free from the office.<br />
+			{'  '}• NEVER silently narrow the scope of a prior-art, novelty, patentability, freedom-to-operate, invalidity or landscape task to the office whose key happens to be set. The scope stays what the work requires; the unsearched office is stated as an open gap in the deliverable, so no one mistakes a configuration detail for a clearance result.<br />
+			{hasKeylessTool && <>
+				<br />
+				**KEYLESS PIVOT — offer it as DIFFERENT data, never as a substitute.** While an office is gated, these need no Patent-Data Key and stay live; you may offer them to keep the work moving, each labeled for what it actually is:<br />
+				{hasPatstat && <>{'  '}• PATSTAT analytics — aggregate counts from a twice-yearly SNAPSHOT (portfolios, filing trends, landscapes). Aggregates, not documents, and not current: it does not answer "what prior art exists for this claim".<br /></>}
+				{tools.hasSearchLegal && <>{'  '}• `search_legal` — patent LAW (MPEP/EPC/guidelines). It tells you the legal standard, never what has been published or filed.<br /></>}
+				{tools.hasSearchAcademic && <>{'  '}• `search_academic` — scholarly LITERATURE. Papers are prior art in their own right, but they are not patent documents and cover a different corpus.<br /></>}
+				{'  '}• Say plainly that this is different data, not a stand-in for the gated office's live search. Never present a keyless result as if it closed the missing-key gap.<br />
+			</>}
+			<br />
+			**RESUME RULE — when the user says they added the missing key:** re-run ONLY the previously gated office and MERGE its results into the deliverable you already produced. Do NOT redo the live office's searches, reads or analysis — that work is already done and paid for. Keys reach the request headers immediately: the user needs no reload, no restart and no new conversation, so retry the gated route in the same turn.<br />
 		</Tag>;
 	}
 }
@@ -843,6 +887,7 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 			<PatentToolSelectionPrompt {...this.props} priority={850} flexGrow={1} />
 			<PatentCriticalRules {...this.props} priority={800} flexGrow={1} />
 			<PatentPersistenceRules {...this.props} priority={790} flexGrow={1} />
+			<PatentKeyGateDoctrine {...this.props} priority={785} flexGrow={1} />
 			<PatentEvidenceRules {...this.props} priority={780} flexGrow={1} />
 			<PatentDeliverableRules {...this.props} priority={775} flexGrow={1} />
 			<PatentDataBoundaryRules {...this.props} priority={770} flexGrow={1} />
