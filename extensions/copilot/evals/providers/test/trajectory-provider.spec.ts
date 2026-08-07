@@ -46,6 +46,26 @@ describe('TrajectoryProvider', () => {
 		});
 	});
 
+	// Without the body on the trajectory, a grader can only see WHICH tools ran, which is how
+	// invented claim text passed T5 (#185): an OK fetch that returns an elided stub and an OK
+	// fetch that returns the real text are indistinguishable by tag.
+	it('records the result body the model was handed for each tool call', async () => {
+		let round = 0;
+		const provider = new TrajectoryProvider(undefined, {
+			fetch: async () => jsonResponse(round++ === 0
+				? { choices: [{ message: { tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search_patents', arguments: '{"query":"battery"}' } }] } }] }
+				: { choices: [{ finish_reason: 'stop', message: { content: 'done' } }] }),
+			env: { OPENROUTER_API_KEY: 'test-key' },
+			loadScript: () => SCRIPT,
+		});
+
+		const result = await provider.callApi('find prior art', CONTEXT);
+
+		expect(JSON.parse(String(result.output)).rounds).toEqual([
+			{ turn: 0, toolCalls: [{ name: 'search_patents', args: { query: 'battery' }, mockTag: 'OK', resultBody: 'one hit' }] },
+		]);
+	});
+
 	// OpenRouter reports an upstream rate limit INSIDE a 200 body. Read as a normal answer it
 	// would score a round the model never got to run as a give-up — a silent false verdict.
 	it('surfaces an upstream error carried in a 200 body instead of scoring it as an empty answer', async () => {

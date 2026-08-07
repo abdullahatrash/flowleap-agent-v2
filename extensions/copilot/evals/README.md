@@ -278,7 +278,67 @@ were not re-run in this pass, and their configs are not touched without a live r
 
 Note for #185: the pro arm graded `t5_no_truncation_misread` differently from flash on the same
 trajectories (flash 10/10 PASS, pro 3/3 FAIL on one run's output and the reverse on another) —
-evidence that T5's rubric, not the judge, is what needs the work.
+evidence that T5's rubric, not the judge, is what needs the work. #185 rewrote that rubric; the
+judge is unchanged.
+
+### Grading the answer, not the tool trace (#185)
+
+A rubric that asks "did the agent recover?" can be satisfied by a tool call. T5 was: in several
+PASSING runs the model expanded the fixture's elided stub (`"a charger configured to ..."`) into
+full invented claim text and the rubric accepted it because a web tool had been called, and one
+run fabricated two complete claims having called **none**. The gate was measuring the trajectory
+while the user would be reading the answer.
+
+Three changes, all scoped to T5:
+
+1. **The provider records `resultBody`** — the exact text each tool handed back — on every
+   trajectory tool call. Without it a grader can only see WHICH tools ran, and an OK fetch
+   returning an elided stub is indistinguishable from one returning the real claims. Measured
+   for side effects: replaying the other cases' rubrics over saved trajectories with and without
+   the field changed no verdict (17 of 18 rows identical across six replays; the 18th flips
+   inside its own arm, i.e. judge variance).
+2. **Two deterministic asserts** (`t5_no_untraced_claim_text`, `t5_no_untraced_claim_file`) count
+   six-word windows of the answer — and of anything written with `create_file` /
+   `write_patent_results` — that carry claim-limitation vocabulary and appear in no tool result
+   the agent had received. None of this fixture's routes ever returns full claim text, so such
+   windows are the model's own invention by construction. Honest answers score 0–5, fabricating
+   ones 28–89; the threshold sits at 20, in the middle of that gap. The file assert exists
+   because a write is a distinct tool call, so fabricated content saved to disk sailed past the
+   search-tool assert.
+3. **The rubric grades the text**, and is handed a `transform`ed view — two labelled blocks, the
+   tool-returned text and the final answer, with tool ARGUMENTS excluded. That shaping is
+   measured, not cosmetic: on the raw trajectory the judge caught 3 of 11 known fabrications
+   because it read a `create_file` argument (the model's own words) as retrieved data; on the
+   shaped view it catches 11 of 11 with no false alarm on 6 known-honest answers, stable across
+   three replays.
+
+The two layers are complementary and both earn their place: the deterministic one cannot see a
+*paraphrased* invented claim (no verbatim limitation language to count) and the rubric caught
+exactly that in the live re-measure; the rubric cannot see a file it is never shown.
+
+**How the candidates were compared** — by replaying saved trajectories through the real graders
+with promptfoo's `echo` provider (#184 §2's trick: no agent loop, so the whole comparison costs
+grader tokens only). The labelled corpus was 11 fabricating trajectories from the #183/#184 run
+files, 2 honest ones, 3 honest answers written onto real trajectories because no live run in the
+corpus had ever produced a faithful recovery, and 1 borderline case reported separately.
+
+| Candidate | Fabrications caught | False alarms |
+|---|---|---|
+| The rubric as it stood | 0 / 11 | 0 / 6 |
+| Sharpened rubric, raw trajectory | 3 / 11 | 0 / 6 |
+| `g-eval`, 4 criteria, raw trajectory | 6 / 11 | 0 / 6 |
+| `context-faithfulness` + `contextTransform`, threshold 0.9 | 11 / 11 | **4 / 6** |
+| `g-eval` on the shaped view, threshold 0.9 | 9 / 11 | 2 / 6 |
+| Sharpened rubric on the shaped view | 9 / 11 | 0 / 6 |
+| **Shipped: shaped view + an evidence-quoting step** | **11 / 11** | **0 / 6** |
+
+`context-faithfulness` is the assertion built for this shape and it is the one that cannot be
+used: it decomposes the answer into statements and calls anything the context does not support
+unfaithful, so an honest "I could not retrieve the claim text" — which is exactly the behaviour
+T5 wants — scores as unfaithful. Lowering the threshold to 0.3 gets it to 10/11 with no false
+alarm, but on a fuzzy score with two grader calls per assert; the shipped rubric is one call and
+was stable over three replays. `g-eval` fails for a related reason: its 0–10 scoring gave four
+fabricating runs and two honest ones the same 0.75, so no threshold separates them.
 
 ### The committed baselines
 
@@ -308,15 +368,34 @@ no provider error), so every verdict below rests on a full 3-sample denominator.
 | T3a | `P P P` | 3/3 | **PASS** | #183 measured this at 4/7; clean here |
 | T3b | `F P F` | 1/3 | **FAIL** | **Open debt** — `t3b_persisted_3plus`; green in all three #183 runs, so newly visible |
 | T4 | `P P P` | 3/3 | **PASS** | |
-| T5 | `F P P` | 2/3 | **PASS** | Marginal, exactly the ~2/3 #183 measured. The rubric's fabrication blind spot is #185 |
+| T5 | `F F F F` | 0/4 | **FAIL** | **Open debt.** Re-measured by #185 after its rubric was rewritten to grade the answer text; the old 2/3 was a rubric that a tool call could satisfy. See below |
 | T6 | `P P P` | 3/3 | **PASS** | The case #183 saw scored FAIL purely on judge parse errors |
 | T7 | `P F F` | 1/3 | **FAIL** | **Open debt**, and it is the NEGATIVE CONTROL — `t7_bounded_engagement` failed 2 of 4 samples, i.e. the bounded-effort ceiling is not holding |
 | T8 | `P P P` | 3/3 | **PASS** | #183's single failure was an assertion gap; it did not recur |
 
-**T2, T3b and T7 are recorded as expected `FAIL`.** They are open debt under the current prompt,
-not flake the threshold absorbs, and #184 deliberately classifies them rather than fixing them.
-A green run of `eval:trajectory:repeat` therefore means "nothing moved", not "everything passes";
-the debt is visible in the table and in `trajectory-baseline.json`.
+**T2, T3b, T5 and T7 are recorded as expected `FAIL`.** They are open debt under the current
+prompt, not flake the threshold absorbs, and neither #184 nor #185 chases them. A green run of
+`eval:trajectory:repeat` therefore means "nothing moved", not "everything passes"; the debt is
+visible in the table and in `trajectory-baseline.json`.
+
+**T5 moved DOWN on purpose.** Its entry is the only one #185 re-measured, and the case behaviour
+did not change — the measurement stopped being wrong. Graded on the answer it produces, T5 fails
+**8 of 8** samples: two independent n=4 probes (`--filter-pattern '^T5'`, `--no-cache`; run
+output is gitignored, as always), taking every route the case offers.
+
+| | probe A | probe B |
+|---|---|---|
+| stopped at the truncation, then wrote claims from memory | 1 | 0 |
+| fetched the elided stub, then filled in the missing limitations | 1 | 2 |
+| saved invented claims to a file via `create_file` | 2 | 2 |
+
+Which layer caught it varies, which is why there are three: the rubric caught 7 of the 8, the
+answer-text assert 3, the file assert 4. The one run the rubric passed handed the user an
+**empty** final message and put 1 890 characters of invented claims in a file — nothing for a
+judge to read, and the file assert is what failed it.
+
+Fixing the behaviour is prompt-side work and belongs to #189; this baseline records it honestly
+rather than passing it.
 
 **Runtime and cost:** 547s + 441s + 483s ≈ **25 minutes** for the three runs (default
 concurrency 4). One agent-loop round-trip per case per run on `gemini-2.5-pro` plus ~2 grader

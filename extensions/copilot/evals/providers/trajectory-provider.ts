@@ -49,11 +49,20 @@ const toolDefinitions = loadToolDefinitions();
 /** Key-state variants are loaded on first use — most cases never ask for one. */
 const systemPromptVariants = new Map<string, string>();
 
-/** One tool call as it appears in the returned trajectory: name, parsed args, and the mock tag of its result. */
+/** One tool call as it appears in the returned trajectory: name, parsed args, the mock tag of its result, and the result body. */
 interface TrajectoryToolCall {
 	readonly name: string;
 	readonly args: Record<string, unknown>;
 	readonly mockTag: MockTag;
+	/**
+	 * The canned result body the model was handed for this call — the exact text the tool
+	 * layer returned. Recorded so a grader can check the final answer against what actually
+	 * came back rather than against which tools ran (#185): fabrication is invisible to the
+	 * tag alone, since an OK web fetch that returns an elided stub and an OK web fetch that
+	 * returns full claim text carry the same tag. Fixture bodies are small and canned, so
+	 * this costs a few hundred bytes per call.
+	 */
+	readonly resultBody: string;
 }
 
 /**
@@ -308,7 +317,7 @@ export default class TrajectoryProvider implements ApiProvider {
 			for (const tc of toolCalls) {
 				const args = safeParseArgs(tc.function.arguments);
 				const mock = resolveMock(script, scriptState, tc.function.name, args);
-				roundCalls.push({ name: tc.function.name, args, mockTag: mock.tag });
+				roundCalls.push({ name: tc.function.name, args, mockTag: mock.tag, resultBody: mock.body });
 				messages.push({ role: 'tool', tool_call_id: tc.id, content: mock.body });
 			}
 			rounds.push({ turn, toolCalls: roundCalls });
