@@ -408,36 +408,24 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 		}).toEqual({ delegationLimit: false, decisionTreeStillRenders: true });
 	});
 
-	test('a tool result that only claims to carry the text grounds nothing', async () => {
+	// A retrieval-warrant block ("a result asserting the text was retrieved is not the text",
+	// "recalled claim language is not retrieval") was written for T5 and REMOVED after
+	// measurement: with it, T1's web-fallback persistence fell to 1/4 and T5 stayed 0/4; without
+	// it T1 is 4/4. What the prompt carries against fabrication is the #183 layer below, which
+	// this pass leaves exactly as it found it — the assertion exists so a future attempt at that
+	// block starts from the fact that the ground it would stand on is unmoved.
+	test('the inherited grounding rules are untouched by this pass', async () => {
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
 		expect({
-			statementIsNotData: output.includes('A STATEMENT ABOUT DATA IS NOT THE DATA'),
-			neverAWarrant: output.includes('never a warrant to write the text out'),
-			onlyLiteralWording: output.includes('Ground only on wording a tool result LITERALLY contained'),
-			elidedTextStaysElided: output.includes('never complete it from what the invention must plausibly say'),
-			breakIsMarkedInTheAnswer: output.includes('mark the break where the source stopped'),
-			antiPatternShowsTheElisionTrap: output.includes('or merely says the full text is available, and you write out the whole claim'),
-			// The same doctrine restated inside CRITICAL RULES, where the measured failures
-			// showed the model needed it: recall of a patent it never fetched reads as retrieval.
-			recallIsNamedAsTheTrap: output.includes('CLAIM TEXT IS THE HARDEST CASE'),
-			fluencyIsNotRetrieval: output.includes('That fluency is NOT retrieval'),
-			noFabricatedSelfReport: output.includes('NEVER report a retrieval you did not make'),
-			listingIsAPointer: output.includes('are POINTERS — fetch the page and use what the fetch returned'),
 			truncationRuleUnchanged: output.includes('AN EMPTY OR TRUNCATED PAYLOAD IS NOT CONTENT'),
+			elisionRuleUnchanged: output.includes('quote it as the partial it is instead of completing it'),
 			finalAnswerSweepUnchanged: output.includes('FINAL-ANSWER GROUNDING'),
+			noRetrievalWarrantBlock: output.includes('A STATEMENT ABOUT DATA IS NOT THE DATA') || output.includes('CLAIM TEXT IS THE HARDEST CASE'),
 		}).toEqual({
-			statementIsNotData: true,
-			neverAWarrant: true,
-			onlyLiteralWording: true,
-			elidedTextStaysElided: true,
-			breakIsMarkedInTheAnswer: true,
-			antiPatternShowsTheElisionTrap: true,
-			recallIsNamedAsTheTrap: true,
-			fluencyIsNotRetrieval: true,
-			noFabricatedSelfReport: true,
-			listingIsAPointer: true,
 			truncationRuleUnchanged: true,
+			elisionRuleUnchanged: true,
 			finalAnswerSweepUnchanged: true,
+			noRetrievalWarrantBlock: false,
 		});
 	});
 
@@ -448,13 +436,12 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 			emptyMessagePlusFileIsNotAnAnswer: output.includes('pointing at a file you created has not answered'),
 			noSmugglingIntoTheFile: output.includes('must not be written into the file either'),
 			toolOffloadCarveOutKept: output.includes('where a TOOL offloaded an oversized record to a path, you still read that path and hand it back'),
-			honestGapIsTheDeliverable: output.includes('the honest report IS the deliverable'),
-			ladderStillGatesTheDisclosure: output.includes('When the ladder is exhausted'),
+			gapDisclosedOnlyAfterTheLadder: output.includes('the gap is disclosed only after the ladder is exhausted'),
 			// Measured interaction: the anti-fabrication pressure bought honesty by SKIPPING the
 			// web rung and offering it instead, so the honest report is bound to the ladder here.
 			honestyDoesNotBuyOutThePersistence: output.includes('never shorten the work to avoid the risk of writing something you cannot source'),
 			droppedRecordStillOwesTheWebRung: output.includes('A record DROPPED in transit leaves rung (iii) untried'),
-			offeringARungIsNotEmittingIt: output.includes('never end the turn OFFERING a rung'),
+			offeringARungIsNotEmittingIt: output.includes('a rung you OFFER ("shall I check Google Patents?") rather than emit is a rung you did not try'),
 			verbatimCompletenessUnchanged: output.includes('VERBATIM-COMPLETENESS'),
 			// The completeness demand is where the pull to invent comes from, so the bound
 			// lives inside that same rule rather than only in a rule further down.
@@ -464,8 +451,7 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 			emptyMessagePlusFileIsNotAnAnswer: true,
 			noSmugglingIntoTheFile: true,
 			toolOffloadCarveOutKept: true,
-			honestGapIsTheDeliverable: true,
-			ladderStillGatesTheDisclosure: true,
+			gapDisclosedOnlyAfterTheLadder: true,
 			honestyDoesNotBuyOutThePersistence: true,
 			droppedRecordStillOwesTheWebRung: true,
 			offeringARungIsNotEmittingIt: true,
