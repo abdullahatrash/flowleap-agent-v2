@@ -20,8 +20,13 @@
  * forward progress on tools the case does not care about.
  */
 
-/** Which failure/success shape a mock result carries. Tags flow into the trajectory so structural asserts can see them. */
-export type MockTag = 'OK' | 'EMPTY' | 'HTTP_5XX' | 'TRUNCATED';
+/**
+ * Which failure/success shape a mock result carries. Tags flow into the trajectory so structural
+ * asserts can see them. `KEY_GATE` is the `data_keys_required` user-action stop (an office whose
+ * Patent-Data Key the user has not set) — deliberately its own tag, because the key-gate doctrine
+ * classifies it as neither an outage nor a zero result.
+ */
+export type MockTag = 'OK' | 'EMPTY' | 'HTTP_5XX' | 'TRUNCATED' | 'KEY_GATE';
 
 export interface MockResponse {
 	/** Classification of this result, surfaced on the trajectory tool call. */

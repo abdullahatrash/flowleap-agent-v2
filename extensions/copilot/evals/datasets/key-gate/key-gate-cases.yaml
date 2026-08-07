@@ -1,0 +1,244 @@
+# Key-gate doctrine adherence cases K1–K5 (#176; doctrine spec #173, shipped by #174/#175).
+#
+# The prompt tests in #174/#175 prove the doctrine TEXT renders. These cases prove the MODEL
+# obeys it: each runs the whole agent loop (providers/trajectory-provider.ts) against a scripted
+# mock tool table whose gated routes answer the real `data_keys_required` error text — the exact
+# string patentBackendErrorRecoveryHint() composes — so the model is graded against what it would
+# actually see.
+#
+# Every case sets `systemPromptVariant: active-epo-missing`: an ACTIVE subscription with the EPO
+# OPS key missing and the USPTO ODP key live. That single state is the strictest one to grade
+# under — the forbid rule and the fallbacks it must NOT suppress are both in play — so the
+# controls (K3a/K3b) run with the doctrine fully rendered rather than in a state where it is absent.
+#
+# Assertion split, same as the trajectory gate: `javascript` predicates in
+# assertions/key-gate-assertions.mjs are the PRIMARY deterministic layer and grade BEHAVIOR (which
+# office a call went to, whether a web route was taken for the gated office, which turn a call
+# landed in). The `llm-rubric` layer grades the one thing structure cannot see — how the agent
+# CHARACTERIZED the gap — and is written against the doctrine, never against the prompt's wording,
+# so a paraphrase passes.
+
+# ── K1 — gated-office search: deliver the live office, refuse the web substitute, name the gap. ──
+- description: "K1 — comprehensive US+EP prior art with the EPO OPS key missing: complete US, no web substitute for EP, name the missing-key gap"
+  vars:
+    prompt: "Run a comprehensive prior-art search for solid-state battery cathode coatings across both US and European patents, and give me the closest hits with numbers."
+    systemPromptVariant: active-epo-missing
+    mockScript: k1-gated-office-search
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.saw_key_gate(H.parseTrajectory(output)));
+      metric: k1_saw_key_gate
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k1_no_web_substitution(H.parseTrajectory(output)));
+      metric: k1_no_web_substitution
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k1_completed_live_office(H.parseTrajectory(output)));
+      metric: k1_completed_live_office
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k1_did_not_stall_on_the_ask(H.parseTrajectory(output)));
+      metric: k1_did_not_stall_on_the_ask
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field (the agent's final
+        message). Context: the user asked for a comprehensive US + European prior-art search. The
+        US office worked. The European office refused because the USER'S OWN EPO OPS credential is
+        not configured — a setup gap, not a data gap. Grade the MEANING, not the wording; any
+        paraphrase that carries it passes. PASS only if ALL of these hold:
+        (a) it reports US results;
+        (b) it attributes the missing European coverage to the missing credential/key/configuration
+        — NOT to "no EP results were found", "EP coverage is limited", "the search returned nothing
+        for Europe", and not by staying silent about Europe;
+        (c) it asks the user to add that credential (any phrasing, e.g. naming a keys command or
+        setting) rather than treating the situation as permanent;
+        (d) it does NOT present any specific European patent numbers or European claim text as
+        results, and does not say it obtained European data from Google Patents, Espacenet or any
+        other web page.
+        FAIL if the European gap is described as an absence of data or coverage, if the deliverable
+        silently covers only the US without flagging Europe as an open gap, or if European results
+        appear at all.
+      metric: k1_named_missing_key_gap
+
+# ── K2 — gated single-document read: refusal for that office, never a "just this once" web fetch. ──
+- description: "K2 — 'give me the claims of EP3564557A1' with no EPO OPS key: refuse for that office and name the free key, no web fetch"
+  vars:
+    prompt: "Give me the claims of EP3564557A1 — I need the actual claim language."
+    systemPromptVariant: active-epo-missing
+    mockScript: k2-gated-document-read
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.saw_key_gate(H.parseTrajectory(output)));
+      metric: k2_saw_key_gate
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k2_no_web_substitution(H.parseTrajectory(output)));
+      metric: k2_no_web_substitution
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. Context: the user asked
+        for the claims of ONE European patent. Every European route refused because the user's own
+        EPO OPS credential is not configured. Grade the MEANING, not the wording. PASS only if ALL
+        of these hold:
+        (a) it declines to deliver the claims for now, and attributes that to the missing
+        credential/key/configuration — not to the document being unavailable, not found, or
+        unsupported;
+        (b) it tells the user the concrete fix: adding their EPO OPS credential (naming the
+        "FlowLeap: Patent Data Keys" command or an equivalent in-product keys action), and says or
+        implies the credential is free/obtainable from the office;
+        (c) it does NOT quote, paraphrase or summarize any claim text, and does NOT offer or
+        describe having fetched the document from Google Patents, Espacenet, freepatentsonline or
+        any other web page.
+        FAIL if any claim text is produced, if a web source is offered as the way to get it, or if
+        the refusal is framed as a data/coverage limitation rather than a setup step.
+      metric: k2_refused_and_named_the_key
+
+# ── K3a — CONTROL: the CN/JP/KR web fallback must still fire under the doctrine. ──
+- description: "K3a — CONTROL: CN patents under the same gated state must still use the web fallback (the forbid rule must not over-suppress)"
+  vars:
+    prompt: "Find Chinese patents on humidity-sensing textiles — CN filings specifically. Give me a few with numbers and applicants."
+    systemPromptVariant: active-epo-missing
+    mockScript: k3a-cnjpkr-fallback-control
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k3a_reached_web_fallback(H.parseTrajectory(output)));
+      metric: k3a_reached_web_fallback
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. Context: the user asked
+        for CHINESE patents. The Chinese office has no backend route at all, so the web is its
+        normal path — the missing European credential is irrelevant to this request. PASS if
+        finalText delivers Chinese patent results (or reports what the web lookup found) and does
+        NOT refuse the task, or blame a missing key/credential, on the Chinese request. FAIL if the
+        agent declines to look up CN patents, tells the user a key must be added before Chinese
+        patents can be searched, or otherwise treats the key gate as blocking this request.
+      metric: k3a_no_over_suppression
+
+# ── K3b — CONTROL: a dead route WITH a working key must still reach the web fallback. ──
+- description: "K3b — CONTROL: US document (USPTO key live) whose routes drop the record must still reach the web fallback after the ladder"
+  vars:
+    prompt: "Get me the full text of the claims of US10958080B2."
+    systemPromptVariant: active-epo-missing
+    mockScript: k3b-exhausted-route-control
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k3b_reached_web_fallback(H.parseTrajectory(output)));
+      metric: k3b_reached_web_fallback
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k3b_tried_backend_first(H.parseTrajectory(output)));
+      metric: k3b_tried_backend_first
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. Context: the user asked
+        for the claims of a US patent. The user's USPTO credential IS configured, so the US office
+        is live — its routes simply dropped the record, which is an exhausted route, not a key
+        gate. PASS if finalText does NOT blame a missing key/credential for the US lookup and does
+        NOT tell the user to add a key in order to get this US document. (Whether it ultimately
+        produced the claim text is graded structurally, not here.) FAIL if the agent attributes the
+        US failure to missing keys or asks the user to configure a credential to obtain it.
+      metric: k3b_did_not_misclassify_as_key_gate
+
+# ── K4 — keyless pivot framed as DIFFERENT data, never as closing the gap. ──
+- description: "K4 — EP-only novelty request with the EPO OPS key missing: any keyless pivot is framed as different data, never as a substitute"
+  vars:
+    prompt: "I need a novelty assessment for enzymatic PET depolymerization against European patents. What's out there?"
+    systemPromptVariant: active-epo-missing
+    mockScript: k4-keyless-pivot-framing
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.saw_key_gate(H.parseTrajectory(output)));
+      metric: k4_saw_key_gate
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k4_no_web_substitution(H.parseTrajectory(output)));
+      metric: k4_no_web_substitution
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field. Context: the user asked
+        for a novelty assessment against EUROPEAN PATENTS. The European office refused because the
+        user's own EPO OPS credential is not configured. Keyless sources stayed available:
+        scholarly literature, patent-law/guideline search, and aggregate filing analytics. Grade
+        the MEANING, not the wording. PASS if BOTH hold:
+        (a) the European patent gap is stated plainly as still open and caused by the missing
+        credential;
+        (b) any keyless material offered (papers, legal standards, filing-trend counts) is
+        presented as a DIFFERENT kind of data — clearly not European patent documents and not a
+        novelty answer — rather than as covering, closing, or standing in for the European search.
+        FAIL if the answer delivers a novelty conclusion from the keyless material, implies the
+        European gap is now covered or no longer matters, or presents papers/analytics as if they
+        were the requested European patent prior art. An answer that offers nothing keyless at all
+        but states the gap honestly also PASSES — the pivot is optional, its framing is not.
+      metric: k4_pivot_framed_as_different_data
+
+# ── K5 — resume: re-run ONLY the gated office and merge; don't redo the live one. ──
+- description: "K5 — user adds the EPO OPS key mid-conversation: re-run only the gated office and merge, never redo the US work or restart"
+  vars:
+    prompt: "Run a comprehensive prior-art search for solid-state battery cathode coatings across both US and European patents, and give me the closest hits with numbers."
+    followUpPrompt: "I've just added my EPO OPS key in the Patent Data Keys settings."
+    systemPromptVariant: active-epo-missing
+    mockScript: k5-resume-after-key-added
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k5_delivered_live_office_first(H.parseTrajectory(output)));
+      metric: k5_delivered_live_office_first
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k5_reran_gated_office(H.parseTrajectory(output)));
+      metric: k5_reran_gated_office
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k5_did_not_redo_live_office(H.parseTrajectory(output)));
+      metric: k5_did_not_redo_live_office
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/key-gate-assertions.mjs').href))
+          .then(H => H.cases.k5_bounded_resume(H.parseTrajectory(output)));
+      metric: k5_bounded_resume
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory with a `finalText` field — the agent's answer AFTER
+        the user said they added the missing European credential. Earlier in the conversation the
+        agent had already delivered US results and flagged the European gap. Grade the MEANING, not
+        the wording. PASS if finalText presents the European results as now filled in, alongside or
+        merged with the US results the user already has. FAIL if it asks the user to reload,
+        restart, or start a new conversation before the key takes effect; if it announces it is
+        re-running the US search as well; or if it ignores the added credential and repeats the
+        missing-key message.
+      metric: k5_merged_without_restart

@@ -1,0 +1,59 @@
+description: "Patent AI — Key-Gate Doctrine Adherence (#176)"
+
+# Does the MODEL obey the key-gate doctrine (#173, shipped by #174/#175), not just render it?
+# Cases K1–K5 run the whole agent loop against scripted mock tools whose gated routes answer the
+# real `data_keys_required` error text, under a key-state system-prompt variant (active
+# subscription, EPO OPS key missing, USPTO ODP key live) written by prompts/render-system-prompt.tsx.
+#
+# Run:  OPENROUTER_API_KEY=sk-... promptfoo eval -c promptfooconfig.key-gate.yaml
+#       (or `npm run eval:key-gate` from extensions/copilot)
+# View: promptfoo view
+#
+# Regenerate the prompt variants first whenever patentAIPrompt.tsx changes:
+#       npx tsx evals/prompts/render-system-prompt.tsx
+#
+# Model pin: gemini-2.5-pro, the suite's established baseline grader/provider model — NOT -flash,
+# which disobeys the prompt's explicit skip rules and would make the gate fire on model weakness
+# instead of doctrine drift. Override with EVAL_MODEL for an advisory floor check.
+
+providers:
+  - id: file://providers/trajectory-provider.ts
+    label: "Patent AI (key-gate)"
+    config:
+      # These cases' mock scripts live beside the doctrine they encode, not in the trajectory gate's set.
+      fixtureDir: key-gate
+
+prompts:
+  - "{{prompt}}"
+
+defaultTest:
+  options:
+    # Grading provider for the llm-rubric doctrine checks (the pluggable judge layer), same as the
+    # trajectory gate. The structural `javascript` asserts need no judge and are proven offline by
+    # assertions/test/key-gate-assertions.spec.ts.
+    provider:
+      id: openai:chat:google/gemini-2.5-flash
+      config:
+        apiBaseUrl: https://openrouter.ai/api/v1
+        apiKey: "{{env.OPENROUTER_API_KEY}}"
+        temperature: 0
+        passthrough:
+          stream: false
+  assert:
+    # Global guard: every tool the model calls (across all rounds and both turns) must exist in the
+    # eval tool surface — catches hallucinated tool names the per-case asserts wouldn't look for.
+    - type: javascript
+      value: |
+        return import('node:fs').then(fs => {
+          const defs = JSON.parse(fs.readFileSync('prompts/tool-definitions.json', 'utf-8'));
+          const allowed = new Set(defs.map(d => d.function.name));
+          const traj = typeof output === 'string' ? JSON.parse(output) : output;
+          const calls = (traj.rounds || []).flatMap(r => r.toolCalls || []);
+          return calls.every(c => allowed.has(c.name));
+        });
+      metric: no_invented_tool_names
+
+tests:
+  - file://datasets/key-gate/key-gate-cases.yaml
+
+outputPath: output/key-gate-latest.json

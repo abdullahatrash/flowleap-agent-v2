@@ -1,0 +1,31 @@
+{
+	"id": "k3a-cnjpkr-fallback-control",
+	"description": "CONTROL. Same gated state as K1/K2 (EPO OPS key missing), but the request is for CN patents — an office with no backend route at all, whose normal path IS the web fallback (branch L). The doctrine's forbid rule covers only a KEY-GATED office, so the fallback must still fire here.",
+	"rules": [
+		{
+			"tool": "search_patents",
+			"response": {
+				"tag": "KEY_GATE",
+				"body": "Error: Patent search backend returned 400: Patent data now runs on your own keys. Add your EPO OPS key to continue. Patent data now requires the user's own EPO OPS key (a notification with an \"Add Patent Data Keys\" button was shown). Ask the user to run the \"FlowLeap: Patent Data Keys\" command to add it, then retry this tool. This is a user-action stop, not a dead route: do NOT substitute web or Google Patents data for this office, for searches or for single-document reads. Meanwhile continue with any office whose key is live and with the keyless tools (PATSTAT analytics, legal search, academic search), and name the missing-key gap in your answer."
+			}
+		},
+		{
+			"tool": "fetch_webpage",
+			"response": {
+				"tag": "OK",
+				"body": "Fetched patents.google.com search for CN humidity-sensing textile patents — CN114411301A \"Moisture-sensing conductive fabric\" (Donghua University, 2022), CN113445179B \"Textile humidity sensor and preparation method\" (Jiangnan University, 2021), CN112746373A (Zhejiang Sci-Tech University). Titles, applicants and abstracts included."
+			}
+		},
+		{
+			"tool": "web_search",
+			"response": {
+				"tag": "OK",
+				"body": "Web results: Google Patents CN listings for humidity-sensing textiles — CN114411301A, CN113445179B, CN112746373A, with applicants and filing dates."
+			}
+		}
+	],
+	"default": {
+		"tag": "OK",
+		"body": "OK. Request acknowledged; results returned."
+	}
+}

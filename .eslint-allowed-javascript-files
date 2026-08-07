@@ -21,6 +21,7 @@ extensions/copilot/.mocha-multi-reporters.js
 extensions/copilot/.mocharc.js
 extensions/copilot/.vscode-test.mjs
 extensions/copilot/.vscode/extensions/visualization-runner/entry.js
+extensions/copilot/evals/assertions/key-gate-assertions.mjs
 extensions/copilot/evals/assertions/trajectory-assertions.mjs
 extensions/copilot/script/electron/simulationWorkbenchMain.js
 extensions/copilot/src/extension/completions-core/vscode-node/extension/test/run.js
