@@ -1,0 +1,12 @@
+{
+	"name": "flowleap-evals",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Pinned promptfoo runner for the Patent AI eval suites. Deliberately isolated from the extension's dependency tree — see README.md ('promptfoo version policy').",
+	"scripts": {
+		"promptfoo": "promptfoo"
+	},
+	"devDependencies": {
+		"promptfoo": "0.122.0"
+	}
+}
