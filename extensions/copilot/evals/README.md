@@ -275,6 +275,56 @@ OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.frontier.yaml --n
 (The two plan-010 demotions — multi-office enumeration and the "all patent offices" synonym —
 were promoted back to `jurisdiction-gating.yaml` when plan 010 landed.)
 
+## Key-gate doctrine suite (#176)
+
+`promptfooconfig.key-gate.yaml` + `datasets/key-gate/key-gate-cases.yaml` grade whether the
+model **obeys** the key-gate doctrine (spec #173, shipped by #174/#175) — the prompt unit
+tests only prove the doctrine text renders.
+
+```bash
+cd evals
+OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.key-gate.yaml --no-cache
+# or, from extensions/copilot:  npm run eval:key-gate
+```
+
+It reuses the trajectory provider (whole agent loop against scripted mock tools) with two
+additions:
+
+- **Key-state prompt variants.** The key blocks render from props, so a case about a gated
+  office needs the prompt that user would actually get. `prompts/render-system-prompt.tsx`
+  writes one snapshot per entry in its `KEY_STATE_VARIANTS` list to
+  `prompts/key-state/<id>.txt`; a case picks one with the `systemPromptVariant` var.
+  **Re-run `npx tsx evals/prompts/render-system-prompt.tsx` whenever `patentAIPrompt.tsx`
+  changes** — it refreshes `system-prompt.txt` and every variant together.
+- **A second user turn.** `followUpPrompt` sends a follow-up once the first turn settles (K5:
+  "I added the key"). Its rounds carry `turn: 1`, so the resume rule can be graded on
+  post-resume work alone.
+
+Gated routes in `fixtures/key-gate/*.json` answer the real `data_keys_required` error text —
+the exact string `patentBackendErrorRecoveryHint()` composes — so the model is graded against
+what it would actually see. Every case runs the `active-epo-missing` state (active
+subscription, EPO OPS key missing, USPTO ODP key live): the strictest single state, because
+the forbid rule and the fallbacks it must not suppress are both in play.
+
+| Case | Scenario | Graded on |
+|---|---|---|
+| K1 | Comprehensive US+EP search, EP gated | No web substitution for EP (arg-level), US office completed, no ask-first stall, gap named as a missing-key gap |
+| K2 | Single EP document read, EP gated | No web route at all, refusal names the free key and the keys command, no claim text |
+| K3a | **Control** — CN request under the same gate | Web fallback still fires; no key blamed for a CN request |
+| K3b | **Control** — dead US routes with a working key | Backend ladder tried first, web fallback still fires, failure not misclassified as a key gate |
+| K4 | EP-only novelty request, EP gated | Keyless pivot framed as different data, never as closing the gap; no web substitution |
+| K5 | User adds the key mid-conversation | Only the gated office re-run, live office not redone, merged without a restart |
+
+Assertion split follows the trajectory gate: the `javascript` predicates in
+`assertions/key-gate-assertions.mjs` are the primary deterministic layer and grade **behavior**
+(which office a call went to, whether a web route took the gated office's data, which turn a
+call landed in); `llm-rubric` grades only how the agent *characterized* the gap, written
+against the doctrine rather than the prompt's wording so paraphrases pass. The structural layer
+is proven offline — no model, no judge — by `assertions/test/key-gate-assertions.spec.ts`,
+which also red-checks each predicate against the failure it exists to catch.
+
+**Baseline (2026-08-07, `google/gemini-2.5-pro`, `--no-cache`): 6/6 cases, 27/27 assertions.**
+
 ## File Structure
 
 ```
@@ -282,11 +332,17 @@ evals/
 ├── promptfooconfig.yaml          # Single-model eval config (gating, 34 cases)
 ├── promptfooconfig.frontier.yaml # Non-gating frontier probe config (4 cases)
 ├── promptfooconfig.multi.yaml    # Multi-model comparison (all 9 models)
+├── promptfooconfig.key-gate.yaml # Key-gate doctrine adherence (6 cases, #176)
 ├── README.md                     # This file
 ├── providers/
-│   └── patent-ai-provider.ts     # Custom provider → OpenRouter (BYOK, no backend)
+│   ├── patent-ai-provider.ts     # Custom provider → OpenRouter (BYOK, no backend)
+│   └── trajectory-provider.ts    # Multi-turn replay loop (trajectory + key-gate suites)
+├── assertions/
+│   ├── trajectory-assertions.mjs # Structural predicates, trajectory gate
+│   └── key-gate-assertions.mjs   # Structural predicates, key-gate suite
 ├── prompts/
 │   ├── system-prompt.txt         # Static render of patentAIPrompt.tsx
+│   ├── key-state/                # Per-key-state prompt variants (same render script)
 │   ├── tool-definitions.json     # 20 tools in OpenAI function format (generated)
 │   └── extract-tools.ts          # Script to regenerate tool-definitions.json (fails on missing names)
 ├── datasets/
@@ -296,7 +352,8 @@ evals/
 │   ├── active-behavior.yaml      # 2 tests — file creation intent
 │   ├── source-attribution.yaml   # 2 tests — source citing
 │   ├── search-strategy.yaml      # 5 tests — API syntax correctness
-│   └── frontier.yaml             # 4 probes — NON-GATING (failures are findings)
+│   ├── frontier.yaml             # 4 probes — NON-GATING (failures are findings)
+│   └── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
 ├── scripts/
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
 │   ├── check-prompt-drift.ts     # TSX ↔ system-prompt.txt drift checker

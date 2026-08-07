@@ -7,7 +7,7 @@ import type { ApiProvider, ProviderResponse, CallApiContextParams, CallApiOption
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { createMockScriptState, resolveMock, type MockScript, type MockTag } from './mock-tool-table';
+import { createMockScriptState, resolveMock, type MockScript, type MockScriptState, type MockTag } from './mock-tool-table';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +25,15 @@ function loadSystemPrompt(): string {
 	return fs.readFileSync(path.join(EVALS_DIR, 'prompts', 'system-prompt.txt'), 'utf-8');
 }
 
+/**
+ * Load a key-state prompt variant (`prompts/key-state/<id>.txt`, written by
+ * prompts/render-system-prompt.tsx). The key-state blocks render from props, so a case that
+ * grades key-gate behavior must be run against the snapshot for ITS state, not the default one.
+ */
+function loadSystemPromptVariant(id: string): string {
+	return fs.readFileSync(path.join(EVALS_DIR, 'prompts', 'key-state', `${id}.txt`), 'utf-8');
+}
+
 interface ToolDefinition {
 	readonly type: string;
 	readonly function: { readonly name: string; readonly description: string; readonly parameters: Record<string, unknown> };
@@ -37,6 +46,8 @@ function loadToolDefinitions(): ToolDefinition[] {
 // Cached across instances (same pattern as the single-turn provider).
 const systemPrompt = loadSystemPrompt();
 const toolDefinitions = loadToolDefinitions();
+/** Key-state variants are loaded on first use — most cases never ask for one. */
+const systemPromptVariants = new Map<string, string>();
 
 /** One tool call as it appears in the returned trajectory: name, parsed args, and the mock tag of its result. */
 interface TrajectoryToolCall {
@@ -45,10 +56,18 @@ interface TrajectoryToolCall {
 	readonly mockTag: MockTag;
 }
 
-/** The structured object assertions JSON.parse — the multi-turn analogue of the single-turn `{text, tool_calls}`. */
+/**
+ * The structured object assertions JSON.parse — the multi-turn analogue of the single-turn
+ * `{text, tool_calls}`. `turn` is 0 for the whole run unless the case supplies a `followUpPrompt`,
+ * in which case the rounds driven by that second user message carry `turn: 1` — how a resume case
+ * tells "work done before the user spoke again" from "work done after".
+ */
 interface Trajectory {
-	readonly rounds: ReadonlyArray<{ readonly toolCalls: readonly TrajectoryToolCall[] }>;
+	readonly rounds: ReadonlyArray<{ readonly turn: number; readonly toolCalls: readonly TrajectoryToolCall[] }>;
+	/** The model's final message of the LAST turn. */
 	readonly finalText: string;
+	/** Final message per turn, in order — a resume case grades the pre-resume answer too. */
+	readonly turnTexts: readonly string[];
 	readonly stoppedReason: 'no_more_tools' | 'max_rounds';
 }
 
@@ -71,12 +90,15 @@ interface ChatChoice {
 export interface TrajectoryProviderDeps {
 	readonly fetch?: typeof fetch;
 	readonly env?: NodeJS.ProcessEnv;
-	/** Resolve a mockScript id to a loaded script. Defaults to reading `fixtures/trajectory/<id>.json`. */
+	/** Resolve a mockScript id to a loaded script. Defaults to reading `fixtures/<fixtureDir>/<id>.json`. */
 	readonly loadScript?: (id: string) => MockScript;
 }
 
-function defaultLoadScript(id: string): MockScript {
-	const fixturePath = path.join(EVALS_DIR, 'fixtures', 'trajectory', `${id}.json`);
+/** Fixture folder a config that does not name one reads from — the original trajectory gate's. */
+const DEFAULT_FIXTURE_DIR = 'trajectory';
+
+function defaultLoadScript(fixtureDir: string, id: string): MockScript {
+	const fixturePath = path.join(EVALS_DIR, 'fixtures', fixtureDir, `${id}.json`);
 	return JSON.parse(fs.readFileSync(fixturePath, 'utf-8')) as MockScript;
 }
 
@@ -102,6 +124,15 @@ function safeParseArgs(raw: string): Record<string, unknown> {
  * The failure bodies are canned fixtures (never live), so at temperature 0 with a fixed model
  * the loop is deterministic. The mockScript id is read from the case's `vars.mockScript`.
  *
+ * Two OPT-IN case vars extend the loop for the key-gate suite (promptfooconfig.key-gate.yaml);
+ * a case that omits them behaves exactly as before:
+ *   `systemPromptVariant`  Render the run against `prompts/key-state/<id>.txt` instead of the
+ *                          default snapshot — the key-state blocks depend on props, so a case
+ *                          about a gated office must see the prompt that user would get.
+ *   `followUpPrompt`       A SECOND user message, sent once the first turn settles (e.g. "I added
+ *                          the key"). Its rounds carry `turn: 1`, so a resume case can assert on
+ *                          post-resume work alone.
+ *
  * Configuration (env, read at call time — shared with the single-turn provider):
  *   EVAL_API_BASE_URL  Chat completions base URL. Default https://openrouter.ai/api/v1
  *   EVAL_API_KEY        API key (falls back to OPENROUTER_API_KEY). Required.
@@ -115,12 +146,13 @@ export default class TrajectoryProvider implements ApiProvider {
 	private readonly env: NodeJS.ProcessEnv;
 	private readonly loadScript: (id: string) => MockScript;
 
-	constructor(options?: { config?: { model?: string; maxRounds?: number }; id?: string; label?: string }, deps?: TrajectoryProviderDeps) {
+	constructor(options?: { config?: { model?: string; maxRounds?: number; fixtureDir?: string }; id?: string; label?: string }, deps?: TrajectoryProviderDeps) {
 		this.configModel = options?.config?.model;
 		this.configMaxRounds = options?.config?.maxRounds;
 		this.fetchFn = deps?.fetch ?? globalThis.fetch;
 		this.env = deps?.env ?? process.env;
-		this.loadScript = deps?.loadScript ?? defaultLoadScript;
+		const fixtureDir = options?.config?.fixtureDir ?? DEFAULT_FIXTURE_DIR;
+		this.loadScript = deps?.loadScript ?? (id => defaultLoadScript(fixtureDir, id));
 	}
 
 	id(): string {
@@ -184,7 +216,7 @@ export default class TrajectoryProvider implements ApiProvider {
 
 		const scriptId = context?.vars?.mockScript;
 		if (typeof scriptId !== 'string' || !scriptId) {
-			return { error: 'Trajectory case is missing a `mockScript` var naming a fixture under fixtures/trajectory/.' };
+			return { error: 'Trajectory case is missing a `mockScript` var naming a fixture under the provider\'s fixture folder.' };
 		}
 		let script: MockScript;
 		try {
@@ -193,54 +225,95 @@ export default class TrajectoryProvider implements ApiProvider {
 			return { error: `Failed to load mockScript "${scriptId}": ${err instanceof Error ? err.message : String(err)}` };
 		}
 		const scriptState = createMockScriptState(script);
-		const maxRounds = this.resolveMaxRounds();
 
-		const messages: ChatMessage[] = [
-			{ role: 'system', content: systemPrompt },
-			{ role: 'user', content: prompt },
-		];
-		const rounds: Array<{ toolCalls: TrajectoryToolCall[] }> = [];
-		let finalText = '';
+		const variantId = context?.vars?.systemPromptVariant;
+		let systemText = systemPrompt;
+		if (typeof variantId === 'string' && variantId) {
+			try {
+				let cached = systemPromptVariants.get(variantId);
+				if (cached === undefined) {
+					cached = loadSystemPromptVariant(variantId);
+					systemPromptVariants.set(variantId, cached);
+				}
+				systemText = cached;
+			} catch (err) {
+				return { error: `Failed to load systemPromptVariant "${variantId}": ${err instanceof Error ? err.message : String(err)}` };
+			}
+		}
+
+		const followUp = context?.vars?.followUpPrompt;
+		const userTurns = [prompt, ...(typeof followUp === 'string' && followUp ? [followUp] : [])];
+
+		const messages: ChatMessage[] = [{ role: 'system', content: systemText }];
+		const rounds: Array<{ turn: number; toolCalls: TrajectoryToolCall[] }> = [];
+		const turnTexts: string[] = [];
 		let stoppedReason: Trajectory['stoppedReason'] = 'max_rounds';
 
 		try {
-			for (let round = 0; round < maxRounds; round++) {
-				const choice = await this.chat(apiKey, messages, /*withTools*/ true);
-				const toolCalls = choice.message.tool_calls ?? [];
-				if (toolCalls.length === 0) {
-					finalText = choice.message.content ?? '';
-					stoppedReason = 'no_more_tools';
-					break;
-				}
-
-				// Record the assistant turn so the model sees its own calls on the next round.
-				messages.push({ role: 'assistant', content: choice.message.content ?? '', tool_calls: toolCalls });
-
-				const roundCalls: TrajectoryToolCall[] = [];
-				for (const tc of toolCalls) {
-					const args = safeParseArgs(tc.function.arguments);
-					const mock = resolveMock(script, scriptState, tc.function.name, args);
-					roundCalls.push({ name: tc.function.name, args, mockTag: mock.tag });
-					messages.push({ role: 'tool', tool_call_id: tc.id, content: mock.body });
-				}
-				rounds.push({ toolCalls: roundCalls });
-			}
-
-			// Loop ran to the cap without a clean stop: take one final no-tools turn so the
-			// judge has the model's actual give-up/summary narration to grade.
-			if (stoppedReason === 'max_rounds') {
-				try {
-					const wrap = await this.chat(apiKey, messages, /*withTools*/ false);
-					finalText = wrap.message.content ?? '';
-				} catch {
-					finalText = '';
+			for (let turn = 0; turn < userTurns.length; turn++) {
+				messages.push({ role: 'user', content: userTurns[turn] });
+				const settled = await this.runTurn(apiKey, messages, script, scriptState, turn, rounds);
+				turnTexts.push(settled.finalText);
+				stoppedReason = settled.stoppedReason;
+				// Carry the answer into the next turn so a follow-up ("I added the key") is read
+				// against what the agent already delivered — the resume rule is about not redoing it.
+				if (turn + 1 < userTurns.length) {
+					messages.push({ role: 'assistant', content: settled.finalText });
 				}
 			}
 		} catch (err) {
 			return { error: `Trajectory run failed: ${err instanceof Error ? err.message : String(err)}` };
 		}
 
-		const trajectory: Trajectory = { rounds, finalText, stoppedReason };
+		const trajectory: Trajectory = { rounds, finalText: turnTexts[turnTexts.length - 1] ?? '', turnTexts, stoppedReason };
 		return { output: JSON.stringify(trajectory) };
+	}
+
+	/** Runs the agent loop for ONE user turn, appending its rounds to `rounds` and its messages to `messages`. */
+	private async runTurn(
+		apiKey: string,
+		messages: ChatMessage[],
+		script: MockScript,
+		scriptState: MockScriptState,
+		turn: number,
+		rounds: Array<{ turn: number; toolCalls: TrajectoryToolCall[] }>,
+	): Promise<{ finalText: string; stoppedReason: Trajectory['stoppedReason'] }> {
+		const maxRounds = this.resolveMaxRounds();
+		let finalText = '';
+		let stoppedReason: Trajectory['stoppedReason'] = 'max_rounds';
+
+		for (let round = 0; round < maxRounds; round++) {
+			const choice = await this.chat(apiKey, messages, /*withTools*/ true);
+			const toolCalls = choice.message.tool_calls ?? [];
+			if (toolCalls.length === 0) {
+				finalText = choice.message.content ?? '';
+				stoppedReason = 'no_more_tools';
+				break;
+			}
+
+			// Record the assistant turn so the model sees its own calls on the next round.
+			messages.push({ role: 'assistant', content: choice.message.content ?? '', tool_calls: toolCalls });
+
+			const roundCalls: TrajectoryToolCall[] = [];
+			for (const tc of toolCalls) {
+				const args = safeParseArgs(tc.function.arguments);
+				const mock = resolveMock(script, scriptState, tc.function.name, args);
+				roundCalls.push({ name: tc.function.name, args, mockTag: mock.tag });
+				messages.push({ role: 'tool', tool_call_id: tc.id, content: mock.body });
+			}
+			rounds.push({ turn, toolCalls: roundCalls });
+		}
+
+		// Loop ran to the cap without a clean stop: take one final no-tools turn so the
+		// judge has the model's actual give-up/summary narration to grade.
+		if (stoppedReason === 'max_rounds') {
+			try {
+				const wrap = await this.chat(apiKey, messages, /*withTools*/ false);
+				finalText = wrap.message.content ?? '';
+			} catch {
+				finalText = '';
+			}
+		}
+		return { finalText, stoppedReason };
 	}
 }
