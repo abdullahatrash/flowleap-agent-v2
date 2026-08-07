@@ -135,7 +135,9 @@ export class TransientBackendError extends PatentBackendError {
  * Model-facing recovery hint for an auth/setup/transient failure from the backend. Tools append
  * this to their error result so the assistant can tell the user (or itself) the concrete next step
  * in-chat — the actionable notification the seam fires is easy to miss mid-conversation, and a
- * transient `5xx`/gateway/timeout needs a "wait and retry" steer, not a give-up. Empty only for the
+ * transient `5xx`/gateway/timeout needs a "wait and retry" steer, not a give-up. The
+ * {@link DataKeysRequiredError} hint carries the key-gate doctrine's no-substitution steer, so the
+ * reactive path says what the system prompt says. Empty only for the
  * generic {@link PatentBackendError} (an unclassified `4xx`), so tools keep their generic format there.
  */
 export function patentBackendErrorRecoveryHint(error: PatentBackendError): string {
@@ -151,7 +153,7 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	}
 	if (error instanceof DataKeysRequiredError) {
 		const providerClause = error.provider ? `${error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP'} ` : 'EPO OPS or USPTO ';
-		return ` Patent data now requires the user's own ${providerClause}key (a notification with an "Add Patent Data Keys" button was shown). Ask the user to run the "FlowLeap: Patent Data Keys" command to add it, then retry this tool.`;
+		return ` Patent data now requires the user's own ${providerClause}key (a notification with an "Add Patent Data Keys" button was shown). Ask the user to run the "FlowLeap: Patent Data Keys" command to add it, then retry this tool. This is a user-action stop, not a dead route: do NOT substitute web or Google Patents data for this office, for searches or for single-document reads. Meanwhile continue with any office whose key is live and with the keyless tools (PATSTAT analytics, legal search, academic search), and name the missing-key gap in your answer.`;
 	}
 	if (error instanceof RateLimitError) {
 		const waitClause = error.retryAfterSeconds ? `Wait at least ${error.retryAfterSeconds} seconds` : 'Wait a few seconds';

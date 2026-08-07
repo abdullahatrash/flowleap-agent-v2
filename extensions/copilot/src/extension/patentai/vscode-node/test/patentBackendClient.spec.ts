@@ -595,6 +595,20 @@ describe('patentBackendErrorRecoveryHint', () => {
 		expect(patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', undefined))).toContain('EPO OPS or USPTO');
 	});
 
+	// The reactive path must say what the system prompt's key-gate doctrine says: a key gate is a
+	// user-action stop, so no web substitution for that office — the other live offices and the
+	// keyless tools carry on, and the gap is named as a missing-key gap.
+	it('the data-keys-required hint carries the no-substitution steer and the keep-going steer', () => {
+		const hint = patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', 'epo'));
+		expect({
+			userActionStop: hint.includes('user-action stop, not a dead route'),
+			noWebSubstitution: hint.includes('do NOT substitute web or Google Patents data for this office'),
+			coversSingleDocumentReads: hint.includes('for searches or for single-document reads'),
+			continuesElsewhere: hint.includes('continue with any office whose key is live and with the keyless tools'),
+			namesTheGap: hint.includes('name the missing-key gap'),
+		}).toEqual({ userActionStop: true, noWebSubstitution: true, coversSingleDocumentReads: true, continuesElsewhere: true, namesTheGap: true });
+	});
+
 	it('maps a RateLimitError to a "wait and retry" hint, naming the wait when known', () => {
 		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', 12))).toContain('12 seconds');
 		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', undefined))).toContain('a few seconds');

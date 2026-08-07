@@ -118,6 +118,17 @@ methods are mocked so inference bypasses them.
 subscription pays for — **not** inference (which is BYOK).
 _Avoid_: "the LLM backend" — it serves patent data, never inference.
 
+**Patent-Data Keys**:
+The user's own EPO OPS **Consumer Key + Secret** pair and USPTO ODP **API Key** — free
+credentials from each office, entered in the FlowLeap Settings Sidebar. **Per-provider and
+independent**: EPO-only and USPTO-only are valid states. During a **trial** the backend serves
+patent data on FlowLeap's shared keys (no user keys needed); an **active** subscriber must
+bring their own — a missing key blocks **only that provider's routes** (`data_keys_required`),
+never the keyless tools (PATSTAT, legal, academic). A key gate is a **user-action stop**, not
+an exhausted route: the agent must not substitute web-scraped data for a gated office.
+_Avoid_: "provider keys" (CLI legacy naming — align on this term); bare "API keys" (collides
+with the BYOK LLM key); framing the add-keys ask as a paywall — the keys are free.
+
 ## Patent domain
 
 **Prior-Art Search**:
