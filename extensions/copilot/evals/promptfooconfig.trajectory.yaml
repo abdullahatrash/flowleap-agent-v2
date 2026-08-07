@@ -17,6 +17,11 @@ description: "Patent AI — Trajectory Gate (multi-turn replay under scripted fa
 # defaultTest.options.provider below (OpenRouter gemini-2.5-flash). They are the SECONDARY
 # layer. The PRIMARY structural `javascript` asserts are fully deterministic and are also
 # proven offline, without any judge, by assertions/test/trajectory-assertions.spec.ts.
+#
+# REPEAT POLICY (#184): one run of this gate is an n=1 draw from a ~15-25%-per-case flaky
+# process. The gating verdict is `npm run eval:trajectory:repeat` — 3 runs folded into a
+# k-of-n verdict per case against output/trajectory-baseline.json. A bare `eval:trajectory`
+# is a single sample and proves nothing on its own. See README, "Repeat policy".
 
 providers:
   - id: file://providers/trajectory-provider.ts
@@ -29,12 +34,24 @@ defaultTest:
   options:
     # Grading provider for the llm-rubric give-up checks (the pluggable judge layer).
     # Swap the model here (or drop the key) without touching the structural gate.
+    #
+    # Model choice is measured, not assumed (#184): replaying the saved #183 trajectories
+    # through this exact grader gives gemini-2.5-flash 0/420 JSON-parse failures and
+    # gemini-2.5-pro 7/63 (11%). Do NOT "upgrade" the judge to pro — it also flips verdicts
+    # on 4 of 21 rubrics, i.e. it silently re-baselines the gate.
+    #
+    # max_tokens is explicit because promptfoo defaults it to 1024 for every model it does
+    # not recognise as a reasoning model (its o1/o3/o4/gpt-5 name list). A thinking model
+    # spends that budget reasoning and the JSON verdict is cut off mid-string, which surfaces
+    # as `Could not extract JSON from llm-rubric response` — the exact grader flake #184 is
+    # about. flash grades in ~64 completion tokens, so the ceiling costs nothing.
     provider:
       id: openai:chat:google/gemini-2.5-flash
       config:
         apiBaseUrl: https://openrouter.ai/api/v1
         apiKey: "{{env.OPENROUTER_API_KEY}}"
         temperature: 0
+        max_tokens: 4096
         passthrough:
           stream: false
   assert:

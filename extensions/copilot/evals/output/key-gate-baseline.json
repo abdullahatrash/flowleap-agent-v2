@@ -1,0 +1,20 @@
+{
+	"updated": "2026-08-07",
+	"config": "promptfooconfig.key-gate.yaml",
+	"policy": {
+		"runs": 3,
+		"passThreshold": { "numerator": 1, "denominator": 1 },
+		"minValidSamples": 2
+	},
+	"model": "google/gemini-2.5-pro",
+	"judge": "google/gemini-2.5-flash (max_tokens 4096)",
+	"notes": "The threshold here is STRICT (every valid sample must pass), unlike the trajectory gate's 2-of-3. The key-gate suite has now run 6/6 five times over (#180, twice in #187, and the three runs of this baseline: 181s + 264s + 272s, --no-cache), with zero voided samples — it does not flake, so a single failure is signal and must not be absorbed by a threshold. The VOID rules still apply: a judge parse failure or a provider error is re-drawn, never counted as a K-case failure. If this suite ever starts flaking, loosen the threshold deliberately and record why — do not let it drift.",
+	"cases": {
+		"K1": { "expected": "PASS", "observed": "3/3", "note": "Comprehensive US+EP search with EP gated." },
+		"K2": { "expected": "PASS", "observed": "3/3", "note": "Single EP document read with no EPO OPS key." },
+		"K3a": { "expected": "PASS", "observed": "3/3", "note": "CONTROL — the forbid rule must not over-suppress the CN web fallback." },
+		"K3b": { "expected": "PASS", "observed": "3/3", "note": "CONTROL — dead US routes with a working key still reach the web fallback." },
+		"K4": { "expected": "PASS", "observed": "3/3", "note": "Keyless pivot framed as different data, never as a substitute." },
+		"K5": { "expected": "PASS", "observed": "3/3", "note": "Key added mid-conversation: only the gated office re-run." }
+	}
+}

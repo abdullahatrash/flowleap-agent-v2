@@ -99,6 +99,11 @@ npm run eval:check-drift
 
 # Compare the last run against the committed pass-rate baseline
 npm run eval:check-baseline
+
+# The trajectory / key-gate GATING verdicts — 3 runs folded into a k-of-n verdict per case.
+# A single run of either suite is a probe, not a verdict: see Repeat policy.
+OPENROUTER_API_KEY=sk-or-... npm run eval:trajectory:repeat
+OPENROUTER_API_KEY=sk-or-... npm run eval:key-gate:repeat
 ```
 
 ## promptfoo version policy
@@ -177,6 +182,153 @@ more than the 0.02 tolerance below `baseline.json`'s `passRate`.
 **Re-baselining:** only deliberately, in its own commit, after an INTENTIONAL prompt
 change — never to silence a regression. Update `totalTests`/`passing`/`passRate`/`updated`
 from a green run.
+
+## Repeat policy — the trajectory and key-gate verdicts are statistical (#184)
+
+**A single run of the trajectory gate is one draw from a noisy process, and a single red run
+proves nothing.** #183 measured ~15–25% per-case flake run-to-run: across three runs of the
+same prompt the failing sets were `{T3a, T8}`, `{T2, T6, T7}`, `{T2, T3a, T5, T6}` — largely
+disjoint. At that rate an all-green single run is not reachable, so the gating verdict is
+**k of n runs**, not one run.
+
+```bash
+# The gating command. 3 runs + top-ups, folded into one verdict per case.
+OPENROUTER_API_KEY=sk-or-... npm run eval:trajectory:repeat
+OPENROUTER_API_KEY=sk-or-... npm run eval:key-gate:repeat
+
+# A bare single run is a probe, not a verdict — useful while iterating, never as evidence.
+npm run eval:trajectory
+
+# Re-aggregate run files you already have (free, no API calls)
+npx tsx evals/scripts/aggregate-repeats.ts --baseline output/trajectory-baseline.json \
+  output/trajectory-repeat-1.json output/trajectory-repeat-2.json output/trajectory-repeat-3.json
+```
+
+### The policy
+
+| | |
+|---|---|
+| **Runs** | 3 whole-suite runs, always `--no-cache` |
+| **Case passes** | trajectory gate: at least **2 of 3** valid samples passed. Key-gate suite: **all** valid samples (it does not flake — see its baseline). The threshold is `ceil(numerator × valid / denominator)` in exact integer arithmetic, so it rescales correctly if top-ups change the denominator |
+| **Valid sample** | a run of that case that produced a real verdict: PASS or FAIL |
+| **VOID sample** | excluded from the denominator — neither pass nor fail (see below) |
+| **Floor** | fewer than **2** valid samples ⇒ **INCONCLUSIVE**, never FAIL |
+| **Exit codes** | `0` all cases met the threshold · `1` a case regressed against the baseline · `2` a case could not be judged (re-run; this is a judge/provider problem, not a model result) · `3` usage error |
+
+### What VOIDs a sample
+
+A sample is void when the row failed for a reason that is **not model behaviour**:
+
+- **Judge could not be parsed.** promptfoo tags that component `metadata.graderError === true`
+  (it also uses that tag for an empty judge response). `--retry-errors` does **not** catch
+  these — they are FAILs, not ERRORs — which is why the policy is our post-processing.
+- **promptfoo ERROR row** (`failureReason: 2`, or an `error` field): transport or provider
+  failure, including the OpenRouter rate-limit-inside-a-200 that `trajectory-provider.ts`
+  throws on since #183.
+
+**A failing structural assert is always a real FAIL, even when a judge component grader-errored
+in the same row** — the deterministic layer saw a genuine miss, so the judge's state is
+irrelevant. This is the one asymmetry that keeps grader-flake immunity from becoming a way to
+hide regressions.
+
+After aggregation, any case short of valid samples is **re-drawn** in a top-up round
+(`--filter-pattern` over just those cases, one round by default), so a voided sample normally
+costs a re-run rather than a thinner denominator. Void counts are always reported.
+
+### Why not promptfoo's own `--repeat`
+
+promptfoo has **no** k-of-n aggregation: `--repeat N` expands each case into N independent rows
+in one run, `assert-set` thresholds are across assertions in a single row, and
+`PROMPTFOO_PASS_RATE_THRESHOLD` is suite-wide (#186). The policy is ours to compute either way.
+Separate invocations additionally let a deficient case be topped up on its own, survive a run
+dying half-way, and reproduce how the flake was measured. Note that promptfoo namespaces its
+cache per repeat index, so **any** repeat scheme must pass `--no-cache` or the extra runs replay
+instead of re-sampling.
+
+### Judge model decision (measured, not assumed)
+
+The `llm-rubric` judge stays **`google/gemini-2.5-flash`**, and both gate configs now pin an
+explicit **`max_tokens: 4096`** on it.
+
+The measurement replayed the saved #183 trajectories through this exact grader (an `echo`
+provider, so no agent-loop spend) and counted `metadata.graderError` rows:
+
+| Judge arm | JSON-parse failures |
+|---|---|
+| `gemini-2.5-flash` (current) | **0 / 420** |
+| `gemini-2.5-flash` under 40-way concurrency | 0 / 210 |
+| `gemini-2.5-pro` | **7 / 63 (11.1%)** |
+| `gemini-2.5-pro` + explicit `max_tokens: 4096` | 0 / 63 |
+
+Two things follow, and both are the opposite of the obvious move:
+
+1. **Do not "upgrade" the judge to pro.** It is the arm that fails to emit parseable JSON, and
+   it also *flips verdicts* on 4 of 21 rubrics (in both directions) — swapping it would silently
+   re-baseline the gate rather than stabilise it.
+2. **The mechanism is a token budget, not a model weakness.** promptfoo sends
+   `max_tokens: 1024` for every model it does not recognise as a reasoning model (its check is a
+   name list: `o1`/`o3`/`o4`/`gpt-5`). A thinking model spends that budget reasoning —
+   the failing pro calls came back `finish_reason: length` with ~950 reasoning tokens and the
+   JSON cut off mid-string. The explicit ceiling closes that failure mode for whatever judge is
+   configured later; on flash, which grades in ~64 completion tokens, it costs nothing.
+
+The same implicit 1024 default sits on the `promptfooconfig.yaml` and
+`promptfooconfig.frontier.yaml` judges. It is **deliberately not changed here** — those suites
+were not re-run in this pass, and their configs are not touched without a live re-baseline.
+
+Note for #185: the pro arm graded `t5_no_truncation_misread` differently from flash on the same
+trajectories (flash 10/10 PASS, pro 3/3 FAIL on one run's output and the reverse on another) —
+evidence that T5's rubric, not the judge, is what needs the work.
+
+### The committed baselines
+
+`output/trajectory-baseline.json` and `output/key-gate-baseline.json` record the policy and the
+**expected verdict per case**. The aggregator compares each case's verdict against its
+expectation:
+
+- expected `PASS`, measured `FAIL` → **regression**, exit 1
+- expected `FAIL`, measured `PASS` → **improvement**, reported, exit 0 (re-baseline deliberately)
+- a case missing from the baseline must pass on its own
+- any case `INCONCLUSIVE` → exit 2
+
+`observed` in each entry is the pass count at baseline time, kept as context for how much margin
+a case had. Re-baseline the same way as the main suite: deliberately, in its own commit, after
+an intentional prompt change — never to silence a regression.
+
+### Baseline: trajectory gate (2026-08-07, `google/gemini-2.5-pro`, `--no-cache`)
+
+Single-run pass counts were **6/9, 8/9, 5/9** with largely disjoint failing sets — which is the
+whole argument for the policy. **Zero of the 27 case-runs were voided** (no judge parse failure,
+no provider error), so every verdict below rests on a full 3-sample denominator.
+
+| Case | Runs | Pass | Verdict | Notes |
+|---|---|---|---|---|
+| T1 | `P P F` | 2/3 | **PASS** | One run never reached the web fallback |
+| T2 | `F P F` | 1/3 | **FAIL** | **Open debt** — `t2_did_not_stop_at_empty_forward` failed 3 of 4 samples; a mostly reproducible routing failure on the empty-forward-citation pivot, not flake |
+| T3a | `P P P` | 3/3 | **PASS** | #183 measured this at 4/7; clean here |
+| T3b | `F P F` | 1/3 | **FAIL** | **Open debt** — `t3b_persisted_3plus`; green in all three #183 runs, so newly visible |
+| T4 | `P P P` | 3/3 | **PASS** | |
+| T5 | `F P P` | 2/3 | **PASS** | Marginal, exactly the ~2/3 #183 measured. The rubric's fabrication blind spot is #185 |
+| T6 | `P P P` | 3/3 | **PASS** | The case #183 saw scored FAIL purely on judge parse errors |
+| T7 | `P F F` | 1/3 | **FAIL** | **Open debt**, and it is the NEGATIVE CONTROL — `t7_bounded_engagement` failed 2 of 4 samples, i.e. the bounded-effort ceiling is not holding |
+| T8 | `P P P` | 3/3 | **PASS** | #183's single failure was an assertion gap; it did not recur |
+
+**T2, T3b and T7 are recorded as expected `FAIL`.** They are open debt under the current prompt,
+not flake the threshold absorbs, and #184 deliberately classifies them rather than fixing them.
+A green run of `eval:trajectory:repeat` therefore means "nothing moved", not "everything passes";
+the debt is visible in the table and in `trajectory-baseline.json`.
+
+**Runtime and cost:** 547s + 441s + 483s ≈ **25 minutes** for the three runs (default
+concurrency 4). One agent-loop round-trip per case per run on `gemini-2.5-pro` plus ~2 grader
+calls; the grader spend is negligible next to the loop.
+
+### Baseline: key-gate suite (2026-08-07, same model)
+
+**6/6 on all three runs, 18/18 case-runs, zero voids** (181s + 264s + 272s ≈ 12 minutes). This
+suite has now been 6/6 five times over (#180, twice in #187, three times here), so its threshold
+is **strict — every valid sample must pass** — rather than the trajectory gate's 2 of 3. A suite
+that does not flake should not be given room to flake; if it ever starts, loosen the threshold
+deliberately and record why.
 
 ## Eval Tool Surface (20 patent tools)
 
@@ -342,6 +494,10 @@ model **obeys** the key-gate doctrine (spec #173, shipped by #174/#175) — the 
 tests only prove the doctrine text renders.
 
 ```bash
+# The gating verdict — 3 runs under the repeat policy, checked against the committed baseline
+OPENROUTER_API_KEY=sk-or-... npm run eval:key-gate:repeat
+
+# A single run (a probe while iterating)
 cd evals
 OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.key-gate.yaml --no-cache
 # or, from extensions/copilot:  npm run eval:key-gate
@@ -383,7 +539,10 @@ against the doctrine rather than the prompt's wording so paraphrases pass. The s
 is proven offline — no model, no judge — by `assertions/test/key-gate-assertions.spec.ts`,
 which also red-checks each predicate against the failure it exists to catch.
 
-**Baseline (2026-08-07, `google/gemini-2.5-pro`, `--no-cache`): 6/6 cases, 27/27 assertions.**
+**Baseline (2026-08-07, `google/gemini-2.5-pro`, `--no-cache`): 6/6 cases, 27/27 assertions —
+and 6/6 on each of three runs under the repeat policy, with a strict per-case threshold. See
+[Repeat policy](#repeat-policy--the-trajectory-and-key-gate-verdicts-are-statistical-184) and
+`output/key-gate-baseline.json`.**
 
 ## File Structure
 
@@ -420,9 +579,13 @@ evals/
 │   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
 │   ├── check-prompt-drift.ts     # TSX ↔ system-prompt.txt drift checker
-│   └── compare-baseline.ts       # Pass-rate baseline gate (npm run eval:check-baseline)
+│   ├── compare-baseline.ts       # Pass-rate baseline gate (npm run eval:check-baseline)
+│   ├── repeat-gate.ts            # Repeat-policy runner: N runs + top-ups → one verdict (#184)
+│   └── aggregate-repeats.ts      # k-of-n verdicts, VOID rules, table (pure; unit-tested)
 └── output/
-    ├── baseline.json             # Committed pass-rate baseline (tracked in git)
+    ├── baseline.json             # Committed pass-rate baseline, main suite (tracked in git)
+    ├── trajectory-baseline.json  # Committed per-case repeat baseline, trajectory gate (tracked)
+    ├── key-gate-baseline.json    # Committed per-case repeat baseline, key-gate suite (tracked)
     ├── latest.json               # Last main-suite results (git-ignored)
     └── frontier-latest.json      # Last frontier-suite results (git-ignored)
 ```
