@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#
+# Local CI. Run the checks on this machine. Sign off the commit on
+# GitHub when all checks pass (basecamp/gh-signoff extension).
+#
+# Usage:
+#   bin/signoff          # run all checks, then sign off HEAD
+#   bin/signoff --quick  # skip the slow checks, then sign off HEAD
+#
+# Requirements:
+#   - gh CLI, logged in (gh auth status)
+#   - gh extension: gh extension install basecamp/gh-signoff
+#   - HEAD must be pushed to the remote before sign-off
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+quick=false
+if [ "${1:-}" = "--quick" ]; then
+	quick=true
+fi
+
+if [ "$quick" = false ]; then
+	echo "==> Typecheck: client sources (src/tsconfig.json)"
+	npm run typecheck-client
+else
+	echo "==> Quick mode: slow checks skipped"
+fi
+
+echo "==> All checks passed. Signing off $(git rev-parse --short HEAD)"
+gh signoff
