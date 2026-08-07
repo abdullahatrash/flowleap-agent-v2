@@ -45,6 +45,7 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.PatstatApiGuide,
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
+	ToolName.PatentSearchSubagent,
 ];
 
 function toolInfo(name: string): vscode.LanguageModelToolInformation {
@@ -346,5 +347,130 @@ suite('PatentAIInstructions key-gate doctrine', () => {
 			doctrineStillRenders: output.includes('KEY-GATE DOCTRINE'),
 			resumeRuleStillRenders: output.includes('RESUME RULE'),
 		}).toEqual({ pivotOffered: false, doctrineStillRenders: true, resumeRuleStillRenders: true });
+	});
+});
+
+// The four sentences #189 added, each against the measured fault it exists to close, plus the
+// rules they must not have displaced — the prompt's history is that individually-fine blocks
+// interact (#183), so the carve-outs are pinned alongside the additions.
+suite('PatentAIInstructions prompt-debt fixes', () => {
+	test('branch C draws a document-vs-aggregate boundary without gutting C3', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			// Measured: the boundary only holds when it precedes the branch list. As a trailing
+			// exception inside branch C it lost to C's own keyword lure (0/3, then 1/4).
+			classificationLeadsTheTree: output.includes('FIRST, CLASSIFY THE DELIVERABLE — DOCUMENTS or NUMBERS ABOUT A CORPUS?'),
+			analyticsCannotReturnDocuments: output.includes('CANNOT answer "which patents…"'),
+			entryTestLeadsTheBranch: output.includes('ENTRY TEST — WHAT IS THE DELIVERABLE?'),
+			rankingIsNotAggregation: output.includes('Ranking is not aggregation.'),
+			branchBClaimsRankedLists: output.includes('a RANKED LIST of documents is still a search'),
+			documentBoundary: output.includes('NOT analytics — DOCUMENTS vs AGGREGATES'),
+			aggregateNeverSatisfiesDocuments: output.includes('An aggregate answer NEVER satisfies a request for documents'),
+			statisticalRankingIsStillASearch: output.includes('take the search path even though the RANKING criterion is itself a statistic'),
+			c3KeepsItsAggregateScope: output.includes('any OTHER PATSTAT aggregate'),
+			c3SendsNamedDocumentsToSearch: output.includes('naming the most-cited DOCUMENTS is branch B, not this'),
+			c1AndC2Unchanged: output.includes('technology/topic analytics by KEYWORDS') && output.includes('NAMED company\'s/applicant\'s aggregate portfolio'),
+		}).toEqual({
+			classificationLeadsTheTree: true,
+			analyticsCannotReturnDocuments: true,
+			entryTestLeadsTheBranch: true,
+			rankingIsNotAggregation: true,
+			branchBClaimsRankedLists: true,
+			documentBoundary: true,
+			aggregateNeverSatisfiesDocuments: true,
+			statisticalRankingIsStillASearch: true,
+			c3KeepsItsAggregateScope: true,
+			c3SendsNamedDocumentsToSearch: true,
+			c1AndC2Unchanged: true,
+		});
+	});
+
+	test('the subagent may not replace the mandated office search paths', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			delegationLimit: output.includes('DELEGATION LIMIT: `patent_search_subagent` is NOT one of those paths'),
+			reasonIsWhatTheAgentWouldNotSee: output.includes('every data_keys_required gate reaches YOU'),
+			neverTheComprehensiveSearch: output.includes('never as your only search call and never as the search for a comprehensive, prior-art or multi-office request'),
+			dualOfficeMandateStands: output.includes('run BOTH search paths'),
+		}).toEqual({
+			delegationLimit: true,
+			reasonIsWhatTheAgentWouldNotSee: true,
+			neverTheComprehensiveSearch: true,
+			dualOfficeMandateStands: true,
+		});
+	});
+
+	test('omits the delegation limit when the subagent tool is unavailable', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.PatentSearchSubagent));
+		expect({
+			delegationLimit: output.includes('DELEGATION LIMIT'),
+			decisionTreeStillRenders: output.includes('PATENT TOOL DECISION TREE'),
+		}).toEqual({ delegationLimit: false, decisionTreeStillRenders: true });
+	});
+
+	test('a tool result that only claims to carry the text grounds nothing', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			statementIsNotData: output.includes('A STATEMENT ABOUT DATA IS NOT THE DATA'),
+			neverAWarrant: output.includes('never a warrant to write the text out'),
+			onlyLiteralWording: output.includes('Ground only on wording a tool result LITERALLY contained'),
+			elidedTextStaysElided: output.includes('never complete it from what the invention must plausibly say'),
+			breakIsMarkedInTheAnswer: output.includes('mark the break where the source stopped'),
+			antiPatternShowsTheElisionTrap: output.includes('or merely says the full text is available, and you write out the whole claim'),
+			// The same doctrine restated inside CRITICAL RULES, where the measured failures
+			// showed the model needed it: recall of a patent it never fetched reads as retrieval.
+			recallIsNamedAsTheTrap: output.includes('CLAIM TEXT IS THE HARDEST CASE'),
+			fluencyIsNotRetrieval: output.includes('That fluency is NOT retrieval'),
+			noFabricatedSelfReport: output.includes('NEVER report a retrieval you did not make'),
+			listingIsAPointer: output.includes('are POINTERS — fetch the page and use what the fetch returned'),
+			truncationRuleUnchanged: output.includes('AN EMPTY OR TRUNCATED PAYLOAD IS NOT CONTENT'),
+			finalAnswerSweepUnchanged: output.includes('FINAL-ANSWER GROUNDING'),
+		}).toEqual({
+			statementIsNotData: true,
+			neverAWarrant: true,
+			onlyLiteralWording: true,
+			elidedTextStaysElided: true,
+			breakIsMarkedInTheAnswer: true,
+			antiPatternShowsTheElisionTrap: true,
+			recallIsNamedAsTheTrap: true,
+			fluencyIsNotRetrieval: true,
+			noFabricatedSelfReport: true,
+			listingIsAPointer: true,
+			truncationRuleUnchanged: true,
+			finalAnswerSweepUnchanged: true,
+		});
+	});
+
+	test('a file write never substitutes for answering, and a gap is reported not filled', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			answerCarriesTheResult: output.includes('THE ANSWER ITSELF CARRIES THE RESULT'),
+			emptyMessagePlusFileIsNotAnAnswer: output.includes('pointing at a file you created has not answered'),
+			noSmugglingIntoTheFile: output.includes('must not be written into the file either'),
+			toolOffloadCarveOutKept: output.includes('where a TOOL offloaded an oversized record to a path, you still read that path and hand it back'),
+			honestGapIsTheDeliverable: output.includes('the honest report IS the deliverable'),
+			ladderStillGatesTheDisclosure: output.includes('When the ladder is exhausted'),
+			// Measured interaction: the anti-fabrication pressure bought honesty by SKIPPING the
+			// web rung and offering it instead, so the honest report is bound to the ladder here.
+			honestyDoesNotBuyOutThePersistence: output.includes('never shorten the work to avoid the risk of writing something you cannot source'),
+			droppedRecordStillOwesTheWebRung: output.includes('A record DROPPED in transit leaves rung (iii) untried'),
+			offeringARungIsNotEmittingIt: output.includes('never end the turn OFFERING a rung'),
+			verbatimCompletenessUnchanged: output.includes('VERBATIM-COMPLETENESS'),
+			// The completeness demand is where the pull to invent comes from, so the bound
+			// lives inside that same rule rather than only in a rule further down.
+			completenessIsBoundedByRetrieval: output.includes('Completeness is bounded by what you actually received'),
+		}).toEqual({
+			answerCarriesTheResult: true,
+			emptyMessagePlusFileIsNotAnAnswer: true,
+			noSmugglingIntoTheFile: true,
+			toolOffloadCarveOutKept: true,
+			honestGapIsTheDeliverable: true,
+			ladderStillGatesTheDisclosure: true,
+			honestyDoesNotBuyOutThePersistence: true,
+			droppedRecordStillOwesTheWebRung: true,
+			offeringARungIsNotEmittingIt: true,
+			verbatimCompletenessUnchanged: true,
+			completenessIsBoundedByRetrieval: true,
+		});
 	});
 });
