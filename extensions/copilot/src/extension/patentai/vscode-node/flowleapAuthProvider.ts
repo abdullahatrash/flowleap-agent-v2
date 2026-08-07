@@ -6,6 +6,7 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import type { ILogService } from '../../../platform/log/common/logService';
+import { registerPatentSubscriptionProvider } from '../common/patentSubscriptionRegistry';
 import { getPatentAccessToken, registerPatentAccessTokenProvider } from '../common/patentTokenRegistry';
 import { registerUriRoute } from '../../uriHandler/vscode-node/extensionUriHandler';
 import { getPatentAIConfig } from './configService';
@@ -67,6 +68,10 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	// used to enrich its Accounts-menu label.
 	private _currentSession: vscode.AuthenticationSession | undefined;
 	private _cachedUserInfo: { email?: string; name?: string } | undefined;
+	// The last snapshot {@link getSubscriptionSnapshot} resolved, served synchronously through the
+	// patentSubscriptionRegistry seam. Every resolution overwrites it — including `unknown` — so a
+	// sign-out or a failed read can never leave a stale "active" behind.
+	private _lastSubscriptionSnapshot: FlowLeapSubscriptionSnapshot | undefined;
 	// Dedup guard so repeated getIdentity()/session builds don't fan out concurrent profile fetches.
 	private _userInfoFetchInFlight = false;
 
@@ -92,6 +97,10 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 
 		// Register this provider as the OAuth token provider for backend-facing consumers.
 		registerPatentAccessTokenProvider(() => this.getAccessToken());
+
+		// Serve the last-known subscription snapshot to synchronous consumers (the Patent AI
+		// system prompt, built inside a render pass that cannot await the backend read).
+		registerPatentSubscriptionProvider(() => this._lastSubscriptionSnapshot);
 
 		// Register persistent URI handler for the OAuth callback.
 		this._registerUriHandler();
@@ -651,8 +660,18 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 * the days left. Inconclusive reads (signed out, token not ready, non-OK response, network
 	 * error) return `{ status: 'unknown' }` with no end date, so a subscribed user is never nagged
 	 * on a transient failure. The reactive `402` gate remains the real, server-enforced control.
+	 *
+	 * Every resolved snapshot is cached as the last-known one and served synchronously through the
+	 * `patentSubscriptionRegistry` seam, so the system prompt can state the user's key/office state
+	 * per turn without awaiting a backend round-trip.
 	 */
 	public async getSubscriptionSnapshot(): Promise<FlowLeapSubscriptionSnapshot> {
+		const snapshot = await this._readSubscriptionSnapshot();
+		this._lastSubscriptionSnapshot = snapshot;
+		return snapshot;
+	}
+
+	private async _readSubscriptionSnapshot(): Promise<FlowLeapSubscriptionSnapshot> {
 		const token = getPatentAccessToken();
 		if (!token) {
 			return { status: 'unknown' };

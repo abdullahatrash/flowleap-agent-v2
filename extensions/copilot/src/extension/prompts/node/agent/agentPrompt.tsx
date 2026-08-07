@@ -26,6 +26,8 @@ import { URI } from '../../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatRequestEditedFileEventKind, Position, Range } from '../../../../vscodeTypes';
 import { GenericBasePromptElementProps } from '../../../context/node/resolvers/genericPanelIntentInvocation';
+import { getPatentDataKeys } from '../../../patentai/common/patentDataKeysRegistry';
+import { getPatentSubscriptionStatus } from '../../../patentai/common/patentSubscriptionRegistry';
 import { ChatVariablesCollection, extractDebugTargetSessionIds, isCustomizationsIndex } from '../../../prompt/common/chatVariablesCollection';
 import { CustomizationsIndexMetadata, getGlobalContextCacheKey, GlobalContextMessageMetadata, RenderedUserMessageMetadata, Turn } from '../../../prompt/common/conversation';
 import { InternalToolReference } from '../../../prompt/common/intents';
@@ -193,6 +195,12 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		const useAlternateGptPrompt = this.props.endpoint.family.startsWith('gpt-') && this.configurationService.getExperimentBasedConfig(ConfigKey.EnableAlternateGptPrompt, this.experimentationService);
 		const PromptClass = useAlternateGptPrompt ? AlternateGPTPrompt : customizations.SystemPrompt!;
 
+		// Per-turn patent-data key state, read synchronously from the two module registries: the
+		// auth provider's last-known subscription snapshot and the keys store. Both read as
+		// "nothing registered" on a stock configuration, which renders as `unknown` — safe by
+		// construction, since `unknown` never claims an office is live or gated.
+		const patentDataKeys = getPatentDataKeys();
+
 		// Single prompt-include seam for the Patent AI overlay: PatentAIInstructions is a
 		// self-contained system block that renders only when a patent tool is available, so
 		// it adds nothing on a stock configuration. Including it here once covers every model
@@ -203,7 +211,13 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 				modelFamily={modelFamily}
 				codesearchMode={this.props.codesearchMode}
 			/>
-			<PatentAIInstructions availableTools={availableTools} webSearchAvailable={webSearchAvailable} />
+			<PatentAIInstructions
+				availableTools={availableTools}
+				webSearchAvailable={webSearchAvailable}
+				subscriptionStatus={getPatentSubscriptionStatus()}
+				hasEpoOpsKey={!!patentDataKeys?.epo}
+				hasUsptoOdpKey={!!patentDataKeys?.usptoOdp}
+			/>
 		</>;
 	}
 
