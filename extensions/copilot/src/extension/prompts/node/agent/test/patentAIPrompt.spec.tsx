@@ -10,6 +10,7 @@ import { messageToMarkdown } from '../../../../../platform/log/common/messageStr
 import { IInstantiationService } from '../../../../../util/vs/platform/instantiation/common/instantiation';
 import { createExtensionUnitTestingServices } from '../../../../test/node/services';
 import { ToolName } from '../../../../tools/common/toolNames';
+import type { FlowLeapSubscriptionStatus } from '../../../../patentai/common/trialCountdown';
 import { renderPromptElement } from '../../base/promptRenderer';
 import { PatentAIInstructions } from '../patentAIPrompt';
 
@@ -50,7 +51,14 @@ function toolInfo(name: string): vscode.LanguageModelToolInformation {
 	return { name, description: '', source: undefined, inputSchema: { type: 'object', properties: {} }, tags: [] };
 }
 
-async function renderPatentInstructions(toolNames: readonly ToolName[]): Promise<string> {
+/** The key state a render is exercised with; omitted fields render the never-read defaults. */
+interface KeyStateOptions {
+	readonly subscriptionStatus?: FlowLeapSubscriptionStatus;
+	readonly hasEpoOpsKey?: boolean;
+	readonly hasUsptoOdpKey?: boolean;
+}
+
+async function renderPatentInstructions(toolNames: readonly ToolName[], keyState: KeyStateOptions = {}): Promise<string> {
 	const services = createExtensionUnitTestingServices();
 	const accessor = services.createTestingAccessor();
 	try {
@@ -59,12 +67,22 @@ async function renderPatentInstructions(toolNames: readonly ToolName[]): Promise
 		const { messages } = await renderPromptElement(instantiationService, endpoint, PatentAIInstructions, {
 			availableTools: toolNames.map(toolInfo),
 			webSearchAvailable: true,
+			...keyState,
 		});
 		return messages.map(m => messageToMarkdown(m)).join('\n\n');
 	} finally {
 		accessor.dispose();
 	}
 }
+
+/** Text that only ever appears when the prompt commits to an office being reachable or gated. */
+const OFFICE_AVAILABILITY_CLAIMS: readonly string[] = [
+	'EPO OPS (EP/WO search and document reads)',
+	'USPTO ODP (US search, prosecution and citation routes)',
+	'EVERY patent-data office is live',
+	'LIVE — the user',
+	'GATED — the user',
+];
 
 suite('PatentAIInstructions', () => {
 	test('renders nothing when no patent tool is available', async () => {
@@ -139,4 +157,89 @@ suite('PatentAIInstructions', () => {
 			}
 		});
 	}
+});
+
+suite('PatentAIInstructions key state', () => {
+	test('trialing with no keys declares every office live and never nags about keys', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'trialing' });
+		expect({
+			allOfficesLive: output.includes('EVERY patent-data office is live on FlowLeap\'s shared keys'),
+			keysNotNeeded: output.includes('Patent-Data Keys are NOT needed'),
+			nagsAboutAMissingKey: output.includes('GATED — the user'),
+			annotatesTheCarousel: output.includes('needs your EPO OPS key (not set)') || output.includes('needs your USPTO ODP key (not set)'),
+		}).toEqual({ allOfficesLive: true, keysNotNeeded: true, nagsAboutAMissingKey: false, annotatesTheCarousel: false });
+	});
+
+	test('active with only the USPTO key marks USPTO live, EPO gated, and annotates the EP carousel option', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'active', hasUsptoOdpKey: true });
+		expect({
+			epoGated: output.includes('EPO OPS (EP/WO search and document reads): GATED — the user\'s EPO OPS consumer key and secret are NOT set'),
+			namesTheKeysCommand: output.includes('"FlowLeap: Patent Data Keys" command'),
+			usptoLive: output.includes('USPTO ODP (US search, prosecution and citation routes): LIVE'),
+			keylessRoutesNamed: output.includes('Keyless routes need no Patent-Data Key and stay live'),
+			epCarouselAnnotated: output.includes('"European/International (EP/WO) — needs your EPO OPS key (not set)"'),
+			usCarouselAnnotated: output.includes('needs your USPTO ODP key (not set)'),
+			bothStillRecommended: output.includes('{"label": "Both (comprehensive)", "recommended": true}'),
+		}).toEqual({
+			epoGated: true,
+			namesTheKeysCommand: true,
+			usptoLive: true,
+			keylessRoutesNamed: true,
+			epCarouselAnnotated: true,
+			usCarouselAnnotated: false,
+			bothStillRecommended: true,
+		});
+	});
+
+	test('active with only the EPO key mirrors it: EPO live, USPTO gated and annotated', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'active', hasEpoOpsKey: true });
+		expect({
+			epoLive: output.includes('EPO OPS (EP/WO search and document reads): LIVE'),
+			usptoGated: output.includes('USPTO ODP (US search, prosecution and citation routes): GATED — the user\'s USPTO ODP API key is NOT set'),
+			usCarouselAnnotated: output.includes('"US patents only (USPTO) — needs your USPTO ODP key (not set)"'),
+			epCarouselAnnotated: output.includes('needs your EPO OPS key (not set)'),
+			bothStillRecommended: output.includes('{"label": "Both (comprehensive)", "recommended": true}'),
+		}).toEqual({
+			epoLive: true,
+			usptoGated: true,
+			usCarouselAnnotated: true,
+			epCarouselAnnotated: false,
+			bothStillRecommended: true,
+		});
+	});
+
+	test('inactive states the subscription requirement and makes no per-office claim', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'inactive' });
+		expect({
+			subscriptionLine: output.includes('patent-data routes require a subscription and answer 402'),
+			officeClaims: OFFICE_AVAILABILITY_CLAIMS.filter(claim => output.includes(claim)),
+			carouselAnnotations: output.includes('(not set)'),
+			bothStillRecommended: output.includes('{"label": "Both (comprehensive)", "recommended": true}'),
+		}).toEqual({ subscriptionLine: true, officeClaims: [], carouselAnnotations: false, bothStillRecommended: true });
+	});
+
+	test('unknown renders key presence only and claims nothing about office availability', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'unknown', hasUsptoOdpKey: true });
+		expect({
+			refusesAvailabilityClaims: output.includes('State NOTHING about which patent-data offices you can reach'),
+			epoKeyPresence: output.includes('EPO OPS key is not set'),
+			usptoKeyPresence: output.includes('USPTO ODP key is set'),
+			officeClaims: OFFICE_AVAILABILITY_CLAIMS.filter(claim => output.includes(claim)),
+			carouselAnnotations: output.includes('(not set)'),
+		}).toEqual({ refusesAvailabilityClaims: true, epoKeyPresence: true, usptoKeyPresence: true, officeClaims: [], carouselAnnotations: false });
+	});
+
+	test('an unread subscription falls back to the unknown row and keeps tools callable', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			unknownRow: output.includes('The subscription status could not be read this turn'),
+			toolsStayCallable: output.includes('Every patent tool stays callable in every state'),
+			officeClaims: OFFICE_AVAILABILITY_CLAIMS.filter(claim => output.includes(claim)),
+		}).toEqual({ unknownRow: true, toolsStayCallable: true, officeClaims: [] });
+	});
+
+	test('renders no key-state block when no patent tool is available', async () => {
+		const output = await renderPatentInstructions([], { subscriptionStatus: 'active' });
+		expect(output.includes('PATENT-DATA KEY STATE')).toBe(false);
+	});
 });

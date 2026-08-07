@@ -19,6 +19,7 @@
 
 import { BasePromptElementProps, PromptElement } from '@vscode/prompt-tsx';
 import type { LanguageModelToolInformation } from 'vscode';
+import type { FlowLeapSubscriptionStatus } from '../../../patentai/common/trialCountdown';
 import { ToolName } from '../../../tools/common/toolNames';
 import { InstructionMessage } from '../base/instructionMessage';
 import { Tag } from '../base/tag';
@@ -27,6 +28,35 @@ export interface PatentAIPromptProps extends BasePromptElementProps {
 	readonly availableTools: readonly LanguageModelToolInformation[] | undefined;
 	/** True when the backend injects the native web_search tool (Anthropic models). */
 	readonly webSearchAvailable?: boolean;
+	/**
+	 * The user's last-known FlowLeap subscription status, read synchronously at prompt build.
+	 * Absent (or `unknown`) means the read was inconclusive and must never drive an
+	 * office-availability claim — during `trialing`, no keys with everything working is normal.
+	 */
+	readonly subscriptionStatus?: FlowLeapSubscriptionStatus;
+	/** True when the user's EPO OPS consumer key and secret are configured. */
+	readonly hasEpoOpsKey?: boolean;
+	/** True when the user's USPTO ODP API key is configured. */
+	readonly hasUsptoOdpKey?: boolean;
+}
+
+/**
+ * The per-turn key state the prompt renders: the subscription status plus, per patent-data
+ * provider, whether the user's key is set and whether its office is gated. An office is gated only
+ * on `active` (bring-your-own keys); on `trialing` FlowLeap's shared keys serve every office, and
+ * `inactive`/`unknown` never yield a per-office claim.
+ */
+function deriveKeyState(props: PatentAIPromptProps) {
+	const status = props.subscriptionStatus ?? 'unknown';
+	const hasEpoOpsKey = props.hasEpoOpsKey === true;
+	const hasUsptoOdpKey = props.hasUsptoOdpKey === true;
+	return {
+		status,
+		hasEpoOpsKey,
+		hasUsptoOdpKey,
+		epoGated: status === 'active' && !hasEpoOpsKey,
+		usptoGated: status === 'active' && !hasUsptoOdpKey,
+	};
 }
 
 /**
@@ -119,6 +149,48 @@ class PatentAIIdentityPrompt extends PromptElement<PatentAIPromptProps> {
 }
 
 /**
+ * Per-turn patent-data key state, so the agent plans its searches knowing which offices are live
+ * instead of learning it from a failed call. Four rows, one per subscription status; `unknown`
+ * renders key presence only and claims nothing about availability.
+ */
+class PatentKeyStateRules extends PromptElement<PatentAIPromptProps> {
+	render() {
+		const tools = detectPatentTools(this.props.availableTools);
+		if (!tools.hasAnyPatentTool) {
+			return null;
+		}
+
+		const { status, hasEpoOpsKey, hasUsptoOdpKey, epoGated, usptoGated } = deriveKeyState(this.props);
+
+		return <Tag name='patentDataKeyState'>
+			PATENT-DATA KEY STATE (this turn):<br />
+			<br />
+			{status === 'trialing' && <>
+				The user is on the FlowLeap trial: EVERY patent-data office is live on FlowLeap's shared keys. Patent-Data Keys are NOT needed — do not mention keys, do not ask the user to add one, and do not warn about key-related coverage.<br />
+			</>}
+			{status === 'active' && <>
+				The subscription is active, so patent data runs on the user's OWN Patent-Data Keys:<br />
+				{'  '}• EPO OPS (EP/WO search and document reads): {hasEpoOpsKey
+					? <>LIVE — the user's EPO OPS key is set.</>
+					: <>GATED — the user's EPO OPS consumer key and secret are NOT set, so EP/WO routes answer data_keys_required. The user adds them with the "FlowLeap: Patent Data Keys" command.</>}<br />
+				{'  '}• USPTO ODP (US search, prosecution and citation routes): {hasUsptoOdpKey
+					? <>LIVE — the user's USPTO ODP key is set.</>
+					: <>GATED — the user's USPTO ODP API key is NOT set, so US routes answer data_keys_required. The user adds it with the "FlowLeap: Patent Data Keys" command.</>}<br />
+				{(epoGated || usptoGated) && <>{'  '}• Keyless routes need no Patent-Data Key and stay live: PATSTAT analytics, patent-law search (MPEP/EPC) and academic search.<br /></>}
+			</>}
+			{status === 'inactive' && <>
+				The user's FlowLeap subscription is not active: patent-data routes require a subscription and answer 402 until it is restored. The 402 notification carries the recovery step.<br />
+			</>}
+			{status === 'unknown' && <>
+				The subscription status could not be read this turn. State NOTHING about which patent-data offices you can reach — no office is declared reachable and none is declared gated. Key presence only: EPO OPS key {hasEpoOpsKey ? <>is set</> : <>is not set</>}; USPTO ODP key {hasUsptoOdpKey ? <>is set</> : <>is not set</>}.<br />
+			</>}
+			<br />
+			Every patent tool stays callable in every state — the Patent-data Backend is the authority on what a route returns.<br />
+		</Tag>;
+	}
+}
+
+/**
  * Autonomous action patterns - what the agent SHOULD do proactively
  */
 class PatentAutonomousActions extends PromptElement<PatentAIPromptProps> {
@@ -162,6 +234,14 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 			return null;
 		}
 
+		// Key-state annotations on the office options, so the user chooses jurisdiction knowing
+		// which office needs a key of theirs. Only an `active` subscription gates an office;
+		// "Both (comprehensive)" stays the recommended default in every state.
+		const { epoGated, usptoGated } = deriveKeyState(this.props);
+		const usOptionLabel = `US patents only (USPTO)${usptoGated ? ' — needs your USPTO ODP key (not set)' : ''}`;
+		const epOptionLabel = `European/International (EP/WO)${epoGated ? ' — needs your EPO OPS key (not set)' : ''}`;
+		const jurisdictionCarouselExample = `{\n  "questions": [{\n    "header": "Jurisdiction",\n    "question": "Which jurisdiction should I search?",\n    "multiSelect": false,\n    "options": [\n      {"label": "${usOptionLabel}"},\n      {"label": "${epOptionLabel}"},\n      {"label": "Both (comprehensive)", "recommended": true}\n    ]\n  }]\n}`;
+
 		return <Tag name='patentToolSelection'>
 			<Tag name='jurisdictionClarification'>
 				JURISDICTION GATE - USE vscode_askQuestions TOOL<br />
@@ -173,8 +253,9 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				Example vscode_askQuestions call:<br />
 				```json<br />
-				{'{\n  "questions": [{\n    "header": "Jurisdiction",\n    "question": "Which jurisdiction should I search?",\n    "multiSelect": false,\n    "options": [\n      {"label": "US patents only (USPTO)"},\n      {"label": "European/International (EP/WO)"},\n      {"label": "Both (comprehensive)", "recommended": true}\n    ]\n  }]\n}'}<br />
+				{jurisdictionCarouselExample}<br />
 				```<br />
+				{(epoGated || usptoGated) && <>Carry those key-state annotations into the options exactly as written — the user chooses with full information. "Both (comprehensive)" stays the recommended default even when an office is annotated.<br /></>}
 				<br />
 				After the user answers via the carousel, proceed with the appropriate search tools.<br />
 				This gate is a brief clarification, NOT a stall. When jurisdiction is genuinely ambiguous, do not make search tool calls until you receive the answer. BUT when the task itself implies comprehensive coverage — a prior-art, novelty, patentability, freedom-to-operate, invalidity, or landscape search, which is unsafe to scope to one office by guess — default to Both (comprehensive) and PROCEED without asking; the carousel is only for a genuine single-office-vs-both narrowing the task actually leaves open, never a reflex before every search.<br />
@@ -758,6 +839,7 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 
 		return <InstructionMessage>
 			<PatentAIIdentityPrompt {...this.props} priority={900} flexGrow={1} />
+			<PatentKeyStateRules {...this.props} priority={870} flexGrow={1} />
 			<PatentToolSelectionPrompt {...this.props} priority={850} flexGrow={1} />
 			<PatentCriticalRules {...this.props} priority={800} flexGrow={1} />
 			<PatentPersistenceRules {...this.props} priority={790} flexGrow={1} />
