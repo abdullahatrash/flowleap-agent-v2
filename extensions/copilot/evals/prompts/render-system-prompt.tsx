@@ -17,9 +17,11 @@
  * not the byte-for-byte full system prompt.
  *
  * PatentAIInstructions renders nothing unless detectPatentTools() finds >=1 patent
- * tool, so we feed it a synthetic tool list whose names are the 20 snake_case patent
- * ToolName values, plus webSearchAvailable:true (matches the eval tool surface, which
- * includes a synthetic web_search tool).
+ * tool, so we feed it a synthetic tool list built from {@link PATENT_TOOL_NAMES} —
+ * the same list extract-tools.ts turns into the tool definitions the model is actually
+ * offered — plus webSearchAvailable:true (matches the eval tool surface, which includes
+ * a synthetic web_search tool). Importing that list rather than restating it is what
+ * keeps the rendered branches and the offered tools in step.
  *
  * Rendering needs the @vscode/prompt-tsx renderer + a tokenizer + the IPromptEndpoint
  * DI seam (InstructionMessage reads endpoint.family). We use the same minimal unit-test
@@ -48,40 +50,8 @@ import { MockEndpoint } from '../../src/platform/endpoint/test/node/mockEndpoint
 import { PatentAIInstructions, PatentAIPromptProps } from '../../src/extension/prompts/node/agent/patentAIPrompt';
 import { PromptRenderer } from '../../src/extension/prompts/node/base/promptRenderer';
 import { createExtensionUnitTestingServices } from '../../src/extension/test/node/services';
-import { ToolName } from '../../src/extension/tools/common/toolNames';
 import { IInstantiationService } from '../../src/util/vs/platform/instantiation/common/instantiation';
-
-/** The 20 patent ToolName values whose presence turns the patent prompt block on. */
-const PATENT_TOOL_NAMES: readonly ToolName[] = [
-	ToolName.BuildPatentQuery,
-	ToolName.BuildUSPTOQuery,
-	ToolName.SearchPatents,
-	ToolName.GetPatentDetails,
-	ToolName.GetPatentFigures,
-	ToolName.PatentApiRequest,
-	ToolName.SearchCitations,
-	ToolName.SearchForwardCitations,
-	ToolName.GetContinuity,
-	ToolName.GetProsecutionTimeline,
-	ToolName.GetLegalStatus,
-	ToolName.GetPatentFamily,
-	ToolName.GetRegisterEvents,
-	ToolName.OpsApiGuide,
-	ToolName.USPTOApiGuide,
-	ToolName.CitationApiGuide,
-	ToolName.SearchLegal,
-	ToolName.LegalSearchGuide,
-	ToolName.SearchAcademic,
-	ToolName.ReadPdf,
-	ToolName.WritePatentResults,
-	ToolName.PatentSearchSubagent,
-	ToolName.AnalyzeClaim,
-	ToolName.CompareClaims,
-	ToolName.PatentAnalyticsViz,
-	ToolName.GetPatentSummary,
-	ToolName.GetPatentTerm,
-	ToolName.ComparePatents,
-];
+import { PATENT_TOOL_NAMES } from './extract-tools';
 
 /** Builds the synthetic tool surface that activates PatentAIInstructions. */
 function buildSyntheticTools(): readonly LanguageModelToolInformation[] {

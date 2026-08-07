@@ -57,6 +57,7 @@ const PATENT_TOOL_PREFIXES = [
 	'patent_api',
 	'patent_search',
 	'patent_analytics',
+	'patstat_',
 	'analyze_claim',
 	'compare_claims',
 	'compare_patents',

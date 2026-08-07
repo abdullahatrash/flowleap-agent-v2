@@ -27,8 +27,14 @@ const OUTPUT = path.join(__dirname, 'tool-definitions.json');
  * as enum members rather than their string values — a rename or removal in
  * toolNames.ts is caught by the missing-name guard in {@link buildToolDefinitions}
  * instead of silently shrinking the eval tool surface.
+ *
+ * This is the SINGLE source of the patent surface the evals model:
+ * render-system-prompt.tsx feeds the same list to detectPatentTools, so the tools
+ * the model is offered and the prompt branches it is offered them under cannot
+ * drift apart (they had — #182: the patstat tools reached this list in #159 but
+ * never reached the renderer's copy of it).
  */
-const PATENT_TOOL_NAMES: readonly ToolName[] = [
+export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.BuildPatentQuery,
 	ToolName.BuildUSPTOQuery,
 	ToolName.SearchPatents,
@@ -58,6 +64,7 @@ const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.GetPatentTerm,
 	ToolName.ComparePatents,
 	ToolName.PatstatPortfolio,
+	ToolName.PatstatQuery,
 	ToolName.PatstatApiGuide,
 ];
 
