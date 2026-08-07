@@ -1,4 +1,8 @@
-# ignore eval run output, but track the committed pass-rate baseline
+# ignore eval run output, but track the committed baselines
 !output/
 output/*
+# main-suite pass-rate baseline (compare-baseline.ts)
 !output/baseline.json
+# per-case k-of-n repeat baselines (repeat-gate.ts / aggregate-repeats.ts)
+!output/trajectory-baseline.json
+!output/key-gate-baseline.json

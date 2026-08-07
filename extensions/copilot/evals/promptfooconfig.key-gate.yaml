@@ -31,12 +31,17 @@ defaultTest:
     # Grading provider for the llm-rubric doctrine checks (the pluggable judge layer), same as the
     # trajectory gate. The structural `javascript` asserts need no judge and are proven offline by
     # assertions/test/key-gate-assertions.spec.ts.
+    #
+    # Judge model and the explicit max_tokens are the measured decision recorded in
+    # promptfooconfig.trajectory.yaml and README "Judge model decision" (#184) — keep the two
+    # gates on the same judge so a doctrine result and a trajectory result stay comparable.
     provider:
       id: openai:chat:google/gemini-2.5-flash
       config:
         apiBaseUrl: https://openrouter.ai/api/v1
         apiKey: "{{env.OPENROUTER_API_KEY}}"
         temperature: 0
+        max_tokens: 4096
         passthrough:
           stream: false
   assert:
