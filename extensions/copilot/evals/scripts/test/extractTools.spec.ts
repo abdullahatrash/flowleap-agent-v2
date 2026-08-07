@@ -45,6 +45,7 @@ describe('extract-tools', () => {
 			'patent_search_subagent',
 			'patstat_api_guide',
 			'patstat_portfolio',
+			'patstat_query',
 			'read_pdf',
 			'run_in_terminal',
 			'search_academic',
@@ -66,5 +67,17 @@ describe('extract-tools', () => {
 			expect(def.function.description.length).toBeGreaterThan(0);
 			expect(def.function.parameters).toMatchObject({ type: 'object' });
 		}
+	});
+
+	// The COMMITTED artifact, not the freshly built one: every suite sends the model
+	// tool-definitions.json as its tool surface, and the `no_invented_tool_names` guard
+	// reads that same file to decide which tool names exist. A stale file therefore both
+	// shrinks the surface and flags legitimate calls as inventions — which is exactly what
+	// happened to the patstat tools between #159 and #182 (added to extract-tools.ts,
+	// never regenerated). Editing the source list without re-running eval:extract-tools
+	// fails here instead of silently at the next live run.
+	it('the committed tool-definitions.json is what extract-tools would write today', () => {
+		const committed = JSON.parse(fs.readFileSync(path.join(ROOT, 'evals/prompts/tool-definitions.json'), 'utf-8'));
+		expect(committed).toStrictEqual(buildToolDefinitions(allTools).definitions);
 	});
 });
