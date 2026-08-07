@@ -84,6 +84,9 @@ interface ChatChoice {
 		readonly content?: string;
 		readonly tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
 	};
+	/** OpenRouter reports an upstream failure (e.g. a 429) INSIDE a 200 body, as this pair. */
+	readonly finish_reason?: string;
+	readonly error?: { readonly code?: number; readonly message?: string };
 }
 
 /** Collaborators promptfoo never supplies — overridden only by tests, so production always gets the real fetch/env/loader. */
@@ -200,6 +203,13 @@ export default class TrajectoryProvider implements ApiProvider {
 		const choice = data.choices?.[0];
 		if (!choice) {
 			throw new Error('No choices in response');
+		}
+		// An upstream failure arrives as a 200 whose choice carries `finish_reason: 'error'` and a
+		// null message. Reading that as "the model answered nothing" would silently score a
+		// rate-limited round as a give-up; surface it so promptfoo reports an ERROR, not a verdict.
+		if (choice.finish_reason === 'error' || choice.error) {
+			const detail = choice.error?.message ?? 'no detail';
+			throw new Error(`Upstream error in a 200 response (finish_reason=${choice.finish_reason}): ${detail}`);
 		}
 		return choice;
 	}
