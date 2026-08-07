@@ -3,8 +3,8 @@ description: "Patent AI Agent — Multi-Model Comparison"
 # Tests the same prompt across 9 OpenRouter models side-by-side.
 # Each column in the results dashboard = one model.
 #
-# Run:  OPENROUTER_API_KEY=sk-... promptfoo eval -c promptfooconfig.multi.yaml
-# View: promptfoo view
+# Run:  OPENROUTER_API_KEY=sk-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.multi.yaml
+# View: npx tsx scripts/promptfoo.ts view
 #
 # Prerequisites:
 #   - OPENROUTER_API_KEY exported (BYOK — no backend required, inference is client-side)

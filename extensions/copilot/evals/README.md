@@ -57,9 +57,10 @@ claude, gpt-5, etc. To compare models, pass a different `config.model` to the pr
 
 ## Prerequisites
 
-- **promptfoo** installed globally: `npm install -g promptfoo`
-  - Installed globally to avoid zod version conflicts (project uses zod 3.x, promptfoo latest needs zod 4)
-  - npm scripts and `run-evals.sh` invoke the `promptfoo` binary directly — make sure it's on `PATH`
+- **The pinned promptfoo** installed once: `npm run eval:setup` (from `extensions/copilot`)
+  - Installs `evals/package.json` → `promptfoo` at the exact pinned version. See
+    [promptfoo version policy](#promptfoo-version-policy) — never `npm i -g promptfoo`.
+  - Needs **Node >= 22.22.0** (promptfoo 0.122.0 dropped Node 20). The repo's `.nvmrc` (24.15.0) satisfies this.
 - **An OpenRouter API key** (or any OpenAI-compatible endpoint + key):
   - `OPENROUTER_API_KEY` — used both by the provider (fallback) and by every grader's `{{env.OPENROUTER_API_KEY}}` reference
   - Optionally override with `EVAL_API_KEY` / `EVAL_API_BASE_URL` to point the provider (not the graders) at a different endpoint
@@ -76,16 +77,16 @@ npm run eval
 # Open browser dashboard to view results
 npm run eval:view
 
-# From evals/ directory directly
+# From evals/ directory directly — scripts/promptfoo.ts runs the PINNED promptfoo
 cd evals
-OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.yaml
+OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml
 
 # Run a single dataset
-OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.yaml \
+OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml \
   -t datasets/tool-selection.yaml
 
-# Skip cache (re-run all API calls)
-OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.yaml --no-cache
+# Skip cache (re-run all GRADER calls — the providers never cache; see Caching)
+OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml --no-cache
 
 # Run against a specific model (single-model config reads EVAL_MODEL)
 EVAL_MODEL=anthropic/claude-sonnet-5 OPENROUTER_API_KEY=sk-or-... npm run eval
@@ -99,6 +100,60 @@ npm run eval:check-drift
 # Compare the last run against the committed pass-rate baseline
 npm run eval:check-baseline
 ```
+
+## promptfoo version policy
+
+**The gate runs one pinned promptfoo version. A global install must never run it.** (#186)
+
+`evals/package.json` pins `promptfoo` to an **exact** version (no `^`, no `~`), with
+`evals/package-lock.json` committed beside it. `scripts/promptfoo.ts` resolves
+`evals/node_modules/promptfoo` and nothing else: if the pinned install is missing it fails
+with the fix instead of falling back to a different version. Every `eval:*` script and
+`run-evals.sh` go through that launcher.
+
+- **Install / update your copy:** `npm run eval:setup` (from `extensions/copilot`) — runs `npm ci` in `evals/`.
+- **Bump the version:** edit `evals/package.json`, run `npm --prefix evals install`, re-run the
+  regression set below, and record the changelog delta in
+  [Upstream changelog review](#upstream-changelog-review). Commit `package.json` and
+  `package-lock.json` together.
+- **Regression set for any bump:** `npm run eval:check-drift` green, `npx vitest run evals` green,
+  and one live `npm run eval:key-gate` at 6/6 on `google/gemini-2.5-pro`.
+
+Why `evals/` has its own `package.json` instead of a devDependency on the extension: promptfoo
+pulls **710 packages / ~1.6 GB** (Playwright Chromium, onnxruntime, sharp). `extensions/copilot`
+is in `build/npm/dirs.ts`, so its dependencies install on **every** CI run and every fork build —
+none of which run evals. A separate manifest keeps that weight, and promptfoo's zod 4 requirement
+(the extension pins zod 3.25.76), out of the product's dependency tree entirely. `evals/` is not in
+any `tsconfig` include and is excluded from the `.vscodeignore` allow-list, so nothing here reaches
+a build artifact.
+
+Historical note: this suite previously ran whatever `promptfoo` sat on `PATH` (a global 0.121.18
+while upstream was 0.122.0). Gate results were not reproducible across machines. `npm exec --no --
+promptfoo` is **not** a sufficient replacement — it still falls back to the global binary when the
+local install is absent, which is why the launcher exists.
+
+## Local dashboard (`promptfoo view`)
+
+```bash
+npm run eval:view              # from extensions/copilot; opens http://localhost:15500
+npm run eval:view -- -n        # start the server, do not open a browser
+npm run eval:view -- -p 15600  # different port
+```
+
+- **What it reads.** The SQLite store at `~/.promptfoo/promptfoo.db` (relocate with
+  `PROMPTFOO_CONFIG_DIR`), which holds **every** eval this machine has run, newest first. It is a
+  different dataset from `outputPath`: the JSON under `output/` is a point-in-time dump of one run,
+  and it is what `compare-baseline.ts` and any pass-rate post-processing must parse. Ratings and
+  comments you add in the dashboard live only in the DB.
+- **Default port 15500.** The UI lists runs by description, so a suite's `description:` field is how
+  you find it (for example "Patent AI — Key-Gate Doctrine Adherence (#176)").
+- **Cache interplay.** `--no-cache` does not change what the dashboard shows; it only forces fresh
+  API calls during the run. Because our providers bypass the promptfoo cache entirely (see
+  [Caching](#caching)), `--no-cache` on our suites affects the **grader** calls only.
+- **Export a run:** `npx tsx scripts/promptfoo.ts export eval latest -o run.json` (or an explicit eval
+  id; `--include-media` embeds blobs). Import elsewhere with `promptfoo import <file>`.
+- **Share:** `promptfoo share` uploads the run to promptfoo's hosted viewer. **Do not use it** — our
+  runs carry the full system prompt and tool surface. Export the JSON and attach it instead.
 
 ## Baseline Gate
 
@@ -184,6 +239,11 @@ keys.
 
 Promptfoo caches API responses by default (14-day TTL at `~/.promptfoo/cache`). This means re-running evals without changes is instant. Use `--no-cache` to force fresh API calls. To clear: `promptfoo cache clear`.
 
+**Our providers are not in that path.** `patent-ai-provider.ts` and `trajectory-provider.ts` call the
+endpoint with `fetch` and never use promptfoo's cache API, so the agent's own calls are always live
+and `--no-cache` only re-runs the **graders**. See
+[Techniques survey](#techniques-survey--what-we-use-and-what-we-do-not).
+
 | Env Variable | Purpose | Default |
 |---|---|---|
 | `PROMPTFOO_CACHE_ENABLED` | Toggle caching | `true` |
@@ -256,7 +316,7 @@ findings, not red builds.** The main suite is the build gate; the frontier suite
 
 ```bash
 cd evals
-OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.frontier.yaml --no-cache
+OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.frontier.yaml --no-cache
 ```
 
 (Always `--no-cache` — frontier probes are meant to be re-checked fresh, not served from cache.)
@@ -283,7 +343,7 @@ tests only prove the doctrine text renders.
 
 ```bash
 cd evals
-OPENROUTER_API_KEY=sk-or-... promptfoo eval -c promptfooconfig.key-gate.yaml --no-cache
+OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.key-gate.yaml --no-cache
 # or, from extensions/copilot:  npm run eval:key-gate
 ```
 
@@ -333,6 +393,8 @@ evals/
 ├── promptfooconfig.frontier.yaml # Non-gating frontier probe config (4 cases)
 ├── promptfooconfig.multi.yaml    # Multi-model comparison (all 9 models)
 ├── promptfooconfig.key-gate.yaml # Key-gate doctrine adherence (6 cases, #176)
+├── package.json                  # Pins promptfoo to an EXACT version (see version policy)
+├── package-lock.json             # Committed — the pin covers transitive deps too
 ├── README.md                     # This file
 ├── providers/
 │   ├── patent-ai-provider.ts     # Custom provider → OpenRouter (BYOK, no backend)
@@ -355,6 +417,7 @@ evals/
 │   ├── frontier.yaml             # 4 probes — NON-GATING (failures are findings)
 │   └── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
 ├── scripts/
+│   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
 │   ├── check-prompt-drift.ts     # TSX ↔ system-prompt.txt drift checker
 │   └── compare-baseline.ts       # Pass-rate baseline gate (npm run eval:check-baseline)
@@ -394,6 +457,65 @@ legal-tool-called) and were converted to deterministic `javascript` asserts. One
 genuinely qualitative rubric survives (`patent_attribution_rubric` in
 source-attribution.yaml) — the documented JSON-extraction flakiness of the grading
 path now affects at most 1 of 34 cases.
+
+## Upstream changelog review
+
+Reviewed for the 0.121.18 → **0.122.0** pin (#186). Range: 0.121.19, 0.121.20, 0.122.0.
+Verdicts are **adopt now**, **defer** (with the issue that owns it), or **not relevant**.
+
+| Upstream change | Version | Relevance here | Verdict |
+|---|---|---|---|
+| Node 20 dropped, `engines` now `>=22.22.0` | 0.122.0 | The only breaking change in the range. This is why 0.122.0 is a minor bump — it ships no features, only that drop plus security dependency pins (Shai-Hulud npm compromise, undici, js-yaml). | **Adopt now** — `.nvmrc` (24.15.0) already satisfies it; recorded in Prerequisites. |
+| Reserved grader vars now win over test vars (`output`, `rubric`, `input`, `completion`, `ideal`, `criteria`) | 0.121.19 | Before this, a test var with one of those names silently replaced the judge's view of the model output. Our datasets define exactly one var, `prompt` — verified by grep across `datasets/`. | **Not relevant** — no name collision. Do not introduce a var with a reserved name. |
+| `getDbPath()` throws when a Vitest/Jest process would open the real DB | 0.121.19 | Guards `~/.promptfoo/promptfoo.db` against test runners. Our vitest specs test assertions and providers offline and never start promptfoo. | **Not relevant.** If that ever changes, set `IS_TESTING=true`. |
+| `context-faithfulness` counts missing judge verdicts as unsupported (stricter) | 0.121.19 | We do not use `context-faithfulness` yet, but it is the assertion that grades output text against provider-returned context — the shape #185 needs. The strictness change works in that issue's favour. | **Defer to #185.** |
+| No new assertion types; the type union is unchanged | whole range | `g-eval` (array of separately scored criteria), `is-json` with a schema, and `context-faithfulness` + `contextTransform` all already existed. They are still the right answers for #185's "grade the TEXT, not the tool trace", but nothing forced a change now. | **Defer to #185.** |
+| No repeat aggregation anywhere; `--repeat` expands each case into independent rows | whole range | promptfoo has **no** "pass if k of n" semantic. `assert-set` `threshold` is k-of-n across assertions in one row, not across runs. The nearest native pieces are `PROMPTFOO_PASS_RATE_THRESHOLD` (suite-wide) and `--retry-errors` (ERROR rows only). Also: repeats are cached per repeat index, so `--repeat` without `--no-cache` replays instead of re-sampling. | **Defer to #184** — and note the issue must build the policy itself. No upstream shortcut appeared. |
+| Judge JSON-parse failure is a FAIL, not an ERROR — but it is tagged | whole range | A judge that emits unparseable JSON yields `pass:false, score:0` with `metadata.graderError === true` on the component result. That flag is public and readable from the `outputPath` JSON, so #184's "never let grader flake fail a case" is implementable by post-processing. `--retry-errors` will not catch these, because they are not ERROR rows. | **Defer to #184.** |
+| Provider errors are still classified by HTTP status only | whole range | The OpenAI-compatible provider errors on non-2xx only. A **200 carrying `finish_reason: "error"`** still yields an empty completion and a plain assertion FAIL, and — because there is no top-level `error` key — it is written to the disk cache and replayed for the 14-day TTL. | **Not relevant as an adoption; keep our fix.** The provider-side throw from #183 (`trajectory-provider.ts`) is not redundant. |
+| Native `trajectory:*` assertions (`tool-used`, `tool-sequence`, `tool-args-match`, `step-count`, `goal-success`) | pre-existing | Real tool-trajectory grading exists, but it reads **OTEL spans**, not our returned JSON. Using it means emitting spans from `context.traceparent` and running a collector, and we would still write the agent loop ourselves. | **Not adopted.** Reconsider only if we ever want span-level grading in addition to the JSON string. |
+| `simulated-user` provider, redteam multi-turn strategies (`goat`, `crescendo`, `goblin` new in 0.121.19) | 0.121.19 | `simulated-user` drives the **user** side of a conversation; it has no seat for our scripted mock tools. The redteam strategies generate jailbreaks, not capability cases. promptfoo has no "run this agent against these mock tools" provider. | **Not relevant.** Our custom provider stays the right design. |
+| Conversation-history isolation and duplicate-provider index fixes | 0.121.20 | Both concern multi-provider or `_conversation` suites. Our gating suites run one provider and never use `_conversation` (multi-turn is internal to our provider). | **Not relevant.** |
+
+**Compatibility verified locally after the bump**, not just read from notes: config schema, the
+`ApiProvider` / `ProviderResponse` / `CallApiContextParams` signatures our providers implement, the
+assertion context shape, the `outputPath` JSON schema (`results.stats` and per-result `success` —
+the two fields `compare-baseline.ts` reads), and the `eval -c` / `--no-cache` / `view` flags are all
+unchanged. The 0.122.0 output adds `vars` and `runtimeOptions` top-level keys, which is additive.
+
+## Techniques survey — what we use and what we do not
+
+**What we use.** File-based custom providers (both suites run their own agent loop, which promptfoo
+has no primitive for); `javascript` assertions as the primary deterministic layer; `llm-rubric` for
+the few genuinely qualitative checks; `defaultTest.options.provider` to pin the judge; `tests:
+file://datasets/*.yaml` for case reuse; `outputPath` JSON as the machine-readable record the
+baseline gate parses.
+
+**Assertion scoring and weights** — *not used, deliberately*. Every assertion carries an implicit
+`weight: 1` and each case is pass/fail on all of them. Weighted combined scores with a test-level
+`threshold` would let a case pass while failing a doctrine check, which is the opposite of what a
+gate is for. `assert-set` (k-of-n across assertions in one row) has the same problem here.
+
+**Red-teaming and adversarial generation** — *not used*. `promptfoo redteam` is a separate subsystem
+for jailbreak and harm-category probing, and its generation step normally calls promptfoo's hosted
+service. Our risk is wrong patent work (fabricated claim text, wrong jurisdiction, a suppressed
+fallback), not a jailbroken assistant. Adding it would mean a new gate with a different owner, not a
+better version of this one.
+
+**Dataset generation** (`promptfoo generate dataset` / `generate assertions`) — *not used*. Cases here
+encode specific doctrine from specific issues (#173 key-gate, jurisdiction gating), and each one has
+to be traceable to the rule it defends. Synthesised cases would need that review anyway, so they
+save nothing. It stays an option for widening coverage once a rule is stable.
+
+**Caching** — *effectively off for the model under test*. Both providers call the endpoint directly
+with `fetch` and never touch promptfoo's cache API, so **nothing about the agent's behaviour is ever
+cached**; only grader (`llm-rubric`) calls go through the 14-day disk cache at `~/.promptfoo/cache`.
+`--no-cache` on our suites therefore re-runs the judges, not the agent. Clear it with `promptfoo
+cache clear`. Two consequences worth remembering: an assertion-only edit can be re-graded cheaply,
+and a provider response poisoned by an upstream error would be cached if we ever routed the agent
+through promptfoo's own provider — an independent reason to keep the loop in our provider.
+
+**Sharing** — *not used*. See [Local dashboard](#local-dashboard-promptfoo-view).
 
 ## Updating the System Prompt
 

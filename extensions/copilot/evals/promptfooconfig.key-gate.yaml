@@ -5,9 +5,9 @@ description: "Patent AI — Key-Gate Doctrine Adherence (#176)"
 # real `data_keys_required` error text, under a key-state system-prompt variant (active
 # subscription, EPO OPS key missing, USPTO ODP key live) written by prompts/render-system-prompt.tsx.
 #
-# Run:  OPENROUTER_API_KEY=sk-... promptfoo eval -c promptfooconfig.key-gate.yaml
+# Run:  OPENROUTER_API_KEY=sk-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.key-gate.yaml
 #       (or `npm run eval:key-gate` from extensions/copilot)
-# View: promptfoo view
+# View: npx tsx scripts/promptfoo.ts view
 #
 # Regenerate the prompt variants first whenever patentAIPrompt.tsx changes:
 #       npx tsx evals/prompts/render-system-prompt.tsx

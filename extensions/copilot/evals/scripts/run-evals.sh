@@ -13,9 +13,11 @@ if [ -z "${EVAL_API_KEY:-}" ] && [ -z "${OPENROUTER_API_KEY:-}" ]; then
 	exit 1
 fi
 
-if ! command -v promptfoo > /dev/null 2>&1; then
-	echo "ERROR: promptfoo not found on PATH."
-	echo "Install it globally: npm i -g promptfoo"
+# The suite runs the PINNED promptfoo from evals/package.json, never a global install —
+# see README.md, "promptfoo version policy". scripts/promptfoo.ts enforces that.
+if [ ! -d "${EVALS_DIR}/node_modules/promptfoo" ]; then
+	echo "ERROR: the pinned promptfoo is not installed."
+	echo "Install it: npm run eval:setup   (from extensions/copilot)"
 	exit 1
 fi
 
@@ -26,7 +28,7 @@ npx tsx "${EVALS_DIR}/prompts/extract-tools.ts"
 # Run evals
 echo "Running evaluations..."
 cd "$EVALS_DIR"
-promptfoo eval -c promptfooconfig.yaml "$@"
+npx tsx "${SCRIPT_DIR}/promptfoo.ts" eval -c promptfooconfig.yaml "$@"
 
 echo ""
 echo "Done. View results with: npm run eval:view"
