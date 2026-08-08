@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { emptiedByTruncationNotice, formatJsonForModel, IMarkdownColumn, isSingleRecordDocumentLookup, renderMarkdownTable, ToolResponseBudgets, truncatePreview } from '../patentResponseFormatter';
+import { emptiedByTruncationNotice, formatJsonForModel, IMarkdownColumn, isSingleRecordDocumentLookup, renderMarkdownTable, ToolResponseBudgets, truncatePreview, truncationNotice } from '../patentResponseFormatter';
 
 // `patentResponseFormatter` is the shared, budget-aware formatter the patent tools route their results
 // through. It is pure (no service dependencies), so it is tested in isolation here.
@@ -193,25 +193,93 @@ describe('formatJsonForModel', () => {
 });
 
 describe('isSingleRecordDocumentLookup', () => {
-	it('classifies by-number document lookups as single-record and search endpoints as multi-record', () => {
+	/** The single oversized record a by-number lookup comes back with, in USPTO wrapper shape. */
+	const oneRecord = { count: 1, patentFileWrapperDataBag: [{ applicationNumberText: '16473445', claims: 'C'.repeat(5_000) }] };
+	/** A genuine multi-record search result. */
+	const manyRecords = { count: 3, patentFileWrapperDataBag: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
+
+	it('classifies routes that return one document by construction, without needing the payload', () => {
 		expect({
-			usptoGrant: isSingleRecordDocumentLookup('/patent-search-uspto/grants/6021533'),
-			opsClaims: isSingleRecordDocumentLookup('/ops/fulltext/claims?doc=US7654321B2'),
-			opsDescription: isSingleRecordDocumentLookup('/ops/fulltext/description?doc=EP1234566'),
-			enrichForm: isSingleRecordDocumentLookup('/ops/biblio?doc=EP1234566&enrich=claims'),
-			usptoSearch: isSingleRecordDocumentLookup('/patent-search-uspto/search'),
-			cqlSearch: isSingleRecordDocumentLookup('/patent-search?q=solar'),
-			opsDocs: isSingleRecordDocumentLookup('/ops/docs'),
-			biblio: isSingleRecordDocumentLookup('/ops/biblio?doc=EP1234566'),
+			usptoGrant: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/grants/6021533' }),
+			usptoApplication: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/applications/16473445' }),
+			opsClaims: isSingleRecordDocumentLookup({ path: '/ops/fulltext/claims?doc=US7654321B2' }),
+			opsDescription: isSingleRecordDocumentLookup({ path: '/ops/fulltext/description?doc=EP1234566' }),
+			enrichForm: isSingleRecordDocumentLookup({ path: '/ops/biblio?doc=EP1234566&enrich=claims' }),
+			// List sub-resources of a by-number route carry many records: they stay on the multi-record path.
+			applicationDocuments: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/applications/16473445/documents' }, manyRecords),
+			usptoSearch: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search' }),
+			cqlSearch: isSingleRecordDocumentLookup({ path: '/patent-search?q=solar' }),
+			opsDocs: isSingleRecordDocumentLookup({ path: '/ops/docs' }),
 		}).toEqual({
 			usptoGrant: true,
+			usptoApplication: true,
 			opsClaims: true,
 			opsDescription: true,
 			enrichForm: true,
+			applicationDocuments: false,
 			usptoSearch: false,
 			cqlSearch: false,
 			opsDocs: false,
-			biblio: false,
+		});
+	});
+
+	it('classifies a by-number lookup routed through a search endpoint from its single record (#204)', () => {
+		// The observed miss (#201/#202 deviation 4): the model reaches the document through the search route
+		// that `get_patent_details` advertises one line after the grants route, so the path says "search" while
+		// the request names one document and the answer is that one document.
+		expect({
+			luceneByNumber: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { q: 'patentNumber:10958080' } }, oneRecord),
+			luceneByApplication: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { q: 'applicationNumberText:16473445', filters: [] } }, oneRecord),
+			bodyIdentifier: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { patentNumber: '10958080' } }, oneRecord),
+			nestedQuery: isSingleRecordDocumentLookup({ path: '/v1/tools/get_claims', body: { arguments: { publicationNumber: 'US10958080B2' } } }, oneRecord),
+			cqlByNumber: isSingleRecordDocumentLookup({ path: '/patent-search?q=pn%3DUS10958080', body: undefined }, oneRecord),
+			opsBiblioByDoc: isSingleRecordDocumentLookup({ path: '/ops/biblio?doc=EP1234566' }, { 'ops:world-patent-data': { 'exchange-document': { title: 'x' } } }),
+			opsFamilyByDoc: isSingleRecordDocumentLookup({ path: '/ops/family?doc=EP1234566' }, { members: [{ id: 'EP1234566' }] }),
+		}).toEqual({
+			luceneByNumber: true,
+			luceneByApplication: true,
+			bodyIdentifier: true,
+			nestedQuery: true,
+			cqlByNumber: true,
+			opsBiblioByDoc: true,
+			opsFamilyByDoc: true,
+		});
+	});
+
+	it('leaves searches that name no document on the multi-record path, whatever they matched', () => {
+		// The false-positive guard. A topical search that happens to match one hit keeps the multi-record
+		// treatment: "refine your query" is real advice there, and the single-record note would assert a
+		// by-number provenance the request does not have. #202's emptied notice covers it when it empties.
+		expect({
+			topicalOneHit: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { q: 'solar cell inverter' } }, oneRecord),
+			cqlTopicalOneHit: isSingleRecordDocumentLookup({ path: '/patent-search?q=ti%3Dsolar', body: undefined }, oneRecord),
+			byNumberManyRecords: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { q: 'patentNumber:1095*' } }, manyRecords),
+			byNumberNoRecords: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { q: 'patentNumber:10958080' } }, { count: 0, patentFileWrapperDataBag: [] }),
+			emptyIdentifier: isSingleRecordDocumentLookup({ path: '/ops/biblio?doc=' }, oneRecord),
+			noPayload: isSingleRecordDocumentLookup({ path: '/patent-search-uspto/search', body: { q: 'patentNumber:10958080' } }),
+		}).toEqual({
+			topicalOneHit: false,
+			cqlTopicalOneHit: false,
+			byNumberManyRecords: false,
+			byNumberNoRecords: false,
+			emptyIdentifier: false,
+			noPayload: false,
+		});
+	});
+
+	it('offloads the sole record of a by-number search instead of emptying it, and empties a topical one', () => {
+		// End to end over the two halves, on the exact payload #202 regenerated its fixture from: the same
+		// oversized single record now takes opposite paths depending on whether the request named a document.
+		const byNumber = { path: '/patent-search-uspto/search', body: { q: 'patentNumber:10958080' } };
+		const topical = { path: '/patent-search-uspto/search', body: { q: 'battery charging system' } };
+		const format = (request: typeof byNumber) => {
+			const formatted = formatJsonForModel(oneRecord, 1_000, { singleRecord: isSingleRecordDocumentLookup(request, oneRecord) });
+			const parsed = JSON.parse(formatted.content) as { patentFileWrapperDataBag: unknown[]; _truncation: { note: string } };
+			return { recordsPresent: parsed.patentFileWrapperDataBag.length, note: parsed._truncation.note };
+		};
+		expect({ byNumber: format(byNumber), topical: format(topical) }).toEqual({
+			byNumber: { recordsPresent: 1, note: truncationNotice(0, 1_000, true) },
+			topical: { recordsPresent: 0, note: emptiedByTruncationNotice(1, 1_000) },
 		});
 	});
 });
