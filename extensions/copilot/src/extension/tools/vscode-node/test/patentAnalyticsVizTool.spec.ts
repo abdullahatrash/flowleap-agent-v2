@@ -162,6 +162,52 @@ describe('PatentAnalyticsVizTool', () => {
 		expect(textOf(result)).toBe('No patents matched patents about unobtanium. Try broader keywords or fewer filters.');
 	});
 
+	it('states an aggregate the backend returned nothing for, and drops it from the highlight line', async () => {
+		// A corpus whose documents carry no harmonized assignee and no CPC code returns those two
+		// aggregates empty while the others are populated. Rendered as header-only tables under their
+		// headings — and closed by a line asking for "the leading assignees" — the result would assert
+		// two breakdowns it does not carry, which is what a reader narrates numbers out of.
+		const { client } = makeBackendClient({
+			success: true,
+			searchDescription: 'patents about unobtanium',
+			analytics: {
+				byYear: [{ year: 2023, count: 7 }],
+				byCountry: [{ country: 'US', count: 7 }],
+				topAssignees: [],
+				topCPC: [],
+			},
+		});
+		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
+
+		const result = await tool.invoke(makeOptions({ keywords: ['unobtanium'] }), makeToken());
+
+		expect(textOf(result)).toMatchInlineSnapshot(`
+			"## Patent Analytics Results
+
+			**Search**: patents about unobtanium
+
+			Coverage: full-corpus counts over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus). Each list below is capped at its top 20.
+
+			### Filing Trend (by publication year)
+			| Year | Patents |
+			| --- | ---: |
+			| 2023 | 7 |
+
+			### Top Assignees
+			The backend returned no assignee breakdown for the matching corpus. This result carries no assignee data — do not report any.
+
+			### By Country
+			| Country | Patents |
+			| --- | ---: |
+			| US | 7 |
+
+			### Top CPC Sections
+			The backend returned no CPC breakdown for the matching corpus. This result carries no CPC data — do not report any.
+
+			Highlight for the user: the peak filing years and the geographic concentration. The tables above are the deliverable — present them directly rather than re-deriving the numbers."
+		`);
+	});
+
 	it('surfaces a backend error with its recovery hint', async () => {
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(400, 'deprecated_parameter: query is no longer supported'); });
 		const tool = new PatentAnalyticsVizTool(makeLogService(), client);

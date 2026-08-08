@@ -21,7 +21,7 @@ import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendCl
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { renderMarkdownTable, ToolResponseBudgets } from './patentResponseFormatter';
+import { IMarkdownColumn, renderMarkdownTable, ToolResponseBudgets } from './patentResponseFormatter';
 
 interface IPatentAnalyticsParams {
 	keywords?: string[];      // Individual keywords, OR logic, matched against EN title + abstract
@@ -156,6 +156,11 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 	 * Render the backend aggregates as markdown tables. Each aggregate is already capped at its top 20
 	 * by the backend; the assembled body is bounded by {@link ToolResponseBudgets.PatentAnalyticsViz} as
 	 * a defensive whole-response ceiling.
+	 *
+	 * An aggregate the backend returned nothing for is stated as absent instead of being rendered as a
+	 * header-only table, and the closing highlight line names only the dimensions this result actually
+	 * carries. A heading over an empty table, under a line that asks for "the leading assignees", asserts
+	 * a breakdown the payload does not hold — the shape a reader narrates from rather than reports.
 	 */
 	private formatAnalytics(searchDescription: string | undefined, analytics: AnalyticsAggregates): string {
 		const { byYear, byCountry, topAssignees, topCPC } = analytics;
@@ -172,35 +177,41 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 
 		// Filing trend, oldest year first so the table reads as a time series.
 		const yearsAscending = [...byYear].sort((a, b) => a.year - b.year);
-		lines.push('### Filing Trend (by publication year)');
-		lines.push(renderMarkdownTable(yearsAscending, [
+
+		lines.push(renderAggregateSection('Filing Trend (by publication year)', 'filing-year', yearsAscending, [
 			{ header: 'Year', cell: y => String(y.year) },
 			{ header: 'Patents', cell: y => y.count.toLocaleString(), align: 'right' },
-		]));
-		lines.push('');
+		]), '');
 
-		lines.push('### Top Assignees');
-		lines.push(renderMarkdownTable(topAssignees, [
+		lines.push(renderAggregateSection('Top Assignees', 'assignee', topAssignees, [
 			{ header: 'Assignee', cell: a => a.assignee },
 			{ header: 'Patents', cell: a => a.count.toLocaleString(), align: 'right' },
-		]));
-		lines.push('');
+		]), '');
 
-		lines.push('### By Country');
-		lines.push(renderMarkdownTable(byCountry, [
+		lines.push(renderAggregateSection('By Country', 'country', byCountry, [
 			{ header: 'Country', cell: c => c.country },
 			{ header: 'Patents', cell: c => c.count.toLocaleString(), align: 'right' },
-		]));
-		lines.push('');
+		]), '');
 
-		lines.push('### Top CPC Sections');
-		lines.push(renderMarkdownTable(topCPC, [
+		lines.push(renderAggregateSection('Top CPC Sections', 'CPC', topCPC, [
 			{ header: 'CPC', cell: c => c.cpc },
 			{ header: 'Patents', cell: c => c.count.toLocaleString(), align: 'right' },
-		]));
-		lines.push('');
+		]), '');
 
-		lines.push('Highlight for the user: the peak filing years, the leading assignees, the geographic concentration, and the dominant CPC sections. The tables above are the deliverable — present them directly rather than re-deriving the numbers.');
+		const highlights: string[] = [];
+		if (yearsAscending.length > 0) {
+			highlights.push('the peak filing years');
+		}
+		if (topAssignees.length > 0) {
+			highlights.push('the leading assignees');
+		}
+		if (byCountry.length > 0) {
+			highlights.push('the geographic concentration');
+		}
+		if (topCPC.length > 0) {
+			highlights.push('the dominant CPC sections');
+		}
+		lines.push(`Highlight for the user: ${joinPhrases(highlights)}. The tables above are the deliverable — present them directly rather than re-deriving the numbers.`);
 
 		const body = lines.join('\n');
 		const budget = ToolResponseBudgets.PatentAnalyticsViz;
@@ -208,6 +219,31 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 			? body.substring(0, budget) + '\n\n(Output truncated to fit the response budget.)'
 			: body;
 	}
+}
+
+/**
+ * Renders one aggregate as a titled markdown table — or, when the backend returned nothing for that
+ * dimension, as an explicit statement that this result carries no such breakdown.
+ *
+ * The empty case cannot be left to {@link renderMarkdownTable}: a header-only table under its heading
+ * still reads as "here is the breakdown", so the absence is legible only if it is written out.
+ */
+function renderAggregateSection<T>(heading: string, dimension: string, rows: readonly T[], columns: readonly IMarkdownColumn<T>[]): string {
+	if (rows.length === 0) {
+		return `### ${heading}\nThe backend returned no ${dimension} breakdown for the matching corpus. This result carries no ${dimension} data — do not report any.`;
+	}
+	return `### ${heading}\n${renderMarkdownTable(rows, columns)}`;
+}
+
+/** Joins phrases as an Oxford-comma list: `a`, `a and b`, `a, b, and c`. */
+function joinPhrases(phrases: readonly string[]): string {
+	if (phrases.length <= 1) {
+		return phrases[0] ?? '';
+	}
+	if (phrases.length === 2) {
+		return `${phrases[0]} and ${phrases[1]}`;
+	}
+	return `${phrases.slice(0, -1).join(', ')}, and ${phrases[phrases.length - 1]}`;
 }
 
 ToolRegistry.registerTool(PatentAnalyticsVizTool);
