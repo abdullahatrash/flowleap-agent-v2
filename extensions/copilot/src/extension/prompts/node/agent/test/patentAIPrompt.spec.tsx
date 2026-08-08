@@ -414,6 +414,11 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 	// it T1 is 4/4. What the prompt carries against fabrication is the #183 layer below, which
 	// this pass leaves exactly as it found it — the assertion exists so a future attempt at that
 	// block starts from the fact that the ground it would stand on is unmoved.
+	//
+	// #195 measured five further arms against T5 and T1 together and shipped NONE of them, so
+	// this layer is still exactly as #183 left it. What was tried, and what it cost, is recorded
+	// in T5's entry in evals/output/trajectory-baseline.json — read that before writing a sixth
+	// composition-time rule, because composition-time wording now stands at 1 pass in 20 samples.
 	test('the inherited grounding rules are untouched by this pass', async () => {
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
 		expect({
