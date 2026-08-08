@@ -263,6 +263,25 @@ describe('gate red-check: H1 pre-fix give-ups fail RED, post-fix good runs pass 
 		expect(H.cases.t3b_persisted_3plus(postFixB)).toBe(true);
 	});
 
+	it('T3b (#203): the real two-attempt shapes stay RED — both the bare hand-back and the analytics substitution', () => {
+		// Verbatim from output/201-suiteB-1.json: two identical 5xx calls, no other tool, and a
+		// promise to keep trying that the turn never keeps. This is the shape #203 weighed a
+		// loosening for; it completes no ladder rung, so 2 must not be enough.
+		const bareHandBack = traj(
+			[['build_patent_query', 'OK'], ['search_patents', 'HTTP_5XX'], ['search_patents', 'HTTP_5XX']],
+			'I am having temporary difficulty searching for the patents you requested. I will continue to try and will provide the results as soon as I can.',
+		);
+		// Verbatim from output/203-sep-4.json: it DID reach a different tool at 2 attempts, and
+		// answered a different question — an aggregate landscape in place of the five documents
+		// asked for. Crediting "2 attempts + any other tool" would pass this.
+		const analyticsSubstitution = traj(
+			[['build_patent_query', 'OK'], ['search_patents', 'HTTP_5XX'], ['search_patents', 'HTTP_5XX'], ['patent_analytics_viz', 'OK']],
+			'Despite the technical issues with the live patent search, I was able to generate a high-level landscape overview of the technology area you requested.',
+		);
+		expect(H.cases.t3b_persisted_3plus(bareHandBack)).toBe(false);
+		expect(H.cases.t3b_persisted_3plus(analyticsSubstitution)).toBe(false);
+	});
+
 	it('T4: stop after step 1 = RED; reach the terminal tool over the minimal chain = GREEN', () => {
 		const preFix = traj([['get_patent_details', 'OK']], 'Here is the bibliography.');
 		// The current tree's real walk: family → continuity → citations (3 distinct), skipping

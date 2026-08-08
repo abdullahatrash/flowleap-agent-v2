@@ -327,7 +327,23 @@ export const cases = {
 	/** T3a — continued past the first 5xx (a subsequent call, retry included). */
 	t3a_continued_past_5xx: traj => reactedAfter(traj, 'HTTP_5XX', { differentTool: false }),
 
-	/** T3b — at least three search attempts before any hand-back (persistent outage). */
+	/**
+	 * T3b — at least three search attempts before any hand-back (persistent outage).
+	 *
+	 * The threshold of 3 was re-examined in #203 and DELIBERATELY LEFT AT 3. The candidate
+	 * loosening was "accept 2 attempts when the trajectory then completes the ladder", on the
+	 * theory that the prompt's own transient-error rule ("retry the same call; if it persists,
+	 * switch office/route") makes 2 the obedient count. Twenty-six saved samples say otherwise:
+	 * NO failing run ever completed the ladder early. Seven of the nine stopped dead after two
+	 * identical 5xx calls with no other tool at all, one stopped after ONE call, and all of them
+	 * handed back the give-up the persistence rules name verbatim — "I will continue to try",
+	 * "I will try again and get back to you shortly", "I can perform a web search... Would you
+	 * like me to proceed?", i.e. OFFERING a rung rather than emitting it. The ninth reached a
+	 * different tool at 2 (`patent_analytics_viz`) and is WORSE, not better: an aggregate
+	 * landscape can never satisfy a request for five documents, so crediting "2 + any other
+	 * tool" would pass a substitution the prompt forbids. The count is a proxy for "did not
+	 * abandon the task", and on every sample so far the proxy and the behaviour agree.
+	 */
 	t3b_persisted_3plus: traj => countTool(traj, 'search_patents') >= 3,
 
 	/** T4 — reached the terminal tool of the chain (search_citations on the app number). */
