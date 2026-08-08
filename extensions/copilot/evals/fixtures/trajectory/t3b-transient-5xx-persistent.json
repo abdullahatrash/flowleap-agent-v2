@@ -41,6 +41,6 @@
 	],
 	"default": {
 		"tag": "OK",
-		"body": "OK. Request acknowledged; results returned."
+		"body": "OK. Request acknowledged (no data payload)."
 	}
 }
