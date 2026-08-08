@@ -23,6 +23,8 @@ import { ToolRegistry } from '../common/toolsRegistry';
  *
  * For the standard portfolio question, PREFER the typed `patstat_portfolio` tool; for other
  * aggregate questions follow the `guarded-sql` workflow (action='workflow') with `patstat_query`.
+ * The six Graph Analytics routes and their `graph` workflow are served here too (backend #245), which
+ * is why `patstat_graph` hardcodes no schema or per-operation guidance of its own.
  * This tool is the single source of truth for the PATSTAT routes' request shapes and conventions —
  * prompts and skills reference it at runtime so guidance never drifts from the backend.
  */

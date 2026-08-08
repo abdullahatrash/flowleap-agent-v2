@@ -65,6 +65,7 @@ export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.ComparePatents,
 	ToolName.PatstatPortfolio,
 	ToolName.PatstatQuery,
+	ToolName.PatstatGraph,
 	ToolName.PatstatApiGuide,
 ];
 
