@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { formatJsonForModel, IMarkdownColumn, isSingleRecordDocumentLookup, renderMarkdownTable, ToolResponseBudgets, truncatePreview } from '../patentResponseFormatter';
+import { emptiedByTruncationNotice, formatJsonForModel, IMarkdownColumn, isSingleRecordDocumentLookup, renderMarkdownTable, ToolResponseBudgets, truncatePreview } from '../patentResponseFormatter';
 
 // `patentResponseFormatter` is the shared, budget-aware formatter the patent tools route their results
 // through. It is pure (no service dependencies), so it is tested in isolation here.
@@ -48,6 +48,7 @@ describe('formatJsonForModel', () => {
 				_truncation: {
 					truncated: true,
 					omittedItems: 200 - keptItems,
+					retainedItems: keptItems,
 					note: `Response exceeded this tool's 2000-character budget. ${200 - keptItems} result item(s) were omitted to keep the output valid JSON. ` +
 						`Refine your query — add filters, narrow the date range, or request fewer results — to retrieve the omitted items.`,
 				},
@@ -56,19 +57,22 @@ describe('formatJsonForModel', () => {
 	});
 
 	it('drops items from an array field and adds a _truncation key to a top-level object', () => {
+		// Budget chosen so items actually survive: this is the PARTIAL-drop path, distinct from the
+		// emptied path covered below.
 		const value = { total: 300, results: Array.from({ length: 300 }, (_, i) => ({ id: `US${i}`, blob: 'y'.repeat(200) })) };
-		const result = formatJsonForModel(value, 3_000);
+		const result = formatJsonForModel(value, 20_000);
 
-		const parsed = JSON.parse(result.content) as { total: number; results: unknown[]; _truncation: { truncated: boolean; omittedItems: number; note: string } };
+		const parsed = JSON.parse(result.content) as { total: number; results: unknown[]; _truncation: { truncated: boolean; omittedItems: number; retainedItems: number; note: string } };
 		expect({
 			truncated: result.truncated,
-			contentUnderBudget: result.content.length <= 3_000,
+			contentUnderBudget: result.content.length <= 20_000,
 			totalPreserved: parsed.total,
-			resultsShortened: parsed.results.length < 300,
+			resultsShortened: parsed.results.length > 0 && parsed.results.length < 300,
 			itemsAccountedFor: parsed.results.length + result.omittedItems === 300,
 			noticeTruncated: parsed._truncation.truncated,
 			noticeMentionsRefine: parsed._truncation.note.includes('Refine your query'),
 			noticeOmittedMatches: parsed._truncation.omittedItems === result.omittedItems,
+			noticeRetainedMatches: parsed._truncation.retainedItems === parsed.results.length,
 		}).toEqual({
 			truncated: true,
 			contentUnderBudget: true,
@@ -78,6 +82,61 @@ describe('formatJsonForModel', () => {
 			noticeTruncated: true,
 			noticeMentionsRefine: true,
 			noticeOmittedMatches: true,
+			noticeRetainedMatches: true,
+		});
+	});
+
+	it('states the emptiness when every item is dropped, instead of reporting a size overrun', () => {
+		// The shape behind the T1/T5 belief attractor (#201): a by-number lookup whose sole record is
+		// oversized on a path the single-record classifier does not recognise. The record is dropped, the
+		// server's `count` survives beside the emptied array, and a size-framed note would let a reader
+		// conclude it holds the document and merely needs to save it. The notice must say the opposite.
+		const value = { count: 1, patentFileWrapperDataBag: [{ applicationNumberText: '16473445', claims: 'C'.repeat(5_000) }], cached: true };
+		const result = formatJsonForModel(value, 1_000);
+
+		const parsed = JSON.parse(result.content) as {
+			count: number;
+			patentFileWrapperDataBag: unknown[];
+			_truncation: { truncated: boolean; omittedItems: number; retainedItems: number; note: string };
+		};
+		expect({
+			omittedItems: result.omittedItems,
+			recordsPresent: parsed.patentFileWrapperDataBag.length,
+			serverCountSurvives: parsed.count,
+			note: parsed._truncation,
+		}).toEqual({
+			omittedItems: 1,
+			recordsPresent: 0,
+			serverCountSurvives: 1,
+			note: {
+				truncated: true,
+				omittedItems: 1,
+				retainedItems: 0,
+				note: emptiedByTruncationNotice(1, 1_000),
+			},
+		});
+	});
+
+	it('leads the emptied notice with the emptiness and closes the "too large, so it was saved" reading', () => {
+		// Pinned as text because this string is the whole fix: a reader forms its belief from what the
+		// result SAYS, and the measured failure was "the content was too large to display, so I saved it".
+		const notice = emptiedByTruncationNotice(1, 50_000);
+		expect({
+			leadsWithEmptiness: notice.startsWith('NO RECORDS WERE RETURNED'),
+			deniesReading: notice.includes('you have not read this record'),
+			disownsTheCount: notice.includes('reports what the SERVER matched, not what you received'),
+			deniesOffload: notice.includes('nothing was saved and no file was written'),
+			forbidsWritingItUp: notice.includes('Do not quote, summarize, describe or save'),
+			offersRecovery: notice.includes('retrieve it by another route'),
+			neverSaysRefineTheQuery: !notice.includes('Refine your query'),
+		}).toEqual({
+			leadsWithEmptiness: true,
+			deniesReading: true,
+			disownsTheCount: true,
+			deniesOffload: true,
+			forbidsWritingItUp: true,
+			offersRecovery: true,
+			neverSaysRefineTheQuery: true,
 		});
 	});
 

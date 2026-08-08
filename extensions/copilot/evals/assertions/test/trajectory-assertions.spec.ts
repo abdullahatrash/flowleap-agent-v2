@@ -166,12 +166,18 @@ describe('mock-table resolver (deterministic sequences)', () => {
 		expect(resolveMock(script, state, 'fetch_webpage', { url: 'https://patents.google.com/patent/US10958080B2' }).tag).toBe('OK');
 	});
 
-	it('the TRUNCATED body is the verbatim empty-bag + refine note from the R1 transcript', () => {
+	// The body is byte-for-byte what `formatJsonForModel` emits when a by-number record is dropped whole.
+	// It moved in #201 because the PRODUCT moved: the emptied case now states the emptiness instead of
+	// reporting a size overrun, so the fixture tracks the new production text. Keep it generated, never
+	// hand-written — the R1 realism of this case is the whole reason it grades anything.
+	it('the TRUNCATED body is the verbatim empty-bag + emptiness notice production now emits', () => {
 		const script = loadFixture('t1-us-claims-exhausted');
 		const state = createMockScriptState(script);
 		const body = resolveMock(script, state, 'patent_api_request', {}).body;
 		expect(body).toContain('"patentFileWrapperDataBag": []');
-		expect(body).toContain('Refine your query');
+		expect(body).toContain('"retainedItems": 0');
+		expect(body).toContain('NO RECORDS WERE RETURNED');
+		expect(body).not.toContain('Refine your query');
 	});
 });
 
