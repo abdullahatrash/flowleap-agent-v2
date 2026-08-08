@@ -66,10 +66,13 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 
 		try {
 			let result: unknown;
+			// Kept in scope for the single-record classifier: a by-number lookup can carry its document
+			// number in the body (`POST …/search` with `q: "patentNumber:…"`) rather than in the path.
+			let parsedBody: unknown;
 
 			if (method === 'POST') {
 				// Parse body string
-				let parsedBody: unknown = {};
+				parsedBody = {};
 				if (bodyStr && bodyStr.trim().length > 0) {
 					try {
 						parsedBody = JSON.parse(bodyStr);
@@ -92,8 +95,10 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 			// whole array items dropped and an explicit omitted-count note (never sliced mid-structure).
 			// Single-record document lookups (by-number claims/description/grant fetches) instead keep their
 			// sole record intact so the harness offloads the full text to a file — dropping it would return
-			// an empty result with a "refine your query" note that a by-number lookup cannot act on.
-			const singleRecord = isSingleRecordDocumentLookup(normalisedPath);
+			// an empty result with a "refine your query" note that a by-number lookup cannot act on. The
+			// classifier reads the response as well as the request, because a by-number lookup routed through
+			// a search endpoint is only recognisable from the single record it came back with.
+			const singleRecord = isSingleRecordDocumentLookup({ path: normalisedPath, body: parsedBody }, result);
 			const formatted = formatJsonForModel(result, ToolResponseBudgets.PatentApiRequest, { singleRecord });
 
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted.content)]);

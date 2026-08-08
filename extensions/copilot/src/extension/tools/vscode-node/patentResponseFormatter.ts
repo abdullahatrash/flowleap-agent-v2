@@ -99,8 +99,8 @@ export interface IFormattedJsonResponse {
  */
 export interface IFormatJsonOptions {
 	/**
-	 * When true, the value is a single-record document lookup (a by-number claims/description/grant fetch)
-	 * rather than a multi-record search result. The sole record is never dropped to fit the budget —
+	 * When true, the value is a single-record document lookup (a by-number claims/description/grant fetch,
+	 * however it was routed) rather than a multi-record search result. The sole record is never dropped —
 	 * the full record is handed back intact so the harness's large-tool-result disk offload writes it to
 	 * a file and gives the model a `read_file` pointer, and the attached note carries single-record
 	 * guidance instead of the meaningless "refine your query". See {@link isSingleRecordDocumentLookup}.
@@ -148,16 +148,52 @@ export function emptiedByTruncationNotice(omittedItems: number, budget: number):
 }
 
 /**
- * True when `path` is a single-record document lookup — a by-number fetch that returns exactly one
- * document (USPTO `grants/{n}`, OPS full-text `claims`/`description`). Such responses must never have
- * their sole record dropped to fit the budget (see {@link formatJsonForModel}'s single-record handling).
- *
- * Multi-record search endpoints (`…/search`, `…/docs`, CQL queries) are deliberately excluded so their
- * budget-driven item-dropping — and the "refine your query" note that is correct for them — is unaffected.
+ * A `patent_api_request` call, as far as the single-record classifier needs to see it.
  */
-export function isSingleRecordDocumentLookup(path: string): boolean {
-	// USPTO by-number grant fetch: /patent-search-uspto/grants/<number>.
-	if (/\/grants\/[^/?]+/.test(path)) {
+export interface IPatentRequestShape {
+	/** Relative backend path including its query string — e.g. `/ops/fulltext/claims?doc=US7654321B2`. */
+	readonly path: string;
+	/** Parsed JSON body of a POST request; `undefined` for a GET. */
+	readonly body?: unknown;
+}
+
+/**
+ * True when a request/response pair is a single-record document lookup — a by-number fetch whose answer
+ * is one document. Such responses must never have their sole record dropped to fit the budget (see
+ * {@link formatJsonForModel}'s single-record handling): dropping it returns nothing, while keeping it
+ * returns everything by way of the harness's file offload.
+ *
+ * Two tiers, because a path alone cannot see every by-number lookup:
+ * - the **route** tier ({@link isSingleRecordDocumentRoute}) recognises paths that return one document by
+ *   construction, and fires on the path alone;
+ * - the **structural** tier fires when the request names one document ({@link isByNumberRequest} — a
+ *   `?doc=` identifier, a numbered path segment, or a `patentNumber:`-style query) *and* the payload in
+ *   fact carries exactly one record ({@link holdsExactlyOneRecord}). This is the tier that catches
+ *   `POST /patent-search-uspto/search` with a by-number query, whose sole oversized record used to be
+ *   dropped on the multi-record path.
+ *
+ * Requests that do NOT name a document — a topical search, a CQL landscape query — stay on the multi-record
+ * path even when they happen to match a single hit. Offloading their one hit would be readable, but the
+ * single-record note asserts two things that are only true of a by-number lookup ("this by-number document
+ * lookup", "do not refine the query"), and refining IS available to a search. What remains there is
+ * covered by {@link emptiedByTruncationNotice}, which is the honest answer for that case.
+ */
+export function isSingleRecordDocumentLookup(request: IPatentRequestShape, payload?: unknown): boolean {
+	return isSingleRecordDocumentRoute(request.path) || (isByNumberRequest(request) && holdsExactlyOneRecord(payload));
+}
+
+/**
+ * True when `path` is a route that returns exactly one document by construction (USPTO `grants/{n}` and
+ * `applications/{n}`, OPS full-text `claims`/`description`), so the classification needs no payload.
+ *
+ * Multi-record routes are deliberately excluded: search endpoints (`…/search`, `…/docs`, CQL queries) and
+ * the by-number *list* sub-resources (`applications/{n}/documents`, `…/transactions`), whose budget-driven
+ * item-dropping — and the "refine your query" note — is unaffected.
+ */
+function isSingleRecordDocumentRoute(path: string): boolean {
+	// USPTO by-number document fetch. `applications/<n>` must be the last path segment so the list
+	// sub-resources hanging off it (…/documents, …/transactions) stay on the multi-record path.
+	if (/\/grants\/[^/?]+/.test(path) || /\/applications\/[^/?#]+(?:[?#]|$)/.test(path)) {
 		return true;
 	}
 	// OPS single-document full text: /ops/fulltext/claims|description (keyed on ?doc=), or an explicit enrich= form.
@@ -165,6 +201,108 @@ export function isSingleRecordDocumentLookup(path: string): boolean {
 		return true;
 	}
 	return false;
+}
+
+/** Request keys whose value names ONE document — `?doc=EP1234566`, `{ "patentNumber": "10958080" }`. */
+const BY_NUMBER_KEY = /^(doc|documentNumber|patentNumber|grantNumber|publicationNumber|applicationNumber|applicationNumberText|patentApplicationNumber)$/i;
+
+/** Keys whose value is a query STRING (USPTO ODP Lucene, EPO CQL) rather than a bare identifier. */
+const QUERY_STRING_KEY = /^(q|query|cql|criteria|searchText)$/i;
+
+/**
+ * Query-language fields that pin a document number inside a search string: ODP Lucene `patentNumber:10958080`
+ * and OPS CQL `pn=US10958080`, `num=`, `ap=` (application number). A wildcard form matching many documents is
+ * harmless here — the structural tier still requires the payload to carry exactly one record.
+ */
+const BY_NUMBER_QUERY_FIELD = /\b(patentNumber|publicationNumber|applicationNumber|applicationNumberText|patentApplicationNumber|documentNumber|pn|num|ap)\s*[:=]\s*\S/i;
+
+/**
+ * True when the request names one specific document, whether in the path (`/grants/10958080`), the query
+ * string (`?doc=EP1234566`), or a POST body (`{ "q": "patentNumber:10958080" }`).
+ */
+function isByNumberRequest(request: IPatentRequestShape): boolean {
+	if (/\/(grants|applications|patents|publications)\/[^/?#]+/.test(request.path)) {
+		return true;
+	}
+	const queryStart = request.path.indexOf('?');
+	if (queryStart >= 0) {
+		for (const pair of request.path.substring(queryStart + 1).split('&')) {
+			const separator = pair.indexOf('=');
+			if (separator > 0 && namesOneDocument(pair.substring(0, separator), decodeQueryValue(pair.substring(separator + 1)))) {
+				return true;
+			}
+		}
+	}
+	return bodyNamesOneDocument(request.body, 0);
+}
+
+/** True when a single `key=value` pair identifies one document. */
+function namesOneDocument(key: string, value: string): boolean {
+	if (value.trim().length === 0) {
+		return false;
+	}
+	return BY_NUMBER_KEY.test(key) || (QUERY_STRING_KEY.test(key) && BY_NUMBER_QUERY_FIELD.test(value));
+}
+
+/** Percent-decodes a query-string value, falling back to the raw text when it is not valid encoding. */
+function decodeQueryValue(value: string): string {
+	try {
+		return decodeURIComponent(value.replace(/\+/g, ' '));
+	} catch {
+		return value;
+	}
+}
+
+/**
+ * True when a parsed POST body names one document. Walks a few levels because backends nest the query
+ * (`{ "query": { "q": … } }`); the depth cap keeps a large body from being traversed in full.
+ */
+function bodyNamesOneDocument(node: unknown, depth: number): boolean {
+	if (depth > 3 || node === null || typeof node !== 'object') {
+		return false;
+	}
+	if (Array.isArray(node)) {
+		return node.some(item => bodyNamesOneDocument(item, depth + 1));
+	}
+	for (const [key, value] of Object.entries(node)) {
+		if (typeof value === 'string' || typeof value === 'number') {
+			if (namesOneDocument(key, String(value))) {
+				return true;
+			}
+		} else if (bodyNamesOneDocument(value, depth + 1)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * True when the payload carries exactly one record: its top-level data array (the largest array-valued
+ * property, or the payload itself when it is an array) holds a single item — or there is no top-level
+ * array at all, which is how the OPS routes return one document as a nested object.
+ *
+ * Deliberately top-level: a USPTO file wrapper is one record whose own nested arrays (the document bag)
+ * may be far larger, and it is the top-level array that says how many records came back.
+ */
+function holdsExactlyOneRecord(payload: unknown): boolean {
+	if (Array.isArray(payload)) {
+		return payload.length === 1;
+	}
+	if (payload === null || typeof payload !== 'object') {
+		return false;
+	}
+	let dataArray: unknown[] | undefined;
+	let dataArraySize = 0;
+	for (const value of Object.values(payload)) {
+		if (Array.isArray(value)) {
+			const size = JSON.stringify(value).length;
+			if (size > dataArraySize) {
+				dataArraySize = size;
+				dataArray = value;
+			}
+		}
+	}
+	return dataArray ? dataArray.length === 1 : true;
 }
 
 /**
