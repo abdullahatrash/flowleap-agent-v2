@@ -44,6 +44,7 @@ describe('extract-tools', () => {
 			'patent_api_request',
 			'patent_search_subagent',
 			'patstat_api_guide',
+			'patstat_graph',
 			'patstat_portfolio',
 			'patstat_query',
 			'read_pdf',

@@ -1362,6 +1362,77 @@
         }
       },
       {
+        "name": "copilot_patstatGraph",
+        "displayName": "PATSTAT Graph Analytics",
+        "toolReferenceName": "patstatGraph",
+        "when": "!isWeb",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "userDescription": "Walk the PATSTAT relationship graph around one named patent or applicant: citations, family, paths, co-applicants",
+        "modelDescription": "GRAPH ANALYTICS OVER PATSTAT — A NAMED NODE AND THE RELATIONSHIPS AROUND IT: USE WHEN the user names ONE patent or ONE applicant and asks about its CONNECTIONS — 'who cites EP3477840', 'what does this patent cite', 'why does this patent matter', 'how are patent X and patent Y connected', 'where does this family have coverage', 'who does this company co-file with'. THREE-WAY ROUTING (criteria shape decides, never the metric): (1) DOCUMENTS — a request to FIND, LIST, RANK or NAME patents on a SUBJECT ('the 5 most cited EP patents on solid-state electrolytes — search for them') is a SEARCH: build_patent_query → search_patents or the USPTO path, NEVER this tool, however the request ranks the documents it asks for; (2) AGGREGATES — counts, trends, shares or rankings over a CORPUS ('how many patents does Siemens file per year', 'who dominates H01M10/0562') are patstat_portfolio / patstat_query, NEVER this tool; (3) TRAVERSAL — a question ABOUT a node you can already NAME, answered by the edges around it, is THIS tool. A traversal answers a question about a named node; it does NOT discover documents by subject and it does NOT count a corpus. ANTI-PATTERN — never call resolve/neighborhood/explain on some patent you picked yourself in order to present its citing or cited documents as 'the most relevant patents on <topic>': edges around one arbitrary node are not a subject search, that question was a search all along, and the snapshot is months stale. If the user has not NAMED the node, you are not in this tool. OPERATIONS (one call each, `operation` selects): 'resolve' (a publication number → its pat:<appln_id> anchor; a company name → ranked harmonized psn_id entity candidates) — START HERE whenever you hold only a number or a name; 'patent_view' (the whole citation picture of one publication: applicants, inventors, CPC, backward patent/NPL/unresolved citations, forward citations, DOCDB family, priorities); 'applicant_view' (one psn_id's filings by year, top CPC, jurisdictions, co-applicant network); 'neighborhood' (bounded 1-2 hop expansion, scope it with edgeTypes); 'path' (shortest citation/family path between two patents); 'explain' (cheapest single-node 'what matters here' summary). AMBIGUITY IS AN INTERACTION STEP: an ambiguous number or a company name returns CANDIDATES — present them and let the USER pick, never choose one yourself; psnId comes only from resolve, never guessed. Every edge carries a confidence tag (EXTRACTED = a direct PATSTAT row, state as fact; INFERRED = a derived join, hedge it; AMBIGUOUS = unresolved, flag it and build nothing on it) and an at=<table>:<row> provenance ref — relay the backend text and tags rather than re-deriving facts. CITATION UNIVERSES (both exist, neither is a superset): THIS tool is the WORLDWIDE DOCDB citation network with examiner-vs-applicant origin — use it for 'who cites this patent' and citation structure, especially on EP/WO subjects; search_citations / search_forward_citations are the USPTO office-action dataset with X/Y/A relevance categories — use those for examiner rejection art on US documents. For citation completeness on an EP subject, exhaust both. PATSTAT is a twice-yearly SNAPSHOT and needs no patent-data key (it stays live while EPO/USPTO are key-gated): always name the data_edition, and never present snapshot data as an individual patent's CURRENT legal status (that is get_legal_status). Per-operation request shapes and bounds: patstat_api_guide action='workflow' workflow='graph', or action='endpoint' with the operation name.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "enum": [
+                "resolve",
+                "patent_view",
+                "applicant_view",
+                "neighborhood",
+                "path",
+                "explain"
+              ],
+              "description": "Which graph operation to run. 'resolve' maps a number or a name onto a node id and is the first call whenever you do not already hold one."
+            },
+            "query": {
+              "type": "string",
+              "description": "operation='resolve': a publication number (EP3477840, US5960411) or an applicant name (Siemens)."
+            },
+            "publication": {
+              "type": "string",
+              "description": "operation='patent_view': the publication number whose full citation picture you want (e.g. EP3477840)."
+            },
+            "psnId": {
+              "type": "number",
+              "description": "operation='applicant_view': the harmonized entity id, taken ONLY from a resolve entity candidate. A company name will not work here and psn_ids must never be guessed."
+            },
+            "node": {
+              "type": "string",
+              "description": "operation='neighborhood' or 'explain': a pat:<appln_id> node id (from resolve) or a publication number."
+            },
+            "a": {
+              "type": "string",
+              "description": "operation='path': the first endpoint — a pat:<appln_id> id or a publication number."
+            },
+            "b": {
+              "type": "string",
+              "description": "operation='path': the second endpoint — a pat:<appln_id> id or a publication number."
+            },
+            "depth": {
+              "type": "number",
+              "description": "operation='neighborhood': hops to expand, 1 or 2 (default 1; 2 is much wider). Prefer narrowing with edgeTypes over raising depth."
+            },
+            "edgeTypes": {
+              "type": "string",
+              "description": "operation='neighborhood': comma-separated edge subset — cites, cited_by, in_family, has_applicant, has_inventor, classified_as, claims_priority (e.g. 'cites,cited_by'). Narrow with this instead of accepting a capped listing."
+            },
+            "maxHops": {
+              "type": "number",
+              "description": "operation='path': maximum hops to search, 1-4 (default 4). A result of 'not found' is an answer, not a failure — absence of a path is not proof of unrelatedness."
+            },
+            "tokenBudget": {
+              "type": "number",
+              "description": "operation='neighborhood', 'path' or 'explain': token budget for the text serialization, clamped by the backend to 100-20000 (default 2000)."
+            }
+          },
+          "required": [
+            "operation"
+          ]
+        }
+      },
+      {
         "name": "copilot_patstatApiGuide",
         "displayName": "PATSTAT Analytics API Guide",
         "toolReferenceName": "patstatApiGuide",
@@ -1369,7 +1440,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(book)",
         "userDescription": "Get PATSTAT analytics API documentation for aggregate patent statistics endpoints",
-        "modelDescription": "Get documentation AND data sections for the PATSTAT analytics API — the aggregate-statistics layer over the self-hosted EPO PATSTAT database. Actions: 'list' (endpoints/workflows/sections), 'endpoint' (one endpoint's docs, e.g. 'query'), 'workflow' (step-by-step guides — 'guarded-sql' is the mandatory workflow for the patstat_query tool), 'full' (complete docs), 'section' (served data: section='semantic-model' returns the FULL schema/metrics/interpretation-conventions YAML to read BEFORE writing SQL for patstat_query; section='examples' returns verified question→SQL pairs — reuse these, and prefer their promoted_to tools). For the standard one-company portfolio question PREFER patstat_portfolio; for other aggregate questions fetch the sections here then use patstat_query. DO NOT use for individual patent documents (OPS/USPTO guides) or keyword landscapes (patent_analytics_viz).",
+        "modelDescription": "Get documentation AND data sections for the PATSTAT analytics API — the aggregate-statistics layer AND the relationship-graph layer over the self-hosted EPO PATSTAT database. Actions: 'list' (endpoints/workflows/sections), 'endpoint' (one endpoint's docs, e.g. 'query', or a graph operation: 'resolve', 'patent', 'applicant', 'neighborhood', 'path', 'explain'), 'workflow' (step-by-step guides — 'guarded-sql' is the mandatory workflow for the patstat_query tool, and 'graph' documents the resolve-first flow and per-operation bounds for the patstat_graph tool), 'full' (complete docs), 'section' (served data: section='semantic-model' returns the FULL schema/metrics/interpretation-conventions YAML to read BEFORE writing SQL for patstat_query; section='examples' returns verified question→SQL pairs — reuse these, and prefer their promoted_to tools). For the standard one-company portfolio question PREFER patstat_portfolio; for other aggregate questions fetch the sections here then use patstat_query; for a named node and its relationships use patstat_graph. DO NOT use for individual patent documents (OPS/USPTO guides) or keyword landscapes (patent_analytics_viz).",
         "tags": [],
         "inputSchema": {
           "type": "object",

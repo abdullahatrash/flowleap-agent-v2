@@ -42,6 +42,7 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.PatentAnalyticsViz,
 	ToolName.PatstatPortfolio,
 	ToolName.PatstatQuery,
+	ToolName.PatstatGraph,
 	ToolName.PatstatApiGuide,
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
@@ -340,7 +341,9 @@ suite('PatentAIInstructions key-gate doctrine', () => {
 	});
 
 	test('omits the keyless-pivot rule when no keyless tool is available', async () => {
-		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatApiGuide, ToolName.SearchLegal, ToolName.SearchAcademic];
+		// Every tool that needs no Patent-Data Key — PATSTAT (all four surfaces, graph included),
+		// legal search and academic search. A new keyless tool missing here fails this test.
+		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatGraph, ToolName.PatstatApiGuide, ToolName.SearchLegal, ToolName.SearchAcademic];
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => !keylessTools.includes(t)));
 		expect({
 			pivotOffered: output.includes('KEYLESS PIVOT'),
@@ -431,6 +434,73 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 			elisionRuleUnchanged: true,
 			finalAnswerSweepUnchanged: true,
 			noRetrievalWarrantBlock: false,
+		});
+	});
+
+	// #168 widened branch C's entry test from documents-vs-aggregates to the three-way
+	// criteria-shape test (CONTEXT.md, ADR 0007). The shipped boundary is asserted alongside the
+	// addition because the prompt's history is that individually-fine blocks interact (#183, #191):
+	// a traversal engine that could swallow "the 5 most cited EP patents — search for them" would
+	// re-open exactly the T3a regression #189/#194 closed.
+	test('branch C routes the three engines by criteria shape without re-opening the document boundary', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			criteriaShapeRouter: output.includes('THEN PICK THE ENGINE BY CRITERIA SHAPE'),
+			freeTextGoesToC1: output.includes('FREE-TEXT KEYWORDS over a corpus ("trends in quantum computing") → C1'),
+			structuredCriteriaGoToC2C3: output.includes('STRUCTURED CRITERIA aggregated over a corpus'),
+			namedNodeGoesToC4: output.includes('A NAMED NODE AND ITS RELATIONSHIPS'),
+			c4Rendered: output.includes('**C4 — a NAMED NODE and the relationships around it**'),
+			resolveFirst: output.includes('START with operation="resolve"'),
+			ambiguityIsAnInteractionStep: output.includes('AMBIGUITY IS AN INTERACTION STEP'),
+			// The anti-regression: a traversal answers a question about a NAMED node; it never
+			// discovers documents by subject, and the shipped search boundary still owns that case.
+			scopeLimitStated: output.includes('it never DISCOVERS documents by subject'),
+			namedSubjectIsStillASearch: output.includes('names a SUBJECT, not a node: that is branch B'),
+			traversalDoesNotSatisfyDocuments: output.includes('the edges around one node you picked yourself are not a subject search'),
+			// And the boundary the shipped prompt already held, unmoved.
+			documentBoundaryUnchanged: output.includes('NOT analytics — DOCUMENTS vs AGGREGATES'),
+			rankingIsNotAggregationUnchanged: output.includes('Ranking is not aggregation.'),
+			c3StillOwnsCorpusAggregates: output.includes('any OTHER PATSTAT aggregate'),
+			c3SendsTraversalsToC4: output.includes('the citations or family of ONE named patent are C4, not this'),
+			// Two citation universes, so the model can exhaust both rather than read one silence as absence.
+			citationUniversesSplit: output.includes('TWO CITATION UNIVERSES, neither a superset of the other'),
+			exhaustBothOnEp: output.includes('EXHAUST BOTH rather than reporting the first one\'s silence as absence'),
+		}).toEqual({
+			criteriaShapeRouter: true,
+			freeTextGoesToC1: true,
+			structuredCriteriaGoToC2C3: true,
+			namedNodeGoesToC4: true,
+			c4Rendered: true,
+			resolveFirst: true,
+			ambiguityIsAnInteractionStep: true,
+			scopeLimitStated: true,
+			namedSubjectIsStillASearch: true,
+			traversalDoesNotSatisfyDocuments: true,
+			documentBoundaryUnchanged: true,
+			rankingIsNotAggregationUnchanged: true,
+			c3StillOwnsCorpusAggregates: true,
+			c3SendsTraversalsToC4: true,
+			citationUniversesSplit: true,
+			exhaustBothOnEp: true,
+		});
+	});
+
+	test('the graph routing disappears with the tool, leaving the shipped two-engine prompt intact', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.PatstatGraph));
+		expect({
+			criteriaShapeRouter: output.includes('THEN PICK THE ENGINE BY CRITERIA SHAPE'),
+			c4Rendered: output.includes('**C4 —'),
+			graphNamedAnywhere: output.includes('patstat_graph'),
+			branchCStillRenders: output.includes('ENTRY TEST — WHAT IS THE DELIVERABLE?'),
+			documentBoundaryStillRenders: output.includes('NOT analytics — DOCUMENTS vs AGGREGATES'),
+			c3StillRenders: output.includes('any OTHER PATSTAT aggregate'),
+		}).toEqual({
+			criteriaShapeRouter: false,
+			c4Rendered: false,
+			graphNamedAnywhere: false,
+			branchCStillRenders: true,
+			documentBoundaryStillRenders: true,
+			c3StillRenders: true,
 		});
 	});
 
