@@ -56,7 +56,7 @@ export const ToolResponseBudgets = {
 const TRUNCATION_KEY = '_truncation';
 
 /** Characters reserved within the budget for the truncation note that gets attached after trimming. */
-const TRUNCATION_NOTE_RESERVE = 600;
+const TRUNCATION_NOTE_RESERVE = 800;
 
 /**
  * The structured note attached, inside the JSON, to any response that had items dropped. Kept as a
@@ -66,6 +66,13 @@ interface ITruncationNote {
 	readonly truncated: true;
 	/** Number of whole array items dropped to fit the budget. */
 	readonly omittedItems: number;
+	/**
+	 * Number of items still present in the arrays items were dropped from — i.e. how much of the
+	 * payload the reader actually received. Omitted when nothing was dropped, because then no array
+	 * is missing anything and a count would be meaningless. A `0` here means the response carries no
+	 * data at all; see {@link emptiedByTruncationNotice}.
+	 */
+	readonly retainedItems?: number;
 	/** Human/model-facing guidance on how to retrieve the omitted items. */
 	readonly note: string;
 }
@@ -121,6 +128,26 @@ export function truncationNotice(omittedItems: number, budget: number, singleRec
 }
 
 /**
+ * Builds the notice for the one truncation outcome that is not a truncation at all: EVERY item was
+ * dropped, so the response carries no data.
+ *
+ * This shape reads like a success — a nonzero `count`/`total` survives next to an emptied array, and
+ * a size-framed note ("response exceeded the budget", "items omitted") describes only WHY the payload
+ * is gone, never that it IS gone. A reader who has just asked for one document sees "too large" and
+ * concludes it holds the document and merely needs to offload it, which is the opposite of the truth.
+ * So the emptied case leads with what was received rather than with what happened, names the sibling
+ * count as untrustworthy, and closes the "too large therefore saved somewhere" inference explicitly.
+ */
+export function emptiedByTruncationNotice(omittedItems: number, budget: number): string {
+	return `NO RECORDS WERE RETURNED — you have not read this record. 0 of ${omittedItems} matching record(s) are present: ` +
+		`every item was dropped in transit because the response exceeded this tool's ${budget}-character budget, ` +
+		`so the record's content does not appear anywhere below. Any count or total field in this result reports what the ` +
+		`SERVER matched, not what you received. "Too large" does not mean "retrieved and offloaded": nothing was saved and ` +
+		`no file was written. Do not quote, summarize, describe or save this record's content on the strength of this result. ` +
+		`To obtain it, request less of it (fewer fields, a narrower slice) or retrieve it by another route.`;
+}
+
+/**
  * True when `path` is a single-record document lookup — a by-number fetch that returns exactly one
  * document (USPTO `grants/{n}`, OPS full-text `claims`/`description`). Such responses must never have
  * their sole record dropped to fit the budget (see {@link formatJsonForModel}'s single-record handling).
@@ -154,6 +181,9 @@ export function isSingleRecordDocumentLookup(path: string): boolean {
  * cannot be brought under budget by dropping array items (e.g. one enormous object with no arrays), the
  * still-valid JSON is returned as-is with the note attached.
  *
+ * When dropping empties the payload completely the note says so in those words rather than reporting a
+ * size overrun — see {@link emptiedByTruncationNotice} for why that distinction is load-bearing.
+ *
  * Single-record document lookups ({@link IFormatJsonOptions.singleRecord}) are handled differently: the
  * sole oversized record is never dropped. It is returned intact — deliberately over the inline budget —
  * so the harness's large-tool-result disk offload (see `toolCalling.tsx`, default on above 8 KB) writes
@@ -177,8 +207,17 @@ export function formatJsonForModel(value: unknown, budget: number, options?: IFo
 
 	const clone: unknown = structuredClone(value);
 	const target = Math.max(0, budget - TRUNCATION_NOTE_RESERVE);
-	const omittedItems = dropArrayItemsToFit(clone, target);
-	const note: ITruncationNote = { truncated: true, omittedItems, note: truncationNotice(omittedItems, budget) };
+	const { omitted: omittedItems, retained: retainedItems } = dropArrayItemsToFit(clone, target);
+	// Dropping everything leaves a response that still LOOKS like a result — a surviving count beside an
+	// emptied array — so it gets a notice that states the emptiness instead of merely explaining the size.
+	const note: ITruncationNote = omittedItems > 0
+		? {
+			truncated: true,
+			omittedItems,
+			retainedItems,
+			note: retainedItems === 0 ? emptiedByTruncationNotice(omittedItems, budget) : truncationNotice(omittedItems, budget),
+		}
+		: { truncated: true, omittedItems, note: truncationNotice(omittedItems, budget) };
 	const annotated = annotateWithTruncationNote(clone, note);
 
 	return { content: JSON.stringify(annotated, null, 2), truncated: true, omittedItems };
@@ -205,10 +244,14 @@ function annotateWithTruncationNote(clone: unknown, note: ITruncationNote): unkn
 
 /**
  * Repeatedly drops trailing items from the largest array reachable in `node` until the pretty-printed
- * structure fits `target` characters. Mutates `node` in place. Returns the number of items dropped.
+ * structure fits `target` characters. Mutates `node` in place.
+ *
+ * Returns both how many items were dropped and how many are still there across the arrays that were
+ * cut — the caller needs the second number to tell a shortened response from an emptied one.
  */
-function dropArrayItemsToFit(node: unknown, target: number): number {
+function dropArrayItemsToFit(node: unknown, target: number): { omitted: number; retained: number } {
 	let omitted = 0;
+	const cutArrays = new Set<unknown[]>();
 	// Guard against pathological inputs; each iteration removes at least one item so this always terminates.
 	for (let guard = 0; guard < 1_000_000; guard++) {
 		const size = JSON.stringify(node, null, 2).length;
@@ -223,9 +266,14 @@ function dropArrayItemsToFit(node: unknown, target: number): number {
 		const perItem = Math.max(1, Math.floor(JSON.stringify(largest, null, 2).length / largest.length));
 		const dropCount = Math.min(largest.length, Math.max(1, Math.ceil(over / perItem)));
 		largest.splice(largest.length - dropCount, dropCount);
+		cutArrays.add(largest);
 		omitted += dropCount;
 	}
-	return omitted;
+	let retained = 0;
+	for (const cut of cutArrays) {
+		retained += cut.length;
+	}
+	return { omitted, retained };
 }
 
 /**

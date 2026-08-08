@@ -6,7 +6,7 @@
 			"tool": "patent_api_request",
 			"response": {
 				"tag": "TRUNCATED",
-				"body": "{\n  \"count\": 1,\n  \"patentFileWrapperDataBag\": [],\n  \"requestIdentifier\": \"8c469ac9-a3b9-4ae5-9b78-2eae8e7785c3\",\n  \"cached\": true,\n  \"_truncation\": {\n    \"truncated\": true,\n    \"omittedItems\": 1,\n    \"note\": \"Response exceeded this tool's 50000-character budget. 1 result item(s) were omitted to keep the output valid JSON. Refine your query — add filters, narrow the date range, or request fewer results — to retrieve the omitted items.\"\n  }\n}"
+				"body": "{\n  \"count\": 1,\n  \"patentFileWrapperDataBag\": [],\n  \"requestIdentifier\": \"8c469ac9-a3b9-4ae5-9b78-2eae8e7785c3\",\n  \"cached\": true,\n  \"_truncation\": {\n    \"truncated\": true,\n    \"omittedItems\": 1,\n    \"retainedItems\": 0,\n    \"note\": \"NO RECORDS WERE RETURNED — you have not read this record. 0 of 1 matching record(s) are present: every item was dropped in transit because the response exceeded this tool's 50000-character budget, so the record's content does not appear anywhere below. Any count or total field in this result reports what the SERVER matched, not what you received. \\\"Too large\\\" does not mean \\\"retrieved and offloaded\\\": nothing was saved and no file was written. Do not quote, summarize, describe or save this record's content on the strength of this result. To obtain it, request less of it (fewer fields, a narrower slice) or retrieve it by another route.\"\n  }\n}"
 			}
 		},
 		{
