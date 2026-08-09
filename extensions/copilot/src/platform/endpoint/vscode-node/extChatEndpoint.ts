@@ -12,7 +12,7 @@ import { ITokenizer, TokenizerType } from '../../../util/common/tokenizer';
 import { AsyncIterableObject } from '../../../util/vs/base/common/async';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { ChatFetchResponseType, ChatLocation, ChatResponse } from '../../chat/common/commonTypes';
+import { CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME, ChatFetchResponseType, ChatLocation, ChatResponse } from '../../chat/common/commonTypes';
 import { ILogService } from '../../log/common/logService';
 import { ContextManagementResponse } from '../../networking/common/anthropic';
 import { FinishedCallback, OpenAiFunctionTool, OptionalChatRequestParams } from '../../networking/common/fetch';
@@ -292,6 +292,21 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 			// the raw dump with an actionable message (the chat error renderer makes the manage-models
 			// command link clickable) and prompt the key update via the shared notifier.
 			const detail = toErrorMessage(e, false);
+			// A provider auth failure our own fetcher already classified arrives pre-rendered and
+			// name-tagged. Trust that over the regex below: string heuristics cannot cover every
+			// vendor's prose (OpenRouter says "User not found." for an unknown key, which matches
+			// nothing) and re-deriving here would drop the message we already built.
+			if (e instanceof Error && e.name === CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME) {
+				notifyByokKeyRejected(this.languageModel.vendor);
+				return {
+					type: ChatFetchResponseType.ProviderAuthFailed,
+					reason: e.message,
+					renderedMessage: e.message,
+					requestId: generateUuid(),
+					serverRequestId: undefined,
+					modelProvider: this.languageModel.vendor,
+				};
+			}
 			if (looksLikeByokKeyRejection(detail)) {
 				notifyByokKeyRejected(this.languageModel.vendor);
 				return {

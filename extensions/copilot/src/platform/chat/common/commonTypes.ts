@@ -104,6 +104,7 @@ export enum ChatFetchResponseType {
 	ExtensionBlocked = 'extensionBlocked',
 	BadRequest = 'badRequest',
 	NotFound = 'notFound',
+	ProviderAuthFailed = 'providerAuthFailed',
 	Failed = 'failed',
 	Unknown = 'unknown',
 	NetworkError = 'networkError',
@@ -164,6 +165,17 @@ export type ChatFetchError =
 	| { type: ChatFetchResponseType.BadRequest; reason: string; reasonDetail?: string; requestId: string; serverRequestId: string | undefined }
 	| { type: ChatFetchResponseType.NotFound; reason: string; reasonDetail?: string; requestId: string; serverRequestId: string | undefined }
 	/**
+	 * A BYOK model provider rejected the user's own credential (HTTP 401/403).
+	 * `credentialSent` is false when we never put a credential on the wire, which
+	 * is a client-side fault rather than a bad key — the two need different advice.
+	 *
+	 * `renderedMessage` is set only when the failure crossed the `vscode.lm`
+	 * boundary, which flattens it to a string: the message was necessarily built
+	 * before the throw, so the renderer must show it as-is rather than wrap it
+	 * a second time.
+	 */
+	| { type: ChatFetchResponseType.ProviderAuthFailed; reason: string; reasonDetail?: string; requestId: string; serverRequestId: string | undefined; modelProvider?: string; credentialSent?: boolean; renderedMessage?: string }
+	/**
 	 * We requested conversation, but didn't come up with any results because something
 	 * unexpected went wrong.
 	 */
@@ -197,6 +209,71 @@ export type FetchResponse<T> = FetchSuccess<T> | ChatFetchError;
 export type ChatResponse = FetchResponse<string>;
 
 export type ChatResponses = FetchResponse<string[]>;
+
+/** Command the chat error renderer trusts, so the link below is clickable there. */
+const MANAGE_MODELS_LINK = 'command:workbench.action.chat.manage';
+
+/**
+ * `Error.name` marking a throw that already carries a rendered
+ * {@link ChatFetchResponseType.ProviderAuthFailed} message.
+ *
+ * The `vscode.lm` API collapses a provider throw to its message string, losing
+ * the response type. Consumers on the far side of that boundary check this name
+ * instead of pattern-matching provider prose.
+ */
+export const CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME = 'ChatProviderAuthFailed';
+
+/**
+ * Message for a BYOK provider refusing the user's credential.
+ *
+ * The provider's own wording cannot be the headline: OpenRouter answers an
+ * unrecognised key with "User not found.", which a signed-in user reads as
+ * "my FlowLeap account is gone" — pointing away from the one thing they can
+ * fix. Lead with the cause and the command that fixes it, and keep the
+ * provider's text as a trailing detail for support.
+ */
+export function getProviderAuthFailedMessage(providerName: string | undefined, credentialSent: boolean, detail: string): string {
+	const firstLine = detail.split('\n', 1)[0].trim();
+	const truncated = firstLine.length > 200 ? `${firstLine.substring(0, 200)}…` : firstLine;
+
+	// No credential on the wire is OUR fault, not a bad key — saying "your key was
+	// rejected" would send the user to re-type a key that is very likely fine.
+	//
+	// Named and unnamed providers get separate sentences rather than a generic
+	// placeholder: "Your {0} API key" with {0}="the model provider" would read
+	// "Your the model provider API key".
+	const headline = credentialSent
+		? (providerName
+			? l10n.t({
+				message: 'Your {0} API key was rejected. Check that the key is valid and still has credit, then try again: [Manage Models]({1})',
+				args: [providerName, MANAGE_MODELS_LINK],
+				comment: [`{Locked=']({'}`]
+			})
+			: l10n.t({
+				message: 'Your API key was rejected by the model provider. Check that the key is valid and still has credit, then try again: [Manage Models]({0})',
+				args: [MANAGE_MODELS_LINK],
+				comment: [`{Locked=']({'}`]
+			}))
+		: (providerName
+			? l10n.t({
+				message: 'No API key was sent to {0}. Add or re-enter your key, then try again: [Manage Models]({1})',
+				args: [providerName, MANAGE_MODELS_LINK],
+				comment: [`{Locked=']({'}`]
+			})
+			: l10n.t({
+				message: 'No API key was sent to the model provider. Add or re-enter your key, then try again: [Manage Models]({0})',
+				args: [MANAGE_MODELS_LINK],
+				comment: [`{Locked=']({'}`]
+			}));
+
+	return truncated
+		? l10n.t({
+			message: '{0}\n\nProvider response: {1}',
+			args: [headline, truncated],
+			comment: ['{0} is the actionable headline, {1} the provider\'s own error text']
+		})
+		: headline;
+}
 
 function getRateLimitMessage(fetchResult: ChatFetchError, copilotPlan: string | undefined): string {
 	if (fetchResult.type !== ChatFetchResponseType.RateLimited) {
@@ -433,6 +510,13 @@ function getErrorDetailsFromChatFetchErrorInner(fetchResult: ChatFetchError, cop
 				message: getQuotaHitMessage(fetchResult, copilotPlan, isUsageBasedBilling, quotaResetDate),
 				isQuotaExceeded: true,
 				...(fetchResult.capiError?.code && { code: fetchResult.capiError.code }),
+			};
+			break;
+		case ChatFetchResponseType.ProviderAuthFailed:
+			details = {
+				message: fetchResult.renderedMessage
+					?? getProviderAuthFailedMessage(fetchResult.modelProvider, fetchResult.credentialSent !== false, fetchResult.reason),
+				level: ChatErrorLevel.Info,
 			};
 			break;
 		case ChatFetchResponseType.BadRequest:

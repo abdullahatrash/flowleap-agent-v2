@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { CopilotToken } from '../../../platform/authentication/common/copilotToken';
 import { IBlockedExtensionService } from '../../../platform/chat/common/blockedExtensionService';
-import { ChatFetchResponseType, ChatLocation, getErrorDetailsFromChatFetchError } from '../../../platform/chat/common/commonTypes';
+import { CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME, ChatFetchResponseType, ChatLocation, getErrorDetailsFromChatFetchError, getProviderAuthFailedMessage } from '../../../platform/chat/common/commonTypes';
 import { getTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { EmbeddingType, getWellKnownEmbeddingTypeInfo, IEmbeddingsComputer } from '../../../platform/embeddings/common/embeddingsComputer';
 import { CustomDataPartMimeTypes } from '../../../platform/endpoint/common/endpointTypes';
@@ -308,6 +308,14 @@ export class CopilotLanguageModelWrapper extends Disposable {
 			} else if (result.type === ChatFetchResponseType.RateLimited) {
 				const err = new Error(result.reason);
 				err.name = 'ChatRateLimited';
+				throw err;
+			} else if (result.type === ChatFetchResponseType.ProviderAuthFailed) {
+				// The LM API flattens a throw to its message, so the 401 we already classified
+				// would reach callers as an untyped string and be re-guessed by regex. Carry the
+				// verdict in `name` (as ChatQuotaExceeded above does) and make the message the
+				// actionable one, so neither consumer has to parse provider prose.
+				const err = new Error(getProviderAuthFailedMessage(result.modelProvider, result.credentialSent !== false, result.reason));
+				err.name = CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME;
 				throw err;
 			}
 

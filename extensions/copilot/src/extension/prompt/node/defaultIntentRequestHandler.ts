@@ -519,6 +519,14 @@ export class DefaultIntentRequestHandler {
 				this.turn.setResponse(TurnStatus.Error, undefined, baseModelTelemetry.properties.messageId, chatResult);
 				return chatResult;
 			}
+			// A rejected BYOK credential is a user-configuration fault, not a server
+			// fault: record the turn as 'user' so it does not read as an outage.
+			case ChatFetchResponseType.ProviderAuthFailed: {
+				const errorDetails = await this.getErrorDetails(fetchResult);
+				const chatResult = { errorDetails, metadata: metadataFragment };
+				this.turn.setResponse(TurnStatus.Error, { message: errorDetails.message, type: 'user' }, baseModelTelemetry.properties.messageId, chatResult);
+				return chatResult;
+			}
 			case ChatFetchResponseType.BadRequest:
 			case ChatFetchResponseType.NetworkError:
 			case ChatFetchResponseType.Failed: {

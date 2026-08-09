@@ -148,4 +148,66 @@ describe('getErrorDetailsFromChatFetchError', () => {
 			expect(result.message).toContain('unknown_error');
 		});
 	});
+
+	describe('ProviderAuthFailed (issue #210)', () => {
+		// The literal body OpenRouter returns for an unrecognised key, captured by curl
+		// on 2026-08-09: {"error":{"message":"User not found.","code":401}}. chatMLFetcher
+		// reads `jsonData.message` off it, so this is verbatim what reaches the renderer.
+		const OPENROUTER_INVALID_KEY = 'User not found.';
+
+		function makeProviderAuthFailed(overrides: Partial<Extract<ChatFetchError, { type: ChatFetchResponseType.ProviderAuthFailed }>> = {}): ChatFetchError {
+			return {
+				type: ChatFetchResponseType.ProviderAuthFailed,
+				reason: OPENROUTER_INVALID_KEY,
+				requestId: '539216a4-46b0-4172-bfd0-292d3b731cbc',
+				serverRequestId: undefined,
+				modelProvider: 'OpenRouter',
+				credentialSent: true,
+				...overrides,
+			};
+		}
+
+		test('names the key instead of leading with the provider wording', () => {
+			const result = getErrorDetailsFromChatFetchError(makeProviderAuthFailed(), undefined, GitHubOutageStatus.None);
+
+			expect({
+				// The reported bug: "User not found." was the whole explanation, so a
+				// signed-in user read it as their account being gone.
+				leadsWithProviderProse: result.message.startsWith(OPENROUTER_INVALID_KEY),
+				namesTheKey: result.message.includes('OpenRouter API key was rejected'),
+				offersTheFix: result.message.includes('command:workbench.action.chat.manage'),
+				keepsProviderTextAsDetail: result.message.includes(`Provider response: ${OPENROUTER_INVALID_KEY}`),
+				// The old path used toErrorMessage(e, true), which appended a stack trace.
+				leaksStack: /\bat \w+\./.test(result.message),
+			}).toEqual({
+				leadsWithProviderProse: false,
+				namesTheKey: true,
+				offersTheFix: true,
+				keepsProviderTextAsDetail: true,
+				leaksStack: false,
+			});
+		});
+
+		test('a credential that never reached the wire blames the client, not the key', () => {
+			const result = getErrorDetailsFromChatFetchError(
+				makeProviderAuthFailed({ credentialSent: false, reason: 'No cookie auth credentials found' }),
+				undefined,
+				GitHubOutageStatus.None,
+			);
+
+			expect(result.message).toContain('No API key was sent to OpenRouter');
+			expect(result.message).not.toContain('was rejected');
+		});
+
+		test('a message already rendered before the lm boundary is shown as-is', () => {
+			const rendered = 'Your OpenRouter API key was rejected.';
+			const result = getErrorDetailsFromChatFetchError(
+				makeProviderAuthFailed({ reason: rendered, renderedMessage: rendered }),
+				undefined,
+				GitHubOutageStatus.None,
+			);
+
+			expect(result.message).toBe(rendered);
+		});
+	});
 });
