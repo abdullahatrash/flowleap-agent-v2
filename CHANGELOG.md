@@ -5,6 +5,48 @@ All notable changes to FlowLeap Patent AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-08-09
+
+### Patent analytics over PATSTAT
+
+- **Portfolio analytics** — aggregate a named applicant's filings by CPC/IPC
+  class, office, year, family, and grant status, with harmonized entity
+  resolution. Every figure carries its PATSTAT Data Edition.
+- **Guarded SQL** — write read-only `SELECT` queries against the `flowleap.*`
+  semantic views for landscapes, grant rates, citation impact, and inventor
+  analytics that the typed commands do not cover.
+- **Graph analytics** — six graph operations over the worldwide DOCDB citation
+  network: who cites a patent (examiner versus applicant origin), citation and
+  family paths between two patents, family coverage, and an applicant's
+  co-applicant network. Every edge is tagged with a confidence level and a
+  PATSTAT row reference.
+- The agent now routes between keyword analytics, structured aggregation, and
+  graph traversal on the shape of the question rather than its wording.
+
+### Provider-key handling
+
+- The agent knows which patent-provider keys are connected and adapts instead
+  of stalling: it does the work that needs no key, tells you exactly which key
+  a blocked step wants, and resumes that step once you connect it.
+- Key state is shown in the chat surface, so a missing EPO OPS or USPTO ODP
+  credential is visible before a search fails.
+
+### Bundled skills
+
+- Updated to FlowLeap CLI v0.6.0 — refreshed provider-key setup guidance,
+  authentication states, and search recipes.
+- Added the `flowleap-patstat-graph` skill for the new graph analytics.
+
+### Fixed
+
+- Chat output panels no longer go blank when a streamed response re-renders.
+- A patent lookup by number no longer drops its only matching record.
+- An empty result set now reports that it is empty instead of reporting a
+  size overrun, and a large result that is trimmed says so plainly.
+- Class-based landscape questions route to portfolio analytics instead of
+  free-text search.
+- The GitHub Copilot walkthrough no longer appears in patent mode.
+
 ## [0.1.0] - 2026-07-24
 
 First public release of **FlowLeap Patent AI** — an AI patent agent for
