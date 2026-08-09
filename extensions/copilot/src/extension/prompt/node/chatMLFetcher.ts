@@ -1389,7 +1389,7 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 			const telemetryData = createTelemetryData(chatEndpointInfo, location, ourRequestId);
 			this._logService.info('Request ID for failed request: ' + ourRequestId);
 			return {
-				result: await this._handleError(telemetryData, response, ourRequestId),
+				result: await this._handleError(telemetryData, response, ourRequestId, chatEndpointInfo),
 				fetcher: response.fetcher,
 				bytesReceived: response.bytesReceived,
 				statusCode: response.status
@@ -1597,7 +1597,8 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 	private async _handleError(
 		telemetryData: TelemetryData,
 		response: Response,
-		requestId: string
+		requestId: string,
+		chatEndpointInfo: IChatEndpoint
 	): Promise<ChatRequestFailed> {
 		const modelRequestIdObj = getRequestId(response.headers);
 		requestId = modelRequestIdObj.headerRequestId || requestId;
@@ -1654,6 +1655,26 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 			}
 
 			if (response.status === 401 || response.status === 403) {
+				// A BYOK endpoint carries the user's OWN credential (IChatEndpoint.ownsAuthorization),
+				// so a rejection here is about that key — not an expired CAPI Copilot token. Resetting
+				// the Copilot token would be meaningless here, and forwarding the provider's raw wording
+				// misleads: OpenRouter answers an unrecognised key with "User not found.", which reads
+				// to a signed-in user as though their FlowLeap account had vanished. Classify it so the
+				// UI can name the real cause and offer the fix.
+				if (chatEndpointInfo.ownsAuthorization) {
+					return {
+						type: FetchResponseKind.Failed,
+						modelRequestId: modelRequestIdObj,
+						failKind: ChatFailKind.ProviderAuthFailed,
+						reason: jsonData?.message || text || `Provider rejected the credential: ${response.status}`,
+						data: {
+							modelProvider: chatEndpointInfo.modelProvider,
+							statusCode: response.status,
+							credentialSent: endpointSentCredential(chatEndpointInfo),
+						},
+					};
+				}
+
 				// Token has expired or invalid, fetch a new one on next request
 				// TODO(drifkin): these actions should probably happen in vsc specific code
 				this._authenticationService.resetCopilotToken(response.status);
@@ -2067,6 +2088,16 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 		if (response.failKind === ChatFailKind.OffTopic) {
 			return { type: ChatFetchResponseType.OffTopic, reason, requestId, serverRequestId };
 		}
+		if (response.failKind === ChatFailKind.ProviderAuthFailed) {
+			return {
+				type: ChatFetchResponseType.ProviderAuthFailed,
+				reason,
+				requestId,
+				serverRequestId,
+				modelProvider: response.data?.modelProvider,
+				credentialSent: response.data?.credentialSent !== false,
+			};
+		}
 		if (response.failKind === ChatFailKind.TokenExpiredOrInvalid || response.failKind === ChatFailKind.ClientNotSupported || reason.includes('Bad request: ')) {
 			return { type: ChatFetchResponseType.BadRequest, reason, requestId, serverRequestId };
 		}
@@ -2310,6 +2341,49 @@ function isValidChatPayload(messages: Raw.ChatMessage[], postOptions: OptionalCh
 
 function asUnexpected(reason: string) {
 	return `Prompt failed validation with the reason: ${reason}. Please file an issue.`;
+}
+
+/** Credential-bearing headers a BYOK endpoint may use, lower-cased. */
+const CREDENTIAL_HEADERS = ['authorization', 'api-key', 'x-api-key', 'x-goog-api-key'];
+
+/**
+ * Leading auth scheme to discount when deciding whether a header carries a secret.
+ * `\b` keeps a key that merely starts with those letters (`tokenabc`) intact.
+ */
+const AUTH_SCHEME_PREFIX = /^\s*(?:bearer|basic|token)\b\s*/i;
+
+/**
+ * Whether a BYOK endpoint actually put a non-empty credential on the wire.
+ *
+ * A rejected request means one of two very different things, and the user must
+ * not be told the wrong one: a credential that was SENT and refused is a bad
+ * key (their action), while a credential that was never sent is our plumbing
+ * dropping it (our bug). Provider wording does not reliably separate the two —
+ * OpenRouter says "User not found." for the first and "No cookie auth
+ * credentials found" for the second — so decide it here, provider-agnostically,
+ * from what the endpoint itself produced.
+ *
+ * A bare scheme (`Authorization: Bearer` with nothing after it) counts as not
+ * sent, since that is what an empty stored key serialises to.
+ */
+export function endpointSentCredential(endpoint: IChatEndpoint): boolean {
+	let headers: Record<string, string>;
+	try {
+		headers = endpoint.getExtraHeaders?.() ?? {};
+	} catch {
+		// getExtraHeaders can throw when a credential cannot be resolved at all,
+		// which is itself the "nothing was sent" case.
+		return false;
+	}
+
+	return Object.entries(headers).some(([name, value]) => {
+		if (!CREDENTIAL_HEADERS.includes(name.toLowerCase())) {
+			return false;
+		}
+		// Strip a leading auth scheme (`Bearer`, `Basic`, …) before testing for content,
+		// so `Authorization: Bearer` with an empty key reads as nothing sent.
+		return (value ?? '').replace(AUTH_SCHEME_PREFIX, '').trim().length > 0;
+	});
 }
 
 export function createTelemetryData(chatEndpointInfo: IChatEndpoint, location: ChatLocation, headerRequestId: string) {

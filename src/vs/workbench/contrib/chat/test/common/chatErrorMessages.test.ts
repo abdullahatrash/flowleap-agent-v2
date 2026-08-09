@@ -71,7 +71,7 @@ suite('ChatErrorMessages', () => {
 		// every fetchError.type its classifiers can produce — so a shape change on either
 		// side is caught here instead of silently failing to render.
 		test('accepts the payload shape and every type the node layer emits', () => {
-			const nodeTypes = ['quotaExceeded', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'failed', 'length'];
+			const nodeTypes = ['quotaExceeded', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'providerAuthFailed', 'failed', 'length'];
 			const resolved = nodeTypes.map(type => getChatErrorDetailsFromMeta(errorInfo({
 				chatError: {
 					fetchError: {
@@ -87,7 +87,7 @@ suite('ChatErrorMessages', () => {
 			}))?.code);
 			// Every node-emitted type resolves to a defined details object whose code is
 			// the fetch type (or, for quota, the more specific capiError code).
-			assert.deepStrictEqual(resolved, ['some_code', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'failed', 'length']);
+			assert.deepStrictEqual(resolved, ['some_code', 'rateLimited', 'canceled', 'badRequest', 'agent_unauthorized', 'notFound', 'providerAuthFailed', 'failed', 'length']);
 		});
 	});
 
@@ -134,6 +134,62 @@ suite('ChatErrorMessages', () => {
 				code: ChatFetchResponseType.Filtered,
 				message: 'Sorry, the response matched public code so it was blocked. Please rephrase your prompt. [Learn more](https://aka.ms/copilot-chat-filtered-docs).',
 				responseIsFiltered: true,
+				level: ChatErrorLevel.Info,
+			});
+		});
+
+		test('a rejected provider key names the key, not the raw provider text', () => {
+			// OpenRouter answers an unrecognised key with "User not found." — verbatim that
+			// reads as "your account is gone", so it must never be the headline.
+			const details = getChatErrorDetailsFromFetchError({
+				type: ChatFetchResponseType.ProviderAuthFailed,
+				modelProvider: 'OpenRouter',
+				credentialSent: true,
+				reason: 'User not found.',
+			}, undefined);
+			assert.deepStrictEqual(details, {
+				code: ChatFetchResponseType.ProviderAuthFailed,
+				message: 'Your OpenRouter API key was rejected. Check that the key is valid and still has credit, then try again: [Manage Models](command:workbench.action.chat.manage)\n\nProvider response: User not found.',
+				level: ChatErrorLevel.Info,
+			});
+		});
+
+		test('no credential sent blames the client, not the key', () => {
+			const details = getChatErrorDetailsFromFetchError({
+				type: ChatFetchResponseType.ProviderAuthFailed,
+				modelProvider: 'OpenRouter',
+				credentialSent: false,
+				reason: 'No cookie auth credentials found',
+			}, undefined);
+			assert.deepStrictEqual(details, {
+				code: ChatFetchResponseType.ProviderAuthFailed,
+				message: 'No API key was sent to OpenRouter. Add or re-enter your key, then try again: [Manage Models](command:workbench.action.chat.manage)\n\nProvider response: No cookie auth credentials found',
+				level: ChatErrorLevel.Info,
+			});
+		});
+
+		test('a pre-rendered message crossing the lm boundary is not wrapped twice', () => {
+			const details = getChatErrorDetailsFromFetchError({
+				type: ChatFetchResponseType.ProviderAuthFailed,
+				modelProvider: 'OpenRouter',
+				reason: 'Your OpenRouter API key was rejected.',
+				renderedMessage: 'Your OpenRouter API key was rejected.',
+			}, undefined);
+			assert.deepStrictEqual(details, {
+				code: ChatFetchResponseType.ProviderAuthFailed,
+				message: 'Your OpenRouter API key was rejected.',
+				level: ChatErrorLevel.Info,
+			});
+		});
+
+		test('an unnamed provider and an empty reason still read sensibly', () => {
+			const details = getChatErrorDetailsFromFetchError({
+				type: ChatFetchResponseType.ProviderAuthFailed,
+				reason: '',
+			}, undefined);
+			assert.deepStrictEqual(details, {
+				code: ChatFetchResponseType.ProviderAuthFailed,
+				message: 'Your API key was rejected by the model provider. Check that the key is valid and still has credit, then try again: [Manage Models](command:workbench.action.chat.manage)',
 				level: ChatErrorLevel.Info,
 			});
 		});

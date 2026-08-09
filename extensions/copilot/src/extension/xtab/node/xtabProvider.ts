@@ -1626,6 +1626,7 @@ export function mapChatFetcherErrorToNoNextEditReason(fetchError: ChatFetchError
 			return new NoNextEditReason.Uncategorized(ErrorUtils.fromUnknown(fetchError));
 		case ChatFetchResponseType.BadRequest:
 		case ChatFetchResponseType.NotFound:
+		case ChatFetchResponseType.ProviderAuthFailed:
 		case ChatFetchResponseType.Failed:
 		case ChatFetchResponseType.NetworkError:
 		case ChatFetchResponseType.Unknown:

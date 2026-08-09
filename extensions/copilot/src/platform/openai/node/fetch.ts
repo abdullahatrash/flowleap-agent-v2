@@ -33,6 +33,13 @@ export interface ChatRequestCanceled {
 export enum ChatFailKind {
 	OffTopic = 'offTopic',
 	TokenExpiredOrInvalid = 'tokenExpiredOrInvalid',
+	/**
+	 * A BYOK endpoint (one that owns its own `Authorization`, see
+	 * `IChatEndpoint.ownsAuthorization`) rejected the user-supplied credential.
+	 * Distinct from {@link TokenExpiredOrInvalid}, which is about the CAPI
+	 * Copilot token and triggers a token reset the user cannot act on.
+	 */
+	ProviderAuthFailed = 'providerAuthFailed',
 	ServerCanceled = 'serverCanceled',
 	ClientNotSupported = 'clientNotSupported',
 	RateLimited = 'rateLimited',
