@@ -5,6 +5,29 @@ All notable changes to FlowLeap Patent AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and version numbers follow [Semantic Versioning](https://semver.org/).
 
+Add every user-visible change to `## [Unreleased]` in the same pull request that
+makes it. Cutting a release renames that heading to `## [X.Y.Z] - YYYY-MM-DD` and
+opens a fresh empty one — the release workflow copies the section verbatim into
+the GitHub release notes, so write for the person downloading the app, not for
+the person who wrote the patch. Changes with no user-visible effect (refactors,
+test-only work, CI) belong in the commit message, not here.
+
+## [Unreleased]
+
+<!-- Nothing yet. Add entries under a `### Heading` as changes land. -->
+
+## [0.2.1] - 2026-08-09
+
+### Fixed
+
+- A rejected model-provider API key now says so. Chat previously ended the turn
+  with the provider's own wording — OpenRouter answers an unrecognised key with
+  "User not found." — followed by a stack trace, which read as though your
+  FlowLeap account were missing rather than your key being wrong. The message
+  now names the provider, tells you to check the key, and links Manage Models,
+  keeping the provider's text as a supporting detail. A key that never reached
+  the provider is reported differently from one that was refused.
+
 ## [0.2.0] - 2026-08-09
 
 ### Patent analytics over PATSTAT

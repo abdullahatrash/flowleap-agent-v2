@@ -98,22 +98,40 @@ gh secret list
 
 ## Cutting a release
 
-1. Bump the version and tag it:
+1. Close the changelog section. `CHANGELOG.md` keeps a `## [Unreleased]`
+   heading that every user-facing PR adds to as it lands. Rename it to
+   `## [X.Y.Z] - YYYY-MM-DD` and open a fresh empty `## [Unreleased]` above it.
+
+   The release workflow copies that section verbatim into the GitHub release
+   notes, so check it reads for someone downloading the app. Verify the
+   extraction before tagging — an empty result silently falls back to generic
+   notes:
 
    ```bash
-   npm version <patch|minor|major> --no-git-tag-version   # or hand-edit package.json
-   git commit -am "Release vX.Y.Z"
+   awk "/^## \[X.Y.Z\]/{flag=1;next}/^## \[/{flag=0}flag" CHANGELOG.md
+   ```
+
+2. Commit and tag. There is no version to bump: `build/flowleap/stamp-flowleap-version.mjs`
+   reads the tag in CI and stamps `extensions/flowleap/package.json` at build
+   time. The root `package.json` version is Code OSS's and is not the product
+   version.
+
+   ```bash
+   git commit -m "release: CHANGELOG for vX.Y.Z" -- CHANGELOG.md
    git tag vX.Y.Z
    git push origin main --tags
    ```
 
-2. Watch the run in the **Actions** tab for `flowleap-release.yml`. Confirm:
+   Tag only a commit whose CI is already green — the release workflow does not
+   re-run the PR gate.
+
+3. Watch the run in the **Actions** tab for `flowleap-release.yml`. Confirm:
    - macOS build+sign+notarize+staple jobs succeed.
    - Windows build job succeeds and uploads the unsigned zip + two `.exe`
      installers + `SHASUMS256.txt`.
    - A **draft** GitHub release was created for the tag.
 
-3. On a Windows machine with SimplySign Desktop running and logged in:
+4. On a Windows machine with SimplySign Desktop running and logged in:
 
    ```powershell
    pwsh build/flowleap/sign-windows-release.ps1 -Tag vX.Y.Z
@@ -121,7 +139,7 @@ gh secret list
 
    Omit `-Tag` to auto-sign the most recently created draft release.
 
-4. Verification checklist before publishing:
+5. Verification checklist before publishing:
    - [ ] macOS: `spctl -a -vvv -t install /path/to/FlowLeap.app` reports
          `accepted` and `source=Notarized Developer ID`.
    - [ ] macOS: `xcrun stapler validate /path/to/FlowLeap.app` succeeds.
@@ -132,7 +150,7 @@ gh secret list
    - [ ] `SHASUMS256.txt` on the release matches the hashes of the actual
          uploaded files (`sha256sum -c` locally after downloading).
 
-5. Publish to the PUBLIC distribution repo. End users and the website never see
+6. Publish to the PUBLIC distribution repo. End users and the website never see
    this repo's draft release — the download page, changelog page and
    `/api/latest-version` on `flowleap-website-v2` all read the GitHub releases
    of the public repo `abdullahatrash/flowleap-releases`. Copy the finished
