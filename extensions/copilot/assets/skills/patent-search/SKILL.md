@@ -56,6 +56,16 @@ next discriminating term from your Step 1 list and probe again.** Under 10: broa
 Refinement). A query you never probed is a guess, and in a prior-art search a query
 returning thousands of hits instead of tens means the closest art is never seen.
 
+**Query budget — probing is not sweeping.** A standard search finishes in **4-6 queries
+total**, probe included. A Prior-Art Search may go deeper, but stop when new variants
+return the same documents. Never spend a call on what you already know:
+- A single neighbourhood term alone (`ta=pipeline`, `ta=sensor`) is always huge — never
+  execute it; probe only queries you would actually accept.
+- `AND` order does not matter: `X AND Y AND Z` equals `Z AND X AND Y` — never re-run a
+  reordered version of a query you already ran.
+- After a transient backend error, retry the SAME query at most once, then move on to a
+  different query or report the gap — grinding retries is not persistence.
+
 ## USPTO Search (US Patents)
 
 The USPTO API is the **Open Data Portal (ODP)** with Lucene query syntax.
