@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
+import { escape } from '../../../util/vs/base/common/strings';
 import {
 	AuthRequiredError,
 	DataKeyInvalidError,
@@ -15,6 +16,8 @@ import { PatentDataKeysStore } from './patentDataKeysStore';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { NON_BYOK_VENDORS } from './patentEndpointProvider';
 import { computeAccountState } from '../common/accountSection';
+import { getManagedInferenceSubject, MANAGED_INFERENCE_SUBJECTS } from '../common/managedInferenceConsent';
+import { IManagedInferenceConsentService } from './managedInferenceConsentService';
 
 /**
  * The FlowLeap Settings sidebar (see CONTEXT.md): a webview VIEW in its own activity-bar
@@ -133,7 +136,8 @@ type PageInMessage =
 	| { readonly type: 'openPreferences' }
 	| { readonly type: 'accountSignIn' }
 	| { readonly type: 'accountSignOut' }
-	| { readonly type: 'accountManageSubscription' };
+	| { readonly type: 'accountManageSubscription' }
+	| { readonly type: 'setConsent'; readonly subjectId: string; readonly verdict: string };
 
 /** Register the `flowleap.patentDataKeys` command: reveals the FlowLeap Settings sidebar. An
  *  optional provider argument (e.g. from the Setup view or the invalid-key toast) focuses
@@ -198,6 +202,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		private readonly _client: IPatentBackendClient,
 		private readonly _authProvider: FlowLeapAuthenticationProvider,
 		private readonly _logService: ILogService,
+		private readonly _consentService: IManagedInferenceConsentService,
 	) { }
 
 	register(): vscode.Disposable {
@@ -207,6 +212,9 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 			this._store.onDidChange(() => this._postState()),
 			// Keep the Account section live across sign-in/out and the late profile-fetch `{changed}`.
 			this._authProvider.onDidChangeSessions(() => void this._postAccountState()),
+			// Keep the Privacy rows live: a verdict answered at an "Always"/"Never" prompt during a
+			// tool call must show up here without the user reopening the view.
+			this._consentService.onDidChangeVerdicts(() => this._postConsentState()),
 		);
 		return vscode.Disposable.from(...this._disposables);
 	}
@@ -248,6 +256,14 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		this._post({ type: 'state', ...state, focus });
 	}
 
+	/**
+	 * Reflect the current managed-inference verdicts. The service owns them, so a verdict answered
+	 * at a prompt elsewhere is shown here without the page needing its own copy.
+	 */
+	private _postConsentState(): void {
+		this._post({ type: 'consent', verdicts: buildConsentVerdictMap(this._consentService) });
+	}
+
 	private _postStatus(provider: Provider, kind: 'testing' | 'ok' | 'error' | 'warn' | 'info', message: string): void {
 		this._post({ type: 'status', provider, kind, message });
 	}
@@ -286,7 +302,19 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					const focus = this._pendingFocus;
 					this._pendingFocus = undefined;
 					this._postState(focus);
+					this._postConsentState();
 					void this._postAccountState();
+					return;
+				}
+				case 'setConsent': {
+					const subject = getManagedInferenceSubject(message.subjectId);
+					if (!subject) {
+						this._logService.warn(`[Patent AI] Ignoring consent change for unknown subject '${message.subjectId}'`);
+						return;
+					}
+					// 'ask' clears the verdict back to undecided; anything else must be a verdict.
+					const verdict = message.verdict === 'always' || message.verdict === 'never' ? message.verdict : undefined;
+					await this._consentService.setVerdict(subject.id, verdict);
 					return;
 				}
 				case 'saveEpo': {
@@ -374,6 +402,45 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
  * section focus) arrives via `state`/`status`/`focus` messages, and no key material is ever
  * embedded. Exported for tests.
  */
+/**
+ * Every subject's current verdict as the page's select values, with undecided rendered as `ask`.
+ * Always covers all subjects, so a reset row visibly returns to Ask rather than keeping its old value.
+ */
+export function buildConsentVerdictMap(consentService: IManagedInferenceConsentService): Record<string, string> {
+	return Object.fromEntries(
+		MANAGED_INFERENCE_SUBJECTS.map(subject => [subject.id, consentService.getVerdict(subject.id) ?? 'ask'])
+	);
+}
+
+/**
+ * The Privacy section's rows, generated from {@link MANAGED_INFERENCE_SUBJECTS} so the settings
+ * page cannot drift from the gate. Each row is a disclosure as much as a control: a user must be
+ * able to learn what is sent where without triggering the capability to find out.
+ */
+export function renderConsentRowsHtml(): string {
+	return MANAGED_INFERENCE_SUBJECTS.map(subject => `
+			<div class="consent-row">
+				<div class="consent-text">
+					<div class="consent-name">${escapeHtml(subject.displayName)}</div>
+					<div class="consent-detail">Sends ${escapeHtml(subject.sends)} · processed by ${escapeHtml(subject.processor)} · ${escapeHtml(subject.retention)}</div>
+				</div>
+				<select class="consent-select" id="consent-${escapeHtml(subject.id)}" data-subject="${escapeHtml(subject.id)}" aria-label="${escapeHtml(subject.displayName)} consent">
+					<option value="ask">Ask</option>
+					<option value="always">Always</option>
+					<option value="never">Never</option>
+				</select>
+			</div>`).join('');
+}
+
+/**
+ * Attribute-safe escaping for the registry strings interpolated into the settings page. Builds on
+ * the shared {@link escape}, which covers `<`, `>` and `&` but not the double quote an attribute
+ * value needs.
+ */
+function escapeHtml(value: string): string {
+	return escape(value).replace(/"/g, '&quot;');
+}
+
 export function renderPatentDataKeysPageHtml(nonce: string): string {
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -467,6 +534,27 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		.status.warn { color: var(--vscode-editorWarning-foreground, #f59e0b); }
 		.status.info, .status.testing { color: var(--vscode-descriptionForeground); }
 		.get-key { margin-top: 10px; font-size: 12px; }
+		.consent-row {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 10px 0;
+			border-top: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border, transparent));
+		}
+		.consent-text { min-width: 0; }
+		.consent-name { font-weight: 600; }
+		.consent-detail { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 2px; }
+		.consent-select {
+			flex: none;
+			background: var(--vscode-dropdown-background);
+			color: var(--vscode-dropdown-foreground);
+			border: 1px solid var(--vscode-dropdown-border, transparent);
+			border-radius: 4px;
+			padding: 3px 6px;
+			font-family: inherit;
+			font-size: 12px;
+		}
 		a { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; }
 		a:hover { text-decoration: underline; }
 		.footer { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 18px; }
@@ -505,6 +593,14 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<div class="buttons">
 				<button id="add-model">Add AI Model</button>
 			</div>
+		</div>
+
+		<div class="card" id="card-privacy">
+			<div class="card-header">
+				<div class="card-title">Privacy</div>
+			</div>
+			<p class="card-desc">Most of FlowLeap runs on your own AI model key. These three features are the exception: they send your text to FlowLeap, which processes it on its own provider accounts. Each one asks the first time and remembers your answer.</p>
+			${renderConsentRowsHtml()}
 		</div>
 
 		<p class="privacy">The patent-office keys below stay on this machine in secure storage and are only sent to reach the patent offices. They are never shown again once saved — entering a new value replaces the stored one.</p>
@@ -638,6 +734,13 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				focusCard(m.provider);
 			} else if (m.type === 'account') {
 				renderAccount(m);
+			} else if (m.type === 'consent') {
+				// Verdicts are owned by the consent service; the page only reflects them, so a
+				// verdict set from a prompt elsewhere shows up here without a reload.
+				for (const [subjectId, verdict] of Object.entries(m.verdicts)) {
+					const select = $('consent-' + subjectId);
+					if (select) { select.value = verdict; }
+				}
 			}
 		});
 
@@ -645,6 +748,13 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		$('account-manage').addEventListener('click', () => vscode.postMessage({ type: 'accountManageSubscription' }));
 		$('account-signout').addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'accountSignOut' }); });
 		$('add-model').addEventListener('click', () => vscode.postMessage({ type: 'openModelPicker' }));
+		for (const select of document.querySelectorAll('.consent-select')) {
+			select.addEventListener('change', () => vscode.postMessage({
+				type: 'setConsent',
+				subjectId: select.dataset.subject,
+				verdict: select.value,
+			}));
+		}
 		$('save-epo').addEventListener('click', () => {
 			vscode.postMessage({ type: 'saveEpo', key: $('epo-key').value, secret: $('epo-secret').value });
 			$('epo-key').value = ''; $('epo-secret').value = '';

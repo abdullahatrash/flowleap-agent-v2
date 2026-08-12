@@ -10,7 +10,9 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IExtensionContribution } from '../../common/contributions';
+import { MANAGED_INFERENCE_CONSENT_COMMAND_ID } from '../common/managedInferenceConsent';
 import { getPatentAIConfig } from './configService';
+import { IManagedInferenceConsentService } from './managedInferenceConsentService';
 import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { triggerFlowleapSignIn } from './flowleapSignIn';
@@ -51,6 +53,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@IPatentBackendClient private readonly _patentBackendClient: IPatentBackendClient,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
+		@IManagedInferenceConsentService private readonly _consentService: IManagedInferenceConsentService,
 	) {
 		super();
 		this._initialize();
@@ -76,7 +79,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// fields + the Add AI Model (BYOK) entry point. The flowleap.patentDataKeys
 			// command reveals it, so all deep links land there.
 			if (this._dataKeysStore && this._authProvider) {
-				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService);
+				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService, this._consentService);
 				this._register(viewProvider.register());
 				this._register(registerPatentDataKeysCommand(viewProvider, this._logService));
 			}
@@ -123,6 +126,15 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			if (this._authProvider) {
 				this._register(registerOnboardingBridgeCommands(this._authProvider, this._logService));
 			}
+		});
+		this._safeStep('register managed-inference consent command', () => {
+			// The seam the PDF viewer asks through before uploading a document for OCR (#213).
+			// `pdf-preview` cannot import this extension, so consent lives behind a command:
+			// all lookup, prompting and persistence stay here, next to the tests.
+			this._register(vscode.commands.registerCommand(
+				MANAGED_INFERENCE_CONSENT_COMMAND_ID,
+				(subjectId: string): Promise<boolean> => this._consentService.requestConsent(subjectId),
+			));
 		});
 		this._safeStep('reveal setup on first run', () => {
 			// Fire-and-forget: first-run users land on the FlowLeap Settings sidebar

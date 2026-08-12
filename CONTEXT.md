@@ -115,8 +115,37 @@ methods are mocked so inference bypasses them.
 **Patent-data Backend**:
 `flowleap-backend`, reached by the patent-data tools (EPO OPS, USPTO, citation, legal RAG) at
 `/v1/…`. Gated **live per request** on Clerk auth + Polar subscription state. This is what the
-subscription pays for — **not** inference (which is BYOK).
-_Avoid_: "the LLM backend" — it serves patent data, never inference.
+subscription pays for — **not** inference (which is BYOK), with the narrow exception of
+**FlowLeap-Managed Inference** below.
+_Avoid_: "the LLM backend" — it serves patent data, and inference only on the four named routes.
+
+**FlowLeap-Managed Inference**:
+The **four** Patent-data Backend routes that run an LLM or OCR model on **FlowLeap's own**
+provider accounts: `/build-patent-query` and `/build-uspto-query` (invention description →
+Anthropic, OpenAI fallback, cached 2h), `/analyze-claim` (claim text → same, cached 2h), and
+`/ocr` (whole document → Mistral `mistral-ocr-latest`, cached 24h). Distinct from the **Model
+Path** (BYOK, the user's own key, client-side) and from plain patent-data retrieval (no model at
+all). Every one is gated on a **Consent Verdict** before it transmits.
+_Avoid_: treating these as ordinary backend calls — that framing is exactly why they shipped
+ungated; reading ADR 0004's "no inference proxy" as covering them (it describes the retired chat
+proxy and the agent loop, not these four).
+
+**Managed-Inference Subject**:
+One gated capability, not one tool: **Query Generation** (both query builders — they send the
+same Invention Disclosure description, and the CLI gates both behind one
+`--allow-external-processing` flag), **Claim Analysis**, **Document OCR**. Exactly these three.
+_Avoid_: a per-tool gate (asks twice for one decision); a single global toggle (forces a cautious
+user to refuse OCR of a published patent in order to protect draft claims).
+
+**Consent Verdict**:
+The user's remembered answer for a Managed-Inference Subject: **undecided** (default — prompts),
+**always**, or **never**. Stored per person, not per workspace, and reversible from the Privacy
+section of the FlowLeap Settings Sidebar. A refusal is a **user-action stop**, exactly like a
+Patent-Data Key gate: the agent must not retry it, reach the same result another way, or invent
+the output.
+_Avoid_: calling **Once** a verdict — it authorises a single call and records nothing; enforcing
+consent through the chat tool-confirmation affordance (a session on blanket auto-approve skips
+confirmations, so the gate must live inside the operation).
 
 **Patent-Data Keys**:
 The user's own EPO OPS **Consumer Key + Secret** pair and USPTO ODP **API Key** — free

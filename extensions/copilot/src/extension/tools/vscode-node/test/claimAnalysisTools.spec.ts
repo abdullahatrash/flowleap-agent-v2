@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
+import type { IManagedInferenceConsentService } from '../../../patentai/vscode-node/managedInferenceConsentService';
 import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { AnalyzeClaimTool } from '../analyzeClaimTool';
 import { CompareClaimsTool } from '../compareClaimsTool';
@@ -38,6 +39,14 @@ function makeBackendClient(postPayload?: unknown, getPayload?: unknown) {
 		},
 	};
 	return { client, calls };
+}
+
+/**
+ * A consent service that has already been told "always" — these tests are about the tools'
+ * formatting, not the gate. The gate itself is covered in `managedInferenceGating.spec.ts`.
+ */
+function makeConsentService(): IManagedInferenceConsentService {
+	return { requestConsent: async () => true } as unknown as IManagedInferenceConsentService;
 }
 
 /** Stub CancellationToken that is never cancelled. */
@@ -80,7 +89,7 @@ describe('claim-analysis tools', () => {
 				],
 			},
 		});
-		const tool = new AnalyzeClaimTool(makeLogService(), client);
+		const tool = new AnalyzeClaimTool(makeLogService(), client, makeConsentService());
 
 		const result = await tool.invoke(makeOptions({ claimText: 'A photovoltaic device comprising a light-absorbing layer.' }), makeToken());
 
@@ -110,7 +119,9 @@ describe('claim-analysis tools', () => {
 
 			---
 			Use the suggested CQL queries with the \`search_patents\` tool to find prior art.
-			Run multiple queries to maximize coverage (different terminology may find different patents)."
+			Run multiple queries to maximize coverage (different terminology may find different patents).
+
+			_Processed by Anthropic (OpenAI as fallback) via FlowLeap-managed inference (cached for 2 hours)._"
 		`);
 	});
 

@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { AuthRequiredError, DataKeyInvalidError, IPatentBackendClient, PatentBackendError } from '../patentBackendClient';
-import { renderPatentDataKeysPageHtml, testPatentDataConnection } from '../patentDataKeysPage';
+import type { IManagedInferenceConsentService } from '../managedInferenceConsentService';
+import { buildConsentVerdictMap, renderConsentRowsHtml, renderPatentDataKeysPageHtml, testPatentDataConnection } from '../patentDataKeysPage';
 
 function makeClient(behavior: { get?: () => Promise<unknown>; post?: () => Promise<unknown> }): IPatentBackendClient {
 	return {
@@ -78,11 +79,43 @@ describe('renderPatentDataKeysPageHtml', () => {
 		expect(html).toContain('field-hint');
 		expect(html).toContain('developers.epo.org');
 		expect(html).toContain('data.uspto.gov/myodp');
-		// Masked inputs only; no value attributes — key material never reaches the markup.
+		// Masked inputs only, and no input carries a value attribute — key material never reaches
+		// the markup. Scoped to <input> because the Privacy section's <option value="…"> entries
+		// are static verdict names, not user data.
 		expect(html.match(/type="password"/g)).toHaveLength(3);
-		expect(html).not.toContain('value=');
+		expect(html).not.toMatch(/<input[^>]*\svalue=/);
 		// Locked-down CSP with the provided nonce.
 		expect(html).toContain(`script-src 'nonce-test-nonce'`);
 		expect(html).toContain(`default-src 'none'`);
+	});
+});
+
+describe('Privacy section', () => {
+
+	it('discloses every gated subject with its processor and retention, not just a switch', () => {
+		const rows = renderConsentRowsHtml();
+
+		// A user must be able to learn what is sent where without triggering the capability.
+		expect(rows).toContain('Query Generation');
+		expect(rows).toContain('Claim Analysis');
+		expect(rows).toContain('Document OCR');
+		expect(rows).toContain('processed by Anthropic (OpenAI as fallback) · cached for 2 hours');
+		expect(rows).toContain('processed by Mistral · cached for 24 hours');
+		// Three subjects, each with the same three choices.
+		expect(rows.match(/class="consent-select"/g)).toHaveLength(3);
+		expect(rows.match(/value="never"/g)).toHaveLength(3);
+	});
+
+	it('renders undecided subjects as Ask so a reset row does not keep its old value', () => {
+		const verdicts: Record<string, 'always' | 'never' | undefined> = { 'claim-analysis': 'never' };
+		const consentService = {
+			getVerdict: (id: string) => verdicts[id],
+		} as unknown as IManagedInferenceConsentService;
+
+		expect(buildConsentVerdictMap(consentService)).toEqual({
+			'query-generation': 'ask',
+			'claim-analysis': 'never',
+			'document-ocr': 'ask',
+		});
 	});
 });

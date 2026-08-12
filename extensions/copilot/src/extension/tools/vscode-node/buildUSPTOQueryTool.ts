@@ -8,7 +8,9 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { IManagedInferenceConsentService } from '../../patentai/vscode-node/managedInferenceConsentService';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { refuseWithoutManagedInferenceConsent, withProcessingNotice } from './managedInferenceGate';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -52,13 +54,14 @@ interface BuildQueryResult {
  * backend through the shared {@link IPatentBackendClient} seam, so it inherits the centralized
  * `401 → re-sign-in` / `402 → start-trial` gating.
  */
-class BuildUSPTOQueryTool implements ICopilotTool<IBuildUSPTOQueryParams> {
+export class BuildUSPTOQueryTool implements ICopilotTool<IBuildUSPTOQueryParams> {
 
 	public static readonly toolName = ToolName.BuildUSPTOQuery;
 
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IManagedInferenceConsentService private readonly consentService: IManagedInferenceConsentService,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IBuildUSPTOQueryParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -70,6 +73,11 @@ class BuildUSPTOQueryTool implements ICopilotTool<IBuildUSPTOQueryParams> {
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IBuildUSPTOQueryParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[BuildUSPTOQueryTool] Building USPTO query strategy');
+
+		const refusal = await refuseWithoutManagedInferenceConsent(this.consentService, 'query-generation');
+		if (refusal) {
+			return refusal;
+		}
 
 		const { description, focus = 'comprehensive' } = options.input;
 
@@ -83,7 +91,7 @@ class BuildUSPTOQueryTool implements ICopilotTool<IBuildUSPTOQueryParams> {
 				]);
 			}
 
-			const formattedResponse = this.formatStrategy(result.strategy);
+			const formattedResponse = withProcessingNotice(this.formatStrategy(result.strategy), 'query-generation');
 			this.logService.info(`[BuildUSPTOQueryTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([

@@ -8,7 +8,9 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { IManagedInferenceConsentService } from '../../patentai/vscode-node/managedInferenceConsentService';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { refuseWithoutManagedInferenceConsent, withProcessingNotice } from './managedInferenceGate';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -40,14 +42,18 @@ interface BuildQueryResult {
  * intent and constructs effective EP/WO patent search queries via the FlowLeap backend through the
  * shared {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
  * `402 → start-trial` gating. Should be called BEFORE searchPatents to ensure a good search strategy.
+ *
+ * The description is processed on FlowLeap's own Anthropic/OpenAI account, so the call is gated on
+ * the user's Query Generation consent (#213) before anything is transmitted.
  */
-class BuildPatentQueryTool implements ICopilotTool<IBuildPatentQueryParams> {
+export class BuildPatentQueryTool implements ICopilotTool<IBuildPatentQueryParams> {
 
 	public static readonly toolName = ToolName.BuildPatentQuery;
 
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IManagedInferenceConsentService private readonly consentService: IManagedInferenceConsentService,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IBuildPatentQueryParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -59,6 +65,11 @@ class BuildPatentQueryTool implements ICopilotTool<IBuildPatentQueryParams> {
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IBuildPatentQueryParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[BuildPatentQueryTool] Building query strategy');
+
+		const refusal = await refuseWithoutManagedInferenceConsent(this.consentService, 'query-generation');
+		if (refusal) {
+			return refusal;
+		}
 
 		const { description, focus = 'comprehensive' } = options.input;
 
@@ -73,7 +84,7 @@ class BuildPatentQueryTool implements ICopilotTool<IBuildPatentQueryParams> {
 			}
 
 			// Format strategy for LLM
-			const formattedResponse = this.formatStrategy(result.strategy);
+			const formattedResponse = withProcessingNotice(this.formatStrategy(result.strategy), 'query-generation');
 			this.logService.info(`[BuildPatentQueryTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([

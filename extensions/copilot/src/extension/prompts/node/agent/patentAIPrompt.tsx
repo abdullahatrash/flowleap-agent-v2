@@ -66,6 +66,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 	const toolNames = new Set(availableTools?.map(t => t.name) ?? []);
 	const base = {
 		hasBuildPatentQuery: toolNames.has(ToolName.BuildPatentQuery),
+		hasBuildUSPTOQuery: toolNames.has(ToolName.BuildUSPTOQuery),
 		hasSearchPatents: toolNames.has(ToolName.SearchPatents),
 		hasOpsApiGuide: toolNames.has(ToolName.OpsApiGuide),
 		hasUSPTOApiGuide: toolNames.has(ToolName.USPTOApiGuide),
@@ -644,6 +645,41 @@ class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
 }
 
 /**
+ * What the agent DOES when a tool reports that the user has refused FlowLeap-Managed Inference
+ * (#213). Deliberately the same classification as {@link PatentKeyGateDoctrine}: a consent refusal
+ * is a user-action stop, not an exhausted route. The difference is that a key gate can be resolved
+ * by the user adding a key, while a consent refusal is a decision to respect — so there is no
+ * resume rule here, and no pivot that reaches the same result another way.
+ */
+class PatentConsentGateDoctrine extends PromptElement<PatentAIPromptProps> {
+	render() {
+		const tools = detectPatentTools(this.props.availableTools);
+		const gatedTools = [
+			tools.hasBuildPatentQuery && '`build_patent_query`',
+			tools.hasBuildUSPTOQuery && '`build_uspto_query`',
+			tools.hasAnalyzeClaim && '`analyze_claim`',
+		].filter((name): name is string => typeof name === 'string');
+
+		if (gatedTools.length === 0) {
+			return null;
+		}
+
+		return <Tag name='consentGateDoctrine'>
+			CONSENT-GATE DOCTRINE — what you do when a tool says the user turned it off:<br />
+			<br />
+			{gatedTools.join(', ')} send the user's own text to FlowLeap, which processes it on FlowLeap's provider accounts rather than on the user's own model key. The user is asked once per capability and can answer "never". When that happens the tool returns a refusal instead of a result — no content was sent.<br />
+			<br />
+			**A refusal is a USER-ACTION STOP, not a dead route.** On seeing one:<br />
+			{'  '}• Do NOT retry the tool. The answer will not change by asking again this turn.<br />
+			{'  '}• Do NOT reach the same result another way — do not hand-write the query the builder would have produced, do not decompose the claim yourself in its place, and do not route the same text through another tool. The user refused the PROCESSING, not the tool call.<br />
+			{'  '}• Do NOT invent the output. A refused analysis has no result to report, estimate or approximate.<br />
+			{'  '}• DO continue with everything else the task needs, and name the gap explicitly as the user's own privacy setting — "claim decomposition is off because you chose not to send claim text to FlowLeap-managed processing" — never as a tool failure, an outage, or a data gap.<br />
+			{'  '}• DO say once, at the END of the turn, that it is reversible in FlowLeap Settings under Privacy. Do not press the point.<br />
+		</Tag>;
+	}
+}
+
+/**
  * Workflow examples showing ACTIVE behavior
  */
 class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
@@ -906,6 +942,7 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 			<PatentCriticalRules {...this.props} priority={800} flexGrow={1} />
 			<PatentPersistenceRules {...this.props} priority={790} flexGrow={1} />
 			<PatentKeyGateDoctrine {...this.props} priority={785} flexGrow={1} />
+			<PatentConsentGateDoctrine {...this.props} priority={784} flexGrow={1} />
 			<PatentEvidenceRules {...this.props} priority={780} flexGrow={1} />
 			<PatentDeliverableRules {...this.props} priority={775} flexGrow={1} />
 			<PatentDataBoundaryRules {...this.props} priority={770} flexGrow={1} />

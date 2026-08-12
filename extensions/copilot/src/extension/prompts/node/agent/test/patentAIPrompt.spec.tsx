@@ -246,6 +246,45 @@ suite('PatentAIInstructions key state', () => {
 	});
 });
 
+suite('PatentAIInstructions consent-gate doctrine', () => {
+	test('classifies a consent refusal as a user-action stop the agent must not route around', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			renders: output.includes('CONSENT-GATE DOCTRINE'),
+			namesTheGatedTools: output.includes('`build_patent_query`, `build_uspto_query`, `analyze_claim`'),
+			userActionStop: output.includes('A refusal is a USER-ACTION STOP, not a dead route'),
+			forbidsRetry: output.includes('Do NOT retry the tool'),
+			forbidsSubstituteRoute: output.includes('do not hand-write the query the builder would have produced'),
+			forbidsFabrication: output.includes('Do NOT invent the output'),
+			namesItAsAPrivacySetting: output.includes("name the gap explicitly as the user's own privacy setting"),
+			pointsAtSettings: output.includes('reversible in FlowLeap Settings under Privacy'),
+		}).toEqual({
+			renders: true,
+			namesTheGatedTools: true,
+			userActionStop: true,
+			forbidsRetry: true,
+			forbidsSubstituteRoute: true,
+			forbidsFabrication: true,
+			namesItAsAPrivacySetting: true,
+			pointsAtSettings: true,
+		});
+	});
+
+	test('names only the gated tools actually available, and stays silent when none are', async () => {
+		const claimOnly = await renderPatentInstructions([ToolName.AnalyzeClaim]);
+		const noGatedTools = await renderPatentInstructions([ToolName.SearchPatents]);
+		expect({
+			claimOnlyRenders: claimOnly.includes('CONSENT-GATE DOCTRINE'),
+			claimOnlyNamesOnlyItsTool: claimOnly.includes('`analyze_claim` send') && !claimOnly.includes('`build_patent_query`,'),
+			noGatedToolsSilent: noGatedTools.includes('CONSENT-GATE DOCTRINE'),
+		}).toEqual({
+			claimOnlyRenders: true,
+			claimOnlyNamesOnlyItsTool: true,
+			noGatedToolsSilent: false,
+		});
+	});
+});
+
 suite('PatentAIInstructions key-gate doctrine', () => {
 	test('classifies a key gate as a user-action stop that the web fallback does not cover', async () => {
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
