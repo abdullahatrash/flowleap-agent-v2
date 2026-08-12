@@ -1,9 +1,12 @@
 # Search Strategy Tests
 # Verifies the agent uses correct tools and includes key search parameters
-# Note: build_patent_query and build_uspto_query only have a "description" field,
-# so we verify the description contains the right elements (assignee, dates, CPC codes).
-# When the model calls uspto_api_guide first (to get docs before searching), that's
-# also valid first-step behavior — we just check the tool is correct.
+# Note: there are no query-builder tools — the model writes the query itself.
+# EP/WO: model-written CQL rides in search_patents args.query; we check the CQL
+# string carries the right elements (assignee, dates, CPC codes) as lowercase
+# substrings (CQL terms appear as ta=term or inside ta="a phrase").
+# US: uspto_api_guide supplies the request shape, then the model's own Lucene
+# query rides in patent_api_request. When the model calls uspto_api_guide first
+# (to get docs before searching), that's valid first-step behavior.
 
 - vars:
     prompt: "Find US patents by Google about neural network inference optimization"
@@ -12,21 +15,21 @@
       value: |
         const parsed = JSON.parse(output);
         return (parsed.tool_calls || []).some(tc =>
-          tc.function?.name === 'build_uspto_query' || tc.function?.name === 'uspto_api_guide'
+          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'patent_api_request'
         );
       metric: uspto_uses_correct_tool
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const directSearch = toolCalls.find(tc => tc.function?.name === 'build_uspto_query');
+        const directSearch = toolCalls.find(tc => tc.function?.name === 'patent_api_request');
         if (directSearch) {
           const args = JSON.parse(directSearch.function.arguments || '{}');
           const allArgs = JSON.stringify(args).toLowerCase();
           return allArgs.includes('google') && allArgs.includes('neural network');
         }
-        // If using uspto_api_guide, that's a valid first step (get docs then search)
-        // Check that text or args mention the search intent
+        // If using uspto_api_guide, that's a valid first step (get docs then
+        // write the Lucene query for patent_api_request)
         const guideCall = toolCalls.find(tc => tc.function?.name === 'uspto_api_guide');
         if (guideCall) return true;
         return false;
@@ -34,11 +37,11 @@
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_uspto_query');
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'patent_api_request');
         if (!call) return true; // guide-first path is valid
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        // Must mention the assignee (Google)
+        const d = JSON.stringify(args).toLowerCase();
+        // The model-written Lucene request must mention the assignee (Google)
         return d.includes('google') || d.includes('alphabet');
       metric: uspto_args_include_assignee
 
@@ -47,34 +50,30 @@
   assert:
     - type: javascript
       value: |
-        // Outcome over path (matches the Siemens four-constraint case below):
-        // build_patent_query is the doctrinal EP route, but a direct search_patents
-        // call whose CQL carries the same constraints reaches the same EP result
-        // set. gemini-2.5-pro deterministically takes the search_patents route here.
+        // The model writes the CQL itself and calls search_patents directly —
+        // there is no builder tool on the EP path.
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc =>
-          ['build_patent_query', 'search_patents'].includes(tc.function?.name)
-        );
-      metric: epo_uses_build_query
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'search_patents');
+      metric: epo_uses_search_patents
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const call = (parsed.tool_calls || []).find(tc => ['build_patent_query', 'search_patents'].includes(tc.function?.name));
+        const call = (parsed.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = JSON.stringify(args).toLowerCase();
-        return d.includes('samsung') && d.includes('wireless');
+        const q = String(args.query || '').toLowerCase();
+        return q.includes('samsung') && q.includes('wireless');
       metric: epo_includes_key_terms
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => ['build_patent_query', 'search_patents'].includes(tc.function?.name));
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = JSON.stringify(args).toLowerCase();
+        const q = String(args.query || '').toLowerCase();
         // Date constraint for "filed after 2023": accept the >=2023 or the stricter
-        // >=2024 ("after 2023" = 2024 onward) reading, or a relative cue.
-        return d.includes('2023') || d.includes('2024') || d.includes('after') || d.includes('recent');
+        // >=2024 ("after 2023" = 2024 onward) reading in the model-written CQL.
+        return q.includes('2023') || q.includes('2024');
       metric: epo_args_include_date_constraint
 
 - vars:
@@ -84,14 +83,14 @@
       value: |
         const parsed = JSON.parse(output);
         return (parsed.tool_calls || []).some(tc =>
-          tc.function?.name === 'build_uspto_query' || tc.function?.name === 'uspto_api_guide'
+          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'patent_api_request'
         );
       metric: date_filter_uses_correct_tool
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const directSearch = toolCalls.find(tc => tc.function?.name === 'build_uspto_query');
+        const directSearch = toolCalls.find(tc => tc.function?.name === 'patent_api_request');
         if (directSearch) {
           const args = JSON.parse(directSearch.function.arguments || '{}');
           const allArgs = JSON.stringify(args).toLowerCase();
@@ -105,11 +104,11 @@
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_uspto_query');
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'patent_api_request');
         if (!call) return true; // guide-first path is valid
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        // Must mention autonomous vehicles or driving
+        const d = JSON.stringify(args).toLowerCase();
+        // The model-written Lucene request must mention autonomous vehicles or driving
         return d.includes('autonomous') || d.includes('self-driving') || d.includes('vehicle') || d.includes('driving');
       metric: date_cpc_args_include_technical_domain
 
@@ -119,16 +118,16 @@
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        return (out.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
-      metric: pharma_epo_uses_build_query
+        return (out.tool_calls || []).some(tc => tc.function?.name === 'search_patents');
+      metric: pharma_epo_uses_search_patents
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        return (d.includes('drug') || d.includes('pharma') || d.includes('nanoparticle')) && d.includes('pfizer');
+        const q = String(args.query || '').toLowerCase();
+        return (q.includes('drug') || q.includes('pharma') || q.includes('nanoparticle')) && q.includes('pfizer');
       metric: pharma_args_contain_core_technical_terms
 
 - vars:
@@ -136,17 +135,16 @@
   assert:
     - type: javascript
       value: |
-        // Outcome over path: build_patent_query is the doctrinal route, but a
-        // direct search_patents call whose CQL carries all four constraints
-        // achieves the same outcome (observed on gemini-2.5-flash baselining).
+        // The model writes the CQL itself; the search_patents query string must
+        // carry all four user constraints (assignee, topic, date, classification).
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => ['build_patent_query', 'search_patents'].includes(tc.function?.name));
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = JSON.stringify(args).toLowerCase();
-        const hasAssignee = d.includes('siemens');
-        const hasTopic = d.includes('de-icing') || d.includes('deicing') || d.includes('de-ice') || d.includes('blade') || d.includes('turbine');
-        const hasDate = d.includes('2022');
-        const hasClassification = d.includes('f03d');
+        const q = String(args.query || '').toLowerCase();
+        const hasAssignee = q.includes('siemens');
+        const hasTopic = q.includes('de-icing') || q.includes('deicing') || q.includes('de-ice') || q.includes('blade') || q.includes('turbine');
+        const hasDate = q.includes('2022');
+        const hasClassification = q.includes('f03d');
         return hasAssignee && hasTopic && hasDate && hasClassification;
       metric: four_constraint_query_carries_all_constraints

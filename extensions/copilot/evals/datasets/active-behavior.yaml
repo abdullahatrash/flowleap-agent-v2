@@ -14,7 +14,7 @@
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const hasSearch = toolCalls.some(tc =>
-          ['build_patent_query', 'search_patents', 'vscode_askQuestions'].includes(tc.function?.name)
+          ['search_patents', 'vscode_askQuestions'].includes(tc.function?.name)
         );
         const hasFileCreate = toolCalls.some(tc =>
           ['write_patent_results', 'create_file'].includes(tc.function?.name)
@@ -43,7 +43,7 @@
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         return toolCalls.some(tc =>
-          ['build_patent_query', 'build_uspto_query', 'search_patents',
+          ['search_patents', 'patent_api_request',
            'search_academic', 'vscode_askQuestions', 'uspto_api_guide',
            'write_patent_results', 'create_file',
            // patent_search_subagent IS the designed route for "search all

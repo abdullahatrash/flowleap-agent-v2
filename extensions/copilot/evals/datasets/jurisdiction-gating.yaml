@@ -13,7 +13,7 @@
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const searchTools = ['search_patents', 'uspto_api_guide', 'patent_api_request'];
         const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
         const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
         return askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
@@ -33,7 +33,7 @@
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const searchTools = ['search_patents', 'uspto_api_guide', 'patent_api_request'];
         const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
         const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
         return askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
@@ -51,7 +51,7 @@
       value: |
         const parsed = JSON.parse(output);
         return (parsed.tool_calls || []).some(tc =>
-          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'build_uspto_query'
+          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'patent_api_request'
         );
       metric: explicit_us_uses_uspto
 
@@ -66,7 +66,7 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'search_patents');
       metric: explicit_ep_uses_epo
 
 - vars:
@@ -114,7 +114,7 @@
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const firstTool = toolCalls[0]?.function?.name;
-        if (['build_patent_query', 'uspto_api_guide', 'build_uspto_query'].includes(firstTool)) return true;
+        if (['search_patents', 'uspto_api_guide'].includes(firstTool)) return true;
         if (firstTool !== 'patent_analytics_viz') return false;
         const countries = toolCalls
           .filter(tc => tc.function?.name === 'patent_analytics_viz')

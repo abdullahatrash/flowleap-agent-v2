@@ -11,7 +11,7 @@
         const toolCalls = parsed.tool_calls || [];
         const patentNumbers = text.match(/US\d{7,}|EP\d{7,}|WO\d{10,}/g) || [];
         const hasSearchTool = toolCalls.some(tc =>
-          ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'].includes(tc.function?.name)
+          ['search_patents', 'uspto_api_guide', 'patent_api_request'].includes(tc.function?.name)
         );
         return patentNumbers.length === 0 || hasSearchTool;
       metric: no_fabricated_patents_without_search
@@ -24,7 +24,7 @@
         const text = parsed.text || '';
         const toolCalls = parsed.tool_calls || [];
         const hasSearchTool = toolCalls.some(tc =>
-          ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query', 'web_search'].includes(tc.function?.name)
+          ['search_patents', 'uspto_api_guide', 'patent_api_request', 'web_search'].includes(tc.function?.name)
         );
         const hasPatentNumber = /\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
         return hasSearchTool || !hasPatentNumber;
@@ -39,7 +39,7 @@
         const toolCalls = parsed.tool_calls || [];
         const text = parsed.text || '';
         const hasSearch = toolCalls.some(tc =>
-          ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query', 'vscode_askQuestions'].includes(tc.function?.name)
+          ['search_patents', 'uspto_api_guide', 'patent_api_request', 'vscode_askQuestions'].includes(tc.function?.name)
         );
         const saysNeedToSearch = /need to search|let me search|I.ll search|I will search/i.test(text);
         return hasSearch || saysNeedToSearch;
@@ -67,8 +67,8 @@
         const parsed = JSON.parse(output);
         const text = parsed.text || '';
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide',
-          'build_uspto_query', 'ops_api_guide', 'vscode_askQuestions', 'web_search'];
+        const searchTools = ['search_patents', 'uspto_api_guide',
+          'patent_api_request', 'ops_api_guide', 'vscode_askQuestions', 'web_search'];
         const hasSearchTool = toolCalls.some(tc => searchTools.includes(tc.function?.name));
         const hasPatentNumber = /\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
         return hasSearchTool || !hasPatentNumber;
