@@ -120,6 +120,7 @@ import { IPromptVariablesService } from '../../prompt/node/promptVariablesServic
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
 import { DevContainerConfigurationServiceImpl } from '../../prompt/vscode-node/devContainerConfigurationServiceImpl';
 import { PatentAIAuthService } from '../../patentai/vscode-node/patentAuthService';
+import { IOcrConsentService, OcrConsentService } from '../../patentai/vscode-node/ocrConsentService';
 import { IPatentBackendClient, PatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { PatentAICopilotTokenManager } from '../../patentai/vscode-node/patentCopilotTokenManager';
 import { PatentAIEndpointProvider } from '../../patentai/vscode-node/patentEndpointProvider';
@@ -218,6 +219,10 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	// FlowLeap Patent AI: the single backend-client seam every patent-data tool goes through.
 	// Centralizes the `401 → re-sign-in` / `402 → start-trial` gating so each tool inherits it.
 	builder.define(IPatentBackendClient, new SyncDescriptor(PatentBackendClient));
+
+	// FlowLeap Patent AI: consent for Document OCR (#213) — the last capability that sends the
+	// user's own content to FlowLeap-Managed Inference. Consulted inside the operation.
+	builder.define(IOcrConsentService, new SyncDescriptor(OcrConsentService));
 
 	builder.define(IGithubCodeSearchService, new SyncDescriptor(GithubCodeSearchService));
 	builder.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(GithubAvailableEmbeddingTypesService));

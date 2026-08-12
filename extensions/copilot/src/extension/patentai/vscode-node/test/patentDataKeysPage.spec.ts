@@ -80,9 +80,28 @@ describe('renderPatentDataKeysPageHtml', () => {
 		expect(html).toContain('data.uspto.gov/myodp');
 		// Masked inputs only; no value attributes — key material never reaches the markup.
 		expect(html.match(/type="password"/g)).toHaveLength(3);
-		expect(html).not.toContain('value=');
+		// Scoped to <input> because the Privacy row's <option value="…"> entries are static
+		// verdict names, not user data.
+		expect(html).not.toMatch(/<input[^>]*\svalue=/);
 		// Locked-down CSP with the provided nonce.
 		expect(html).toContain(`script-src 'nonce-test-nonce'`);
 		expect(html).toContain(`default-src 'none'`);
 	});
 });
+
+describe('Privacy section', () => {
+
+	it('discloses the OCR processor and retention, not just a switch', () => {
+		const html = renderPatentDataKeysPageHtml('test-nonce');
+
+		// A user must be able to learn what is uploaded and to whom without triggering it.
+		expect(html).toContain('Document OCR');
+		expect(html).toContain('processed by Mistral');
+		expect(html).toContain('cached for 24 hours');
+		// Three choices, reversible in both directions.
+		expect(html).toContain('value="ask"');
+		expect(html).toContain('value="always"');
+		expect(html).toContain('value="never"');
+	});
+});
+

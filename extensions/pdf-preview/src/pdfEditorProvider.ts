@@ -79,6 +79,15 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 
 				case 'extractTextOCR':
 					try {
+						if (!await this._hasOcrConsent()) {
+							// No upload. Any explanation is the consent owner's job: Patent AI
+							// toasts on a stored Never (naming the setting and where to change
+							// it) and stays silent on a dismissed dialog, which is "not this
+							// time", not a policy. This side only restores the button.
+							webviewPanel.webview.postMessage({ type: 'ocrCancelled' });
+							return;
+						}
+
 						webviewPanel.webview.postMessage({ type: 'ocrStarted' });
 						await vscode.window.withProgress(
 							{
@@ -201,6 +210,29 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 	 * Last path segment of a URI. Operates on the URI path (always '/'-separated),
 	 * so it is portable across platforms.
 	 */
+	/**
+	 * Whether the user has agreed to OCR uploading this document to FlowLeap, which processes it
+	 * on its own Mistral account (#213).
+	 *
+	 * The verdict is owned by the Patent AI extension — it owns the store and the FlowLeap
+	 * Settings sidebar the user reverses it from — and this extension cannot import across that
+	 * boundary, so the question is asked through a command. The command id below is therefore
+	 * hand-mirrored from `patentai/common/ocrConsent.ts`, the same manual mirroring
+	 * `resolvePatentApiUrl` already documents, and a test there pins the string.
+	 *
+	 * Fails CLOSED. If the gate cannot be reached at all — Patent AI not activated, command not
+	 * registered — the answer is no. A document must never be uploaded because the thing that
+	 * asks permission was missing.
+	 */
+	private async _hasOcrConsent(): Promise<boolean> {
+		try {
+			return await vscode.commands.executeCommand<boolean>('flowleap.ocr.requestConsent') === true;
+		} catch (err) {
+			console.error('[PDF Preview] Consent gate unavailable, refusing OCR:', err);
+			return false;
+		}
+	}
+
 	private _basename(uri: vscode.Uri): string {
 		return uri.path.substring(uri.path.lastIndexOf('/') + 1);
 	}
@@ -294,7 +326,7 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 				<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M2 2h12v2H2zM2 5h12v2H2zM2 8h8v2H2zM2 11h10v2H2z"/></svg>
 				${vscode.l10n.t('Extract text')}
 			</button>
-			<button id="extract-ocr" title="${vscode.l10n.t('Extract text with OCR (best for scanned documents)')}">
+			<button id="extract-ocr" title="${vscode.l10n.t('Extract text with OCR — best for scanned documents. Uploads the document to FlowLeap for processing by Mistral.')}">
 				<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg>
 				${vscode.l10n.t('Extract with OCR')}
 			</button>

@@ -138,6 +138,17 @@ neighbourhood, not a house. Every query needs at least one.
 _Avoid_: treating a broad category word ("artificial intelligence") or a CPC code as the
 subject matter — both return the field, not the invention.
 
+**Consent Verdict**:
+The user's remembered answer to the one **FlowLeap-Managed Inference** capability that carries
+their own content: Document OCR. **undecided** (default — asks), **always**, or **never**.
+Stored per person, not per workspace, and reversible from the Privacy section of the FlowLeap
+Settings Sidebar. Covers the PDF viewer's "Extract with OCR" only — USPTO office-action
+extraction runs the same Mistral OCR over **published** IFW documents, which are not the user's
+content and are not gated.
+_Avoid_: calling **Once** a verdict — it authorises a single extraction and records nothing;
+enforcing consent through the chat tool-confirmation affordance (a session on blanket
+auto-approve skips confirmations, so the gate lives inside the operation).
+
 **Patent-Data Keys**:
 The user's own EPO OPS **Consumer Key + Secret** pair and USPTO ODP **API Key** — free
 credentials from each office, entered in the FlowLeap Settings Sidebar. **Per-provider and
