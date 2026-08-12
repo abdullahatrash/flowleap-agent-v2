@@ -295,8 +295,8 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Keywords: my claim, this claim, analyze claim, prior art for claim<br />
 				<br />
 				**B) SEARCH for patents (general topic, no specific claim)?**<br />
-				→ Jurisdiction gate FIRST: a company or technology name alone does NOT specify jurisdiction — vscode_askQuestions before any search call<br />
-				→ Write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
+				→ Jurisdiction gate FIRST — your first action for this branch: a company or technology name alone does NOT specify jurisdiction, so vscode_askQuestions comes before ANY search_patents call. Writing the CQL yourself does not exempt you from the gate<br />
+				→ AFTER the jurisdiction answer: write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
 				→ Carry EVERY user constraint into the query: assignee, classification, and dates ("filed after 2023" → pd{'>='}2023)<br />
 				→ Save a report file if many results<br />
 				→ Keywords: find patents, search, look for patents, patents about, "the N most cited / closest / most relevant patents on X" — a RANKED LIST of documents is still a search<br />

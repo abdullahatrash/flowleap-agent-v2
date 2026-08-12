@@ -359,8 +359,8 @@ The other branches (C analytics, E claim comparison, F/G patent lookup and figur
 → Keywords: my claim, this claim, analyze claim, prior art for claim
 
 **B) SEARCH for patents (general topic, no specific claim)?**
-→ Jurisdiction gate FIRST: a company or technology name alone does NOT specify jurisdiction — vscode_askQuestions before any search call
-→ Write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results
+→ Jurisdiction gate FIRST — your first action for this branch: a company or technology name alone does NOT specify jurisdiction, so vscode_askQuestions comes before ANY search_patents call. Writing the CQL yourself does not exempt you from the gate
+→ AFTER the jurisdiction answer: write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results
 → Carry EVERY user constraint into the query: assignee, classification, and dates ("filed after 2023" → pd>=2023)
 → Save a report file if many results
 → Keywords: find patents, search, look for patents, patents about, "the N most cited / closest / most relevant patents on X" — a RANKED LIST of documents is still a search
