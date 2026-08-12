@@ -122,9 +122,11 @@ _Avoid_: "the LLM backend" — it serves patent data, and runs a model only on t
 **FlowLeap-Managed Inference**:
 The **exception list**: backend routes that run a model on FlowLeap's own provider account
 rather than on the user's **Model Path**. Governed by backend ADR 0012 — *FlowLeap runs a
-model only where the client cannot*: `/ocr` (Mistral; specialised model work), legal-search
-embeddings (must match the index they are compared against), and `/analyst` (the website's
-analytics page, whose visitors have no BYOK key at all). Its **target size is zero**;
+model only where the client cannot*: `/ocr` (Mistral; specialised model work), USPTO
+office-action text extraction (the same Mistral OCR, invoked from the file-wrapper route —
+public IFW documents, not user content), legal-search embeddings (must match the index they
+are compared against), and `/analyst` (the website's analytics page, whose visitors have no
+BYOK key at all). Its **target size is zero**;
 additions require a decision, not a pull request.
 _Avoid_: treating a new server-side model call as an ordinary backend call — that framing is
 why query building and claim analysis sat here unnoticed until ADR 0012 removed them.
