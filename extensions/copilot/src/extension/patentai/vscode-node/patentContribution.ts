@@ -10,7 +10,9 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IExtensionContribution } from '../../common/contributions';
+import { OCR_CONSENT_COMMAND_ID } from '../common/ocrConsent';
 import { getPatentAIConfig } from './configService';
+import { IOcrConsentService } from './ocrConsentService';
 import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { triggerFlowleapSignIn } from './flowleapSignIn';
@@ -51,6 +53,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@IPatentBackendClient private readonly _patentBackendClient: IPatentBackendClient,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
+		@IOcrConsentService private readonly _ocrConsentService: IOcrConsentService,
 	) {
 		super();
 		this._initialize();
@@ -76,7 +79,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// fields + the Add AI Model (BYOK) entry point. The flowleap.patentDataKeys
 			// command reveals it, so all deep links land there.
 			if (this._dataKeysStore && this._authProvider) {
-				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService);
+				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService, this._ocrConsentService);
 				this._register(viewProvider.register());
 				this._register(registerPatentDataKeysCommand(viewProvider, this._logService));
 			}
@@ -123,6 +126,15 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			if (this._authProvider) {
 				this._register(registerOnboardingBridgeCommands(this._authProvider, this._logService));
 			}
+		});
+		this._safeStep('register OCR consent command', () => {
+			// The seam the PDF viewer asks through before uploading a document (#213).
+			// `pdf-preview` cannot import this extension, so consent lives behind a command:
+			// lookup, prompt and persistence all stay here, next to the tests.
+			this._register(vscode.commands.registerCommand(
+				OCR_CONSENT_COMMAND_ID,
+				(): Promise<boolean> => this._ocrConsentService.requestConsent(),
+			));
 		});
 		this._safeStep('reveal setup on first run', () => {
 			// Fire-and-forget: first-run users land on the FlowLeap Settings sidebar

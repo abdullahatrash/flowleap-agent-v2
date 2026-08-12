@@ -769,6 +769,17 @@
 		vscode.postMessage({ type: 'extractText' });
 	});
 
+	/**
+	 * Restore the OCR button from its "Processing..." state. Every path out of an OCR attempt —
+	 * success, failure, and consent refusal — must call this or the button stays disabled.
+	 */
+	function resetOcrButton() {
+		if (extractOcrButton) {
+			extractOcrButton.disabled = false;
+			extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> Extract with OCR';
+		}
+	}
+
 	extractOcrButton.addEventListener('click', () => {
 		extractOcrButton.disabled = true;
 		extractOcrButton.textContent = 'Processing...';
@@ -931,18 +942,19 @@
 
 			case 'ocrComplete':
 				console.log('[PDF Preview] OCR completed successfully');
-				if (extractOcrButton) {
-					extractOcrButton.disabled = false;
-					extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> Extract with OCR';
-				}
+				resetOcrButton();
 				break;
 
 			case 'ocrError':
 				console.error('[PDF Preview] OCR failed:', message.message);
-				if (extractOcrButton) {
-					extractOcrButton.disabled = false;
-					extractOcrButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M1 3v10h14V3H1zm1 1h12v8H2V4zm2 1v2h2V5H4zm3 0v2h5V5H7zM4 8v2h8V8H4z"/></svg> Extract with OCR';
-				}
+				resetOcrButton();
+				break;
+
+			case 'ocrCancelled':
+				// The user has not consented to uploading the document, so nothing ran.
+				// The button must come back out of its "Processing..." state.
+				console.log('[PDF Preview] OCR cancelled before upload');
+				resetOcrButton();
 				break;
 		}
 	});

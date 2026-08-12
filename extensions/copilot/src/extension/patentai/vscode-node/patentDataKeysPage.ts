@@ -15,6 +15,8 @@ import { PatentDataKeysStore } from './patentDataKeysStore';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { NON_BYOK_VENDORS } from './patentEndpointProvider';
 import { computeAccountState } from '../common/accountSection';
+import { OCR_PROCESSOR, OCR_RETENTION } from '../common/ocrConsent';
+import { IOcrConsentService } from './ocrConsentService';
 
 /**
  * The FlowLeap Settings sidebar (see CONTEXT.md): a webview VIEW in its own activity-bar
@@ -133,7 +135,8 @@ type PageInMessage =
 	| { readonly type: 'openPreferences' }
 	| { readonly type: 'accountSignIn' }
 	| { readonly type: 'accountSignOut' }
-	| { readonly type: 'accountManageSubscription' };
+	| { readonly type: 'accountManageSubscription' }
+	| { readonly type: 'setOcrConsent'; readonly verdict: string };
 
 /** Register the `flowleap.patentDataKeys` command: reveals the FlowLeap Settings sidebar. An
  *  optional provider argument (e.g. from the Setup view or the invalid-key toast) focuses
@@ -198,6 +201,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		private readonly _client: IPatentBackendClient,
 		private readonly _authProvider: FlowLeapAuthenticationProvider,
 		private readonly _logService: ILogService,
+		private readonly _ocrConsentService: IOcrConsentService,
 	) { }
 
 	register(): vscode.Disposable {
@@ -207,6 +211,9 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 			this._store.onDidChange(() => this._postState()),
 			// Keep the Account section live across sign-in/out and the late profile-fetch `{changed}`.
 			this._authProvider.onDidChangeSessions(() => void this._postAccountState()),
+			// Keep the Privacy row live: a verdict answered at the OCR prompt must show up here
+			// without the user reopening the view.
+			this._ocrConsentService.onDidChangeVerdict(() => this._postOcrConsent()),
 		);
 		return vscode.Disposable.from(...this._disposables);
 	}
@@ -248,6 +255,11 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		this._post({ type: 'state', ...state, focus });
 	}
 
+	/** Reflect the current OCR consent verdict; the service owns it, the page only shows it. */
+	private _postOcrConsent(): void {
+		this._post({ type: 'ocrConsent', verdict: this._ocrConsentService.getVerdict() ?? 'ask' });
+	}
+
 	private _postStatus(provider: Provider, kind: 'testing' | 'ok' | 'error' | 'warn' | 'info', message: string): void {
 		this._post({ type: 'status', provider, kind, message });
 	}
@@ -286,7 +298,14 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					const focus = this._pendingFocus;
 					this._pendingFocus = undefined;
 					this._postState(focus);
+					this._postOcrConsent();
 					void this._postAccountState();
+					return;
+				}
+				case 'setOcrConsent': {
+					// 'ask' clears back to undecided; anything else must be a verdict.
+					const verdict = message.verdict === 'always' || message.verdict === 'never' ? message.verdict : undefined;
+					await this._ocrConsentService.setVerdict(verdict);
 					return;
 				}
 				case 'saveEpo': {
@@ -467,6 +486,11 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		.status.warn { color: var(--vscode-editorWarning-foreground, #f59e0b); }
 		.status.info, .status.testing { color: var(--vscode-descriptionForeground); }
 		.get-key { margin-top: 10px; font-size: 12px; }
+		.consent-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border, transparent)); }
+		.consent-text { min-width: 0; }
+		.consent-name { font-weight: 600; }
+		.consent-detail { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 2px; }
+		.consent-select { flex: none; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border, transparent); border-radius: 4px; padding: 3px 6px; font-family: inherit; font-size: 12px; }
 		a { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; }
 		a:hover { text-decoration: underline; }
 		.footer { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 18px; }
@@ -504,6 +528,24 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<p class="card-desc">Chat runs on your own AI provider key (Anthropic, OpenAI, OpenRouter, …).</p>
 			<div class="buttons">
 				<button id="add-model">Add AI Model</button>
+			</div>
+		</div>
+
+		<div class="card" id="card-privacy">
+			<div class="card-header">
+				<div class="card-title">Privacy</div>
+			</div>
+			<p class="card-desc">FlowLeap runs on your own AI model key. One feature is the exception: extracting text from a scanned document with OCR uploads it to FlowLeap for processing. It asks the first time and remembers your answer.</p>
+			<div class="consent-row">
+				<div class="consent-text">
+					<div class="consent-name">Document OCR</div>
+					<div class="consent-detail">Uploads the document you are extracting &middot; processed by ${OCR_PROCESSOR} &middot; ${OCR_RETENTION}</div>
+				</div>
+				<select class="consent-select" id="consent-ocr" aria-label="Document OCR consent">
+					<option value="ask">Ask</option>
+					<option value="always">Always</option>
+					<option value="never">Never</option>
+				</select>
 			</div>
 		</div>
 
@@ -638,6 +680,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				focusCard(m.provider);
 			} else if (m.type === 'account') {
 				renderAccount(m);
+			} else if (m.type === 'ocrConsent') {
+				$('consent-ocr').value = m.verdict;
 			}
 		});
 
@@ -645,6 +689,7 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		$('account-manage').addEventListener('click', () => vscode.postMessage({ type: 'accountManageSubscription' }));
 		$('account-signout').addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'accountSignOut' }); });
 		$('add-model').addEventListener('click', () => vscode.postMessage({ type: 'openModelPicker' }));
+		$('consent-ocr').addEventListener('change', e => vscode.postMessage({ type: 'setOcrConsent', verdict: e.target.value }));
 		$('save-epo').addEventListener('click', () => {
 			vscode.postMessage({ type: 'saveEpo', key: $('epo-key').value, secret: $('epo-secret').value });
 			$('epo-key').value = ''; $('epo-secret').value = '';
