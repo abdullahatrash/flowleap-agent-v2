@@ -144,7 +144,8 @@
         const q = String(args.query || '').toLowerCase();
         const hasAssignee = q.includes('siemens');
         const hasTopic = q.includes('de-icing') || q.includes('deicing') || q.includes('de-ice') || q.includes('blade') || q.includes('turbine');
-        const hasDate = q.includes('2022');
+        // "filed after 2022" is correctly rendered as either pd>2022 or pd>=2023
+        const hasDate = q.includes('2022') || q.includes('2023');
         const hasClassification = q.includes('f03d');
         return hasAssignee && hasTopic && hasDate && hasClassification;
       metric: four_constraint_query_carries_all_constraints
