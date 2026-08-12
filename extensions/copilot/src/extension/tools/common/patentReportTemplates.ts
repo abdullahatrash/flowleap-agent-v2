@@ -46,20 +46,42 @@ const DISCLAIMER = 'This document was generated with AI assistance for informati
 /** Placeholder for a field the practitioner fills in after generation. */
 const FIELD = '_(to be completed)_';
 
-/** Render a `| Field | Value |` metadata table from ordered rows. */
-function fieldTable(rows: readonly string[]): string {
-	return ['| Field | Details |', '| --- | --- |', ...rows.map(label => `| ${label} | ${FIELD} |`)].join('\n');
+/**
+ * Values known at generation time. The tool supplies `date`/`preparedBy`; the model supplies the
+ * rest from the conversation. Anything absent falls back to the practitioner placeholder, so a
+ * report is never blocked on missing metadata — but is no longer an empty form when the
+ * information was right there in the request.
+ */
+export interface PatentReportFields {
+	readonly matter?: string;
+	readonly subject?: string;
+	readonly date?: string;
+	readonly preparedBy?: string;
+	readonly objective?: string;
+	readonly searchStrategy?: string;
+	readonly relevanceAssessment?: string;
+}
+
+/** Render a `| Field | Value |` metadata table; empty values fall back to the placeholder. */
+function fieldTable(rows: readonly [string, string | undefined][]): string {
+	return ['| Field | Details |', '| --- | --- |', ...rows.map(([label, value]) => `| ${label} | ${value?.trim() || FIELD} |`)].join('\n');
+}
+
+/** A scaffold section body: the supplied text, or the italic guidance stub when absent. */
+function section(stub: string, value: string | undefined): string {
+	return value?.trim() ? value.trim() : stub;
 }
 
 /**
  * Wrap the model-produced `content` in the professional structure named by `template`. When
  * `template` is undefined the content is returned unchanged (free-form save).
  */
-export function buildPatentReport(content: string, template: PatentReportTemplate | undefined): string {
+export function buildPatentReport(content: string, template: PatentReportTemplate | undefined, fields?: PatentReportFields): string {
 	if (!template) {
 		return content;
 	}
 
+	const f = fields ?? {};
 	const results = content.trim().length > 0 ? content.trim() : FIELD;
 
 	switch (template) {
@@ -67,19 +89,19 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Prior Art Search Report',
 				'',
-				fieldTable(['Matter / Reference', 'Subject Technology', 'Date', 'Prepared By']),
+				fieldTable([['Matter / Reference', f.matter], ['Subject Technology', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Objective',
-				'_Describe the invention and the question the search is intended to answer._',
+				section('_Describe the invention and the question the search is intended to answer._', f.objective),
 				'',
 				'## 2. Search Strategy',
-				'_Databases searched, classification codes, keyword sets, and date ranges._',
+				section('_Databases searched, classification codes, keyword sets, and date ranges._', f.searchStrategy),
 				'',
 				'## 3. Findings',
 				results,
 				'',
 				'## 4. Relevance Assessment',
-				'_Novelty (§102) and obviousness (§103) observations for the most relevant references._',
+				section('_Novelty (§102) and obviousness (§103) observations for the most relevant references._', f.relevanceAssessment),
 				'',
 				'---',
 				`*${DISCLAIMER}*`,
@@ -90,7 +112,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Freedom-to-Operate Memorandum',
 				'',
-				fieldTable(['Matter / Reference', 'Product / Technology', 'Jurisdiction(s)', 'Date', 'Prepared By']),
+				fieldTable([['Matter / Reference', f.matter], ['Product / Technology', f.subject], ['Jurisdiction(s)', undefined], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Product / Technology Description',
 				'_Describe the product or process being cleared._',
@@ -116,7 +138,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Office Action Response',
 				'',
-				fieldTable(['Application No.', 'Examiner', 'Art Unit', 'Mailing Date', 'Response Due Date', 'Prepared By']),
+				fieldTable([['Application No.', f.matter], ['Examiner', undefined], ['Art Unit', undefined], ['Mailing Date', undefined], ['Response Due Date', undefined], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Summary of Rejections',
 				'_List each rejection (statute, claims affected, cited references)._',
@@ -139,7 +161,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Invalidity Claim Chart',
 				'',
-				fieldTable(['Patent No. / Claim(s) at Issue', 'Prior Art Reference(s)', 'Date', 'Prepared By']),
+				fieldTable([['Patent No. / Claim(s) at Issue', f.matter], ['Prior Art Reference(s)', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Overview',
 				'_Identify the challenged patent, the claim(s) at issue, and the prior art reference(s) applied against them._',
@@ -163,7 +185,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Evidence-of-Use (EoU) Infringement Chart',
 				'',
-				fieldTable(['Patent No. / Claim(s) Asserted', 'Accused Product / Service', 'Date', 'Prepared By']),
+				fieldTable([['Patent No. / Claim(s) Asserted', f.matter], ['Accused Product / Service', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Overview',
 				'_Identify the asserted patent, the claim(s) asserted, and the accused product or service being mapped._',
@@ -187,7 +209,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Patentability Opinion',
 				'',
-				fieldTable(['Matter / Reference', 'Invention Title', 'Date', 'Prepared By']),
+				fieldTable([['Matter / Reference', f.matter], ['Invention Title', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Invention Summary',
 				'_Describe the invention, its key features, and the claim(s) or claim concepts under evaluation._',
@@ -210,7 +232,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Patent Landscape Report',
 				'',
-				fieldTable(['Technology Area / Scope', 'Search Criteria', 'Date', 'Prepared By']),
+				fieldTable([['Technology Area / Scope', f.subject], ['Search Criteria', f.searchStrategy], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Scope & Methodology',
 				'_Technology area covered, search criteria (keywords, CPC/IPC codes, jurisdictions, date range), and data source._',
@@ -230,7 +252,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 			return [
 				'# Portfolio Due Diligence Memorandum',
 				'',
-				fieldTable(['Target / Portfolio', 'Transaction / Purpose', 'Date', 'Prepared By']),
+				fieldTable([['Target / Portfolio', f.subject], ['Transaction / Purpose', f.matter], ['Date', f.date], ['Prepared By', f.preparedBy]]),
 				'',
 				'## 1. Portfolio Overview',
 				'_Scope of the portfolio reviewed: number of assets, families, jurisdictions, and technology areas._',

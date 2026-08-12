@@ -259,4 +259,41 @@ describe('writePatentResults report templates', () => {
 			"
 		`);
 	});
+
+	it('prior-art-report fills supplied fields and keeps placeholders for the rest', () => {
+		const report = buildPatentReport('- EP1 (close art)', 'prior-art-report', {
+			subject: 'Sulfide glass-ceramic solid electrolytes',
+			date: '2026-08-12',
+			preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
+			objective: 'Find prior art for a sulfide glass-ceramic electrolyte before filing.',
+			searchStrategy: 'EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).',
+			relevanceAssessment: 'EP1 anticipates the base composition; novelty must rest on narrower ranges.',
+		});
+		expect(report).toMatchInlineSnapshot(`
+			"# Prior Art Search Report
+
+			| Field | Details |
+			| --- | --- |
+			| Matter / Reference | _(to be completed)_ |
+			| Subject Technology | Sulfide glass-ceramic solid electrolytes |
+			| Date | 2026-08-12 |
+			| Prepared By | FlowLeap Patent AI (AI-assisted draft) |
+
+			## 1. Objective
+			Find prior art for a sulfide glass-ceramic electrolyte before filing.
+
+			## 2. Search Strategy
+			EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).
+
+			## 3. Findings
+			- EP1 (close art)
+
+			## 4. Relevance Assessment
+			EP1 anticipates the base composition; novelty must rest on narrower ranges.
+
+			---
+			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
+			"
+		`);
+	});
 });

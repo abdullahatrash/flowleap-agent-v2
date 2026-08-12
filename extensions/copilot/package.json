@@ -2142,7 +2142,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write patent search results or analysis to a local file. Use this tool when the user asks to save patent search results to a file. This tool does not require GitHub Copilot authentication and works directly with the file system.",
+        "modelDescription": "Write patent search results or analysis to a local file. Use this tool when the user asks to save patent search results to a file. When using a template, fill the metadata the conversation already knows — subject always, and for prior-art reports objective, searchStrategy and relevanceAssessment — so the saved report is a finished document, not an empty form; date and authorship are stamped automatically, and only practitioner-owned fields (e.g. matter reference) may stay as placeholders. This tool does not require GitHub Copilot authentication and works directly with the file system.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -2168,6 +2168,26 @@
                 "portfolio-due-diligence-memo"
               ],
               "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses, 'invalidity-claim-chart' for element-by-element invalidity charts, 'eou-infringement-chart' for element-by-element evidence-of-use/infringement charts, 'patentability-opinion' for novelty and non-obviousness opinions, 'landscape-report' for technology landscape analyses, 'portfolio-due-diligence-memo' for portfolio due-diligence memoranda. Omit for a free-form save of the raw content."
+            },
+            "matter": {
+              "type": "string",
+              "description": "Matter/case reference or the identifying patent/application number, when the user provided one. Leave unset to keep the practitioner placeholder."
+            },
+            "subject": {
+              "type": "string",
+              "description": "Short phrase naming what the report is about (the technology searched, product cleared, portfolio reviewed). ALWAYS provide this when using a template — it is known from the request."
+            },
+            "objective": {
+              "type": "string",
+              "description": "prior-art-report: one or two sentences stating the invention and the question the search answers. Provide it — do not leave the report's Objective section as a stub."
+            },
+            "searchStrategy": {
+              "type": "string",
+              "description": "prior-art-report and landscape-report: short summary of databases searched, classification codes, and the key queries with their result counts. Provide it — the information is in this conversation."
+            },
+            "relevanceAssessment": {
+              "type": "string",
+              "description": "prior-art-report: novelty/obviousness observations for the closest references. Provide it when the findings support one."
             }
           },
           "required": [
