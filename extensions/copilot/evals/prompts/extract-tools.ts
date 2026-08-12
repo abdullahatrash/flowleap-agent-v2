@@ -35,8 +35,6 @@ const OUTPUT = path.join(__dirname, 'tool-definitions.json');
  * never reached the renderer's copy of it).
  */
 export const PATENT_TOOL_NAMES: readonly ToolName[] = [
-	ToolName.BuildPatentQuery,
-	ToolName.BuildUSPTOQuery,
 	ToolName.SearchPatents,
 	ToolName.GetPatentDetails,
 	ToolName.GetPatentFigures,
@@ -57,7 +55,6 @@ export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.ReadPdf,
 	ToolName.WritePatentResults,
 	ToolName.PatentSearchSubagent,
-	ToolName.AnalyzeClaim,
 	ToolName.CompareClaims,
 	ToolName.PatentAnalyticsViz,
 	ToolName.GetPatentSummary,

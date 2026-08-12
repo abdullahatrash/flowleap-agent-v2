@@ -26,7 +26,6 @@ describe('ToolNames', () => {
 		// (toolNames.ts pairs the `copilot_*` contributed name with the `*` ToolName by key). A key typo
 		// would silently sever the mapping so the tool never reaches its registration. Assert both directions.
 		const family = [
-			[ContributedToolName.AnalyzeClaim, ToolName.AnalyzeClaim],
 			[ContributedToolName.CompareClaims, ToolName.CompareClaims],
 			[ContributedToolName.PatentAnalyticsViz, ToolName.PatentAnalyticsViz],
 		] as const;
@@ -41,8 +40,6 @@ describe('ToolNames', () => {
 		// enum KEY (the loop in toolNames.ts pairs them by key). A typo on either side silently breaks the
 		// mapping and the tool would never reach its registration. Assert both directions for the whole family.
 		const family = [
-			[ContributedToolName.BuildPatentQuery, ToolName.BuildPatentQuery],
-			[ContributedToolName.BuildUSPTOQuery, ToolName.BuildUSPTOQuery],
 			[ContributedToolName.PatentApiRequest, ToolName.PatentApiRequest],
 			[ContributedToolName.OpsApiGuide, ToolName.OpsApiGuide],
 			[ContributedToolName.USPTOApiGuide, ToolName.USPTOApiGuide],
@@ -92,8 +89,6 @@ describe('ToolNames', () => {
 		// or a severed key pairing. This includes `patentSearchSubagent`: it is a patent tool in the registry even
 		// though the PatentResearch agent intentionally does not grant it.
 		const PATENT_TOOL_KEYS = [
-			'BuildPatentQuery',
-			'BuildUSPTOQuery',
 			'SearchPatents',
 			'SearchAcademic',
 			'GetPatentDetails',
@@ -104,7 +99,6 @@ describe('ToolNames', () => {
 			'CitationApiGuide',
 			'SearchLegal',
 			'LegalSearchGuide',
-			'AnalyzeClaim',
 			'CompareClaims',
 			'PatentAnalyticsViz',
 			'PatentApiRequest',
@@ -134,7 +128,7 @@ describe('ToolNames', () => {
 		}).filter(entry => entry.issues.length > 0);
 
 		expect({ count: PATENT_TOOL_KEYS.length, duplicates: PATENT_TOOL_KEYS.length - new Set(PATENT_TOOL_KEYS).size, problems })
-			.toEqual({ count: 22, duplicates: 0, problems: [] });
+			.toEqual({ count: 19, duplicates: 0, problems: [] });
 	});
 
 	it('returns original name for unmapped core tools', () => {

@@ -90,8 +90,6 @@ export enum ToolName {
 	// Patent AI tools (patentai overlay). The implementations and contributions
 	// land in later migration layers; these names are the vocabulary the patent
 	// system prompt (patentAIPrompt.tsx) keys off to scope patent guidance.
-	BuildPatentQuery = 'build_patent_query',
-	BuildUSPTOQuery = 'build_uspto_query',
 	SearchPatents = 'search_patents',
 	GetPatentDetails = 'get_patent_details',
 	GetPatentFigures = 'get_patent_figures',
@@ -112,7 +110,6 @@ export enum ToolName {
 	ReadPdf = 'read_pdf',
 	WritePatentResults = 'write_patent_results',
 	PatentSearchSubagent = 'patent_search_subagent',
-	AnalyzeClaim = 'analyze_claim',
 	CompareClaims = 'compare_claims',
 	PatentAnalyticsViz = 'patent_analytics_viz',
 	GetPatentTerm = 'get_patent_term',
@@ -184,7 +181,6 @@ export enum ContributedToolName {
 	SearchAcademic = 'copilot_searchAcademic',
 	WritePatentResults = 'copilot_writePatentResults',
 	PatentSearchSubagent = 'copilot_patentSearchSubagent',
-	AnalyzeClaim = 'copilot_analyzeClaim',
 	CompareClaims = 'copilot_compareClaims',
 	PatentAnalyticsViz = 'copilot_patentAnalyticsViz',
 	GetPatentTerm = 'copilot_getPatentTerm',
@@ -196,8 +192,6 @@ export enum ContributedToolName {
 	GetPatentFamily = 'copilot_getPatentFamily',
 	GetRegisterEvents = 'copilot_getRegisterEvents',
 	ReadPdf = 'copilot_readPdf',
-	BuildPatentQuery = 'copilot_buildPatentQuery',
-	BuildUSPTOQuery = 'copilot_buildUSPTOQuery',
 	PatentApiRequest = 'copilot_patentApiRequest',
 	OpsApiGuide = 'copilot_opsApiGuide',
 	USPTOApiGuide = 'copilot_usptoApiGuide',
@@ -340,8 +334,6 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.SessionStoreSql]: ToolCategory.Core,
 
 	// Patent AI tools (patentai overlay)
-	[ToolName.BuildPatentQuery]: ToolCategory.WebInteraction,
-	[ToolName.BuildUSPTOQuery]: ToolCategory.WebInteraction,
 	[ToolName.SearchPatents]: ToolCategory.WebInteraction,
 	[ToolName.GetPatentDetails]: ToolCategory.WebInteraction,
 	[ToolName.GetPatentFigures]: ToolCategory.WebInteraction,
@@ -362,7 +354,6 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.ReadPdf]: ToolCategory.Core,
 	[ToolName.WritePatentResults]: ToolCategory.Core,
 	[ToolName.PatentSearchSubagent]: ToolCategory.Core,
-	[ToolName.AnalyzeClaim]: ToolCategory.WebInteraction,
 	[ToolName.CompareClaims]: ToolCategory.WebInteraction,
 	[ToolName.PatentAnalyticsViz]: ToolCategory.WebInteraction,
 	[ToolName.GetPatentTerm]: ToolCategory.WebInteraction,
