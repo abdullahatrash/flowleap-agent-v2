@@ -24,9 +24,17 @@ Before ANY search, determine jurisdiction. If not specified by the user, ask (vi
 
 ### Writing the query
 
-Every query needs at least one **discriminating** term — one that separates this invention
-from the millions of generic patents in its technology area. A CPC code is never
-discriminating: it names a neighbourhood, not a house.
+**Step 1 — extract the terms. Mandatory, before any CQL.** List every specific noun
+phrase in the description: materials, mechanisms, subject matter ("sulfide glass
+ceramic", "foreign object detection", "prior art"). These are your candidate
+discriminating terms. For each one you leave out of the query, state why. Uncertainty
+about phrasing ("glass ceramic" vs "glass-ceramic") is a reason to OR both forms, never
+to drop the term. The most common failure is dropping the phrase that *is* the
+invention.
+
+**Step 2 — write the query.** Every query needs at least one **discriminating** term —
+one that separates this invention from the millions of generic patents in its technology
+area. A CPC code is never discriminating: it names a neighbourhood, not a house.
 
 For "AI for patent analysis", the discriminating term is `ta="patent analysis"` or
 `ta="prior art search"`. `ta="artificial intelligence"` is the neighbourhood, and
@@ -42,6 +50,12 @@ appear in that reference — if you cannot name the field's entry, you have gues
 read it. Wildcards on `ic`/`cpc`/`cl`/`pn` and queries over ~10 terms are API errors, not
 weak results.
 
+**Step 3 — probe the count. Mandatory, before trusting any results.** Run the query with
+a small limit and read the total. **Over ~1,000 hits: the query is too broad — add the
+next discriminating term from your Step 1 list and probe again.** Under 10: broaden (see
+Refinement). A query you never probed is a guess, and in a prior-art search a query
+returning thousands of hits instead of tens means the closest art is never seen.
+
 ## USPTO Search (US Patents)
 
 The USPTO API is the **Open Data Portal (ODP)** with Lucene query syntax.
@@ -56,8 +70,10 @@ read the shape from it rather than recalling one. You supply the query; it suppl
 envelope.
 
 ### Writing the Lucene query
-The **discriminating** rule applies unchanged: the query needs the specific subject matter,
-not the technology area. ODP differs from CQL in syntax, not in strategy:
+Steps 1 and 3 above apply unchanged: extract the candidate terms first, and probe the
+count before trusting results. The **discriminating** rule applies unchanged too: the
+query needs the specific subject matter, not the technology area. ODP differs from CQL in
+syntax, not in strategy:
 - Fielded terms: `inventionTitle:(solar cell)`, `abstractText:(photovoltaic)`
 - Assignee: `assigneeEntityName:(Tesla)`
 - Boolean: `AND`, `OR`, `NOT`; group with parentheses; phrases in `"double quotes"`
@@ -65,7 +81,7 @@ not the technology area. ODP differs from CQL in syntax, not in strategy:
   string — `uspto_api_guide` gives their current names
 
 ## Search Refinement
-- Too many results (>10,000): add a date filter, narrow the classification, add a second discriminating term
+- Too many results (>1,000): add the next discriminating term from your Step 1 list; then a date filter or a narrower classification
 - Too few results (<10): try synonyms, remove filters, use the parent CPC class
 - Off-topic results: the discriminating term is too broad — replace the category word with the specific subject matter
 - Try subsidiary companies: Google → also Alphabet, DeepMind, Waymo

@@ -59,11 +59,23 @@ and prosecution data use the USPTO ODP path instead.
 
 **Operators:** `AND`, `OR`, `NOT` — uppercase. Phrases in `"double quotes"`.
 
+**Grouping:** parentheses group complete `field=value` clauses:
+
+```
+(ic=H02J OR ic=B60L)                     ← valid; the way to cover two classes
+(ta="glass ceramic" OR ta="glass-ceramic")   ← valid; the way to cover both word forms
+ta=(turbine OR blade)                    ← NOT CQL — parentheses inside a field's value
+                                           fail with a hard OPS 404
+```
+
+Repeat the field inside the parentheses; never put the parentheses inside the value.
+
 **Not documented here, because it is not confirmed:** whether EPO OPS stems word forms
 (`charging` → `charge`), how it treats hyphens (`glass-ceramic` vs `glass ceramic`), and
 exactly what counts as one "term" against the budget below (a three-word phrase may cost one
-or three). Do not assume. Where it changes your query, try both forms and compare counts —
-and if you learn the answer, record it here.
+or three). Do not assume. Where hyphenation or word form changes your query, OR both forms
+with the field repeated (the pattern above) — that is live-verified — rather than dropping
+the term. If you learn a definitive answer, record it here.
 
 ## Choosing terms
 
@@ -78,10 +90,15 @@ how to apply it per field.
 - **Applicants take wildcards for name variants**: `pa=GOOGLE*` catches "Google LLC",
   "Google Inc". Consider subsidiaries separately — Google also files as Alphabet, DeepMind,
   Waymo.
-- **Drop the classification when the invention spans classes.** "Machine learning applied to
-  patent analysis" lives across `G06N`, `G06F` and `G06Q`; pinning one of them silently
-  discards the other two. When you cannot name the single class the invention belongs in,
-  use none and let two `ta` terms carry the discrimination.
+- **When the invention spans classes, OR the classes together — do not drop them.**
+  "Machine learning applied to patent analysis" lives across `G06N`, `G06F` and `G06Q`;
+  pinning one silently discards the other two, but a class still does real work against a
+  noisy `ta` term. Write `(ic=G06N OR ic=G06F OR ic=G06Q)`. Use no class only when you
+  cannot name the candidate classes at all.
+- **Aim for two or three discriminating terms, not the minimum one.** One extra
+  discriminating term routinely cuts a count by two orders of magnitude — the difference
+  between 3,549 hits (unusable) and 18 (readable). Take the next term from the extraction
+  list the skill requires; do not invent one.
 - **Spend the term budget on discrimination, not coverage.** With ~10 terms available, two
   precise `ta` terms beat five vague ones plus three classification codes.
 
@@ -117,12 +134,13 @@ what a too-narrow query never returned.
 
 ## Refinement
 
-Run a cheap count first. You cannot predict where a query will land, so execute it with a
-small limit, read the total, and refine from there rather than reasoning about it blind.
+The count probe is mandatory, not advisory. You cannot predict where a query will land, so
+execute it with a small limit, read the total, and refine from there rather than reasoning
+about it blind. A query is not done until its count is workable.
 
 | Symptom | Move |
 |---|---|
-| >10,000 results | add a date bound; narrow the classification; add a second `ta` term |
+| >1,000 results | add the next discriminating term from your extraction list; then a date bound or a narrower classification |
 | <10 results | drop the classification; try synonyms; use the parent CPC class; widen dates |
 | Off-topic results | your `ta` term is not discriminating — replace the category word with the specific subject matter |
 | `MaximumTotalTerms` | too many terms; cut to the discriminating ones |
@@ -138,6 +156,7 @@ pa=TESLA* AND ta=battery AND ic=H01M
 in=HINTON* AND ic=G06N
 ct=EP1234567
 ta=CRISPR AND ic=C12N AND pd>=2020
+ta="foreign object" AND ta=charging AND (ic=H02J OR ic=B60L)
 pn=EP3456789
 ```
 
@@ -146,6 +165,8 @@ pn=EP3456789
 ```
 ic=G06N*                              ← wildcard on a classification field
 pn=EP123*                             ← wildcard on a publication number
+ta=(turbine OR blade)                 ← parentheses inside a field value; hard 404 —
+                                        write (ta=turbine OR ta=blade)
 pa=GOOGLE* AND pa=APPLE* AND ta=phone AND ta=mobile AND ic=H04W AND ic=G06F
                                       ← over the term budget
 ```
