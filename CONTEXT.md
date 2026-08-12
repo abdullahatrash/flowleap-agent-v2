@@ -115,8 +115,26 @@ methods are mocked so inference bypasses them.
 **Patent-data Backend**:
 `flowleap-backend`, reached by the patent-data tools (EPO OPS, USPTO, citation, legal RAG) at
 `/v1/…`. Gated **live per request** on Clerk auth + Polar subscription state. This is what the
-subscription pays for — **not** inference (which is BYOK).
-_Avoid_: "the LLM backend" — it serves patent data, never inference.
+subscription pays for — **not** inference (which is BYOK), except for the narrow
+**FlowLeap-Managed Inference** list below.
+_Avoid_: "the LLM backend" — it serves patent data, and runs a model only on the named exceptions.
+
+**FlowLeap-Managed Inference**:
+The **exception list**: backend routes that run a model on FlowLeap's own provider account
+rather than on the user's **Model Path**. Governed by backend ADR 0012 — *FlowLeap runs a
+model only where the client cannot*: `/ocr` (Mistral; specialised model work), legal-search
+embeddings (must match the index they are compared against), and `/analyst` (the website's
+analytics page, whose visitors have no BYOK key at all). Its **target size is zero**;
+additions require a decision, not a pull request.
+_Avoid_: treating a new server-side model call as an ordinary backend call — that framing is
+why query building and claim analysis sat here unnoticed until ADR 0012 removed them.
+
+**Discriminating Term**:
+The term in a search query that separates one invention from the millions of generic patents
+in its technology area. A classification code is never discriminating: it names a
+neighbourhood, not a house. Every query needs at least one.
+_Avoid_: treating a broad category word ("artificial intelligence") or a CPC code as the
+subject matter — both return the field, not the invention.
 
 **Patent-Data Keys**:
 The user's own EPO OPS **Consumer Key + Secret** pair and USPTO ODP **API Key** — free

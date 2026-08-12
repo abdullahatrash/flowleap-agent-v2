@@ -76,7 +76,7 @@ B62K3/12 → Subgroup
 3. Check both the **parent class** (e.g., G06N) and **specific subgroups** (e.g., G06N3/084 for backpropagation; G06N3/08 is the broader "learning methods" group)
 4. Use EPO's CPC browser: `web_search "espacenet cpc [term]"`
 5. Look at CPC codes assigned to similar known patents — they reveal the right codes
-6. `analyze_claim` also suggests IPC/CPC codes when the user describes their own invention
+6. The `claim-analysis` skill (Step 3b) derives classification codes when the user describes their own invention
 
 ## Boolean Classification Search (CQL)
 

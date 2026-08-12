@@ -29,7 +29,7 @@ All via `web_search` — Google Patents indexes machine-translated versions, so 
 ## Cross-Language Discovery Workflow
 
 ### Step 1: English Search First
-Run EPO OPS (`build_patent_query` → `search_patents`) and USPTO (`build_uspto_query` → `patent_api_request`) to establish the baseline.
+Run EPO OPS (write the CQL → `search_patents`) and USPTO (write the ODP query → `patent_api_request`) to establish the baseline; see `patent-search` for both.
 
 ### Step 2: Identify Key Players
 Note applicants from Step 1, then search their CN/JP/KR filings:

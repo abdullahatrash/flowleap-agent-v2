@@ -39,7 +39,7 @@ Also note: the inventor-known prior art has a **duty-of-candor consequence** (ID
 ## Phase 2: Prior Art Search
 
 Run the **prior-art** skill using the invention record as input:
-1. `analyze_claim` on the solution + novel features → keywords, synonyms, CPC codes
+1. Decompose the solution + novel features yourself (see `claim-analysis` Step 3b) → keywords, synonyms, CPC codes
 2. Full broad-to-narrow search per that skill (EPO, USPTO, Google Patents/WIPO, NPL via `search_academic`)
 3. Explicitly retrieve and assess every inventor-cited reference — these are guaranteed-relevant and will be in front of the examiner
 
