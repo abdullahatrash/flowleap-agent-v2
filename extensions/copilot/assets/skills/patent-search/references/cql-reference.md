@@ -59,6 +59,12 @@ and prosecution data use the USPTO ODP path instead.
 
 **Operators:** `AND`, `OR`, `NOT` — uppercase. Phrases in `"double quotes"`.
 
+**Not documented here, because it is not confirmed:** whether EPO OPS stems word forms
+(`charging` → `charge`), how it treats hyphens (`glass-ceramic` vs `glass ceramic`), and
+exactly what counts as one "term" against the budget below (a three-word phrase may cost one
+or three). Do not assume. Where it changes your query, try both forms and compare counts —
+and if you learn the answer, record it here.
+
 ## Choosing terms
 
 Every query needs at least one **discriminating** term. See the skill for the rule; this is
@@ -72,8 +78,27 @@ how to apply it per field.
 - **Applicants take wildcards for name variants**: `pa=GOOGLE*` catches "Google LLC",
   "Google Inc". Consider subsidiaries separately — Google also files as Alphabet, DeepMind,
   Waymo.
+- **Drop the classification when the invention spans classes.** "Machine learning applied to
+  patent analysis" lives across `G06N`, `G06F` and `G06Q`; pinning one of them silently
+  discards the other two. When you cannot name the single class the invention belongs in,
+  use none and let two `ta` terms carry the discrimination.
 - **Spend the term budget on discrimination, not coverage.** With ~10 terms available, two
   precise `ta` terms beat five vague ones plus three classification codes.
+
+### Combination inventions — when two broad terms are one narrow one
+
+Many inventions are "thing A applied to domain B", where A and B are each a neighbourhood
+but the *intersection* is narrow: a drone that inspects wind turbine blades; wireless
+charging with foreign-object detection. Here **keeping both terms is the discrimination** —
+dropping the category word loses the invention.
+
+```
+ta=drone AND ta="turbine blade"          ← the pair is narrow; keep both
+ta="crack detection"                     ← drops the drone, pulls in ground-based inspection
+```
+
+Read the rule as *"replace a vague category with the specific subject matter"*, not as
+*"delete every broad word"*.
 
 ## Recall vs precision
 
@@ -91,6 +116,9 @@ A **Prior-Art Search** should start broad and narrow, never the reverse: you can
 what a too-narrow query never returned.
 
 ## Refinement
+
+Run a cheap count first. You cannot predict where a query will land, so execute it with a
+small limit, read the total, and refine from there rather than reasoning about it blind.
 
 | Symptom | Move |
 |---|---|
@@ -131,7 +159,17 @@ ta="artificial intelligence"          ← names the neighbourhood, not the house
 
 ## Classification codes
 
-Do not guess codes. Common areas:
+Do not guess codes — and do not trust this table alone. **CPC reclassifies.** The `H10`
+range (`H10F`, `H10H`, `H10K`, `H10N`) was carved out of `H01L` for radiation-sensitive,
+light-emitting and other specialised semiconductor devices; `H01L` is now formally
+"semiconductor devices **not covered by class H10**". Anything filed or classified recently
+may sit in a code this table does not list.
+
+**Verify the code** for the invention at hand — `web_search "cpc scheme [term]"`, or the
+prior-art skill's `references/cpc-classification.md` — before relying on it. A wrong class
+silently returns the wrong corpus; it does not error.
+
+Common areas (as of 2026-08; treat as a starting point, not an authority):
 
 | Code | Area |
 |---|---|
@@ -147,7 +185,8 @@ Do not guess codes. Common areas:
 | G06N | AI, machine learning, neural networks |
 | G06Q | business methods, fintech |
 | G16H | healthcare informatics |
-| H01L | semiconductors |
+| H01L | semiconductors *not* covered by H10 |
+| H10F | photovoltaic cells, photodiodes, light-sensitive semiconductors |
 | H01M | batteries, fuel cells |
 | H02J | power distribution, charging |
 | H04L | network protocols, telecom |
