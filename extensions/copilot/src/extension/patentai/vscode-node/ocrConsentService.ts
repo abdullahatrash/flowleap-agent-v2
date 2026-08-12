@@ -10,6 +10,7 @@ import { createServiceIdentifier } from '../../../util/common/services';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import {
 	buildConsentPrompt,
+	buildRefusalMessage,
 	ConsentVerdict,
 	decideFromAnswer,
 	decideFromStored,
@@ -76,8 +77,16 @@ export class OcrConsentService implements IOcrConsentService {
 
 	async requestConsent(): Promise<boolean> {
 		const step = decideFromStored(this.getVerdict());
-		if (step !== 'ask') {
-			return step === 'proceed';
+		if (step === 'proceed') {
+			return true;
+		}
+		if (step === 'refuse') {
+			// The verdict's owner explains the refusal. Only this service can tell a stored
+			// Never (a setting worth naming, with where to change it) from a dismissed dialog
+			// (silence — "not this time" needs no toast), and the caller across the command
+			// boundary sees only a boolean. Fire-and-forget, non-modal.
+			void this._notificationService.showInformationMessage(buildRefusalMessage());
+			return false;
 		}
 		if (this._pending) {
 			return this._pending;

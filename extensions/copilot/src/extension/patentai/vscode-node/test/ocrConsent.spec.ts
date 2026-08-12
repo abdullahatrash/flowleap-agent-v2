@@ -123,14 +123,19 @@ describe('OcrConsentService', () => {
 			.toEqual({ first: true, second: true, promptCount: 1, stored: 'always' });
 	});
 
-	it('remembers Never and refuses without prompting again', async () => {
+	it('remembers Never and refuses without prompting again, naming the setting in a toast', async () => {
 		const { service, state, prompts } = makeService(['Never']);
 
 		const first = await service.requestConsent();
 		const second = await service.requestConsent();
 
-		expect({ first, second, promptCount: prompts.length, stored: state.get(OCR_CONSENT_STORAGE_KEY) })
-			.toEqual({ first: false, second: false, promptCount: 1, stored: 'never' });
+		// The second call refuses from the STORED verdict: no modal, but a non-modal toast that
+		// names the user's own setting and where to change it. The toast is the service's job —
+		// the pdf-preview caller sees only a boolean and stays silent.
+		const modals = prompts.filter(p => p.options?.modal);
+		const toasts = prompts.filter(p => !p.options?.modal);
+		expect({ first, second, modalCount: modals.length, toastMessages: toasts.map(t => t.message), stored: state.get(OCR_CONSENT_STORAGE_KEY) })
+			.toEqual({ first: false, second: false, modalCount: 1, toastMessages: [buildRefusalMessage()], stored: 'never' });
 	});
 
 	it('treats Once as an answer and not a verdict, asking again next time', async () => {
@@ -143,12 +148,15 @@ describe('OcrConsentService', () => {
 			.toEqual({ first: true, second: true, promptCount: 2, stored: undefined });
 	});
 
-	it('treats a dismissed prompt as "not this time" — no upload, no verdict recorded', async () => {
-		const { service, state } = makeService([undefined]);
+	it('treats a dismissed prompt as "not this time" — no upload, no verdict, and no toast', async () => {
+		const { service, state, prompts } = makeService([undefined]);
 
 		const proceed = await service.requestConsent();
 
-		expect({ proceed, stored: state.get(OCR_CONSENT_STORAGE_KEY) }).toEqual({ proceed: false, stored: undefined });
+		// Dismissal is silent: the user chose nothing, so there is no setting to name. A toast
+		// claiming "OCR is turned off" here would announce a policy that was never chosen.
+		expect({ proceed, stored: state.get(OCR_CONSENT_STORAGE_KEY), notificationCount: prompts.length })
+			.toEqual({ proceed: false, stored: undefined, notificationCount: 1 });
 	});
 
 	it('serves concurrent requests from a single prompt', async () => {

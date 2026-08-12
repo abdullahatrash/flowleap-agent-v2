@@ -80,12 +80,11 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 				case 'extractTextOCR':
 					try {
 						if (!await this._hasOcrConsent()) {
-							// A refusal is the user's own setting, not a failure: say so and stop.
-							// The local "Extract text" button beside this one still works offline.
+							// No upload. Any explanation is the consent owner's job: Patent AI
+							// toasts on a stored Never (naming the setting and where to change
+							// it) and stays silent on a dismissed dialog, which is "not this
+							// time", not a policy. This side only restores the button.
 							webviewPanel.webview.postMessage({ type: 'ocrCancelled' });
-							vscode.window.showInformationMessage(
-								vscode.l10n.t('Text extraction with OCR is turned off. You can change this in FlowLeap Settings under Privacy, or use "Extract text" to read the document locally.')
-							);
 							return;
 						}
 
