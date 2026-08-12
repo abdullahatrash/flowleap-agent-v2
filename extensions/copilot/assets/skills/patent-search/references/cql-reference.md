@@ -165,9 +165,17 @@ light-emitting and other specialised semiconductor devices; `H01L` is now formal
 "semiconductor devices **not covered by class H10**". Anything filed or classified recently
 may sit in a code this table does not list.
 
-**Verify the code** for the invention at hand — `web_search "cpc scheme [term]"`, or the
-prior-art skill's `references/cpc-classification.md` — before relying on it. A wrong class
-silently returns the wrong corpus; it does not error.
+**Derive the code from the corpus rather than from this table.** Run a text-only search on
+the discriminating terms first (`ta="perovskite solar cell"`, no classification filter), read
+the codes off the top 5-10 hits, then re-run with the most frequent one as a filter. The
+codes that recur ARE the right codes — that is where the art lives today — and the method
+cannot go stale, because when CPC reclassifies the corpus reclassifies with it.
+
+A wrong class silently returns the wrong corpus; it does not error. That is why guessing from
+a list is the one mistake here with no feedback signal.
+
+Fallbacks: `web_search "cpc scheme [term]"`, or the prior-art skill's
+`references/cpc-classification.md`.
 
 Common areas (as of 2026-08; treat as a starting point, not an authority):
 
