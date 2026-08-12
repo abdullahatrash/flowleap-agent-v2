@@ -12,7 +12,7 @@ Retrieve actual claim text from patent databases, then perform structured analys
 
 - **EP/WO patents**: `get_patent_details` with the publication number — returns biblio plus full claims and description where published
 - **US patents**: `uspto_api_guide` action="endpoint" endpoint="grants" → execute with `patent_api_request` to look up the granted patent by number (response includes claims)
-- **User's own claim vs existing patents**: `analyze_claim` to decompose the user's claim, then `compare_claims` against specific patent numbers — it fetches the real claims and maps overlaps/differences
+- **User's own claim**: it is already in front of you — decompose it yourself with Step 2, never send it anywhere. To compare it against existing patents, use `compare_claims` with specific patent numbers — it fetches the real claims and maps overlaps/differences
 
 ## Step 2: Parse Claim Structure
 
@@ -37,6 +37,23 @@ For dependent claims:
 
 ### Visual Context (Optional)
 If the claim references figures: `get_patent_figures` with the publication number → drawing pages as inline images. Use them to understand structural/spatial limitations and map reference numerals to claim elements.
+
+## Step 3b: Turn the Claim into Search Terms
+
+When the analysis feeds a prior-art hunt, convert the elements into search inputs:
+
+1. **Keywords** — the core technical terms from the body limitations. Take them from the
+   claim's own language, not from the field it belongs to.
+2. **Synonyms** — industry and technical variants for each keyword, because the prior art
+   was drafted by other people using other words: "wireless charging" → "inductive power
+   transfer", "contactless charging"; "machine learning" → "neural network", "trained model".
+3. **Classification codes** — be specific. `H01M10/052` locates the invention;
+   `H01M` is the whole of batteries.
+4. **Queries** — two or three, varying the terminology so different drafting styles surface.
+
+The keyword that best separates this claim from its technology area is the
+**discriminating** term. To build the queries themselves, use the `patent-search` skill —
+it owns query construction and the CQL field reference.
 
 ## Step 4: Scope Assessment
 

@@ -27,7 +27,7 @@ Document EVERY search executed:
 | # | Database | Tool + Query/Parameters | Results Count | Date Executed |
 |---|----------|------------------------|---------------|---------------|
 | 1 | EPO OPS | search_patents: pa=Samsung and ic=H01M and pd>=2023 | 47 | [date] |
-| 2 | USPTO ODP | build_uspto_query → patent_api_request (Samsung, H01M, 2023-) | 89 | [date] |
+| 2 | USPTO ODP | patent_api_request, ODP Lucene (Samsung, H01M, 2023-) | 89 | [date] |
 | 3 | Google Patents (CN) | web_search: site:patents.google.com/patent/CN "Samsung" "battery" | ~120 | [date] |
 | 4 | Academic | search_academic: "solid state battery electrolyte" | 34 | [date] |
 
@@ -37,7 +37,7 @@ For every patent/reference cited in the analysis:
 | Reference | Source Database | How Retrieved | Verified |
 |-----------|---------------|---------------|----------|
 | EP3875305 B1 | EPO OPS search #1 | search_patents → get_patent_details | ✅ Claims retrieved |
-| US11,234,567 | USPTO search #2 | build_uspto_query → patent_api_request | ✅ Abstract confirmed |
+| US11,234,567 | USPTO search #2 | patent_api_request (ODP Lucene) | ✅ Abstract confirmed |
 | CN115432109A | Google Patents #3 | web_search | ⚠️ Machine-translated |
 
 ### Section 4: Limitations (what was NOT retrieved)
@@ -52,7 +52,7 @@ Be explicit, e.g.:
 ```markdown
 This research was conducted using Patent AI Agent (FlowLeap), an AI-assisted
 patent search tool. AI capabilities used: [list the tools actually used, e.g.
-natural-language query conversion (build_patent_query/build_uspto_query),
+agent-written search queries (CQL and ODP Lucene),
 patent search execution (EPO OPS, USPTO ODP), claim retrieval and analysis].
 
 All patent numbers, dates, and claim text cited in this report were retrieved

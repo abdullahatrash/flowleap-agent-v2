@@ -18,36 +18,61 @@ Before ANY search, determine jurisdiction. If not specified by the user, ask (vi
 ## EPO OPS Search (EP/WO Patents)
 
 ### Tool Chain
-1. `build_patent_query` with the invention/topic description → returns CQL
-2. `search_patents` with the CQL → returns EP/WO results
-3. `get_patent_details` for full claims/description of interesting hits
-4. Other detail endpoints (family, legal, register): `ops_api_guide` → execute with `patent_api_request`
+1. Write the CQL yourself (see below) → `search_patents` with it → returns EP/WO results
+2. `get_patent_details` for full claims/description of interesting hits
+3. Other detail endpoints (family, legal, register): `ops_api_guide` → execute with `patent_api_request`
 
-### CQL Syntax Quick Reference
-- Applicant: `pa=Samsung` or `pa="Samsung Electronics"`
-- Title/Abstract: `ti=battery or ab=battery`
-- IPC/CPC codes: `ic=H01M` or `cpc=G06N` (for the technology-area → code mapping, see the CPC reference below — do not guess codes)
-- Date: `pd>=2024`
-- Combined: `pa=Tesla and ic=H01M and pd>=2023`
+### Writing the query
 
-Common CPC/IPC codes by domain: see the prior-art skill's `references/cpc-classification.md`, or `web_search "cpc scheme [term]"` (when `web_search` is available).
+Every query needs at least one **discriminating** term — one that separates this invention
+from the millions of generic patents in its technology area. A CPC code is never
+discriminating: it names a neighbourhood, not a house.
+
+For "AI for patent analysis", the discriminating term is `ta="patent analysis"` or
+`ta="prior art search"`. `ta="artificial intelligence"` is the neighbourhood, and
+`ic=G06N` alone returns every machine-learning patent ever filed.
+
+```
+pa=GOOGLE* AND ta="machine learning" AND ic=G06N
+```
+
+**Before writing any CQL beyond a single `pa=` or `ti=` term, read
+`references/cql-reference.md`. Do not guess field names.** Every field in your query must
+appear in that reference — if you cannot name the field's entry, you have guessed, so go
+read it. Wildcards on `ic`/`cpc`/`cl`/`pn` and queries over ~10 terms are API errors, not
+weak results.
 
 ## USPTO Search (US Patents)
 
 The USPTO API is the **Open Data Portal (ODP)** with Lucene query syntax.
 
 ### Tool Chain
-1. `build_uspto_query` with a natural-language description → returns the current ODP Lucene search body
-2. `patent_api_request` (POST) with the generated body → results
+1. `uspto_api_guide` action="endpoint" for the search endpoint → gives the current request body shape
+2. Write the Lucene query into that body → `patent_api_request` (POST) → results
 3. For other ODP endpoints (patent by ID, applications, continuity chains): `uspto_api_guide` action="list", then `patent_api_request`
 
-`uspto_api_guide` is the single source of truth for current ODP request shapes.
+`uspto_api_guide` is the single source of truth for current ODP request shapes — always
+read the shape from it rather than recalling one. You supply the query; it supplies the
+envelope.
+
+### Writing the Lucene query
+The **discriminating** rule applies unchanged: the query needs the specific subject matter,
+not the technology area. ODP differs from CQL in syntax, not in strategy:
+- Fielded terms: `inventionTitle:(solar cell)`, `abstractText:(photovoltaic)`
+- Assignee: `assigneeEntityName:(Tesla)`
+- Boolean: `AND`, `OR`, `NOT`; group with parentheses; phrases in `"double quotes"`
+- Classification and date filters travel as separate body parameters, not inside the query
+  string — `uspto_api_guide` gives their current names
 
 ## Search Refinement
-- Too many results (>10,000): add a date filter, narrow the CPC code
+- Too many results (>10,000): add a date filter, narrow the classification, add a second discriminating term
 - Too few results (<10): try synonyms, remove filters, use the parent CPC class
+- Off-topic results: the discriminating term is too broad — replace the category word with the specific subject matter
 - Try subsidiary companies: Google → also Alphabet, DeepMind, Waymo
 - Try keyword variations: "machine learning" → "neural network", "deep learning"
+
+A **Prior-Art Search** starts broad and narrows. You cannot notice what a too-narrow query
+never returned.
 
 ## Output
 - Save results via `write_patent_results`

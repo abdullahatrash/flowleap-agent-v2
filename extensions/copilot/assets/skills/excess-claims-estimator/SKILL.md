@@ -11,7 +11,7 @@ Turn a claim set into an excess-claim surcharge estimate. The threshold amounts 
 Threshold values and worked examples, date-stamped with the "schedule governs" caveat, live in [references/claim-fee-thresholds.md](references/claim-fee-thresholds.md).
 
 ## Step 1 — Count the claims
-Get the claim set from the user. If it is in a file or a patent, use `read_file`, `get_patent_details`, or `analyze_claim` to extract it rather than asking the user to retype. Count:
+Get the claim set from the user. If it is in a file or a patent, use `read_file` or `get_patent_details` to extract it rather than asking the user to retype. Count:
 - **Total claims** (all independent + dependent).
 - **Independent claims** (needed for the USPTO independent-claim threshold).
 

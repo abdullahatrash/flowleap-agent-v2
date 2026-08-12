@@ -13,7 +13,7 @@ For CPC/IPC section tables, common codes, and classification search syntax, see 
 ## Phase 1: Invention Analysis (USPTO 3-Sentence Technique)
 
 ### 1a. Three-Sentence Description
-Describe the invention three different ways (ask the user, or derive from their description): 1. structure/components, 2. function/use case, 3. novelty/differentiation. Review all three for **repeated words and phrases** — these are the core concepts. If the user is describing THEIR OWN invention, run `analyze_claim` first — it extracts keywords, synonyms, and IPC/CPC codes automatically.
+Describe the invention three different ways (ask the user, or derive from their description): 1. structure/components, 2. function/use case, 3. novelty/differentiation. Review all three for **repeated words and phrases** — these are the core concepts. If the user is describing THEIR OWN invention, decompose it yourself with the `claim-analysis` skill (Step 3b) — it turns the claim into keywords, synonyms and classification codes. Their unfiled invention text never leaves the machine.
 
 ### 1b. Concept-Synonym Table (MANDATORY)
 Build a table of every concept with synonyms, technical equivalents, and related terms:
@@ -47,13 +47,13 @@ Start broad, narrow progressively. Document hit counts at every step:
 **Primary concept** = the single concept ALL relevant results must contain.
 
 ### 2b. EPO OPS (EP/WO)
-1. `build_patent_query` with the concept-synonym table → CQL
+1. Write the CQL from the concept-synonym table — see `patent-search` for the field reference
 2. `search_patents` with the CQL → record result count
 3. Run at least **3 query variations** with different synonym combinations; combine with CPC: `ic=[CPC] AND (kw1 OR kw2)`
 4. For top 3-5 results: `get_patent_details` → full claims and description
 
 ### 2c. USPTO (US)
-1. `build_uspto_query` with the invention description → ODP Lucene search body
+1. Write the ODP Lucene query from the concept-synonym table — see `patent-search`; `uspto_api_guide` gives the body shape
 2. `patent_api_request` (POST) with the generated body → record hit counts
 3. Run keyword + CPC + assignee variations; filter to before the critical date
 4. For endpoint details beyond search: `uspto_api_guide` action="list"

@@ -30,12 +30,12 @@ When the technology area is expressible as CPC classes (not free text), `patstat
 
 ### 2c. Targeted Counts (EPO OPS)
 Where you need precise per-slice counts beyond the analytics sample:
-- `build_patent_query` → `search_patents`, note the total count per query
+- Write the CQL (see `patent-search`) → `search_patents`, note the total count per query
 - Top applicants: `pa=Samsung and ic=H01M and pd>=2020` → count; repeat for 8-10 expected filers
 - Year-over-year: `ic=G06N and pd>=2020 and pd<=2020` → 2020 count; repeat per year
 
 ### 2d. US Data (USPTO)
-- `build_uspto_query` (ODP Lucene) → `patent_api_request` (POST)
+- Write the ODP Lucene query (see `patent-search`) → `patent_api_request` (POST)
 - Vary by CPC code + date range for volume, by assignee for top-filer analysis
 - Bulk detail retrieval: `ops_api_guide` action="endpoint" endpoint="biblio-bulk" → `patent_api_request` (OPS carries US publications too)
 

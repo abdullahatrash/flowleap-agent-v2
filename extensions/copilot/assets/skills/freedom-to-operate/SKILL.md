@@ -24,11 +24,11 @@ Break the product down into individual technical features (Feature A, B, C...).
 
 For EACH feature, search for active patents:
 
-1. **EPO OPS**: `build_patent_query` → `search_patents` for EP/WO
+1. **EPO OPS**: write the CQL (see `patent-search`) → `search_patents` for EP/WO
    - Focus on GRANTED patents (kind codes B1/B2)
    - Legal status (grant, lapse, expiry, opposition — is it still in force?): `get_legal_status` (publicationNumber)
    - EP register events (oppositions, transfers of rights, amendments): `get_register_events` (publicationNumber)
-2. **USPTO**: `build_uspto_query` → `patent_api_request` (POST) for US granted patents
+2. **USPTO**: write the ODP Lucene query (see `patent-search`) → `patent_api_request` (POST) for US granted patents
 3. **Target-market coverage**: patent family across jurisdictions via `get_patent_family` (publicationNumber) — the INPADOC members show where the patent is (or is not) filed
 
 ### Key Filters
