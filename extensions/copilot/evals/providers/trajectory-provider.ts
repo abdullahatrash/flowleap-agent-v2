@@ -14,10 +14,11 @@ const __dirname = path.dirname(__filename);
 const EVALS_DIR = path.resolve(__dirname, '..');
 
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
-// Same pin as the single-turn suite (patent-ai-provider.ts): gemini-2.5-pro obeys the
+// Same pin as the single-turn suite (patent-ai-provider.ts): claude-sonnet-5, the app's
+// primary tested model. (Historical: gemini-2.5-pro obeyed the
 // prompt's skip rules where -flash does not. Holding the model fixed is the point — this
 // gate must fire on prompt / tool-string / skill drift, not on model choice (H4 §2).
-const DEFAULT_MODEL = 'google/gemini-2.5-pro';
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
 /** Loop cap: above the ~6-retry grinds seen in H3, below a runaway (H4 §2). */
 const DEFAULT_MAX_ROUNDS = 8;
 
@@ -148,7 +149,7 @@ function safeParseArgs(raw: string): Record<string, unknown> {
  * Configuration (env, read at call time — shared with the single-turn provider):
  *   EVAL_API_BASE_URL  Chat completions base URL. Default https://openrouter.ai/api/v1
  *   EVAL_API_KEY        API key (falls back to OPENROUTER_API_KEY). Required.
- *   EVAL_MODEL          Model slug when config omits one. Default google/gemini-2.5-pro
+ *   EVAL_MODEL          Model slug when config omits one. Default anthropic/claude-sonnet-5
  *   EVAL_MAX_ROUNDS     Loop cap. Default 8.
  */
 export default class TrajectoryProvider implements ApiProvider {

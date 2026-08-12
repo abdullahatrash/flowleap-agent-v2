@@ -1,5 +1,12 @@
 # Patent AI Agent Evaluations
 
+> **Default subject model: `anthropic/claude-sonnet-5`** (since 2026-08-12; `google/gemini-2.5-pro`
+> retired — deprecated upstream). Baselines recorded before that date were measured on
+> gemini-2.5-pro and are historical: comparing a sonnet-5 run against them is not valid.
+> Re-record `output/trajectory-baseline.json` and the key-gate baseline on sonnet-5 before
+> relying on the repeat gates. The trajectory JUDGE stays gemini-2.5-flash (measured pin — see
+> promptfooconfig.trajectory.yaml).
+
 Automated behavioral evaluations for the Patent AI agent system prompt using [promptfoo](https://promptfoo.dev).
 
 ## What We're Testing
