@@ -21,9 +21,6 @@ describe('extract-tools', () => {
 
 		const names = definitions.map(d => d.function.name).sort();
 		expect(names).toStrictEqual([
-			'analyze_claim',
-			'build_patent_query',
-			'build_uspto_query',
 			'citation_api_guide',
 			'compare_claims',
 			'compare_patents',
