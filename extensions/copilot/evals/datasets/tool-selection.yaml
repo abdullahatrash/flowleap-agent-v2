@@ -424,12 +424,14 @@
       metric: pasted_claim_decomposed_in_text
     - type: javascript
       value: |
+        // The hard invariant is NO SEARCH without jurisdiction — an optional
+        // forward-looking vscode_askQuestions after the in-text decomposition
+        // is fine (the gate-eager prompt makes the model offer the next step).
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const asked = toolCalls.some(tc => tc.function?.name === 'vscode_askQuestions');
         const searched = toolCalls.some(tc => ['search_patents', 'uspto_api_guide', 'patent_api_request'].includes(tc.function?.name));
-        return !asked && !searched;
-      metric: pasted_claim_analysis_skips_gate_and_search
+        return !searched;
+      metric: pasted_claim_analysis_runs_no_search
 
 # Branch F: "tell me about <patent>" now prefers the one-call get_patent_summary
 # overview tool. This REPLACES the prior expectation that get_patent_details was
