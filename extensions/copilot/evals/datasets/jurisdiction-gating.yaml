@@ -13,7 +13,7 @@
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const searchTools = ['search_patents', 'uspto_api_guide', 'patent_api_request'];
         const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
         const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
         return askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
@@ -33,7 +33,7 @@
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide', 'build_uspto_query'];
+        const searchTools = ['search_patents', 'uspto_api_guide', 'patent_api_request'];
         const askIdx = toolCalls.findIndex(tc => tc.function?.name === 'vscode_askQuestions');
         const searchIdx = toolCalls.findIndex(tc => searchTools.includes(tc.function?.name));
         return askIdx >= 0 && (searchIdx < 0 || askIdx < searchIdx);
@@ -51,7 +51,7 @@
       value: |
         const parsed = JSON.parse(output);
         return (parsed.tool_calls || []).some(tc =>
-          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'build_uspto_query'
+          tc.function?.name === 'uspto_api_guide' || tc.function?.name === 'patent_api_request'
         );
       metric: explicit_us_uses_uspto
 
@@ -66,7 +66,7 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'search_patents');
       metric: explicit_ep_uses_epo
 
 - vars:
@@ -83,18 +83,33 @@
   assert:
     - type: javascript
       value: |
+        // H5 softened gate: a prior-art task with no explicit jurisdiction may
+        // EITHER ask via the carousel OR default to Both (comprehensive) and
+        // proceed — but proceeding is only compliant when the turn shows BOTH
+        // office paths (EP: search_patents; US: uspto_api_guide/patent_api_request).
+        // (Aligned with tool-selection's H5 update; sonnet-5 follows the rule
+        // literally where gemini asked anyway.)
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
-      metric: claim_without_jurisdiction_asks
+        const names = (parsed.tool_calls || []).map(tc => tc.function?.name);
+        const asked = names.includes('vscode_askQuestions');
+        const ep = names.includes('search_patents');
+        const us = names.includes('uspto_api_guide') || names.includes('patent_api_request');
+        return asked || (ep && us);
+      metric: claim_without_jurisdiction_asks_or_comprehensive
 
 - vars:
     prompt: "Is my idea patentable? A toothbrush that detects cavities with ultrasound"
   assert:
     - type: javascript
       value: |
+        // Same H5 rule as above: ask, or proceed comprehensively on both paths.
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
-      metric: own_invention_without_jurisdiction_asks
+        const names = (parsed.tool_calls || []).map(tc => tc.function?.name);
+        const asked = names.includes('vscode_askQuestions');
+        const ep = names.includes('search_patents');
+        const us = names.includes('uspto_api_guide') || names.includes('patent_api_request');
+        return asked || (ep && us);
+      metric: own_invention_asks_or_comprehensive
 
 # Mixed jurisdictions explicitly named — must not ask, must search
 - vars:
@@ -114,7 +129,7 @@
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const firstTool = toolCalls[0]?.function?.name;
-        if (['build_patent_query', 'uspto_api_guide', 'build_uspto_query'].includes(firstTool)) return true;
+        if (['search_patents', 'uspto_api_guide'].includes(firstTool)) return true;
         if (firstTool !== 'patent_analytics_viz') return false;
         const countries = toolCalls
           .filter(tc => tc.function?.name === 'patent_analytics_viz')

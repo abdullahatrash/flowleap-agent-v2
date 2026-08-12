@@ -12,7 +12,7 @@ description: "Patent AI — Key-Gate Doctrine Adherence (#176)"
 # Regenerate the prompt variants first whenever patentAIPrompt.tsx changes:
 #       npx tsx evals/prompts/render-system-prompt.tsx
 #
-# Model pin: gemini-2.5-pro, the suite's established baseline grader/provider model — NOT -flash,
+# Model pin: claude-sonnet-5 (gemini-2.5-pro retired 2026-08-12; its baselines are historical) — NOT a -flash tier,
 # which disobeys the prompt's explicit skip rules and would make the gate fire on model weakness
 # instead of doctrine drift. Override with EVAL_MODEL for an advisory floor check.
 

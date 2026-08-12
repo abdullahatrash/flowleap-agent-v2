@@ -22,6 +22,16 @@ interface IWritePatentResultsParams {
 	content: string;
 	/** Optional report template. Omitted = free-form save of `content` unchanged. */
 	template?: PatentReportTemplate;
+	/** Matter/case reference or the document's identifying number, when the user provided one. */
+	matter?: string;
+	/** The technology/product/portfolio the report is about, in a short phrase. */
+	subject?: string;
+	/** One or two sentences: the question the work answers (prior-art-report). */
+	objective?: string;
+	/** Short summary of databases, codes, and key queries used (prior-art and landscape reports). */
+	searchStrategy?: string;
+	/** Novelty/obviousness observations for the closest references (prior-art-report). */
+	relevanceAssessment?: string;
 }
 
 /**
@@ -74,8 +84,18 @@ class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> 
 
 		try {
 			// Wrap the model's content in the chosen professional report structure, or write it
-			// verbatim when no template is requested.
-			const document = buildPatentReport(content, template);
+			// verbatim when no template is requested. The tool stamps what it knows (date, AI
+			// authorship); the model supplies what the conversation knows; only genuinely
+			// practitioner-owned fields keep the placeholder.
+			const document = buildPatentReport(content, template, {
+				matter: options.input.matter,
+				subject: options.input.subject,
+				objective: options.input.objective,
+				searchStrategy: options.input.searchStrategy,
+				relevanceAssessment: options.input.relevanceAssessment,
+				date: new Date().toISOString().slice(0, 10),
+				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
+			});
 
 			// Ensure the parent directory exists before writing.
 			await createDirectoryIfNotExists(this.fileSystemService, dirname(uri));

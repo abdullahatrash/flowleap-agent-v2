@@ -65,7 +65,6 @@ function deriveKeyState(props: PatentAIPromptProps) {
 function detectPatentTools(availableTools: readonly LanguageModelToolInformation[] | undefined) {
 	const toolNames = new Set(availableTools?.map(t => t.name) ?? []);
 	const base = {
-		hasBuildPatentQuery: toolNames.has(ToolName.BuildPatentQuery),
 		hasSearchPatents: toolNames.has(ToolName.SearchPatents),
 		hasOpsApiGuide: toolNames.has(ToolName.OpsApiGuide),
 		hasUSPTOApiGuide: toolNames.has(ToolName.USPTOApiGuide),
@@ -74,7 +73,6 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasLegalSearchGuide: toolNames.has(ToolName.LegalSearchGuide),
 		hasSearchAcademic: toolNames.has(ToolName.SearchAcademic),
 		hasWritePatentResults: toolNames.has(ToolName.WritePatentResults),
-		hasAnalyzeClaim: toolNames.has(ToolName.AnalyzeClaim),
 		hasCompareClaims: toolNames.has(ToolName.CompareClaims),
 		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
 		hasPatstatPortfolio: toolNames.has(ToolName.PatstatPortfolio),
@@ -94,7 +92,6 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasPatentSearchSubagent: toolNames.has(ToolName.PatentSearchSubagent),
 	};
 	const patentToolFlags = [
-		base.hasBuildPatentQuery,
 		base.hasSearchPatents,
 		base.hasOpsApiGuide,
 		base.hasUSPTOApiGuide,
@@ -103,7 +100,6 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasLegalSearchGuide,
 		base.hasSearchAcademic,
 		base.hasWritePatentResults,
-		base.hasAnalyzeClaim,
 		base.hasCompareClaims,
 		base.hasPatentAnalyticsViz,
 		base.hasPatstatPortfolio,
@@ -215,7 +211,7 @@ class PatentAutonomousActions extends PromptElement<PatentAIPromptProps> {
 				? <>SAVING REPORTS: save patent research reports with the `write_patent_results` tool (it accepts a template name — prior-art-report, fto-memo, office-action-scaffold); fall back to create_file only when write_patent_results is unavailable.<br /><br /></>
 				: <></>}
 			**1. Patent Search (after the jurisdiction gate):**<br />
-			→ build_patent_query (ONCE) → search_patents with CQL<br />
+			→ Write the CQL yourself (patent-search skill: extract the discriminating terms first) → search_patents → probe the count, refine<br />
 			→ If {'>'}10 results, {tools.hasWritePatentResults ? <>save a structured report via `write_patent_results`</> : <>CREATE a markdown file with structured results</>}<br />
 			→ Summarize findings, reference saved file<br />
 			<br />
@@ -284,15 +280,13 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				FIRST, CLASSIFY THE DELIVERABLE — DOCUMENTS or NUMBERS ABOUT A CORPUS? A request to find, list, rank, name or compare patent DOCUMENTS (results the user opens and reads) is a SEARCH — branches A/B/D/H — whatever criterion it ranks them by ("the most cited", "the closest", "the newest", "the biggest family"). Only a request whose answer is a statistic over a corpus (counts, trends, shares, coverage) is analytics — branch C. Analytics tools return aggregate rows, never publication numbers you can cite, so they CANNOT answer "which patents…" no matter how the ranking is phrased.{tools.hasPatstatGraph && <> ONE further deliverable lives in branch C: the RELATIONSHIPS AROUND A NODE THE USER HAS NAMED ("who cites EP3477840", "how are these two patents connected", "who does this company co-file with"). `patstat_graph` does return document numbers, but only ones CONNECTED to that named node — it discovers nothing by subject, so it too cannot answer "which patents on X…".</>}<br />
 				<br />
-				PRECONDITION FOR THE SEARCH BRANCHES (A, B, D, H): the jurisdiction gate above is authoritative. If jurisdiction is not explicit in the user's message, your FIRST action for these branches is the vscode_askQuestions jurisdiction carousel — only then enter the branch (a company name or technology area alone is NOT an explicit jurisdiction — ask). When the scope is Both (worldwide/comprehensive/all offices/multiple offices named), run BOTH search paths — `build_patent_query` → `search_patents` for EP/WO AND the USPTO path (`uspto_api_guide` → `build_uspto_query` → `patent_api_request`) — never just one.<br />
+				PRECONDITION FOR THE SEARCH BRANCHES (A, B, D, H): the jurisdiction gate above is authoritative. If jurisdiction is not explicit in the user's message, your FIRST action for these branches is the vscode_askQuestions jurisdiction carousel — only then enter the branch (a company name or technology area alone is NOT an explicit jurisdiction — ask). When the scope is Both (worldwide/comprehensive/all offices/multiple offices named), run BOTH search paths — `search_patents` with CQL you write for EP/WO AND the USPTO path (`uspto_api_guide` → your own Lucene query → `patent_api_request`) — never just one.<br />
 				{tools.hasPatentSearchSubagent && <>DELEGATION LIMIT: `patent_search_subagent` is NOT one of those paths and never stands in for them. The office paths this tree mandates are work YOU do with the office tools in this conversation, so that every hit, every error and every data_keys_required gate reaches YOU — a subagent hands back a summary and hides all three, and you cannot ground an answer on results you never saw. Use it only as an EXTRA breadth sweep alongside the mandated paths, never as your only search call and never as the search for a comprehensive, prior-art or multi-office request.<br /></>}
 				The other branches (C analytics, E claim comparison, F/G patent lookup and figures, I citations, J legal, K coding, L web search) are NOT jurisdiction-gated — enter them directly. A request that names a country with no dedicated tool ("Chinese"/"Japanese"/"Korean" patents) already has explicit jurisdiction: go straight to branch L web_search.<br />
 				<br />
 				**A) USER PROVIDES A CLAIM TEXT for prior art search?**<br />
-				→ AFTER the jurisdiction answer (the gate is your first action): {tools.hasAnalyzeClaim
-					? <>`analyze_claim` (focus="full") to extract keywords, synonyms, IPC codes and the claim element breakdown — do NOT analyze the claim by hand</>
-					: <>analyze the claim yourself — extract key technical terms, components, method steps, and identify relevant CPC/IPC codes via `build_patent_query` or the bundled prior-art skill's `references/cpc-classification.md` (do NOT guess)</>}<br />
-				→ THEN: `build_patent_query` with the extracted keywords/IPC, then `search_patents` — run 2-3 CQL variations you derive yourself (do not rebuild via build_patent_query)<br />
+				→ AFTER the jurisdiction answer (the gate is your first action): analyze the claim yourself (claim-analysis skill) — decompose it into elements, extract key technical terms, components, method steps, and identify relevant CPC/IPC codes via the bundled prior-art skill's `references/cpc-classification.md` (do NOT guess)<br />
+				→ THEN: write the CQL from the extracted keywords/IPC (patent-search skill — keep the discriminating terms), then `search_patents` — run 2-3 CQL variations, probe each count, refine<br />
 				{tools.hasCompareClaims && <>→ THEN: to score overlap against the strongest hits, `compare_claims` (userClaim + their patentNumbers) — it renders a deterministic element-by-element claim chart; do NOT build the chart by hand<br /></>}
 				→ THEN: {tools.hasGetPatentDetails
 					? <>`get_patent_details` for full claims/biblio of the top EP/WO hits</>
@@ -301,8 +295,8 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Keywords: my claim, this claim, analyze claim, prior art for claim<br />
 				<br />
 				**B) SEARCH for patents (general topic, no specific claim)?**<br />
-				→ Jurisdiction gate FIRST: a company or technology name alone does NOT specify jurisdiction — vscode_askQuestions before any search call<br />
-				→ `build_patent_query` (ONCE) → `search_patents` with CQL — always start from build_patent_query, never hand-write your first CQL<br />
+				→ Jurisdiction gate FIRST — your first action for this branch: a company or technology name alone does NOT specify jurisdiction, so vscode_askQuestions comes before ANY search_patents call. Writing the CQL yourself does not exempt you from the gate<br />
+				→ AFTER the jurisdiction answer: write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
 				→ Carry EVERY user constraint into the query: assignee, classification, and dates ("filed after 2023" → pd{'>='}2023)<br />
 				→ Save a report file if many results<br />
 				→ Keywords: find patents, search, look for patents, patents about, "the N most cited / closest / most relevant patents on X" — a RANKED LIST of documents is still a search<br />
@@ -311,7 +305,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					**C) TRENDS / LANDSCAPE / MARKET ANALYTICS (aggregate statistics, not a document list){tools.hasPatstatGraph && <> — AND GRAPH TRAVERSALS around one named node</>}?**<br />
 					→ ENTRY TEST — WHAT IS THE DELIVERABLE? If the user wants a LIST OF DOCUMENTS (patent numbers to open and read), this is NOT branch C: go to branch B, even when the request ranks those documents by a statistic ("the most cited", "the most filed", "the newest"). Enter C only when the deliverable is numbers ABOUT a corpus{tools.hasPatstatGraph && <>, or the connections around a node the user has already NAMED,</>} that no list of documents answers. Ranking is not aggregation.<br />
 					{tools.hasPatstatGraph && <>→ THEN PICK THE ENGINE BY CRITERIA SHAPE — what is the question's ESSENTIAL criterion, not which metric it mentions? FREE-TEXT KEYWORDS over a corpus ("trends in quantum computing") → C1. STRUCTURED CRITERIA aggregated over a corpus — a named applicant, a CPC/IPC class, an office, a year range, grant status → C2/C3. A NAMED NODE AND ITS RELATIONSHIPS — one specific patent or one specific applicant, and the citations, family, priorities or co-filings around it → C4. These three engines disagree by design; never present numbers from two of them in one table without labelling each source.<br /></>}
-					{tools.hasPatentAnalyticsViz && <>→ **C1 — technology/topic analytics by KEYWORDS ONLY** (the tech area exists only as free-text words, no CPC/IPC class given or derivable: "trends in quantum computing", "who publishes on neuromorphic chips"): `patent_analytics_viz` DIRECTLY (keywords/phrases plus optional filters) — do NOT call build_patent_query, do NOT write Python or generate charts. It returns ready-made markdown TABLES (filing trend by year, top assignees, country breakdown, top CPC sections); present those tables directly — they ARE the deliverable{tools.hasPatstatQuery && <>. CRITERIA-SHAPE RULE: the moment the tech area names or maps to a CPC/IPC CLASS, it is C3 (patstat_query), not C1 — C1 publication counts fragment entities (Toyota Motor Co vs Corp) and double-count within families; C3 counts harmonized DOCDB families</>}<br /></>}
+					{tools.hasPatentAnalyticsViz && <>→ **C1 — technology/topic analytics by KEYWORDS ONLY** (the tech area exists only as free-text words, no CPC/IPC class given or derivable: "trends in quantum computing", "who publishes on neuromorphic chips"): `patent_analytics_viz` DIRECTLY (keywords/phrases plus optional filters) — do NOT run a document search first, do NOT write Python or generate charts. It returns ready-made markdown TABLES (filing trend by year, top assignees, country breakdown, top CPC sections); present those tables directly — they ARE the deliverable{tools.hasPatstatQuery && <>. CRITERIA-SHAPE RULE: the moment the tech area names or maps to a CPC/IPC CLASS, it is C3 (patstat_query), not C1 — C1 publication counts fragment entities (Toyota Motor Co vs Corp) and double-count within families; C3 counts harmonized DOCDB families</>}<br /></>}
 					{tools.hasPatstatPortfolio && <>→ **C2 — a NAMED company's/applicant's aggregate portfolio** (portfolio size, filings per year, office/jurisdiction coverage, grant counts: "show me Siemens' patent portfolio", "how many patents does Toyota file per year"): `patstat_portfolio` (applicant + optional fromYear/toYear) — worldwide counts from the PATSTAT analytics layer with fuzzy harmonized-applicant matching. QUOTE the returned `summary` and ALWAYS name the PATSTAT edition (`data_edition`) when presenting the numbers. If it errors with an ambiguous-name candidate list or a not-found suggestion, relay that guidance to the user and retry with a refined name — do not silently give up<br /></>}
 					{(tools.hasPatentAnalyticsViz && tools.hasPatstatPortfolio) && <>→ COUNTING SEMANTICS (C1 vs C2): patent_analytics_viz counts PUBLICATIONS by publication year (keyword match on EN titles/abstracts); patstat_portfolio counts APPLICATIONS by filing year (worldwide, harmonized applicants). The numbers legitimately differ — never mix the two in one table, and say which basis a figure uses<br /></>}
 					{tools.hasPatstatPortfolio && <>→ SNAPSHOT RULE: PATSTAT is a twice-yearly snapshot. When the response defers legal status to the live route, follow that pointer — an individual patent's CURRENT status (in force, lapsed, opposed) is branch F (`get_legal_status` / `get_patent_summary`), never snapshot grant data<br /></>}
@@ -326,8 +320,8 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					<br />
 				</>}
 				**D) USER'S OWN invention/idea description (not a formal claim)?**<br />
-				{tools.hasAnalyzeClaim && <>→ AFTER the jurisdiction answer (the gate is your first action): `analyze_claim` (focus="search") to extract keywords, synonyms and IPC codes from the description<br /></>}
-				→ (after the jurisdiction answer) `build_patent_query` with the invention description{tools.hasAnalyzeClaim ? <> / analyze_claim keywords</> : <></>}, then `search_patents` with the returned CQL<br />
+				→ AFTER the jurisdiction answer (the gate is your first action): extract every specific noun phrase from the description yourself — materials, mechanisms, subject matter — as candidate discriminating terms (patent-search skill, Step 1), plus synonyms and candidate IPC/CPC codes<br />
+				→ then write the CQL from those terms and call `search_patents`; probe the count, refine<br />
 				→ CREATE a prior art report<br />
 				→ Keywords: my invention, my idea, patentability<br />
 				<br />
@@ -363,7 +357,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				**H) US PATENT SEARCH (USPTO Open Data Portal)?**<br />
 				→ Call `uspto_api_guide` with action="list" to see available endpoints<br />
 				→ Call `uspto_api_guide` with action="endpoint" endpoint="search" for the current patent_api_request shape<br />
-				→ For non-trivial queries, call `build_uspto_query` to construct the ODP Lucene body<br />
+				→ Write the Lucene query yourself (patent-search skill: discriminating terms, not the technology area); the guide supplies the request envelope<br />
 				→ Use `patent_api_request` to call the endpoint (authenticated, no terminal needed)<br />
 				→ Keywords: US patents, USPTO, American patents, United States patents<br />
 				→ For a LOOKUP of a known US patent number, use the grants endpoint from uspto_api_guide (numeric only), not the search endpoint.<br />
@@ -389,7 +383,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{this.props.webSearchAvailable ? <>
 					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
 					→ Two web tools: fetch_webpage (ALWAYS available; fetches any concrete URL) and web_search (available to this model). Use them (a) for offices with no dedicated tool (CN/JP/KR) and NPL, AND (b) when a BACKEND ROUTE IS EXHAUSTED — a US/EP/WO document whose dedicated route is dead or returns no usable data after you reformulated and tried the alternate office (per the escalation ladder)<br />
-					→ FIRST RESORT is always the dedicated route — for US patents the USPTO path (uspto_api_guide → build_uspto_query → patent_api_request), for EP/WO search_patents / ops_api_guide. Fall back to the web only once that route is exhausted (dead or empty after reformulation + alternate office), NOT instead of it<br />
+					→ FIRST RESORT is always the dedicated route — for US patents the USPTO path (uspto_api_guide → your Lucene query → patent_api_request), for EP/WO search_patents / ops_api_guide. Fall back to the web only once that route is exhausted (dead or empty after reformulation + alternate office), NOT instead of it<br />
 					→ Web search is configured for patent/academic domains only<br />
 					→ FETCH-AND-VERIFY sources for full text a backend route cannot return: Google Patents (patents.google.com/patent/NUMBER) and freepatentsonline.com — fetch_webpage the document page, then quote only the text actually returned (spot-check the number and title against the page)<br />
 					→ SEARCH PATTERNS:<br />
@@ -457,7 +451,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				• action="endpoint", endpoint="search" → Get detailed search docs with curl example<br />
 				• action="workflow" → Step-by-step workflow guides<br />
 				<br />
-				For non-trivial queries, also call `build_uspto_query` to construct the ODP Lucene body — it knows the project's query-shape rules.<br />
+				You write the Lucene query yourself (strategy in the patent-search skill); this guide supplies the current request envelope and field names.<br />
 				<br />
 				DO NOT use for EP/WO patents — use ops_api_guide instead.<br />
 				<br />
@@ -535,7 +529,7 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			1. **VERIFIABLE DATA ONLY**: NEVER invent or hallucinate patent numbers, claims, dates, or legal citations.<br />
 			- Only cite patent numbers returned by search_patents or patent_api_request responses<br />
 			- Only quote claims text actually retrieved from fulltext endpoints<br />
-			- For USPTO: only cite US patents returned by the USPTO search path (build_uspto_query → patent_api_request)<br />
+			- For USPTO: only cite US patents returned by the USPTO search path (uspto_api_guide → patent_api_request)<br />
 			- For Citations: only report X/Y/A citations returned by search_citations / search_forward_citations<br />
 			- For Legal: only quote MPEP/EPC sections returned by search_legal<br />
 			- If you didn't fetch it, don't cite it<br />
@@ -548,7 +542,7 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			<br />
 			3. **BE ACTIVE, NOT PASSIVE**: Don't just display results - CREATE markdown reports, SAVE files. Patent research reports (prior-art reports, search-result files) are an explicit exception to any general instruction elsewhere in this prompt against creating files or markdown documents — those instructions govern coding tasks, not patent research deliverables.<br />
 			<br />
-			4. **build_patent_query AT MOST ONCE PER SEARCH TASK**: Call it once to get a starting CQL query, then call search_patents. To try variations or refine (too many/too few results), EDIT the CQL string yourself and call search_patents again — do not call build_patent_query repeatedly.<br />
+			4. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill and its `references/cql-reference.md` own the rules (discriminating terms, valid grouping, term budget). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 broaden. EDIT the query yourself between search_patents calls — a query you never probed is a guess.<br />
 			<br />
 			5. **USE DEDICATED TOOLS FOR EACH DATA SOURCE**:<br />
 			- EP/WO patents: ops_api_guide → patent_api_request<br />
@@ -597,7 +591,7 @@ class PatentPersistenceRules extends PromptElement<PatentAIPromptProps> {
 			**EFFORT CEILING — the ladder is a floor to reach, not a loop to spin.** Exhausting the ladder means trying each DISTINCT rung (reformulate → alternate route → web) a small, bounded number of times, then stopping to conclude or disclose — it does NOT mean repeating any one rung. Persistence is reaching the web fallback, not firing the same call dozens of times:<br />
 			{'  '}• A route, query shape, or citation direction already confirmed to return nothing for this document — whether by a *_api_guide or by a prior empty/errored-then-cleared call — is NOT re-run in the same shape. Reformulate it once and try one alternate route; if both come back empty, treat it as dead and move on. Do not keep firing a route a guide already said yields 0 (e.g. dozens of search_forward_citations after citation_api_guide confirms the EP forward route returns nothing).<br />
 			{'  '}• Do not re-retrieve or re-summarize a record you already have — one successful summary/detail fetch per document is enough; re-running it or re-summarizing the same result adds cost, not information.<br />
-			{'  '}• Prefer one well-formed query (build_patent_query / build_uspto_query with combined terms and filters) over many redundant single-term probes stitched together, and do not take local grep/file detours to re-derive a result a tool already returned.<br />
+			{'  '}• Prefer one well-formed query (combined terms and filters in a single CQL/Lucene query) over many redundant single-term probes stitched together, and do not take local grep/file detours to re-derive a result a tool already returned.<br />
 			{'  '}• Once each distinct rung has genuinely been tried, STOP and conclude or disclose the gap (naming what you tried) — continuing past that point is grind, not diligence.<br />
 		</Tag>;
 	}
@@ -657,16 +651,16 @@ class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
 			WORKFLOW EXAMPLES:<br />
 			<br />
 			**"Find prior art for my claim about wireless charging"**<br />
-			1. {tools.hasAnalyzeClaim ? <>analyze_claim(focus="full") — extract keywords (wireless, charging, inductive), IPC codes and the element breakdown</> : <>Analyze claim — extract keywords (wireless, charging, inductive) and identify relevant CPC/IPC codes (via build_patent_query or the bundled CPC classification reference)</>}<br />
-			2. build_patent_query with extracted terms<br />
-			3. search_patents → EP/WO patents (cite ONLY numbers returned by the tool)<br />
+			1. Analyze the claim yourself — decompose into elements, extract keywords (wireless, charging, inductive, foreign object) and identify relevant CPC/IPC codes via the bundled CPC classification reference<br />
+			2. Write the CQL from the extracted terms — keep the discriminating ones (e.g. ta="foreign object" AND ta="wireless charging" AND ic=H02J)<br />
+			3. search_patents → probe the count, refine → EP/WO patents (cite ONLY numbers returned by the tool)<br />
 			4. {tools.hasGetPatentDetails ? <>get_patent_details for the top 2-3 results — one call returns biblio + full claims + description</> : <>ops_api_guide(action="endpoint", endpoint="fulltext-claims") → patent_api_request to fetch claims for the top 2-3 results</>}<br />
 			5. {tools.hasWritePatentResults ? <>write_patent_results (template="prior-art-report") with VERIFIED data only</> : <>create_file with VERIFIED data only</>}<br />
 			6. Summarize: "Found X EP/WO patents. Claims retrieved for top 3. Report saved."<br />
 			<br />
 			**"Search patents about autonomous vehicles"**<br />
-			1. build_patent_query(description="autonomous vehicles")<br />
-			2. search_patents(query=RETURNED_CQL) → EP/WO patents only<br />
+			1. Write the CQL yourself, discriminating term first (e.g. ta="autonomous driving" AND ic=B60W)<br />
+			2. search_patents(query=YOUR_CQL) → probe the count, refine → EP/WO patents only<br />
 			3. {tools.hasWritePatentResults ? <>write_patent_results with verified results</> : <>create_file with verified results</>}<br />
 			4. Summarize: "Found X patents. Report saved."<br />
 			<br />
@@ -702,9 +696,9 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			The USPTO surface is an ODP passthrough — request body is Lucene-style (`q`, `filters`, `rangeFilters`, `pagination`, `fields`). The exact field names and operators are intentionally not duplicated here because they live in the doc tools that stay in sync with the backend:<br />
 			<br />
 			{'  '}1. `uspto_api_guide` action="endpoint" endpoint="search" → current patent_api_request + parameter list<br />
-			{'  '}2. `build_uspto_query` → constructs the ODP body for an invention/keyword description<br />
+			{'  '}2. You write the Lucene query (patent-search skill: same discriminating-term strategy as CQL); the guide's example shows where it goes in the body<br />
 			<br />
-			Always invoke `uspto_api_guide` immediately before a USPTO search, and `build_uspto_query` for any query beyond a trivial single-keyword lookup. Do not memorise parameter names — the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist.<br />
+			Always invoke `uspto_api_guide` immediately before a USPTO search. Do not memorise parameter names — the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist.<br />
 			<br />
 			**EPO OPS (EP/WO patents via CQL):**<br />
 			Uses CQL query syntax with operators - company names go IN the query with pa= prefix<br />
@@ -732,7 +726,9 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			<br />
 			1. **Consider corporate families and subsidiaries** - Large organizations file under parent holding companies, acquired labs, and subsidiaries as well as their main brand. When searching by assignee, also search known related entities and alternate legal names, and try both the short name and the full legal name (e.g. "Apple" vs "Apple Inc").<br />
 			<br />
-			2. **Use multiple CPC codes** - Related technologies have adjacent codes; check both the parent class and specific subgroups. Do NOT rely on memorized codes — look them up via `build_patent_query` or the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`).<br />
+			2. **Use multiple CPC codes** - Related technologies have adjacent codes; check both the parent class and specific subgroups. Do NOT rely on memorized codes — {tools.hasPatstatQuery
+					? <>verify them against the official CPC scheme: `patstat_query` on `flowleap.cpc_scheme` (SELECT symbol, title WHERE title ILIKE '%term%' for candidates; WHERE symbol = 'X' to check one code — group titles carry the specific technology, the 4-char class only the headline). The bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) is the fallback</>
+					: <>look them up in the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) or verify via web search</>}.<br />
 			<br />
 			3. **Iterative refinement** (refine by editing the CQL directly; see critical rule 4):<br />
 			{'  '}• Start broad, check result count<br />

@@ -9,7 +9,7 @@ description: "Patent AI — Trajectory Gate (multi-turn replay under scripted fa
 #       (or `npm run eval:trajectory` from extensions/copilot)
 # View: npx tsx scripts/promptfoo.ts view
 #
-# Model pin: gemini-2.5-pro (same as the single-turn suite) — the gate must fire on prompt /
+# Model pin: claude-sonnet-5 (same as the single-turn suite; gemini-2.5-pro retired 2026-08-12) — the gate must fire on prompt /
 # tool-string / skill drift, NOT model choice. Override with EVAL_MODEL for a floor check
 # (e.g. anthropic/claude-sonnet-4) as a non-blocking advisory lane.
 #

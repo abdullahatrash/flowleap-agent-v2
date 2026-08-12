@@ -1,6 +1,6 @@
 description: "Patent AI Agent Evaluation — Default Model"
 
-# Single model (EVAL_MODEL env default, google/gemini-2.5-pro if unset). For multi-model comparison use promptfooconfig.multi.yaml
+# Single model (EVAL_MODEL env default, anthropic/claude-sonnet-5 if unset). For multi-model comparison use promptfooconfig.multi.yaml
 
 providers:
   - id: file://providers/patent-ai-provider.ts

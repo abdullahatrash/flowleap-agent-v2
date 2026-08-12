@@ -5,9 +5,6 @@
 
 // All tools that need to be in vscode-node
 
-import './analyzeClaimTool';
-import './buildPatentQueryTool';
-import './buildUSPTOQueryTool';
 import './citationApiGuideTool';
 import './compareClaimsTool';
 import './comparePatentsTool';

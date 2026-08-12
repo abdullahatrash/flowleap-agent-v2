@@ -30,8 +30,11 @@ describe('writePatentResults report templates', () => {
 			## 2. Search Strategy
 			_Databases searched, classification codes, keyword sets, and date ranges._
 
-			## 3. Findings
+			## 3. Documents Considered Relevant
+			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`._
 			Found US-1234567-B2 (X, novelty-destroying).
+
+			**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.
 
 			## 4. Relevance Assessment
 			_Novelty (§102) and obviousness (§103) observations for the most relevant references._
@@ -89,13 +92,14 @@ describe('writePatentResults report templates', () => {
 			| Prepared By | _(to be completed)_ |
 
 			## 1. Summary of Rejections
-			_List each rejection (statute, claims affected, cited references)._
+			_List each rejection and objection (statute, claims affected, cited references)._
 
-			## 2. Response & Arguments
+			## 2. Claim Amendments
+			_Complete listing of ALL claims — not only those amended — each with its status identifier ((Original), (Currently Amended), (Canceled), (Withdrawn), (New), (Previously Presented)) and amendments in marked-up form, per 37 CFR 1.121._
+
+			## 3. Remarks
+			_Address EVERY ground of rejection and objection raised in the office action (37 CFR 1.111(b)); an unanswered ground makes the reply non-responsive._
 			Claim 1 is patentable over Smith under §103.
-
-			## 3. Claim Amendments
-			_Proposed amendments in marked-up form, if any._
 
 			## 4. Conclusion
 			_Request for allowance and any remaining issues._
@@ -120,16 +124,19 @@ describe('writePatentResults report templates', () => {
 			## 1. Overview
 			_Identify the challenged patent, the claim(s) at issue, and the prior art reference(s) applied against them._
 
-			## 2. Element-by-Element Invalidity Chart
+			## 2. Prior Art Qualification
+			_For each reference: its publication or public-availability date and the statutory basis on which it qualifies as prior art against the earliest claimed priority date (Patent L.R. 3-3(a))._
+
+			## 3. Element-by-Element Invalidity Chart
 			_Render as a markdown table with one row per claim element and one column per prior art reference, mirroring the element-by-element chart produced by compare_claims: \`| Claim Element | <Reference 1> | <Reference 2> | ... |\`. Each cell quotes or paraphrases the disclosing passage and notes the applicable basis (X/§102 anticipation or Y/§103 obviousness, alone or in combination)._
 			| Claim Element | US-1234567-B2 | US-7654321-A1 |
 			| --- | --- | --- |
 			| Preamble | Disclosed | Disclosed |
 
-			## 3. Basis Summary
-			_For each ground raised, list the statute (§102 or §103), the claim(s) affected, and the reference(s) or combination relied upon._
+			## 4. Basis Summary
+			_For each ground raised, list the statute (§102 or §103), the claim(s) affected, and the reference(s) or combination relied upon — and for EVERY §103 combination, the motivation to combine and its source (Patent L.R. 3-3(b))._
 
-			## 4. Claim Language
+			## 5. Claim Language
 			_Verbatim text of the challenged claim(s), for reference._
 
 			---
@@ -153,13 +160,13 @@ describe('writePatentResults report templates', () => {
 			_Identify the asserted patent, the claim(s) asserted, and the accused product or service being mapped._
 
 			## 2. Element-by-Element Evidence-of-Use Chart
-			_Render as a markdown table with one row per claim element and columns for the accused product/feature and supporting evidence, mirroring the element-by-element chart produced by compare_claims: \`| Claim Element | Accused Product Feature | Supporting Evidence |\`. Cite specifications, teardown reports, marketing materials, or source documentation for each mapped element._
+			_Render as a markdown table with one row per claim element and columns for the accused product/feature and supporting evidence, mirroring the element-by-element chart produced by compare_claims: \`| Claim Element | Accused Product Feature | Literal / DOE | Supporting Evidence |\` — mark EACH element literal or doctrine-of-equivalents (Patent L.R. 3-1(e)). Cite specifications, teardown reports, marketing materials, or source documentation for each mapped element._
 			| Claim Element | Accused Product Feature | Supporting Evidence |
 			| --- | --- | --- |
 			| Preamble | Model X | Datasheet p.3 |
 
 			## 3. Infringement Theory
-			_Literal infringement vs. doctrine of equivalents for any elements not literally met, with rationale._
+			_For each element marked DOE in the chart: the function-way-result or insubstantial-differences rationale._
 
 			## 4. Evidentiary Sources
 			_Documents, specifications, or public materials relied upon for the evidence-of-use mapping._
@@ -190,7 +197,10 @@ describe('writePatentResults report templates', () => {
 			## 3. Novelty and Inventive-Step Analysis
 			No single reference discloses the claimed feedback loop; combining refs A and B requires impermissible hindsight.
 
-			## 4. Conclusion and Risk Assessment
+			## 4. Per-Claim Assessment
+			_ISA/237 Box V-style grid: \`| Claim | Novelty (Y/N) | Inventive Step (Y/N) | Key Reference(s) |\` — one row per claim or claim concept evaluated._
+
+			## 5. Conclusion and Risk Assessment
 			_Overall patentability conclusion with a risk rating (low/medium/high) and recommended next steps._
 
 			---
@@ -210,15 +220,21 @@ describe('writePatentResults report templates', () => {
 			| Date | _(to be completed)_ |
 			| Prepared By | _(to be completed)_ |
 
-			## 1. Scope & Methodology
-			_Technology area covered, search criteria (keywords, CPC/IPC codes, jurisdictions, date range), and data source._
+			## 1. Executive Summary
+			_The key findings in under a page — for many readers this is the only section read (WIPO Pub 946)._
 
-			## 2. Filing Trends, Assignees & Classification Breakdown
+			## 2. Scope & Methodology
+			_Technology area covered, search criteria (keywords, CPC/IPC codes, jurisdictions, date range), data source, and the data cutoff date._
+
+			## 3. Filing Trends, Assignees & Classification Breakdown
 			### Filing Trend (by publication year)
 			2024: 812 patents
 
-			## 3. White-Space Observations
+			## 4. White-Space Observations
 			_Underexplored technology intersections, declining vs. emerging filing activity, and potential opportunity areas suggested by the data._
+
+			## 5. Issues & Limitations
+			_What the data cannot show: coverage and language limits, publication lag on the most recent 18 months, family-counting caveats, and any classification ambiguities._
 
 			---
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
@@ -253,6 +269,46 @@ describe('writePatentResults report templates', () => {
 
 			## 5. Valuation-Relevant Observations
 			_Factors bearing on portfolio value: claim breadth, remaining term, citation activity, and market relevance._
+
+			---
+			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
+			"
+		`);
+	});
+
+	it('prior-art-report fills supplied fields and keeps placeholders for the rest', () => {
+		const report = buildPatentReport('- EP1 (close art)', 'prior-art-report', {
+			subject: 'Sulfide glass-ceramic solid electrolytes',
+			date: '2026-08-12',
+			preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
+			objective: 'Find prior art for a sulfide glass-ceramic electrolyte before filing.',
+			searchStrategy: 'EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).',
+			relevanceAssessment: 'EP1 anticipates the base composition; novelty must rest on narrower ranges.',
+		});
+		expect(report).toMatchInlineSnapshot(`
+			"# Prior Art Search Report
+
+			| Field | Details |
+			| --- | --- |
+			| Matter / Reference | _(to be completed)_ |
+			| Subject Technology | Sulfide glass-ceramic solid electrolytes |
+			| Date | 2026-08-12 |
+			| Prepared By | FlowLeap Patent AI (AI-assisted draft) |
+
+			## 1. Objective
+			Find prior art for a sulfide glass-ceramic electrolyte before filing.
+
+			## 2. Search Strategy
+			EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).
+
+			## 3. Documents Considered Relevant
+			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`._
+			- EP1 (close art)
+
+			**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.
+
+			## 4. Relevance Assessment
+			EP1 anticipates the base composition; novelty must rest on narrower ranges.
 
 			---
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*

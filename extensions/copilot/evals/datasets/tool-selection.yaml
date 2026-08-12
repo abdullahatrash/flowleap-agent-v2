@@ -11,40 +11,42 @@
     - type: javascript
       value: |
         // Branch A has two prompt-sanctioned openers: clarify jurisdiction via the
-        // carousel, OR decompose the claim first with analyze_claim (Branch A: "do
-        // NOT analyze the claim by hand"). H5's softened jurisdiction gate
+        // carousel, OR go straight to search_patents — the model analyzes the
+        // claim in its own reasoning/text (there is no claim-analysis tool),
+        // writes the CQL itself and searches. H5's softened jurisdiction gate
         // (2026-07-17) lets a prior-art task — which a supplied claim plainly is —
         // default to comprehensive coverage and PROCEED without asking, so requiring
-        // vscode_askQuestions first is now stale. Reject only a naive jump to a raw
-        // search or a hand-built analysis.
+        // vscode_askQuestions first is now stale.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'vscode_askQuestions' || firstTool === 'analyze_claim';
+        return firstTool === 'vscode_askQuestions' || firstTool === 'search_patents';
       metric: path_a_claim_prior_art
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
-        if (!call) return true; // ask-first flow: build_patent_query is not expected in single-turn output
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
+        if (!call) return true; // ask-first flow: search_patents is not expected in single-turn output
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        return d.includes('wireless') || d.includes('inductive') || d.includes('charging') || d.includes('impedance');
+        // Model-written CQL: terms may appear as ta=term or inside ta="a phrase",
+        // so a plain substring check on the lowercased query string suffices.
+        const q = String(args.query || '').toLowerCase();
+        return q.includes('wireless') || q.includes('inductive') || q.includes('charging') || q.includes('impedance');
       metric: path_a_claim_args_contain_technical_terms
     # Converted from llm-rubric (2026-06-12); relaxed 2026-07-17 for H5's softened
-    # gate. Guards the real invariants: no fabricated patent numbers, and the model
-    # does not jump straight to a raw keyword search — it first either clarifies
-    # jurisdiction or decomposes the claim via analyze_claim (both prompt-sanctioned
-    # Branch A openers; see path_a_claim_prior_art).
+    # gate. Guards the real invariants: no fabricated patent numbers, and a
+    # prompt-sanctioned Branch A opener — the jurisdiction carousel or a direct
+    # search_patents call with model-written CQL (claim decomposition happens in
+    # the model's own text, not via a tool; see path_a_claim_prior_art).
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const firstTool = toolCalls[0]?.function?.name;
-        const validOpener = firstTool === 'vscode_askQuestions' || firstTool === 'analyze_claim';
+        const validOpener = firstTool === 'vscode_askQuestions' || firstTool === 'search_patents';
         const text = parsed.text || '';
         const noFabricatedNumbers = !/\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
         return validOpener && noFabricatedNumbers;
-      metric: path_a_asks_before_search_no_fabricated_numbers
+      metric: path_a_valid_opener_no_fabricated_numbers
 
 - vars:
     prompt: "Find EP patents about autonomous drone delivery systems"
@@ -53,7 +55,7 @@
       value: |
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'build_patent_query';
+        return firstTool === 'search_patents';
       metric: path_b_general_search
     - type: javascript
       value: |
@@ -63,11 +65,11 @@
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
         if (!call) return false;
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        return d.includes('drone') || d.includes('uav') || d.includes('unmanned') || d.includes('delivery');
+        const q = String(args.query || '').toLowerCase();
+        return q.includes('drone') || q.includes('uav') || q.includes('unmanned') || q.includes('delivery');
       metric: path_b_args_contain_domain_terms
 
 - vars:
@@ -78,18 +80,20 @@
   assert:
     - type: javascript
       value: |
+        // patstat_query is a sanctioned opener too: verifying CPC codes against
+        // flowleap.cpc_scheme BEFORE searching is the prompt's own doctrine.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'build_patent_query' || firstTool === 'vscode_askQuestions';
+        return firstTool === 'search_patents' || firstTool === 'vscode_askQuestions' || firstTool === 'patstat_query';
       metric: path_c_invention_patentability
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_patent_query');
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'search_patents');
         if (!call) return true; // vscode_askQuestions path is also valid
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
-        return d.includes('solar') || d.includes('uv') || d.includes('water') || d.includes('purif') || d.includes('turbidity');
+        const q = String(args.query || '').toLowerCase();
+        return q.includes('solar') || q.includes('uv') || q.includes('water') || q.includes('purif') || q.includes('turbidity');
       metric: path_c_args_contain_invention_terms
 
 - vars:
@@ -109,17 +113,19 @@
   assert:
     - type: javascript
       value: |
+        // US path: uspto_api_guide first for the request shape, then the model
+        // writes its own Lucene query and calls patent_api_request.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'uspto_api_guide' || firstTool === 'build_uspto_query';
+        return firstTool === 'uspto_api_guide';
       metric: path_e_us_patent_search
     - type: javascript
       value: |
         const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'build_uspto_query');
-        if (!call) return true; // uspto_api_guide first-step path is also valid
+        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'patent_api_request');
+        if (!call) return true; // uspto_api_guide first-step path: the search request is not expected in single-turn output
         const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const d = String(args.description || args.query || '').toLowerCase();
+        const d = JSON.stringify(args).toLowerCase();
         return d.includes('tesla') && (d.includes('battery') || d.includes('thermal'));
       metric: path_e_args_contain_assignee_and_topic
 
@@ -155,7 +161,7 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const patentSearchTools = ['build_patent_query', 'search_patents',
+        const patentSearchTools = ['search_patents', 'patent_api_request',
           'ops_api_guide', 'uspto_api_guide', 'citation_api_guide', 'legal_search_guide'];
         return !(parsed.tool_calls || []).some(tc => patentSearchTools.includes(tc.function?.name));
       metric: path_h_coding_task
@@ -234,16 +240,17 @@
       metric: number_lookup_requires_tool
 
 # --- NEW-TOOL COVERAGE (task #5) ---
-# The typed tools added post-migration (analyze_claim, compare_claims,
-# get_patent_details, get_patent_figures, patent_analytics_viz) and
-# search_forward_citations had no dataset coverage. patentAIPrompt.tsx does NOT
-# name the first five in its decision tree, so their routing is driven by the
-# tool modelDescriptions; prompts below are phrased to hit those descriptions
-# without tripping branch A's prior-art path or the jurisdiction gate.
+# The typed tools added post-migration (compare_claims, get_patent_details,
+# get_patent_figures, patent_analytics_viz) and search_forward_citations had no
+# dataset coverage. patentAIPrompt.tsx does NOT name them all in its decision
+# tree, so their routing is driven by the tool modelDescriptions; prompts below
+# are phrased to hit those descriptions without tripping branch A's prior-art
+# path or the jurisdiction gate.
 
-# analyze_claim: structural element extraction (NOT a prior-art search, so no
-# jurisdiction gate and no build_patent_query). Trigger: analyze_claim
-# modelDescription "extract searchable elements ... claim element breakdown".
+# Claim decomposition: there is NO claim-analysis tool — the prompt tells the
+# model to decompose the claim in its own reasoning/text. An explicit "extract
+# elements, don't search yet" ask is answered in text with no search calls and
+# no jurisdiction gate.
 - vars:
     prompt: >
       Here's claim 1 of my draft application. Extract the individual claim
@@ -254,18 +261,15 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'analyze_claim';
-      metric: analyze_claim_first_for_element_extraction
+        const gated = ['search_patents', 'uspto_api_guide', 'patent_api_request', 'vscode_askQuestions'];
+        return !(parsed.tool_calls || []).some(tc => gated.includes(tc.function?.name));
+      metric: claim_decomposition_no_search_or_gate
     - type: javascript
       value: |
-        const out = JSON.parse(output);
-        const call = (out.tool_calls || []).find(tc => tc.function?.name === 'analyze_claim');
-        if (!call) return false;
-        const args = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
-        const t = String(args.claimText || '').toLowerCase();
+        const parsed = JSON.parse(output);
+        const t = String(parsed.text || '').toLowerCase();
         return t.includes('lidar') || t.includes('obstacle') || t.includes('flight');
-      metric: analyze_claim_args_carry_claim_text
+      metric: claim_decomposition_text_engages_elements
 
 # compare_claims: user supplies their claim AND explicit patent numbers to
 # compare against (no search needed). Trigger: compare_claims modelDescription.
@@ -310,7 +314,7 @@
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const asked = toolCalls.some(tc => tc.function?.name === 'vscode_askQuestions');
-        const searched = toolCalls.some(tc => ['build_patent_query', 'search_patents', 'build_uspto_query'].includes(tc.function?.name));
+        const searched = toolCalls.some(tc => ['search_patents', 'uspto_api_guide'].includes(tc.function?.name));
         return !asked && !searched;
       metric: get_patent_details_skips_gate_and_search
 
@@ -336,8 +340,8 @@
       metric: get_patent_figures_args_carry_number
 
 # patent_analytics_viz: analytics/trends intent — modelDescription is PRIORITY
-# TOOL FOR ANALYTICS and explicitly says DO NOT use build_patent_query; it is not
-# a jurisdiction-scoped search, so no vscode_askQuestions gate.
+# TOOL FOR ANALYTICS and branch C1 says DO NOT run a document search first; it
+# is not a jurisdiction-scoped search, so no vscode_askQuestions gate.
 - vars:
     prompt: >
       Chart the filing trends in quantum computing over the last decade, and show
@@ -384,8 +388,8 @@
 # branch G) rather than relying on tool modelDescriptions alone.
 
 # Branch C: landscape/analytics wording must route to patent_analytics_viz and
-# must NOT trip the query builder (the prompt and tool both say "DO NOT use
-# build_patent_query for analytics").
+# must NOT run a document search (branch C1: "do NOT run a document search
+# first" — no search_patents call for an analytics deliverable).
 - vars:
     prompt: >
       Give me the patent landscape for solid-state battery technology — who are
@@ -393,18 +397,24 @@
   assert:
     - type: javascript
       value: |
+        // Two prompt-sanctioned engines: C1 (patent_analytics_viz, keyword
+        // analytics) — or C3 when the tech area maps to a CPC class (the
+        // criteria-shape rule): patstat_query with the mandatory
+        // patstat_api_guide-first workflow. "Solid-state battery" maps to
+        // H01M10/0562, so the C3 opener is compliant routing, not a miss.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'patent_analytics_viz';
-      metric: landscape_routes_to_analytics_viz
+        return firstTool === 'patent_analytics_viz' || firstTool === 'patstat_api_guide' || firstTool === 'patstat_query' || firstTool === 'patstat_portfolio';
+      metric: landscape_routes_to_analytics_engine
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'build_patent_query');
-      metric: landscape_does_not_call_query_builder
+        return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'search_patents');
+      metric: landscape_does_not_run_document_search
 
-# Branch A/D claim analysis: a pasted claim asked for structural breakdown routes
-# through analyze_claim first, before any search and without the jurisdiction gate.
+# Branch A/D claim analysis: a pasted claim asked for structural breakdown is
+# decomposed in the model's OWN text — there is no claim-analysis tool — with
+# no search calls and without the jurisdiction gate.
 - vars:
     prompt: >
       Here's claim 1 of my draft application: "A wearable device comprising a
@@ -416,17 +426,19 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'analyze_claim';
-      metric: pasted_claim_routes_to_analyze_claim_first
+        const t = String(parsed.text || '').toLowerCase();
+        return t.includes('photoplethysmography') || t.includes('heart-rate') || t.includes('heart rate') || t.includes('haptic');
+      metric: pasted_claim_decomposed_in_text
     - type: javascript
       value: |
+        // The hard invariant is NO SEARCH without jurisdiction — an optional
+        // forward-looking vscode_askQuestions after the in-text decomposition
+        // is fine (the gate-eager prompt makes the model offer the next step).
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
-        const asked = toolCalls.some(tc => tc.function?.name === 'vscode_askQuestions');
-        const searched = toolCalls.some(tc => ['build_patent_query', 'search_patents', 'build_uspto_query'].includes(tc.function?.name));
-        return !asked && !searched;
-      metric: pasted_claim_analysis_skips_gate_and_search
+        const searched = toolCalls.some(tc => ['search_patents', 'uspto_api_guide', 'patent_api_request'].includes(tc.function?.name));
+        return !searched;
+      metric: pasted_claim_analysis_runs_no_search
 
 # Branch F: "tell me about <patent>" now prefers the one-call get_patent_summary
 # overview tool. This REPLACES the prior expectation that get_patent_details was

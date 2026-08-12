@@ -38,7 +38,7 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const allowed = ['build_patent_query', 'search_patents', 'build_uspto_query',
+        const allowed = ['search_patents', 'patent_api_request',
           'search_academic', 'write_patent_results', 'read_pdf', 'ops_api_guide',
           'uspto_api_guide', 'citation_api_guide', 'legal_search_guide',
           'patent_search_subagent', 'create_file', 'fetch_webpage',
@@ -55,8 +55,8 @@
         const parsed = JSON.parse(output);
         const text = parsed.text || '';
         const toolCalls = parsed.tool_calls || [];
-        const searchTools = ['build_patent_query', 'search_patents', 'uspto_api_guide',
-          'build_uspto_query', 'ops_api_guide', 'web_search'];
+        const searchTools = ['search_patents', 'uspto_api_guide',
+          'patent_api_request', 'ops_api_guide', 'web_search'];
         const hasSearchTool = toolCalls.some(tc => searchTools.includes(tc.function?.name));
         const hasPatentNumber = /\b(?:US|EP|WO)\s?\d{6,}/i.test(text);
         return hasSearchTool || !hasPatentNumber;
@@ -73,9 +73,12 @@
       metric: frontier_worldwide_claim_skips_ask
     - type: javascript
       value: |
+        // The model writes queries itself: the date constraint must reach the
+        // CQL in search_patents args.query or the Lucene request body in
+        // patent_api_request.
         const out = JSON.parse(output);
-        const builders = (out.tool_calls || []).filter(tc => ['build_patent_query','build_uspto_query'].includes(tc.function?.name));
-        return builders.some(tc => {
+        const queryCalls = (out.tool_calls || []).filter(tc => ['search_patents','patent_api_request'].includes(tc.function?.name));
+        return queryCalls.some(tc => {
         	const a = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
         	return JSON.stringify(a).includes('2020');
         });

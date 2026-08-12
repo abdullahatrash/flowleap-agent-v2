@@ -16,8 +16,6 @@ import { PatentAIInstructions } from '../patentAIPrompt';
 
 /** The full patent tool surface that activates every decision-tree branch. */
 const ALL_PATENT_TOOLS: readonly ToolName[] = [
-	ToolName.BuildPatentQuery,
-	ToolName.BuildUSPTOQuery,
 	ToolName.SearchPatents,
 	ToolName.GetPatentDetails,
 	ToolName.GetPatentFigures,
@@ -36,7 +34,6 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.LegalSearchGuide,
 	ToolName.SearchAcademic,
 	ToolName.WritePatentResults,
-	ToolName.AnalyzeClaim,
 	ToolName.CompareClaims,
 	ToolName.ComparePatents,
 	ToolName.PatentAnalyticsViz,
@@ -111,7 +108,6 @@ suite('PatentAIInstructions', () => {
 			'the FIGURES or DRAWINGS',
 			'get_patent_figures',
 			'one call returns biblio, abstract, full claims and description',
-			'analyze_claim',
 			'write_patent_results',
 			'US PROSECUTION HISTORY',
 			'get_continuity',
@@ -140,7 +136,6 @@ suite('PatentAIInstructions', () => {
 		[ToolName.GetPatentTerm, 'EXPIRY / TERM', undefined],
 		[ToolName.GetPatentFigures, 'the FIGURES or DRAWINGS', undefined],
 		[ToolName.GetPatentDetails, 'one call returns biblio, abstract, full claims and description', undefined],
-		[ToolName.AnalyzeClaim, 'analyze_claim', 'analyze the claim yourself'],
 		[ToolName.GetContinuity, 'CONTINUITY (parent/child family)', undefined],
 		[ToolName.GetProsecutionTimeline, 'PROSECUTION / LEGAL-EVENT TIMELINE', undefined],
 		[ToolName.GetLegalStatus, 'LEGAL STATUS in depth', undefined],

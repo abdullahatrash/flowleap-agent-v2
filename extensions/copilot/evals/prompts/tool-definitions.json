@@ -54,13 +54,13 @@
     "type": "function",
     "function": {
       "name": "search_patents",
-      "description": "Executes an EPO OPS CQL patent search for EP/WO patents; returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents — not US patents (for those, use build_uspto_query then patent_api_request; see uspto_api_guide for advanced options). Use after build_patent_query to run the generated CQL. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (e.g. 'EP,WO' to restrict to fulltext-available patents). No wildcards on ic/cpc fields; max 100 results per request.",
+      "description": "Executes an EPO OPS CQL patent search for EP/WO patents; returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents — not US patents (for those, write a Lucene query and use patent_api_request; see uspto_api_guide for the request shape). The jurisdiction gate applies BEFORE this tool: when jurisdiction is not explicit in the user's message (a company or technology name alone is not explicit) and the task does not imply comprehensive coverage, ask via vscode_askQuestions first. You write the CQL yourself: every query needs a discriminating term (the specific subject matter, never just the technology area or a classification code), and the patent-search skill's references/cql-reference.md documents the fields, grouping and limits — read it before any non-trivial query. Probe the count with a small range first and refine. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (e.g. 'EP,WO' to restrict to fulltext-available patents). No wildcards on ic/cpc fields; max 100 results per request.",
       "parameters": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "CQL query string (preferably from build_patent_query tool). Examples: 'pa=Pfizer* AND ic=A61K AND ti=cancer', 'pa=Vestas* AND ic=F03D AND ti=\"wind turbine\"'. IMPORTANT: No wildcards on ic/cpc fields."
+            "description": "CQL query string you write yourself (patent-search skill rules). Examples: 'pa=Pfizer* AND ic=A61K AND ti=cancer', 'pa=Vestas* AND ic=F03D AND ti=\"wind turbine\"'. IMPORTANT: No wildcards on ic/cpc fields."
           },
           "range": {
             "type": "string",
@@ -86,36 +86,8 @@
   {
     "type": "function",
     "function": {
-      "name": "analyze_claim",
-      "description": "Analyze user's invention/claim to extract searchable elements. USE WHEN: User describes THEIR OWN invention, claim, or idea and wants prior art analysis or patentability assessment. TRIGGER PHRASES: 'my invention', 'my idea', 'analyze my claim', 'is my idea patentable', 'prior art for my concept'. Returns: keywords, synonyms, IPC codes, suggested CQL queries, claim element breakdown. WORKFLOW: After analysis, use suggested queries with search_patents, then compare_claims to assess overlaps.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "claimText": {
-            "type": "string",
-            "description": "The patent claim or invention description to analyze. Can be a formal claim or informal description of the invention."
-          },
-          "focus": {
-            "type": "string",
-            "enum": [
-              "search",
-              "elements",
-              "full"
-            ],
-            "description": "What to extract: 'search' returns keywords, synonyms, IPC codes and suggested queries only; 'elements' returns the claim element breakdown only; 'full' (default) returns both."
-          }
-        },
-        "required": [
-          "claimText"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
       "name": "compare_claims",
-      "description": "Compare a user's patent claim against one or more existing patents to identify overlaps and differences. WORKFLOW: (1) First use analyze_claim to understand the user's claim, (2) Use search_patents to find potentially relevant patents, (3) Then use THIS tool to compare the user's claim against specific patent numbers. Fetches the actual claims of each cited patent from EPO OPS and returns them alongside the user's claim with an analysis rubric — YOU then perform the element-by-element comparison: relevance (HIGH/MEDIUM/LOW), overlapping elements, missing elements (potential novelty), key differences, and a 102/103 risk summary. NOTE: EPO OPS full text covers mainly EP/WO publications; for US patents whose claims are unavailable, fetch them via patent_api_request (POST /patent-search-uspto/search). Useful for patentability assessment, freedom-to-operate analysis, and prior art evaluation.",
+      "description": "Compare a user's patent claim against one or more existing patents to identify overlaps and differences. WORKFLOW: (1) First decompose the user's claim into elements yourself, (2) Use search_patents to find potentially relevant patents, (3) Then use THIS tool to compare the user's claim against specific patent numbers. Fetches the actual claims of each cited patent from EPO OPS and returns them alongside the user's claim with an analysis rubric — YOU then perform the element-by-element comparison: relevance (HIGH/MEDIUM/LOW), overlapping elements, missing elements (potential novelty), key differences, and a 102/103 risk summary. NOTE: EPO OPS full text covers mainly EP/WO publications; for US patents whose claims are unavailable, fetch them via patent_api_request (POST /patent-search-uspto/search). Useful for patentability assessment, freedom-to-operate analysis, and prior art evaluation.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -169,7 +141,7 @@
     "type": "function",
     "function": {
       "name": "patstat_query",
-      "description": "GUARDED SQL OVER PATSTAT (Layer 2) — RETURNS AGGREGATE ROWS, NEVER DOCUMENTS: USE WHEN the deliverable is NUMBERS ABOUT A CORPUS and no typed analytics tool answers it — technology landscapes by CPC ('who dominates solid-state electrolytes'), filing trends, grant rates, citation-impact STATISTICS over a corpus, inventor analytics, family/jurisdiction coverage, or any combination. It returns statistic rows only (counts, shares, rates, ranked aggregates) plus the data_edition: it CANNOT retrieve patent documents and CANNOT produce a list of specific patents for the user to open and read, and an aggregate row NEVER satisfies a request for documents. DOCUMENTS vs AGGREGATES: any request to FIND, SEARCH FOR, RETRIEVE, LIST or NAME specific patents is a SEARCH — build_patent_query → search_patents (or the USPTO path) — however that request ranks the documents it asks for ('which 5 EP patents on X are the most cited? search for them', 'the top patents in area Y'); ranking is not aggregation. ANTI-PATTERN — never write a SELECT whose rows are publication/application NUMBERS ordered by a citation count (or any other statistic) so that you can then look those documents up: identifiers off a snapshot are not search results, the snapshot is months stale, and that question was a search all along — run search_patents, then get citation counts for the hits with search_forward_citations. Every SELECT you write here must AGGREGATE (GROUP BY / COUNT / AVG / share), not enumerate documents. You WRITE one SQL SELECT against the flowleap.* semantic views; the backend gates it deterministically (single-SELECT parse check, flowleap-only allowlist, EXPLAIN cost ceiling, 5000-row/5MB hard caps, 20s timeout) and returns rows + data_edition. MANDATORY WORKFLOW (details: patstat_api_guide action='workflow', workflow='guarded-sql'): (1) check patstat_api_guide action='section' section='examples' first — reuse verified SQL, and if an example carries promoted_to, call that tool instead; (2) fetch section='semantic-model' BEFORE writing SQL — schema-qualify every table as flowleap.<view>, apply its interpretation_conventions (count FAMILIES for 'how many patents', applications for office stats; earliest_filing_year for trends), and ALWAYS state the chosen interpretation in your answer plus the data_edition; (3) always send `question` (the user's words, verbatim); (4) on a patstat_sql_* error, the message contains the exact fix instruction — fix the SQL ONCE, resubmit with retryOf, and STOP after a second failure (never loop); patstat_busy means back off and retry the SAME SQL. ROUTING: a list of patent documents, however ranked → the search tools, never this one; ONE NAMED company's standard portfolio → patstat_portfolio (preferred); keyword/free-text technology analytics → patent_analytics_viz (publication counts — different semantics, never mix); a specific document's text or CURRENT legal status → OPS/USPTO document tools. Budget: 10 queries/minute. DO NOT use for anything a typed tool already answers.",
+      "description": "GUARDED SQL OVER PATSTAT (Layer 2) — RETURNS AGGREGATE ROWS, NEVER DOCUMENTS: USE WHEN the deliverable is NUMBERS ABOUT A CORPUS and no typed analytics tool answers it — technology landscapes by CPC ('who dominates solid-state electrolytes'), filing trends, grant rates, citation-impact STATISTICS over a corpus, inventor analytics, family/jurisdiction coverage, or any combination. It returns statistic rows only (counts, shares, rates, ranked aggregates) plus the data_edition: it CANNOT retrieve patent documents and CANNOT produce a list of specific patents for the user to open and read, and an aggregate row NEVER satisfies a request for documents. DOCUMENTS vs AGGREGATES: any request to FIND, SEARCH FOR, RETRIEVE, LIST or NAME specific patents is a SEARCH — search_patents (or the USPTO path) — however that request ranks the documents it asks for ('which 5 EP patents on X are the most cited? search for them', 'the top patents in area Y'); ranking is not aggregation. ANTI-PATTERN — never write a SELECT whose rows are publication/application NUMBERS ordered by a citation count (or any other statistic) so that you can then look those documents up: identifiers off a snapshot are not search results, the snapshot is months stale, and that question was a search all along — run search_patents, then get citation counts for the hits with search_forward_citations. Every SELECT you write here must AGGREGATE (GROUP BY / COUNT / AVG / share), not enumerate documents. You WRITE one SQL SELECT against the flowleap.* semantic views; the backend gates it deterministically (single-SELECT parse check, flowleap-only allowlist, EXPLAIN cost ceiling, 5000-row/5MB hard caps, 20s timeout) and returns rows + data_edition. MANDATORY WORKFLOW (details: patstat_api_guide action='workflow', workflow='guarded-sql'): (1) check patstat_api_guide action='section' section='examples' first — reuse verified SQL, and if an example carries promoted_to, call that tool instead; (2) fetch section='semantic-model' BEFORE writing SQL — schema-qualify every table as flowleap.<view>, apply its interpretation_conventions (count FAMILIES for 'how many patents', applications for office stats; earliest_filing_year for trends), and ALWAYS state the chosen interpretation in your answer plus the data_edition; (3) always send `question` (the user's words, verbatim); (4) on a patstat_sql_* error, the message contains the exact fix instruction — fix the SQL ONCE, resubmit with retryOf, and STOP after a second failure (never loop); patstat_busy means back off and retry the SAME SQL. ROUTING: a list of patent documents, however ranked → the search tools, never this one; ONE NAMED company's standard portfolio → patstat_portfolio (preferred); keyword/free-text technology analytics → patent_analytics_viz (publication counts — different semantics, never mix); a specific document's text or CURRENT legal status → OPS/USPTO document tools. Budget: 10 queries/minute. DO NOT use for anything a typed tool already answers.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -196,7 +168,7 @@
     "type": "function",
     "function": {
       "name": "patstat_graph",
-      "description": "GRAPH ANALYTICS OVER PATSTAT — A NAMED NODE AND THE RELATIONSHIPS AROUND IT: USE WHEN the user names ONE patent or ONE applicant and asks about its CONNECTIONS — 'who cites EP3477840', 'what does this patent cite', 'why does this patent matter', 'how are patent X and patent Y connected', 'where does this family have coverage', 'who does this company co-file with'. THREE-WAY ROUTING (criteria shape decides, never the metric): (1) DOCUMENTS — a request to FIND, LIST, RANK or NAME patents on a SUBJECT ('the 5 most cited EP patents on solid-state electrolytes — search for them') is a SEARCH: build_patent_query → search_patents or the USPTO path, NEVER this tool, however the request ranks the documents it asks for; (2) AGGREGATES — counts, trends, shares or rankings over a CORPUS ('how many patents does Siemens file per year', 'who dominates H01M10/0562') are patstat_portfolio / patstat_query, NEVER this tool; (3) TRAVERSAL — a question ABOUT a node you can already NAME, answered by the edges around it, is THIS tool. A traversal answers a question about a named node; it does NOT discover documents by subject and it does NOT count a corpus. ANTI-PATTERN — never call resolve/neighborhood/explain on some patent you picked yourself in order to present its citing or cited documents as 'the most relevant patents on <topic>': edges around one arbitrary node are not a subject search, that question was a search all along, and the snapshot is months stale. If the user has not NAMED the node, you are not in this tool. OPERATIONS (one call each, `operation` selects): 'resolve' (a publication number → its pat:<appln_id> anchor; a company name → ranked harmonized psn_id entity candidates) — START HERE whenever you hold only a number or a name; 'patent_view' (the whole citation picture of one publication: applicants, inventors, CPC, backward patent/NPL/unresolved citations, forward citations, DOCDB family, priorities); 'applicant_view' (one psn_id's filings by year, top CPC, jurisdictions, co-applicant network); 'neighborhood' (bounded 1-2 hop expansion, scope it with edgeTypes); 'path' (shortest citation/family path between two patents); 'explain' (cheapest single-node 'what matters here' summary). AMBIGUITY IS AN INTERACTION STEP: an ambiguous number or a company name returns CANDIDATES — present them and let the USER pick, never choose one yourself; psnId comes only from resolve, never guessed. Every edge carries a confidence tag (EXTRACTED = a direct PATSTAT row, state as fact; INFERRED = a derived join, hedge it; AMBIGUOUS = unresolved, flag it and build nothing on it) and an at=<table>:<row> provenance ref — relay the backend text and tags rather than re-deriving facts. CITATION UNIVERSES (both exist, neither is a superset): THIS tool is the WORLDWIDE DOCDB citation network with examiner-vs-applicant origin — use it for 'who cites this patent' and citation structure, especially on EP/WO subjects; search_citations / search_forward_citations are the USPTO office-action dataset with X/Y/A relevance categories — use those for examiner rejection art on US documents. For citation completeness on an EP subject, exhaust both. PATSTAT is a twice-yearly SNAPSHOT and needs no patent-data key (it stays live while EPO/USPTO are key-gated): always name the data_edition, and never present snapshot data as an individual patent's CURRENT legal status (that is get_legal_status). Per-operation request shapes and bounds: patstat_api_guide action='workflow' workflow='graph', or action='endpoint' with the operation name.",
+      "description": "GRAPH ANALYTICS OVER PATSTAT — A NAMED NODE AND THE RELATIONSHIPS AROUND IT: USE WHEN the user names ONE patent or ONE applicant and asks about its CONNECTIONS — 'who cites EP3477840', 'what does this patent cite', 'why does this patent matter', 'how are patent X and patent Y connected', 'where does this family have coverage', 'who does this company co-file with'. THREE-WAY ROUTING (criteria shape decides, never the metric): (1) DOCUMENTS — a request to FIND, LIST, RANK or NAME patents on a SUBJECT ('the 5 most cited EP patents on solid-state electrolytes — search for them') is a SEARCH: search_patents or the USPTO path, NEVER this tool, however the request ranks the documents it asks for; (2) AGGREGATES — counts, trends, shares or rankings over a CORPUS ('how many patents does Siemens file per year', 'who dominates H01M10/0562') are patstat_portfolio / patstat_query, NEVER this tool; (3) TRAVERSAL — a question ABOUT a node you can already NAME, answered by the edges around it, is THIS tool. A traversal answers a question about a named node; it does NOT discover documents by subject and it does NOT count a corpus. ANTI-PATTERN — never call resolve/neighborhood/explain on some patent you picked yourself in order to present its citing or cited documents as 'the most relevant patents on <topic>': edges around one arbitrary node are not a subject search, that question was a search all along, and the snapshot is months stale. If the user has not NAMED the node, you are not in this tool. OPERATIONS (one call each, `operation` selects): 'resolve' (a publication number → its pat:<appln_id> anchor; a company name → ranked harmonized psn_id entity candidates) — START HERE whenever you hold only a number or a name; 'patent_view' (the whole citation picture of one publication: applicants, inventors, CPC, backward patent/NPL/unresolved citations, forward citations, DOCDB family, priorities); 'applicant_view' (one psn_id's filings by year, top CPC, jurisdictions, co-applicant network); 'neighborhood' (bounded 1-2 hop expansion, scope it with edgeTypes); 'path' (shortest citation/family path between two patents); 'explain' (cheapest single-node 'what matters here' summary). AMBIGUITY IS AN INTERACTION STEP: an ambiguous number or a company name returns CANDIDATES — present them and let the USER pick, never choose one yourself; psnId comes only from resolve, never guessed. Every edge carries a confidence tag (EXTRACTED = a direct PATSTAT row, state as fact; INFERRED = a derived join, hedge it; AMBIGUOUS = unresolved, flag it and build nothing on it) and an at=<table>:<row> provenance ref — relay the backend text and tags rather than re-deriving facts. CITATION UNIVERSES (both exist, neither is a superset): THIS tool is the WORLDWIDE DOCDB citation network with examiner-vs-applicant origin — use it for 'who cites this patent' and citation structure, especially on EP/WO subjects; search_citations / search_forward_citations are the USPTO office-action dataset with X/Y/A relevance categories — use those for examiner rejection art on US documents. For citation completeness on an EP subject, exhaust both. PATSTAT is a twice-yearly SNAPSHOT and needs no patent-data key (it stays live while EPO/USPTO are key-gated): always name the data_edition, and never present snapshot data as an individual patent's CURRENT legal status (that is get_legal_status). Per-operation request shapes and bounds: patstat_api_guide action='workflow' workflow='graph', or action='endpoint' with the operation name.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -305,7 +277,7 @@
     "type": "function",
     "function": {
       "name": "patent_analytics_viz",
-      "description": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis'. ROUTING vs patstat_portfolio: THIS tool counts PUBLICATIONS by publication year, matched on keywords/phrases in English titles/abstracts — use it for TECHNOLOGY/TOPIC analytics expressible ONLY as free-text keywords. A landscape defined by a CPC/IPC CLASS ('who dominates H01M10/0562') belongs to patstat_query instead — family-level counts under harmonized applicant names; THIS tool's publication counts fragment entities and double-count within families. For ONE NAMED company's aggregate portfolio (counts by filing year and office, grant counts) PREFER patstat_portfolio — worldwide application-level counts under harmonized applicant names. The two counting semantics legitimately differ; never mix their numbers in one table. DO NOT use build_patent_query for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
+      "description": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis'. ROUTING vs patstat_portfolio: THIS tool counts PUBLICATIONS by publication year, matched on keywords/phrases in English titles/abstracts — use it for TECHNOLOGY/TOPIC analytics expressible ONLY as free-text keywords. A landscape defined by a CPC/IPC CLASS ('who dominates H01M10/0562') belongs to patstat_query instead — family-level counts under harmonized applicant names; THIS tool's publication counts fragment entities and double-count within families. For ONE NAMED company's aggregate portfolio (counts by filing year and office, grant counts) PREFER patstat_portfolio — worldwide application-level counts under harmonized applicant names. The two counting semantics legitimately differ; never mix their numbers in one table. DO NOT run a document search for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -421,7 +393,7 @@
     "type": "function",
     "function": {
       "name": "get_patent_details",
-      "description": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use build_patent_query + search_patents to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
+      "description": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use search_patents (with CQL you write) to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
       "parameters": {
         "type": "object",
         "properties": {
@@ -697,64 +669,6 @@
   {
     "type": "function",
     "function": {
-      "name": "build_patent_query",
-      "description": "Translates a natural-language invention or topic description into an EPO CQL query for EP/WO prior-art search. Use for prior-art research, patentability assessment, and EP/WO patent landscape searches — prefer this over manual CQL when the search involves technical keywords, IPC/CPC codes, or applicant names. Call ONCE per search intent, then immediately call search_patents with the returned CQL. For US patent searches use build_uspto_query instead. Input: description (free text of the invention or topic); focus ('broad'/'precise'/'comprehensive'). EPO CQL limits: no wildcards on ic/cpc fields, max ~10 terms per query.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string",
-            "description": "Natural language description of what patents to search for. Examples: 'Pfizer patents about cancer treatment', 'wind turbine patents from Vestas or Siemens', 'Tesla battery technology patents', 'agricultural drone patents', 'Boeing aircraft wing designs'"
-          },
-          "focus": {
-            "type": "string",
-            "enum": [
-              "broad",
-              "precise",
-              "comprehensive"
-            ],
-            "description": "Search focus: 'broad' for exploratory searches, 'precise' for specific known-item searches, 'comprehensive' for thorough research. Default: comprehensive",
-            "default": "comprehensive"
-          }
-        },
-        "required": [
-          "description"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "build_uspto_query",
-      "description": "Translates a natural-language description into a USPTO Open Data Portal (ODP) Lucene search body for US patent searches. Use before every USPTO search — it knows the current ODP field names and avoids the legacy PatentsView parameters (query/assignee/cpcCode/dateRange no longer exist). Prefer this over manual ODP body construction for any query beyond a trivial single keyword. For EP/WO patents use build_patent_query instead. Input: description (free text); focus ('broad'/'precise'/'comprehensive'). Call ONCE per intent, then use the result with uspto_api_guide.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string",
-            "description": "Natural language description of US patents to search for. Examples: 'Google AI patents from 2023', 'Tesla battery technology patents', 'Apple face recognition patents'"
-          },
-          "focus": {
-            "type": "string",
-            "enum": [
-              "broad",
-              "precise",
-              "comprehensive"
-            ],
-            "description": "Search focus: 'broad' for exploratory, 'precise' for specific, 'comprehensive' for thorough. Default: comprehensive",
-            "default": "comprehensive"
-          }
-        },
-        "required": [
-          "description"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
       "name": "patent_api_request",
       "description": "Make an authenticated request to the Patent AI backend and get the JSON result directly. Use this for ANY backend endpoint shown by the *_api_guide tools (OPS, USPTO, citation, legal) — supply the `path` (e.g. /ops/biblio?doc=EP1234566), optional `method` (GET default, or POST), and optional `body` (a JSON string for POST). Prefer this over running curl in the terminal: it authenticates automatically and returns structured results. Do NOT put the backend host or /v1 in the path.",
       "parameters": {
@@ -925,7 +839,7 @@
     "type": "function",
     "function": {
       "name": "search_academic",
-      "description": "Searches academic research papers (Google Scholar, arXiv, PubMed) for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (build_uspto_query + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. Input: query (free text, e.g. 'CRISPR gene editing off-target effects'); sources (['scholar','arxiv','pubmed'], default ['scholar','arxiv']); maxResults (default 10, max 50).",
+      "description": "Searches academic research papers (Google Scholar, arXiv, PubMed) for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (uspto_api_guide + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. Input: query (free text, e.g. 'CRISPR gene editing off-target effects'); sources (['scholar','arxiv','pubmed'], default ['scholar','arxiv']); maxResults (default 10, max 50).",
       "parameters": {
         "type": "object",
         "properties": {
@@ -967,7 +881,7 @@
     "type": "function",
     "function": {
       "name": "write_patent_results",
-      "description": "Write patent search results or analysis to a local file. Use this tool when the user asks to save patent search results to a file. This tool does not require GitHub Copilot authentication and works directly with the file system.",
+      "description": "Write patent search results or analysis to a local file. Use this tool when the user asks to save patent search results to a file. When using a template, fill the metadata the conversation already knows — subject always, and for prior-art reports objective, searchStrategy and relevanceAssessment — so the saved report is a finished document, not an empty form; date and authorship are stamped automatically, and only practitioner-owned fields (e.g. matter reference) may stay as placeholders. This tool does not require GitHub Copilot authentication and works directly with the file system.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -977,7 +891,7 @@
           },
           "content": {
             "type": "string",
-            "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section."
+            "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section. Format it to the template's convention: prior-art-report — an ISR-style table `| Category (X/Y/A) | Citation with relevant passages | Relevant to claim No. |`; eou-infringement-chart — one row per claim element with a Literal/DOE column; invalidity-claim-chart — one row per element per reference; patentability-opinion — analysis narrative (the per-claim Y/N grid renders as its own section)."
           },
           "template": {
             "type": "string",
@@ -992,6 +906,26 @@
               "portfolio-due-diligence-memo"
             ],
             "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses, 'invalidity-claim-chart' for element-by-element invalidity charts, 'eou-infringement-chart' for element-by-element evidence-of-use/infringement charts, 'patentability-opinion' for novelty and non-obviousness opinions, 'landscape-report' for technology landscape analyses, 'portfolio-due-diligence-memo' for portfolio due-diligence memoranda. Omit for a free-form save of the raw content."
+          },
+          "matter": {
+            "type": "string",
+            "description": "Matter/case reference or the identifying patent/application number, when the user provided one. Leave unset to keep the practitioner placeholder."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Short phrase naming what the report is about (the technology searched, product cleared, portfolio reviewed). ALWAYS provide this when using a template — it is known from the request."
+          },
+          "objective": {
+            "type": "string",
+            "description": "prior-art-report: one or two sentences stating the invention and the question the search answers. Provide it — do not leave the report's Objective section as a stub."
+          },
+          "searchStrategy": {
+            "type": "string",
+            "description": "prior-art-report and landscape-report: short summary of databases searched, classification codes, and the key queries with their result counts. Provide it — the information is in this conversation."
+          },
+          "relevanceAssessment": {
+            "type": "string",
+            "description": "prior-art-report: novelty/obviousness observations for the closest references. Provide it when the findings support one."
           }
         },
         "required": [

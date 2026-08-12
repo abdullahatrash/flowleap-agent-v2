@@ -9,7 +9,6 @@ import type { ILogService } from '../../../../platform/log/common/logService';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
-import { AnalyzeClaimTool } from '../analyzeClaimTool';
 import { CompareClaimsTool } from '../compareClaimsTool';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
@@ -64,55 +63,6 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('claim-analysis tools', () => {
-
-	it('AnalyzeClaimTool POSTs /analyze-claim and renders a structured element-breakdown table', async () => {
-		const { client, calls } = makeBackendClient({
-			success: true,
-			analysis: {
-				keywords: ['solar cell', 'photovoltaic'],
-				synonyms: { 'solar cell': ['PV cell', 'photovoltaic cell'] },
-				ipcCodes: ['H01L 31/00'],
-				suggestedQueries: ['ti=("solar cell") and ic=H01L'],
-				claimElements: [
-					{ element: 'A photovoltaic device comprising', type: 'preamble' },
-					{ element: 'a light-absorbing layer', type: 'component' },
-					{ element: 'wherein the layer is flexible', type: 'limitation' },
-				],
-			},
-		});
-		const tool = new AnalyzeClaimTool(makeLogService(), client);
-
-		const result = await tool.invoke(makeOptions({ claimText: 'A photovoltaic device comprising a light-absorbing layer.' }), makeToken());
-
-		expect(calls).toEqual([{ path: '/analyze-claim', body: { claimText: 'A photovoltaic device comprising a light-absorbing layer.', focus: 'full' } }]);
-		expect(textOf(result)).toMatchInlineSnapshot(`
-			"## Claim Analysis
-
-			### Keywords
-			- solar cell
-			- photovoltaic
-
-			### Synonyms & Alternative Terms
-			- **solar cell**: PV cell, photovoltaic cell
-
-			### Suggested IPC/CPC Classifications
-			- H01L 31/00
-
-			### Recommended Search Queries (CQL)
-			1. \`ti=("solar cell") and ic=H01L\`
-
-			### Claim Elements
-			| # | Claim Element | Type |
-			| ---: | --- | --- |
-			| 1 | A photovoltaic device comprising | preamble |
-			| 2 | a light-absorbing layer | limitation (component) |
-			| 3 | wherein the layer is flexible | limitation |
-
-			---
-			Use the suggested CQL queries with the \`search_patents\` tool to find prior art.
-			Run multiple queries to maximize coverage (different terminology may find different patents)."
-		`);
-	});
 
 	it('CompareClaimsTool GETs /ops/fulltext/claims per patent and renders an element-by-element claim chart', async () => {
 		const { client, calls } = makeBackendClient(undefined, {

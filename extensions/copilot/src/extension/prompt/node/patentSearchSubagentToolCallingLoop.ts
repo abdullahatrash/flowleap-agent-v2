@@ -120,8 +120,6 @@ export class PatentSearchSubagentToolCallingLoop extends ToolCallingLoop<IPatent
 		// inert until that family registers (e.g. ReadPdf, the API guides arrive with #12–#16).
 		const allowedPatentTools = new Set([
 			ToolName.SearchPatents,
-			ToolName.BuildPatentQuery,
-			ToolName.BuildUSPTOQuery,
 			ToolName.SearchAcademic,
 			ToolName.FetchWebPage,
 			ToolName.ReadPdf,

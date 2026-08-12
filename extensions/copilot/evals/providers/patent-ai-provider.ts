@@ -14,10 +14,12 @@ const __dirname = path.dirname(__filename);
 const EVALS_DIR = path.resolve(__dirname, '..');
 
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
+// claude-sonnet-5: the app's primary tested model (2026-08-12) — the eval subject
+// should mirror what users actually run. Historical note on the retired default,
 // gemini-2.5-pro over -flash: the flash tier disobeys the prompt's explicit
 // jurisdiction skip rules (3/40 baseline failures), which would make the
 // regression gate fire on model weakness instead of prompt drift.
-const DEFAULT_MODEL = 'google/gemini-2.5-pro';
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
 
 function loadSystemPrompt(): string {
 	const promptPath = path.join(EVALS_DIR, 'prompts', 'system-prompt.txt');
@@ -54,7 +56,7 @@ export interface PatentAIProviderDeps {
  * Configuration (read from the environment at call time):
  *   EVAL_API_BASE_URL  Base URL for the chat completions API. Default: https://openrouter.ai/api/v1
  *   EVAL_API_KEY        API key. Falls back to OPENROUTER_API_KEY. Required — no unauthenticated requests.
- *   EVAL_MODEL          Default model slug when the provider config omits one. Default: google/gemini-2.5-pro
+ *   EVAL_MODEL          Default model slug when the provider config omits one. Default: anthropic/claude-sonnet-5
  *
  * Usage in promptfooconfig.yaml:
  *   providers:

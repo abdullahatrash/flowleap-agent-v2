@@ -110,9 +110,9 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 - Determine target jurisdictions
 
 ### 2. Build Search Strategy
-- When the user describes their OWN invention or claim, run #tool:analyze_claim first to extract keywords, synonyms, and IPC/CPC codes
-- Use #tool:build_patent_query for optimized EPO CQL queries
-- Use #tool:build_uspto_query for USPTO-specific queries
+- When the user describes their OWN invention or claim, decompose it yourself first: extract every specific noun phrase (materials, mechanisms, subject matter) as candidate discriminating terms, plus synonyms and IPC/CPC codes
+- Write EPO CQL queries yourself — every query needs a discriminating term, not just the technology area
+- Write USPTO Lucene queries yourself — same strategy, different syntax
 - Plan keyword variations, synonyms, and classification codes
 - For complex searches, launch **Explore subagents in parallel** for different angles
 
@@ -120,7 +120,7 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 **ALWAYS search BOTH patents AND academic sources unless explicitly told otherwise.**
 
 - Search EPO via #tool:search_patents with CQL queries
-- Search USPTO via #tool:build_uspto_query, executed with #tool:patent_api_request (endpoint shapes from #tool:uspto_api_guide)
+- Search USPTO with your own Lucene query via #tool:patent_api_request (endpoint shapes from #tool:uspto_api_guide)
 - Search academic via #tool:search_academic for papers and non-patent literature
 - Use #tool:fetch_webpage for web-based sources when needed
 

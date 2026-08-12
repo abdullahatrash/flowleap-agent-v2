@@ -7,9 +7,7 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc =>
-          ['build_patent_query', 'search_patents'].includes(tc.function?.name)
-        );
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'search_patents');
       metric: attribution_has_search
     # Kept as llm-rubric (2026-06-12 de-flake pass): judging whether prose
     # "clearly indicates" attribution is genuinely qualitative — phrase lists
