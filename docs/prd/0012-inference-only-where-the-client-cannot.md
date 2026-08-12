@@ -29,7 +29,11 @@ becomes the single source of truth for query construction; the other nine skills
 currently restate "call `build_patent_query`" point at it instead. The Invention Disclosure
 stops leaving the machine.
 
-The same skill serves the CLI for free: the CLI has no LLM, but its harness agent does.
+The CLI needs its own version of this. Its harness agent is the LLM, but it reads a
+**different skill family** (`flowleap-cli/skills/flowleap-*`), not the app's bundled Patent
+Skills — the drift manifest mirrors `src/vs/sessions/skills/*` from the CLI and never touches
+`assets/skills`. So the CLI is a separate change in a separate repo, with a release chain:
+CLI edit -> tag -> bump `skills-drift-manifest.json` -> re-mirror. Phase 1b below.
 
 Sequencing is deliberately **additive first**. Skills land while the old tools still work,
 so both paths can be compared directly on real searches. That comparison is the gate: it is
@@ -65,8 +69,12 @@ anything is deleted.
 - Keep broader/narrower as refinement rules (the Search Refinement section already does this job). Drop `focus` as a mode — it was a tool parameter, not a concept the agent thinks in; its content (recall vs precision) goes in the reference.
 
 **Skills: the other nine point rather than restate**
-- `prior-art`, `freedom-to-operate`, `patent-landscape`, `invention-disclosure`, `portfolio-analysis`, `audit-report`, `patent-translation`, `excess-claims-estimator`, `claim-analysis` currently each name `build_patent_query`. They gain a **context pointer** to `patent-search` and lose the restatement. Net skill text goes **down**.
+- `prior-art`, `freedom-to-operate`, `patent-landscape`, `invention-disclosure`, `portfolio-analysis`, `audit-report`, `patent-translation`, `excess-claims-estimator`, `claim-analysis` currently each name `build_patent_query`. They gain a **context pointer** to `patent-search` and lose the restatement. Measured after the fact: this is roughly text-neutral (+42 lines across the SKILL.md files), not the reduction originally predicted — the restatements were one-liners and the pointers are the same length. The win is the single source of truth, not token count.
 - `claim-analysis` already teaches preamble/transitional-phrase/body decomposition and element-by-element analysis. It gains the decomposition depth from `CLAIM_ANALYSIS_PROMPT` and loses its `analyze_claim` delegation.
+
+**Phase 1b — CLI skills (`flowleap-cli`, separate repo and release chain)**
+- `flowleap-patent`, `persona-patent-attorney` and `recipe-invention-disclosure` teach `flowleap patent build-query --allow-external-processing`. They need the same discriminating-term guidance and a CQL reference of their own.
+- Blocked by the mirror pin: `scripts/skills-drift-manifest.json` pins `ref: v0.6.0`, so a CLI skill change requires a CLI tag and a manifest bump before `src/vs/sessions/skills/*` reflects it. Sequence this with the CLI command deletions in Phase 3 rather than separately — one CLI release, not two.
 
 **Skills: USPTO is a different case**
 - `uspto_api_guide` remains the single source of truth for ODP **request shapes** — that is server-owned and correctly stays on the backend. The skill gains only the Lucene *query-writing* strategy. Materially less new content than CQL, and the two halves can land independently.
