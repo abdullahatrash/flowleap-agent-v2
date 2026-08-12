@@ -71,9 +71,11 @@ ta=(turbine OR blade)                    ← NOT CQL — parentheses inside a fi
 Repeat the field inside the parentheses; never put the parentheses inside the value.
 
 **Not documented here, because it is not confirmed:** whether EPO OPS stems word forms
-(`charging` → `charge`), how it treats hyphens (`glass-ceramic` vs `glass ceramic`), and
-exactly what counts as one "term" against the budget below (a three-word phrase may cost one
-or three). Do not assume. Where hyphenation or word form changes your query, OR both forms
+(`charging` → `charge`), how it treats hyphens (`glass-ceramic` vs `glass ceramic`),
+whether a wildcard works *inside* a quoted phrase (`ta="patent claim*"` — a zero-hit
+result from that shape may be a syntax artifact, not an empty field; prefer the wildcard
+on an unquoted term), and exactly what counts as one "term" against the budget below (a
+three-word phrase may cost one or three). Do not assume. Where hyphenation or word form changes your query, OR both forms
 with the field repeated (the pattern above) — that is live-verified — rather than dropping
 the term. If you learn a definitive answer, record it here.
 
