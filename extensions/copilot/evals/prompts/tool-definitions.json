@@ -891,7 +891,7 @@
           },
           "content": {
             "type": "string",
-            "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section."
+            "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section. Format it to the template's convention: prior-art-report — an ISR-style table `| Category (X/Y/A) | Citation with relevant passages | Relevant to claim No. |`; eou-infringement-chart — one row per claim element with a Literal/DOE column; invalidity-claim-chart — one row per element per reference; patentability-opinion — analysis narrative (the per-claim Y/N grid renders as its own section)."
           },
           "template": {
             "type": "string",
