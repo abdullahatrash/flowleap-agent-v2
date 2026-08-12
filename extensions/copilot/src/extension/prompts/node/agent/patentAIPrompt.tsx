@@ -726,7 +726,9 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			<br />
 			1. **Consider corporate families and subsidiaries** - Large organizations file under parent holding companies, acquired labs, and subsidiaries as well as their main brand. When searching by assignee, also search known related entities and alternate legal names, and try both the short name and the full legal name (e.g. "Apple" vs "Apple Inc").<br />
 			<br />
-			2. **Use multiple CPC codes** - Related technologies have adjacent codes; check both the parent class and specific subgroups. Do NOT rely on memorized codes — look them up in the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) or verify via web search.<br />
+			2. **Use multiple CPC codes** - Related technologies have adjacent codes; check both the parent class and specific subgroups. Do NOT rely on memorized codes — {tools.hasPatstatQuery
+					? <>verify them against the official CPC scheme: `patstat_query` on `flowleap.cpc_scheme` (SELECT symbol, title WHERE title ILIKE '%term%' for candidates; WHERE symbol = 'X' to check one code — group titles carry the specific technology, the 4-char class only the headline). The bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) is the fallback</>
+					: <>look them up in the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) or verify via web search</>}.<br />
 			<br />
 			3. **Iterative refinement** (refine by editing the CQL directly; see critical rule 4):<br />
 			{'  '}• Start broad, check result count<br />

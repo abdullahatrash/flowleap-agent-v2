@@ -1,5 +1,11 @@
 # CPC/IPC Classification Reference
 
+> **Source of truth first:** when `patstat_query` is available, verify codes against the
+> official CPC scheme instead of this file —
+> `SELECT symbol, title FROM flowleap.cpc_scheme WHERE title ILIKE '%term%' LIMIT 15;`
+> (or `WHERE symbol = 'H10F'` to check one code). The scheme is version-stamped and
+> complete (~254k entries); this file is orientation, not authority.
+
 ## CPC Structure (Cooperative Patent Classification)
 
 Joint USPTO + EPO system. Hierarchy:

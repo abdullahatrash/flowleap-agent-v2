@@ -186,11 +186,31 @@ Do not guess codes — and do not trust this table alone. **CPC reclassifies.** 
 range (`H10F`, `H10H`, `H10K`, `H10N`) was carved out of `H01L` for radiation-sensitive,
 light-emitting and other specialised semiconductor devices; `H01L` is now formally
 "semiconductor devices **not covered by class H10**". Anything filed or classified recently
-may sit in a code this table does not list.
+may sit in a code this table does not list. (The corpus agrees: `H10F` carries ~1.16M CPC
+assignments in PATSTAT 2026 Spring; `H01L31`, the pre-2023 photovoltaics subclass, carries
+zero — reclassification rewrote the backfile.)
 
-**Verify the code** for the invention at hand — `web_search "cpc scheme [term]"`, or the
-prior-art skill's `references/cpc-classification.md` — before relying on it. A wrong class
-silently returns the wrong corpus; it does not error.
+**Verify the code — the official CPC scheme is queryable.** The version-stamped scheme
+text lives in `flowleap.cpc_scheme` (columns: `symbol`, `level`, `title`), reachable via
+`patstat_query`:
+
+```sql
+SELECT symbol, title FROM flowleap.cpc_scheme WHERE symbol = 'H10F';
+-- does the code exist, and what is it
+
+SELECT symbol, title FROM flowleap.cpc_scheme
+WHERE title ILIKE '%photovoltaic%' ORDER BY symbol LIMIT 15;
+-- candidate codes for a technology term
+```
+
+Read the results at the right level: a 4-char class carries only the headline
+(`H10F` = "inorganic semiconductor devices sensitive to radiation"); the specific
+technology titles live in its **groups** (`H10F10/00`, `H10F71/00` …). Match keywords
+against group titles, then search with the 4-char class (`ic=H10F`) or the exact group
+(`cpc=H10F10/00`). A wrong class silently returns the wrong corpus; it does not error.
+
+Fall back to `web_search "cpc scheme [term]"` or the prior-art skill's
+`references/cpc-classification.md` only when `patstat_query` is unavailable.
 
 Common areas (as of 2026-08; treat as a starting point, not an authority):
 
@@ -216,5 +236,6 @@ Common areas (as of 2026-08; treat as a starting point, not an authority):
 | H04W | wireless communication |
 | Y02E | clean energy technologies |
 
-For anything not listed: the prior-art skill's `references/cpc-classification.md`, or
-`web_search "cpc scheme [term]"` when `web_search` is available.
+For anything not listed: `patstat_query` on `flowleap.cpc_scheme` (the queries above) —
+then the prior-art skill's `references/cpc-classification.md`, or
+`web_search "cpc scheme [term]"`, when `patstat_query` is unavailable.
