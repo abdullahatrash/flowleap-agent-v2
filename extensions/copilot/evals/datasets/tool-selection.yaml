@@ -80,9 +80,11 @@
   assert:
     - type: javascript
       value: |
+        // patstat_query is a sanctioned opener too: verifying CPC codes against
+        // flowleap.cpc_scheme BEFORE searching is the prompt's own doctrine.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'search_patents' || firstTool === 'vscode_askQuestions';
+        return firstTool === 'search_patents' || firstTool === 'vscode_askQuestions' || firstTool === 'patstat_query';
       metric: path_c_invention_patentability
     - type: javascript
       value: |
@@ -395,10 +397,15 @@
   assert:
     - type: javascript
       value: |
+        // Two prompt-sanctioned engines: C1 (patent_analytics_viz, keyword
+        // analytics) — or C3 when the tech area maps to a CPC class (the
+        // criteria-shape rule): patstat_query with the mandatory
+        // patstat_api_guide-first workflow. "Solid-state battery" maps to
+        // H01M10/0562, so the C3 opener is compliant routing, not a miss.
         const parsed = JSON.parse(output);
         const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'patent_analytics_viz';
-      metric: landscape_routes_to_analytics_viz
+        return firstTool === 'patent_analytics_viz' || firstTool === 'patstat_api_guide' || firstTool === 'patstat_query' || firstTool === 'patstat_portfolio';
+      metric: landscape_routes_to_analytics_engine
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
