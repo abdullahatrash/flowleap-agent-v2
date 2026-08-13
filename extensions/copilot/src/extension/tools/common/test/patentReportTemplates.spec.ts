@@ -31,7 +31,7 @@ describe('writePatentResults report templates', () => {
 			_Databases searched, classification codes, keyword sets, and date ranges._
 
 			## 3. Documents Considered Relevant
-			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`._
+			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`. For the closest X references, follow it with an element-by-element mapping table — \`| Claim element | <Reference 1> | <Reference 2> |\`, one row per claim element, each cell quoting the disclosing passage (original language plus a translation where applicable) — so anticipation is shown per element, not asserted per document._
 			Found US-1234567-B2 (X, novelty-destroying).
 
 			**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.
@@ -302,7 +302,7 @@ describe('writePatentResults report templates', () => {
 			EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).
 
 			## 3. Documents Considered Relevant
-			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`._
+			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`. For the closest X references, follow it with an element-by-element mapping table — \`| Claim element | <Reference 1> | <Reference 2> |\`, one row per claim element, each cell quoting the disclosing passage (original language plus a translation where applicable) — so anticipation is shown per element, not asserted per document._
 			- EP1 (close art)
 
 			**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.

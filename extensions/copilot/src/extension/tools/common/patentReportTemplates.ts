@@ -98,7 +98,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				section('_Databases searched, classification codes, keyword sets, and date ranges._', f.searchStrategy),
 				'',
 				'## 3. Documents Considered Relevant',
-				'_ISR-style citation table (Form PCT/ISA/210 section C): `| Category | Citation of document, with relevant passages | Relevant to claim No. |`._',
+				'_ISR-style citation table (Form PCT/ISA/210 section C): `| Category | Citation of document, with relevant passages | Relevant to claim No. |`. For the closest X references, follow it with an element-by-element mapping table — `| Claim element | <Reference 1> | <Reference 2> |`, one row per claim element, each cell quoting the disclosing passage (original language plus a translation where applicable) — so anticipation is shown per element, not asserted per document._',
 				results,
 				'',
 				'**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.',
