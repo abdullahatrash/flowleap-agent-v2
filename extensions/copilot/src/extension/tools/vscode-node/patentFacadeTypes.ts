@@ -15,5 +15,11 @@ export interface FacadeToolEnvelope<T> {
 	readonly tool?: string;
 	readonly data?: T;
 	readonly executionTimeMs?: number;
+	/**
+	 * Whether the backend served this result from its own cache. Present only when at least one
+	 * underlying provider read reported a verdict — omitted rather than falsified — which is why the
+	 * seam's `backendCached` telemetry dimension reads an absent flag as "not cached".
+	 */
+	readonly cached?: boolean;
 	readonly error?: { readonly code?: string; readonly message?: string };
 }

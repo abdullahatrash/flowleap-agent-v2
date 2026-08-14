@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -18,6 +19,9 @@ interface ISearchAcademicParams {
 	sources?: string[]; // e.g., ['scholar', 'arxiv']
 	maxResults?: number;
 }
+
+/** Facade source names. The tool's own input keeps the lib's historical `scholar` spelling. */
+type FacadeSource = 'semantic-scholar' | 'arxiv';
 
 interface AcademicPaper {
 	title: string;
@@ -29,21 +33,20 @@ interface AcademicPaper {
 	citations?: number;
 }
 
-interface AcademicSearchResult {
-	success: boolean;
+/** `data` payload of the `search_academic` facade tool. */
+interface AcademicSearchData {
 	total?: number;
 	papers?: AcademicPaper[];
 	query?: string;
-	error?: string;
 }
 
 /**
- * Tool for searching academic sources (Google Scholar, arXiv, PubMed) for non-patent literature
- * (NPL) prior art. Calls the FlowLeap backend (which handles upstream API authentication) through
- * the shared {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
+ * Tool for searching academic sources (Semantic Scholar, arXiv) for non-patent literature (NPL)
+ * prior art, through the FlowLeap backend's `search_academic` facade tool. Routes through the
+ * shared {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
  * `402 → start-trial` gating.
  */
-class SearchAcademicTool implements ICopilotTool<ISearchAcademicParams> {
+export class SearchAcademicTool implements ICopilotTool<ISearchAcademicParams> {
 
 	public static readonly toolName = ToolName.SearchAcademic;
 
@@ -69,17 +72,21 @@ class SearchAcademicTool implements ICopilotTool<ISearchAcademicParams> {
 		const { query, sources = ['scholar', 'arxiv'], maxResults = 10 } = options.input;
 
 		try {
-			const result = await this.patentBackendClient.post<AcademicSearchResult>('/academic-search', { query, sources, maxResults }, token);
+			// The facade names the Semantic Scholar source `semantic-scholar` on input while the
+			// papers it returns still carry `source: "scholar"`; map the tool's own spelling across.
+			const facadeSources = sources
+				.map((s): FacadeSource | undefined => (s === 'scholar' || s === 'semantic-scholar' ? 'semantic-scholar' : s === 'arxiv' ? 'arxiv' : undefined))
+				.filter((s): s is FacadeSource => s !== undefined);
+			const input = {
+				query,
+				sources: facadeSources.length > 0 ? facadeSources : ['semantic-scholar', 'arxiv'],
+				max_results: maxResults,
+			};
 
-			if (!result.success) {
-				this.logService.error(`[SearchAcademicTool] Search failed: ${result.error}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error searching academic sources: ${result.error}`)
-				]);
-			}
+			const data = await callFacadeTool<AcademicSearchData>(this.patentBackendClient, 'search_academic', input, token);
 
 			// Format results for LLM
-			const formattedResponse = this.formatSearchResults(result);
+			const formattedResponse = this.formatSearchResults(data);
 			this.logService.info(`[SearchAcademicTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -94,8 +101,8 @@ class SearchAcademicTool implements ICopilotTool<ISearchAcademicParams> {
 	/**
 	 * Format search results for LLM consumption
 	 */
-	private formatSearchResults(result: AcademicSearchResult): string {
-		if (!result.success || !result.papers || result.papers.length === 0) {
+	private formatSearchResults(result: AcademicSearchData): string {
+		if (!result.papers || result.papers.length === 0) {
 			return `No academic papers found for query: ${result.query}`;
 		}
 

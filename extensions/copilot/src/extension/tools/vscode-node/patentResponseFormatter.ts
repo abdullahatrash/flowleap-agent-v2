@@ -151,7 +151,7 @@ export function emptiedByTruncationNotice(omittedItems: number, budget: number):
  * A `patent_api_request` call, as far as the single-record classifier needs to see it.
  */
 export interface IPatentRequestShape {
-	/** Relative backend path including its query string — e.g. `/ops/fulltext/claims?doc=US7654321B2`. */
+	/** Relative backend path including any query string — e.g. `/tools/get_claims`. */
 	readonly path: string;
 	/** Parsed JSON body of a POST request; `undefined` for a GET. */
 	readonly body?: unknown;
@@ -164,12 +164,12 @@ export interface IPatentRequestShape {
  * returns everything by way of the harness's file offload.
  *
  * Two tiers, because a path alone cannot see every by-number lookup:
- * - the **route** tier ({@link isSingleRecordDocumentRoute}) recognises paths that return one document by
+ * - the **tool** tier ({@link isSingleRecordDocumentTool}) recognises tools that return one document by
  *   construction, and fires on the path alone;
  * - the **structural** tier fires when the request names one document ({@link isByNumberRequest} — a
- *   `?doc=` identifier, a numbered path segment, or a `patentNumber:`-style query) *and* the payload in
- *   fact carries exactly one record ({@link holdsExactlyOneRecord}). This is the tier that catches
- *   `POST /patent-search-uspto/search` with a by-number query, whose sole oversized record used to be
+ *   `patent_number`-style identifier or a `patentNumber:`-style query) *and* the payload in fact carries
+ *   exactly one record ({@link holdsExactlyOneRecord}). This is the tier that catches
+ *   `POST /tools/search_patents` with a by-number query, whose sole oversized record would otherwise be
  *   dropped on the multi-record path.
  *
  * Requests that do NOT name a document — a topical search, a CQL landscape query — stay on the multi-record
@@ -179,32 +179,39 @@ export interface IPatentRequestShape {
  * covered by {@link emptiedByTruncationNotice}, which is the honest answer for that case.
  */
 export function isSingleRecordDocumentLookup(request: IPatentRequestShape, payload?: unknown): boolean {
-	return isSingleRecordDocumentRoute(request.path) || (isByNumberRequest(request) && holdsExactlyOneRecord(payload));
+	return isSingleRecordDocumentTool(request.path) || (isByNumberRequest(request) && holdsExactlyOneRecord(payload));
 }
 
 /**
- * True when `path` is a route that returns exactly one document by construction (USPTO `grants/{n}` and
- * `applications/{n}`, OPS full-text `claims`/`description`), so the classification needs no payload.
+ * Names of facade tools that answer with exactly ONE document, so the classification needs no payload.
  *
- * Multi-record routes are deliberately excluded: search endpoints (`…/search`, `…/docs`, CQL queries) and
- * the by-number *list* sub-resources (`applications/{n}/documents`, `…/transactions`), whose budget-driven
- * item-dropping — and the "refine your query" note — is unaffected.
+ * Multi-record tools are deliberately absent: the search tools, and the by-number LIST tools
+ * (`get_application_documents`, `get_transactions`, …) whose budget-driven item-dropping — and the
+ * "refine your query" note — is unaffected.
  */
-function isSingleRecordDocumentRoute(path: string): boolean {
-	// USPTO by-number document fetch. `applications/<n>` must be the last path segment so the list
-	// sub-resources hanging off it (…/documents, …/transactions) stay on the multi-record path.
-	if (/\/grants\/[^/?]+/.test(path) || /\/applications\/[^/?#]+(?:[?#]|$)/.test(path)) {
-		return true;
-	}
-	// OPS single-document full text: /ops/fulltext/claims|description (keyed on ?doc=), or an explicit enrich= form.
-	if (/\/fulltext\/(claims|description)\b/.test(path) || /[?&]enrich=(claims|description)\b/.test(path)) {
-		return true;
-	}
-	return false;
+const SINGLE_RECORD_TOOLS = new Set([
+	'get_claims',
+	'get_description',
+	'get_bibliography',
+	'get_abstract',
+	'get_fulltext',
+	'get_patent_summary',
+	'get_us_grant',
+	'get_us_application',
+	'read_application_document',
+]);
+
+/** True when `path` invokes one of {@link SINGLE_RECORD_TOOLS} on the `/v1/tools` facade. */
+function isSingleRecordDocumentTool(path: string): boolean {
+	const match = /\/tools\/([A-Za-z0-9_]+)/.exec(path);
+	return match !== null && SINGLE_RECORD_TOOLS.has(match[1]);
 }
 
-/** Request keys whose value names ONE document — `?doc=EP1234566`, `{ "patentNumber": "10958080" }`. */
-const BY_NUMBER_KEY = /^(doc|documentNumber|patentNumber|grantNumber|publicationNumber|applicationNumber|applicationNumberText|patentApplicationNumber)$/i;
+/**
+ * Request keys whose value names ONE document. Both spellings are live: facade tool inputs are
+ * snake_case (`patent_number`), while the query strings inside them keep the provider's own camelCase.
+ */
+const BY_NUMBER_KEY = /^(doc|documentNumber|patentNumber|grantNumber|publicationNumber|applicationNumber|applicationNumberText|patentApplicationNumber|patent_number|application_number|cited_document|document_id)$/i;
 
 /** Keys whose value is a query STRING (USPTO ODP Lucene, EPO CQL) rather than a bare identifier. */
 const QUERY_STRING_KEY = /^(q|query|cql|criteria|searchText)$/i;
@@ -217,13 +224,11 @@ const QUERY_STRING_KEY = /^(q|query|cql|criteria|searchText)$/i;
 const BY_NUMBER_QUERY_FIELD = /\b(patentNumber|publicationNumber|applicationNumber|applicationNumberText|patentApplicationNumber|documentNumber|pn|num|ap)\s*[:=]\s*\S/i;
 
 /**
- * True when the request names one specific document, whether in the path (`/grants/10958080`), the query
- * string (`?doc=EP1234566`), or a POST body (`{ "q": "patentNumber:10958080" }`).
+ * True when the request names one specific document, in the query string (`?doc=EP1234566`) or, as the
+ * facade always does, in the POST body (`{ "patent_number": "EP1234566" }`,
+ * `{ "query": "pn=US10958080" }`).
  */
 function isByNumberRequest(request: IPatentRequestShape): boolean {
-	if (/\/(grants|applications|patents|publications)\/[^/?#]+/.test(request.path)) {
-		return true;
-	}
 	const queryStart = request.path.indexOf('?');
 	if (queryStart >= 0) {
 		for (const pair of request.path.substring(queryStart + 1).split('&')) {

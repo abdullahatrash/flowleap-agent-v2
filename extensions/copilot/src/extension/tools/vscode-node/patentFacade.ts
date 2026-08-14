@@ -4,13 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentBackendClient, IPatentBackendRequestOptions, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
 import { FacadeToolEnvelope } from './patentFacadeTypes';
 
 /**
- * Call a compound `/v1/tools/{toolName}` facade endpoint through the shared {@link IPatentBackendClient}
- * seam and unwrap the `data` payload. So every facade tool inherits the centralized
+ * Call a `/v1/tools/{toolName}` facade endpoint through the shared {@link IPatentBackendClient} seam
+ * and unwrap the `data` payload. So every facade tool inherits the centralized
  * `401 → re-sign-in` / `402 → start-trial` / `429 → wait` gating.
+ *
+ * This is the ONE way a patent tool reaches backend data (backend ADR 0013: the tools facade is the
+ * single agent surface). Tool names are the backend's, in snake_case, and so are their parameters.
  *
  * The backend reports a tool-execution failure two ways: as a non-2xx status (the seam throws a
  * {@link PatentBackendError} whose message is the raw JSON body) or, less commonly, as a `200` with
@@ -18,12 +21,12 @@ import { FacadeToolEnvelope } from './patentFacadeTypes';
  * clean human message, and the `success` guard below covers the second — so callers see one tidy
  * error message either way.
  */
-export async function callFacadeTool<T>(client: IPatentBackendClient, toolName: string, input: unknown, token: CancellationToken): Promise<T> {
+export async function callFacadeTool<T>(client: IPatentBackendClient, toolName: string, input: unknown, token: CancellationToken, options?: IPatentBackendRequestOptions): Promise<T> {
 	let envelope: FacadeToolEnvelope<T>;
 	try {
-		// config.apiUrl already ends in `/v1` (existing tools call `/ops/...`, not `/v1/ops/...`), so the
-		// facade path is `/tools/{name}` here — prefixing `/v1` again resolves to `.../v1/v1/tools/...` (404).
-		envelope = await client.post<FacadeToolEnvelope<T>>(`/tools/${toolName}`, input, token);
+		// config.apiUrl already ends in `/v1`, so the facade path is `/tools/{name}` here — prefixing
+		// `/v1` again resolves to `.../v1/v1/tools/...` (404).
+		envelope = await client.post<FacadeToolEnvelope<T>>(`/tools/${toolName}`, input, token, options);
 	} catch (error) {
 		throw normalizeFacadeError(error);
 	}

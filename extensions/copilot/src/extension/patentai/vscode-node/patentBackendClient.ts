@@ -177,6 +177,16 @@ export interface IPatentBackendRequestOptions {
 	 * outside `/v1`. Defaults to false (the normal `/v1` patent-data path).
 	 */
 	readonly rootHost?: boolean;
+	/**
+	 * Keep this request out of the per-session read cache — neither served from it nor stored in it.
+	 *
+	 * The cache exists because patent-data calls are reads: the same document asked for twice in a
+	 * burst is the same document. A call WITHOUT read semantics breaks that assumption — the billing
+	 * portal mints a fresh single-use URL, and a key-validation verdict is a live probe of credentials
+	 * the user is editing. Replaying either from a 60-second cache returns a stale answer that reads
+	 * like a fresh one.
+	 */
+	readonly bypassReadCache?: boolean;
 }
 
 export const IPatentBackendClient = createServiceIdentifier<IPatentBackendClient>('IPatentBackendClient');
@@ -260,6 +270,10 @@ const CACHE_TTL_MS = 60_000;
 const CACHE_MAX_ENTRIES = 100;
 /** Internal funnel event: one per public request. Endpoint/method/status only — never request bodies or keys. */
 const REQUEST_TELEMETRY_EVENT = 'flowleap.patentBackend.request';
+/** Client-identity header the backend logs per `/v1` request (ADR 0014 rule 5). */
+const CLIENT_HEADER = 'X-FlowLeap-Client';
+/** Product half of the client-identity header value; the version half is the extension's own. */
+const CLIENT_PRODUCT = 'vscode';
 
 /** One cached read: the parsed value and the wall-clock time it stops being served. */
 interface CacheEntry {
@@ -301,9 +315,12 @@ export class PatentBackendClient implements IPatentBackendClient {
 	private readonly _dataKeysRequiredPrompted = new Set<string>();
 
 	/**
-	 * Per-session read cache keyed by method+path+body. All patent routes are read-only (#89), so an
+	 * Per-session read cache keyed by method+path+body. Patent-data calls are reads (#89), so an
 	 * identical repeated call within {@link CACHE_TTL_MS} can be served without re-hitting the backend.
 	 * Bounded to {@link CACHE_MAX_ENTRIES} with oldest-first eviction — a dedupe buffer, not a store.
+	 *
+	 * Calls WITHOUT read semantics opt out via {@link IPatentBackendRequestOptions.bypassReadCache}
+	 * and are neither served from here nor stored here.
 	 */
 	private readonly _cache = new Map<string, CacheEntry>();
 
@@ -324,7 +341,8 @@ export class PatentBackendClient implements IPatentBackendClient {
 	}
 
 	async getCustomerPortalUrl(token: CancellationToken): Promise<string> {
-		const res = await this.get<{ portalUrl?: string }>('/api/invoices', token, { rootHost: true });
+		// Not a read: Stripe mints a fresh portal URL per call, so a cached one is a dead link.
+		const res = await this.get<{ portalUrl?: string }>('/api/invoices', token, { rootHost: true, bypassReadCache: true });
 		if (!res?.portalUrl) {
 			throw new PatentBackendError(undefined, 'The FlowLeap backend did not return a customer portal URL.');
 		}
@@ -339,9 +357,10 @@ export class PatentBackendClient implements IPatentBackendClient {
 	private async _request<T>(method: 'GET' | 'POST', path: string, body: unknown, token: CancellationToken, options?: IPatentBackendRequestOptions): Promise<T> {
 		const startedAt = Date.now();
 		const endpoint = endpointLabel(path);
+		const cacheable = !options?.bypassReadCache;
 		const cacheKey = cacheKeyFor(method, path, body);
 
-		const cached = this._cacheGet(cacheKey);
+		const cached = cacheable ? this._cacheGet(cacheKey) : undefined;
 		if (cached) {
 			this._sendRequestTelemetry({ endpoint, method, statusClass: 'cache', latencyMs: Date.now() - startedAt, responseBytes: 0, retries: 0, servedFromCache: true, backendCached: true });
 			return cached.value as T;
@@ -377,7 +396,9 @@ export class PatentBackendClient implements IPatentBackendClient {
 
 			const value = text ? JSON.parse(text) as T : undefined as T;
 			backendCached = backendCachedFlag(value);
-			this._cacheSet(cacheKey, value);
+			if (cacheable) {
+				this._cacheSet(cacheKey, value);
+			}
 			return value;
 		} finally {
 			this._sendRequestTelemetry({ endpoint, method, statusClass, latencyMs: Date.now() - startedAt, responseBytes, retries, servedFromCache: false, backendCached });
@@ -385,15 +406,20 @@ export class PatentBackendClient implements IPatentBackendClient {
 	}
 
 	/**
-	 * Build the request headers: JSON content type for POST, the Bearer token (when one is registered),
-	 * and the BYO patent-data key headers (#31, ADR 0005) forwarded per the #30 wire contract. The two
-	 * providers are independent (EPO-only / USPTO-only are valid). Never log these values.
+	 * Build the request headers: JSON content type for POST, the client-version header, the Bearer
+	 * token (when one is registered), and the BYO patent-data key headers (#31, ADR 0005) forwarded
+	 * per the #30 wire contract. The two providers are independent (EPO-only / USPTO-only are valid).
+	 * Never log the key values.
 	 */
 	private _buildHeaders(method: 'GET' | 'POST', accessToken: string | undefined): Record<string, string> {
 		const headers: Record<string, string> = {};
 		if (method === 'POST') {
 			headers['Content-Type'] = 'application/json';
 		}
+		// Client identity (backend ADR 0014 rule 5): the backend logs product/version on every /v1
+		// request so retirement decisions rest on usage evidence rather than hand counts. Purely
+		// observational — no request is ever rejected on it.
+		headers[CLIENT_HEADER] = `${CLIENT_PRODUCT}/${this._envService.getVersion()}`;
 		if (accessToken) {
 			headers['Authorization'] = `Bearer ${accessToken}`;
 		}
@@ -736,7 +762,11 @@ function byteLength(text: string): number {
 	return new TextEncoder().encode(text).length;
 }
 
-/** True when the backend marked this response as served from its own cache (`{ cached: true }`). */
+/**
+ * True when the backend marked this response as served from its own cache. The flag lives at the top
+ * level of the facade envelope (`{ success, tool, data, executionTimeMs, cached }`) and is omitted
+ * rather than falsified when the backend has no verdict, so an absent flag reads as "not cached".
+ */
 function backendCachedFlag(value: unknown): boolean {
 	return typeof value === 'object' && value !== null && (value as { cached?: unknown }).cached === true;
 }

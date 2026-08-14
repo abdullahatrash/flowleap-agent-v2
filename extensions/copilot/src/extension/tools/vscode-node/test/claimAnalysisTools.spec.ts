@@ -64,20 +64,22 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 
 describe('claim-analysis tools', () => {
 
-	it('CompareClaimsTool GETs /ops/fulltext/claims per patent and renders an element-by-element claim chart', async () => {
-		const { client, calls } = makeBackendClient(undefined, {
+	it('CompareClaimsTool calls the get_claims tool per patent and renders an element-by-element claim chart', async () => {
+		const { client, calls } = makeBackendClient({
 			success: true,
+			tool: 'get_claims',
 			data: {
 				docId: 'US7654321B2',
-				lang: 'en',
-				claims: ['1. A photovoltaic module comprising a rigid substrate and a light-absorbing layer.'],
+				claims: [{ number: '1', text: '1. A photovoltaic module comprising a rigid substrate and a light-absorbing layer.' }],
+				totalClaims: 1,
+				language: 'en',
 			},
 		});
 		const tool = new CompareClaimsTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({ userClaim: 'A flexible photovoltaic device.', patentNumbers: ['US-7654321-B2'] }), makeToken());
 
-		expect(calls).toEqual([{ path: '/ops/fulltext/claims?doc=US7654321B2' }]);
+		expect(calls).toEqual([{ path: '/tools/get_claims', body: { patent_number: 'US7654321B2' } }]);
 		expect(textOf(result)).toMatchInlineSnapshot(`
 			"## Prior Art Claim Comparison Package
 
@@ -120,10 +122,7 @@ describe('claim-analysis tools', () => {
 		const client: IPatentBackendClient = {
 			_serviceBrand: undefined,
 			async getCustomerPortalUrl(): Promise<string> { return ''; },
-			async post<T>(): Promise<T> {
-				throw new Error('compare_claims does not POST');
-			},
-			async get<T>(pathWithQuery: string): Promise<T> {
+			async post<T>(_path: string, body: unknown): Promise<T> {
 				const claimsByDoc: Record<string, string[]> = {
 					EP1000000A1: [
 						'1. A battery pack comprising: a housing; a plurality of cells arranged within the housing; and a controller coupled to the cells.',
@@ -133,8 +132,16 @@ describe('claim-analysis tools', () => {
 						'1. An energy storage device comprising a casing and a set of cells disposed inside the casing.',
 					],
 				};
-				const doc = new URLSearchParams(pathWithQuery.split('?')[1]).get('doc') ?? '';
-				return { success: true, data: { docId: doc, lang: 'en', claims: claimsByDoc[doc] ?? [] } } as T;
+				const doc = (body as { patent_number?: string })?.patent_number ?? '';
+				const claims = (claimsByDoc[doc] ?? []).map((text, i) => ({ number: String(i + 1), text }));
+				return {
+					success: true,
+					tool: 'get_claims',
+					data: { docId: doc, claims, totalClaims: claims.length, language: 'en' },
+				} as T;
+			},
+			async get<T>(): Promise<T> {
+				throw new Error('compare_claims does not GET');
 			},
 		};
 		const tool = new CompareClaimsTool(makeLogService(), client);

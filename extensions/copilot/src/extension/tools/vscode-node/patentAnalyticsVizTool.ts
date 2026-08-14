@@ -6,10 +6,10 @@
 /*---------------------------------------------------------------------------------------------
  *  Patent Analytics Tool
  *
- *  Sends a structured search contract to the FlowLeap backend's full-corpus analytics route
- *  (`/v1/patent-analytics`, DuckDB-backed over a quarterly-refreshed slice of the Google Patents
- *  corpus) and renders the returned aggregates (filing trend, top assignees, country and CPC
- *  breakdowns) as markdown tables. The aggregates ARE the deliverable — no client-side sampling.
+ *  Sends a structured search contract to the FlowLeap backend's `patent_analytics` facade tool
+ *  (DuckDB-backed over a quarterly-refreshed slice of the Google Patents corpus) and renders the
+ *  returned aggregates (filing trend, top assignees, country and CPC breakdowns) as markdown
+ *  tables. The aggregates ARE the deliverable — no client-side sampling.
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
@@ -18,6 +18,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -34,7 +35,7 @@ interface IPatentAnalyticsParams {
 	dateTo?: string;          // Publication-date upper bound, YYYY-MM-DD
 }
 
-/** The structured request body accepted by `/v1/patent-analytics`. Every field is optional; at least one is required. */
+/** The structured input accepted by the `patent_analytics` tool. Every field is optional; at least one is required. */
 interface IPatentAnalyticsRequest {
 	keywords?: string[];
 	phrases?: string[];
@@ -53,17 +54,16 @@ interface AnalyticsAggregates {
 	topCPC: { cpc: string; count: number }[];
 }
 
-interface AnalyticsResponse {
-	success: boolean;
+/** `data` payload of the `patent_analytics` facade tool. */
+interface AnalyticsData {
 	searchDescription?: string;
 	request?: IPatentAnalyticsRequest;
 	analytics?: AnalyticsAggregates;
-	error?: string;
 }
 
 /**
  * Tool for fetching patent analytics over the full backend corpus. Maps the structured search
- * criteria to the `/v1/patent-analytics` contract and calls it through the shared
+ * criteria to the `patent_analytics` tool's input and calls it through the shared
  * {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
  * `402 → start-trial` / `429 → rate-limited` gating. The backend computes each aggregate
  * (filing trend, top assignees, country and CPC breakdowns) over the whole matching corpus and
@@ -97,15 +97,15 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 		}
 
 		try {
-			const result = await this.patentBackendClient.post<AnalyticsResponse>('/patent-analytics', request, token);
+			const data = await callFacadeTool<AnalyticsData>(this.patentBackendClient, 'patent_analytics', request, token);
 
-			if (!result.success || !result.analytics) {
+			if (!data.analytics) {
 				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error: ${result.error || 'Unknown error'}`)
+					new LanguageModelTextPart('Error: the analytics tool returned no aggregates for these criteria.')
 				]);
 			}
 
-			const formattedResponse = this.formatAnalytics(result.searchDescription, result.analytics);
+			const formattedResponse = this.formatAnalytics(data.searchDescription, data.analytics);
 
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(formattedResponse)
@@ -117,9 +117,9 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 	}
 
 	/**
-	 * Map the tool inputs onto the `/v1/patent-analytics` request contract, dropping empty fields.
-	 * Returns undefined when no criterion is given, so the caller can short-circuit before the network
-	 * call (the backend would reject an empty body with `400 no-criterion`).
+	 * Map the tool inputs onto the `patent_analytics` input contract, dropping empty fields. Returns
+	 * undefined when no criterion is given, so the caller can short-circuit before the network call
+	 * (the backend rejects a criterion-free input with `422 INVALID_INPUT`).
 	 */
 	private buildRequest(input: IPatentAnalyticsParams): IPatentAnalyticsRequest | undefined {
 		const request: IPatentAnalyticsRequest = {};

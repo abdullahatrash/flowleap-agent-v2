@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -28,22 +29,24 @@ interface PatentDoc {
 	publicationDate: string | null;
 }
 
-interface PatentSearchResult {
-	success: boolean;
+/** `data` payload of the `search_patents` facade tool with `provider: 'epo_ops'`. */
+interface PatentSearchData {
 	total?: number;
 	range?: {
 		begin: number;
 		end: number;
 	};
 	docs?: PatentDoc[];
-	query?: string;
-	error?: string;
 }
 
 /**
- * Tool for searching patent databases using CQL (Common Patent Query Language). Calls the FlowLeap
- * backend (which handles EPO OPS API authentication) through the shared {@link IPatentBackendClient}
- * seam, so it inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating.
+ * Tool for searching patent databases using CQL (Common Patent Query Language). Calls the
+ * `search_patents` tool on the FlowLeap backend's `/v1/tools` facade (which handles EPO OPS
+ * authentication) through the shared {@link IPatentBackendClient} seam, so it inherits the
+ * centralized `401 → re-sign-in` / `402 → start-trial` gating.
+ *
+ * The facade hydrates each EPO result with title, abstract, applicants and publication date by
+ * default, which is what this tool's table renders.
  */
 export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
@@ -71,23 +74,22 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 		const { query, range = '1-25', countries } = options.input;
 
 		try {
-			// Build request body, only include countries if specified
-			const requestBody: { query: string; range: string; countries?: string } = { query, range };
-			if (countries) {
-				requestBody.countries = countries;
+			// The facade takes snake_case params and a countries ARRAY (the legacy route took a
+			// comma-separated string); this tool keeps its own string input and splits it here.
+			const input: { query: string; provider: 'epo_ops'; range: string; countries?: string[] } = {
+				query,
+				provider: 'epo_ops',
+				range,
+			};
+			const countryList = countries?.split(',').map(c => c.trim().toUpperCase()).filter(c => c.length === 2);
+			if (countryList && countryList.length > 0) {
+				input.countries = countryList;
 			}
 
-			const result = await this.patentBackendClient.post<PatentSearchResult>('/patent-search', requestBody, token);
-
-			if (!result.success) {
-				this.logService.error(`[SearchPatentsTool] Search failed: ${result.error}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error searching patents: ${result.error}`)
-				]);
-			}
+			const data = await callFacadeTool<PatentSearchData>(this.patentBackendClient, 'search_patents', input, token);
 
 			// Format results for LLM
-			const formattedResponse = this.formatSearchResults(result);
+			const formattedResponse = this.formatSearchResults(data, query);
 			this.logService.info(`[SearchPatentsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -100,18 +102,19 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	}
 
 	/**
-	 * Format search results for LLM consumption
+	 * Format search results for LLM consumption. The facade envelope carries no echo of the query, so
+	 * the caller's own query text is threaded through for the summary line.
 	 */
-	private formatSearchResults(result: PatentSearchResult): string {
-		if (!result.success || !result.docs || result.docs.length === 0) {
-			return `No patents found for query: ${result.query}`;
+	private formatSearchResults(result: PatentSearchData, query: string): string {
+		if (!result.docs || result.docs.length === 0) {
+			return `No patents found for query: ${query}`;
 		}
 
 		// `total` is optional in the backend response; fall back to the number of
 		// returned docs so the summary never reads "Found undefined patents".
 		const total = result.total ?? result.docs.length;
 		const lines: string[] = [
-			`Found ${total} patents matching query: "${result.query}"`,
+			`Found ${total} patents matching query: "${query}"`,
 			`Showing results ${result.range?.begin}-${result.range?.end}:`,
 			''
 		];

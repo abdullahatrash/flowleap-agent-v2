@@ -3,76 +3,53 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BaseApiGuideTool, GuideDocsData, GuideEndpointDoc } from './baseApiGuideTool';
+import { BaseRegistryGuideTool } from './registryGuideTool';
 import { ToolName } from '../common/toolNames';
 import { ToolRegistry } from '../common/toolsRegistry';
 
 /**
- * Tool that provides EPO OPS API documentation to the LLM agent. The agent can then use the
- * `patent_api_request` tool to make authenticated API calls. Docs are fetched from the FlowLeap
- * backend through the shared {@link IPatentBackendClient} seam, so it inherits the centralized
- * `401 → re-sign-in` / `402 → start-trial` gating.
+ * Tool that documents the EPO OPS-backed tools of the FlowLeap tool registry — worldwide search,
+ * per-document bibliography, abstract, full text, family, legal status, register events, citations,
+ * figures and number conversion.
+ *
+ * Reference docs come from the backend's versioned `GET /v1/tools` registry through the shared
+ * {@link IPatentBackendClient} seam, so the guide inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` gating and can never describe a tool that no longer exists.
  *
  * This enables the agent to:
- * 1. Learn available endpoints and their parameters
- * 2. Get example patent_api_request invocations
- * 3. Understand workflows for common patent tasks
- * 4. Use the patent_api_request tool to execute calls without leaking auth tokens
+ * 1. Learn which tools cover EPO data and what each one returns
+ * 2. Read a tool's parameters, examples and input schema before calling it
+ * 3. Call the tool directly — there is no separate HTTP path to construct
  */
-class OpsApiGuideTool extends BaseApiGuideTool {
+export class OpsApiGuideTool extends BaseRegistryGuideTool {
 
 	public static readonly toolName = ToolName.OpsApiGuide;
 
-	protected readonly docsRoute = '/ops/docs';
+	protected readonly toolFamily = [
+		'search_patents',
+		'get_search_syntax',
+		'get_bibliography',
+		'get_abstract',
+		'get_claims',
+		'get_description',
+		'get_fulltext',
+		'get_patent_family',
+		'get_family',
+		'get_legal_status',
+		'get_register_events',
+		'get_citations',
+		'get_patent_image',
+		'convert_patent_number',
+		'get_patent_summary',
+		'get_prosecution_timeline',
+		'get_patent_term',
+		'compare_patents',
+	];
 	protected readonly logPrefix = '[OpsApiGuideTool]';
-	protected readonly docsErrorLabel = 'OPS API docs';
-	protected readonly fullDocsTitle = '# EPO OPS API Documentation';
-	protected readonly defaultInvocationMessage = 'Getting OPS API documentation';
-	protected readonly listInvocationMessage = 'Listing available OPS endpoints';
-
-	protected override renderEndpointNote(endpoint: GuideEndpointDoc): string[] {
-		return ['', `**Rate Limit Note:** ${endpoint.rateLimitNote}`];
-	}
-
-	protected override renderCompactExtras(data: GuideDocsData): string[] {
-		if (!data.cqlFields) {
-			return [];
-		}
-		const lines = ['', '## CQL Query Fields:'];
-		for (const [field, desc] of Object.entries(data.cqlFields)) {
-			lines.push(`- ${field}: ${desc}`);
-		}
-		return lines;
-	}
-
-	protected override renderFullDocsAfterEndpoints(data: GuideDocsData): string[] {
-		if (!data.cqlReference) {
-			return [];
-		}
-		const lines: string[] = ['## CQL Query Reference:', '', '### Fields:'];
-		for (const [field, desc] of Object.entries(data.cqlReference.fields)) {
-			lines.push(`- ${field}: ${desc}`);
-		}
-		lines.push('');
-
-		if (data.cqlReference.operators) {
-			lines.push('### Operators:');
-			for (const [op, desc] of Object.entries(data.cqlReference.operators)) {
-				lines.push(`- ${op}: ${desc}`);
-			}
-			lines.push('');
-		}
-
-		if (data.cqlReference.examples && data.cqlReference.examples.length > 0) {
-			lines.push('### Examples:');
-			for (const ex of data.cqlReference.examples) {
-				lines.push(`- \`${ex.query}\` - ${ex.description}`);
-			}
-			lines.push('');
-		}
-
-		return lines;
-	}
+	protected readonly docsErrorLabel = 'EPO OPS tool docs';
+	protected readonly fullDocsTitle = '# EPO OPS Tools';
+	protected readonly defaultInvocationMessage = 'Getting EPO OPS tool documentation';
+	protected readonly listInvocationMessage = 'Listing available EPO OPS tools';
 }
 
 ToolRegistry.registerTool(OpsApiGuideTool);

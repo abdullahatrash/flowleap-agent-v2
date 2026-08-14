@@ -25,7 +25,7 @@ export interface IGuideApiParams {
 	section?: string;
 }
 
-/** One documented endpoint. `rateLimitNote`/`note` are route-specific and rendered by the subclass. */
+/** One documented endpoint. */
 export interface GuideEndpointDoc {
 	path: string;
 	method: string;
@@ -60,11 +60,7 @@ export interface GuideWorkflowDoc {
 	steps: GuideWorkflowStep[];
 }
 
-/**
- * The `data` payload of a `/docs` response. Every route reuses the shared endpoint/workflow shape;
- * the route-specific reference sections (CQL fields, search params, citation categories, legal
- * sources, …) are all optional and rendered by the owning subclass.
- */
+/** The `data` payload of a `/docs` response: the shared endpoint/workflow shape plus served sections. */
 export interface GuideDocsData {
 	baseUrl: string;
 	description?: string;
@@ -73,32 +69,6 @@ export interface GuideDocsData {
 	endpoint?: GuideEndpointDoc;
 	workflow?: GuideWorkflowDoc;
 	workflows?: Record<string, GuideWorkflowDoc> | string[];
-	cqlReference?: {
-		fields: Record<string, string>;
-		operators?: Record<string, string>;
-		examples?: Array<{ query: string; description: string }>;
-	};
-	cqlFields?: Record<string, string>;
-	searchParams?: Record<string, {
-		type: string;
-		required?: boolean;
-		description: string;
-		default?: string;
-		options?: string[];
-		example?: string;
-	}>;
-	categoriesReference?: Record<string, {
-		code: string;
-		description: string;
-		legalBasis?: string;
-	}>;
-	sourcesReference?: Record<string, {
-		name: string;
-		jurisdiction: string;
-		description: string;
-		sections?: string[];
-	}>;
-	searchModes?: Record<string, string>;
 	/** Served sections (PATSTAT): compact lists names; full docs carries pointer objects. */
 	sections?: string[] | Record<string, { description: string; url: string }>;
 	/** `?section=semantic-model` payload: the loaded edition + the semantic model YAML, verbatim. */
@@ -116,15 +86,16 @@ export interface GuideDocsResponse {
 }
 
 /**
- * Base for the API guide tools (OPS, USPTO, citation, legal). Each fetches route documentation from
- * the FlowLeap backend through the shared {@link IPatentBackendClient} seam (inheriting the
- * centralized `401 → re-sign-in` / `402 → start-trial` gating) and formats it for the agent, which
- * then makes the real calls through the `patent_api_request` tool without leaking auth tokens.
+ * Base for a guide tool that reads a backend `/docs` ROUTE — today only the PATSTAT guide, which owns
+ * its own documentation endpoint by decision (backend PRD 0013 keeps PATSTAT a route surface).
  *
- * The four tools were ~85% identical; this base owns the fetch/format skeleton and exposes hooks for
- * the parts that differ: the docs route, log tag and messages, the endpoint note field, the
- * route-specific reference sections in the compact list and full docs, and the typed-tool deferral
- * banner (citation/legal). Subclasses supply configuration and unique reference sections only.
+ * Every other guide reads the versioned tool registry instead; see {@link BaseRegistryGuideTool} in
+ * `registryGuideTool.ts`. Documentation that describes a route can only be hand-written, and
+ * hand-written docs drift from what they document — which is why this base has exactly one subclass
+ * left rather than five.
+ *
+ * Fetches through the shared {@link IPatentBackendClient} seam, so it inherits the centralized
+ * `401 → re-sign-in` / `402 → start-trial` gating.
  */
 export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> {
 
@@ -196,7 +167,7 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			}
 
 			// Format the docs for LLM consumption
-			const formattedDocs = this.formatDocs(action, result.data, endpoint, section);
+			const formattedDocs = this.formatDocs(action, result.data, section);
 			this.logService.info(`${this.logPrefix} Formatted docs length: ${formattedDocs.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -209,10 +180,9 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 	}
 
 	/**
-	 * Format the docs response for LLM consumption, dispatching on `action` and letting the subclass
-	 * decorate the body (e.g. with a typed-tool deferral banner).
+	 * Format the docs response for LLM consumption, dispatching on `action`.
 	 */
-	protected formatDocs(action: string, data: GuideDocsData | undefined, endpointParam?: string, sectionParam?: string): string {
+	protected formatDocs(action: string, data: GuideDocsData | undefined, sectionParam?: string): string {
 		if (!data) {
 			return 'No documentation available';
 		}
@@ -230,7 +200,7 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			body = this.formatFullDocs(data);
 		}
 
-		return this.decorateBody(action, endpointParam, body);
+		return body;
 	}
 
 	/**
@@ -274,8 +244,6 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 		lines.push('```');
 		lines.push(endpoint.responseShape);
 		lines.push('```');
-
-		lines.push(...this.renderEndpointNote(endpoint));
 
 		return lines.join('\n');
 	}
@@ -333,8 +301,6 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			}
 		}
 
-		lines.push(...this.renderCompactExtras(data));
-
 		lines.push('');
 		lines.push('Use action="endpoint" with endpoint name for detailed docs.');
 		lines.push('Use action="workflow" with workflow name for step-by-step guides.');
@@ -363,8 +329,6 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			lines.push('');
 		}
 
-		lines.push(...this.renderFullDocsBeforeEndpoints(data));
-
 		// Endpoints
 		if (data.endpoints && !Array.isArray(data.endpoints)) {
 			lines.push('## Endpoints:');
@@ -382,8 +346,6 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 			}
 		}
 
-		lines.push(...this.renderFullDocsAfterEndpoints(data));
-
 		// Workflows
 		if (data.workflows && !Array.isArray(data.workflows)) {
 			lines.push('## Workflows:');
@@ -397,38 +359,7 @@ export abstract class BaseApiGuideTool implements ICopilotTool<IGuideApiParams> 
 		lines.push('');
 		lines.push('---');
 		lines.push('Use the patent_api_request tool to execute API calls. It handles authentication automatically.');
-		lines.push(...this.renderFullDocsTailExtras(data));
 
 		return lines.join('\n');
-	}
-
-	/** Route-specific note appended to a single endpoint's docs (rate-limit note, general note, …). */
-	protected renderEndpointNote(_endpoint: GuideEndpointDoc): string[] {
-		return [];
-	}
-
-	/** Route-specific reference section appended to the compact list before its trailing hints. */
-	protected renderCompactExtras(_data: GuideDocsData): string[] {
-		return [];
-	}
-
-	/** Route-specific reference section rendered in full docs before the endpoints section. */
-	protected renderFullDocsBeforeEndpoints(_data: GuideDocsData): string[] {
-		return [];
-	}
-
-	/** Route-specific reference section rendered in full docs after the endpoints section. */
-	protected renderFullDocsAfterEndpoints(_data: GuideDocsData): string[] {
-		return [];
-	}
-
-	/** Route-specific trailing lines appended after the full-docs footer. */
-	protected renderFullDocsTailExtras(_data: GuideDocsData): string[] {
-		return [];
-	}
-
-	/** Wrap or annotate the formatted body (e.g. a typed-tool deferral banner). Identity by default. */
-	protected decorateBody(_action: string, _endpointParam: string | undefined, body: string): string {
-		return body;
 	}
 }

@@ -3,52 +3,47 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BaseApiGuideTool, GuideDocsData, GuideEndpointDoc } from './baseApiGuideTool';
+import { BaseRegistryGuideTool } from './registryGuideTool';
 import { ToolName } from '../common/toolNames';
 import { ToolRegistry } from '../common/toolsRegistry';
 
 /**
- * Tool that provides USPTO Open Data Portal API documentation to the LLM agent. The agent can then
- * use the `patent_api_request` tool to make authenticated API calls. Docs are fetched from the
- * FlowLeap backend through the shared {@link IPatentBackendClient} seam, so it inherits the
- * centralized `401 → re-sign-in` / `402 → start-trial` gating.
+ * Tool that documents the USPTO Open Data Portal tools of the FlowLeap tool registry — US search,
+ * granted-patent and application lookups, continuity, and the file-wrapper tools (transactions,
+ * assignments, foreign priority, PTA, attorney of record, IFW documents).
  *
- * This enables the agent to:
- * 1. Learn available endpoints and their current parameters
- * 2. Get example patent_api_request invocations for US patent searches
- * 3. Understand workflows for common USPTO patent tasks
- * 4. Use the patent_api_request tool to execute calls without leaking auth tokens
+ * Reference docs come from the backend's versioned `GET /v1/tools` registry through the shared
+ * {@link IPatentBackendClient} seam, so the guide inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` gating.
  *
- * This tool is the single source of truth for the USPTO route's request shape.
- * Prompts and skills should not hardcode parameter names — call this tool
- * at runtime so guidance never drifts from the backend.
+ * This is the single source of truth for the USPTO tools' input shapes: the underlying API migrated
+ * from PatentsView to ODP, and the field names live in the registry, not in a prompt. Call this tool
+ * before writing a non-trivial Lucene query so guidance never drifts from the backend.
  */
-class USPTOApiGuideTool extends BaseApiGuideTool {
+export class USPTOApiGuideTool extends BaseRegistryGuideTool {
 
 	public static readonly toolName = ToolName.USPTOApiGuide;
 
-	protected readonly docsRoute = '/patent-search-uspto/docs';
+	protected readonly toolFamily = [
+		'search_patents',
+		'get_search_syntax',
+		'get_us_grant',
+		'get_us_application',
+		'get_continuity',
+		'get_transactions',
+		'get_assignments',
+		'get_foreign_priority',
+		'get_patent_term_adjustment',
+		'get_attorney',
+		'get_application_documents',
+		'read_application_document',
+		'search_uspto_portfolio_by_customer_number',
+	];
 	protected readonly logPrefix = '[USPTOApiGuideTool]';
-	protected readonly docsErrorLabel = 'USPTO API docs';
-	protected readonly fullDocsTitle = '# USPTO Open Data Portal API Documentation';
-	protected readonly defaultInvocationMessage = 'Getting USPTO Open Data Portal API documentation';
-	protected readonly listInvocationMessage = 'Listing available USPTO endpoints';
-
-	protected override renderEndpointNote(endpoint: GuideEndpointDoc): string[] {
-		return endpoint.rateLimitNote ? ['', `**Rate Limit Note:** ${endpoint.rateLimitNote}`] : [];
-	}
-
-	protected override renderCompactExtras(data: GuideDocsData): string[] {
-		if (!data.searchParams) {
-			return [];
-		}
-		const lines = ['', '## Search Parameters:'];
-		for (const [param, info] of Object.entries(data.searchParams)) {
-			const req = info.required ? '(required)' : '';
-			lines.push(`- ${param} ${req}: ${info.description}`);
-		}
-		return lines;
-	}
+	protected readonly docsErrorLabel = 'USPTO tool docs';
+	protected readonly fullDocsTitle = '# USPTO Open Data Portal Tools';
+	protected readonly defaultInvocationMessage = 'Getting USPTO tool documentation';
+	protected readonly listInvocationMessage = 'Listing available USPTO tools';
 }
 
 ToolRegistry.registerTool(USPTOApiGuideTool);

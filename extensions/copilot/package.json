@@ -1740,7 +1740,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(references)",
         "userDescription": "Find prior art citations against a USPTO patent application",
-        "modelDescription": "PRIMARY TOOL for backward citation search: finds prior-art references cited by examiners against a USPTO application (X = novelty-destroying/102, Y = obviousness/103, A = background). Use whenever the user asks about citations against an application, examiner prior art, or X/Y/A rejection references. Prefer this over citation_api_guide + patent_api_request for standard citation lookups — use citation_api_guide only for date-range filtering or citation statistics. Input: applicationNumber (numeric string, no slashes — normalize '16/000,001' to '16000001'); category ('X'/'Y'/'A', omit for all); examinerOnly (boolean); size (default 100).",
+        "modelDescription": "PRIMARY TOOL for backward citation search: finds prior-art references cited by examiners against a USPTO application (X = novelty-destroying/102, Y = obviousness/103, A = background). Use whenever the user asks about citations against an application, examiner prior art, or X/Y/A rejection references. Prefer this over citation_api_guide + patent_api_request for standard citation lookups — use citation_api_guide only for citation statistics. Input: applicationNumber (numeric string, no slashes — normalize '16/000,001' to '16000001'); category ('X'/'Y'/'A', omit for all); examinerOnly (boolean); size (default 100); dateFrom/dateTo (YYYY-MM-DD, inclusive office-action date window; either bound may stand alone).",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1767,6 +1767,14 @@
               "type": "number",
               "description": "Optional. Maximum number of citations to return. Default: 100.",
               "default": 100
+            },
+            "dateFrom": {
+              "type": "string",
+              "description": "Optional. Earliest office-action date to include, YYYY-MM-DD (inclusive). May be given without dateTo."
+            },
+            "dateTo": {
+              "type": "string",
+              "description": "Optional. Latest office-action date to include, YYYY-MM-DD (inclusive). May be given without dateFrom."
             }
           },
           "required": [
@@ -1907,14 +1915,14 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(cloud-download)",
         "userDescription": "Make an authenticated request to the Patent AI backend",
-        "modelDescription": "Make an authenticated request to the Patent AI backend and get the JSON result directly. Use this for ANY backend endpoint shown by the *_api_guide tools (OPS, USPTO, citation, legal) — supply the `path` (e.g. /ops/biblio?doc=EP1234566), optional `method` (GET default, or POST), and optional `body` (a JSON string for POST). Prefer this over running curl in the terminal: it authenticates automatically and returns structured results. Do NOT put the backend host or /v1 in the path.",
+        "modelDescription": "Make an authenticated request to the Patent AI backend and get the JSON result directly. Use this to call a backend TOOL that has no typed tool of its own: supply the `path` (\"/tools/<tool_name>\", e.g. /tools/get_citations), `method` \"POST\", and `body` (the tool's JSON input, e.g. '{\"patent_number\":\"EP1000000\"}'). The *_api_guide tools name the tool and give its input schema. PATSTAT routes (/patstat/...) are the exception and are still called by path. Prefer this over running curl in the terminal: it authenticates automatically and returns structured results. Do NOT put the backend host or /v1 in the path.",
         "tags": [],
         "inputSchema": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "Relative path to the backend endpoint, e.g. \"/ops/biblio?doc=EP1234566\" or \"/patent-search-uspto\". Do NOT include the host or /v1 prefix."
+              "description": "Relative path, e.g. \"/tools/get_bibliography\" for a backend tool or \"/patstat/portfolio\" for a PATSTAT route. Do NOT include the host or /v1 prefix."
             },
             "method": {
               "type": "string",
