@@ -57,8 +57,17 @@ async function canFocusSettingsView(): Promise<boolean> {
 
 const SHOW_SETUP_ON_STARTUP_SETTING = 'flowleap.showSetupOnStartup';
 
-const EPO_SIGNUP_URL = 'https://developers.epo.org/';
-const USPTO_SIGNUP_URL = 'https://data.uspto.gov/myodp';
+/**
+ * Where a user who has no key yet is sent, per provider. The USPTO entry is the public
+ * "Getting Started" page, not the signed-in `data.uspto.gov/myodp` dashboard it was before: since
+ * June 2026 ODP needs a USPTO.gov account with MFA, so a keyless user met a sign-in wall instead of
+ * the instructions. It is also the URL the CLI already uses (`flowleap-cli/src/commands/keys.rs`),
+ * so both clients now send people to one place. Exported so a test can pin the URLs.
+ */
+export const SIGNUP_URLS = {
+	epo: 'https://developers.epo.org/',
+	uspto: 'https://data.uspto.gov/apis/getting-started',
+} as const;
 
 /** The purpose-built key-validation endpoint: reports, per provider, the key source and verdict. */
 const KEY_VALIDATION_PATH = '/keys/validate';
@@ -159,8 +168,8 @@ interface ProviderSpec {
 }
 
 const PROVIDERS: readonly ProviderSpec[] = [
-	{ provider: 'epo', label: 'EPO OPS (European Patent Office)', signupUrl: EPO_SIGNUP_URL },
-	{ provider: 'uspto', label: 'USPTO ODP (US Patent Office)', signupUrl: USPTO_SIGNUP_URL },
+	{ provider: 'epo', label: 'EPO OPS (European Patent Office)', signupUrl: SIGNUP_URLS.epo },
+	{ provider: 'uspto', label: 'USPTO ODP (US Patent Office)', signupUrl: SIGNUP_URLS.uspto },
 ];
 
 /** Presence-only view state — the ONLY key-related data that ever reaches the webview. */
@@ -457,6 +466,11 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		}
 		.container { max-width: 640px; margin: 0 auto; padding: 12px 14px 20px; }
 		.privacy { color: var(--vscode-descriptionForeground); font-size: 12px; margin-bottom: 14px; }
+		.notice {
+			font-size: 12px; line-height: 1.5; padding: 10px 12px; margin-bottom: 10px; border-radius: 6px;
+			background: color-mix(in srgb, var(--vscode-textLink-foreground) 10%, transparent);
+			border: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground) 30%, transparent);
+		}
 		.card {
 			background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
 			border: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border, transparent));
@@ -595,6 +609,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			</div>
 		</div>
 
+		<p class="notice">Both patent-office keys are <strong>free</strong>. During your trial FlowLeap's own server keys cover patent data; on a paid plan the patent offices are reached with your keys, so add them before your trial ends.</p>
+
 		<p class="privacy">The patent-office keys below stay on this machine in secure storage and are only sent to reach the patent offices. They are never shown again once saved — entering a new value replaces the stored one.</p>
 
 		<div class="card" id="card-epo">
@@ -602,7 +618,7 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				<div class="card-title">EPO OPS (European Patent Office)</div>
 				<span class="badge" id="badge-epo">Not configured</span>
 			</div>
-			<p class="card-desc">European patent data. Needs the Consumer Key and Consumer Secret of an app on your EPO OPS account.</p>
+			<p class="card-desc">European patent data. Needs the Consumer Key and Consumer Secret of an app on your EPO OPS account. Free from the patent office — signup takes a few minutes.</p>
 			<div class="field">
 				<label for="epo-key">Consumer Key</label>
 					<span class="field-hint">Find it at developers.epo.org — My Apps → your app → Consumer Key.</span>
@@ -619,7 +635,7 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				<button class="secondary" id="clear-epo" disabled>Clear</button>
 			</div>
 			<div class="status" id="status-epo"></div>
-			<div class="get-key">Don't have a key yet? <a href="#" id="signup-epo">Get one at developers.epo.org</a></div>
+			<div class="get-key">Don't have a key yet? <a href="#" id="signup-epo">Get one free at developers.epo.org</a></div>
 		</div>
 
 		<div class="card" id="card-uspto">
@@ -627,10 +643,10 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				<div class="card-title">USPTO ODP (US Patent Office)</div>
 				<span class="badge" id="badge-uspto">Not configured</span>
 			</div>
-			<p class="card-desc">US patent data and citation analysis. Needs an Open Data Portal API key.</p>
+			<p class="card-desc">US patent data and citation analysis. Needs an Open Data Portal API key. Free from the patent office — signup takes a few minutes.</p>
 			<div class="field">
 				<label for="uspto-key">API Key</label>
-					<span class="field-hint">Find it at data.uspto.gov/myodp — My ODP → API key.</span>
+					<span class="field-hint">Find it at data.uspto.gov — sign in, then My ODP → API key.</span>
 				<input type="password" id="uspto-key" placeholder="Paste your API key">
 			</div>
 			<div class="buttons">
@@ -639,7 +655,7 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				<button class="secondary" id="clear-uspto" disabled>Clear</button>
 			</div>
 			<div class="status" id="status-uspto"></div>
-			<div class="get-key">Don't have a key yet? <a href="#" id="signup-uspto">Get one at data.uspto.gov/myodp</a></div>
+			<div class="get-key">Don't have a key yet? <a href="#" id="signup-uspto">Get one free at data.uspto.gov</a></div>
 		</div>
 
 		<div class="footer">Looking for chat mode, projects folder and other preferences? <a href="#" id="open-preferences">All FlowLeap preferences…</a></div>
