@@ -12,6 +12,7 @@ import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendCl
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { CitationDoc } from './patentCitationTypes';
+import { callFacadeTool } from './patentFacade';
 import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
 import { handlePatentToolError } from './patentToolError';
 
@@ -20,15 +21,15 @@ interface ISearchCitationsParams {
 	category?: 'X' | 'Y' | 'A';
 	examinerOnly?: boolean;
 	size?: number;
+	/** Inclusive office-action date window, YYYY-MM-DD; either bound may stand alone. */
+	dateFrom?: string;
+	dateTo?: string;
 }
 
-interface CitationSearchResult {
-	success: boolean;
+/** `data` payload of the `search_office_action_citations` facade tool. */
+interface CitationSearchData {
 	total?: number;
-	data?: CitationDoc[];
-	applicationNumber?: string;
-	cached?: boolean;
-	error?: string;
+	citations?: CitationDoc[];
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -96,35 +97,32 @@ export class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams>
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<ISearchCitationsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[SearchCitationsTool] Invoking citation search');
 
-		const { applicationNumber, category, examinerOnly = false, size = 100 } = options.input;
+		const { applicationNumber, category, examinerOnly = false, size = 100, dateFrom, dateTo } = options.input;
 
 		const normalized = applicationNumber.replace(/[\/,\s]/g, '');
 
 		try {
-			const requestBody: {
-				applicationNumber: string;
+			const input: {
+				application_number: string;
 				size: number;
-				examinerCitedOnly: boolean;
+				examiner_cited_only: boolean;
 				category?: string;
+				date_range?: { from?: string; to?: string };
 			} = {
-				applicationNumber: normalized,
+				application_number: normalized,
 				size,
-				examinerCitedOnly: examinerOnly,
+				examiner_cited_only: examinerOnly,
 			};
 			if (category) {
-				requestBody.category = category;
+				input.category = category;
+			}
+			if (dateFrom || dateTo) {
+				input.date_range = { ...(dateFrom ? { from: dateFrom } : {}), ...(dateTo ? { to: dateTo } : {}) };
 			}
 
-			const result = await this.patentBackendClient.post<CitationSearchResult>('/citation-search', requestBody, token);
+			const data = await callFacadeTool<CitationSearchData>(this.patentBackendClient, 'search_office_action_citations', input, token);
 
-			if (!result.success) {
-				this.logService.error(`[SearchCitationsTool] Search failed: ${result.error}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error searching citations: ${result.error ?? 'unknown error'}`)
-				]);
-			}
-
-			const formatted = this.formatSearchResults(result, { applicationNumber: normalized, category, examinerOnly, size });
+			const formatted = this.formatSearchResults(data, { applicationNumber: normalized, category, examinerOnly, size, dateFrom, dateTo });
 			this.logService.info(`[SearchCitationsTool] Formatted response length: ${formatted.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -136,11 +134,12 @@ export class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams>
 	}
 
 	private formatSearchResults(
-		result: CitationSearchResult,
-		query: { applicationNumber: string; category?: string; examinerOnly: boolean; size: number }
+		result: CitationSearchData,
+		query: { applicationNumber: string; category?: string; examinerOnly: boolean; size: number; dateFrom?: string; dateTo?: string }
 	): string {
 		const lines: string[] = [];
-		const total = result.total ?? result.data?.length ?? 0;
+		const citations = result.citations;
+		const total = result.total ?? citations?.length ?? 0;
 
 		lines.push(`Found ${total} citations for application ${query.applicationNumber}`);
 		if (query.category) {
@@ -149,18 +148,21 @@ export class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams>
 		if (query.examinerOnly) {
 			lines.push('Examiner-cited only: yes');
 		}
+		if (query.dateFrom || query.dateTo) {
+			lines.push(`Office-action date range: ${query.dateFrom ?? 'earliest'} to ${query.dateTo ?? 'latest'}`);
+		}
 		lines.push('');
 
-		if (!result.data || result.data.length === 0) {
+		if (!citations || citations.length === 0) {
 			lines.push('No citations found matching the filters.');
 			lines.push('');
 			lines.push('Backward citations key on the US application number, not the publication number — if you passed a publication number, resolve the application number via get_patent_family (find the US member) then get_continuity (read its application number) and retry. To instead find patents that cite this document forward, use search_forward_citations with the publication number.');
 			lines.push('');
-			lines.push('For forward citations, citation statistics, or date-range filtering, use citation_api_guide.');
+			lines.push('For forward citations or citation statistics, use citation_api_guide.');
 			return lines.join('\n');
 		}
 
-		const rows = result.data.map((doc, i) => ({ doc, n: i + 1 }));
+		const rows = citations.map((doc, i) => ({ doc, n: i + 1 }));
 
 		lines.push(renderMarkdownTable(rows, [
 			{ header: '#', cell: r => String(r.n), align: 'right' },
@@ -187,13 +189,13 @@ export class SearchCitationsTool implements ICopilotTool<ISearchCitationsParams>
 			}
 		}
 
-		if (total > result.data.length) {
+		if (total > citations.length) {
 			lines.push('');
-			lines.push(`Showing first ${result.data.length} of ${total}. Re-call with a larger size to see more.`);
+			lines.push(`Showing first ${citations.length} of ${total}. Re-call with a larger size to see more.`);
 		}
 
 		lines.push('');
-		lines.push('For forward citations, citation statistics, or date-range filtering, use citation_api_guide.');
+		lines.push('For forward citations or citation statistics, use citation_api_guide.');
 
 		return lines.join('\n');
 	}

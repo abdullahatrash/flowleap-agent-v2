@@ -217,8 +217,8 @@ export class PdfEditorProvider implements vscode.CustomReadonlyEditorProvider {
 	 * The verdict is owned by the Patent AI extension — it owns the store and the FlowLeap
 	 * Settings sidebar the user reverses it from — and this extension cannot import across that
 	 * boundary, so the question is asked through a command. The command id below is therefore
-	 * hand-mirrored from `patentai/common/ocrConsent.ts`, the same manual mirroring
-	 * `resolvePatentApiUrl` already documents, and a test there pins the string.
+	 * hand-mirrored from `patentai/common/ocrConsent.ts`, the same manual mirroring the OCR run
+	 * command in `pdfTextExtractor.ts` documents, and a test there pins the string.
 	 *
 	 * Fails CLOSED. If the gate cannot be reached at all — Patent AI not activated, command not
 	 * registered — the answer is no. A document must never be uploaded because the thing that

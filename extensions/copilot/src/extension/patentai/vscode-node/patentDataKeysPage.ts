@@ -31,12 +31,14 @@ import { IOcrConsentService } from './ocrConsentService';
  * (SecretStorage) and are never logged; the webview only ever RECEIVES presence booleans —
  * stored key material never round-trips into the view.
  *
- * "Test connection" rides the normal request seam on purpose: the backend's key-forwarding
- * middleware (#30) eagerly validates the EPO pair on ANY guarded request and answers
- * `400 patent_provider_key_invalid` with a `provider` field, so a cheap request doubles as
- * a per-provider probe — no dedicated test endpoint needed. Saving auto-runs the test so a
- * typo is caught at entry, not mid-research (the key is kept either way — a sign-in or
- * connectivity problem must not block key entry).
+ * "Test connection" calls the backend's purpose-built key-validation endpoint through the normal
+ * request seam. It answers with a verdict PER PROVIDER — where the credentials came from (the user's
+ * headers, the FlowLeap server, or nowhere) and whether they work — so a test says something true
+ * about the provider under test instead of inferring it from whether an unrelated data call
+ * survived. The endpoint sits outside the subscription gate by design: key setup happens during
+ * onboarding, which may precede a subscription. Saving auto-runs the test so a typo is caught at
+ * entry, not mid-research (the key is kept either way — a sign-in or connectivity problem must not
+ * block key entry).
  */
 
 export const PATENT_DATA_KEYS_COMMAND = 'flowleap.patentDataKeys';
@@ -58,14 +60,33 @@ const SHOW_SETUP_ON_STARTUP_SETTING = 'flowleap.showSetupOnStartup';
 const EPO_SIGNUP_URL = 'https://developers.epo.org/';
 const USPTO_SIGNUP_URL = 'https://data.uspto.gov/myodp';
 
-/** A guarded GET that performs no USPTO call — with EPO headers attached, the backend's
- *  eager mint validates the pair, so the response IS the EPO verdict. */
-const EPO_PROBE_PATH = '/citation-search/health';
-/** A USPTO-backed call so the forwarded ODP key is actually exercised. */
-const USPTO_PROBE_PATH = '/citation-search';
-const USPTO_PROBE_BODY = { applicationNumber: '16123456' };
+/** The purpose-built key-validation endpoint: reports, per provider, the key source and verdict. */
+const KEY_VALIDATION_PATH = '/keys/validate';
 
 type Provider = 'epo' | 'uspto';
+
+/** Where a provider's credentials came from, as the backend reports it. */
+type KeySource = 'user' | 'server' | 'none';
+
+/**
+ * One provider's verdict. `valid` is deliberately three-valued: `true` = proven working,
+ * `false` = absent or rejected, `null` = configured but not exercised (server credentials, or the
+ * provider was unreachable). A null is not a pass and not a failure, and the view must not round it
+ * to either.
+ */
+interface ProviderVerdict {
+	readonly source?: KeySource;
+	readonly valid?: boolean | null;
+	readonly message?: string;
+}
+
+/** Body of `POST /v1/keys/validate`. */
+interface KeyValidationResponse {
+	readonly providers?: {
+		readonly epo?: ProviderVerdict;
+		readonly uspto?: ProviderVerdict;
+	};
+}
 
 export interface TestConnectionResult {
 	readonly ok: boolean;
@@ -75,24 +96,49 @@ export interface TestConnectionResult {
 	readonly failedProvider?: Provider;
 }
 
+/** Human label for a provider, in the words its own portal uses. */
+function providerLabel(provider: Provider): string {
+	return provider === 'epo' ? 'EPO OPS credentials' : 'USPTO ODP key';
+}
+
 /**
- * Probe the backend to verify the CONFIGURED key for `provider`. Pure logic (no UI) so
- * it is unit-testable; the view wraps it in inline per-provider status lines.
+ * Ask the backend to verify the CONFIGURED key for `provider`. Pure logic (no UI) so it is
+ * unit-testable; the view wraps it in inline per-provider status lines.
+ *
+ * The call reports both providers at once, but a test is about the one the user just edited, so the
+ * verdict for the OTHER provider is read only to attribute a rejection the seam raised. Validation
+ * is a live probe of credentials, so it deliberately skips the seam's read cache: an answer replayed
+ * from a 60-second cache would describe the key the user just replaced.
  */
 export async function testPatentDataConnection(client: IPatentBackendClient, provider: Provider): Promise<TestConnectionResult> {
 	try {
-		if (provider === 'epo') {
-			await client.get(EPO_PROBE_PATH, CancellationToken.None, { timeoutMs: 15_000 });
-			return { ok: true, message: 'EPO OPS credentials verified.' };
+		const response = await client.post<KeyValidationResponse>(
+			KEY_VALIDATION_PATH, {}, CancellationToken.None, { timeoutMs: 15_000, bypassReadCache: true });
+		const verdict = response?.providers?.[provider];
+		const label = providerLabel(provider);
+
+		if (verdict?.valid === true) {
+			return { ok: true, message: verdict.message || `${label} verified.` };
 		}
-		await client.post(USPTO_PROBE_PATH, USPTO_PROBE_BODY, CancellationToken.None, { timeoutMs: 15_000 });
-		return { ok: true, message: 'USPTO ODP key verified.' };
+		if (verdict?.valid === false) {
+			return {
+				ok: false,
+				message: verdict.message || `${label} rejected by the provider. Update the key and test again.`,
+				failedProvider: provider,
+			};
+		}
+		// `valid: null` — configured but not exercised. Says what is actually known, and never
+		// reports FlowLeap's own server credentials as the user's key working.
+		if (verdict?.source === 'server') {
+			return { ok: true, message: verdict.message || 'Using FlowLeap server credentials — no key of your own is needed yet.' };
+		}
+		return { ok: false, message: verdict?.message || `Could not verify the ${label}; the provider did not answer. Try again shortly.` };
 	} catch (error) {
 		if (error instanceof DataKeyInvalidError) {
-			// The backend names the failing provider — it may differ from the one under test
-			// (e.g. testing USPTO while a broken EPO pair is configured fails the eager EPO
-			// validation first). Report what actually failed.
-			const failed = error.provider === 'epo' ? 'EPO OPS credentials' : 'USPTO ODP key';
+			// The seam can raise this before the handler runs: the backend's key-forwarding
+			// middleware eagerly validates the EPO pair on any guarded request, so testing USPTO
+			// while a broken EPO pair is stored fails on EPO first. Report what actually failed.
+			const failed = providerLabel(error.provider);
 			return {
 				ok: false,
 				message: `${failed} rejected by the provider. ${error.provider === provider ? 'Update the key and test again.' : 'Fix or clear that provider first, then re-test.'}`,

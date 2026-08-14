@@ -11,6 +11,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { callFacadeTool } from './patentFacade';
 import { IMarkdownColumn, renderMarkdownTable, ToolResponseBudgets, truncationNotice } from './patentResponseFormatter';
 import { handlePatentToolError } from './patentToolError';
 
@@ -99,16 +100,12 @@ function decomposeClaim(rawClaim: string): IClaimElement[] {
 	return elements;
 }
 
-interface OpsEnvelope<T> {
-	success: boolean;
-	data?: T;
-	error?: string;
-}
-
-interface OpsClaimsData {
+/** `data` payload of the `get_claims` facade tool — numbered claims, not bare strings. */
+interface ClaimsData {
 	docId: string;
-	lang: string;
-	claims: string[];
+	claims: { number: string; text: string }[];
+	totalClaims: number;
+	language: string;
 }
 
 interface FetchedClaims {
@@ -119,8 +116,9 @@ interface FetchedClaims {
 
 /**
  * Tool for comparing a user's claim against prior art patents. Fetches the actual claims of each
- * cited patent from EPO OPS (`/ops/fulltext/claims`, via the shared {@link IPatentBackendClient}
- * seam, so it inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating) and
+ * cited patent through the backend's `get_claims` facade tool (via the shared
+ * {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` gating) and
  * returns them alongside the user's claim with an analysis rubric — the agent performs the
  * element-by-element comparison itself. Should be called AFTER search_patents to analyze
  * relevant results.
@@ -179,8 +177,8 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(
 						`Could not retrieve claims for any of the requested patents:\n${failures}\n\n` +
-						'EPO OPS full text covers mainly EP/WO publications. For US patents, fetch claims via ' +
-						'patent_api_request (POST /patent-search-uspto/search) or get_patent_details, then compare manually.'
+						'Claims are not published for every office and document. Fetch them with get_patent_details, ' +
+						'or for a US document with get_us_grant, then compare manually.'
 					)
 				]);
 			}
@@ -205,12 +203,11 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 	private async fetchClaims(patentNumber: string, token: CancellationToken): Promise<FetchedClaims> {
 		const doc = patentNumber.replace(/[-.\s/]/g, '').toUpperCase();
 		try {
-			const result = await this.patentBackendClient.get<OpsEnvelope<OpsClaimsData>>(
-				`/ops/fulltext/claims?${new URLSearchParams({ doc }).toString()}`, token);
-			if (!result.success || !result.data || result.data.claims.length === 0) {
-				return { patentNumber, claims: null, failureReason: result.error || 'no claims returned' };
+			const data = await callFacadeTool<ClaimsData>(this.patentBackendClient, 'get_claims', { patent_number: doc }, token);
+			if (!data.claims || data.claims.length === 0) {
+				return { patentNumber, claims: null, failureReason: 'no claims returned' };
 			}
-			return { patentNumber, claims: result.data.claims };
+			return { patentNumber, claims: data.claims.map(c => c.text) };
 		} catch (error) {
 			if (error instanceof PatentBackendError) {
 				if (error.message === 'Request cancelled.' || error.status === 401 || error.status === 402) {
@@ -249,7 +246,7 @@ export class CompareClaimsTool implements ICopilotTool<ICompareClaimsParams> {
 			if (f.claims && f.claims.length > 0) {
 				lines.push(this.renderBoundedClaims(f.claims));
 			} else {
-				lines.push(`Claims unavailable via EPO OPS (${f.failureReason}). For US patents, fetch via patent_api_request (POST /patent-search-uspto/search).`);
+				lines.push(`Claims unavailable (${f.failureReason}). For a US document, try get_us_grant with the bare numeric patent number.`);
 			}
 			lines.push('');
 		}

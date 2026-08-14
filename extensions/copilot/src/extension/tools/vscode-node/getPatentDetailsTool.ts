@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -17,13 +18,8 @@ interface IGetPatentDetailsParams {
 	publicationNumber: string;
 }
 
-interface OpsEnvelope<T> {
-	success: boolean;
-	data?: T;
-	error?: string;
-}
-
-interface OpsBiblioData {
+/** `data` payload of the `get_bibliography` facade tool. */
+interface BiblioData {
 	docId: string;
 	title: string | null;
 	abstract: string | null;
@@ -38,27 +34,32 @@ interface OpsBiblioData {
 	};
 }
 
-interface OpsClaimsData {
+/** `data` payload of the `get_claims` facade tool — numbered claims, not bare strings. */
+interface ClaimsData {
 	docId: string;
-	lang: string;
-	claims: string[];
+	claims: { number: string; text: string }[];
+	totalClaims: number;
+	language: string;
 }
 
-interface OpsDescriptionData {
+/** `data` payload of the `get_description` facade tool. */
+interface DescriptionData {
 	docId: string;
-	lang: string;
-	description: string;
+	description: string | null;
+	language: string;
 }
 
 /**
- * Tool for retrieving full patent details (bibliographic data + claims + description) from EPO OPS
- * via the FlowLeap backend (`/ops/biblio` + `/ops/fulltext/*`). Routes through the shared
- * {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
- * `402 → start-trial` gating. OPS full text covers mainly EP and WO publications; for other
- * jurisdictions the biblio section still resolves and the output points the model at the
- * USPTO fallback.
+ * Tool for retrieving full patent details (bibliographic data + claims + description) through the
+ * FlowLeap backend's `/v1/tools` facade — `get_bibliography`, `get_claims`, `get_description` — via
+ * the shared {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` gating.
+ *
+ * The facade routes full text per office (EP/WO through EPO OPS, US claims through BigQuery), so a
+ * missing section is a structured verdict rather than a coverage assumption; a section that fails
+ * degrades to the fallback line instead of failing the whole tool.
  */
-class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
+export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 
 	public static readonly toolName = ToolName.GetPatentDetails;
 
@@ -91,23 +92,14 @@ class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 		this.logService.info(`[GetPatentDetailsTool] Normalized: ${publicationNumber} -> ${doc}`);
 
 		try {
-			const biblioPromise = this.patentBackendClient.get<OpsEnvelope<OpsBiblioData>>(
-				`/ops/biblio?${new URLSearchParams({ doc }).toString()}`, token);
-			const claimsPromise = this.fetchOptionalSection<OpsClaimsData>('/ops/fulltext/claims', doc, token);
-			const descriptionPromise = this.fetchOptionalSection<OpsDescriptionData>('/ops/fulltext/description', doc, token);
+			const biblioPromise = callFacadeTool<BiblioData>(this.patentBackendClient, 'get_bibliography', { patent_number: doc }, token);
+			const claimsPromise = this.fetchOptionalSection<ClaimsData>('get_claims', doc, token);
+			const descriptionPromise = this.fetchOptionalSection<DescriptionData>('get_description', doc, token);
 
 			const biblio = await biblioPromise;
-			if (!biblio.success || !biblio.data) {
-				const errorMsg = biblio.error || `Patent not found: ${publicationNumber}`;
-				this.logService.error(`[GetPatentDetailsTool] Error: ${errorMsg}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`${errorMsg}\n\n${this.usptoFallbackHint(doc)}`)
-				]);
-			}
-
 			const [claims, description] = await Promise.all([claimsPromise, descriptionPromise]);
 
-			const formattedResponse = this.formatPatentDetails(biblio.data, claims, description, doc);
+			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc);
 			this.logService.info(`[GetPatentDetailsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -126,35 +118,33 @@ class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 	}
 
 	/**
-	 * Fetch an optional full-text section. OPS full text is only published for some jurisdictions
-	 * (mainly EP/WO), so a 404 here must not fail the whole tool — return null and let the
-	 * formatter point at the fallback. Auth/subscription errors (401/402) and cancellation still
-	 * propagate: the same guards protect `/ops/biblio`, so surfacing them once there is enough.
+	 * Fetch an optional full-text section through the facade. Full text is not published for every
+	 * office and section, so a failure here must not fail the whole tool — return null and let the
+	 * formatter point at the fallback. Cancellation still propagates, and so do the seam's typed
+	 * gating errors: the same guards protect `get_bibliography`, so surfacing them once there is enough.
 	 */
-	private async fetchOptionalSection<T>(path: string, doc: string, token: CancellationToken): Promise<T | null> {
+	private async fetchOptionalSection<T>(toolName: string, doc: string, token: CancellationToken): Promise<T | null> {
 		try {
-			const result = await this.patentBackendClient.get<OpsEnvelope<T>>(
-				`${path}?${new URLSearchParams({ doc }).toString()}`, token);
-			return result.success && result.data ? result.data : null;
+			return await callFacadeTool<T>(this.patentBackendClient, toolName, { patent_number: doc }, token);
 		} catch (error) {
 			if (error instanceof PatentBackendError && error.message === 'Request cancelled.') {
 				throw error;
 			}
-			this.logService.info(`[GetPatentDetailsTool] Optional section ${path} unavailable for ${doc}: ${error instanceof Error ? error.message : String(error)}`);
+			this.logService.info(`[GetPatentDetailsTool] Optional section ${toolName} unavailable for ${doc}: ${error instanceof Error ? error.message : String(error)}`);
 			return null;
 		}
 	}
 
 	private usptoFallbackHint(doc: string): string {
-		return `For US patents, full text is available via the USPTO: use patent_api_request with GET /patent-search-uspto/grants/${doc.replace(/^US/, '').replace(/[A-Z]\d?$/, '')} or POST /patent-search-uspto/search.`;
+		return `For a US document, the full file wrapper is available from the USPTO: use get_us_grant with the bare numeric patent number (${doc.replace(/^US/, '').replace(/[A-Z]\d?$/, '')}), or search_patents with provider="uspto".`;
 	}
 
 	/**
 	 * Format patent details for LLM consumption
 	 */
-	private formatPatentDetails(biblio: OpsBiblioData, claims: OpsClaimsData | null, description: OpsDescriptionData | null, doc: string): string {
+	private formatPatentDetails(biblio: BiblioData, claims: ClaimsData | null, description: DescriptionData | null, doc: string): string {
 		const countryCode = biblio.docId?.substring(0, 2) || doc.substring(0, 2);
-		const fulltextFallback = `Not available via EPO OPS for this document (full text is published mainly for EP/WO). ${this.usptoFallbackHint(doc)}`;
+		const fulltextFallback = `Full text is not available for this document and section. ${this.usptoFallbackHint(doc)}`;
 
 		const lines: string[] = [
 			`# Patent: ${biblio.docId || doc}`,
@@ -175,13 +165,13 @@ class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParams> {
 			biblio.abstract || 'No abstract available.',
 			'',
 			'## Claims',
-			claims && claims.claims.length > 0 ? claims.claims.join('\n\n') : fulltextFallback,
+			claims && claims.claims.length > 0 ? claims.claims.map(c => c.text).join('\n\n') : fulltextFallback,
 			'',
 			'## Description',
 			description?.description || fulltextFallback,
 			'',
 			'---',
-			`For citations use search_citations / search_forward_citations; for the patent family use patent_api_request with GET /ops/family?doc=${doc}.`,
+			'For citations use search_citations / search_forward_citations; for the patent family use get_patent_family.',
 		];
 
 		return lines.join('\n');

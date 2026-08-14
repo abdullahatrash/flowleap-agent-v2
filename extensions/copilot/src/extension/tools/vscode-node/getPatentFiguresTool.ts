@@ -10,6 +10,7 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { decodeBase64 } from '../../../util/vs/base/common/buffer';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -28,19 +29,19 @@ interface FigureData {
 	base64?: string;
 }
 
-interface FiguresResponseData {
+/**
+ * `data` payload of the `get_patent_image` facade tool. Metadata-only calls return the image-inquiry
+ * shape (no `figures`); with `include_images` the same shape carries the base64 pages.
+ */
+interface FiguresData {
 	docId: string;
-	totalFigures: number;
-	availableFormats: string[];
+	/** Present on an image-fetching call; metadata-only calls report page counts per format instead. */
+	totalFigures?: number;
+	availableFormats?: string[];
+	formats?: { format: string; pages: number; drawingStartPage?: number }[];
 	/** 1-based page where the DRAWINGS section starts (earlier pages are cover/biblio/description). */
 	drawingStartPage?: number;
-	figures: FigureData[];
-}
-
-interface FiguresApiResponse {
-	success: boolean;
-	data?: FiguresResponseData;
-	error?: string;
+	figures?: FigureData[];
 }
 
 /** Default number of figure pages to fetch when the caller does not specify `pages`. */
@@ -53,13 +54,16 @@ const MAX_REQUESTED_PAGES = 20;
 const FIGURE_RENDER_TIMEOUT_MS = 60_000;
 
 /**
- * Tool for retrieving patent figure/drawing images from the FlowLeap backend (EPO OPS).
+ * Tool for retrieving patent figure/drawing images through the FlowLeap backend's `get_patent_image`
+ * facade tool (EPO OPS images).
  *
- * The backend rasterizes the (PDF-only) EPO drawings to PNG via `render=png`, and this tool
- * returns them as inline image parts so the model can actually see and analyze the figures.
+ * The tool call returns base64 page images inside the JSON envelope — metadata first (to learn the
+ * page count and where the drawings start), then the selected pages with `include_images` and
+ * `render: 'png'`, since EPO serves most patents as PDF only and a PDF cannot be shown as an image.
+ * The pages come back as inline image parts so the model can actually see and analyze the figures.
  * Routes through the shared {@link IPatentBackendClient} seam for centralized `401`/`402` gating.
  */
-class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
+export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
 
 	public static readonly toolName = ToolName.GetPatentFigures;
 
@@ -80,19 +84,18 @@ class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
 		this.logService.info(`[GetPatentFiguresTool] Fetching figures for ${publicationNumber}${pages ? ` pages=${pages}` : ''}`);
 
 		try {
-			const figuresPath = (qs: Record<string, string>) =>
-				`/ops/figures?${new URLSearchParams({ doc: publicationNumber, ...qs }).toString()}`;
-
 			// Step 1: fetch metadata (no images) to learn the page count and where the
 			// DRAWINGS section starts. EPO image links include cover/biblio/description
 			// pages first, so the actual drawings usually begin partway through.
-			const meta = await this.patentBackendClient.get<FiguresApiResponse>(figuresPath({}), token);
-			if (!meta.success || !meta.data) {
-				const errorMsg = meta.error || `No figures found for ${publicationNumber}`;
-				return new LanguageModelToolResult([new LanguageModelTextPart(errorMsg)]);
-			}
+			const meta = await callFacadeTool<FiguresData>(
+				this.patentBackendClient, 'get_patent_image', { patent_number: publicationNumber }, token);
 
-			const { docId, totalFigures, drawingStartPage } = meta.data;
+			const docId = meta.docId || publicationNumber;
+			// Metadata-only calls report per-format page counts. Prefer the PDF entry: rendering to
+			// PNG rasterizes the PDF source, which is the only format most patents have.
+			const source = meta.formats?.find(f => f.format === 'pdf') ?? meta.formats?.[0];
+			const totalFigures = source?.pages ?? 0;
+			const drawingStartPage = source?.drawingStartPage;
 			if (totalFigures < 1) {
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`No figure images are available for ${docId}.`)
@@ -103,26 +106,28 @@ class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
 			// Otherwise default to the DRAWINGS section (drawingStartPage..end), capped.
 			const userSelected = !!pages?.trim();
 			const startPage = (!userSelected && drawingStartPage && drawingStartPage <= totalFigures) ? drawingStartPage : 1;
-			const pagesParam = userSelected
+			const selectedPages = userSelected
 				// The schema documents a max of MAX_REQUESTED_PAGES; keep only valid page
 				// numbers and cap the count so an over-long request can't be forwarded raw.
 				? pages!.split(',')
-					.map(p => p.trim())
-					.filter(p => /^\d+$/.test(p))
+					.map(p => Number(p.trim()))
+					.filter(p => Number.isInteger(p) && p >= 1)
 					.slice(0, MAX_REQUESTED_PAGES)
-					.join(',')
 				: Array.from(
 					{ length: Math.min(DEFAULT_MAX_PAGES, totalFigures - startPage + 1) },
 					(_, i) => startPage + i
-				).join(',');
+				);
+			const pagesParam = selectedPages.join(',');
 
-			// Step 3: fetch the selected pages as rendered PNGs.
-			const imgResult = await this.patentBackendClient.get<FiguresApiResponse>(
-				figuresPath({ include_images: 'true', render: 'png', pages: pagesParam }),
+			// Step 3: fetch the selected pages as rendered PNGs, base64 inside the tool envelope.
+			const imgResult = await callFacadeTool<FiguresData>(
+				this.patentBackendClient,
+				'get_patent_image',
+				{ patent_number: publicationNumber, include_images: true, render: 'png', pages: selectedPages },
 				token,
 				{ timeoutMs: FIGURE_RENDER_TIMEOUT_MS }
 			);
-			const figures = imgResult.data?.figures ?? [];
+			const figures = imgResult.figures ?? [];
 			const withImages = figures.filter(f => f.base64);
 
 			if (withImages.length === 0) {

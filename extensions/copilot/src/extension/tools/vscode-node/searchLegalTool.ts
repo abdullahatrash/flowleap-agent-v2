@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -52,24 +53,23 @@ interface LegalComprehensiveResult {
 	citation?: string;
 }
 
-interface LegalSearchResponse {
+/** `data` payload of the `reference_search` facade tool. */
+interface LegalSearchData {
 	query?: string;
 	jurisdiction?: string;
 	search_mode?: string;
 	comprehensive?: boolean;
 	results?: LegalChunkResult[] | LegalComprehensiveResult[];
 	count?: number;
-	error?: string;
-	message?: string;
 }
 
 /**
  * PRIMARY tool for patent law / procedure lookups: searches MPEP (USPTO), EPC, and EPO Guidelines
- * via the FlowLeap legal RAG backend. Routes through the shared {@link IPatentBackendClient} seam,
- * so it inherits the centralized `401 → re-sign-in` / `402 → start-trial` gating instead of
- * fetching the backend directly.
+ * through the FlowLeap backend's `reference_search` facade tool. Routes through the shared
+ * {@link IPatentBackendClient} seam, so it inherits the centralized `401 → re-sign-in` /
+ * `402 → start-trial` gating instead of fetching the backend directly.
  */
-class SearchLegalTool implements ICopilotTool<ISearchLegalParams> {
+export class SearchLegalTool implements ICopilotTool<ISearchLegalParams> {
 
 	public static readonly toolName = ToolName.SearchLegal;
 
@@ -109,7 +109,7 @@ class SearchLegalTool implements ICopilotTool<ISearchLegalParams> {
 		}
 
 		try {
-			const requestBody: {
+			const input: {
 				query: string;
 				limit: number;
 				comprehensive: boolean;
@@ -120,19 +120,12 @@ class SearchLegalTool implements ICopilotTool<ISearchLegalParams> {
 				comprehensive,
 			};
 			if (jurisdiction) {
-				requestBody.jurisdiction = jurisdiction;
+				input.jurisdiction = jurisdiction;
 			}
 
-			const result = await this.patentBackendClient.post<LegalSearchResponse>('/legal-search', requestBody, token);
+			const data = await callFacadeTool<LegalSearchData>(this.patentBackendClient, 'reference_search', input, token);
 
-			if (result.error) {
-				this.logService.error(`[SearchLegalTool] Search returned error: ${result.error}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error searching legal sources: ${result.error}${result.message ? ' - ' + result.message : ''}`)
-				]);
-			}
-
-			const formatted = this.formatSearchResults(result, { query, jurisdiction, comprehensive, limit });
+			const formatted = this.formatSearchResults(data, { query, jurisdiction, comprehensive, limit });
 			this.logService.info(`[SearchLegalTool] Formatted response length: ${formatted.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -144,7 +137,7 @@ class SearchLegalTool implements ICopilotTool<ISearchLegalParams> {
 	}
 
 	private formatSearchResults(
-		result: LegalSearchResponse,
+		result: LegalSearchData,
 		query: { query: string; jurisdiction?: string; comprehensive: boolean; limit: number }
 	): string {
 		const lines: string[] = [];

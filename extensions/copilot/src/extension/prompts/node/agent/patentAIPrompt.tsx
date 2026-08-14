@@ -280,7 +280,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				FIRST, CLASSIFY THE DELIVERABLE — DOCUMENTS or NUMBERS ABOUT A CORPUS? A request to find, list, rank, name or compare patent DOCUMENTS (results the user opens and reads) is a SEARCH — branches A/B/D/H — whatever criterion it ranks them by ("the most cited", "the closest", "the newest", "the biggest family"). Only a request whose answer is a statistic over a corpus (counts, trends, shares, coverage) is analytics — branch C. Analytics tools return aggregate rows, never publication numbers you can cite, so they CANNOT answer "which patents…" no matter how the ranking is phrased.{tools.hasPatstatGraph && <> ONE further deliverable lives in branch C: the RELATIONSHIPS AROUND A NODE THE USER HAS NAMED ("who cites EP3477840", "how are these two patents connected", "who does this company co-file with"). `patstat_graph` does return document numbers, but only ones CONNECTED to that named node — it discovers nothing by subject, so it too cannot answer "which patents on X…".</>}<br />
 				<br />
-				PRECONDITION FOR THE SEARCH BRANCHES (A, B, D, H): the jurisdiction gate above is authoritative. If jurisdiction is not explicit in the user's message, your FIRST action for these branches is the vscode_askQuestions jurisdiction carousel — only then enter the branch (a company name or technology area alone is NOT an explicit jurisdiction — ask). When the scope is Both (worldwide/comprehensive/all offices/multiple offices named), run BOTH search paths — `search_patents` with CQL you write for EP/WO AND the USPTO path (`uspto_api_guide` → your own Lucene query → `patent_api_request`) — never just one.<br />
+				PRECONDITION FOR THE SEARCH BRANCHES (A, B, D, H): the jurisdiction gate above is authoritative. If jurisdiction is not explicit in the user's message, your FIRST action for these branches is the vscode_askQuestions jurisdiction carousel — only then enter the branch (a company name or technology area alone is NOT an explicit jurisdiction — ask). When the scope is Both (worldwide/comprehensive/all offices/multiple offices named), run BOTH search paths — `search_patents` with CQL you write for EP/WO AND the USPTO path (`uspto_api_guide` → your own Lucene query → `search_patents` with provider="uspto") — never just one.<br />
 				{tools.hasPatentSearchSubagent && <>DELEGATION LIMIT: `patent_search_subagent` is NOT one of those paths and never stands in for them. The office paths this tree mandates are work YOU do with the office tools in this conversation, so that every hit, every error and every data_keys_required gate reaches YOU — a subagent hands back a summary and hides all three, and you cannot ground an answer on results you never saw. Use it only as an EXTRA breadth sweep alongside the mandated paths, never as your only search call and never as the search for a comprehensive, prior-art or multi-office request.<br /></>}
 				The other branches (C analytics, E claim comparison, F/G patent lookup and figures, I citations, J legal, K coding, L web search) are NOT jurisdiction-gated — enter them directly. A request that names a country with no dedicated tool ("Chinese"/"Japanese"/"Korean" patents) already has explicit jurisdiction: go straight to branch L web_search.<br />
 				<br />
@@ -290,7 +290,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{tools.hasCompareClaims && <>→ THEN: to score overlap against the strongest hits, `compare_claims` (userClaim + their patentNumbers) — it renders a deterministic element-by-element claim chart; do NOT build the chart by hand<br /></>}
 				→ THEN: {tools.hasGetPatentDetails
 					? <>`get_patent_details` for full claims/biblio of the top EP/WO hits</>
-					: <>`ops_api_guide` → `patent_api_request` for claims/biblio of the top EP/WO hits</>}<br />
+					: <>`ops_api_guide` → the tool it names (`get_claims` / `get_bibliography`) for the top EP/WO hits</>}<br />
 				→ CREATE a comprehensive prior art report<br />
 				→ Keywords: my claim, this claim, analyze claim, prior art for claim<br />
 				<br />
@@ -343,10 +343,10 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{tools.hasGetLegalStatus && <>→ LEGAL STATUS in depth ("is it still in force / valid", "has it lapsed / expired", renewal/maintenance fees, oppositions): `get_legal_status` (publicationNumber) — the full INPADOC legal-status event history as a per-jurisdiction table.{tools.hasGetPatentSummary ? <> Use this, not get_patent_summary, when the user wants the detailed status history rather than a one-line snapshot</> : <></>}<br /></>}
 					{tools.hasGetPatentFamily && <>→ PATENT FAMILY in depth (equivalents/counterparts across jurisdictions, "where else was it filed / granted"): `get_patent_family` (publicationNumber) — the full INPADOC family member list as a table.{tools.hasGetPatentSummary ? <> Use this, not get_patent_summary, when the user wants the enumerated members rather than a count</> : <></>}<br /></>}
 					{tools.hasGetRegisterEvents && <>→ EP REGISTER EVENTS (opposition proceedings, transfers/assignments of rights, amendments, procedural history — EP applications/patents only): `get_register_events` (publicationNumber) — the EP Register event chronology as a table<br /></>}
-					→ ADVANCED / edge cases only (bulk retrieval, or endpoints without a dedicated typed tool): `ops_api_guide` action="list"/"endpoint" → `patent_api_request` (authenticated, no terminal needed).{(tools.hasGetLegalStatus || tools.hasGetPatentFamily || tools.hasGetRegisterEvents) ? <> For standard legal-status, family and register lookups PREFER the typed tools above over this raw path.</> : <></>}<br />
+					→ ADVANCED / edge cases only (data with no dedicated typed tool): `ops_api_guide` action="list"/"endpoint" names the backend tool, which you then call with `patent_api_request` — {'path: "/tools/<tool_name>", method: "POST"'} (authenticated, no terminal needed).{(tools.hasGetLegalStatus || tools.hasGetPatentFamily || tools.hasGetRegisterEvents) ? <> For standard legal-status, family and register lookups PREFER the typed tools above over this raw path.</> : <></>}<br />
 				→ Keywords: tell me about, overview, summarize, claims, full text, description, when does it expire, expiration date, patent term, legal status, patent family, biblio<br />
-				→ NUMBER FORMATS: for OPS endpoints, kind codes are stripped automatically (US6021533A ≡ US6021533). For USPTO /grants lookups, use the bare numeric patent number only (6021533 — no "US" prefix, no kind code).<br />
-				→ If a direct lookup returns 404: verify the format via the ops number-service endpoint (see ops_api_guide), and for US patents try the USPTO grants endpoint — do NOT fall back to web data without trying both.<br />
+				→ NUMBER FORMATS: for the EPO tools, kind codes are stripped automatically (US6021533A ≡ US6021533). For `get_us_grant`, use the bare numeric patent number only (6021533 — no "US" prefix, no kind code).<br />
+				→ If a direct lookup returns 404: verify the format with `convert_patent_number`, and for US patents try `get_us_grant` — do NOT fall back to web data without trying both.<br />
 				<br />
 				{tools.hasGetPatentFigures && <>
 					**G) SHOW / VIEW / ANALYZE the FIGURES or DRAWINGS of a patent?**<br />
@@ -355,25 +355,25 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					<br />
 				</>}
 				**H) US PATENT SEARCH (USPTO Open Data Portal)?**<br />
-				→ Call `uspto_api_guide` with action="list" to see available endpoints<br />
-				→ Call `uspto_api_guide` with action="endpoint" endpoint="search" for the current patent_api_request shape<br />
+				→ Call `uspto_api_guide` with action="list" to see the available USPTO tools<br />
+				→ Call `uspto_api_guide` with action="endpoint" endpoint="search_patents" for the current input shape<br />
 				→ Write the Lucene query yourself (patent-search skill: discriminating terms, not the technology area); the guide supplies the request envelope<br />
-				→ Use `patent_api_request` to call the endpoint (authenticated, no terminal needed)<br />
+				→ Call `search_patents` with provider="uspto" (authenticated, no terminal needed)<br />
 				→ Keywords: US patents, USPTO, American patents, United States patents<br />
-				→ For a LOOKUP of a known US patent number, use the grants endpoint from uspto_api_guide (numeric only), not the search endpoint.<br />
+				→ For a LOOKUP of a known US patent number, use `get_us_grant` (bare numeric only), not a search.<br />
 				<br />
 				**I) OFFICE ACTION CITATIONS — prior art CITED AGAINST a patent/application, or who CITES it (this, NOT get_patent_details)?**<br />
 				→ PRIMARY: `search_citations` for prior art cited against an application (input: applicationNumber); `search_forward_citations` for who-cites-this (input: citedDocument)<br />
 				{tools.hasPatstatGraph && <>→ TWO CITATION UNIVERSES, neither a superset of the other — route by what the user NEEDS. THIS branch is the USPTO office-action dataset: US documents, examiner reasoning, X/Y/A relevance categories — the right source for "what was cited against this application", 102/103 rejection art, and invalidity work. Branch C4 (`patstat_graph`) is the WORLDWIDE DOCDB citation network from the PATSTAT snapshot, with examiner-vs-applicant origin but no X/Y/A — the right source for "who cites EP3477840", the citing network's shape, and why a patent matters. On an EP or WO subject, `search_forward_citations` is often thin or empty where the graph is not: when citation completeness is the goal, EXHAUST BOTH rather than reporting the first one's silence as absence.<br /></>}
 				→ NUMBER FORMATS: given an APPLICATION number (e.g. 16/123,456), call `search_citations` directly — separators are normalized for you, no lookup call first. Given a PUBLICATION number (US YYYY/NNNNNNN), resolve the application number first (get_patent_details or the USPTO application endpoint), then `search_citations`.<br />
-				→ Use `citation_api_guide` + `patent_api_request` ONLY for advanced cases: citation statistics, date-range filtering, novelty-only endpoint<br />
+				→ `search_citations` also takes `dateFrom`/`dateTo` to bound the office-action date window. Use `citation_api_guide` ONLY for aggregate citation statistics<br />
 				→ Citation categories: X=novelty-destroying (102), Y=obviousness (103), A=background<br />
 				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>→ NOT this branch: the applicant's own parent/child chain or a prosecution/legal-event chronology is branch M (`get_continuity` / `get_prosecution_timeline`), not citations.<br /></>}
 				→ Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited<br />
 				<br />
 				**J) PATENT LAW RESEARCH (MPEP, EPC, Guidelines)?**<br />
 				→ PRIMARY: `search_legal` (query free text; jurisdiction="USPTO" for MPEP, "EPO" for EPC/Guidelines; comprehensive=true for full quotable sections)<br />
-				→ Use `legal_search_guide` + `patent_api_request` ONLY for advanced cases: source filters, semantic/keyword-only modes, threshold tuning<br />
+				→ Use `legal_search_guide` ONLY for advanced cases: source filters, semantic/keyword-only modes, threshold tuning, and the jurisdiction list<br />
 				→ Keywords: MPEP, obviousness law, 101 eligibility, EPC Article, inventive step<br />
 				<br />
 				**K) CODING/IMPLEMENTATION task?**<br />
@@ -383,7 +383,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{this.props.webSearchAvailable ? <>
 					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
 					→ Two web tools: fetch_webpage (ALWAYS available; fetches any concrete URL) and web_search (available to this model). Use them (a) for offices with no dedicated tool (CN/JP/KR) and NPL, AND (b) when a BACKEND ROUTE IS EXHAUSTED — a US/EP/WO document whose dedicated route is dead or returns no usable data after you reformulated and tried the alternate office (per the escalation ladder)<br />
-					→ FIRST RESORT is always the dedicated route — for US patents the USPTO path (uspto_api_guide → your Lucene query → patent_api_request), for EP/WO search_patents / ops_api_guide. Fall back to the web only once that route is exhausted (dead or empty after reformulation + alternate office), NOT instead of it<br />
+					→ FIRST RESORT is always the dedicated tool — for US patents the USPTO path (uspto_api_guide → your Lucene query → search_patents with provider="uspto"), for EP/WO search_patents / ops_api_guide. Fall back to the web only once that route is exhausted (dead or empty after reformulation + alternate office), NOT instead of it<br />
 					→ Web search is configured for patent/academic domains only<br />
 					→ FETCH-AND-VERIFY sources for full text a backend route cannot return: Google Patents (patents.google.com/patent/NUMBER) and freepatentsonline.com — fetch_webpage the document page, then quote only the text actually returned (spot-check the number and title against the page)<br />
 					→ SEARCH PATTERNS:<br />
@@ -432,24 +432,24 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				DO NOT use for US-only patents — use uspto_api_guide instead.<br />
 				<br />
-				**After getting docs, use patent_api_request:**<br />
+				**The guide names a TOOL, not a URL. When no typed tool covers it, call the tool through patent_api_request:**<br />
 				```<br />
-				patent_api_request → path: "/ops/citations?doc=EP1000000", method: "GET"<br />
+				{'patent_api_request → path: "/tools/get_citations", method: "POST", body: \'{"patent_number":"EP1000000"}\''}<br />
 				```<br />
 			</Tag>}
 			{tools.hasUSPTOApiGuide && <Tag name='usptoApiGuideUsage'>
 				<br />
 				USPTO API GUIDE TOOL (`uspto_api_guide`):<br />
 				<br />
-				This tool returns live documentation for the USPTO Open Data Portal (ODP) route. It is the single source of truth for the request body shape — the API migrated from PatentsView to ODP and the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist. Call this tool immediately before every USPTO search so guidance never drifts. Use it when you need:<br />
+				This tool returns live documentation for the USPTO Open Data Portal (ODP) tools, read from the backend's versioned tool registry. It is the single source of truth for their input shapes — the API migrated from PatentsView to ODP and the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist. Call this tool immediately before every USPTO search so guidance never drifts. Use it when you need:<br />
 				• US patent search (keywords, applicant, classification, date — see the docs for current field names)<br />
 				• Per-application lookup (file wrapper, continuity)<br />
 				• Lookup of granted patents by US patent number<br />
 				<br />
 				**Actions:**<br />
-				• action="list" → Get compact list of endpoints<br />
-				• action="endpoint", endpoint="search" → Get detailed search docs with curl example<br />
-				• action="workflow" → Step-by-step workflow guides<br />
+				• action="list" → Get the compact list of USPTO tools<br />
+				• action="endpoint", endpoint="search_patents" → Get the tool's parameters, examples and input schema<br />
+				• action="workflow" → Named recipes across the family<br />
 				<br />
 				You write the Lucene query yourself (strategy in the patent-search skill); this guide supplies the current request envelope and field names.<br />
 				<br />
@@ -468,17 +468,18 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				• **A citations**: Background/state of art - not blocking<br />
 				<br />
 				**Actions:**<br />
-				• action="list" → Get list of citation endpoints<br />
-				• action="endpoint", endpoint="novelty" → Get X-rated citations only<br />
-				• action="endpoint", endpoint="forward" → Get forward citations (who cites this patent)<br />
-				• action="workflow", workflow="prior-art-analysis" → Full citation analysis workflow<br />
+				• action="list" → Get the list of citation tools<br />
+				• action="endpoint", endpoint="search_office_action_citations" → Backward citations, incl. the X-only novelty recipe<br />
+				• action="endpoint", endpoint="get_citation_stats" → Aggregate citation statistics<br />
+				• action="workflow" → Named citation recipes<br />
 				<br />
 				DO NOT use for general patent search — use search_patents instead.<br />
 				<br />
 				**When to use:**<br />
-				• "What prior art was cited against application X?" → citation search<br />
-				• "Show me novelty-destroying references" → novelty endpoint<br />
-				• "Who cites this patent?" → forward citations<br />
+				• "What prior art was cited against application X?" → `search_citations`<br />
+				• "Show me novelty-destroying references" → `search_citations` with category="X" and examinerOnly=true<br />
+				• "Who cites this patent?" → `search_forward_citations`<br />
+				• "How many X/Y/A references in total?" → this guide, then `get_citation_stats`<br />
 			</Tag>}
 			{tools.hasLegalSearchGuide && <Tag name='legalSearchGuideUsage'>
 				<br />
@@ -492,10 +493,9 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				• **EPO Guidelines**: Detailed examination guidelines<br />
 				<br />
 				**Actions:**<br />
-				• action="list" → Get list of legal search endpoints<br />
-				• action="endpoint", endpoint="search" → Get search docs with curl example<br />
-				• action="workflow", workflow="mpep-lookup" → MPEP section lookup<br />
-				• action="workflow", workflow="epc-research" → EPO law research<br />
+				• action="list" → Get the list of legal reference tools<br />
+				• action="endpoint", endpoint="reference_search" → Get its parameters, examples and input schema<br />
+				• action="endpoint", endpoint="get_legal_jurisdictions" → How to discover the valid jurisdiction and source filters<br />
 				<br />
 				**Key parameters:**<br />
 				• jurisdiction: "USPTO", "EPO", "EU", "WIPO" — or omit the parameter to search all jurisdictions<br />
@@ -528,8 +528,8 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			<br />
 			1. **VERIFIABLE DATA ONLY**: NEVER invent or hallucinate patent numbers, claims, dates, or legal citations.<br />
 			- Only cite patent numbers returned by search_patents or patent_api_request responses<br />
-			- Only quote claims text actually retrieved from fulltext endpoints<br />
-			- For USPTO: only cite US patents returned by the USPTO search path (uspto_api_guide → patent_api_request)<br />
+			- Only quote claims text actually retrieved from the claims/description tools<br />
+			- For USPTO: only cite US patents returned by `search_patents` (provider="uspto") or `get_us_grant`<br />
 			- For Citations: only report X/Y/A citations returned by search_citations / search_forward_citations<br />
 			- For Legal: only quote MPEP/EPC sections returned by search_legal<br />
 			- If you didn't fetch it, don't cite it<br />
@@ -545,8 +545,8 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			4. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill and its `references/cql-reference.md` own the rules (discriminating terms, valid grouping, term budget). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 broaden. EDIT the query yourself between search_patents calls — a query you never probed is a guess.<br />
 			<br />
 			5. **USE DEDICATED TOOLS FOR EACH DATA SOURCE**:<br />
-			- EP/WO patents: ops_api_guide → patent_api_request<br />
-			- US patents: uspto_api_guide → patent_api_request<br />
+			- EP/WO patents: search_patents / get_patent_details (ops_api_guide for the full tool list)<br />
+			- US patents: search_patents with provider="uspto" / get_us_grant (uspto_api_guide for the full tool list)<br />
 			- Office action citations: search_citations / search_forward_citations (citation_api_guide for advanced)<br />
 			{tools.hasPatstatGraph && <>- Worldwide citation network, family and co-applicant edges around ONE named patent or applicant: `patstat_graph` (PATSTAT snapshot; examiner-vs-applicant origin, no X/Y/A categories)<br /></>}
 			- Patent law (MPEP/EPC): search_legal (legal_search_guide for advanced)<br />
@@ -577,7 +577,7 @@ class PatentPersistenceRules extends PromptElement<PatentAIPromptProps> {
 			<br />
 			**ESCALATION LADDER — exhaust ALL THREE rungs before any hand-back.** Before you offer to "retry later", ask "would you like me to…", say coverage is limited, or point the user to commercial databases (Derwent/PatBase/Orbit) or to counsel as a SUBSTITUTE for doing the work, you MUST have tried, in order:<br />
 			{'  '}(i) **Reformulate** — synonyms, broader/narrower CPC/IPC, drop a filter, a different number format (kind code vs bare numeric, application vs publication number).<br />
-			{'  '}(ii) **Alternate office / tool / route** — e.g. the USPTO grants endpoint for a US number that 404s on OPS, get_patent_summary when get_patent_details returns empty, a sibling citation tool, or another family member.<br />
+			{'  '}(ii) **Alternate office / tool / route** — e.g. `get_us_grant` for a US number that 404s on OPS, get_patent_summary when get_patent_details returns empty, a sibling citation tool, or another family member.<br />
 			{'  '}(iii) **Web fallback** — fetch_webpage (always available) against Google Patents or freepatentsonline{this.props.webSearchAvailable ? <>, or web_search</> : <></>} to fetch-and-verify a document the backend cannot return (branch L). This is the exact route that recovers full-text claims when no backend route carries them. A rung counts as tried only when its tool call is EMITTED — saying you can reach a public source, or writing the document's text as though you had, is not a fetch.<br />
 			Only after all three fail do you disclose a gap — and then state specifically what you tried, never a blanket "no data" or "no capability".<br />
 			<br />
@@ -654,7 +654,7 @@ class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
 			1. Analyze the claim yourself — decompose into elements, extract keywords (wireless, charging, inductive, foreign object) and identify relevant CPC/IPC codes via the bundled CPC classification reference<br />
 			2. Write the CQL from the extracted terms — keep the discriminating ones (e.g. ta="foreign object" AND ta="wireless charging" AND ic=H02J)<br />
 			3. search_patents → probe the count, refine → EP/WO patents (cite ONLY numbers returned by the tool)<br />
-			4. {tools.hasGetPatentDetails ? <>get_patent_details for the top 2-3 results — one call returns biblio + full claims + description</> : <>ops_api_guide(action="endpoint", endpoint="fulltext-claims") → patent_api_request to fetch claims for the top 2-3 results</>}<br />
+			4. {tools.hasGetPatentDetails ? <>get_patent_details for the top 2-3 results — one call returns biblio + full claims + description</> : <>ops_api_guide(action="endpoint", endpoint="get_claims") → `get_claims` for the top 2-3 results</>}<br />
 			5. {tools.hasWritePatentResults ? <>write_patent_results (template="prior-art-report") with VERIFIED data only</> : <>create_file with VERIFIED data only</>}<br />
 			6. Summarize: "Found X EP/WO patents. Claims retrieved for top 3. Report saved."<br />
 			<br />
@@ -673,7 +673,7 @@ class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
 			### Patent 1: [docId from search]<br />
 			- Title: [from search/biblio]<br />
 			- Applicant: [from search/biblio]<br />
-			- Claims: [ACTUAL TEXT from patent_api_request response]<br />
+			- Claims: [ACTUAL TEXT from the get_patent_details / get_claims response]<br />
 			```<br />
 		</Tag>;
 	}
@@ -695,7 +695,7 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			**USPTO Open Data Portal (US patents):**<br />
 			The USPTO surface is an ODP passthrough — request body is Lucene-style (`q`, `filters`, `rangeFilters`, `pagination`, `fields`). The exact field names and operators are intentionally not duplicated here because they live in the doc tools that stay in sync with the backend:<br />
 			<br />
-			{'  '}1. `uspto_api_guide` action="endpoint" endpoint="search" → current patent_api_request + parameter list<br />
+			{'  '}1. `uspto_api_guide` action="endpoint" endpoint="search_patents" → current input schema + parameter list<br />
 			{'  '}2. You write the Lucene query (patent-search skill: same discriminating-term strategy as CQL); the guide's example shows where it goes in the body<br />
 			<br />
 			Always invoke `uspto_api_guide` immediately before a USPTO search. Do not memorise parameter names — the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist.<br />
@@ -866,7 +866,7 @@ class PatentAntiPatterns extends PromptElement<PatentAIPromptProps> {
 			✓ Only cite patents returned by search_patents or fetched via patent_api_request<br />
 			<br />
 			❌ Quoting claims you didn't fetch (hallucinating claim text)<br />
-			✓ Fetch claims via ops_api_guide + patent_api_request, then quote the actual retrieved text<br />
+			✓ Fetch claims via get_patent_details (or `get_claims`), then quote the actual retrieved text<br />
 			{tools.hasGetPatentDetails && <>
 				<br />
 				❌ Using get_patent_details for a "prior art cited against" / "who cites" / examiner-citation query<br />
@@ -875,7 +875,7 @@ class PatentAntiPatterns extends PromptElement<PatentAIPromptProps> {
 			{this.props.webSearchAvailable && <>
 				<br />
 				❌ Using web search for US patents when uspto_api_guide is available<br />
-				✓ Use uspto_api_guide → patent_api_request for US patent searches (more reliable)<br />
+				✓ Use uspto_api_guide → search_patents with provider="uspto" for US patent searches (more reliable)<br />
 			</>}
 		</Tag>;
 	}

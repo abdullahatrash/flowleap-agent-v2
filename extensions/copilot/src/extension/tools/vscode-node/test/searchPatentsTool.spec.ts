@@ -17,6 +17,11 @@ function makeLogService(): ILogService {
 	return { trace: () => { }, debug: () => { }, info: () => { }, warn: () => { }, error: () => { } } as unknown as ILogService;
 }
 
+/** Wrap a tool payload in the `/v1/tools` facade envelope the seam actually returns. */
+function facadeEnvelope(data: unknown) {
+	return { success: true, tool: 'search_patents', data, executionTimeMs: 5 };
+}
+
 /**
  * A {@link IPatentBackendClient} whose `post` returns a scripted payload, capturing the paths and
  * bodies it was called with so the test can assert the tool routes through the shared client seam.
@@ -64,21 +69,23 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 describe('SearchPatentsTool', () => {
 
 	it('renders search results as a markdown table with abstract snippets below', async () => {
-		const { client, calls } = makeBackendClient({
-			success: true,
+		const { client, calls } = makeBackendClient(facadeEnvelope({
 			total: 2,
 			range: { begin: 1, end: 2 },
-			query: 'ti=("solar cell")',
 			docs: [
 				{ docId: 'EP1234567A1', title: 'Solar cell module', applicants: ['ACME Corp', 'Sun Inc'], publicationDate: '2020-01-15', abstract: 'A photovoltaic module with a light-absorbing layer.' },
 				{ docId: 'US7654321B2', title: null, applicants: [], publicationDate: null, abstract: null },
 			],
-		});
+		}));
 		const tool = new SearchPatentsTool(makeLogService(), client);
 
-		const result = await tool.invoke(makeOptions({ query: 'ti=("solar cell")', range: '1-25' }), makeToken());
+		const result = await tool.invoke(makeOptions({ query: 'ti=("solar cell")', range: '1-25', countries: 'ep, wo' }), makeToken());
 
-		expect(calls).toEqual([{ path: '/patent-search', body: { query: 'ti=("solar cell")', range: '1-25' } }]);
+		// The facade takes snake_case params, an explicit provider, and a countries ARRAY.
+		expect(calls).toEqual([{
+			path: '/tools/search_patents',
+			body: { query: 'ti=("solar cell")', provider: 'epo_ops', range: '1-25', countries: ['EP', 'WO'] },
+		}]);
 		expect(textOf(result)).toMatchInlineSnapshot(`
 			"Found 2 patents matching query: "ti=("solar cell")"
 			Showing results 1-2:
@@ -96,7 +103,7 @@ describe('SearchPatentsTool', () => {
 	});
 
 	it('reports no results when the backend returns an empty doc list', async () => {
-		const { client } = makeBackendClient({ success: true, docs: [], query: 'ti=(nothing)' });
+		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [] }));
 		const tool = new SearchPatentsTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=(nothing)' }), makeToken());

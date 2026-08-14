@@ -20,7 +20,7 @@ import { formatJsonForModel, isSingleRecordDocumentLookup, ToolResponseBudgets }
  * Kept intentionally flat so the LLM can supply values without constructing nested objects.
  */
 interface IPatentApiRequestParams {
-	/** Relative path to the backend endpoint, e.g. "/ops/biblio?doc=EP1234566" */
+	/** Relative path to the backend, e.g. "/tools/get_bibliography" or "/patstat/portfolio" */
 	path: string;
 	/** HTTP method — defaults to GET */
 	method?: 'GET' | 'POST';
@@ -33,6 +33,11 @@ interface IPatentApiRequestParams {
  * directly to the LLM. Replaces the pattern of running curl in the terminal: authentication is
  * handled by the shared {@link IPatentBackendClient} seam (which also centralizes the
  * `401 → re-sign-in` / `402 → start-trial` gating), so nothing leaks to the user's terminal.
+ *
+ * The escape hatch for capabilities with no typed tool of their own. Since patent data is reached
+ * through the `/v1/tools` facade, that means `POST /tools/<tool_name>` with the tool's JSON input —
+ * the `*_api_guide` tools name the tool and publish its schema. PATSTAT is the exception the backend
+ * kept as a route surface, so `/patstat/...` paths are still called directly.
  */
 class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 

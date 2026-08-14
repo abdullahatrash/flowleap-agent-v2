@@ -56,9 +56,11 @@ function makeNotificationService() {
 	};
 }
 
+/** The client reads `getVersion()` for the `X-FlowLeap-Client` header, and opens upgrade URLs. */
 function makeEnvService() {
 	const openExternal = vi.fn(async () => true);
-	return { service: { openExternal } as unknown as IEnvService, openExternal };
+	const getVersion = vi.fn(() => '9.9.9');
+	return { service: { openExternal, getVersion } as unknown as IEnvService, openExternal, getVersion };
 }
 
 function makeTelemetryService() {
@@ -191,6 +193,18 @@ describe('PatentBackendClient.post', () => {
 
 		expect(result).toEqual({ success: true, results: [42] });
 		expect(capturedOptions?.headers?.['Authorization']).toBe('Bearer tok-123');
+	});
+
+	it('sends the client-version header on every request (ADR 0014 rule 5)', async () => {
+		let capturedOptions: FetchOptions | undefined;
+		const { client } = makeClient(async (_url, options) => {
+			capturedOptions = options;
+			return makeResponse(200, { success: true });
+		});
+
+		await client.post('/tools/search_patents', { query: 'AI' }, makeToken());
+
+		expect(capturedOptions?.headers?.['X-FlowLeap-Client']).toBe('vscode/9.9.9');
 	});
 
 	it('sends no Authorization header when no token is registered', async () => {
@@ -794,6 +808,18 @@ describe('session read cache (#89)', () => {
 		expect(measurements).toEqual(expect.objectContaining({ servedFromCache: 1 }));
 	});
 
+	it('keeps a bypassReadCache call out of the cache, in both directions', async () => {
+		const fetch = scriptedFetch([makeResponse(200, { r: 1 }), makeResponse(200, { r: 2 })]);
+		const { client } = makeClient(fetch);
+
+		const first = await client.post<{ r: number }>('/keys/validate', {}, makeToken(), { bypassReadCache: true });
+		const second = await client.post<{ r: number }>('/keys/validate', {}, makeToken(), { bypassReadCache: true });
+
+		// Neither served from the cache nor stored in it: a live probe must not be replayed.
+		expect([first, second]).toEqual([{ r: 1 }, { r: 2 }]);
+		expect(fetch.calls()).toBe(2);
+	});
+
 	it('does not cache across a differing request body', async () => {
 		const fetch = scriptedFetch([makeResponse(200, { r: 1 }), makeResponse(200, { r: 2 })]);
 		const { client } = makeClient(fetch);
@@ -823,6 +849,23 @@ describe('getCustomerPortalUrl (#118)', () => {
 		expect(url).toBe('https://billing.stripe.com/p/session/abc');
 		// apiUrl is https://api.test/v1; the account route drops the /v1 suffix.
 		expect(capturedUrl).toBe('https://api.test/api/invoices');
+	});
+
+	it('mints a fresh portal URL per call instead of replaying a cached one', async () => {
+		const fetch = scriptedFetch([
+			makeResponse(200, { portalUrl: 'https://billing.stripe.com/p/session/first' }),
+			makeResponse(200, { portalUrl: 'https://billing.stripe.com/p/session/second' }),
+		]);
+		const { client } = makeClient(fetch);
+
+		const first = await client.getCustomerPortalUrl(makeToken());
+		const second = await client.getCustomerPortalUrl(makeToken());
+
+		expect([first, second]).toEqual([
+			'https://billing.stripe.com/p/session/first',
+			'https://billing.stripe.com/p/session/second',
+		]);
+		expect(fetch.calls()).toBe(2);
 	});
 
 	it('throws PatentBackendError when the backend returns no URL', async () => {

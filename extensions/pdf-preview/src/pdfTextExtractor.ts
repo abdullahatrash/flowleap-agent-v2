@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import type { PdfMetadata } from './extension';
 
 /**
- * OCR Image from backend
+ * OCR Image, as the Patent AI OCR bridge reports it.
  */
 interface OcrImage {
 	id: string;
@@ -16,17 +16,30 @@ interface OcrImage {
 }
 
 /**
- * OCR Response from backend
+ * The command Patent AI registers for Document OCR, and the outcome it answers with. Hand-mirrored
+ * from `patentai/common/ocrBridge.ts`, which this extension cannot import — the same manual
+ * mirroring the consent command id already documents.
+ *
+ * The bridge answers rather than throws, because a rejection thrown across `executeCommand` arrives
+ * as a bare message: the CODE is what tells "sign in" from "start your trial" from "wait and retry",
+ * and this side must never branch on message wording (backend policy makes wording editable).
  */
-interface OcrResponse {
-	success: boolean;
-	markdown: string;
-	pages: Array<{ pageNumber: number; markdown: string }>;
-	images: OcrImage[];
-	pageCount: number;
-	processingTimeMs: number;
-	error?: { message: string };
-}
+const OCR_RUN_COMMAND_ID = 'flowleap.ocr.run';
+
+type OcrBridgeErrorCode =
+	| 'auth_required'
+	| 'subscription_required'
+	| 'data_keys_required'
+	| 'patent_provider_key_invalid'
+	| 'rate_limited'
+	| 'transient'
+	| 'cancelled'
+	| 'backend_error'
+	| 'unavailable';
+
+type OcrBridgeOutcome =
+	| { ok: true; markdown: string; images: OcrImage[]; pageCount: number }
+	| { ok: false; code: OcrBridgeErrorCode; message: string };
 
 // PDF.js types (simplified)
 interface PDFDocumentProxy {
@@ -52,22 +65,6 @@ interface PDFDocumentLoadingTask {
 interface PDFJSLib {
 	getDocument(options: { data: Uint8Array; useSystemFonts?: boolean; disableAutoFetch?: boolean; disableStream?: boolean; isEvalSupported?: boolean }): PDFDocumentLoadingTask;
 	GlobalWorkerOptions: { workerSrc: string };
-}
-
-/**
- * Resolve the FlowLeap (Patent AI) backend API base URL from environment and settings.
- *
- * This mirrors `getPatentAIConfig` in the copilot extension by hand: pdf-preview cannot
- * import from the copilot extension, so the resolution order (env var > setting > production
- * default) and the `patent.apiUrl` key must be kept in sync manually.
- *
- * The returned base URL includes the `/v1` version suffix (e.g. `https://api.flowleap.co/v1`),
- * with any trailing slash stripped so callers can safely append `/ocr` etc.
- */
-function resolvePatentApiUrl(): string {
-	const config = vscode.workspace.getConfiguration('patent');
-	const apiUrl = process.env.PATENT_API_URL || config.get<string>('apiUrl') || 'https://api.flowleap.co/v1';
-	return apiUrl.replace(/\/+$/, '');
 }
 
 let pdfjsLib: PDFJSLib | null = null;
@@ -183,16 +180,20 @@ export class PdfTextExtractor {
 	}
 
 	/**
-	 * Extract text using the backend OCR service.
+	 * Extract text with Document OCR, through Patent AI's backend seam.
 	 * Returns markdown-formatted text, extracted images, and the processed page count.
 	 * When a cancellation token is supplied, cancelling aborts the in-flight request.
+	 *
+	 * The call goes through the {@link OCR_RUN_COMMAND_ID} command rather than this extension's own
+	 * `fetch`, so the upload inherits the one client every other FlowLeap call uses: the session
+	 * token, the BYO patent-data key headers, the client-version header, retry-with-backoff, and the
+	 * centralized gating that shows the user a Sign In / Start Trial / Add Keys action. This side
+	 * only turns the returned CODE into a sentence.
+	 *
+	 * Fails CLOSED, like the consent gate beside it: if the command is missing — Patent AI not
+	 * activated — there is no seam to upload through, so nothing is uploaded.
 	 */
 	async extractWithOCR(uri: vscode.Uri, token?: vscode.CancellationToken): Promise<{ markdown: string; images: OcrImage[]; pageCount: number }> {
-		// Resolve the backend API base URL (env var > setting > production default). The base
-		// already includes the `/v1` suffix, so the OCR route is derived by appending `/ocr`.
-		const backendUrl = resolvePatentApiUrl();
-		const ocrUrl = `${backendUrl}/ocr`;
-
 		// Read PDF file and convert to base64
 		const data = await vscode.workspace.fs.readFile(uri);
 		const base64Data = Buffer.from(data).toString('base64');
@@ -202,97 +203,61 @@ export class PdfTextExtractor {
 
 		this._logger.info(`Starting OCR for: ${filename}`);
 
-		// /v1/ocr sits behind the FlowLeap auth + subscription guard chain, so the
-		// request must carry the FlowLeap session token like every other patent-data call.
-		const session = await vscode.authentication.getSession('flowleap', [], { createIfNone: false });
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-		};
-		if (session) {
-			headers['Authorization'] = `Bearer ${session.accessToken}`;
+		let outcome: OcrBridgeOutcome;
+		try {
+			outcome = await vscode.commands.executeCommand<OcrBridgeOutcome>(
+				OCR_RUN_COMMAND_ID, { file: base64Data, filename }, token);
+		} catch (err) {
+			this._logger.error(`OCR bridge unavailable: ${err instanceof Error ? err.message : String(err)}`);
+			throw new Error(vscode.l10n.t('Text extraction is unavailable because FlowLeap Patent AI is not running.'));
 		}
 
-		// Abort the request if the caller cancels the surrounding progress.
-		const controller = new AbortController();
-		const cancelSubscription = token?.onCancellationRequested(() => controller.abort());
+		if (token?.isCancellationRequested) {
+			throw new vscode.CancellationError();
+		}
 
-		try {
-			// Call backend OCR endpoint
-			const response = await fetch(ocrUrl, {
-				method: 'POST',
-				headers,
-				body: JSON.stringify({
-					file: base64Data,
-					filename: filename,
-				}),
-				signal: controller.signal,
-			});
-
-			if (!response.ok) {
-				if (response.status === 401) {
-					throw new Error(session
-						? 'Your FlowLeap session has expired. Please sign in again to extract text.'
-						: 'Text extraction requires a FlowLeap account. Please sign in to FlowLeap and try again.');
-				}
-				if (response.status === 402) {
-					throw new Error('Text extraction requires an active FlowLeap subscription or trial.');
-				}
-				const errorText = await response.text();
-				throw new Error(`Text extraction failed: ${response.status} ${errorText}`);
-			}
-
-			const result = await response.json() as OcrResponse;
-
-			if (!result.success) {
-				throw new Error(result.error?.message || 'Text extraction failed');
-			}
-
-			this._logger.info(`OCR completed: ${result.pageCount} pages, ${result.images?.length || 0} images in ${result.processingTimeMs}ms`);
-
-			return {
-				markdown: result.markdown,
-				images: result.images || [],
-				pageCount: result.pageCount,
-			};
-
-		} catch (error) {
-			// A cancelled request surfaces as an abort — normalise it to a cancellation.
-			if (token?.isCancellationRequested) {
+		if (!outcome?.ok) {
+			const code = outcome?.code ?? 'backend_error';
+			if (code === 'cancelled') {
 				throw new vscode.CancellationError();
 			}
-
-			this._logger.error(`OCR error: ${error instanceof Error ? error.message : String(error)}`);
-
-			if (error instanceof Error && error.message.includes('fetch')) {
-				throw new Error(`Cannot connect to FlowLeap backend at ${backendUrl}. Make sure the backend is running.`);
-			}
-
-			throw error;
-		} finally {
-			cancelSubscription?.dispose();
+			this._logger.error(`OCR error (${code}): ${outcome?.message ?? 'no outcome returned'}`);
+			throw new Error(this._ocrFailureMessage(code, outcome?.message));
 		}
+
+		this._logger.info(`OCR completed: ${outcome.pageCount} pages, ${outcome.images?.length || 0} images`);
+
+		return {
+			markdown: outcome.markdown,
+			images: outcome.images || [],
+			pageCount: outcome.pageCount,
+		};
 	}
 
 	/**
-	 * Check if OCR service is available
+	 * Turn a bridge error code into a sentence for the user. Branching on the CODE, never on the
+	 * message text: the backend is free to reword, and Patent AI has already shown the actionable
+	 * notification (Sign In, Start Trial, Add Patent Data Keys) for the gated codes.
 	 */
-	async isOCRAvailable(): Promise<boolean> {
-		const backendUrl = resolvePatentApiUrl();
-
-		try {
-			const response = await fetch(`${backendUrl}/ocr/health`, {
-				method: 'GET',
-			});
-
-			if (!response.ok) {
-				return false;
-			}
-
-			const result = await response.json() as { status: string; configured: boolean };
-			return result.status === 'ok' && result.configured;
-
-		} catch {
-			return false;
+	private _ocrFailureMessage(code: OcrBridgeErrorCode, detail: string | undefined): string {
+		switch (code) {
+			case 'auth_required':
+				return vscode.l10n.t('Text extraction requires a FlowLeap account. Sign in to FlowLeap and try again.');
+			case 'subscription_required':
+				return vscode.l10n.t('Text extraction requires an active FlowLeap subscription or trial.');
+			case 'data_keys_required':
+			case 'patent_provider_key_invalid':
+				return vscode.l10n.t('Text extraction needs your FlowLeap patent-data keys. Add or update them in FlowLeap Settings, then try again.');
+			case 'rate_limited':
+				return vscode.l10n.t('FlowLeap is rate-limiting requests right now. Wait a few seconds and try again.');
+			case 'transient':
+				return vscode.l10n.t('The FlowLeap backend is temporarily unavailable. Wait briefly and try again.');
+			case 'unavailable':
+				return vscode.l10n.t('Text extraction is unavailable because FlowLeap Patent AI is not running.');
+			default:
+				return detail
+					? vscode.l10n.t('Text extraction failed: {0}', detail)
+					: vscode.l10n.t('Text extraction failed.');
 		}
 	}
 

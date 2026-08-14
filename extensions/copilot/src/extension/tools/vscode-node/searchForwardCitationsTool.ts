@@ -12,6 +12,7 @@ import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendCl
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { CitationDoc } from './patentCitationTypes';
+import { callFacadeTool } from './patentFacade';
 import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
 import { handlePatentToolError } from './patentToolError';
 
@@ -22,13 +23,10 @@ interface ISearchForwardCitationsParams {
 	size?: number;
 }
 
-interface ForwardCitationSearchResult {
-	success: boolean;
+/** `data` payload of the `search_enriched_citations` facade tool. */
+interface ForwardCitationSearchData {
 	total?: number;
-	data?: CitationDoc[];
-	citedDocument?: string;
-	cached?: boolean;
-	error?: string;
+	citations?: CitationDoc[];
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -89,30 +87,23 @@ export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCi
 		const { citedDocument, category, examinerOnly = false, size = 100 } = options.input;
 
 		try {
-			const requestBody: {
-				citedDocument: string;
+			const input: {
+				cited_document: string;
 				size: number;
-				examinerCitedOnly: boolean;
+				examiner_cited_only: boolean;
 				category?: string;
 			} = {
-				citedDocument,
+				cited_document: citedDocument,
 				size,
-				examinerCitedOnly: examinerOnly,
+				examiner_cited_only: examinerOnly,
 			};
 			if (category) {
-				requestBody.category = category;
+				input.category = category;
 			}
 
-			const result = await this.patentBackendClient.post<ForwardCitationSearchResult>('/citation-search/forward', requestBody, token);
+			const data = await callFacadeTool<ForwardCitationSearchData>(this.patentBackendClient, 'search_enriched_citations', input, token);
 
-			if (!result.success) {
-				this.logService.error(`[SearchForwardCitationsTool] Search failed: ${result.error}`);
-				return new LanguageModelToolResult([
-					new LanguageModelTextPart(`Error searching forward citations: ${result.error ?? 'unknown error'}`)
-				]);
-			}
-
-			const formatted = this.formatSearchResults(result, { citedDocument, category, examinerOnly, size });
+			const formatted = this.formatSearchResults(data, { citedDocument, category, examinerOnly, size });
 			this.logService.info(`[SearchForwardCitationsTool] Formatted response length: ${formatted.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -124,11 +115,12 @@ export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCi
 	}
 
 	private formatSearchResults(
-		result: ForwardCitationSearchResult,
+		result: ForwardCitationSearchData,
 		query: { citedDocument: string; category?: string; examinerOnly: boolean; size: number }
 	): string {
 		const lines: string[] = [];
-		const total = result.total ?? result.data?.length ?? 0;
+		const citations = result.citations;
+		const total = result.total ?? citations?.length ?? 0;
 
 		lines.push(`Found ${total} patents citing ${query.citedDocument}`);
 		if (query.category) {
@@ -139,16 +131,16 @@ export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCi
 		}
 		lines.push('');
 
-		if (!result.data || result.data.length === 0) {
+		if (!citations || citations.length === 0) {
 			lines.push('No forward citations found matching the filters.');
 			lines.push('');
 			lines.push('For prior art cited AGAINST this patent (the examiner X/Y/A references), use search_citations with the US application number — this tool only finds patents that cite this document, not the references cited against it. Resolve the application number via get_patent_family (find the US member) then get_continuity (read its application number).');
 			lines.push('');
-			lines.push('For citation statistics or date-range filtering, use citation_api_guide.');
+			lines.push('For citation statistics, use citation_api_guide.');
 			return lines.join('\n');
 		}
 
-		const rows = result.data.map((doc, i) => ({ doc, n: i + 1 }));
+		const rows = citations.map((doc, i) => ({ doc, n: i + 1 }));
 
 		lines.push(renderMarkdownTable(rows, [
 			{ header: '#', cell: r => String(r.n), align: 'right' },
@@ -176,13 +168,13 @@ export class SearchForwardCitationsTool implements ICopilotTool<ISearchForwardCi
 			}
 		}
 
-		if (total > result.data.length) {
+		if (total > citations.length) {
 			lines.push('');
-			lines.push(`Showing first ${result.data.length} of ${total}. Re-call with a larger size to see more.`);
+			lines.push(`Showing first ${citations.length} of ${total}. Re-call with a larger size to see more.`);
 		}
 
 		lines.push('');
-		lines.push('For citation statistics or date-range filtering, use citation_api_guide.');
+		lines.push('For citation statistics, use citation_api_guide.');
 
 		return lines.join('\n');
 	}

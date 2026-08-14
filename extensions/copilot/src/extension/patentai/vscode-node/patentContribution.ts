@@ -8,11 +8,14 @@ import { IAuthenticationService } from '../../../platform/authentication/common/
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
+import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IExtensionContribution } from '../../common/contributions';
+import { OCR_RUN_COMMAND_ID, OcrBridgeOutcome, OcrBridgeRequest } from '../common/ocrBridge';
 import { OCR_CONSENT_COMMAND_ID } from '../common/ocrConsent';
 import { getPatentAIConfig } from './configService';
 import { IOcrConsentService } from './ocrConsentService';
+import { runOcrThroughSeam } from './patentOcrBridge';
 import { registerFlowleapAuthContextKeys } from './flowleapAuthContextKeys';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { triggerFlowleapSignIn } from './flowleapSignIn';
@@ -134,6 +137,16 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			this._register(vscode.commands.registerCommand(
 				OCR_CONSENT_COMMAND_ID,
 				(): Promise<boolean> => this._ocrConsentService.requestConsent(),
+			));
+		});
+		this._safeStep('register OCR run command', () => {
+			// The extraction itself, for the same caller and the same reason (#229). It runs
+			// through the shared backend client here rather than a second `fetch` over there, so
+			// the upload inherits auth, key headers, retries and the typed error codes.
+			this._register(vscode.commands.registerCommand(
+				OCR_RUN_COMMAND_ID,
+				(request: OcrBridgeRequest, token?: CancellationToken): Promise<OcrBridgeOutcome> =>
+					runOcrThroughSeam(this._patentBackendClient, request, token ?? CancellationToken.None),
 			));
 		});
 		this._safeStep('reveal setup on first run', () => {

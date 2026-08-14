@@ -17,6 +17,11 @@ function makeLogService(): ILogService {
 	return { trace: () => { }, debug: () => { }, info: () => { }, warn: () => { }, error: () => { } } as unknown as ILogService;
 }
 
+/** Wrap a tool payload in the `/v1/tools` facade envelope the seam actually returns. */
+function facadeEnvelope(data: unknown) {
+	return { success: true, tool: 'patent_analytics', data, executionTimeMs: 3 };
+}
+
 /**
  * A {@link IPatentBackendClient} whose `post` returns a scripted payload (or throws a scripted error),
  * capturing the paths and bodies it was called with so the test can assert the tool routes the
@@ -64,7 +69,6 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 }
 
 const fixtureAnalytics = {
-	success: true,
 	searchDescription: 'patents mentioning "machine learning" assigned to Tesla',
 	analytics: {
 		byYear: [
@@ -92,7 +96,7 @@ const fixtureAnalytics = {
 describe('PatentAnalyticsVizTool', () => {
 
 	it('posts the structured contract and renders each aggregate as a markdown table', async () => {
-		const { client, calls } = makeBackendClient(fixtureAnalytics);
+		const { client, calls } = makeBackendClient(facadeEnvelope(fixtureAnalytics));
 		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({
@@ -104,7 +108,7 @@ describe('PatentAnalyticsVizTool', () => {
 		}), makeToken());
 
 		expect(calls).toEqual([{
-			path: '/patent-analytics',
+			path: '/tools/patent_analytics',
 			body: { phrases: ['machine learning'], assignee: 'Tesla', cpc: ['G06N'], countryCode: 'US', dateFrom: '2020-01-01' },
 		}]);
 		expect(textOf(result)).toMatchInlineSnapshot(`
@@ -144,7 +148,7 @@ describe('PatentAnalyticsVizTool', () => {
 	});
 
 	it('returns a criterion error without calling the backend when no criteria are given', async () => {
-		const { client, calls } = makeBackendClient(fixtureAnalytics);
+		const { client, calls } = makeBackendClient(facadeEnvelope(fixtureAnalytics));
 		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({}), makeToken());
@@ -154,7 +158,7 @@ describe('PatentAnalyticsVizTool', () => {
 	});
 
 	it('reports no matches when the backend returns empty aggregates', async () => {
-		const { client } = makeBackendClient({ success: true, searchDescription: 'patents about unobtanium', analytics: { byYear: [], byCountry: [], topAssignees: [], topCPC: [] } });
+		const { client } = makeBackendClient(facadeEnvelope({ searchDescription: 'patents about unobtanium', analytics: { byYear: [], byCountry: [], topAssignees: [], topCPC: [] } }));
 		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({ keywords: ['unobtanium'] }), makeToken());
@@ -167,8 +171,7 @@ describe('PatentAnalyticsVizTool', () => {
 		// aggregates empty while the others are populated. Rendered as header-only tables under their
 		// headings — and closed by a line asking for "the leading assignees" — the result would assert
 		// two breakdowns it does not carry, which is what a reader narrates numbers out of.
-		const { client } = makeBackendClient({
-			success: true,
+		const { client } = makeBackendClient(facadeEnvelope({
 			searchDescription: 'patents about unobtanium',
 			analytics: {
 				byYear: [{ year: 2023, count: 7 }],
@@ -176,7 +179,7 @@ describe('PatentAnalyticsVizTool', () => {
 				topAssignees: [],
 				topCPC: [],
 			},
-		});
+		}));
 		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
 
 		const result = await tool.invoke(makeOptions({ keywords: ['unobtanium'] }), makeToken());

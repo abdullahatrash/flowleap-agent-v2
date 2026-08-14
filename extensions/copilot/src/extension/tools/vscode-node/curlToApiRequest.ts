@@ -7,7 +7,7 @@
  * Result of parsing a curl command into patent_api_request parameters.
  */
 export interface ICurlToApiRequestResult {
-	/** Relative path, e.g. "/ops/biblio?doc=EP1234566" */
+	/** Relative path, e.g. "/tools/get_bibliography" or "/patstat/portfolio" */
 	readonly path: string;
 	readonly method: 'GET' | 'POST';
 	/** JSON body string, present only when method is POST and data was found */
@@ -38,7 +38,7 @@ export function curlToApiRequest(curl: string): ICurlToApiRequestResult {
 	if (urlMatch) {
 		rawUrl = urlMatch[0].replace(/['"]/g, ''); // strip surrounding quotes if any
 	} else {
-		// Try bare path like /ops/biblio
+		// Try bare path like /patstat/portfolio
 		const barePathMatch = /(?:^|\s)(\/[^\s'"]+)/.exec(curl);
 		if (barePathMatch) {
 			rawUrl = barePathMatch[1];
