@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AuthRequiredError, DataKeyInvalidError, IPatentBackendClient, PatentBackendError } from '../patentBackendClient';
-import { renderPatentDataKeysPageHtml, testPatentDataConnection } from '../patentDataKeysPage';
+import { renderPatentDataKeysPageHtml, SIGNUP_URLS, testPatentDataConnection } from '../patentDataKeysPage';
 
 /** One provider's verdict as `POST /v1/keys/validate` reports it. */
 interface Verdict {
@@ -138,7 +138,10 @@ describe('renderPatentDataKeysPageHtml', () => {
 		// Key-source guidance is a persistent caption, not a load-bearing placeholder.
 		expect(html).toContain('field-hint');
 		expect(html).toContain('developers.epo.org');
-		expect(html).toContain('data.uspto.gov/myodp');
+		expect(html).toContain('data.uspto.gov');
+		// The signed-in My ODP dashboard is a sign-in wall for someone who has no key yet; the
+		// public getting-started page is the one both this page and the CLI point at.
+		expect(html).not.toContain('data.uspto.gov/myodp');
 		// Masked inputs only; no value attributes — key material never reaches the markup.
 		expect(html.match(/type="password"/g)).toHaveLength(3);
 		// Scoped to <input> because the Privacy row's <option value="…"> entries are static
@@ -147,6 +150,35 @@ describe('renderPatentDataKeysPageHtml', () => {
 		// Locked-down CSP with the provided nonce.
 		expect(html).toContain(`script-src 'nonce-test-nonce'`);
 		expect(html).toContain(`default-src 'none'`);
+	});
+});
+
+describe('cost and trial-vs-paid copy (E2)', () => {
+
+	it('says the keys are free where the user types, on both provider cards', () => {
+		const html = renderPatentDataKeysPageHtml('test-nonce');
+
+		// "Free" has to be visible at the moment of the ask — a user who thinks the offices charge
+		// for a key abandons the page rather than filing for one.
+		expect(html.match(/Free from the patent office — signup takes a few minutes\./g)).toHaveLength(2);
+	});
+
+	it('explains that server keys serve the trial and a paid plan needs your own', () => {
+		const html = renderPatentDataKeysPageHtml('test-nonce');
+
+		// Mirrors the Setup tree's deadline framing ("Add before your trial ends — free to obtain"),
+		// so both surfaces tell the same story about when the keys become load-bearing.
+		expect(html).toContain('During your trial');
+		expect(html).toContain('add them before your trial ends');
+	});
+});
+
+describe('signup URLs (E3)', () => {
+
+	it('points USPTO at the public getting-started page, matching the CLI', () => {
+		// The signed-in My ODP dashboard is a sign-in wall for a user who has no key yet.
+		expect(SIGNUP_URLS.uspto).toBe('https://data.uspto.gov/apis/getting-started');
+		expect(SIGNUP_URLS.epo).toBe('https://developers.epo.org/');
 	});
 });
 
