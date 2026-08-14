@@ -105,7 +105,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: flowleap-ai/flowleap-cli
-          ref: v0.7.1
+          ref: v0.8.0
           path: flowleap-cli
           fetch-depth: 1
 
