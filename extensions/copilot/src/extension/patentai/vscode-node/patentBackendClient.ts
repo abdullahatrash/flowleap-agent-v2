@@ -85,11 +85,16 @@ export class DataKeyInvalidError extends PatentBackendError {
  * no key was sent at all. The recovery action is "add your patent-data keys". `provider` names the
  * missing provider when the backend identifies one; otherwise the prompt is generic. Extends
  * {@link PatentBackendError} so tool catch paths keep working.
+ *
+ * Also raised for the ODP taxonomy's `503 odp_api_key_missing` — the same "no USPTO key anywhere"
+ * verdict wearing a different code and status. The gate is normalized here (as the CLI normalizes it
+ * to `provider_keys_required`) so the recovery path stays the one the user needs, while `status`
+ * still reports the wire status — `400` or `503`, never anything else.
  */
 export class DataKeysRequiredError extends PatentBackendError {
 	readonly code = 'data_keys_required';
-	constructor(message: string, readonly provider: 'epo' | 'uspto' | undefined) {
-		super(400, message);
+	constructor(message: string, readonly provider: 'epo' | 'uspto' | undefined, status: 400 | 503 = 400) {
+		super(status, message);
 		this.name = 'DataKeysRequiredError';
 	}
 }
@@ -383,11 +388,12 @@ export class PatentBackendClient implements IPatentBackendClient {
 		let retries = 0;
 		let backendCached = false;
 		try {
-			const { response, retries: usedRetries } = await this._fetchWithRetry(method, url, headers, body, timeoutMs, token);
+			const { response, retries: usedRetries, bodyText } = await this._fetchWithRetry(method, url, headers, body, timeoutMs, token);
 			retries = usedRetries;
 			statusClass = classifyStatus(response.status);
 
-			const text = await response.text();
+			// The retry loop consumes the body when it has to classify one; the stream is single-read.
+			const text = bodyText ?? await response.text();
 			responseBytes = byteLength(text);
 
 			if (!response.ok) {
@@ -439,9 +445,10 @@ export class PatentBackendClient implements IPatentBackendClient {
 	 * route can safely repeat: network errors, `5xx`, and a `429` whose `Retry-After` is within
 	 * {@link RATE_LIMIT_MAX_RETRY_WAIT_MS}. Timeouts and cancellations are NOT retried — they surface as
 	 * the same {@link PatentBackendError} messages as before. Returns the final response (which may be a
-	 * non-2xx the caller then gates) together with how many retries it took.
+	 * non-2xx the caller then gates) together with how many retries it took, plus `bodyText` when the
+	 * loop already consumed the single-read body to classify it.
 	 */
-	private async _fetchWithRetry(method: 'GET' | 'POST', url: string, headers: Record<string, string>, body: unknown, timeoutMs: number, token: CancellationToken): Promise<{ response: Response; retries: number }> {
+	private async _fetchWithRetry(method: 'GET' | 'POST', url: string, headers: Record<string, string>, body: unknown, timeoutMs: number, token: CancellationToken): Promise<{ response: Response; retries: number; bodyText?: string }> {
 		let attempt = 0;
 		for (; ;) {
 			let response: Response;
@@ -481,9 +488,20 @@ export class PatentBackendClient implements IPatentBackendClient {
 				return { response, retries: attempt };
 			}
 
-			// `5xx` is retryable — the read can be safely repeated.
+			// `5xx` is retryable — the read can be safely repeated. One exception: a `503` may be the
+			// USPTO key gate (`odp_api_key_missing`), which is a permanent verdict wearing a transient
+			// status, so retrying it only delays the prompt the user needs. Peek that one body instead
+			// of discarding it and stop early on a match; the body is single-read, so the peeked text
+			// is threaded back for the caller to reuse.
 			if (response.status >= 500 && response.status <= 599 && attempt < MAX_RETRIES) {
-				response.body.destroy();
+				if (response.status === 503) {
+					const bodyText = await response.text();
+					if (parseOdpKeyMissing(bodyText)) {
+						return { response, retries: attempt, bodyText };
+					}
+				} else {
+					response.body.destroy();
+				}
 				this._logService.debug(`[PatentBackendClient] ${response.status} on ${url}; retry ${attempt + 1}/${MAX_RETRIES}`);
 				await this._backoffDelay(attempt, token);
 				attempt++;
@@ -573,6 +591,19 @@ export class PatentBackendClient implements IPatentBackendClient {
 			const retryAfterMs = parseRetryAfterMs(response);
 			const retryAfterSeconds = retryAfterMs !== undefined ? Math.ceil(retryAfterMs / 1000) : undefined;
 			throw new RateLimitError(rateLimitMessage(text, retryAfterSeconds), retryAfterSeconds);
+		}
+
+		// The one `5xx` that is NOT transient: the ODP client answers `503 odp_api_key_missing` when
+		// no USPTO ODP key reached it (server-side or forwarded). Waiting will never clear it — the
+		// user has to add a key — so it joins the `data_keys_required` gate rather than the transient
+		// path, and inherits its deep link into the USPTO card. The code names the office itself, so
+		// the backend sends no `provider` field.
+		if (response.status === 503) {
+			const odpKeyMissing = parseOdpKeyMissing(text);
+			if (odpKeyMissing) {
+				this._fireDataKeysRequiredUx(odpKeyMissing);
+				throw new DataKeysRequiredError(odpKeyMissing.message, 'uspto', 503);
+			}
 		}
 
 		// Transient gate: a `5xx` (incl. gateway `502`/`503`/`504`) that survived the client's retry
@@ -861,6 +892,27 @@ function parseDataKeysRequired(body: string): DataKeysRequiredInfo | undefined {
 		return { message: error.message || fallback, provider };
 	} catch {
 		// Not JSON — let the caller fall back to generic error handling.
+		return undefined;
+	}
+}
+
+/**
+ * Parse a `503` body, returning the USPTO key-gate info only when it carries the ODP taxonomy's
+ * `odp_api_key_missing` code. The backend's own message names an env var (`Set USPTO_ODP_API_KEY…`),
+ * which is server-operator language, so the user-facing message is always ours.
+ */
+function parseOdpKeyMissing(body: string): DataKeysRequiredInfo | undefined {
+	try {
+		const parsed = JSON.parse(body) as { error?: { code?: string } };
+		if (parsed?.error?.code !== 'odp_api_key_missing') {
+			return undefined;
+		}
+		return {
+			message: l10n.t('US patent data needs your own USPTO ODP key. Add it to continue.'),
+			provider: 'uspto',
+		};
+	} catch {
+		// Not JSON (a gateway HTML page) — let the caller fall through to the transient gate.
 		return undefined;
 	}
 }

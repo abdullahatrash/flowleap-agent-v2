@@ -584,6 +584,72 @@ describe('data-keys-required gate (400 data_keys_required, ADR 0008)', () => {
 	});
 });
 
+describe('USPTO key gate through a 503 (odp_api_key_missing, E1)', () => {
+
+	// The ODP taxonomy's own "no USPTO key" verdict: a 5xx status on a permanent, user-fixable cause,
+	// and no `provider` field — the code names the office itself.
+	const BODY = {
+		success: false,
+		error: { code: 'odp_api_key_missing', message: 'USPTO ODP API key not configured. Set USPTO_ODP_API_KEY environment variable.' },
+		status: 503,
+	};
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-123'));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('is a DataKeysRequiredError for USPTO, not a transient backend error', async () => {
+		const { client } = makeClient(async () => makeResponse(503, BODY));
+
+		const thrown = await captureThrow(() => client.post('/tools/search_patents', { provider: 'uspto' }, makeToken()));
+
+		expect(thrown).toBeInstanceOf(DataKeysRequiredError);
+		expect(thrown).not.toBeInstanceOf(TransientBackendError);
+		const err = thrown as DataKeysRequiredError;
+		expect(err.code).toBe('data_keys_required');
+		expect(err.provider).toBe('uspto');
+		expect(err.status).toBe(503); // the real wire status, normalized code notwithstanding
+	});
+
+	it('deep-links into the USPTO card of the keys UI when the prompt is accepted', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(503, BODY));
+		notification.showWarningMessage.mockResolvedValueOnce(ADD_KEYS_ACTION as never);
+
+		await captureThrow(() => client.post('/tools/search_patents', { provider: 'uspto' }, makeToken()));
+		await flush();
+
+		expect(notification.showWarningMessage).toHaveBeenCalledWith(expect.any(String), ADD_KEYS_ACTION);
+		expect(executeCommandMock).toHaveBeenCalledWith('flowleap.patentDataKeys', 'uspto');
+	});
+
+	it('is not retried — waiting never adds a key', async () => {
+		const fetch = scriptedFetch([makeResponse(503, BODY)]);
+		const { client } = makeClient(fetch);
+
+		await captureThrow(() => client.post('/tools/search_patents', { provider: 'uspto' }, makeToken()));
+
+		expect(fetch.calls()).toBe(1);
+	}, 5000);
+
+	it('leaves an ordinary 503 on the transient path (retried, then a transient error)', async () => {
+		const fetch = scriptedFetch([Response.fromText(503, '', new HeadersImpl({ 'content-type': 'text/html' }), '<html>503 Service Unavailable</html>', 'test-stub')]);
+		const { client } = makeClient(fetch);
+
+		const thrown = await captureThrow(() => client.get('/patent-search-bq/EP-1-A1', makeToken()));
+
+		expect(thrown).toBeInstanceOf(TransientBackendError);
+		expect(thrown).not.toBeInstanceOf(DataKeysRequiredError);
+		expect(fetch.calls()).toBe(3);
+	}, 5000);
+
+	it('carries the key-gate recovery hint for USPTO, not a "wait and retry" steer', () => {
+		const hint = patentBackendErrorRecoveryHint(new DataKeysRequiredError('nope', 'uspto', 503));
+
+		expect(hint).toContain('USPTO ODP');
+		expect(hint).toContain('"FlowLeap: Patent Data Keys"');
+		expect(hint).not.toContain('transient');
+	});
+});
+
 describe('patentBackendErrorRecoveryHint', () => {
 
 	it('maps each error type to its model-facing hint (empty for generic backend errors)', () => {
