@@ -16,6 +16,7 @@ build/builtin/browser-main.js
 build/builtin/main.js
 build/codex/generate-protocol.mjs
 build/flowleap/stamp-flowleap-version.mjs
+build/flowleap/stamp-update-config.mjs
 eslint.config.js
 extensions/copilot/.mocha-multi-reporters.js
 extensions/copilot/.mocharc.js
