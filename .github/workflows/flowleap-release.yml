@@ -362,10 +362,12 @@ jobs:
         env:
           FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
 
-      # See the macOS job's equivalent step for the rationale: make this a
-      # Stamped Build (ADR 0008) before the gulp package task runs.
-      - name: Stamp update configuration
-        run: node build/flowleap/stamp-update-config.mjs
+      # NOTE: deliberately NO "Stamp update configuration" step here. ADR 0008
+      # scopes Silent Update rollout to macOS first: the website feed does not
+      # map the win32 keys the native updater polls (win32-x64-user, ...), so a
+      # stamped Windows build would suppress the Notify-Only Checker while its
+      # native updater 400s — losing ALL update surfaces. Windows stamping
+      # arrives with the Windows follow-up.
 
       # See the macOS job's equivalent step for the full rationale: only the legacy
       # TS FlowLeap extensions need pre-compilation before packaging.
