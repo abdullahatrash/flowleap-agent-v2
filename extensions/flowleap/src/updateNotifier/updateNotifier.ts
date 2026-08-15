@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { IProductUpdateConfiguration, isNativeUpdaterArmed, isStampedVersion, shouldRunUpdateCheck } from './updateGate';
+import { IProductUpdateConfiguration, IUpdateGateState, isNativeUpdaterArmed, isStampedVersion, shouldRunUpdateCheck } from './updateGate';
 
 /**
  * Notify-only update checker for the FlowLeap fork.
@@ -76,12 +76,7 @@ class UpdateNotifier implements vscode.Disposable {
 		// Skip automatic checks for dev / unstamped builds (never nag locally)
 		// and for builds where the native updater is armed (ADR 0008: silent
 		// updates own the update surface there).
-		const eligible = shouldRunUpdateCheck('background', {
-			nativeUpdaterArmed: isNativeUpdaterArmed(readProductUpdateConfiguration()),
-			productionExtensionMode: this.context.extensionMode === vscode.ExtensionMode.Production,
-			stampedVersion: isStampedVersion(this.currentVersion)
-		});
-		if (!eligible) {
+		if (!shouldRunUpdateCheck('background', this.gateState())) {
 			console.log('FlowLeap update notifier: automatic checks disabled (dev/unstamped build or native updater armed)');
 			return;
 		}
@@ -96,16 +91,24 @@ class UpdateNotifier implements vscode.Disposable {
 		this.disposables.push({ dispose: () => clearTimeout(first) });
 	}
 
-	private isPlaceholderBuild(): boolean {
-		return !isStampedVersion(this.currentVersion);
+	/**
+	 * Collects the plain-data inputs of the update gate from the running build.
+	 */
+	private gateState(): IUpdateGateState {
+		return {
+			nativeUpdaterArmed: isNativeUpdaterArmed(readProductUpdateConfiguration()),
+			productionExtensionMode: this.context.extensionMode === vscode.ExtensionMode.Production,
+			stampedVersion: isStampedVersion(this.currentVersion)
+		};
 	}
 
 	/**
 	 * Performs one update check. `explicit` is true for the manual command,
-	 * which surfaces "you're up to date" and ignores the skipped-version filter.
+	 * which is exempt from the gate, surfaces "you're up to date" and ignores
+	 * the skipped-version filter.
 	 */
 	private async check(explicit: boolean): Promise<void> {
-		if (!explicit && this.isPlaceholderBuild()) {
+		if (!shouldRunUpdateCheck(explicit ? 'manual' : 'background', this.gateState())) {
 			return;
 		}
 
