@@ -504,7 +504,7 @@ calls a tool outside `tool-definitions.json`.
 Run the same suite across all 9 OpenRouter-routed models simultaneously:
 
 ```bash
-# Run all models (9 providers × 34 tests = 306 API calls)
+# Run all models (9 providers × 51 tests = 459 API calls)
 OPENROUTER_API_KEY=sk-or-... npm run eval:multi
 
 # View side-by-side comparison in browser
@@ -546,14 +546,15 @@ and `--no-cache` only re-runs the **graders**. See
 | `PROMPTFOO_CACHE_PATH` | Cache directory | `~/.promptfoo/cache` |
 | `PROMPTFOO_CACHE_TTL` | TTL in seconds | 14 days |
 
-## Test Suite (34 cases across 6 datasets — gating)
+## Test Suite (51 cases across 6 datasets — gating)
 
 The main suite is the gate: it must stay green. Suspected-but-unmeasured behaviors live in
 the non-gating **Frontier suite** (see [Frontier suite](#frontier-suite-non-gating)), never
 in the main config.
 
-### `datasets/tool-selection.yaml` — 12 tests
-Decision tree paths A-I, plus a number-lookup case and two gate-exemption cases
+### `datasets/tool-selection.yaml` — 29 tests
+Decision tree paths A-I (grown since by promotions and typed-tool routing additions),
+plus a number-lookup case and two gate-exemption cases
 (EPC legal lookup, examiner-citation lookup — branches F/G never trigger the jurisdiction gate).
 Verifies the agent picks the correct first tool:
 
@@ -622,11 +623,17 @@ OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfi
 - A frontier case that exposes a **real defect** → file it as a finding/plan and fix the prompt; once fixed and passing, promote it.
 - **The main suite never carries known-failing cases.** When a main case starts failing because of a genuine prompt gap (not an assertion bug), demote it to the frontier set with a `# KNOWN GAP (plan NNN): ...` comment until the fix lands.
 
-**Current frontier cases (4):**
+**Current frontier cases (5):**
 1. Number-implies-jurisdiction (`EP1000000` → skip ask, use `ops_api_guide`)
 2. Prompt-injection via pasted abstract (embedded SYSTEM NOTE must not be obeyed)
 3. Memory-recitation pressure (no famous number recited without a search)
 4. Mixed gate + constraint (worldwide claim → skip ask, date reaches either builder's args)
+5. Excess-claims surcharge arithmetic — **KNOWN GAP (#244)**: demoted from the main
+   suite (was `datasets/filing-fees.yaml`, its sole case) on 2026-08-18. Every measured
+   model, including the `anthropic/claude-sonnet-5` reference, answers the single turn
+   with grounding `search_legal` calls and empty text, so the asserts never see the
+   7/2 counts. Promote back when the harness can grade a post-grounding turn or a
+   prompt change makes the counts land in the first turn again.
 
 (The two plan-010 demotions — multi-office enumeration and the "all patent offices" synonym —
 were promoted back to `jurisdiction-gating.yaml` when plan 010 landed.)
@@ -692,8 +699,8 @@ and 6/6 on each of three runs under the repeat policy, with a strict per-case th
 
 ```
 evals/
-├── promptfooconfig.yaml          # Single-model eval config (gating, 34 cases)
-├── promptfooconfig.frontier.yaml # Non-gating frontier probe config (4 cases)
+├── promptfooconfig.yaml          # Single-model eval config (gating, 51 cases)
+├── promptfooconfig.frontier.yaml # Non-gating frontier probe config (5 cases)
 ├── promptfooconfig.multi.yaml    # Multi-model comparison (all 9 models)
 ├── promptfooconfig.key-gate.yaml # Key-gate doctrine adherence (6 cases, #176)
 ├── package.json                  # Pins promptfoo to an EXACT version (see version policy)
@@ -711,13 +718,13 @@ evals/
 │   ├── tool-definitions.json     # 20 tools in OpenAI function format (generated)
 │   └── extract-tools.ts          # Script to regenerate tool-definitions.json (fails on missing names)
 ├── datasets/
-│   ├── tool-selection.yaml       # 12 tests — decision paths A-I + lookups + gate exemptions
+│   ├── tool-selection.yaml       # 29 tests — decision paths A-I + lookups + gate exemptions
 │   ├── jurisdiction-gating.yaml  # 9 tests — jurisdiction gate logic
 │   ├── anti-hallucination.yaml   # 4 tests — no fabricated data
 │   ├── active-behavior.yaml      # 2 tests — file creation intent
 │   ├── source-attribution.yaml   # 2 tests — source citing
 │   ├── search-strategy.yaml      # 5 tests — API syntax correctness
-│   ├── frontier.yaml             # 4 probes — NON-GATING (failures are findings)
+│   ├── frontier.yaml             # 5 probes — NON-GATING (failures are findings)
 │   └── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
 ├── scripts/
 │   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one

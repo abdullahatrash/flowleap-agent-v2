@@ -1,8 +1,8 @@
 {
-	"updated": "2026-07-20",
+	"updated": "2026-08-18",
 	"config": "promptfooconfig.yaml",
-	"totalTests": 52,
-	"passing": 52,
+	"totalTests": 51,
+	"passing": 51,
 	"passRate": 1.0,
-	"notes": "Re-graded against the post-H16/H17/H18/H19 prompt (ticket H20, PRD 0010 workstream 2) on default model google/gemini-2.5-pro via OpenRouter. Suite is 52 rows; drift check green (fixture byte-matches a fresh render). Zero prompt edits and zero assertion edits this round — the four fix policies (H17 final-answer grounding, H16 effort ceiling, H18/H19 deliverable completeness) stand untouched and introduced no routing regression. The H13 residual (filing-fees excess-claims arithmetic, 51/52) resolved as a beneficial side-effect of the H16 effort ceiling: the model now computes the 7/2 counts directly in text instead of double-calling search_legal to 'verify' thresholds first, so single-turn grading sees the counts and the case passes. Re-baseline deliberately, in its own commit, after intentional prompt changes."
+	"notes": "Re-recorded after #244 demoted the excess-claims surcharge case (the sole case in datasets/filing-fees.yaml) to the frontier suite, shrinking the denominator 52 -> 51. Green live run on the default subject model anthropic/claude-sonnet-5 via OpenRouter, 51/51 (eval-7JF-2026-08-18T17:09:19, 6m07s). The demoted case was the only failure in the 2026-08-18 evidence runs (reference-sonnet-5.json: 51/52): at temperature 0 the model answers the graded turn with grounding search_legal calls and empty text, which a single-turn harness cannot grade for the 7/2 counts. Note: the run used the working tree's prompts/system-prompt.txt, which at the time carried uncommitted in-flight prompt edits (same tree state as the 2026-08-18 trial-candidate evidence runs). Re-baseline deliberately, in its own commit, after intentional prompt changes."
 }
