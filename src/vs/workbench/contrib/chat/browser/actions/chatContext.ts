@@ -2,6 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+import { coalesce } from '../../../../../base/common/arrays.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -9,6 +10,7 @@ import { isElectron } from '../../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { localize } from '../../../../../nls.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -20,6 +22,7 @@ import { IHostService } from '../../../../services/host/browser/host.js';
 import { UntitledTextEditorInput } from '../../../../services/untitled/common/untitledTextEditorInput.js';
 import { FileEditorInput } from '../../../files/browser/editors/fileEditorInput.js';
 import { NotebookEditorInput } from '../../../notebook/common/notebookEditorInput.js';
+import { IChatAttachmentResolveService } from '../attachments/chatAttachmentResolveService.js';
 import { IChatContextPickService, IChatContextValueItem, IChatContextPickerItem, IChatContextPickerPickItem, IChatContextPicker } from '../attachments/chatContextPickService.js';
 import { IChatRequestToolEntry, IChatRequestToolSetEntry, IChatRequestVariableEntry, IImageVariableEntry, toToolSetVariableEntry, toToolVariableEntry } from '../../common/attachments/chatVariableEntries.js';
 import { isToolSet, ToolDataSource } from '../../common/tools/languageModelToolsService.js';
@@ -80,6 +83,7 @@ export class ChatContextContributions extends Disposable implements IWorkbenchCo
 		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(ToolsContextPickerPick)));
 		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(ChatInstructionsPickerPick)));
 		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(OpenEditorContextValuePick)));
+		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(BrowseFilesContextValuePick)));
 		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(ClipboardImageContextValuePick)));
 		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(ScreenshotContextValuePick)));
 		this._store.add(contextPickService.registerChatContextItem(instantiationService.createInstance(SessionReferenceContextPickerPick)));
@@ -194,6 +198,45 @@ class OpenEditorContextValuePick implements IChatContextValueItem {
 
 }
 
+
+/**
+ * Lets the user attach any file or folder from disk, including locations outside
+ * of the current workspace, through the native open dialog.
+ */
+class BrowseFilesContextValuePick implements IChatContextValueItem {
+
+	readonly type = 'valuePick';
+	readonly label: string = localize('chatContext.browseFiles', 'Files from Disk...');
+	readonly icon: ThemeIcon = Codicon.folderOpened;
+	readonly ordinal = 900;
+
+	constructor(
+		@IFileDialogService private readonly _fileDialogService: IFileDialogService,
+		@IChatAttachmentResolveService private readonly _attachmentResolveService: IChatAttachmentResolveService,
+	) { }
+
+	isEnabled(widget: IChatWidget): boolean {
+		return !!widget.attachmentCapabilities.supportsFileAttachments;
+	}
+
+	async asAttachment(): Promise<IChatRequestVariableEntry[] | undefined> {
+		const resources = await this._fileDialogService.showOpenDialog({
+			title: localize('chatContext.browseFiles.title', "Add Files to Chat"),
+			openLabel: localize('chatContext.browseFiles.openLabel', "Add"),
+			canSelectFiles: true,
+			canSelectFolders: true,
+			canSelectMany: true,
+			defaultUri: await this._fileDialogService.defaultFilePath()
+		});
+
+		if (!resources?.length) {
+			return undefined;
+		}
+
+		const attachments = await Promise.all(resources.map(resource => this._attachmentResolveService.resolveEditorAttachContext({ resource })));
+		return coalesce(attachments);
+	}
+}
 
 class ClipboardImageContextValuePick implements IChatContextValueItem {
 	readonly type = 'valuePick';
