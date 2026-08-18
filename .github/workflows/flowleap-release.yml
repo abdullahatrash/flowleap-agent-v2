@@ -8,6 +8,10 @@
 #   - macOS DMGs are notarized SYNCHRONOUSLY (notarytool --wait), the job FAILS on
 #     rejection, and the DMG is stapled + Gatekeeper-verified before upload, so the
 #     artifact attached to the release is final.
+#   - Every macOS build also ships a per-arch Squirrel archive (a .zip of the
+#     signed, notarized, stapled .app) for the native Silent Update path
+#     (ADR 0008), and the release-time stamping makes it a Stamped Build
+#     (updateUrl + quality land in the built product.json).
 #   - Per-extension build steps trimmed to only what this fork actually needs
 #     (see the "Compile FlowLeap legacy extensions" step comment).
 #   - Windows stays unsigned in CI; signing is a documented local step.
@@ -72,6 +76,14 @@ jobs:
         run: node build/flowleap/stamp-flowleap-version.mjs
         env:
           FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
+
+      # Stamp the native-updater fields (updateUrl + quality) into the ROOT
+      # product.json BEFORE the gulp package task, so the built app is a
+      # Stamped Build (ADR 0008). The gulp build injects `commit` (the real
+      # source sha) and `date` itself; the checked-in product.json keeps
+      # neither field, so dev/local builds stay inert.
+      - name: Stamp update configuration
+        run: node build/flowleap/stamp-update-config.mjs
 
       # All *standard* built-in extensions (git, typescript, markdown, ...) use esbuild
       # and self-compile during the `vscode-darwin-*` package task, so they need no step
@@ -195,33 +207,33 @@ jobs:
           APP_NAME="Flow Leap, AI patent agent.app"
           APP_PATH="../VSCode-darwin-${{ matrix.arch }}/$APP_NAME"
           DMG_NAME="FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.dmg"
-          ZIP_NAME="FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.zip"
 
           if [ ! -e "$APP_PATH" ]; then
             echo "::error::App bundle not found at $APP_PATH"
             exit 1
           fi
 
-          # Preferred path: create-dmg. It can exit non-zero even on success (e.g. when it
-          # cannot re-sign), so we decide success by whether a .dmg actually appeared.
+          # create-dmg can exit non-zero even on success (e.g. when it cannot
+          # re-sign), so success is decided by whether a .dmg actually appeared.
+          # No fallback: a missing DMG fails the job, so no artifact can ever
+          # ship un-notarized.
           echo "Attempting create-dmg..."
           create-dmg "$APP_PATH" --overwrite --dmg-title="FlowLeap" || echo "::warning::create-dmg exited non-zero; checking for output before deciding"
 
           if ls ./*.dmg >/dev/null 2>&1; then
             mv ./*.dmg "dist/$DMG_NAME"
-            echo "DMG path taken: create-dmg -> dist/$DMG_NAME"
+            echo "DMG created: dist/$DMG_NAME"
           else
-            echo "::warning::create-dmg produced no .dmg; falling back to a plain zip archive (this build will NOT be notarized)"
-            ( cd "../VSCode-darwin-${{ matrix.arch }}" && zip -qr "$GITHUB_WORKSPACE/dist/$ZIP_NAME" "$APP_NAME" )
-            echo "Fallback path taken: zip -> dist/$ZIP_NAME"
+            echo "::error::create-dmg produced no .dmg; failing the build (un-notarized artifacts must never ship)"
+            exit 1
           fi
 
           ls -la dist/
 
       # Notarization: submit SYNCHRONOUSLY and staple, so the uploaded DMG is final.
       # The job FAILS if Apple rejects notarization (the notarytool log is printed for
-      # diagnosis). A missing DMG (only the zip fallback exists) is a soft-skip, not a
-      # failure, because the build itself succeeded.
+      # diagnosis) and also if the DMG is missing — every shipped artifact must be
+      # notarized.
       - name: Notarize and Staple DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -231,8 +243,8 @@ jobs:
           DMG_PATH="dist/FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.dmg"
 
           if [ ! -f "$DMG_PATH" ]; then
-            echo "::warning::No DMG found (zip fallback was used); skipping notarization. The zip is un-notarized and users will see a Gatekeeper prompt."
-            exit 0
+            echo "::error::No DMG found at $DMG_PATH; nothing to notarize."
+            exit 1
           fi
 
           echo "Submitting $DMG_PATH to the Apple notary service (waiting up to 45m)..."
@@ -270,6 +282,29 @@ jobs:
           spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
 
           echo "DMG is signed, notarized and stapled: $DMG_PATH"
+
+      # Squirrel.Mac cannot install a .dmg — it needs a .zip of the signed,
+      # notarized, stapled .app (ADR 0008). The DMG notarization above covers
+      # the nested app bundle, so its ticket is stapled directly onto the .app
+      # before archiving. ditto -c -k --keepParent produces the archive layout
+      # Squirrel.Mac expects. The .dmg remains the human download.
+      - name: Create Squirrel Archive (notarized app zip)
+        run: |
+          APP_PATH="../VSCode-darwin-${{ matrix.arch }}/Flow Leap, AI patent agent.app"
+          ZIP_PATH="dist/FlowLeap-${{ inputs.version || github.ref_name }}-darwin-${{ matrix.arch }}.zip"
+
+          echo "Stapling the notarization ticket onto the app bundle..."
+          xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+
+          echo "Gatekeeper assessment of the stapled app..."
+          spctl --assess --type execute -vv "$APP_PATH"
+
+          echo "Creating Squirrel archive..."
+          ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
+
+          ls -la dist/
+          echo "Squirrel archive created: $ZIP_PATH"
 
       - name: Cleanup Keychain
         if: always()
@@ -326,6 +361,13 @@ jobs:
         run: node build/flowleap/stamp-flowleap-version.mjs
         env:
           FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
+
+      # NOTE: deliberately NO "Stamp update configuration" step here. ADR 0008
+      # scopes Silent Update rollout to macOS first: the website feed does not
+      # map the win32 keys the native updater polls (win32-x64-user, ...), so a
+      # stamped Windows build would suppress the Notify-Only Checker while its
+      # native updater 400s — losing ALL update surfaces. Windows stamping
+      # arrives with the Windows follow-up.
 
       # See the macOS job's equivalent step for the full rationale: only the legacy
       # TS FlowLeap extensions need pre-compilation before packaging.
