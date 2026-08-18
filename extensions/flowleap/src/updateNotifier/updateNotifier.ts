@@ -3,17 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
+import { IProductUpdateConfiguration, IUpdateGateState, isNativeUpdaterArmed, isStampedVersion, shouldRunUpdateCheck } from './updateGate';
 
 /**
  * Notify-only update checker for the FlowLeap fork.
  *
- * The fork does NOT use VS Code's native (Squirrel/Inno) auto-updater. Instead
- * this polls the website's `/api/latest-version` endpoint, compares the latest
+ * This polls the website's `/api/latest-version` endpoint, compares the latest
  * published release against this build's stamped version, and — when newer —
  * shows a toast that links the user to the download page. It can never rewrite
  * the installed app, so it cannot break an installation; the user downloads and
  * reinstalls manually (the Cursor / Claude-desktop style "update available" UX).
+ *
+ * On builds where the NATIVE updater is armed (ADR 0008 Silent Updates — the
+ * running app's product configuration carries an `updateUrl`), the background
+ * checks and toasts here are suppressed so the two update surfaces never
+ * compete; only the manual `flowleap.checkForUpdates` command remains.
  *
  * The build's identity comes from this extension's `package.json` version,
  * which the release workflow stamps from the git tag. In development (or an
@@ -22,9 +29,6 @@ import * as vscode from 'vscode';
 
 /** Base URL of the FlowLeap website; override with `FLOWLEAP_SITE_URL` for staging. */
 const DEFAULT_SITE_URL = 'https://www.flowleap.co';
-
-/** Placeholder versions that indicate an unstamped (dev) build — never check against these. */
-const PLACEHOLDER_VERSIONS = new Set(['0.0.0', '0.0.1']);
 
 const FIRST_CHECK_DELAY_MS = 30 * 1000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // every 4 hours while running
@@ -69,9 +73,11 @@ class UpdateNotifier implements vscode.Disposable {
 	}
 
 	start(): void {
-		// Skip automatic checks for dev / unstamped builds so we never nag locally.
-		if (this.context.extensionMode !== vscode.ExtensionMode.Production || this.isPlaceholderBuild()) {
-			console.log('FlowLeap update notifier: automatic checks disabled (dev or unstamped build)');
+		// Skip automatic checks for dev / unstamped builds (never nag locally)
+		// and for builds where the native updater is armed (ADR 0008: silent
+		// updates own the update surface there).
+		if (!shouldRunUpdateCheck('background', this.gateState())) {
+			console.log('FlowLeap update notifier: automatic checks disabled (dev/unstamped build or native updater armed)');
 			return;
 		}
 
@@ -85,16 +91,24 @@ class UpdateNotifier implements vscode.Disposable {
 		this.disposables.push({ dispose: () => clearTimeout(first) });
 	}
 
-	private isPlaceholderBuild(): boolean {
-		return !this.currentVersion || PLACEHOLDER_VERSIONS.has(this.currentVersion);
+	/**
+	 * Collects the plain-data inputs of the update gate from the running build.
+	 */
+	private gateState(): IUpdateGateState {
+		return {
+			nativeUpdaterArmed: isNativeUpdaterArmed(readProductUpdateConfiguration()),
+			productionExtensionMode: this.context.extensionMode === vscode.ExtensionMode.Production,
+			stampedVersion: isStampedVersion(this.currentVersion)
+		};
 	}
 
 	/**
 	 * Performs one update check. `explicit` is true for the manual command,
-	 * which surfaces "you're up to date" and ignores the skipped-version filter.
+	 * which is exempt from the gate, surfaces "you're up to date" and ignores
+	 * the skipped-version filter.
 	 */
 	private async check(explicit: boolean): Promise<void> {
-		if (!explicit && this.isPlaceholderBuild()) {
+		if (!shouldRunUpdateCheck(explicit ? 'manual' : 'background', this.gateState())) {
 			return;
 		}
 
@@ -201,6 +215,22 @@ class UpdateNotifier implements vscode.Disposable {
 			d.dispose();
 		}
 		this.disposables.length = 0;
+	}
+}
+
+/**
+ * Reads the running app's product configuration (`<appRoot>/product.json`),
+ * the seam that tells a built-in extension whether the native updater is armed
+ * on this build. Returns `undefined` when it cannot be read or parsed, which
+ * callers treat as NOT armed (fail open to the notify-only toast).
+ */
+function readProductUpdateConfiguration(): IProductUpdateConfiguration | undefined {
+	try {
+		const raw = fs.readFileSync(path.join(vscode.env.appRoot, 'product.json'), 'utf8');
+		return JSON.parse(raw) as IProductUpdateConfiguration;
+	} catch (error) {
+		console.log('FlowLeap update notifier: could not read product.json', error);
+		return undefined;
 	}
 }
 
