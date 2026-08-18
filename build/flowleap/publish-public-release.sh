@@ -10,12 +10,18 @@
 # /api/latest-version all consume that repo's GitHub releases.
 #
 #   1. Downloads every asset from the source draft release.
-#   2. Sanity-checks the expected artifact set (DMGs + signed installers).
-#   3. Regenerates SHASUMS256.txt from the actual files (the CI-generated one
+#   2. Sanity-checks the expected artifact set (DMGs + darwin Squirrel zips +
+#      signed installers).
+#   3. Generates update-metadata.json — the release identity the website
+#      Update Feed reads (ADR 0008): {"commit": "<source sha>", "version":
+#      "<x.y.z>"}. The sha is resolved from the tag on the SOURCE repo, never
+#      from the local checkout.
+#   4. Regenerates SHASUMS256.txt from the actual files (the CI-generated one
 #      uses subdirectory paths and pre-signing hashes for the .exe files).
-#   4. Creates a PUBLISHED release on the public repo with the same tag and the
+#      It covers the zips and update-metadata.json too.
+#   5. Creates a PUBLISHED release on the public repo with the same tag and the
 #      draft's release notes.
-#   5. With --clean-old: afterwards deletes every OTHER release (and its tag)
+#   6. With --clean-old: afterwards deletes every OTHER release (and its tag)
 #      from the public repo, so only the new release remains.
 #
 # Order matters: the new public release is created BEFORE old ones are removed,
@@ -59,16 +65,18 @@ rm -f SHASUMS256.txt
 echo "==> Downloaded assets:"
 ls -la
 
-# The set a complete release must carry. The plain win32 zip is optional.
+# The set a complete release must carry. The darwin zips are the Squirrel.Mac
+# update archives (ADR 0008) — without them a published release is not
+# updatable. The plain win32 zip is optional.
 missing=0
-for pattern in "*darwin-arm64.dmg" "*darwin-x64.dmg" "FlowLeap-Setup-*.exe" "FlowLeap-UserSetup-*.exe"; do
+for pattern in "*darwin-arm64.dmg" "*darwin-x64.dmg" "*darwin-arm64.zip" "*darwin-x64.zip" "FlowLeap-Setup-*.exe" "FlowLeap-UserSetup-*.exe"; do
 	if ! compgen -G "$pattern" > /dev/null; then
 		echo "error: expected asset matching '$pattern' not found" >&2
 		missing=1
 	fi
 done
 if [ "$missing" -ne 0 ]; then
-	echo "Aborting: incomplete artifact set. Did the release build finish, and did sign-windows-release.ps1 run?" >&2
+	echo "Aborting: incomplete artifact set. Did the release build finish (it must upload the darwin Squirrel zips), and did sign-windows-release.ps1 run?" >&2
 	exit 1
 fi
 
@@ -77,7 +85,21 @@ fi
 echo
 echo "NOTE: verify the .exe files above are the SIGNED ones (sign-windows-release.ps1 must have re-uploaded them)."
 
+echo "==> Generating update-metadata.json (release identity, ADR 0008) ..."
+# The website Update Feed compares a client's build commit against this file,
+# so 'commit' must be the source sha the release was BUILT from. The draft's
+# targetCommitish is only a branch name ('main'), so resolve the tag itself on
+# the source repo — never the local checkout's HEAD, which may be anywhere.
+source_sha=$(gh api "repos/$SRC_REPO/commits/$TAG" --jq .sha)
+if ! [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "error: could not resolve tag '$TAG' on $SRC_REPO to a commit sha (got '$source_sha')" >&2
+	exit 1
+fi
+printf '{"commit": "%s", "version": "%s"}\n' "$source_sha" "${TAG#v}" > update-metadata.json
+cat update-metadata.json
+
 echo "==> Regenerating SHASUMS256.txt ..."
+# update-metadata.json already exists at this point, so the glob hashes it too.
 shasum -a 256 -- * > SHASUMS256.txt
 cat SHASUMS256.txt
 
@@ -110,6 +132,16 @@ if [ "$latest" != "$TAG" ]; then
 	exit 1
 fi
 echo "OK: $DST_REPO latest is $TAG"
+
+echo "==> Verifying the published release carries the update artifacts ..."
+published_assets=$(gh release view "$TAG" --repo "$DST_REPO" --json assets --jq '.assets[].name')
+for needed in "darwin-arm64.zip" "darwin-x64.zip" "update-metadata.json" "SHASUMS256.txt"; do
+	if ! grep -qF -- "$needed" <<< "$published_assets"; then
+		echo "error: published release is missing an asset matching '$needed'" >&2
+		exit 1
+	fi
+done
+echo "OK: darwin zips, update-metadata.json and SHASUMS256.txt are published"
 
 if [ "$CLEAN_OLD" -eq 1 ]; then
 	echo "==> Removing all OTHER releases (and their tags) from $DST_REPO ..."
