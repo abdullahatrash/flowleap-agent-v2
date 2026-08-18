@@ -2544,6 +2544,10 @@
         }
       },
       {
+        "vendor": "flowleap-trial",
+        "displayName": "FlowLeap Trial"
+      },
+      {
         "vendor": "openrouter",
         "displayName": "OpenRouter",
         "configuration": {

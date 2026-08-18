@@ -29,6 +29,7 @@ function makeClient(behavior: { post?: (path: string, body: unknown, token: unkn
 			return behavior.post ? behavior.post(path, body, token, options) : {};
 		},
 		getCustomerPortalUrl: async () => '',
+		getTrialModelKey: () => { throw new Error('getTrialModelKey not exercised in this test fake'); },
 	} as IPatentBackendClient;
 	return { client, calls };
 }

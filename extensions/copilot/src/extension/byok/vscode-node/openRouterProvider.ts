@@ -30,12 +30,21 @@ interface OpenRouterModelData {
 	};
 }
 
-export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
+/** OpenRouter API base URL, shared with the FlowLeap Trial provider (same inference host, different key source). */
+export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
-	public static readonly providerName = 'OpenRouter';
-	public static readonly providerId = this.providerName.toLowerCase();
+/**
+ * The OpenRouter inference machinery (model discovery, capability resolution, and the native
+ * Anthropic-Messages routing), independent of where the API key comes from. Two providers share
+ * it: {@link OpenRouterLMProvider} (user-entered BYO key) and the FlowLeap Trial provider
+ * (backend-fetched trial key) — the latter must run inference through exactly this path, with
+ * no new inference code.
+ */
+export abstract class AbstractOpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 
 	constructor(
+		id: string,
+		name: string,
 		byokStorageService: IBYOKStorageService,
 		@IFetcherService fetcherService: IFetcherService,
 		@ILogService logService: ILogService,
@@ -44,8 +53,8 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 		@IExperimentationService expService: IExperimentationService
 	) {
 		super(
-			OpenRouterLMProvider.providerId,
-			OpenRouterLMProvider.providerName,
+			id,
+			name,
 			undefined,
 			byokStorageService,
 			fetcherService,
@@ -57,7 +66,7 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 	}
 
 	protected override getModelsBaseUrl(): string | undefined {
-		return 'https://openrouter.ai/api/v1';
+		return OPENROUTER_BASE_URL;
 	}
 
 	protected override getModelsDiscoveryUrl(modelsBaseUrl: string): string {
@@ -99,6 +108,32 @@ export class OpenRouterLMProvider extends AbstractOpenAICompatibleLMProvider {
 			: `${model.url}/chat/completions`;
 
 		return this._instantiationService.createInstance(OpenRouterEndpoint, modelInfo, model.configuration?.apiKey ?? '', url);
+	}
+}
+
+export class OpenRouterLMProvider extends AbstractOpenRouterLMProvider {
+
+	public static readonly providerName = 'OpenRouter';
+	public static readonly providerId = this.providerName.toLowerCase();
+
+	constructor(
+		byokStorageService: IBYOKStorageService,
+		@IFetcherService fetcherService: IFetcherService,
+		@ILogService logService: ILogService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IExperimentationService expService: IExperimentationService
+	) {
+		super(
+			OpenRouterLMProvider.providerId,
+			OpenRouterLMProvider.providerName,
+			byokStorageService,
+			fetcherService,
+			logService,
+			instantiationService,
+			configurationService,
+			expService
+		);
 	}
 }
 

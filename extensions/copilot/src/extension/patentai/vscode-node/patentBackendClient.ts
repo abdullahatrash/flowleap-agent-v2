@@ -100,6 +100,22 @@ export class DataKeysRequiredError extends PatentBackendError {
 }
 
 /**
+ * Thrown when the backend answers `403 { error: { code: 'trial_model_key_unavailable', reason } }`
+ * on the Trial Model key route (ADR 0015 / flowleap-backend#302) — the caller's subscription is not
+ * `trialing`, so no trial LLM key is served. A first-class typed outcome, not a failure: the
+ * recovery is "hide the FlowLeap Trial provider and steer to BYO-key", which the trial provider
+ * applies itself — deliberately no notification at the seam, since the fetch runs silently on
+ * every model listing. Extends {@link PatentBackendError} so shared catch paths keep working.
+ */
+export class TrialModelKeyUnavailableError extends PatentBackendError {
+	readonly code = 'trial_model_key_unavailable';
+	constructor(message: string, readonly reason: string | undefined) {
+		super(403, message);
+		this.name = 'TrialModelKeyUnavailableError';
+	}
+}
+
+/**
  * Thrown when the backend answers `429` and the request could not be transparently retried within a
  * short {@link https://developer.mozilla.org/docs/Web/HTTP/Headers/Retry-After Retry-After} budget —
  * the caller is being rate-limited. Kept distinct from the generic non-2xx path so tools surface a
@@ -194,6 +210,17 @@ export interface IPatentBackendRequestOptions {
 	readonly bypassReadCache?: boolean;
 }
 
+/**
+ * One payload configures the whole trial LLM experience (ADR 0015): the provisioned OpenRouter
+ * runtime key, the curated Trial Models list, and the daily spend cap. `models` is ordered by
+ * contract — the first entry is the default trial model.
+ */
+export interface TrialModelKeyPayload {
+	readonly key: string;
+	readonly models: readonly string[];
+	readonly cap: { readonly dailyUsd: number };
+}
+
 export const IPatentBackendClient = createServiceIdentifier<IPatentBackendClient>('IPatentBackendClient');
 
 /**
@@ -226,6 +253,15 @@ export interface IPatentBackendClient {
 	 * `402` — and throws {@link PatentBackendError} when the backend returns no URL.
 	 */
 	getCustomerPortalUrl(token: CancellationToken): Promise<string>;
+
+	/**
+	 * Fetches the Trial Model key and curated model list from `GET /v1/trial/model-key`
+	 * (ADR 0015). Throws {@link TrialModelKeyUnavailableError} on the typed `403` (the caller
+	 * is not `trialing`); transport failures surface as the seam's usual typed errors
+	 * ({@link TransientBackendError}, {@link AuthRequiredError}, …). Never cached: the response
+	 * carries a live credential, and a trial that just started must show on the next listing.
+	 */
+	getTrialModelKey(token: CancellationToken): Promise<TrialModelKeyPayload>;
 }
 
 // ── Internal UX payloads ───────────────────────────────────────────────────────
@@ -352,6 +388,20 @@ export class PatentBackendClient implements IPatentBackendClient {
 			throw new PatentBackendError(undefined, 'The FlowLeap backend did not return a customer portal URL.');
 		}
 		return res.portalUrl;
+	}
+
+	async getTrialModelKey(token: CancellationToken): Promise<TrialModelKeyPayload> {
+		const res = await this.get<{ key?: unknown; models?: unknown; cap?: { dailyUsd?: unknown } }>('/trial/model-key', token, { bypassReadCache: true });
+		const key = typeof res?.key === 'string' && res.key.length > 0 ? res.key : undefined;
+		const models = Array.isArray(res?.models) ? res.models.filter((m): m is string => typeof m === 'string' && m.length > 0) : [];
+		if (!key || models.length === 0) {
+			throw new PatentBackendError(undefined, 'The FlowLeap backend returned an invalid Trial Model key payload.');
+		}
+		return {
+			key,
+			models,
+			cap: { dailyUsd: typeof res.cap?.dailyUsd === 'number' ? res.cap.dailyUsd : 0 },
+		};
 	}
 
 	/**
@@ -583,6 +633,17 @@ export class PatentBackendClient implements IPatentBackendClient {
 				: { message: SIGNED_OUT_MESSAGE, signedOut: true };
 			this._fireAuthRequiredUx(info);
 			throw new AuthRequiredError(info.message);
+		}
+
+		// Trial-model-key gate: `403 trial_model_key_unavailable` (ADR 0015) is a first-class
+		// typed outcome — the caller is not `trialing`. The trial provider maps it to "hide the
+		// provider, steer to BYO-key" itself; no notification here, since the fetch runs silently
+		// in the background on every model listing.
+		if (response.status === 403) {
+			const info = parseTrialModelKeyUnavailable(text);
+			if (info) {
+				throw new TrialModelKeyUnavailableError(info.message, info.reason);
+			}
 		}
 
 		// Rate-limit gate: a `429` that survived the inline Retry-After retry (too long a wait, or
@@ -913,6 +974,24 @@ function parseOdpKeyMissing(body: string): DataKeysRequiredInfo | undefined {
 		};
 	} catch {
 		// Not JSON (a gateway HTML page) — let the caller fall through to the transient gate.
+		return undefined;
+	}
+}
+
+/** Parse a `403` body, returning trial-key-unavailable info only when it matches the ADR 0015 contract. */
+function parseTrialModelKeyUnavailable(body: string): { message: string; reason: string | undefined } | undefined {
+	try {
+		const parsed = JSON.parse(body) as { error?: { code?: string; message?: string; reason?: string } };
+		const error = parsed?.error;
+		if (error?.code !== 'trial_model_key_unavailable') {
+			return undefined;
+		}
+		return {
+			message: error.message || l10n.t('Trial Models serve the trial window only — add your own LLM provider key to continue.'),
+			reason: typeof error.reason === 'string' ? error.reason : undefined,
+		};
+	} catch {
+		// Not JSON — let the caller fall back to generic error handling.
 		return undefined;
 	}
 }
