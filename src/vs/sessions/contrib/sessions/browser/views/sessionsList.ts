@@ -12,6 +12,7 @@ import { IListStyles } from '../../../../../base/browser/ui/list/listWidget.js';
 import { IObjectTreeElement, ITreeNode, ITreeRenderer, ITreeContextMenuEvent, ObjectTreeElementCollapseState, ITreeDragAndDrop, ITreeDragOverReaction } from '../../../../../base/browser/ui/tree/tree.js';
 import { RenderIndentGuides, TreeFindMode } from '../../../../../base/browser/ui/tree/abstractTree.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
+import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { HighlightedLabel } from '../../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { createMatches, FuzzyScore, IMatch } from '../../../../../base/common/filters.js';
@@ -243,6 +244,9 @@ class SessionItemActionRunner extends ActionRunner {
 const SESSION_TITLE_SHIMMER_ANIMATION_NAMES = new Set(['session-title-shimmer']);
 const SESSION_TITLE_SHIMMER_PAUSED_CLASS = 'session-title-shimmer-paused';
 
+/** Renames a session. Registered in `sessionsViewActions.ts`. */
+const RENAME_SESSION_COMMAND_ID = 'sessionsViewPane.renameSession';
+
 interface ISessionItemTemplate {
 	readonly container: HTMLElement;
 	readonly statusIcon: SessionStatusIcon;
@@ -274,7 +278,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 	readonly onDidChangeItemHeight: Event<ISession> = this._onDidChangeItemHeight.event;
 
 	constructor(
-		private readonly options: { grouping: () => SessionsGrouping; sorting: () => SessionsSorting; isPinned: (session: ISession) => boolean; isRead: (session: ISession) => boolean; visibleSessions: IObservable<readonly (IActiveSession | undefined)[]>; getMultiSelectedSessions: (session: ISession) => ISession[] },
+		private readonly options: { grouping: () => SessionsGrouping; sorting: () => SessionsSorting; isPinned: (session: ISession) => boolean; isRead: (session: ISession) => boolean; visibleSessions: IObservable<readonly (IActiveSession | undefined)[]>; getMultiSelectedSessions: (session: ISession) => ISession[]; onDidRequestRename?: (session: ISession) => void },
 		private readonly approvalModel: AgentSessionApprovalModel | undefined,
 		private readonly instantiationService: IInstantiationService,
 		private readonly contextKeyService: IContextKeyService,
@@ -341,6 +345,25 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 	private renderSession(element: ISession, template: ISessionItemTemplate, matches?: IMatch[]): void {
 		template.elementDisposables.clear();
+
+		if (this.options.onDidRequestRename) {
+			template.elementDisposables.add(DOM.addDisposableListener(template.title.element, DOM.EventType.DBLCLICK, (event: MouseEvent) => {
+				if (
+					event.button !== 0 ||
+					event.altKey ||
+					event.ctrlKey ||
+					event.metaKey ||
+					event.shiftKey ||
+					!element.capabilities.supportsRename
+				) {
+					return;
+				}
+
+				event.preventDefault();
+				event.stopPropagation();
+				this.options.onDidRequestRename?.(element);
+			}));
+		}
 
 		// TEMPORARY (#320480): trigger lazy resolve of expensive session
 		// properties (e.g. changes) for rows that scroll into view, so providers
@@ -1485,7 +1508,17 @@ export class SessionsList extends Disposable implements ISessionsList {
 		// TEMPORARY (#320480): see the note on the `IAgentSessionsService` import.
 		const agentSessionsService = instantiationService.invokeFunction(accessor => accessor.get(IAgentSessionsService));
 		const sessionRenderer = new SessionItemRenderer(
-			{ grouping: this.options.grouping, sorting: this.options.sorting, isPinned: s => this.isSessionPinned(s), isRead: s => this.isSessionRead(s), visibleSessions: this._sessionsService.visibleSessions, getMultiSelectedSessions: s => this.getMultiSelectedSessions(s) },
+			{
+				grouping: this.options.grouping,
+				sorting: this.options.sorting,
+				isPinned: s => this.isSessionPinned(s),
+				isRead: s => this.isSessionRead(s),
+				visibleSessions: this._sessionsService.visibleSessions,
+				getMultiSelectedSessions: s => this.getMultiSelectedSessions(s),
+				onDidRequestRename: session => {
+					this.commandService.executeCommand(RENAME_SESSION_COMMAND_ID, session).catch(onUnexpectedError);
+				},
+			},
 			approvalModel,
 			instantiationService,
 			contextKeyService,
