@@ -6,7 +6,8 @@
 import assert from 'assert';
 import { URI } from '../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { buildPlanReviewProgressContent, formatResponseTokenStats, reconcileChatItemHeight, renderChatRequestTimestamp, renderChatResponseDetails, shouldCreateGroupedThinkingPart, shouldHideChatUserIdentity, shouldRenderInitialProgressiveContentImmediately, shouldScheduleInitialHeightChange, shouldStartNewCollapsedThinkingGroup } from '../../../browser/widget/chatListRenderer.js';
+import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
+import { buildPlanReviewProgressContent, formatCompletedResponseDisclosureLabel, formatResponseTokenStats, getFinalResponseStartIndex, getVisibleCompletedResponseItemCount, reconcileChatItemHeight, renderChatRequestTimestamp, renderChatResponseDetails, shouldCreateGroupedThinkingPart, shouldHideChatUserIdentity, shouldRenderInitialProgressiveContentImmediately, shouldScheduleInitialHeightChange, shouldStartNewCollapsedThinkingGroup } from '../../../browser/widget/chatListRenderer.js';
 import { formatChatRequestTimestamp, formatChatResponseDetails, formatElapsedTime } from '../../../common/chatProgressFormatting.js';
 import { CollapsedToolsDisplayMode, ThinkingDisplayMode } from '../../../common/constants.js';
 
@@ -28,6 +29,59 @@ suite('ChatListRenderer', () => {
 				true,
 				true,
 			]);
+		});
+
+		suite('getFinalResponseStartIndex', () => {
+			test('finds the trailing markdown response while leaving trailing adjuncts in place', () => {
+				assert.deepStrictEqual([
+					getFinalResponseStartIndex([
+						{ kind: 'references', references: [] },
+						{ kind: 'markdownContent', content: new MarkdownString('Final response') },
+						{ kind: 'references', references: [] },
+					]),
+					getFinalResponseStartIndex([
+						{ kind: 'markdownContent', content: new MarkdownString('Earlier response') },
+						{ kind: 'references', references: [] },
+						{ kind: 'markdownContent', content: new MarkdownString('First segment') },
+						{ kind: 'markdownContent', content: new MarkdownString('Second segment') },
+					]),
+					getFinalResponseStartIndex([
+						{ kind: 'references', references: [] },
+						{ kind: 'markdownContent', content: new MarkdownString('') },
+					]),
+				], [
+					1,
+					2,
+					undefined,
+				]);
+			});
+
+			test('formats completed response disclosure step count and timing', () => {
+				assert.deepStrictEqual([
+					formatCompletedResponseDisclosureLabel(1, 83_000),
+					formatCompletedResponseDisclosureLabel(6, 83_000),
+					formatCompletedResponseDisclosureLabel(6, undefined),
+				], [
+					'Completed 1 step in 1m 23s',
+					'Completed 6 steps in 1m 23s',
+					'Completed 6 steps',
+				]);
+			});
+
+			test('counts visible completed response items', () => {
+				const hidden = document.createElement('div');
+				hidden.style.display = 'none';
+				const first = document.createElement('div');
+				const second = document.createElement('div');
+
+				assert.deepStrictEqual([
+					getVisibleCompletedResponseItemCount([hidden, first]),
+					getVisibleCompletedResponseItemCount([hidden, first, second]),
+				], [
+					1,
+					2,
+				]);
+			});
 		});
 	});
 
