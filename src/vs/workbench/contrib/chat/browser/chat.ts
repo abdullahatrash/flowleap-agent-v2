@@ -122,6 +122,8 @@ export interface IChatWidgetService {
 
 	readonly onDidAddWidget: Event<IChatWidget>;
 
+	readonly onDidRemoveWidget: Event<IChatWidget>;
+
 	/**
 	 * Fires when a chat session is no longer open in any chat widget.
 	 */
