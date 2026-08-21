@@ -13,3 +13,18 @@ export namespace CustomDataPartMimeTypes {
 }
 
 export const CacheType = 'ephemeral';
+
+/**
+ * Vendors of the built-in BYOK providers whose converters handle the internal
+ * {@link CustomDataPartMimeTypes.CacheControl} sentinel. Others would leak it upstream (#313920).
+ *
+ * `flowleap-trial` is a FlowLeap addition: the Trial provider extends the OpenRouter provider and
+ * so runs the very same converter as `openrouter`.
+ *
+ * TODO: replace with an externally exposed opt-in API (#313920).
+ */
+export const CacheBreakpointAwareModelVendors: ReadonlySet<string> = new Set(['anthropic', 'gemini', 'openrouter', 'flowleap-trial']);
+
+export function modelVendorHandlesCacheBreakpoints(vendor: string | undefined): boolean {
+	return !!vendor && CacheBreakpointAwareModelVendors.has(vendor.toLowerCase());
+}
