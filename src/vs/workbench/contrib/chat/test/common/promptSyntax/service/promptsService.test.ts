@@ -6,6 +6,7 @@
 import assert from 'assert';
 import * as sinon from 'sinon';
 import { CancellationToken } from '../../../../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { match } from '../../../../../../../base/common/glob.js';
 import { ResourceSet } from '../../../../../../../base/common/map.js';
@@ -41,7 +42,7 @@ import { ComputeAutomaticInstructions, newInstructionsCollectionEvent, newInstru
 import { PromptsConfig } from '../../../../common/promptSyntax/config/config.js';
 import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, HOOKS_SOURCE_FOLDER, INSTRUCTION_FILE_EXTENSION, INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, LEGACY_MODE_DEFAULT_SOURCE_FOLDER, PROMPT_DEFAULT_SOURCE_FOLDER, PROMPT_FILE_EXTENSION } from '../../../../common/promptSyntax/config/promptFileLocations.js';
 import { INSTRUCTIONS_LANGUAGE_ID, PROMPT_LANGUAGE_ID, PromptFileSource, PromptsType, Target } from '../../../../common/promptSyntax/promptTypes.js';
-import { IAgentDiscoveryResult, IAgentSource, IBuiltinPromptPath, ICustomAgent, IPromptFileContext, IPromptsService, PromptsStorage } from '../../../../common/promptSyntax/service/promptsService.js';
+import { IAgentDiscoveryResult, IAgentSource, IBuiltinPromptPath, ICustomAgent, IPromptFileContext, IPromptPath, IPromptsService, PromptsStorage } from '../../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../common/promptSyntax/service/promptsServiceImpl.js';
 import { mockFiles } from '../testUtils/mockFilesystem.js';
 import { InMemoryStorageService, IStorageService } from '../../../../../../../platform/storage/common/storage.js';
@@ -96,10 +97,12 @@ suite('PromptsService', () => {
 	let fileService: IFileService;
 	let testPluginsObservable: ISettableObservable<readonly IAgentPlugin[]>;
 	let workspaceTrustService: TestWorkspaceTrustManagementService;
+	let logService: NullLogService;
 
 	setup(async () => {
 		instaService = disposables.add(new TestInstantiationService());
-		instaService.stub(ILogService, new NullLogService());
+		logService = new NullLogService();
+		instaService.stub(ILogService, logService);
 
 		workspaceContextService = new TestContextService();
 		instaService.stub(IWorkspaceContextService, workspaceContextService);
@@ -3724,6 +3727,34 @@ suite('PromptsService', () => {
 		test('the base service contributes no built-in prompt files', async () => {
 			const forStorage = await service.listPromptFilesForStorage(PromptsType.skill, PromptsStorage.builtIn, CancellationToken.None);
 			assert.deepStrictEqual(forStorage, []);
+		});
+	});
+
+	suite('getPromptSlashCommands - prompt discovery', () => {
+		teardown(() => {
+			sinon.restore();
+		});
+
+		test('CancellationError from parseNew is skipped without logging', async () => {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, false);
+
+			const promptUri = URI.parse('file://extensions/my-extension/cancelled.prompt.md');
+			const logErrorSpy = sinon.spy(logService, 'error');
+			sinon.stub(service, 'listPromptFiles').callsFake(async (type: PromptsType) => {
+				return type === PromptsType.prompt
+					? [{ uri: promptUri, storage: PromptsStorage.local, type: PromptsType.prompt } as IPromptPath]
+					: [];
+			});
+			sinon.stub(service, 'parseNew').rejects(new CancellationError());
+
+			const slashCommands = await service.getPromptSlashCommands(CancellationToken.None);
+			const discoveryInfo = await service.getDiscoveryInfo(PromptsType.prompt, CancellationToken.None);
+
+			assert.deepStrictEqual(slashCommands, []);
+			assert.strictEqual(logErrorSpy.called, false);
+			assert.strictEqual(discoveryInfo.files.length, 1);
+			assert.strictEqual(discoveryInfo.files[0].status, 'skipped');
+			assert.strictEqual(discoveryInfo.files[0].skipReason, 'parse-error');
 		});
 	});
 
