@@ -106,4 +106,34 @@ describe('PatentAIEndpointProvider selection — FlowLeap Trial models (#241)', 
 		await expect(provider.hasByokModel()).resolves.toBe(false);
 		await expect(provider.getChatEndpoint()).rejects.toThrow('No connected model');
 	});
+
+	// ── BYO-key precedence (#242): the user's own model wins as default ─────────────────────────
+
+	it('resolves the user\'s own model as the default when both user and trial models exist', async () => {
+		const userModel = makeModel('openrouter', 'anthropic/claude-sonnet-4.6');
+		// Trial models first in the fake's pool: the user-first outcome must come from the
+		// provider's enumeration order, not from the ordering of this array.
+		serveModels([...TRIAL_MODELS, userModel]);
+
+		await provider.getChatEndpoint();
+
+		expect(insta.createInstance).toHaveBeenCalledWith(ExtensionContributedChatEndpoint, userModel);
+	});
+
+	it('prefers the user\'s model over a trial model serving the SAME model id', async () => {
+		const userModel = makeModel('openrouter', 'google/gemini-3.7-flash');
+		serveModels([...TRIAL_MODELS, userModel]);
+
+		await provider.getChatEndpoint('google/gemini-3.7-flash');
+
+		expect(insta.createInstance).toHaveBeenCalledWith(ExtensionContributedChatEndpoint, userModel);
+	});
+
+	it('keeps an explicitly selected trial model routable while the user has their own models', async () => {
+		serveModels([...TRIAL_MODELS, makeModel('openrouter', 'anthropic/claude-sonnet-4.6')]);
+
+		await provider.getChatEndpoint(TRIAL_MODELS[1]);
+
+		expect(insta.createInstance).toHaveBeenCalledWith(ExtensionContributedChatEndpoint, TRIAL_MODELS[1]);
+	});
 });

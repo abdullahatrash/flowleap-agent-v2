@@ -6,7 +6,7 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import type { ILogService } from '../../../platform/log/common/logService';
-import { registerPatentSubscriptionProvider } from '../common/patentSubscriptionRegistry';
+import { notifyPatentSubscriptionChanged, registerPatentSubscriptionProvider } from '../common/patentSubscriptionRegistry';
 import { getPatentAccessToken, registerPatentAccessTokenProvider } from '../common/patentTokenRegistry';
 import { registerUriRoute } from '../../uriHandler/vscode-node/extensionUriHandler';
 import { getPatentAIConfig } from './configService';
@@ -92,6 +92,10 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Clock seam: defaults to the real wall clock. Tests inject a fake to exercise
 		// the token-expiry decision deterministically without stubbing globals.
 		private readonly _now: () => number = Date.now,
+		// Fetch seam for the subscription read: defaults to the real global fetch. Tests inject a
+		// fake to drive status transitions (and the change event they broadcast) without stubbing
+		// globals.
+		private readonly _fetchImpl: typeof fetch = fetch,
 	) {
 		this._logService.info('[Patent AI Auth] Initializing authentication provider');
 
@@ -521,6 +525,11 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		this._tokenExpiresAt = 0;
 		this._currentSession = undefined;
 		this._cachedUserInfo = undefined;
+		// The subscription belongs to the signed-in account: sign-out invalidates the cached
+		// snapshot, and listeners (e.g. the FlowLeap Trial provider discarding its key, #242) must
+		// hear about it — the next backend read only happens after a fresh sign-in.
+		const hadSubscriptionSnapshot = this._lastSubscriptionSnapshot !== undefined && this._lastSubscriptionSnapshot.status !== 'unknown';
+		this._lastSubscriptionSnapshot = undefined;
 
 		try {
 			await this._context.secrets.delete(TOKEN_STORAGE_KEY);
@@ -530,6 +539,9 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 
 		if (removed) {
 			this._onDidChangeSessions.fire({ added: [], removed: [removed], changed: [] });
+		}
+		if (hadSubscriptionSnapshot) {
+			notifyPatentSubscriptionChanged();
 		}
 	}
 
@@ -667,7 +679,14 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 */
 	public async getSubscriptionSnapshot(): Promise<FlowLeapSubscriptionSnapshot> {
 		const snapshot = await this._readSubscriptionSnapshot();
+		// Broadcast only real status transitions (trialing → active, active → inactive, …) so the
+		// hourly countdown refresh re-resolving the same status stays silent. The cache is updated
+		// FIRST: listeners re-read through the registry accessor and must see the new state.
+		const previousStatus: FlowLeapSubscriptionStatus = this._lastSubscriptionSnapshot?.status ?? 'unknown';
 		this._lastSubscriptionSnapshot = snapshot;
+		if (snapshot.status !== previousStatus) {
+			notifyPatentSubscriptionChanged();
+		}
 		return snapshot;
 	}
 
@@ -679,7 +698,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		try {
 			const config = getPatentAIConfig();
 			const url = `${config.apiUrl.replace(/\/v1\/?$/, '')}/billing/subscription`;
-			const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+			const res = await this._fetchImpl(url, { headers: { Authorization: `Bearer ${token}` } });
 			if (!res.ok) {
 				return { status: 'unknown' };
 			}

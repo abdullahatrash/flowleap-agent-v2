@@ -32,21 +32,45 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
  */
 export const NON_BYOK_VENDORS: ReadonlySet<string> = new Set(['copilot', 'copilotcli', 'claude-code', 'patent-ai', 'flowleap']);
 
-const BYOK_VENDOR_IDS: readonly string[] = [
+/**
+ * The FlowLeap Trial provider's vendor id (ADR 0015): a backend-fetched OpenRouter key, so its
+ * models run real client-side inference exactly like a BYO key. Deliberately admitted to the BYOK
+ * enumeration — unlike the retired `flowleap` pseudo-vendor in NON_BYOK_VENDORS, which must stay
+ * blocked — but always enumerated LAST: the user's own models take precedence (#242).
+ */
+export const FLOWLEAP_TRIAL_VENDOR = 'flowleap-trial';
+
+/** Every BYOK vendor whose key the USER entered — i.e. all of them except the trial vendor. */
+const USER_BYOK_VENDOR_IDS: readonly string[] = [
 	'anthropic',
 	'azure',
 	'customendpoint',
 	'customoai',
-	// The FlowLeap Trial provider (ADR 0015): a backend-fetched OpenRouter key, so its models run
-	// real client-side inference exactly like a BYO key. Deliberately admitted here — unlike the
-	// retired `flowleap` pseudo-vendor in NON_BYOK_VENDORS, which must stay blocked.
-	'flowleap-trial',
 	'gemini',
 	'ollama',
 	'openai',
 	'openrouter',
 	'xai',
 ];
+
+/**
+ * Enumerate the models the user connected with their OWN provider keys — every BYOK vendor except
+ * {@link FLOWLEAP_TRIAL_VENDOR}. Shared with the FlowLeap Trial provider, which uses it to decide
+ * whether its models may claim the default slot (BYO-key precedence, #242). A vendor whose
+ * enumeration throws contributes nothing rather than failing the whole read; `onVendorError` lets
+ * the caller log those.
+ */
+export async function selectUserByokChatModels(onVendorError?: (vendor: string, err: unknown) => void): Promise<LanguageModelChat[]> {
+	const results = await Promise.all(USER_BYOK_VENDOR_IDS.map(async vendor => {
+		try {
+			return await lm.selectChatModels({ vendor });
+		} catch (err) {
+			onVendorError?.(vendor, err);
+			return [];
+		}
+	}));
+	return results.flat().filter(m => !NON_BYOK_VENDORS.has(m.vendor));
+}
 
 /**
  * Internal utility families used by background callers (title/intent generation,
@@ -99,15 +123,24 @@ export class PatentAIEndpointProvider implements IEndpointProvider {
 	}
 
 	private async _selectByokModels(): Promise<LanguageModelChat[]> {
-		const results = await Promise.all(BYOK_VENDOR_IDS.map(async vendor => {
-			try {
-				return await lm.selectChatModels({ vendor });
-			} catch (err) {
-				this._logService.trace(`[Patent AI] selectChatModels failed for BYOK vendor '${vendor}': ${err}`);
-				return [];
-			}
-		}));
-		return results.flat().filter(m => this._isByokModel(m));
+		// User-owned models enumerate FIRST: both the preferred-match and the no-preference
+		// fallback in _resolveByokEndpoint take the earliest hit, so the user's own model always
+		// wins over a trial model — including when both serve the same model id (BYO-key
+		// precedence, #242). Trial models stay in the pool: selectable when explicitly chosen, and
+		// the only candidates when the user has no key of their own.
+		const logVendorError = (vendor: string, err: unknown) => this._logService.trace(`[Patent AI] selectChatModels failed for BYOK vendor '${vendor}': ${err}`);
+		const [userModels, trialModels] = await Promise.all([
+			selectUserByokChatModels(logVendorError),
+			(async () => {
+				try {
+					return await lm.selectChatModels({ vendor: FLOWLEAP_TRIAL_VENDOR });
+				} catch (err) {
+					logVendorError(FLOWLEAP_TRIAL_VENDOR, err);
+					return [];
+				}
+			})(),
+		]);
+		return [...userModels, ...trialModels].filter(m => this._isByokModel(m));
 	}
 
 	/**

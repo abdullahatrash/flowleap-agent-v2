@@ -16,13 +16,14 @@ import { DisposableStore } from '../../../../util/vs/base/common/lifecycle';
 import { Event } from '../../../../util/vs/base/common/event';
 import { SyncDescriptor } from '../../../../util/vs/platform/instantiation/common/descriptors';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
-import { registerPatentSubscriptionProvider } from '../../../patentai/common/patentSubscriptionRegistry';
+import { notifyPatentSubscriptionChanged, registerPatentSubscriptionProvider } from '../../../patentai/common/patentSubscriptionRegistry';
 import { registerPatentAccessTokenProvider } from '../../../patentai/common/patentTokenRegistry';
 import { IPatentBackendClient, PatentBackendError, TransientBackendError, TrialModelKeyUnavailableError, TrialModelKeyPayload } from '../../../patentai/vscode-node/patentBackendClient';
 import { createExtensionUnitTestingServices } from '../../../test/node/services';
 import { BYOKAuthType } from '../../common/byokProvider';
+import { AbstractOpenAICompatibleLMProvider } from '../abstractLanguageModelChatProvider';
 import type { IBYOKStorageService } from '../byokStorageService';
-import { FlowLeapTrialLMProvider } from '../flowleapTrialProvider';
+import { FlowLeapTrialLMProvider, IFlowLeapTrialLifecycleDeps } from '../flowleapTrialProvider';
 
 const TRIAL_KEY = 'sk-or-v1-trial-key';
 const SERVED_MODELS = ['deepseek/deepseek-v4-flash-0731', 'google/gemini-3.7-flash', 'openai/gpt-5.6-luna'];
@@ -37,11 +38,13 @@ const CATALOG = {
 	],
 };
 
-function makeStorageService() {
-	const storeAPIKey = vi.fn(async () => undefined);
-	const deleteAPIKey = vi.fn(async () => undefined);
+/** Stateful storage fake: `getAPIKey` serves what `storeAPIKey` stored, so lifecycle tests can assert "a held key gets discarded". */
+function makeStorageService(initialKey?: string) {
+	let stored = initialKey;
+	const storeAPIKey = vi.fn(async (_provider: string, apiKey: string) => { stored = apiKey; });
+	const deleteAPIKey = vi.fn(async () => { stored = undefined; });
 	const service: IBYOKStorageService = {
-		getAPIKey: vi.fn(async () => undefined),
+		getAPIKey: vi.fn(async () => stored),
 		storeAPIKey,
 		deleteAPIKey,
 		getStoredModelConfigs: vi.fn(async () => ({})),
@@ -49,6 +52,19 @@ function makeStorageService() {
 		removeModelConfig: vi.fn(async () => undefined),
 	};
 	return { service, storeAPIKey, deleteAPIKey };
+}
+
+/** Injectable lifecycle deps (no stubbed globals): no user BYOK models, and a scripted notification surface. */
+function makeLifecycleDeps(overrides?: Partial<IFlowLeapTrialLifecycleDeps>) {
+	const showWarningMessage = vi.fn(async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined);
+	const executeCommand = vi.fn(async (): Promise<unknown> => undefined);
+	const deps: IFlowLeapTrialLifecycleDeps = {
+		hasUserByokModels: async () => false,
+		showWarningMessage,
+		executeCommand,
+		...overrides,
+	};
+	return { deps, showWarningMessage, executeCommand };
 }
 
 /** An {@link IPatentBackendClient} whose trial-key fetch is scripted per test; nothing else is exercised. */
@@ -112,16 +128,17 @@ describe('FlowLeapTrialLMProvider (ADR 0015, #241)', () => {
 		vi.restoreAllMocks();
 	});
 
-	function makeProvider(backend: { client: IPatentBackendClient }, storage: { service: IBYOKStorageService }, fetchImpl: () => Promise<Response> = catalogResponse) {
-		return new FlowLeapTrialLMProvider(
+	function makeProvider(backend: { client: IPatentBackendClient }, storage: { service: IBYOKStorageService }, fetchImpl: () => Promise<Response> = catalogResponse, deps: IFlowLeapTrialLifecycleDeps = makeLifecycleDeps().deps) {
+		return disposables.add(new FlowLeapTrialLMProvider(
 			storage.service,
+			deps,
 			backend.client,
 			makeFetcherService(fetchImpl),
 			new TestLogService(),
 			instaService,
 			new DefaultsOnlyConfigurationService(),
 			new NullExperimentationService(),
-		);
+		));
 	}
 
 	function listModels(provider: FlowLeapTrialLMProvider) {
@@ -236,5 +253,155 @@ describe('FlowLeapTrialLMProvider (ADR 0015, #241)', () => {
 
 		expect(models).toEqual([]);
 		expect(backend.getTrialModelKey).not.toHaveBeenCalled();
+	});
+
+	// ── Lifecycle (#242): the provider follows the subscription, not the machine ────────────────
+
+	/** Flush the async subscription-change reaction (two awaited storage calls) after a broadcast. */
+	const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+	it('discards the stored key, nudges toward a BYO key, and re-lists when the status leaves trialing (conversion)', async () => {
+		let snapshot: { status: 'trialing' | 'active' } = { status: 'trialing' };
+		registerPatentSubscriptionProvider(() => snapshot);
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const lifecycle = makeLifecycleDeps();
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+		let changeEvents = 0;
+		disposables.add(provider.onDidChangeLanguageModelChatInformation(() => { changeEvents++; }));
+
+		// While trialing: models served and the key held in storage.
+		expect((await listModels(provider)).length).toBe(3);
+
+		snapshot = { status: 'active' };
+		notifyPatentSubscriptionChanged();
+		await settle();
+
+		expect(storage.deleteAPIKey).toHaveBeenCalledWith(FlowLeapTrialLMProvider.providerName, BYOKAuthType.GlobalApiKey);
+		expect(lifecycle.showWarningMessage).toHaveBeenCalledTimes(1);
+		expect(lifecycle.showWarningMessage.mock.calls[0][0]).toContain('Add your own API key');
+		expect(changeEvents).toBe(1);
+		// The re-listing core triggers off the change event now hides the provider.
+		expect(await listModels(provider)).toEqual([]);
+	});
+
+	it('discards the stored key and nudges on sign-out, without a backend call', async () => {
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const lifecycle = makeLifecycleDeps();
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+		await listModels(provider);
+		backend.getTrialModelKey.mockClear();
+
+		registerPatentAccessTokenProvider(() => undefined);
+		notifyPatentSubscriptionChanged();
+		await settle();
+
+		expect(storage.deleteAPIKey).toHaveBeenCalledWith(FlowLeapTrialLMProvider.providerName, BYOKAuthType.GlobalApiKey);
+		expect(lifecycle.showWarningMessage).toHaveBeenCalledTimes(1);
+		expect(backend.getTrialModelKey).not.toHaveBeenCalled();
+	});
+
+	it('never nudges a user who held no trial key, but still re-lists on the change', async () => {
+		registerPatentSubscriptionProvider(() => ({ status: 'active' }));
+		const backend = makeBackendClient(async () => { throw new PatentBackendError(undefined, 'must not be called'); });
+		const storage = makeStorageService();
+		const lifecycle = makeLifecycleDeps();
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+		let changeEvents = 0;
+		disposables.add(provider.onDidChangeLanguageModelChatInformation(() => { changeEvents++; }));
+
+		notifyPatentSubscriptionChanged();
+		await settle();
+
+		expect(lifecycle.showWarningMessage).not.toHaveBeenCalled();
+		expect(storage.deleteAPIKey).not.toHaveBeenCalled();
+		expect(changeEvents).toBe(1);
+	});
+
+	it('routes the nudge action to the manage-models command', async () => {
+		let snapshot: { status: 'trialing' | 'inactive' } = { status: 'trialing' };
+		registerPatentSubscriptionProvider(() => snapshot);
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const lifecycle = makeLifecycleDeps();
+		lifecycle.showWarningMessage.mockResolvedValue('Manage Models');
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+		await listModels(provider);
+
+		snapshot = { status: 'inactive' };
+		notifyPatentSubscriptionChanged();
+		await settle();
+
+		expect(lifecycle.executeCommand).toHaveBeenCalledWith('workbench.action.chat.manage');
+	});
+
+	it('maps a revoked-key turn failure to the BYO-key nudge (not a raw provider error) and discards the key', async () => {
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const provider = makeProvider(backend, storage);
+		const [model] = await listModels(provider);
+		let changeEvents = 0;
+		disposables.add(provider.onDidChangeLanguageModelChatInformation(() => { changeEvents++; }));
+		// The inherited OpenRouter turn machinery throws the untyped auth-rejection shape OpenRouter
+		// serves for a revoked key; the trial provider must re-map it, so fake exactly that seam.
+		vi.spyOn(AbstractOpenAICompatibleLMProvider.prototype, 'provideLanguageModelChatResponse')
+			.mockRejectedValue(new Error('token expired or invalid: 401 User not found.'));
+
+		const tokenSource = new vscode.CancellationTokenSource();
+		try {
+			await expect(provider.provideLanguageModelChatResponse(model, [], {} as never, { report: () => undefined }, tokenSource.token))
+				.rejects.toThrow(/Add your own API key.*command:workbench\.action\.chat\.manage/);
+		} finally {
+			tokenSource.dispose();
+		}
+		expect(storage.deleteAPIKey).toHaveBeenCalledWith(FlowLeapTrialLMProvider.providerName, BYOKAuthType.GlobalApiKey);
+		expect(changeEvents).toBe(1);
+	});
+
+	it('passes a non-auth turn failure through untouched and keeps the key', async () => {
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const provider = makeProvider(backend, storage);
+		const [model] = await listModels(provider);
+		vi.spyOn(AbstractOpenAICompatibleLMProvider.prototype, 'provideLanguageModelChatResponse')
+			.mockRejectedValue(new Error('The upstream provider is overloaded.'));
+
+		const tokenSource = new vscode.CancellationTokenSource();
+		try {
+			await expect(provider.provideLanguageModelChatResponse(model, [], {} as never, { report: () => undefined }, tokenSource.token))
+				.rejects.toThrow('The upstream provider is overloaded.');
+		} finally {
+			tokenSource.dispose();
+		}
+		expect(storage.deleteAPIKey).not.toHaveBeenCalled();
+	});
+
+	it('cedes the default slot to the user\'s own BYOK models while staying selectable (BYO-key precedence)', async () => {
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const lifecycle = makeLifecycleDeps({ hasUserByokModels: async () => true });
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+
+		const models = await listModels(provider);
+
+		// Still the full trial list — selectable while trialing — but none of it claims default.
+		expect(models.map(m => m.id)).toEqual(SERVED_MODELS);
+		expect(models.map(m => m.isDefault)).toEqual([false, false, false]);
+	});
+
+	it('re-fetches the key silently on a fresh machine: empty storage plus a trialing account is enough', async () => {
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService(); // nothing stored: this machine has never seen the trial key
+		const lifecycle = makeLifecycleDeps();
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+
+		// A background (silent) listing — no user action of any kind.
+		const models = await listModels(provider);
+
+		expect(models.map(m => m.id)).toEqual(SERVED_MODELS);
+		expect(backend.getTrialModelKey).toHaveBeenCalledTimes(1);
+		expect(storage.storeAPIKey).toHaveBeenCalledWith(FlowLeapTrialLMProvider.providerName, TRIAL_KEY, BYOKAuthType.GlobalApiKey);
+		expect(lifecycle.showWarningMessage).not.toHaveBeenCalled();
 	});
 });

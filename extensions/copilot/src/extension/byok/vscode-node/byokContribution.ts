@@ -62,8 +62,10 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 		this._providers.set(OpenRouterLMProvider.providerId, instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService));
 		// The FlowLeap Trial provider registers alongside the BYO-key providers but decides its
 		// own visibility per listing: models are served only while the subscription snapshot /
-		// backend say `trialing` (ADR 0015, #241).
-		this._providers.set(FlowLeapTrialLMProvider.providerId, instantiationService.createInstance(FlowLeapTrialLMProvider, this._byokStorageService));
+		// backend say `trialing` (ADR 0015, #241). It also reacts to subscription-status changes
+		// (discarding its key and re-listing, #242), so it holds a listener that must be disposed
+		// with this contribution. `undefined` selects its default lifecycle dependencies.
+		this._providers.set(FlowLeapTrialLMProvider.providerId, this._register(instantiationService.createInstance(FlowLeapTrialLMProvider, this._byokStorageService, undefined)));
 		this._providers.set(AzureBYOKModelProvider.providerId, instantiationService.createInstance(AzureBYOKModelProvider, this._byokStorageService));
 		this._providers.set(CustomOAIBYOKModelProvider.providerId, instantiationService.createInstance(CustomOAIBYOKModelProvider, this._byokStorageService));
 		this._providers.set(CustomEndpointBYOKModelProvider.providerId, instantiationService.createInstance(CustomEndpointBYOKModelProvider, this._byokStorageService));

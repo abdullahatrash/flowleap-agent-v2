@@ -84,6 +84,8 @@ vi.mock('../../../uriHandler/vscode-node/extensionUriHandler', () => ({
 }));
 
 import { FlowLeapAuthenticationProvider } from '../flowleapAuthProvider';
+import { getPatentSubscriptionSnapshot, onDidChangePatentSubscription } from '../../common/patentSubscriptionRegistry';
+import { getPatentAccessToken } from '../../common/patentTokenRegistry';
 import type { ILogService } from '../../../../platform/log/common/logService';
 
 /** Stub ILogService that ignores all calls. */
@@ -335,5 +337,56 @@ describe('FlowLeapAuthenticationProvider token-expiry decision', () => {
 		await provider.waitForInitialization();
 
 		expect(provider.isAuthenticated).toBe(true);
+	});
+});
+
+describe('FlowLeapAuthenticationProvider subscription-change broadcast', () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	/** A provider whose subscription reads resolve the (mutable) scripted status via the injected fetch seam. */
+	function makeProviderWithSubscription(initialStatus: string) {
+		const scripted = { status: initialStatus };
+		// The subscription read requires a signed-in token; the registry module is mocked above.
+		vi.mocked(getPatentAccessToken).mockReturnValue('tok');
+		const fetchImpl = (async () => ({
+			ok: true,
+			json: async () => ({ subscription: { status: scripted.status, currentPeriodEnd: null } }),
+		})) as unknown as typeof fetch;
+		const provider = new FlowLeapAuthenticationProvider(makeExtensionContext({ token: 'stored.jwt', expiresAt: Date.now() + 60 * 60_000 }), makeLogService(), undefined, fetchImpl);
+		return { provider, scripted };
+	}
+
+	it('fires once per status transition, never on a same-status re-read', async () => {
+		const { provider, scripted } = makeProviderWithSubscription('trialing');
+		let heard = 0;
+		const listener = onDidChangePatentSubscription(() => { heard++; });
+		try {
+			await provider.getSubscriptionSnapshot(); // unknown → trialing
+			await provider.getSubscriptionSnapshot(); // trialing → trialing: the hourly refresh must stay silent
+			scripted.status = 'active';
+			await provider.getSubscriptionSnapshot(); // trialing → active (conversion)
+
+			expect(heard).toBe(2);
+		} finally {
+			listener.dispose();
+		}
+	});
+
+	it('clears the cached snapshot and broadcasts on sign-out', async () => {
+		const { provider } = makeProviderWithSubscription('trialing');
+		await provider.waitForInitialization();
+		await provider.getSubscriptionSnapshot();
+		expect(getPatentSubscriptionSnapshot()?.status).toBe('trialing');
+
+		let heard = 0;
+		const listener = onDidChangePatentSubscription(() => { heard++; });
+		try {
+			await provider.signOut();
+
+			expect(heard).toBe(1);
+			expect(getPatentSubscriptionSnapshot()).toBeUndefined();
+		} finally {
+			listener.dispose();
+		}
 	});
 });
