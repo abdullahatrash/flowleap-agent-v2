@@ -26,6 +26,12 @@ import { SequencerByKey } from '../../../util/vs/base/common/async';
 
 // const CHAT_SESSION_WORKTREE_MEMENTO_KEY = 'github.copilot.cli.sessionWorktrees';
 
+/**
+ * Number of numbered branch name candidates (`name`, `name-2`, ... `name-100`) that are
+ * probed before falling back to a random suffix.
+ */
+const MAX_BRANCH_NAME_CANDIDATES = 100;
+
 export class ChatSessionWorktreeService extends Disposable implements IChatSessionWorktreeService {
 	declare _serviceBrand: undefined;
 
@@ -35,6 +41,7 @@ export class ChatSessionWorktreeService extends Disposable implements IChatSessi
 	readonly onDidChangeWorktreeChanges = this._onDidChangeWorktreeChanges.event;
 
 	private readonly _updatePropertiesSequencer = new SequencerByKey<string>();
+	private readonly _createWorktreeSequencer = new SequencerByKey<string>();
 
 	constructor(
 		@IAgentSessionsWorkspace private readonly agentSessionsWorkspace: IAgentSessionsWorkspace,
@@ -80,7 +87,6 @@ export class ChatSessionWorktreeService extends Disposable implements IChatSessi
 			const autoCommit = this.configurationService.getConfig<boolean>(ConfigKey.Advanced.CLIAutoCommitEnabled);
 
 			let baseCommit: string | undefined = undefined;
-			const branch = await this.generateBranchName(branchName, activeRepository);
 
 			// When a base branch is provided, we attempt to resolve it, to see whether it has an
 			// upstream. If there is an upstream, we use the upstream as the base for the worktree
@@ -110,7 +116,14 @@ export class ChatSessionWorktreeService extends Disposable implements IChatSessi
 				}
 			}
 
-			const worktreePath = await this.gitService.createWorktree(activeRepository.rootUri, { branch, commitish: baseBranch, noTrack: true });
+			// Serialize branch name selection and worktree creation per repository. Two sessions
+			// started back-to-back on the same repository would otherwise pick the same name
+			// before either of them created the branch or the worktree directory.
+			const { branch, worktreePath } = await this._createWorktreeSequencer.queue(activeRepository.rootUri.toString(), async () => {
+				const branch = await this.generateBranchName(branchName, activeRepository);
+				const worktreePath = await this.gitService.createWorktree(activeRepository.rootUri, { branch, commitish: baseBranch, noTrack: true });
+				return { branch, worktreePath };
+			});
 
 			if (worktreePath && activeRepository.headCommitHash && activeRepository.headBranchName) {
 				const baseBranchName = baseBranch ?? activeRepository.headBranchName;
@@ -160,29 +173,75 @@ export class ChatSessionWorktreeService extends Disposable implements IChatSessi
 		}
 	}
 
-	private async generateBranchName(preferredName: string | undefined, repository: RepoContext) {
-		const branchPrefixConfig = vscode.workspace.getConfiguration('git').get<string>('branchPrefix') ?? '';
+	private async generateBranchName(preferredName: string | undefined, repository: RepoContext): Promise<string> {
+		const branchPrefixConfig = this.configurationService.getNonExtensionConfig<string>('git.branchPrefix') ?? '';
 		const branchPrefix = this.agentSessionsWorkspace.isAgentSessionsWorkspace ? 'agents' : 'copilot';
 
+		let baseBranchName: string;
 		if (preferredName) {
-			let branchName = `${branchPrefixConfig}${branchPrefix}/${preferredName}`;
-			// Check if we already have a branch with the preferred name, and if not, then use it.
-			// Else suffix the preferred name with a random string to avoid conflicts.
-			const refs = await this.gitService.getRefs(repository.rootUri, { pattern: `refs/heads/${branchName}` });
-			if (refs.some(ref => ref.name === branchName)) {
-				branchName = `${branchName}-${generateUuid().replaceAll('-', '').substring(0, 8).toLowerCase()}`;
-			}
+			baseBranchName = `${branchPrefixConfig}${branchPrefix}/${preferredName}`;
+		} else {
+			// Attempt to generate a random branch name for the worktree
+			const randomBranchName = await this.gitService.generateRandomBranchName(repository.rootUri);
 
-			return branchName;
+			baseBranchName = randomBranchName ? `${branchPrefixConfig}${branchPrefix}/${randomBranchName.substring(branchPrefixConfig.length)}`
+				: `${branchPrefixConfig}${branchPrefix}/worktree-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
 		}
 
-		// Attempt to generate a random branch name for the worktree
-		const randomBranchName = await this.gitService.generateRandomBranchName(repository.rootUri);
+		// Use the first candidate that is free, suffixing the base name with an increasing
+		// number for every candidate that is taken.
+		for (let candidate = 1; candidate <= MAX_BRANCH_NAME_CANDIDATES; candidate++) {
+			const branchName = candidate === 1 ? baseBranchName : `${baseBranchName}-${candidate}`;
+			if (!await this.branchNameCollides(branchName, branchPrefixConfig, repository)) {
+				return branchName;
+			}
+		}
 
-		const branch = randomBranchName ? `${branchPrefixConfig}${branchPrefix}/${randomBranchName.substring(branchPrefixConfig.length)}`
-			: `${branchPrefixConfig}${branchPrefix}/worktree-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
+		// All numbered candidates are taken, fall back to a random suffix.
+		return `${baseBranchName}-${generateUuid().replaceAll('-', '').substring(0, 8).toLowerCase()}`;
+	}
 
-		return branch;
+	/**
+	 * A branch name is taken when the branch already exists, or when the worktree directory
+	 * that would be derived from it is already present. A failed check counts as a collision
+	 * so that we pick another name instead of failing the worktree creation.
+	 */
+	private async branchNameCollides(branchName: string, branchPrefixConfig: string, repository: RepoContext): Promise<boolean> {
+		try {
+			const refs = await this.gitService.getRefs(repository.rootUri, { pattern: `refs/heads/${branchName}` });
+			if (refs.some(ref => ref.name === branchName)) {
+				return true;
+			}
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			this.logService.warn(`[ChatSessionWorktreeService][branchNameCollides] Failed to check whether branch ${branchName} exists. Error: ${errorMessage}`);
+			return true;
+		}
+
+		// The git extension derives the worktree directory name from the branch name.
+		const worktreeName = (branchName.startsWith(branchPrefixConfig)
+			? branchName.substring(branchPrefixConfig.length)
+			: branchName).replaceAll('/', '-');
+
+		// A worktree of the same name is already registered with the repository, possibly
+		// below a worktree root that the user selected earlier.
+		if (repository.worktrees.some(worktree => path.basename(worktree.path) === worktreeName)) {
+			return true;
+		}
+
+		// A directory is left over at the default worktree location, for example from a
+		// worktree that was deleted outside of git.
+		const worktreePath = path.join(
+			path.dirname(repository.rootUri.fsPath),
+			`${path.basename(repository.rootUri.fsPath)}.worktrees`,
+			worktreeName);
+
+		try {
+			await fs.access(worktreePath);
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	async getWorktreeProperties(sessionId: string): Promise<ChatSessionWorktreeProperties | undefined> {
