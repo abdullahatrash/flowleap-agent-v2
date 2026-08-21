@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import * as sinon from 'sinon';
-import { CancellationToken } from '../../../../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { match } from '../../../../../../../base/common/glob.js';
@@ -2321,6 +2321,42 @@ suite('PromptsService', () => {
 			} finally {
 				registered.dispose();
 				logErrorSpy.restore();
+			}
+		});
+
+		test('Canceled provider listing stops without logging an error', async () => {
+			const extension = {
+				identifier: { value: 'test.my-extension' },
+				enabledApiProposals: ['chatParticipantPrivate']
+			} as unknown as IExtensionDescription;
+			const cancellationTokenSource = disposables.add(new CancellationTokenSource());
+			let secondProviderCalled = false;
+			disposables.add(service.registerPromptFileProvider(extension, PromptsType.agent, {
+				providePromptFiles: async () => {
+					cancellationTokenSource.cancel();
+					throw new CancellationError();
+				}
+			}));
+			disposables.add(service.registerPromptFileProvider(extension, PromptsType.agent, {
+				providePromptFiles: async () => {
+					secondProviderCalled = true;
+					return [];
+				}
+			}));
+			const errorSpy = sinon.spy(logService, 'error');
+
+			try {
+				await service.listPromptFiles(PromptsType.agent, cancellationTokenSource.token);
+
+				assert.deepStrictEqual({
+					secondProviderCalled,
+					errorCount: errorSpy.callCount,
+				}, {
+					secondProviderCalled: false,
+					errorCount: 0,
+				});
+			} finally {
+				errorSpy.restore();
 			}
 		});
 
