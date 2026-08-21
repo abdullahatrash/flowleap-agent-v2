@@ -285,7 +285,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				The other branches (C analytics, E claim comparison, F/G patent lookup and figures, I citations, J legal, K coding, L web search) are NOT jurisdiction-gated — enter them directly. A request that names a country with no dedicated tool ("Chinese"/"Japanese"/"Korean" patents) already has explicit jurisdiction: go straight to branch L web_search.<br />
 				<br />
 				**A) USER PROVIDES A CLAIM TEXT for prior art search?**<br />
-				→ AFTER the jurisdiction answer (the gate is your first action): analyze the claim yourself (claim-analysis skill) — decompose it into elements, extract key technical terms, components, method steps, and identify relevant CPC/IPC codes via the bundled prior-art skill's `references/cpc-classification.md` (do NOT guess)<br />
+				→ Apply the jurisdiction gate above, then analyze the claim yourself (claim-analysis skill) — decompose it into elements, extract key technical terms, components, method steps, and identify relevant CPC/IPC codes via the bundled prior-art skill's `references/cpc-classification.md` (do NOT guess)<br />
 				→ THEN: write the CQL from the extracted keywords/IPC (patent-search skill — keep the discriminating terms), then `search_patents` — run 2-3 CQL variations, probe each count, refine<br />
 				{tools.hasCompareClaims && <>→ THEN: to score overlap against the strongest hits, `compare_claims` (userClaim + their patentNumbers) — it renders a deterministic element-by-element claim chart; do NOT build the chart by hand<br /></>}
 				→ THEN: {tools.hasGetPatentDetails
@@ -295,8 +295,8 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ Keywords: my claim, this claim, analyze claim, prior art for claim<br />
 				<br />
 				**B) SEARCH for patents (general topic, no specific claim)?**<br />
-				→ Jurisdiction gate FIRST — your first action for this branch: a company or technology name alone does NOT specify jurisdiction, so vscode_askQuestions comes before ANY search_patents call. Writing the CQL yourself does not exempt you from the gate<br />
-				→ AFTER the jurisdiction answer: write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
+				→ Apply the jurisdiction gate above first (a company or technology name alone does NOT specify jurisdiction)<br />
+				→ Then write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
 				→ Carry EVERY user constraint into the query: assignee, classification, and dates ("filed after 2023" → pd{'>='}2023)<br />
 				→ Save a report file if many results<br />
 				→ Keywords: find patents, search, look for patents, patents about, "the N most cited / closest / most relevant patents on X" — a RANKED LIST of documents is still a search<br />
@@ -320,7 +320,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					<br />
 				</>}
 				**D) USER'S OWN invention/idea description (not a formal claim)?**<br />
-				→ AFTER the jurisdiction answer (the gate is your first action): extract every specific noun phrase from the description yourself — materials, mechanisms, subject matter — as candidate discriminating terms (patent-search skill, Step 1), plus synonyms and candidate IPC/CPC codes<br />
+				→ Apply the jurisdiction gate above, then extract every specific noun phrase from the description yourself — materials, mechanisms, subject matter — as candidate discriminating terms (patent-search skill, Step 1), plus synonyms and candidate IPC/CPC codes<br />
 				→ then write the CQL from those terms and call `search_patents`; probe the count, refine<br />
 				→ CREATE a prior art report<br />
 				→ Keywords: my invention, my idea, patentability<br />
@@ -526,25 +526,11 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 		return <Tag name='criticalRules'>
 			CRITICAL RULES:<br />
 			<br />
-			1. **VERIFIABLE DATA ONLY**: NEVER invent or hallucinate patent numbers, claims, dates, or legal citations.<br />
-			- Only cite patent numbers returned by search_patents or patent_api_request responses<br />
-			- Only quote claims text actually retrieved from the claims/description tools<br />
-			- For USPTO: only cite US patents returned by `search_patents` (provider="uspto") or `get_us_grant`<br />
-			- For Citations: only report X/Y/A citations returned by search_citations / search_forward_citations<br />
-			- For Legal: only quote MPEP/EPC sections returned by search_legal<br />
-			- If you didn't fetch it, don't cite it<br />
+			1. **BE ACTIVE, NOT PASSIVE**: Don't just display results - CREATE markdown reports, SAVE files. Patent research reports (prior-art reports, search-result files) are an explicit exception to any general instruction elsewhere in this prompt against creating files or markdown documents — those instructions govern coding tasks, not patent research deliverables.<br />
 			<br />
-			2. **CITE YOUR SOURCES**: When referencing patent data, always indicate where you got it:<br />
-			- "According to search results: EP1234567..."<br />
-			- "Claims retrieved from EP1234567 state: [actual text]"<br />
-			- "MPEP 2143 states: [actual text from legal_search response]"<br />
-			- Never paraphrase claims or legal citations as if they're quotes<br />
+			2. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill and its `references/cql-reference.md` own the rules (discriminating terms, valid grouping, term budget). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 broaden. EDIT the query yourself between search_patents calls — a query you never probed is a guess.<br />
 			<br />
-			3. **BE ACTIVE, NOT PASSIVE**: Don't just display results - CREATE markdown reports, SAVE files. Patent research reports (prior-art reports, search-result files) are an explicit exception to any general instruction elsewhere in this prompt against creating files or markdown documents — those instructions govern coding tasks, not patent research deliverables.<br />
-			<br />
-			4. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill and its `references/cql-reference.md` own the rules (discriminating terms, valid grouping, term budget). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 broaden. EDIT the query yourself between search_patents calls — a query you never probed is a guess.<br />
-			<br />
-			5. **USE DEDICATED TOOLS FOR EACH DATA SOURCE**:<br />
+			3. **USE DEDICATED TOOLS FOR EACH DATA SOURCE**:<br />
 			- EP/WO patents: search_patents / get_patent_details (ops_api_guide for the full tool list)<br />
 			- US patents: search_patents with provider="uspto" / get_us_grant (uspto_api_guide for the full tool list)<br />
 			- Office action citations: search_citations / search_forward_citations (citation_api_guide for advanced)<br />
@@ -554,7 +540,7 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 				? <>- CN/JP/KR patents: web search / fetch_webpage (no dedicated backend tool)<br /></>
 				: <>- CN/JP/KR patents: no dedicated search tool; use fetch_webpage against Google Patents (branch L) to fetch-and-verify before reporting any coverage gap<br /></>}
 			<br />
-			6. **ANALYSIS SUPPORT, NOT LEGAL ADVICE**: For any patentability, validity, infringement, FTO, or office-action-response output, include one brief note that this is analytical support and not legal advice; recommend qualified patent counsel for filing or dispute decisions. Once per response, not per paragraph.<br />
+			4. **ANALYSIS SUPPORT, NOT LEGAL ADVICE**: For any patentability, validity, infringement, FTO, or office-action-response output, include one brief note that this is analytical support and not legal advice; recommend qualified patent counsel for filing or dispute decisions. Once per response, not per paragraph.<br />
 		</Tag>;
 	}
 }
@@ -638,48 +624,6 @@ class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
 }
 
 /**
- * Workflow examples showing ACTIVE behavior
- */
-class PatentWorkflowExamples extends PromptElement<PatentAIPromptProps> {
-	render() {
-		const tools = detectPatentTools(this.props.availableTools);
-		if (!tools.hasAnyPatentTool) {
-			return null;
-		}
-
-		return <Tag name='patentWorkflowExamples'>
-			WORKFLOW EXAMPLES:<br />
-			<br />
-			**"Find prior art for my claim about wireless charging"**<br />
-			1. Analyze the claim yourself — decompose into elements, extract keywords (wireless, charging, inductive, foreign object) and identify relevant CPC/IPC codes via the bundled CPC classification reference<br />
-			2. Write the CQL from the extracted terms — keep the discriminating ones (e.g. ta="foreign object" AND ta="wireless charging" AND ic=H02J)<br />
-			3. search_patents → probe the count, refine → EP/WO patents (cite ONLY numbers returned by the tool)<br />
-			4. {tools.hasGetPatentDetails ? <>get_patent_details for the top 2-3 results — one call returns biblio + full claims + description</> : <>ops_api_guide(action="endpoint", endpoint="get_claims") → `get_claims` for the top 2-3 results</>}<br />
-			5. {tools.hasWritePatentResults ? <>write_patent_results (template="prior-art-report") with VERIFIED data only</> : <>create_file with VERIFIED data only</>}<br />
-			6. Summarize: "Found X EP/WO patents. Claims retrieved for top 3. Report saved."<br />
-			<br />
-			**"Search patents about autonomous vehicles"**<br />
-			1. Write the CQL yourself, discriminating term first (e.g. ta="autonomous driving" AND ic=B60W)<br />
-			2. search_patents(query=YOUR_CQL) → probe the count, refine → EP/WO patents only<br />
-			3. {tools.hasWritePatentResults ? <>write_patent_results with verified results</> : <>create_file with verified results</>}<br />
-			4. Summarize: "Found X patents. Report saved."<br />
-			<br />
-			**REPORT FORMAT for verified data:**<br />
-			```markdown<br />
-			## Prior Art Search Results<br />
-			Search query: [actual CQL used]<br />
-			Total EP/WO results: [number from search]<br />
-			<br />
-			### Patent 1: [docId from search]<br />
-			- Title: [from search/biblio]<br />
-			- Applicant: [from search/biblio]<br />
-			- Claims: [ACTUAL TEXT from the get_patent_details / get_claims response]<br />
-			```<br />
-		</Tag>;
-	}
-}
-
-/**
  * Search strategies for USPTO and EPO OPS
  */
 class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
@@ -701,26 +645,7 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			Always invoke `uspto_api_guide` immediately before a USPTO search. Do not memorise parameter names — the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist.<br />
 			<br />
 			**EPO OPS (EP/WO patents via CQL):**<br />
-			Uses CQL query syntax with operators - company names go IN the query with pa= prefix<br />
-			<br />
-			• **Applicant (company) search**: Use `pa=` prefix<br />
-			{'  '}pa=Apple → All Apple patents<br />
-			{'  '}pa="Apple Inc" → Exact match (use quotes for spaces)<br />
-			<br />
-			• **IPC classification**: Use `ic=` or `cpc=` prefix<br />
-			{'  '}ic=G06N → AI/neural networks<br />
-			{'  '}pa=Samsung and ic=H04W → Samsung wireless patents<br />
-			<br />
-			• **Publication date**: Use `pd=` with comparison operators<br />
-			{'  '}pd{'>='}2023 → Patents from 2023 onwards<br />
-			{'  '}pd{'>='}2024 and pd{'<='}2025 → Date range<br />
-			<br />
-			• **Title/Abstract keywords**: Use `ti=` and `ab=`<br />
-			{'  '}ti=battery or ab=battery → Title or abstract contains "battery"<br />
-			{'  '}pa=Tesla and (ti=battery or ab=charging)<br />
-			<br />
-			• **Combined EPO CQL example (Google AI patents 2024)**:<br />
-			{'  '}pa=Google and ic=G06N and pd{'>='}2024<br />
+			CQL fields: `pa=` applicant, `ti=`/`ab=` title/abstract keywords, `ic=`/`cpc=` classification, `pd=` publication date with comparison operators (pd{'>='}2023). Combine with and/or, group with parentheses, quote multi-word terms (pa="Apple Inc"). The patent-search skill's `references/cql-reference.md` owns the full syntax and strategy — read it before any non-trivial query.<br />
 			<br />
 			**ADVANCED STRATEGIES (both APIs):**<br />
 			<br />
@@ -729,16 +654,6 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			2. **Use multiple CPC codes** - Related technologies have adjacent codes; check both the parent class and specific subgroups. Do NOT rely on memorized codes — {tools.hasPatstatQuery
 					? <>verify them against the official CPC scheme: `patstat_query` on `flowleap.cpc_scheme` (SELECT symbol, title WHERE title ILIKE '%term%' for candidates; WHERE symbol = 'X' to check one code — group titles carry the specific technology, the 4-char class only the headline). The bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) is the fallback</>
 					: <>look them up in the bundled CPC classification reference (the prior-art skill's `references/cpc-classification.md`) or verify via web search</>}.<br />
-			<br />
-			3. **Iterative refinement** (refine by editing the CQL directly; see critical rule 4):<br />
-			{'  '}• Start broad, check result count<br />
-			{'  '}• If too many ({'>'}10,000): Add date filter, narrow CPC code<br />
-			{'  '}• If too few ({'<'}10): Try synonyms, remove filters, try parent CPC<br />
-			<br />
-			4. **Keyword variations** - Try synonyms and related terms:<br />
-			{'  '}• "machine learning" → also "neural network", "deep learning", "AI"<br />
-			{'  '}• "wireless charging" → also "inductive charging", "contactless power"<br />
-			{'  '}• "autonomous vehicle" → also "self-driving", "driverless"<br />
 		</Tag>;
 	}
 }
@@ -850,38 +765,6 @@ class PatentExaminationContext extends PromptElement<PatentAIPromptProps> {
 }
 
 /**
- * Anti-patterns to avoid
- */
-class PatentAntiPatterns extends PromptElement<PatentAIPromptProps> {
-	render() {
-		const tools = detectPatentTools(this.props.availableTools);
-		if (!tools.hasAnyPatentTool) {
-			return null;
-		}
-
-		return <Tag name='patentAntiPatterns'>
-			DON'T:<br />
-			<br />
-			❌ Inventing patent numbers you didn't retrieve (e.g., "US1234567" without search)<br />
-			✓ Only cite patents returned by search_patents or fetched via patent_api_request<br />
-			<br />
-			❌ Quoting claims you didn't fetch (hallucinating claim text)<br />
-			✓ Fetch claims via get_patent_details (or `get_claims`), then quote the actual retrieved text<br />
-			{tools.hasGetPatentDetails && <>
-				<br />
-				❌ Using get_patent_details for a "prior art cited against" / "who cites" / examiner-citation query<br />
-				✓ Route citation questions to search_citations (cited against an application) or search_forward_citations (who cites) — get_patent_details returns a patent's OWN text, not its citations<br />
-			</>}
-			{this.props.webSearchAvailable && <>
-				<br />
-				❌ Using web search for US patents when uspto_api_guide is available<br />
-				✓ Use uspto_api_guide → search_patents with provider="uspto" for US patent searches (more reliable)<br />
-			</>}
-		</Tag>;
-	}
-}
-
-/**
  * Complete Patent AI instructions block.
  *
  * Self-contained system block: renders its own {@link InstructionMessage} so it can be
@@ -909,8 +792,6 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 			<PatentExaminationContext {...this.props} priority={750} flexGrow={1} />
 			<PatentSearchStrategies {...this.props} priority={700} flexGrow={1} />
 			<PatentAutonomousActions {...this.props} priority={650} flexGrow={1} />
-			<PatentWorkflowExamples {...this.props} priority={600} flexGrow={1} />
-			<PatentAntiPatterns {...this.props} priority={600} flexGrow={1} />
 		</InstructionMessage>;
 	}
 }
