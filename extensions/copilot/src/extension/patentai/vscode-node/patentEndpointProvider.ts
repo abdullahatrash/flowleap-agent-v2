@@ -37,6 +37,10 @@ const BYOK_VENDOR_IDS: readonly string[] = [
 	'azure',
 	'customendpoint',
 	'customoai',
+	// The FlowLeap Trial provider (ADR 0015): a backend-fetched OpenRouter key, so its models run
+	// real client-side inference exactly like a BYO key. Deliberately admitted here — unlike the
+	// retired `flowleap` pseudo-vendor in NON_BYOK_VENDORS, which must stay blocked.
+	'flowleap-trial',
 	'gemini',
 	'ollama',
 	'openai',

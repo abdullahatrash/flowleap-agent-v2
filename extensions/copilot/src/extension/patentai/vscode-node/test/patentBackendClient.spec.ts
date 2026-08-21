@@ -20,7 +20,7 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError, TransientBackendError } from '../patentBackendClient';
+import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError, TransientBackendError, TrialModelKeyUnavailableError } from '../patentBackendClient';
 import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
@@ -948,5 +948,91 @@ describe('getCustomerPortalUrl (#118)', () => {
 		const thrown = await captureThrow(() => client.getCustomerPortalUrl(makeToken()));
 
 		expect(thrown).toBeInstanceOf(AuthRequiredError);
+	});
+});
+
+describe('getTrialModelKey (ADR 0015, #241)', () => {
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-trial'));
+	afterEach(() => vi.restoreAllMocks());
+
+	const successBody = {
+		key: 'sk-or-v1-trial',
+		models: ['deepseek/deepseek-v4-flash-0731', 'google/gemini-3.7-flash', 'openai/gpt-5.6-luna'],
+		cap: { dailyUsd: 5 },
+	};
+
+	it('resolves the payload from GET /v1/trial/model-key, preserving the served model order', async () => {
+		let capturedUrl: string | undefined;
+		const { client } = makeClient(async url => {
+			capturedUrl = url;
+			return makeResponse(200, successBody);
+		});
+
+		const payload = await client.getTrialModelKey(makeToken());
+
+		expect(capturedUrl).toBe('https://api.test/v1/trial/model-key');
+		expect(payload).toEqual(successBody);
+	});
+
+	it('never serves the key from the read cache (each call is a fresh backend read)', async () => {
+		const fetch = scriptedFetch([makeResponse(200, successBody), makeResponse(200, successBody)]);
+		const { client } = makeClient(fetch);
+
+		await client.getTrialModelKey(makeToken());
+		await client.getTrialModelKey(makeToken());
+
+		expect(fetch.calls()).toBe(2);
+	});
+
+	it('maps the typed 403 denial to TrialModelKeyUnavailableError carrying the reason, with no notification', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(403, {
+			error: {
+				message: 'Trial Model keys serve the trial window only — add your own LLM provider key to continue.',
+				type: 'trial_model_key',
+				code: 'trial_model_key_unavailable',
+				reason: 'not_trialing',
+			},
+		}));
+
+		const thrown = await captureThrow(() => client.getTrialModelKey(makeToken())) as TrialModelKeyUnavailableError;
+		await flush();
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).toBeInstanceOf(TrialModelKeyUnavailableError);
+		expect(thrown.status).toBe(403);
+		expect(thrown.reason).toBe('not_trialing');
+		// The trial provider owns the recovery (hide + BYO-key steer); the seam stays silent here.
+		expect(notification.showInformationMessage).not.toHaveBeenCalled();
+		expect(notification.showWarningMessage).not.toHaveBeenCalled();
+	});
+
+	it('surfaces a retried 503 upstream_unavailable as the transient "wait and retry" error', async () => {
+		const body = { error: { message: 'Could not provision the Trial Model key. Retry the same request.', type: 'upstream', code: 'upstream_unavailable', service: 'openrouter' } };
+		const fetch = scriptedFetch([makeResponse(503, body), makeResponse(503, body), makeResponse(503, body)]);
+		const { client } = makeClient(fetch);
+
+		const thrown = await captureThrow(() => client.getTrialModelKey(makeToken())) as TransientBackendError;
+
+		expect(thrown).toBeInstanceOf(TransientBackendError);
+		expect(thrown.status).toBe(503);
+		expect(fetch.calls()).toBe(3); // initial + 2 retries — the 503 is retryable by contract
+	}, 5000);
+
+	it('inherits the seam auth gate on 401', async () => {
+		const { client } = makeClient(async () => makeResponse(401, { error: { message: 'expired' } }));
+
+		const thrown = await captureThrow(() => client.getTrialModelKey(makeToken()));
+
+		expect(thrown).toBeInstanceOf(AuthRequiredError);
+	});
+
+	it('rejects a malformed success payload (missing key or empty model list)', async () => {
+		const { client } = makeClient(async () => makeResponse(200, { key: 'sk-or-v1-trial', models: [] }));
+
+		const thrown = await captureThrow(() => client.getTrialModelKey(makeToken()));
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect((thrown as PatentBackendError).message).toContain('invalid Trial Model key payload');
 	});
 });

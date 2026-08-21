@@ -32,6 +32,7 @@ function makeBackendClient(postResult?: unknown | (() => never)) {
 	const client: IPatentBackendClient = {
 		_serviceBrand: undefined,
 		async getCustomerPortalUrl(): Promise<string> { return ''; },
+		getTrialModelKey(): never { throw new Error('getTrialModelKey not exercised in this test fake'); },
 		async post<T>(path: string, body: unknown, _token: CancellationToken, _options?: IPatentBackendRequestOptions): Promise<T> {
 			calls.push({ path, body });
 			if (typeof postResult === 'function') {
