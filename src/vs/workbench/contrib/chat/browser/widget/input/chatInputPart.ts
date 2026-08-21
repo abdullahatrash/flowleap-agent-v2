@@ -2783,6 +2783,10 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			// For contributed sessions with history, pre-select the model
 			// from the last request so the user resumes with the same model.
 			this.preselectModelFromSessionHistory();
+
+			// Runs after the incoming view model is assigned so model resolution/validation
+			// use the incoming session pool, not the outgoing one.
+			this._applyConfiguredDefaultForEmptySession();
 		}));
 
 		let elements;
