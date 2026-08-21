@@ -1706,6 +1706,10 @@ export class ChatTerminalThinkingCollapsibleWrapper extends ChatCollapsibleConte
 		this.setExpanded(initialExpanded);
 	}
 
+	protected override shouldAnimateContent(): boolean {
+		return true;
+	}
+
 	private _setCodeFormattedTitle(): void {
 		if (!this._collapseButton) {
 			return;

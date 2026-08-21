@@ -27,6 +27,7 @@ import { ChatQueryTitlePart } from './chatConfirmationWidget.js';
 import { IChatContentPartRenderContext } from './chatContentParts.js';
 import { ChatToolOutputContentSubPart } from './chatToolOutputContentSubPart.js';
 import { getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
+import { ChatCollapsibleContentPart } from './chatCollapsibleContentPart.js';
 
 export interface IChatCollapsibleIOCodePart {
 	kind: 'code';
@@ -103,7 +104,10 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 
 		const container = dom.h('.chat-confirmation-widget-container');
 		const titleEl = dom.h('.chat-confirmation-widget-title-inner');
-		const elements = dom.h('.chat-confirmation-widget');
+		const elements = dom.h('.chat-confirmation-widget.chat-confirmation-widget-collapsible');
+		const contentAnimation = dom.h('.chat-confirmation-widget-message-animation', [
+			dom.h('.chat-confirmation-widget-message-animation-inner@inner'),
+		]);
 		this.domNode = container.root;
 		container.root.appendChild(elements.root);
 
@@ -120,6 +124,7 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 		const btn = this._register(new ButtonWithIcon(elements.root, {}));
 		btn.element.classList.add('chat-confirmation-widget-title', 'monaco-text-button');
 		btn.labelElement.append(titleEl.root);
+		elements.root.appendChild(contentAnimation.root);
 
 		// Add hover chevron indicator on the right (decorative, hide from screen readers)
 		const hoverChevron = dom.$('span.chat-collapsible-hover-chevron.codicon.codicon-chevron-right');
@@ -133,7 +138,6 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 		this._register(autorun(r => {
 			const value = expanded.read(r);
 			const checkmarksEnabled = showCheckmarks.read(r);
-			elements.root.classList.toggle('collapsed', !value);
 
 			const isInProgress = !output && !isError;
 			if (isError) {
@@ -148,22 +152,26 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 			container.root.classList.toggle('show-checkmarks', checkmarksEnabled);
 
 			// Update hover chevron direction
-			hoverChevron.classList.toggle('codicon-chevron-right', !value);
-			hoverChevron.classList.toggle('codicon-chevron-down', value);
+			hoverChevron.classList.toggle('expanded', value);
 
 			// Lazy initialization: render content only when expanded for the first time
 			if (value && !this._contentInitialized) {
 				this._contentInitialized = true;
 				const messageContainer = dom.h('.chat-confirmation-widget-message');
 				messageContainer.root.appendChild(this.createMessageContents());
-				elements.root.appendChild(messageContainer.root);
+				contentAnimation.inner.appendChild(messageContainer.root);
+				contentAnimation.root.getBoundingClientRect();
 			}
+			elements.root.classList.toggle('collapsed', !value);
+			contentAnimation.inner.inert = !value;
+			btn.element.ariaExpanded = String(value);
 		}));
 
 		const toggle = (e: Event) => {
 			if (!e.defaultPrevented) {
 				const value = expanded.get();
 				expanded.set(!value, undefined);
+				container.root.dispatchEvent(new CustomEvent(ChatCollapsibleContentPart.userToggleEvent, { bubbles: true }));
 				e.preventDefault();
 			}
 		};

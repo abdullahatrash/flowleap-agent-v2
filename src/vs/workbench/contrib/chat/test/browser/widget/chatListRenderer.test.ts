@@ -6,8 +6,9 @@
 import assert from 'assert';
 import { URI } from '../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { buildPlanReviewProgressContent, formatResponseTokenStats, reconcileChatItemHeight, renderChatRequestTimestamp, renderChatResponseDetails, shouldHideChatUserIdentity, shouldRenderInitialProgressiveContentImmediately, shouldScheduleInitialHeightChange } from '../../../browser/widget/chatListRenderer.js';
+import { buildPlanReviewProgressContent, formatResponseTokenStats, reconcileChatItemHeight, renderChatRequestTimestamp, renderChatResponseDetails, shouldCreateGroupedThinkingPart, shouldHideChatUserIdentity, shouldRenderInitialProgressiveContentImmediately, shouldScheduleInitialHeightChange, shouldStartNewCollapsedThinkingGroup } from '../../../browser/widget/chatListRenderer.js';
 import { formatChatRequestTimestamp, formatChatResponseDetails, formatElapsedTime } from '../../../common/chatProgressFormatting.js';
+import { CollapsedToolsDisplayMode, ThinkingDisplayMode } from '../../../common/constants.js';
 
 suite('ChatListRenderer', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -101,6 +102,40 @@ suite('ChatListRenderer', () => {
 				[{ kind: 'none', height: 500, stored: 500 }],
 				[{ kind: 'scheduleInitial', height: 700, stored: 700 }],
 			]);
+		});
+	});
+
+	suite('shouldStartNewCollapsedThinkingGroup', () => {
+		test('separates reasoning and grouped items only in collapsed mode', () => {
+			assert.deepStrictEqual({
+				reasoningToItems: shouldStartNewCollapsedThinkingGroup(ThinkingDisplayMode.Collapsed, 'reasoning', 'items'),
+				itemsToReasoning: shouldStartNewCollapsedThinkingGroup(ThinkingDisplayMode.Collapsed, 'items', 'reasoning'),
+				reasoningToReasoning: shouldStartNewCollapsedThinkingGroup(ThinkingDisplayMode.Collapsed, 'reasoning', 'reasoning'),
+				itemsToItems: shouldStartNewCollapsedThinkingGroup(ThinkingDisplayMode.Collapsed, 'items', 'items'),
+				fixedScrolling: shouldStartNewCollapsedThinkingGroup(ThinkingDisplayMode.FixedScrolling, 'reasoning', 'items'),
+				collapsedPreview: shouldStartNewCollapsedThinkingGroup(ThinkingDisplayMode.CollapsedPreview, 'reasoning', 'items'),
+			}, {
+				reasoningToItems: true,
+				itemsToReasoning: true,
+				reasoningToReasoning: false,
+				itemsToItems: false,
+				fixedScrolling: false,
+				collapsedPreview: false,
+			});
+		});
+	});
+
+	suite('shouldCreateGroupedThinkingPart', () => {
+		test('honors withThinking unless a reasoning group was just separated', () => {
+			assert.deepStrictEqual({
+				withThinkingWithoutReasoning: shouldCreateGroupedThinkingPart(CollapsedToolsDisplayMode.WithThinking, false),
+				withThinkingAfterReasoning: shouldCreateGroupedThinkingPart(CollapsedToolsDisplayMode.WithThinking, true),
+				alwaysWithoutReasoning: shouldCreateGroupedThinkingPart(CollapsedToolsDisplayMode.Always, false),
+			}, {
+				withThinkingWithoutReasoning: false,
+				withThinkingAfterReasoning: true,
+				alwaysWithoutReasoning: true,
+			});
 		});
 	});
 

@@ -3122,16 +3122,32 @@ have to be updated for changes to the rules above, or to support more deeply nes
 .chat-collapsible-hover-chevron {
 	font-size: 12px;
 	opacity: 0;
-	transition: opacity 0.1s ease-in-out;
+	transform: rotate(0deg);
+	transform-origin: center;
+	transition:
+		opacity 100ms ease-in-out,
+		transform 180ms cubic-bezier(0.2, 0, 0, 1);
 	color: var(--vscode-descriptionForeground);
 }
 
-.chat-collapsible-hover-chevron.codicon-chevron-down {
+.chat-collapsible-hover-chevron.expanded {
 	opacity: 1;
+	transform: rotate(90deg);
 }
 
 .interactive-session .chat-used-context-label .monaco-button:hover .chat-collapsible-hover-chevron {
 	opacity: 1;
+}
+
+.monaco-reduce-motion .chat-collapsible-hover-chevron,
+.monaco-workbench.monaco-reduce-motion .chat-collapsible-hover-chevron {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chat-collapsible-hover-chevron {
+		transition: none;
+	}
 }
 
 .interactive-item-container .progress-container {

@@ -474,6 +474,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 		this.finalizeTitle();
 		// Collapse when done
 		this.setExpanded(false);
+		this.setContentAnimationEnabled(true);
 	}
 
 	public finalizeTitle(): void {
@@ -1080,6 +1081,14 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 	protected override shouldInitEarly(): boolean {
 		// Never init early - subagent is collapsed while running, content only shown on expand
 		return false;
+	}
+
+	protected override shouldAnimateContent(): boolean {
+		return !this.isActive;
+	}
+
+	protected override shouldPrepareContentAnimation(): boolean {
+		return true;
 	}
 
 	/**
