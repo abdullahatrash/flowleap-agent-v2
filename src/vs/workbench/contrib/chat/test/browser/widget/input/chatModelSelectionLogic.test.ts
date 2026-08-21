@@ -20,6 +20,8 @@ import {
 	isModelSupportedForMode,
 	isModelValidForSession,
 	isNewConversation,
+	resolveModelIdentifier,
+	resolveModelIdentifierFromCatalog,
 	getModelPickerUnavailableReason,
 	ModelPickerUnavailableReason,
 	mergeModelsWithCache,
@@ -1773,6 +1775,54 @@ suite('ChatModelSelectionLogic', () => {
 				true,
 				'reset fallback should not be a BYOK model',
 			);
+		});
+	});
+
+	suite('resolveModelIdentifier', () => {
+
+		const gpt = createModel('gpt', 'GPT');
+
+		test('classifies a requested identifier by presence and whether the absence is final', () => {
+			assert.deepStrictEqual([
+				resolveModelIdentifier([gpt], undefined, true).kind,
+				resolveModelIdentifier([gpt], gpt.identifier, true).kind,
+				resolveModelIdentifier([gpt], 'copilot/missing', true).kind,
+				resolveModelIdentifier([gpt], 'copilot/missing', false).kind,
+			], ['notRequested', 'available', 'unavailable', 'pending']);
+		});
+	});
+
+	suite('resolveModelIdentifierFromCatalog', () => {
+
+		const gpt = createModel('gpt', 'GPT');
+
+		function resolve(identifier: string, liveVendors: string[], resolvedVendors: string[]) {
+			return resolveModelIdentifierFromCatalog([gpt], identifier, {
+				hasLiveModels: vendor => liveVendors.includes(vendor),
+				hasResolved: vendor => resolvedVendors.includes(vendor),
+			}).kind;
+		}
+
+		test('a remembered model stays pending while its provider is still fetching', () => {
+			assert.deepStrictEqual([
+				// The trial provider has neither published models nor finished resolving.
+				resolve('flowleap-trial/claude-sonnet-5', [], []),
+				// It finished resolving without the model, so the absence is final.
+				resolve('flowleap-trial/claude-sonnet-5', [], ['flowleap-trial']),
+				// It published other models, so the absence is final.
+				resolve('flowleap-trial/claude-sonnet-5', ['flowleap-trial'], []),
+			], ['pending', 'unavailable', 'unavailable']);
+		});
+
+		test('Copilot stays pending until it publishes models, because it resolves in batches', () => {
+			assert.deepStrictEqual([
+				resolve('copilot/missing', [], ['copilot']),
+				resolve('copilot/missing', ['copilot'], ['copilot']),
+			], ['pending', 'unavailable']);
+		});
+
+		test('an identifier with no vendor prefix cannot be waited on', () => {
+			assert.strictEqual(resolve('bare-identifier', [], []), 'unavailable');
 		});
 	});
 

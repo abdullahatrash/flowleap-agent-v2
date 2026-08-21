@@ -90,7 +90,7 @@ import { IChatEditingSession, IModifiedFileEntry, ModifiedFileEntryState } from 
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../common/languageModels.js';
 import { ChatModelConfigurationStore } from './chatModelConfigurationStore.js';
 import { IChatModelInputState, IChatRequestModeInfo, IInputModel, logChangesToStateModel } from '../../../common/model/chatModel.js';
-import { filterModelsForSession, findBestMatchingModel, findDefaultModel, findRecommendedDefaultModel, hasModelsTargetingSession, isModelValidForSession, isNewConversation, mergeModelsWithCache, resolveConfiguredModel, resolveModelFromSyncState, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
+import { filterModelsForSession, findBestMatchingModel, findDefaultModel, findRecommendedDefaultModel, hasModelsTargetingSession, isModelValidForSession, isNewConversation, mergeModelsWithCache, ModelIdentifierResolution, resolveConfiguredModel, resolveModelFromSyncState, resolveModelIdentifierFromCatalog, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
 import { getChatSessionType, LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chatViewModel.js';
 import { IChatAgentService } from '../../../common/participants/chatAgents.js';
@@ -916,6 +916,47 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		return this.getModels().find(m => m.identifier === persisted);
 	}
 
+	/**
+	 * Resolve a model identifier against this input's pool using vendor catalog readiness, so a
+	 * model whose provider is still fetching resolves as `pending` rather than `unavailable`.
+	 */
+	private resolveModelIdentifier(identifier: string | undefined): ModelIdentifierResolution {
+		const liveVendors = new Set<string>();
+		for (const id of this.languageModelsService.getLanguageModelIds()) {
+			const metadata = this.languageModelsService.lookupLanguageModel(id);
+			if (metadata) {
+				liveVendors.add(metadata.vendor);
+			}
+		}
+		return resolveModelIdentifierFromCatalog(this.getModels(), identifier, {
+			hasLiveModels: vendor => liveVendors.has(vendor),
+			hasResolved: vendor => this.languageModelsService.hasResolvedVendor(vendor),
+		});
+	}
+
+	/**
+	 * Subscribe to catalog changes and re-run `reevaluate` on each one, tearing the subscription
+	 * down as soon as it reports `'settled'` — or when `isRelevant()` becomes false (the session
+	 * the wait was armed for moved on). Shared by the restore waits so the subscription lifecycle
+	 * and the relevance guard live in one place; `reevaluate` applies any model change and reports
+	 * whether the wait is done.
+	 */
+	private _watchModelChanges(
+		wait: MutableDisposable<IDisposable>,
+		isRelevant: () => boolean,
+		reevaluate: () => 'settled' | 'waiting',
+	): void {
+		wait.value = this.languageModelsService.onDidChangeLanguageModels(() => {
+			if (!isRelevant()) {
+				wait.clear();
+				return;
+			}
+			if (reevaluate() === 'settled') {
+				wait.clear();
+			}
+		});
+	}
+
 	private initSelectedModel() {
 		// initSelectedModel is scoped to the current storage key/session type.
 		// Do not let a delayed restore from a previous session type apply later.
@@ -948,13 +989,14 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			// extension is still registering its models). Wait for it rather than
 			// falling back to the persisted selection, so the configured default
 			// still wins once the model list settles.
-			this._waitForPersistedLanguageModel.value = this.languageModelsService.onDidChangeLanguageModels(() => {
+			this._watchModelChanges(this._waitForPersistedLanguageModel, () => true, () => {
 				const lateModel = resolveConfiguredModel(configuredValue, this.getModels());
-				if (lateModel) {
-					this._waitForPersistedLanguageModel.clear();
-					this.setCurrentLanguageModel(lateModel);
-					this.checkModelSupported();
+				if (!lateModel) {
+					return 'waiting';
 				}
+				this.setCurrentLanguageModel(lateModel);
+				this.checkModelSupported();
+				return 'settled';
 			});
 			return;
 		}
@@ -966,19 +1008,26 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 				this.setCurrentLanguageModel(result.model);
 				this.checkModelSupported();
 			} else if (!result.model) {
-				this._waitForPersistedLanguageModel.value = this.languageModelsService.onDidChangeLanguageModels(e => {
+				this._watchModelChanges(this._waitForPersistedLanguageModel, () => true, () => {
 					const persistedModel = this.languageModelsService.lookupLanguageModel(persistedSelection);
 					if (persistedModel) {
-						this._waitForPersistedLanguageModel.clear();
-
 						const lateModel = { metadata: persistedModel, identifier: persistedSelection };
 						if (shouldRestoreLateArrivingModel(persistedSelection, persistedAsDefault, lateModel, this.location)) {
 							this.setCurrentLanguageModel(lateModel);
 							this.checkModelSupported();
 						}
-					} else {
-						this.setCurrentLanguageModelToDefault();
+						return 'settled';
 					}
+					// Catalogs resolve in batches — a BYOK or trial provider fetches its model
+					// list well after the first change fires. Falling back now would call
+					// `setCurrentLanguageModel`, which overwrites the remembered identifier in
+					// storage, losing the selection before it ever arrived. Keep waiting until
+					// the vendor's silence is conclusive.
+					if (this.resolveModelIdentifier(persistedSelection).kind === 'pending') {
+						return 'waiting';
+					}
+					this.setCurrentLanguageModelToDefault();
+					return 'settled';
 				});
 			}
 		}
@@ -1850,19 +1899,21 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		// Models may not be loaded yet - wait for them
-		this._waitForSessionHistoryLanguageModel.value = this.languageModelsService.onDidChangeLanguageModels(() => {
-			const currentSessionResource = this._widget?.viewModel?.model.sessionResource;
-			if (!currentSessionResource || !isEqual(currentSessionResource, sessionResource)) {
-				this._waitForSessionHistoryLanguageModel.clear();
-				return;
-			}
-
-			const found = tryMatch();
-			if (found) {
-				this._waitForSessionHistoryLanguageModel.clear();
+		this._watchModelChanges(
+			this._waitForSessionHistoryLanguageModel,
+			() => {
+				const currentSessionResource = this._widget?.viewModel?.model.sessionResource;
+				return !!currentSessionResource && isEqual(currentSessionResource, sessionResource);
+			},
+			() => {
+				const found = tryMatch();
+				if (!found) {
+					return 'waiting';
+				}
 				this.setCurrentLanguageModel(found);
-			}
-		});
+				return 'settled';
+			},
+		);
 	}
 
 	private setCurrentLanguageModelToDefault(forSessionType?: string) {

@@ -44,6 +44,18 @@ import { ILanguageModelsProviderGroup, ILanguageModelsConfigurationService } fro
  */
 export const COPILOT_VENDOR_ID = 'copilot';
 
+/**
+ * Whether a vendor's failure to contribute a given model can be treated as final.
+ *
+ * A vendor that has already published models is authoritative: a model it does not list is gone.
+ * A vendor that has merely finished resolving is authoritative too, except for Copilot, whose
+ * catalog is populated in several batches after the first resolve. While the absence is not
+ * conclusive, callers should keep waiting rather than fall back.
+ */
+export function isLanguageModelVendorAbsenceConclusive(vendor: string, hasLiveModels: boolean, hasResolved: boolean): boolean {
+	return hasLiveModels || (hasResolved && vendor !== COPILOT_VENDOR_ID);
+}
+
 export const enum ChatMessageRole {
 	System,
 	User,
