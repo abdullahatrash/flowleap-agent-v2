@@ -29,7 +29,7 @@ import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { IChatFollowup, IChatSendRequestOptions, IChatService } from '../../common/chatService/chatService.js';
 import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../common/constants.js';
 import { IChatRequestModeInfo } from '../../common/model/chatModel.js';
-import { IChatRequestViewModel, IChatResponseViewModel, IChatViewModel, isRequestVM, isResponseVM } from '../../common/model/chatViewModel.js';
+import { getStickyScrollTargetItem, IChatRequestViewModel, IChatResponseViewModel, IChatViewModel, isRequestVM, isResponseVM } from '../../common/model/chatViewModel.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatTreeItem, IChatAccessibilityService, IChatCodeBlockInfo, IChatFileTreeInfo, IChatListItemRendererOptions } from '../chat.js';
 import { CodeBlockPart } from './chatContentParts/codeBlockPart.js';
@@ -274,6 +274,7 @@ export class ChatListWidget extends Disposable {
 	private _viewModel: IChatViewModel | undefined;
 	private _visible = true;
 	private _lastItem: ChatTreeItem | undefined;
+	private _stickyScrollTargetItem: ChatTreeItem | undefined;
 	private _mostRecentlyFocusedItemIndex: number = -1;
 	private _scrollLock: boolean = true;
 	private _suppressAutoScroll: boolean = false;
@@ -330,6 +331,10 @@ export class ChatListWidget extends Disposable {
 	 */
 	get lastItem(): ChatTreeItem | undefined {
 		return this._lastItem;
+	}
+
+	get stickyScrollTargetItem(): ChatTreeItem | undefined {
+		return this._stickyScrollTargetItem;
 	}
 
 	/**
@@ -757,12 +762,14 @@ export class ChatListWidget extends Disposable {
 		if (!this._viewModel) {
 			this._tree.setChildren(null, []);
 			this._lastItem = undefined;
+			this._stickyScrollTargetItem = undefined;
 			this._lastItemIdContextKey.set([]);
 			return;
 		}
 
 		const items = this._viewModel.getItems();
 		this._lastItem = items.at(-1);
+		this._stickyScrollTargetItem = getStickyScrollTargetItem(items);
 		this._lastItemIdContextKey.set(this._lastItem ? [this._lastItem.id] : []);
 
 		const treeItems = this._useTreeHierarchy
