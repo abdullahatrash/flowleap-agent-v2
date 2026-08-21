@@ -1,7 +1,7 @@
 {
   "name": "flowleap",
   "displayName": "FlowLeap",
-  "description": "FlowLeap Patent IDE - AI-Powered Patent Analysis",
+  "description": "FlowLeap — AI Patent Agent",
   "version": "0.0.1",
   "publisher": "vscode",
   "engines": {
