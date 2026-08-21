@@ -52,7 +52,9 @@
 		"workbench.view.testing",
 		"workbench.view.remote",
 		"workbench.view.scm",
-		"workbench.panel.repl"
+		"workbench.panel.repl",
+		"workbench.view.extension.copilot-chat",
+		"workbench.view.extension.context-inspector"
 	],
 	"defaultChatAgent": {
 		"extensionId": "flowleap.patent-ai",
