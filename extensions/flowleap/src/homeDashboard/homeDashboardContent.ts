@@ -340,6 +340,22 @@ export async function renderHomeDashboard(webview: vscode.Webview, context: vsco
 			color: var(--text-secondary);
 		}
 
+		.project-quick-links {
+			display: flex;
+			gap: 16px;
+			margin-top: 14px;
+		}
+
+		.project-quick-link {
+			font-size: 12px;
+			color: var(--accent);
+			cursor: pointer;
+		}
+
+		.project-quick-link:hover {
+			text-decoration: underline;
+		}
+
 		/* Narrow host — the activity-bar view is about 300px wide. Single-column
 		grids, tighter padding and a smaller header keep the dashboard usable
 		there; the wide editor-panel rendering is untouched. */
@@ -436,6 +452,9 @@ export async function renderHomeDashboard(webview: vscode.Webview, context: vsco
 				case 'openFolder':
 					vscode.postMessage({ command: 'openFolder' });
 					break;
+				case 'browseFiles':
+					vscode.postMessage({ command: 'browseFiles' });
+					break;
 				case 'openRecent':
 					vscode.postMessage({ command: 'openRecent' });
 					break;
@@ -466,6 +485,10 @@ export function handleHomeDashboardMessage(message: HomeDashboardMessage): void 
 	switch (message.command) {
 		case 'openFolder':
 			vscode.commands.executeCommand('workbench.action.files.openFolder');
+			return;
+		case 'browseFiles':
+			// Reveal the open project's files, never the OS folder picker.
+			vscode.commands.executeCommand('workbench.files.action.focusFilesExplorer');
 			return;
 		case 'newProject':
 			vscode.commands.executeCommand('flowleap.newProject', message.type);
@@ -592,10 +615,14 @@ function renderProjectView(project: CurrentProject): string {
 				<div class="project-action-icon">\u{1F4AC}</div>
 				<div class="project-action-label">AI Chat</div>
 			</div>
-			<div class="project-action-btn" data-action="openFolder">
+			<div class="project-action-btn" data-action="browseFiles">
 				<div class="project-action-icon">\u{1F4C2}</div>
 				<div class="project-action-label">Browse Files</div>
 			</div>
+		</div>
+		<div class="project-quick-links">
+			<span class="project-quick-link" data-action="newProject">New Project…</span>
+			<span class="project-quick-link" data-action="openRecent">Open Recent…</span>
 		</div>
 	</div>`;
 }
