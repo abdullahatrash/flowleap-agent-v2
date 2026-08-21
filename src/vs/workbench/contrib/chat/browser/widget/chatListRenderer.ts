@@ -3655,6 +3655,10 @@ export class ChatListDelegate extends CachedListVirtualDelegate<ChatTreeItem> {
 	hasDynamicHeight(element: ChatTreeItem): boolean {
 		return true;
 	}
+
+	getMeasuredHeight(element: ChatTreeItem): number | undefined {
+		return this.getCachedHeight(element);
+	}
 }
 
 /**
