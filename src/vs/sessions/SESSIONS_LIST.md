@@ -122,7 +122,7 @@ The insertion line relies on the base list widget's `drop-target-before`/`drop-t
 
 Archived sessions do not show the session group context menu actions ("Create Group", "Add to Group", "Move to Group", or "Remove from Group").
 
-Transient actions created for these context menus are owned for the menu lifetime and disposed when it closes.
+Transient context-menu actions are non-disposable values; the contributed session-row menu remains owned for the menu lifetime and is disposed when it closes.
 
 ### Read / Unread
 

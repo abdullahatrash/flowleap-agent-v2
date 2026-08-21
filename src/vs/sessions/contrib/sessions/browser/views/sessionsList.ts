@@ -39,7 +39,7 @@ import { GITHUB_REMOTE_FILE_SCHEME, ISession, ISessionWorkspace, SessionStatus }
 import { AgentSessionApprovalModel, IAgentSessionApprovalInfo } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionApprovalModel.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
-import { Action, ActionRunner, IAction, Separator, SubmenuAction } from '../../../../../base/common/actions.js';
+import { ActionRunner, IAction, Separator, SubmenuAction, toAction } from '../../../../../base/common/actions.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { HoverStyle } from '../../../../../base/browser/ui/hover/hover.js';
 import { HoverPosition } from '../../../../../base/browser/ui/hover/hoverWidget.js';
@@ -2365,14 +2365,19 @@ export class SessionsList extends Disposable implements ISessionsList {
 			if (!(action instanceof MenuItemAction) || !action.item.source) {
 				return action;
 			}
-			const wrapped = disposables.add(new Action(action.id, action.label, action.class, action.enabled, () => this.commandService.executeCommand(action.id, marshalledArg)));
-			wrapped.tooltip = action.tooltip;
-			wrapped.checked = action.checked;
-			return wrapped;
+			return toAction({
+				id: action.id,
+				label: action.label,
+				class: action.class,
+				enabled: action.enabled,
+				tooltip: action.tooltip,
+				checked: action.checked,
+				run: () => this.commandService.executeCommand(action.id, marshalledArg),
+			});
 		};
 
 		const baseActions = Separator.join(...menu.getActions({ arg: selectedSessions, shouldForwardArgs: true }).map(([, actions]) => actions.map(wrapForExtensions)));
-		const groupActions = this.getGroupSessionActions(selectedSessions, disposables);
+		const groupActions = this.getGroupSessionActions(selectedSessions);
 		const actions = groupActions.length > 0 ? [...baseActions, new Separator(), ...groupActions] : baseActions;
 		if (actions.length === 0) {
 			disposables.dispose();
@@ -2392,53 +2397,63 @@ export class SessionsList extends Disposable implements ISessionsList {
 	 * "Create Group", an "Add to Group"/"Move to Group" submenu listing the
 	 * groups in display order, and "Remove from Group" when applicable.
 	 */
-	private getGroupSessionActions(selected: ISession[], disposables: DisposableStore): IAction[] {
+	private getGroupSessionActions(selected: ISession[]): IAction[] {
 		const actions: IAction[] = [];
 		if (selected.some(session => session.isArchived.get())) {
 			return actions;
 		}
 
-		actions.push(disposables.add(new Action('sessions.createGroup', localize('createGroupAction', "Create Group"), undefined, true, async () => {
-			this.createGroupFromSessions(selected);
-		})));
+		actions.push(toAction({
+			id: 'sessions.createGroup',
+			label: localize('createGroupAction', "Create Group"),
+			run: () => this.createGroupFromSessions(selected),
+		}));
 
 		const currentGroupIds = new Set(selected.map(s => this._sessionGroupsService.getGroupOfSession(s.sessionId)));
 		const currentGroupId = currentGroupIds.size === 1 ? [...currentGroupIds][0] : undefined;
 
 		const targetGroups = this.getGroupsInDisplayOrder().filter(g => g.id !== currentGroupId);
 		if (targetGroups.length > 0) {
-			const subActions = targetGroups.map(g => disposables.add(new Action(`sessions.addToGroup.${g.id}`, g.name, undefined, true, async () => {
-				this.addSessionsToGroup(selected, g.id);
-			})));
+			const subActions = targetGroups.map(g => toAction({
+				id: `sessions.addToGroup.${g.id}`,
+				label: g.name,
+				run: () => this.addSessionsToGroup(selected, g.id),
+			}));
 			const label = currentGroupId !== undefined ? localize('moveToGroupAction', "Move to Group") : localize('addToGroupAction', "Add to Group");
 			actions.push(new SubmenuAction('sessions.addToGroupSubmenu', label, subActions));
 		}
 
 		if (currentGroupId !== undefined) {
-			actions.push(disposables.add(new Action('sessions.removeFromGroup', localize('removeFromGroupAction', "Remove from Group"), undefined, true, async () => {
-				for (const session of selected) {
-					this._sessionGroupsService.removeFromGroup(session.sessionId);
-				}
-			})));
+			actions.push(toAction({
+				id: 'sessions.removeFromGroup',
+				label: localize('removeFromGroupAction', "Remove from Group"),
+				run: () => {
+					for (const session of selected) {
+						this._sessionGroupsService.removeFromGroup(session.sessionId);
+					}
+				},
+			}));
 		}
 
 		return actions;
 	}
 
 	private showGroupContextMenu(groupItem: ISessionGroupItem, anchor: ITreeContextMenuEvent<SessionListItem>['anchor']): void {
-		const disposables = new DisposableStore();
 		const actions: IAction[] = [
-			disposables.add(new Action('sessions.renameGroupAction', localize('renameGroupAction', "Rename..."), undefined, true, async () => {
-				this.beginRenameGroup(groupItem.group.id);
-			})),
-			disposables.add(new Action('sessions.deleteGroupAction', localize('deleteGroupAction', "Delete Group"), undefined, true, async () => {
-				this._sessionGroupsService.deleteGroup(groupItem.group.id);
-			})),
+			toAction({
+				id: 'sessions.renameGroupAction',
+				label: localize('renameGroupAction', "Rename..."),
+				run: () => this.beginRenameGroup(groupItem.group.id),
+			}),
+			toAction({
+				id: 'sessions.deleteGroupAction',
+				label: localize('deleteGroupAction', "Delete Group"),
+				run: () => this._sessionGroupsService.deleteGroup(groupItem.group.id),
+			}),
 		];
 		this.contextMenuService.showContextMenu({
 			getActions: () => actions,
 			getAnchor: () => anchor,
-			onHide: () => disposables.dispose(),
 		});
 	}
 
