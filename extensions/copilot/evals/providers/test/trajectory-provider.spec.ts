@@ -66,6 +66,45 @@ describe('TrajectoryProvider', () => {
 		]);
 	});
 
+	// #263: sonnet-5 answers a bare tools-stripped continuation with EMPTY content, which
+	// silently scored every capped trajectory as a wordless give-up. The wrap-up turn must
+	// carry an explicit user nudge and retry once on empty content.
+	it('nudges and retries the wrap-up turn instead of accepting empty finalText at the round cap', async () => {
+		const requests: { hasTools: boolean; lastMessage: { role: string; content: string | null } }[] = [];
+		let wrapAttempt = 0;
+		const provider = new TrajectoryProvider({ config: { maxRounds: 2 } }, {
+			fetch: async (_url, init) => {
+				const body = JSON.parse(String(init?.body));
+				requests.push({ hasTools: Boolean(body.tools), lastMessage: body.messages[body.messages.length - 1] });
+				if (body.tools) {
+					return jsonResponse({ choices: [{ message: { tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search_patents', arguments: '{}' } }] } }] });
+				}
+				wrapAttempt++;
+				return jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: wrapAttempt === 1 ? '' : 'honest give-up narration' } }] });
+			},
+			env: { OPENROUTER_API_KEY: 'test-key' },
+			loadScript: () => SCRIPT,
+		});
+
+		const result = await provider.callApi('find prior art', CONTEXT);
+
+		const parsed = JSON.parse(String(result.output));
+		const wrapRequests = requests.filter(r => !r.hasTools);
+		expect({
+			stoppedReason: parsed.stoppedReason,
+			finalText: parsed.finalText,
+			wrapAttempts: wrapRequests.length,
+			nudgeRole: wrapRequests[0]?.lastMessage.role,
+			nudgeMentionsFinalAnswer: /final answer/.test(String(wrapRequests[0]?.lastMessage.content)),
+		}).toEqual({
+			stoppedReason: 'max_rounds',
+			finalText: 'honest give-up narration',
+			wrapAttempts: 2,
+			nudgeRole: 'user',
+			nudgeMentionsFinalAnswer: true,
+		});
+	});
+
 	// OpenRouter reports an upstream rate limit INSIDE a 200 body. Read as a normal answer it
 	// would score a round the model never got to run as a give-up — a silent false verdict.
 	it('surfaces an upstream error carried in a 200 body instead of scoring it as an empty answer', async () => {
