@@ -8,7 +8,8 @@ import { VSBuffer } from '../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { AbstractCommonMcpManagementService, AbstractMcpResourceManagementService } from '../../common/mcpManagementService.js';
+import { upcastPartial } from '../../../../base/test/common/mock.js';
+import { AbstractCommonMcpManagementService, AbstractMcpResourceManagementService, McpUserResourceManagementService } from '../../common/mcpManagementService.js';
 import { IGalleryMcpServer, IGalleryMcpServerConfiguration, IInstallableMcpServer, ILocalMcpServer, IMcpGalleryService, InstallOptions, RegistryType, TransportType, UninstallOptions } from '../../common/mcpManagement.js';
 import { IMcpSandboxConfiguration, McpServerType, McpServerVariableType, IMcpServerConfiguration, IMcpServerVariable } from '../../common/mcpPlatformTypes.js';
 import { IMarkdownString } from '../../../../base/common/htmlContent.js';
@@ -20,6 +21,15 @@ import { InMemoryFileSystemProvider } from '../../../files/common/inMemoryFilesy
 import { NullLogService } from '../../../log/common/log.js';
 import { McpResourceScannerService } from '../../common/mcpResourceScannerService.js';
 import { UriIdentityService } from '../../../uriIdentity/common/uriIdentityService.js';
+import { IEnvironmentService } from '../../../environment/common/environment.js';
+
+class TestLogService extends NullLogService {
+	readonly errors: string[] = [];
+
+	override error(message: string | Error, ...args: unknown[]): void {
+		this.errors.push([message, ...args].join(' '));
+	}
+}
 
 class TestMcpManagementService extends AbstractCommonMcpManagementService {
 
@@ -1124,14 +1134,16 @@ suite('McpResourceManagementService', () => {
 	const mcpResource = URI.from({ scheme: Schemas.inMemory, path: '/mcp.json' });
 	let disposables: DisposableStore;
 	let fileService: FileService;
+	let uriIdentityService: UriIdentityService;
+	let scannerService: McpResourceScannerService;
 	let service: TestMcpResourceManagementService;
 
 	setup(async () => {
 		disposables = new DisposableStore();
 		fileService = disposables.add(new FileService(new NullLogService()));
 		disposables.add(fileService.registerProvider(Schemas.inMemory, disposables.add(new InMemoryFileSystemProvider())));
-		const uriIdentityService = disposables.add(new UriIdentityService(fileService));
-		const scannerService = disposables.add(new McpResourceScannerService(fileService, uriIdentityService));
+		uriIdentityService = disposables.add(new UriIdentityService(fileService));
+		scannerService = disposables.add(new McpResourceScannerService(fileService, uriIdentityService));
 		service = disposables.add(new TestMcpResourceManagementService(mcpResource, fileService, uriIdentityService, scannerService));
 
 		await fileService.writeFile(mcpResource, VSBuffer.fromString(JSON.stringify({
@@ -1188,5 +1200,39 @@ suite('McpResourceManagementService', () => {
 
 		assert.strictEqual(updateCount, 1);
 		assert.deepStrictEqual(updated[0].rootSandbox, updatedSandbox);
+	});
+
+	test('missing gallery metadata cache is not logged as an error', async () => {
+		const galleryResource = URI.from({ scheme: Schemas.inMemory, path: '/missing-gallery-metadata-mcp.json' });
+		await fileService.writeFile(galleryResource, VSBuffer.fromString(JSON.stringify({
+			servers: {
+				test: {
+					type: 'stdio',
+					command: 'node',
+					gallery: true,
+					version: '1.0.0'
+				}
+			}
+		}, null, '\t')));
+		const logService = new TestLogService();
+		const galleryService = disposables.add(new McpUserResourceManagementService(
+			galleryResource,
+			upcastPartial<IMcpGalleryService>({}),
+			fileService,
+			uriIdentityService,
+			logService,
+			scannerService,
+			upcastPartial<IEnvironmentService>({ userRoamingDataHome: URI.from({ scheme: Schemas.inMemory, path: '/user' }) }),
+		));
+
+		const installed = await galleryService.getInstalled();
+
+		assert.deepStrictEqual({
+			installed: installed.map(server => ({ name: server.name, version: server.version, location: server.location })),
+			errors: logService.errors,
+		}, {
+			installed: [{ name: 'test', version: '1.0.0', location: undefined }],
+			errors: [],
+		});
 	});
 });
