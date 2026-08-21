@@ -1291,10 +1291,6 @@ suite('SessionsManagementService', () => {
 			// superseded closed chat.
 			await view.reopenLastClosedItem();
 
-			// `closedChats` is empty rather than `['b']`: this fork snapshots
-			// closed-chat state only on `onWillSaveState`, so the wrapper rebuilt
-			// by the reopen starts with none. The superseded chat entry is gone
-			// either way, which is what this test is about.
 			assert.deepStrictEqual({
 				...grid(view),
 				closedChats: view.activeSession.get()!.closedChats.get().map(c => c.title.get()),
@@ -1302,7 +1298,7 @@ suite('SessionsManagementService', () => {
 				visible: ['A'],
 				sticky: [false],
 				active: 'A',
-				closedChats: [],
+				closedChats: ['b'],
 			});
 		});
 
@@ -1348,6 +1344,96 @@ suite('SessionsManagementService', () => {
 			await view.reopenLastClosedItem();
 
 			assert.deepStrictEqual({ canReopen: canReopen() }, { canReopen: false });
+		});
+	});
+
+	suite('closed chats persistence', () => {
+
+		function chat(title: string): IChat {
+			return {
+				...stubChat,
+				resource: URI.parse(`test:///chat/${title}`),
+				title: constObservable(title),
+				status: constObservable(SessionStatus.Completed),
+			};
+		}
+
+		function multiChatSession(id: string, chats: IChat[]): ISession {
+			return stubSession({
+				sessionId: id,
+				providerId: 'test',
+				status: constObservable(SessionStatus.Completed),
+				chats: constObservable(chats),
+				mainChat: constObservable(chats[0]),
+				capabilities: { supportsMultipleChats: true },
+			});
+		}
+
+		function setup(sessions: ISession[]) {
+			const provider = new class extends TestSessionsProvider {
+				constructor() { super(sessions[0]); }
+				override getSessions(): ISession[] { return sessions; }
+			};
+			return createSessionsManagementService(sessions[0], disposables, provider);
+		}
+
+		const closedTitles = (view: SessionsService) =>
+			(view.activeSession.get()?.closedChats.get() ?? []).map(c => c.title.get());
+
+		test('a chat closed in one session stays closed after switching away and back', async () => {
+			const sessionA = multiChatSession('A', [chat('mainA'), chat('b')]);
+			const sessionB = multiChatSession('B', [chat('mainB')]);
+			const { view } = setup([sessionA, sessionB]);
+
+			await view.openSession(sessionA.resource);
+			const chatB = sessionA.chats.get().find(c => c.title.get() === 'b')!;
+			await view.closeChat(view.activeSession.get()!, chatB);
+			assert.deepStrictEqual(closedTitles(view), ['b']);
+
+			// Switching away disposes session A's wrapper (and its in-memory closed
+			// set); switching back must restore the closed chat from persisted state.
+			await view.openSession(sessionB.resource);
+			await view.openSession(sessionA.resource);
+
+			assert.deepStrictEqual(closedTitles(view), ['b']);
+		});
+
+		test('closing the middle of three chats persists across a switch', async () => {
+			const sessionA = multiChatSession('A', [chat('c1'), chat('c2'), chat('c3')]);
+			const sessionB = multiChatSession('B', [chat('mainB')]);
+			const { view } = setup([sessionA, sessionB]);
+
+			await view.openSession(sessionA.resource);
+			const middle = sessionA.chats.get().find(c => c.title.get() === 'c2')!;
+			await view.closeChat(view.activeSession.get()!, middle);
+
+			await view.openSession(sessionB.resource);
+			await view.openSession(sessionA.resource);
+
+			const reActiveA = view.activeSession.get()!;
+			assert.deepStrictEqual({
+				open: reActiveA.openChats.get().map(c => c.title.get()),
+				closed: reActiveA.closedChats.get().map(c => c.title.get()),
+			}, {
+				open: ['c1', 'c3'],
+				closed: ['c2'],
+			});
+		});
+
+		test('reopening a closed chat is also persisted across a switch', async () => {
+			const sessionA = multiChatSession('A', [chat('mainA'), chat('b')]);
+			const sessionB = multiChatSession('B', [chat('mainB')]);
+			const { view } = setup([sessionA, sessionB]);
+
+			await view.openSession(sessionA.resource);
+			const chatB = sessionA.chats.get().find(c => c.title.get() === 'b')!;
+			await view.closeChat(view.activeSession.get()!, chatB);
+			await view.openChat(sessionA, chatB.resource); // reopen
+
+			await view.openSession(sessionB.resource);
+			await view.openSession(sessionA.resource);
+
+			assert.deepStrictEqual(closedTitles(view), []);
 		});
 	});
 });
