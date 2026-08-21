@@ -244,6 +244,34 @@ describe('FlowLeapTrialLMProvider (ADR 0015, #241)', () => {
 		expect(models.map(m => m.id)).toEqual(SERVED_MODELS);
 	});
 
+	it('maps a spend-cap rejection to the localized two-exit message, never the raw provider error (ADR 0015, #243)', async () => {
+		const capError = new Error('Quota Exceeded\n\nServer Error: This request requires more credits\nError Code: 402');
+		capError.name = 'ChatQuotaExceeded';
+		vi.spyOn(AbstractOpenAICompatibleLMProvider.prototype, 'provideLanguageModelChatResponse').mockRejectedValue(capError);
+		const provider = makeProvider(makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } })), makeStorageService());
+
+		const tokenSource = new vscode.CancellationTokenSource();
+		try {
+			await expect(provider.provideLanguageModelChatResponse({} as never, [], {} as never, { report: () => undefined }, tokenSource.token))
+				.rejects.toThrow(/Add your own API key.*Manage Models.*cap resets daily/s);
+		} finally {
+			tokenSource.dispose();
+		}
+	});
+
+	it('rethrows non-cap chat failures unchanged', async () => {
+		vi.spyOn(AbstractOpenAICompatibleLMProvider.prototype, 'provideLanguageModelChatResponse').mockRejectedValue(new Error('socket hang up'));
+		const provider = makeProvider(makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } })), makeStorageService());
+
+		const tokenSource = new vscode.CancellationTokenSource();
+		try {
+			await expect(provider.provideLanguageModelChatResponse({} as never, [], {} as never, { report: () => undefined }, tokenSource.token))
+				.rejects.toThrow('socket hang up');
+		} finally {
+			tokenSource.dispose();
+		}
+	});
+
 	it('stays hidden without a backend call when the user is signed out', async () => {
 		registerPatentAccessTokenProvider(() => undefined);
 		const backend = makeBackendClient(async () => { throw new PatentBackendError(undefined, 'must not be called'); });

@@ -20,11 +20,13 @@ import { getPatentAccessToken } from '../../patentai/common/patentTokenRegistry'
 import { IPatentBackendClient, TrialModelKeyPayload, TrialModelKeyUnavailableError } from '../../patentai/vscode-node/patentBackendClient';
 import { selectUserByokChatModels } from '../../patentai/vscode-node/patentEndpointProvider';
 import { BYOKAuthType, BYOKModelCapabilities } from '../common/byokProvider';
+import { looksLikeSpendCapRejection } from '../common/trialSpendCap';
 import { LanguageModelChatConfiguration, OpenAICompatibleLanguageModelChatInformation } from './abstractLanguageModelChatProvider';
 import { byokKnownModelToAPIInfoWithEffort } from './byokModelInfo';
 import { IBYOKStorageService } from './byokStorageService';
 import { AbstractOpenRouterLMProvider, OPENROUTER_BASE_URL } from './openRouterProvider';
 
+/** The model-manager surface the revocation nudge and the cap message link to — where the user adds their own key. */
 const MANAGE_MODELS_COMMAND = 'workbench.action.chat.manage';
 
 /** Bound the user-model probe so a slow provider enumeration can never stall a model listing. */
@@ -143,17 +145,30 @@ export class FlowLeapTrialLMProvider extends AbstractOpenRouterLMProvider implem
 	}
 
 	/**
-	 * Chat turns run through the inherited OpenRouter machinery, but a rejected key gets the
-	 * trial-specific mapping: the trial key is not a credential the user can update, so the
-	 * generic "update your key" recovery would be a dead end. A mid-turn rejection means the key
-	 * was revoked (trial ended or converted, ADR 0015) — discard it, re-list (hiding the provider
-	 * unless a re-fetch serves a fresh key), and surface the add-your-own-key nudge as the turn's
-	 * failure. Every other error passes through untouched.
+	 * Chat turns run through the inherited OpenRouter machinery, but two failure shapes get a
+	 * trial-specific mapping (ADR 0015), checked in this order:
+	 *
+	 * 1. Spend cap (#243): a 402/credit-limit shaped rejection means the daily cap is exhausted —
+	 *    the key is still VALID, so this must be recognised before the revocation branch (which
+	 *    would discard a working key). The user sees the actionable two-exit message — add your
+	 *    own key now, or the cap resets daily — never the raw provider error.
+	 * 2. Key rejection (#242): the trial key is not a credential the user can update, so the
+	 *    generic "update your key" recovery would be a dead end. A mid-turn rejection means the
+	 *    key was revoked (trial ended or converted) — discard it, re-list (hiding the provider
+	 *    unless a re-fetch serves a fresh key), and surface the add-your-own-key nudge as the
+	 *    turn's failure.
+	 *
+	 * Every other error passes through untouched.
 	 */
 	override async provideLanguageModelChatResponse(model: OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>, messages: Array<LanguageModelChatMessage | LanguageModelChatMessage2>, options: ProvideLanguageModelChatResponseOptions, progress: Progress<LanguageModelResponsePart2>, token: CancellationToken): Promise<void> {
 		try {
 			return await super.provideLanguageModelChatResponse(model, messages, options, progress, token);
 		} catch (err) {
+			if (err instanceof Error && looksLikeSpendCapRejection(err.name, err.message)) {
+				this._logService.info('[FlowLeap Trial] Daily spend cap reached; rendering the two-exit guidance.');
+				// The chat error renderer makes the manage-models command link clickable.
+				throw new Error(l10n.t('Your FlowLeap Trial models have reached today\'s shared usage cap. Add your own API key to keep chatting now: [{0}](command:{1}) — or wait: the cap resets daily, so your trial models come back tomorrow.', l10n.t('Manage Models'), MANAGE_MODELS_COMMAND));
+			}
 			const preClassified = err instanceof Error && err.name === CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME;
 			if (preClassified || looksLikeByokKeyRejection(toErrorMessage(err, false))) {
 				this._logService.info('[FlowLeap Trial] The trial key was rejected mid-turn (revoked); discarding it and steering to BYO-key setup.');

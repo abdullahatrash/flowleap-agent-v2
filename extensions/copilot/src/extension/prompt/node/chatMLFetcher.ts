@@ -1689,7 +1689,12 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 			if (response.status === 402) {
 				// When we receive a 402, we have exceed a quota
 				// This is stored on the token so let's refresh it
-				if (!this._authenticationService.copilotToken?.isChatQuotaExceeded) {
+				// A BYOK endpoint carries the user's OWN credential (IChatEndpoint.ownsAuthorization),
+				// so its 402 is the provider's spend/credit-cap rejection, not a Copilot quota state:
+				// there is no Copilot token to refresh, and in the CAPI-disabled build getCopilotToken
+				// rejects, which would flatten the provider's reason into a generic failure before the
+				// UI could render the cap guidance (mirrors the 401/403 guard above).
+				if (!chatEndpointInfo.ownsAuthorization && !this._authenticationService.copilotToken?.isChatQuotaExceeded) {
 					this._authenticationService.resetCopilotToken(response.status);
 					await this._authenticationService.getCopilotToken();
 				}

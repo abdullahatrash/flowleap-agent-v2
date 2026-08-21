@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
+import { FlowLeapTrialLMProvider } from '../../byok/vscode-node/flowleapTrialProvider';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { PatentDataKeysStore } from './patentDataKeysStore';
 import { PATENT_DATA_KEYS_COMMAND } from './patentDataKeysPage';
@@ -34,7 +35,16 @@ export interface SetupItemData {
 export interface SetupState {
 	readonly signedIn: boolean;
 	readonly accountLabel?: string;
+	/** Models connected with the user's OWN provider key (FlowLeap Trial models excluded). */
 	readonly byokModelCount: number;
+	/**
+	 * Models served by the FlowLeap Trial provider (ADR 0015). Only present while `trialing` —
+	 * the provider hides them for every other subscription state. With no own-key models, the
+	 * AI Model row counts them as configured but tells the truth: FlowLeap pays for them via
+	 * OpenRouter, and the user should add their own key before the trial ends. Optional
+	 * (defaults to 0).
+	 */
+	readonly trialModelCount?: number;
 	readonly epoConfigured: boolean;
 	readonly usptoConfigured: boolean;
 	/**
@@ -51,7 +61,31 @@ function missingKeyDescription(trialing: boolean | undefined): string {
 	return trialing ? 'Add before your trial ends — free to obtain' : 'Add key…';
 }
 
+/** The AI Model row's description/tooltip triple — own-key models, trial-only models, or none. */
+function aiModelRow(state: SetupState): { description: string; tooltip: string; ok: boolean } {
+	if (state.byokModelCount > 0) {
+		return {
+			description: `${state.byokModelCount} connected`,
+			tooltip: `${state.byokModelCount} model${state.byokModelCount === 1 ? '' : 's'} connected with your own key. Click to manage.`,
+			ok: true,
+		};
+	}
+	if ((state.trialModelCount ?? 0) > 0) {
+		return {
+			description: 'FlowLeap Trial — add your own key before the trial ends',
+			tooltip: 'Chat runs on FlowLeap Trial models: FlowLeap pays for them via OpenRouter during your free trial, and they stop when it ends. Add your own provider key (Anthropic, OpenAI, OpenRouter, …) at any time to switch — your models then take over. Click to manage.',
+			ok: true,
+		};
+	}
+	return {
+		description: 'Add your key…',
+		tooltip: 'Connect an AI model with your own provider key (Anthropic, OpenAI, OpenRouter, …) to start chatting.',
+		ok: false,
+	};
+}
+
 export function buildSetupItems(state: SetupState): SetupItemData[] {
+	const aiModel = aiModelRow(state);
 	return [
 		{
 			id: 'account',
@@ -67,12 +101,10 @@ export function buildSetupItems(state: SetupState): SetupItemData[] {
 		{
 			id: 'aiModel',
 			label: 'AI Model',
-			description: state.byokModelCount > 0 ? `${state.byokModelCount} connected` : 'Add your key…',
-			tooltip: state.byokModelCount > 0
-				? `${state.byokModelCount} model${state.byokModelCount === 1 ? '' : 's'} connected with your own key. Click to manage.`
-				: 'Connect an AI model with your own provider key (Anthropic, OpenAI, OpenRouter, …) to start chatting.',
+			description: aiModel.description,
+			tooltip: aiModel.tooltip,
 			icon: 'sparkle',
-			ok: state.byokModelCount > 0,
+			ok: aiModel.ok,
 			command: { command: 'workbench.action.chat.manage' },
 		},
 		{
@@ -147,9 +179,13 @@ class PatentSetupTreeProvider implements vscode.TreeDataProvider<SetupItemData> 
 		}
 
 		let byokModelCount = 0;
+		let trialModelCount = 0;
 		try {
 			const models = await vscode.lm.selectChatModels({});
-			byokModelCount = models.filter(m => !NON_BYOK_VENDORS.has(m.vendor)).length;
+			// FlowLeap Trial models are counted separately: they satisfy the row, but its copy must
+			// say who pays for them and that they end with the trial (ADR 0015 disclosure, #243).
+			trialModelCount = models.filter(m => m.vendor === FlowLeapTrialLMProvider.providerId).length;
+			byokModelCount = models.filter(m => !NON_BYOK_VENDORS.has(m.vendor) && m.vendor !== FlowLeapTrialLMProvider.providerId).length;
 		} catch {
 			// Model enumeration unavailable (e.g. during startup) — show the connect nudge.
 		}
@@ -170,6 +206,7 @@ class PatentSetupTreeProvider implements vscode.TreeDataProvider<SetupItemData> 
 			signedIn,
 			accountLabel,
 			byokModelCount,
+			trialModelCount,
 			epoConfigured: !!keys?.epo,
 			usptoConfigured: !!keys?.usptoOdp,
 			trialing,
