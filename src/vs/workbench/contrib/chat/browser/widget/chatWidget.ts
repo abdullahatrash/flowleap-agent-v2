@@ -1672,12 +1672,12 @@ export class ChatWidget extends Disposable implements IChatWidget {
 			listContainer,
 			{
 				rendererOptions: options,
-				renderStyle: this.viewOptions.renderStyle,
 				defaultElementHeight: this.viewOptions.defaultElementHeight ?? 200,
 				overflowWidgetsDomNode: overflowWidgetsContainer,
 				styles: {
 					listForeground: this.styles.listForeground,
 					listBackground: this.styles.listBackground,
+					listShadow: this.styles.listShadow,
 				},
 				currentChatMode: () => this.input.currentModeKind,
 				filter: this.viewOptions.filter ? { filter: this.viewOptions.filter.bind(this.viewOptions) } : undefined,
@@ -1686,16 +1686,31 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				location: this.location,
 				getCurrentLanguageModelId: () => this.input.currentLanguageModel,
 				getCurrentModeInfo: () => this.input.currentModeInfo,
+				getEditingValue: () => this.input.inputEditor.getValue(),
 			}
 		));
 
 		// Wire up ChatWidget-specific list widget events
 		this._register(this.listWidget.onDidClickRequest(async item => {
+			// If the click came from a sticky scroll row, scroll to reveal the real
+			// element and use its template so editing works on the actual row.
+			if (dom.findParentWithClass(item.rowContainer, 'monaco-tree-sticky-row') && isRequestVM(item.currentElement)) {
+				this.listWidget.reveal(item.currentElement, 0);
+				const realTemplate = this.listWidget.getTemplateDataForRequestId(item.currentElement.id);
+				if (realTemplate) {
+					this.clickedRequest(realTemplate);
+				}
+				return;
+			}
 			this.clickedRequest(item);
 		}));
 
 		this._register(this.listWidget.onDidRerender(item => {
 			if (isRequestVM(item.currentElement) && this.configurationService.getValue<string>('chat.editRequests') !== 'input') {
+				// Don't move the input into sticky scroll rows
+				if (dom.findParentWithClass(item.rowContainer, 'monaco-tree-sticky-row')) {
+					return;
+				}
 				if (!item.rowContainer.contains(this.inputContainer)) {
 					item.rowContainer.appendChild(this.inputContainer);
 				}

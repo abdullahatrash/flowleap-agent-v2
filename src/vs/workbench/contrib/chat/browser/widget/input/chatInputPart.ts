@@ -89,6 +89,7 @@ import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel
 import { IChatEditingSession, IModifiedFileEntry, ModifiedFileEntryState } from '../../../common/editing/chatEditingService.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../common/languageModels.js';
 import { ChatModelConfigurationStore } from './chatModelConfigurationStore.js';
+import { deserializeUntitledInputAttachments, deserializeUntitledInputState, serializeUntitledInputAttachments, serializeUntitledInputState } from './chatInputStatePersistence.js';
 import { IChatModelInputState, IChatRequestModeInfo, IInputModel, logChangesToStateModel } from '../../../common/model/chatModel.js';
 import { filterModelsForSession, findBestMatchingModel, findDefaultModel, findRecommendedDefaultModel, hasModelsTargetingSession, isModelValidForSession, isNewConversation, mergeModelsWithCache, ModelIdentifierResolution, resolveConfiguredModel, resolveModelFromSyncState, resolveModelIdentifierFromCatalog, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
 import { getChatSessionType, LocalChatSessionUri } from '../../../common/model/chatUri.js';
@@ -151,6 +152,7 @@ export interface IChatInputStyles {
 	overlayBackground: string;
 	listForeground: string;
 	listBackground: string;
+	listShadow?: string;
 }
 
 export interface IChatInputPartOptions {
@@ -207,9 +209,9 @@ export interface IChatWidgetLocationInfo {
 const emptyInputState = observableMemento<IChatModelInputState | undefined>({
 	defaultValue: undefined,
 	key: 'chat.untitledInputState',
-	toStorage: JSON.stringify,
+	toStorage: serializeUntitledInputState,
 	fromStorage(value) {
-		const obj = JSON.parse(value) as IChatModelInputState;
+		const obj = deserializeUntitledInputState(value);
 		if (obj.selectedModel && !obj.selectedModel.metadata.isDefaultForLocation) {
 			// Migrate old `isDefault` to `isDefaultForLocation`
 			type OldILanguageModelChatMetadata = ILanguageModelChatMetadata & { isDefault?: boolean };
@@ -220,6 +222,13 @@ const emptyInputState = observableMemento<IChatModelInputState | undefined>({
 		}
 		return obj;
 	},
+});
+
+const emptyInputAttachments = observableMemento<readonly IChatRequestVariableEntry[]>({
+	defaultValue: [],
+	key: 'chat.untitledInputAttachments',
+	toStorage: serializeUntitledInputAttachments,
+	fromStorage: deserializeUntitledInputAttachments,
 });
 
 export class ChatInputPart extends Disposable implements IHistoryNavigationWidget {
@@ -558,6 +567,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 	private _generating?: { rc: number; defer: DeferredPromise<void> };
 
 	private _emptyInputState: ObservableMemento<IChatModelInputState | undefined>;
+	private _emptyInputAttachments: ObservableMemento<readonly IChatRequestVariableEntry[]>;
 	private _chatSessionIsEmpty = false;
 	/**
 	 * Whether the user has explicitly picked a model for the current session
@@ -622,6 +632,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			this._syncInputStateToModel();
 		}, 150));
 		this._emptyInputState = this._register(emptyInputState(StorageScope.WORKSPACE, StorageTarget.USER, this.storageService));
+		this._emptyInputAttachments = this._register(emptyInputAttachments(StorageScope.WORKSPACE, StorageTarget.USER, this.storageService));
 
 		this._contextResourceLabels = this._register(this.instantiationService.createInstance(ResourceLabels, { onDidChangeVisibility: this._onDidChangeVisibility.event }));
 		this._currentModeObservable = observableValue<IChatMode>('currentMode', this.options.defaultMode ?? ChatMode.Agent);
@@ -673,7 +684,12 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		this._attachmentModel = this._register(this.instantiationService.createInstance(ChatAttachmentModel));
-		this._register(this._attachmentModel.onDidChange(() => this._syncInputStateToModel()));
+		this._register(this._attachmentModel.onDidChange(() => {
+			if (this._chatSessionIsEmpty) {
+				this._emptyInputAttachments.set(this._attachmentModel.attachments, undefined);
+			}
+			this._syncInputStateToModel();
+		}));
 		// Capture model-configuration changes into the draft input state immediately,
 		// mirroring how a model selection is synced in `setCurrentLanguageModel`. Without
 		// this, a config-only change would not reach the draft state until some other
