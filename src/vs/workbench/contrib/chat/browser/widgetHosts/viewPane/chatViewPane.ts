@@ -12,9 +12,10 @@ import { DomScrollableElement } from '../../../../../../base/browser/ui/scrollba
 import { CancellationToken, CancellationTokenSource } from '../../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { MutableDisposable, toDisposable, DisposableStore } from '../../../../../../base/common/lifecycle.js';
+import { LRUCache } from '../../../../../../base/common/map.js';
 import { MarshalledId } from '../../../../../../base/common/marshallingIds.js';
 import { autorun, IReader, observableValue } from '../../../../../../base/common/observable.js';
-import { isEqual } from '../../../../../../base/common/resources.js';
+import { getComparisonKey, isEqual } from '../../../../../../base/common/resources.js';
 import { ScrollbarVisibility } from '../../../../../../base/common/scrollable.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { localize } from '../../../../../../nls.js';
@@ -59,7 +60,7 @@ import { IChatViewsWelcomeDescriptor } from '../../viewsWelcome/chatViewsWelcome
 import { IWorkbenchLayoutService, LayoutSettings, Position } from '../../../../../services/layout/browser/layoutService.js';
 import { AgentSessionsViewerOrientation, AgentSessionsViewerPosition } from '../../agentSessions/agentSessions.js';
 import { IProgressService } from '../../../../../../platform/progress/common/progress.js';
-import { ChatViewId, IChatWidgetService, setModelPreservingInputTypedWhileLoading } from '../../chat.js';
+import { CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT, ChatViewId, IChatWidgetService, IChatWidgetViewState, setModelPreservingInputTypedWhileLoading } from '../../chat.js';
 import { IActivityService, ProgressBadge } from '../../../../../services/activity/common/activity.js';
 import { disposableTimeout } from '../../../../../../base/common/async.js';
 import { AgentSessionsFilter, AgentSessionsGrouping } from '../../agentSessions/agentSessionsFilter.js';
@@ -107,6 +108,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	private restoringSession: Promise<void> | undefined;
 	private readonly loadSessionCts = this._register(new MutableDisposable<CancellationTokenSource>());
 	private readonly modelRef = this._register(new MutableDisposable<IChatModelReference>());
+	private readonly widgetViewStates = new LRUCache<string, IChatWidgetViewState>(CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT);
 
 	private readonly activityBadge = this._register(new MutableDisposable());
 	private readonly _currentSessionResource = observableValue<URI | undefined>(this, undefined);
@@ -1074,7 +1076,10 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	}
 
 	private async showModel(token: CancellationToken, modelRef?: IChatModelReference | undefined, startNewSession = true, ignoreTransferredSession = false, inputBeforeLoad?: string): Promise<IChatModel | undefined> {
-		const oldModelResource = this.modelRef.value?.object.sessionResource;
+		const oldModelResource = this._widget.viewModel?.sessionResource;
+		if (oldModelResource) {
+			this.widgetViewStates.set(getComparisonKey(oldModelResource), this._widget.getViewState());
+		}
 		this.modelRef.value = undefined;
 
 		// Baseline draft for preserving text typed during loading. `loadSession`
@@ -1118,6 +1123,10 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 
 		if (model) {
 			setModelPreservingInputTypedWhileLoading(this._widget, baselineInput, () => this._widget.setModel(model));
+			const widgetViewState = this.widgetViewStates.get(getComparisonKey(model.sessionResource));
+			if (widgetViewState) {
+				this._widget.restoreViewState(widgetViewState);
+			}
 		} else {
 			this._widget.setModel(model);
 		}
@@ -1540,7 +1549,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	}
 
 	private updateViewState(viewState?: IChatModelInputState): void {
-		const newViewState = viewState ?? this._widget.getViewState();
+		const newViewState = viewState ?? this._widget.getInputState();
 		if (newViewState) {
 			for (const [key, value] of Object.entries(newViewState)) {
 				(this.viewState as Record<string, unknown>)[key] = value; // Assign all props to the memento so they get saved

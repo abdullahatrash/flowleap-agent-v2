@@ -73,7 +73,7 @@ import { ILanguageModelToolsService, isToolSet } from '../../common/tools/langua
 import { IHandOff, PromptHeader } from '../../common/promptSyntax/promptFileParser.js';
 import { IPromptsService, PromptsStorage } from '../../common/promptSyntax/service/promptsService.js';
 import { GENERATE_AGENT_INSTRUCTIONS_COMMAND_ID, handleModeSwitch } from '../actions/chatActions.js';
-import { ChatTreeItem, IChatAcceptInputOptions, IChatAccessibilityService, IChatCodeBlockInfo, IChatFileTreeInfo, IChatFindController, IChatListItemRendererOptions, IChatWidget, IChatWidgetService, IChatWidgetViewContext, IChatWidgetViewModelChangeEvent, IChatWidgetViewOptions, isIChatResourceViewContext, isIChatViewViewContext } from '../chat.js';
+import { ChatTreeItem, IChatAcceptInputOptions, IChatAccessibilityService, IChatCodeBlockInfo, IChatFileTreeInfo, IChatFindController, IChatListItemRendererOptions, IChatWidget, IChatWidgetService, IChatWidgetViewContext, IChatWidgetViewModelChangeEvent, IChatWidgetViewOptions, IChatWidgetViewState, isIChatResourceViewContext, isIChatViewViewContext } from '../chat.js';
 import { ChatAttachmentModel } from '../attachments/chatAttachmentModel.js';
 import { IChatAttachmentResolveService } from '../attachments/chatAttachmentResolveService.js';
 import { ChatDynamicVariableModel } from '../attachments/chatDynamicVariables.js';
@@ -749,6 +749,21 @@ export class ChatWidget extends Disposable implements IChatWidget {
 
 	set scrollTop(value: number) {
 		this.listWidget.scrollTop = value;
+	}
+
+	getViewState(): IChatWidgetViewState {
+		return {
+			scrollTop: this.listWidget.scrollTop,
+			isAtBottom: this.listWidget.isScrolledToBottom,
+		};
+	}
+
+	restoreViewState(state: IChatWidgetViewState): void {
+		if (state.isAtBottom) {
+			this.listWidget.scrollToEnd();
+		} else {
+			this.listWidget.scrollTop = state.scrollTop;
+		}
 	}
 
 	get attachmentModel(): ChatAttachmentModel {
@@ -3170,7 +3185,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		// no-op
 	}
 
-	getViewState(): IChatModelInputState | undefined {
+	getInputState(): IChatModelInputState | undefined {
 		return this.input.getCurrentInputState();
 	}
 
