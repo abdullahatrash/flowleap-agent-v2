@@ -53,7 +53,7 @@ import { BugIndicatingError } from '../../../../../base/common/errors.js';
 import { compareIgnoreCase } from '../../../../../base/common/strings.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { IChatSessionsService } from '../../common/chatSessionsService.js';
-import { createPixelSpinner } from '../../../../../base/browser/ui/pixelSpinner/pixelSpinner.js';
+import { createPixelSpinner, IPixelSpinner } from '../../../../../base/browser/ui/pixelSpinner/pixelSpinner.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 
 export type AgentSessionListItem = IAgentSession | IAgentSessionSection | IAgentSessionShowMore | IAgentSessionShowLess;
@@ -106,6 +106,7 @@ class AgentSessionStatusIcon extends Disposable {
 
 	private _currentCacheKey: string | undefined;
 	private _lastInputs: IAgentSessionStatusIconInputs | undefined;
+	private readonly spinner = this._register(new MutableDisposable<IPixelSpinner>());
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -130,6 +131,7 @@ class AgentSessionStatusIcon extends Disposable {
 	reset(): void {
 		this._currentCacheKey = undefined;
 		this._lastInputs = undefined;
+		this.spinner.clear();
 		clearNode(this.container);
 	}
 
@@ -146,8 +148,9 @@ class AgentSessionStatusIcon extends Disposable {
 			}
 
 			this._currentCacheKey = cacheKey;
+			this.spinner.clear();
 			clearNode(this.container);
-			createPixelSpinner(this.container, { variant: isNeedsInput ? 'ring' : 'grid' });
+			this.spinner.value = createPixelSpinner(this.container, { variant: isNeedsInput ? 'ring' : 'grid' });
 			return;
 		}
 
@@ -159,6 +162,7 @@ class AgentSessionStatusIcon extends Disposable {
 		}
 
 		this._currentCacheKey = cacheKey;
+		this.spinner.clear();
 		clearNode(this.container);
 		this.container.appendChild(h(`span${cacheKey}`).root);
 	}

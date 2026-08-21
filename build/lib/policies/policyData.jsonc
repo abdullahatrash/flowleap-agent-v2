@@ -61,7 +61,7 @@
             "localization": {
                 "description": {
                     "key": "chat.plugins.extraMarketplaces.policy",
-                    "value": "Additional plugin marketplaces to query. Keys are marketplace names; values are GitHub shorthand (`owner/repo[#ref]`) or Git URIs (`{url}[#ref]`)."
+                    "value": "Additional plugin marketplaces to query. Keys are marketplace names; values are GitHub shorthand (`owner/repo[#ref]`) or Git URIs (`{url}[#ref]`), optionally with an enterprise-managed auto-update override."
                 }
             },
             "type": "object",
@@ -539,7 +539,7 @@
             "localization": {
                 "description": {
                     "key": "updateMode",
-                    "value": "Configure whether you receive automatic updates. Requires a restart after change. The updates are fetched from a Microsoft online service."
+                    "value": "Configure whether you receive automatic updates. The updates are fetched from a Microsoft online service."
                 },
                 "enumDescriptions": [
                     {

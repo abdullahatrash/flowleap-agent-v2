@@ -791,7 +791,7 @@ registerAction2(class RenameSessionAction extends Action2 {
 	}
 	async run(accessor: ServicesAccessor, context?: ISession | ISession[]): Promise<void> {
 		const session = Array.isArray(context) ? context[0] : context;
-		if (!session) {
+		if (!session || !session.capabilities.supportsRename) {
 			return;
 		}
 		const quickInputService = accessor.get(IQuickInputService);
@@ -808,7 +808,7 @@ registerAction2(class RenameSessionAction extends Action2 {
 		});
 		if (newTitle) {
 			const trimmedTitle = newTitle.trim();
-			if (trimmedTitle) {
+			if (trimmedTitle && trimmedTitle !== session.title.get().trim()) {
 				await sessionsManagementService.renameSession(session, trimmedTitle);
 			}
 		}

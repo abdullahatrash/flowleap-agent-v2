@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { DeferredPromise, timeout } from '../../../../../../base/common/async.js';
 import { CancellationToken } from '../../../../../../base/common/cancellation.js';
-import { Event } from '../../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { constObservable, ISettableObservable, observableValue } from '../../../../../../base/common/observable.js';
@@ -649,6 +649,38 @@ suite('ChatService', () => {
 		modelRef.dispose();
 		await testService.waitForModelDisposals();
 		assert.strictEqual(disposed, true);
+	});
+
+	test('disposing a session cancels pending followups', async () => {
+		let followupsToken: CancellationToken | undefined;
+		const followupsCancelled = new DeferredPromise<IChatFollowup[]>();
+		const followupsAgent: IChatAgentImplementation = {
+			async invoke() {
+				return {};
+			},
+			provideFollowups(request, result, history, token) {
+				followupsToken = token;
+				testDisposables.add(token.onCancellationRequested(() => followupsCancelled.complete([])));
+				return followupsCancelled.p;
+			},
+		};
+
+		testDisposables.add(chatAgentService.registerAgent('followupsAgent', { ...getAgentData('followupsAgent'), isDefault: true }));
+		testDisposables.add(chatAgentService.registerAgentImplementation('followupsAgent', followupsAgent));
+
+		const testService = createChatService();
+		const modelRef = testService.startNewLocalSession(ChatAgentLocation.Chat);
+		const response = await testService.sendRequest(modelRef.object.sessionResource, 'test request', { agentId: 'followupsAgent' });
+		ChatSendResult.assertSent(response);
+		await response.data.responseCompletePromise;
+
+		assert.ok(followupsToken);
+		assert.strictEqual(followupsToken.isCancellationRequested, false);
+
+		modelRef.dispose();
+		await testService.waitForModelDisposals();
+
+		assert.strictEqual(followupsToken.isCancellationRequested, true);
 	});
 
 	test('steering message queued triggers setYieldRequested', async () => {
@@ -1961,7 +1993,7 @@ suite('ChatService', () => {
 			readonly progressObs?: ISettableObservable<IChatProgress[]>;
 			readonly isCompleteObs?: ISettableObservable<boolean>;
 			readonly interruptActiveResponseCallback?: () => Promise<boolean>;
-			readonly onDidStartServerRequest?: Event<{ prompt: string; variableData?: IChatRequestVariableData; isSystemInitiated?: boolean; systemInitiatedLabel?: string }>;
+			readonly onDidStartServerRequest?: Event<{ prompt: string; variableData?: IChatRequestVariableData; timestamp?: number; isSystemInitiated?: boolean; systemInitiatedLabel?: string }>;
 			readonly history?: readonly IChatSessionHistoryItem[];
 		}
 
@@ -1994,6 +2026,102 @@ suite('ChatService', () => {
 		function generateId(): string {
 			return `${Date.now()}-${idCounter++}`;
 		}
+
+		test('restores request timestamps from remote session history', async () => {
+			const timestamp = 1_752_012_321_000;
+			const completedAt = timestamp + 2_500;
+			const { resource } = setupRemoteProvider({
+				history: [
+					{ type: 'request', prompt: 'hello', participant: remoteScheme, timestamp },
+					{ type: 'response', parts: [], participant: remoteScheme, elapsedMs: 2_500, completedAt },
+				],
+			});
+
+			const testService = createChatService();
+			const ref = await testService.acquireOrLoadSession(resource, ChatAgentLocation.Chat, CancellationToken.None);
+			assert.ok(ref);
+			testDisposables.add(ref);
+
+			assert.deepStrictEqual({
+				timestamp: ref.object.getRequests()[0].timestamp,
+				requestTimestamp: ref.object.getRequests()[0].requestTimestamp,
+				elapsedMs: ref.object.getRequests()[0].response?.elapsedMs,
+				completedAt: ref.object.getRequests()[0].response?.completedAt,
+				completionTimestamp: ref.object.getRequests()[0].response?.completionTimestamp,
+			}, {
+				timestamp,
+				requestTimestamp: timestamp,
+				elapsedMs: 2_500,
+				completedAt,
+				completionTimestamp: completedAt,
+			});
+		});
+
+		test('keeps display time unknown when remote session history predates timestamps', async () => {
+			const before = Date.now();
+			const { resource } = setupRemoteProvider({
+				history: [{ type: 'request', prompt: 'hello', participant: remoteScheme }],
+			});
+
+			const testService = createChatService();
+			const ref = await testService.acquireOrLoadSession(resource, ChatAgentLocation.Chat, CancellationToken.None);
+			assert.ok(ref);
+			testDisposables.add(ref);
+
+			const request = ref.object.getRequests()[0];
+			assert.deepStrictEqual({
+				hasCurrentRecencyFallback: request.timestamp >= before && request.timestamp <= Date.now(),
+				requestTimestamp: request.requestTimestamp,
+				completionTimestamp: request.response?.completionTimestamp,
+			}, {
+				hasCurrentRecencyFallback: true,
+				requestTimestamp: undefined,
+				completionTimestamp: undefined,
+			});
+		});
+
+		test('normalizes legacy remote timestamp sentinels to unknown', async () => {
+			const { resource } = setupRemoteProvider({
+				history: [{ type: 'request', prompt: 'hello', participant: remoteScheme, timestamp: -1 }],
+			});
+
+			const testService = createChatService();
+			const ref = await testService.acquireOrLoadSession(resource, ChatAgentLocation.Chat, CancellationToken.None);
+			assert.ok(ref);
+			testDisposables.add(ref);
+
+			assert.deepStrictEqual({
+				requestTimestamp: ref.object.getRequests()[0].requestTimestamp,
+				serializedTimestamp: ref.object.toJSON().requests[0].timestamp,
+			}, {
+				requestTimestamp: undefined,
+				serializedTimestamp: undefined,
+			});
+		});
+
+		test('uses the Agent Host timestamp for live server-initiated requests', async () => {
+			const onDidStartServerRequest = testDisposables.add(new Emitter<{ prompt: string; timestamp?: number }>());
+			const timestamp = 1_752_012_321_000;
+			const { resource } = setupRemoteProvider({
+				progressObs: observableValue<IChatProgress[]>('progress', []),
+				interruptActiveResponseCallback: async () => true,
+				onDidStartServerRequest: onDidStartServerRequest.event,
+			});
+
+			const testService = createChatService();
+			const ref = await testService.acquireOrLoadSession(resource, ChatAgentLocation.Chat, CancellationToken.None);
+			assert.ok(ref);
+			testDisposables.add(ref);
+			onDidStartServerRequest.fire({ prompt: 'server request', timestamp });
+
+			assert.deepStrictEqual({
+				message: ref.object.lastRequest?.message.text,
+				timestamp: ref.object.lastRequest?.timestamp,
+			}, {
+				message: 'server request',
+				timestamp,
+			});
+		});
 
 		test('already-complete session at load time: no initial pending request, response is completed via autorun', async () => {
 			const progressObs = observableValue<IChatProgress[]>('progress', []);
@@ -2326,7 +2454,7 @@ function toSnapshotExportData(model: IChatModel) {
 		...exp,
 		requests: exp.requests.map(r => {
 			// Destructure properties after `vote` so we can insert `voteDownReason` in the correct position for snapshot compat
-			const { slashCommand, usedContext, contentReferences, codeCitations, timeSpentWaiting, isSystemInitiated: _isSystemInitiated, systemInitiatedLabel: _systemInitiatedLabel, elapsedMs: _elapsedMs, completionTokens: _completionTokens, promptTokens: _promptTokens, outputBuffer: _outputBuffer, promptTokenDetails: _promptTokenDetails, copilotCredits: _copilotCredits, ...rest } = r;
+			const { slashCommand, usedContext, contentReferences, codeCitations, timeSpentWaiting, isSystemInitiated: _isSystemInitiated, systemInitiatedLabel: _systemInitiatedLabel, responseTimestamp: _responseTimestamp, elapsedMs: _elapsedMs, completionTokens: _completionTokens, promptTokens: _promptTokens, outputBuffer: _outputBuffer, promptTokenDetails: _promptTokenDetails, copilotCredits: _copilotCredits, ...rest } = r;
 			return {
 				...rest,
 				modelState: {

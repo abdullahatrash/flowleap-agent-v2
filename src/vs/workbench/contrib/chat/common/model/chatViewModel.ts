@@ -32,6 +32,26 @@ export function isPendingDividerVM(item: unknown): item is IChatPendingDividerVi
 	return !!item && typeof item === 'object' && (item as IChatPendingDividerViewModel).kind === 'pendingDivider';
 }
 
+interface IChatViewModelItemWithPendingState {
+	readonly id: string;
+	readonly kind?: string;
+	readonly pendingKind?: ChatRequestQueueKind;
+}
+
+function isPendingChatViewModelItem(item: IChatViewModelItemWithPendingState): boolean {
+	return item.kind === 'pendingDivider' || item.pendingKind !== undefined;
+}
+
+export function getStickyScrollTargetItem<T extends IChatViewModelItemWithPendingState>(items: readonly T[]): T | undefined {
+	for (let i = items.length - 1; i >= 0; i--) {
+		const item = items[i];
+		if (!isPendingChatViewModelItem(item)) {
+			return item;
+		}
+	}
+	return items.at(-1);
+}
+
 export function isChatTreeItem(item: unknown): item is IChatRequestViewModel | IChatResponseViewModel {
 	return isRequestVM(item) || isResponseVM(item);
 }
@@ -96,6 +116,7 @@ export interface IChatRequestViewModel {
 	readonly attachedContext?: readonly IChatRequestVariableEntry[];
 	readonly modelId?: string;
 	readonly timestamp: number;
+	readonly requestTimestamp: number | undefined;
 	/** The kind of pending request, or undefined if not pending */
 	readonly pendingKind?: ChatRequestQueueKind;
 	readonly isSystemInitiated?: boolean;
@@ -504,6 +525,10 @@ export class ChatRequestViewModel implements IChatRequestViewModel {
 		return this._model.timestamp;
 	}
 
+	get requestTimestamp() {
+		return this._model.requestTimestamp;
+	}
+
 	get pendingKind() {
 		return this._pendingKind;
 	}
@@ -636,7 +661,7 @@ export class ChatResponseViewModel extends Disposable implements IChatResponseVi
 	}
 
 	get isLast(): boolean {
-		return this.session.getItems().at(-1) === this;
+		return getStickyScrollTargetItem(this.session.getItems()) === this;
 	}
 
 	renderData: IChatResponseRenderData | undefined = undefined;

@@ -26,6 +26,8 @@ Then read the relevant spec for the area you are changing (see table below). If 
 
 ## Common Pitfalls
 
+- **Animation performance must preserve perceptual smoothness**: reducing a continuous title shimmer to 10 stepped updates per second makes the sweep visibly choppy even if paint counts improve. Use a smooth baseline such as 30 updates per second, then measure the remaining performance win; do not optimize decorative motion by callback counts alone.
+
 - **Wrong menu IDs**: Never use `MenuId.*` from `vs/platform/actions` for Agents window UI. Always use `Menus.*` from `browser/menus.ts`.
 - **Events instead of observables**: Session state must flow through `IObservable`, not `Event`. Use `autorun`/`derived` for reactive UI, not `onDid*` event listeners.
 - **Importing from providers**: Non-provider `contrib/*` code must never import from `contrib/providers/*`. Extract shared interfaces to `services/` or `common/`.

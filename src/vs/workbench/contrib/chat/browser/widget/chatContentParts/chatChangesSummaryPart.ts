@@ -32,6 +32,7 @@ import { ChatConfiguration } from '../../../common/constants.js';
 import { IChatService } from '../../../common/chatService/chatService.js';
 import { IChatChangesSummaryPart as IChatFileChangesSummaryPart, IChatRendererContent } from '../../../common/model/chatViewModel.js';
 import { ChatTreeItem } from '../../chat.js';
+import { ChatCollapsibleContentPart } from './chatCollapsibleContentPart.js';
 import { ResourcePool } from './chatCollections.js';
 import { IChatContentPart, IChatContentPartRenderContext } from './chatContentParts.js';
 
@@ -107,6 +108,7 @@ export class ChatCheckpointFileChangesSummaryContentPart extends Disposable impl
 		disposables.add(viewListButton.onDidClick(() => {
 			this.isCollapsed = !this.isCollapsed;
 			setExpansionState();
+			this.domNode.dispatchEvent(new CustomEvent(ChatCollapsibleContentPart.userToggleEvent, { bubbles: true }));
 		}));
 		disposables.add(this.renderViewAllFileChangesButton(viewListButton.element));
 		return toDisposable(() => disposables.dispose());

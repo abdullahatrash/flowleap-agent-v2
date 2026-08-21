@@ -81,7 +81,7 @@ import { AccessibilityCommandId } from '../../../../accessibility/common/accessi
 import { getSimpleCodeEditorWidgetOptions, getSimpleEditorOptions, setupSimpleEditorSelectionStyling } from '../../../../codeEditor/browser/simpleEditorOptions.js';
 import { IChatViewTitleActionContext } from '../../../common/actions/chatActions.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
-import { ChatRequestVariableSet, getImageAttachmentLimit, IChatRequestVariableEntry, isBrowserViewVariableEntry, isElementVariableEntry, isExplicitFileOrImageVariableEntry, isImageVariableEntry, isNotebookOutputVariableEntry, isPasteVariableEntry, isPromptFileVariableEntry, isPromptTextVariableEntry, isSCMHistoryItemChangeRangeVariableEntry, isSCMHistoryItemChangeVariableEntry, isSCMHistoryItemVariableEntry, isStringVariableEntry, OmittedState } from '../../../common/attachments/chatVariableEntries.js';
+import { ChatRequestVariableSet, getImageAttachmentLimit, IChatRequestVariableEntry, isPastedTextArtifact, isBrowserViewVariableEntry, isElementVariableEntry, isExplicitFileOrImageVariableEntry, isImageVariableEntry, isNotebookOutputVariableEntry, isPasteVariableEntry, isPromptFileVariableEntry, isPromptTextVariableEntry, isSCMHistoryItemChangeRangeVariableEntry, isSCMHistoryItemChangeVariableEntry, isSCMHistoryItemVariableEntry, isStringVariableEntry, OmittedState } from '../../../common/attachments/chatVariableEntries.js';
 import { ChatMode, getModeNameForTelemetry, IChatMode, IChatModes, IChatModeService } from '../../../common/chatModes.js';
 import { IChatFollowup, IChatPlanReview, IChatQuestionCarousel, IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import { IChatSessionProviderOptionGroup, IChatSessionProviderOptionItem, IChatSessionsService, isAgentHostTarget, isIChatSessionFileChange2, localChatSessionType, SessionType } from '../../../common/chatSessionsService.js';
@@ -89,8 +89,9 @@ import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel
 import { IChatEditingSession, IModifiedFileEntry, ModifiedFileEntryState } from '../../../common/editing/chatEditingService.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService } from '../../../common/languageModels.js';
 import { ChatModelConfigurationStore } from './chatModelConfigurationStore.js';
+import { deserializeUntitledInputAttachments, deserializeUntitledInputState, serializeUntitledInputAttachments, serializeUntitledInputState } from './chatInputStatePersistence.js';
 import { IChatModelInputState, IChatRequestModeInfo, IInputModel, logChangesToStateModel } from '../../../common/model/chatModel.js';
-import { filterModelsForSession, findBestMatchingModel, findDefaultModel, findRecommendedDefaultModel, hasModelsTargetingSession, isModelValidForSession, mergeModelsWithCache, resolveConfiguredModel, resolveModelFromSyncState, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
+import { filterModelsForSession, findBestMatchingModel, findDefaultModel, findRecommendedDefaultModel, hasModelsTargetingSession, isModelValidForSession, isNewConversation, mergeModelsWithCache, ModelIdentifierResolution, resolveConfiguredModel, resolveModelFromSyncState, resolveModelIdentifierFromCatalog, shouldResetModelToDefault, shouldResetOnModelListChange, shouldRestoreLateArrivingModel, shouldRestorePersistedModel } from './chatModelSelectionLogic.js';
 import { getChatSessionType, LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import { IChatResponseViewModel, isResponseVM } from '../../../common/model/chatViewModel.js';
 import { IChatAgentService } from '../../../common/participants/chatAgents.js';
@@ -119,6 +120,7 @@ import { IChatContentPartRenderContext } from '../chatContentParts/chatContentPa
 import { CollapsibleListPool, IChatCollapsibleListItem } from '../chatContentParts/chatReferencesContentPart.js';
 import { ChatTodoListWidget } from '../chatContentParts/chatTodoListWidget.js';
 import { ChatArtifactsWidget } from '../chatArtifactsWidget.js';
+import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { ChatFollowups } from './chatFollowups.js';
 import { IChatInputNotificationService } from './chatInputNotificationService.js';
@@ -151,6 +153,7 @@ export interface IChatInputStyles {
 	overlayBackground: string;
 	listForeground: string;
 	listBackground: string;
+	listShadow?: string;
 }
 
 export interface IChatInputPartOptions {
@@ -207,9 +210,9 @@ export interface IChatWidgetLocationInfo {
 const emptyInputState = observableMemento<IChatModelInputState | undefined>({
 	defaultValue: undefined,
 	key: 'chat.untitledInputState',
-	toStorage: JSON.stringify,
+	toStorage: serializeUntitledInputState,
 	fromStorage(value) {
-		const obj = JSON.parse(value) as IChatModelInputState;
+		const obj = deserializeUntitledInputState(value);
 		if (obj.selectedModel && !obj.selectedModel.metadata.isDefaultForLocation) {
 			// Migrate old `isDefault` to `isDefaultForLocation`
 			type OldILanguageModelChatMetadata = ILanguageModelChatMetadata & { isDefault?: boolean };
@@ -220,6 +223,13 @@ const emptyInputState = observableMemento<IChatModelInputState | undefined>({
 		}
 		return obj;
 	},
+});
+
+const emptyInputAttachments = observableMemento<readonly IChatRequestVariableEntry[]>({
+	defaultValue: [],
+	key: 'chat.untitledInputAttachments',
+	toStorage: serializeUntitledInputAttachments,
+	fromStorage: deserializeUntitledInputAttachments,
 });
 
 export class ChatInputPart extends Disposable implements IHistoryNavigationWidget {
@@ -558,6 +568,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 	private _generating?: { rc: number; defer: DeferredPromise<void> };
 
 	private _emptyInputState: ObservableMemento<IChatModelInputState | undefined>;
+	private _emptyInputAttachments: ObservableMemento<readonly IChatRequestVariableEntry[]>;
 	private _chatSessionIsEmpty = false;
 	/**
 	 * Whether the user has explicitly picked a model for the current session
@@ -622,6 +633,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			this._syncInputStateToModel();
 		}, 150));
 		this._emptyInputState = this._register(emptyInputState(StorageScope.WORKSPACE, StorageTarget.USER, this.storageService));
+		this._emptyInputAttachments = this._register(emptyInputAttachments(StorageScope.WORKSPACE, StorageTarget.USER, this.storageService));
 
 		this._contextResourceLabels = this._register(this.instantiationService.createInstance(ResourceLabels, { onDidChangeVisibility: this._onDidChangeVisibility.event }));
 		this._currentModeObservable = observableValue<IChatMode>('currentMode', this.options.defaultMode ?? ChatMode.Agent);
@@ -673,7 +685,13 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		this._attachmentModel = this._register(this.instantiationService.createInstance(ChatAttachmentModel));
-		this._register(this._attachmentModel.onDidChange(() => this._syncInputStateToModel()));
+		const attachmentModel = this._attachmentModel;
+		this._register(this._attachmentModel.onDidChange(() => {
+			if (this._chatSessionIsEmpty) {
+				this._emptyInputAttachments.set(this._attachmentModel.attachments, undefined);
+			}
+			this._syncInputStateToModel();
+		}));
 		// Capture model-configuration changes into the draft input state immediately,
 		// mirroring how a model selection is synced in `setCurrentLanguageModel`. Without
 		// this, a config-only change would not reach the draft state until some other
@@ -682,7 +700,10 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		// and the store's redundant-update short-circuit prevent feedback loops on restore.
 		this._register(this._modelConfigStore.onDidChange(() => this._syncInputStateToModel()));
 		this.selectedToolsModel = this._register(this.instantiationService.createInstance(ChatSelectedTools, this.currentModeObs, this._currentLanguageModel));
-		this.dnd = this._register(this.instantiationService.createInstance(ChatDragAndDrop, () => this._widget, this._attachmentModel, styles));
+		this.dnd = this._register(this.instantiationService.createInstance(ChatDragAndDrop, () => this._widget, {
+			get attachments() { return attachmentModel.attachments; },
+			addAttachments: (entries: readonly IChatRequestVariableEntry[]) => attachmentModel.addContext(...entries),
+		}, styles));
 
 		this.inputEditorMaxHeight = this.options.renderStyle === 'compact' ? INPUT_EDITOR_MAX_HEIGHT / 3 : INPUT_EDITOR_MAX_HEIGHT;
 		const padding = this.options.renderStyle === 'compact' ? INPUT_EDITOR_PADDING.compact : INPUT_EDITOR_PADDING.default;
@@ -916,6 +937,47 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		return this.getModels().find(m => m.identifier === persisted);
 	}
 
+	/**
+	 * Resolve a model identifier against this input's pool using vendor catalog readiness, so a
+	 * model whose provider is still fetching resolves as `pending` rather than `unavailable`.
+	 */
+	private resolveModelIdentifier(identifier: string | undefined): ModelIdentifierResolution {
+		const liveVendors = new Set<string>();
+		for (const id of this.languageModelsService.getLanguageModelIds()) {
+			const metadata = this.languageModelsService.lookupLanguageModel(id);
+			if (metadata) {
+				liveVendors.add(metadata.vendor);
+			}
+		}
+		return resolveModelIdentifierFromCatalog(this.getModels(), identifier, {
+			hasLiveModels: vendor => liveVendors.has(vendor),
+			hasResolved: vendor => this.languageModelsService.hasResolvedVendor(vendor),
+		});
+	}
+
+	/**
+	 * Subscribe to catalog changes and re-run `reevaluate` on each one, tearing the subscription
+	 * down as soon as it reports `'settled'` — or when `isRelevant()` becomes false (the session
+	 * the wait was armed for moved on). Shared by the restore waits so the subscription lifecycle
+	 * and the relevance guard live in one place; `reevaluate` applies any model change and reports
+	 * whether the wait is done.
+	 */
+	private _watchModelChanges(
+		wait: MutableDisposable<IDisposable>,
+		isRelevant: () => boolean,
+		reevaluate: () => 'settled' | 'waiting',
+	): void {
+		wait.value = this.languageModelsService.onDidChangeLanguageModels(() => {
+			if (!isRelevant()) {
+				wait.clear();
+				return;
+			}
+			if (reevaluate() === 'settled') {
+				wait.clear();
+			}
+		});
+	}
+
 	private initSelectedModel() {
 		// initSelectedModel is scoped to the current storage key/session type.
 		// Do not let a delayed restore from a previous session type apply later.
@@ -948,13 +1010,14 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			// extension is still registering its models). Wait for it rather than
 			// falling back to the persisted selection, so the configured default
 			// still wins once the model list settles.
-			this._waitForPersistedLanguageModel.value = this.languageModelsService.onDidChangeLanguageModels(() => {
+			this._watchModelChanges(this._waitForPersistedLanguageModel, () => true, () => {
 				const lateModel = resolveConfiguredModel(configuredValue, this.getModels());
-				if (lateModel) {
-					this._waitForPersistedLanguageModel.clear();
-					this.setCurrentLanguageModel(lateModel);
-					this.checkModelSupported();
+				if (!lateModel) {
+					return 'waiting';
 				}
+				this.setCurrentLanguageModel(lateModel);
+				this.checkModelSupported();
+				return 'settled';
 			});
 			return;
 		}
@@ -966,19 +1029,26 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 				this.setCurrentLanguageModel(result.model);
 				this.checkModelSupported();
 			} else if (!result.model) {
-				this._waitForPersistedLanguageModel.value = this.languageModelsService.onDidChangeLanguageModels(e => {
+				this._watchModelChanges(this._waitForPersistedLanguageModel, () => true, () => {
 					const persistedModel = this.languageModelsService.lookupLanguageModel(persistedSelection);
 					if (persistedModel) {
-						this._waitForPersistedLanguageModel.clear();
-
 						const lateModel = { metadata: persistedModel, identifier: persistedSelection };
 						if (shouldRestoreLateArrivingModel(persistedSelection, persistedAsDefault, lateModel, this.location)) {
 							this.setCurrentLanguageModel(lateModel);
 							this.checkModelSupported();
 						}
-					} else {
-						this.setCurrentLanguageModelToDefault();
+						return 'settled';
 					}
+					// Catalogs resolve in batches — a BYOK or trial provider fetches its model
+					// list well after the first change fires. Falling back now would call
+					// `setCurrentLanguageModel`, which overwrites the remembered identifier in
+					// storage, losing the selection before it ever arrived. Keep waiting until
+					// the vendor's silence is conclusive.
+					if (this.resolveModelIdentifier(persistedSelection).kind === 'pending') {
+						return 'waiting';
+					}
+					this.setCurrentLanguageModelToDefault();
+					return 'settled';
 				});
 			}
 		}
@@ -1088,6 +1158,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 				this.renderAttachedContext();
 			},
 			getModels: () => this.getModels(),
+			isCacheWarm: () => (this._widget?.viewModel?.model.getRequests().length ?? 0) > 0,
 			useGroupedModelPicker: () => {
 				// Agent-host session types (local and remote) reuse the same
 				// grouped/featured model picker as the default chat session, so
@@ -1292,13 +1363,20 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this._currentChatModes.value = chatModes;
 		this._currentChatModesObservable.set(chatModes, undefined);
 		this.selectedToolsModel.resetSessionEnablementState();
-		this._chatSessionIsEmpty = chatSessionIsEmpty;
+		this._chatSessionIsEmpty = isNewConversation(forSessionResource, chatSessionIsEmpty);
 		// A freshly bound session starts with no explicit in-conversation model
 		// pick, so the configured default (e.g. enterprise policy) is again allowed
 		// to win for a new empty conversation.
 		this._userExplicitlySelectedModel = false;
 
-		if (chatSessionIsEmpty) {
+		if (this._chatSessionIsEmpty) {
+			// Only seed the model when a draft was actually persisted. `_getPersistedEmptyInputState`
+			// also seeds a remembered session-type model, which must not mark the model as having state.
+			const persistedState = model.state.get() || !this._emptyInputState.read(undefined) ? undefined : this._getPersistedEmptyInputState();
+			if (persistedState) {
+				model.setState(persistedState);
+				this._syncFromModel(persistedState, forSessionResource);
+			}
 			logChangesToStateModel(this._inputModel, `(1) setting empty model state for ${forSessionResource.toString()}`, undefined, undefined, this.logService);
 			this._setEmptyModelState();
 
@@ -1331,40 +1409,8 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			let state = model.state.read(reader);
 			let message = `syncing from model for ${forSessionResource.toString()} in ${this._currentSessionKey}`;
 			if (!state && this._chatSessionIsEmpty) {
-				state = this._emptyInputState.read(undefined);
+				state = this._getPersistedEmptyInputState();
 				message = `syncing from empty input state for ${forSessionResource.toString()}`;
-				// Seed model/config from the last-used selection for this session type (configured default still wins).
-				const rememberedSessionTypeModel = this._getRememberedSessionTypeModel();
-				if (rememberedSessionTypeModel) {
-					const base = state ?? this.getCurrentInputState();
-					const rememberedModelConfiguration = this._modelConfigStore.getModelConfiguration(rememberedSessionTypeModel.identifier);
-					state = { ...base, selectedModel: rememberedSessionTypeModel, modelConfiguration: rememberedModelConfiguration };
-				}
-				// A configured default model (e.g. set by enterprise policy via
-				// `chat.defaultModel`) starts every NEW conversation and
-				// must win over the remembered empty-input draft model. `initSelectedModel`
-				// only re-runs at construction and on session-type changes, so plain local
-				// sessions (whose type never changes) would otherwise keep the draft model.
-				// This override only applies while seeding from the draft — once the user
-				// switches the model, `model.state` is set and this branch is skipped, so
-				// the in-conversation selection is preserved.
-				if (state && this.getConfiguredModelValue()) {
-					const configuredModel = this.getConfiguredDefaultModel(this.getModels());
-					if (configuredModel) {
-						if (configuredModel.identifier !== state.selectedModel?.identifier) {
-							state = { ...state, selectedModel: configuredModel, modelConfiguration: undefined };
-						}
-					} else if (state.selectedModel) {
-						// A configured default is set but its model is not registered yet
-						// (e.g. the Copilot extension is still fetching its model list, so
-						// the synthetic "Auto" model is not in the pool). Drop the remembered
-						// draft model so `_syncFromModel` is a no-op rather than applying the
-						// draft and clearing the configured-default wait set up in
-						// `initSelectedModel`. The wait then applies the configured default
-						// once the model list settles.
-						state = { ...state, selectedModel: undefined, modelConfiguration: undefined };
-					}
-				}
 			}
 			// Detect autorun firing for a session that is no longer the widget's
 			// active session - indicates a late/stale model.state.read() landed for
@@ -1389,6 +1435,54 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			}
 			this._syncFromModel(state, forSessionResource);
 		}));
+	}
+
+	private _getPersistedEmptyInputState(): IChatModelInputState | undefined {
+		let state = this._emptyInputState.read(undefined);
+		if (state) {
+			// Attachments are persisted separately so the draft state stays small.
+			const persistedAttachments = this._emptyInputAttachments.read(undefined);
+			state = {
+				...state,
+				attachments: persistedAttachments.length > 0 ? persistedAttachments : state.attachments,
+			};
+		}
+
+		// Seed model/config from the last-used selection for this session type (configured default still wins).
+		const rememberedSessionTypeModel = this._getRememberedSessionTypeModel();
+		if (rememberedSessionTypeModel) {
+			const base = state ?? this.getCurrentInputState();
+			const rememberedModelConfiguration = this._modelConfigStore.getModelConfiguration(rememberedSessionTypeModel.identifier);
+			state = { ...base, selectedModel: rememberedSessionTypeModel, modelConfiguration: rememberedModelConfiguration };
+		}
+
+		// A configured default model (e.g. set by enterprise policy via
+		// `chat.defaultModel`) starts every NEW conversation and
+		// must win over the remembered empty-input draft model. `initSelectedModel`
+		// only re-runs at construction and on session-type changes, so plain local
+		// sessions (whose type never changes) would otherwise keep the draft model.
+		// This override only applies while seeding from the draft — once the user
+		// switches the model, `model.state` is set and this branch is skipped, so
+		// the in-conversation selection is preserved.
+		if (state && this.getConfiguredModelValue()) {
+			const configuredModel = this.getConfiguredDefaultModel(this.getModels());
+			if (configuredModel) {
+				if (configuredModel.identifier !== state.selectedModel?.identifier) {
+					state = { ...state, selectedModel: configuredModel, modelConfiguration: undefined };
+				}
+			} else if (state.selectedModel) {
+				// A configured default is set but its model is not registered yet
+				// (e.g. the Copilot extension is still fetching its model list, so
+				// the synthetic "Auto" model is not in the pool). Drop the remembered
+				// draft model so `_syncFromModel` is a no-op rather than applying the
+				// draft and clearing the configured-default wait set up in
+				// `initSelectedModel`. The wait then applies the configured default
+				// once the model list settles.
+				state = { ...state, selectedModel: undefined, modelConfiguration: undefined };
+			}
+		}
+
+		return state;
 	}
 
 	private _setEmptyModelState() {
@@ -1850,19 +1944,21 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		// Models may not be loaded yet - wait for them
-		this._waitForSessionHistoryLanguageModel.value = this.languageModelsService.onDidChangeLanguageModels(() => {
-			const currentSessionResource = this._widget?.viewModel?.model.sessionResource;
-			if (!currentSessionResource || !isEqual(currentSessionResource, sessionResource)) {
-				this._waitForSessionHistoryLanguageModel.clear();
-				return;
-			}
-
-			const found = tryMatch();
-			if (found) {
-				this._waitForSessionHistoryLanguageModel.clear();
+		this._watchModelChanges(
+			this._waitForSessionHistoryLanguageModel,
+			() => {
+				const currentSessionResource = this._widget?.viewModel?.model.sessionResource;
+				return !!currentSessionResource && isEqual(currentSessionResource, sessionResource);
+			},
+			() => {
+				const found = tryMatch();
+				if (!found) {
+					return 'waiting';
+				}
 				this.setCurrentLanguageModel(found);
-			}
-		});
+				return 'settled';
+			},
+		);
 	}
 
 	private setCurrentLanguageModelToDefault(forSessionType?: string) {
@@ -2187,6 +2283,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		if (this._chatSessionIsEmpty) {
 			this._chatSessionIsEmpty = false;
 			this._emptyInputState.set(undefined, undefined);
+			this._emptyInputAttachments.set([], undefined);
 		}
 
 		// Clear attached context, fire event to clear input state, and clear the input editor
@@ -2783,6 +2880,10 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			// For contributed sessions with history, pre-select the model
 			// from the last request so the user resumes with the same model.
 			this.preselectModelFromSessionHistory();
+
+			// Runs after the incoming view model is assigned so model resolution/validation
+			// use the incoming session pool, not the outgoing one.
+			this._applyConfiguredDefaultForEmptySession();
 		}));
 
 		let elements;
@@ -3491,7 +3592,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			const shouldFocusClearButton = index === Math.min(this._indexOfLastAttachedContextDeletedWithKeyboard, this.attachmentModel.size - 1) && this._indexOfLastAttachedContextDeletedWithKeyboard > -1;
 
 			let attachmentWidget;
-			const options = { shouldFocusClearButton, supportsDeletion: true };
+			const options = { shouldFocusClearButton, supportsDeletion: true, isCurrentInput: true };
 			const lm = this._currentLanguageModel.get();
 			if (attachment.kind === 'tool' || attachment.kind === 'toolset') {
 				attachmentWidget = this.instantiationService.createInstance(ToolSetOrToolItemAttachmentWidget, attachment, lm, options, container, this._contextResourceLabels);
@@ -3545,6 +3646,39 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this._indexOfLastOpenedContext = -1;
 	}
 
+	/**
+	 * Removes the inline reference bound to a deleted attachment, including one
+	 * trailing space, so the input is not left with a token that resolves to
+	 * nothing. The dynamic variable model drops the reference once its text goes.
+	 */
+	private removeInlineReferenceText(attachment: IChatRequestVariableEntry): void {
+		if (!attachment.range || !isPastedTextArtifact(attachment)) {
+			return;
+		}
+		const model = this._inputEditor.getModel();
+		const reference = this._widget?.getContrib<ChatDynamicVariableModel>(ChatDynamicVariableModel.ID)?.variables
+			.find(variable => variable.id === attachment.id);
+		if (!model || !reference) {
+			return;
+		}
+		const range = Range.lift(reference.range);
+		const endColumn = model.getValueInRange(new Range(range.endLineNumber, range.endColumn, range.endLineNumber, range.endColumn + 1)) === ' '
+			? range.endColumn + 1
+			: range.endColumn;
+		this._inputEditor.executeEdits('chatRemoveAttachmentReference', [{
+			range: new Range(range.startLineNumber, range.startColumn, range.endLineNumber, endColumn),
+			text: '',
+		}]);
+	}
+
+	/**
+	 * This fork carries no terminal-command paste veto, so a paste never turns the
+	 * input into a terminal command.
+	 */
+	isTerminalCommandPaste(_pastedText: string, _range: IRange): boolean {
+		return false;
+	}
+
 	private handleAttachmentDeletion(e: KeyboardEvent | unknown, index: number, attachment: IChatRequestVariableEntry) {
 		// Set focus to the next attached context item if deletion was triggered by a keystroke (vs a mouse click)
 		if (dom.isKeyboardEvent(e)) {
@@ -3552,6 +3686,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		this._attachmentModel.delete(attachment.id);
+		this.removeInlineReferenceText(attachment);
 
 
 		if (this.configurationService.getValue<boolean>('chat.implicitContext.enableImplicitContext')) {
@@ -4223,6 +4358,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			list.layout(height);
 			list.getHTMLElement().style.height = `${height}px`;
 			list.splice(0, list.length, allEntries);
+			workingSetContainer.classList.toggle('overflowing', allEntries.length > maxItemsShown);
 		}));
 	}
 

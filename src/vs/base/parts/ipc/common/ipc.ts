@@ -640,7 +640,7 @@ export class ChannelClient implements IChannelClient, IDisposable {
 				uninitializedPromise.then(() => {
 					uninitializedPromise = null;
 					doRequest();
-				});
+				}, () => { });
 			}
 
 			const cancel = () => {
@@ -680,6 +680,8 @@ export class ChannelClient implements IChannelClient, IDisposable {
 
 		const emitter = new Emitter<any>({
 			onWillAddFirstListener: () => {
+				const handler: IHandler = (res: IRawResponse) => emitter.fire((res as IRawEventFireResponse).data);
+				this.handlers.set(id, handler);
 				const doRequest = () => {
 					this.activeRequests.add(emitter);
 					this.sendRequest(request);
@@ -691,7 +693,7 @@ export class ChannelClient implements IChannelClient, IDisposable {
 					uninitializedPromise.then(() => {
 						uninitializedPromise = null;
 						doRequest();
-					});
+					}, () => { });
 				}
 			},
 			onDidRemoveLastListener: () => {
@@ -705,9 +707,6 @@ export class ChannelClient implements IChannelClient, IDisposable {
 				this.handlers.delete(id);
 			}
 		});
-
-		const handler: IHandler = (res: IRawResponse) => emitter.fire((res as IRawEventFireResponse).data);
-		this.handlers.set(id, handler);
 
 		return emitter.event;
 	}

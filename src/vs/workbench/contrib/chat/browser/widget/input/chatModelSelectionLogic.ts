@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { URI } from '../../../../../../base/common/uri.js';
+import { localChatSessionType } from '../../../common/chatSessionsService.js';
 import { ChatAgentLocation, ChatModeKind } from '../../../common/constants.js';
-import { COPILOT_VENDOR_ID, ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier } from '../../../common/languageModels.js';
+import { COPILOT_VENDOR_ID, ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, isLanguageModelVendorAbsenceConclusive } from '../../../common/languageModels.js';
+import { getChatSessionType, isUntitledChatSession } from '../../../common/model/chatUri.js';
 
 /**
  * Describes the context needed for model selection decisions.
@@ -166,6 +169,82 @@ export function findRecommendedDefaultModel(
 	return candidates.reduce((best, candidate) =>
 		compareModelVersions(candidate.metadata.name, best.metadata.name) > 0 ? candidate : best
 	);
+}
+
+/**
+ * Whether the input should treat a session as a brand-new conversation, which is what unlocks the
+ * shared new-chat draft, the default mode/permission level, and `chat.defaultModel`.
+ *
+ * `hasNoRequests` is sampled when the input binds, and a contributed session's requests load after
+ * that — so on its own it reports a started contributed session as new. A contributed session's
+ * resource keeps its `untitled-` path until the session is started, so it stays accurate
+ * regardless of load timing. Local sessions have no such marker and rely on `hasNoRequests`.
+ */
+export function isNewConversation(sessionResource: URI, hasNoRequests: boolean): boolean {
+	return hasNoRequests
+		&& (getChatSessionType(sessionResource) === localChatSessionType || isUntitledChatSession(sessionResource));
+}
+
+/**
+ * The outcome of looking a requested model identifier up in the current catalog. `pending` means
+ * the model is absent but its vendor may still contribute it, so a caller waiting on the model
+ * must keep waiting; `unavailable` means the absence is final and the caller may fall back.
+ */
+export type ModelIdentifierResolution =
+	| { readonly kind: 'notRequested' }
+	| { readonly kind: 'pending'; readonly identifier: string }
+	| { readonly kind: 'available'; readonly model: ILanguageModelChatMetadataAndIdentifier }
+	| { readonly kind: 'unavailable'; readonly identifier: string };
+
+/** Reports how far along each vendor's catalog is. */
+export interface IModelVendorResolution {
+	hasLiveModels(vendor: string): boolean;
+	hasResolved(vendor: string): boolean;
+}
+
+/** Resolves a requested model identifier against the current model catalog. */
+export function resolveModelIdentifier(
+	models: readonly ILanguageModelChatMetadataAndIdentifier[],
+	identifier: string | undefined,
+	isAbsenceConclusive: boolean,
+): ModelIdentifierResolution {
+	if (!identifier) {
+		return { kind: 'notRequested' };
+	}
+
+	const model = models.find(model => model.identifier === identifier);
+	if (model) {
+		return { kind: 'available', model };
+	}
+
+	return isAbsenceConclusive
+		? { kind: 'unavailable', identifier }
+		: { kind: 'pending', identifier };
+}
+
+/**
+ * Resolves a model identifier using vendor-level catalog readiness. Model identifiers are
+ * `<vendor><separator><id>`, so the vendor can be read off an identifier whose model has not been
+ * contributed yet — which is the whole point: it lets a remembered selection stay `pending` while
+ * its provider is still fetching, instead of being discarded on the first catalog batch.
+ */
+export function resolveModelIdentifierFromCatalog(
+	models: readonly ILanguageModelChatMetadataAndIdentifier[],
+	identifier: string | undefined,
+	vendorResolution: IModelVendorResolution,
+): ModelIdentifierResolution {
+	if (!identifier) {
+		return { kind: 'notRequested' };
+	}
+
+	const separator = identifier.search(/[/:]/);
+	const vendor = separator === -1 ? undefined : identifier.substring(0, separator);
+	const isAbsenceConclusive = !vendor || isLanguageModelVendorAbsenceConclusive(
+		vendor,
+		vendorResolution.hasLiveModels(vendor),
+		vendorResolution.hasResolved(vendor),
+	);
+	return resolveModelIdentifier(models, identifier, isAbsenceConclusive);
 }
 
 /**
@@ -485,4 +564,21 @@ export function getModelPickerUnavailableReason(context: {
 		return ModelPickerUnavailableReason.SetupRequired;
 	}
 	return undefined;
+}
+
+/**
+ * Whether a picker should show the cache-break hint: suppressed when dismissed, when the cache is cold, or
+ * when there is nothing to switch to (#325185). `excludeAutoModel` also suppresses it under Auto (model picker only).
+ */
+export function shouldShowCacheBreakHint(context: {
+	readonly dismissed: boolean;
+	readonly cacheWarm: boolean;
+	readonly noModelsAvailable: boolean;
+	readonly excludeAutoModel: boolean;
+	readonly selectedModelIsAuto: boolean;
+}): boolean {
+	if (context.dismissed || !context.cacheWarm || context.noModelsAvailable) {
+		return false;
+	}
+	return !(context.excludeAutoModel && context.selectedModelIsAuto);
 }

@@ -59,6 +59,7 @@ function createMockPromptsService(instructionFiles: IFixtureInstructionFile[], a
 			return [];
 		}
 		override async listAgentInstructions() { return agentInstructionFiles; }
+		override async listPromptFilesForStorage() { return []; }
 		override async getCustomAgents() { return []; }
 		override async findAgentSkills() { return []; }
 		override async getPromptSlashCommands() { return []; }

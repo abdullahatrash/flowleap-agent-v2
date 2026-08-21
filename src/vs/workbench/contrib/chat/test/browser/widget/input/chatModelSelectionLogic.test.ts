@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import { URI } from '../../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../../base/test/common/utils.js';
 import { ExtensionIdentifier } from '../../../../../../../platform/extensions/common/extensions.js';
 import { ChatAgentLocation, ChatModeKind } from '../../../../common/constants.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier } from '../../../../common/languageModels.js';
+import { LocalChatSessionUri } from '../../../../common/model/chatUri.js';
 import {
 	filterModelsForSession,
 	findBestMatchingModel,
@@ -17,6 +19,9 @@ import {
 	isModelSupportedForInlineChat,
 	isModelSupportedForMode,
 	isModelValidForSession,
+	isNewConversation,
+	resolveModelIdentifier,
+	resolveModelIdentifierFromCatalog,
 	getModelPickerUnavailableReason,
 	ModelPickerUnavailableReason,
 	mergeModelsWithCache,
@@ -26,6 +31,7 @@ import {
 	shouldResetOnModelListChange,
 	shouldRestoreLateArrivingModel,
 	shouldRestorePersistedModel,
+	shouldShowCacheBreakHint,
 } from '../../../../browser/widget/input/chatModelSelectionLogic.js';
 
 /**
@@ -1773,6 +1779,72 @@ suite('ChatModelSelectionLogic', () => {
 		});
 	});
 
+	suite('resolveModelIdentifier', () => {
+
+		const gpt = createModel('gpt', 'GPT');
+
+		test('classifies a requested identifier by presence and whether the absence is final', () => {
+			assert.deepStrictEqual([
+				resolveModelIdentifier([gpt], undefined, true).kind,
+				resolveModelIdentifier([gpt], gpt.identifier, true).kind,
+				resolveModelIdentifier([gpt], 'copilot/missing', true).kind,
+				resolveModelIdentifier([gpt], 'copilot/missing', false).kind,
+			], ['notRequested', 'available', 'unavailable', 'pending']);
+		});
+	});
+
+	suite('resolveModelIdentifierFromCatalog', () => {
+
+		const gpt = createModel('gpt', 'GPT');
+
+		function resolve(identifier: string, liveVendors: string[], resolvedVendors: string[]) {
+			return resolveModelIdentifierFromCatalog([gpt], identifier, {
+				hasLiveModels: vendor => liveVendors.includes(vendor),
+				hasResolved: vendor => resolvedVendors.includes(vendor),
+			}).kind;
+		}
+
+		test('a remembered model stays pending while its provider is still fetching', () => {
+			assert.deepStrictEqual([
+				// The trial provider has neither published models nor finished resolving.
+				resolve('flowleap-trial/claude-sonnet-5', [], []),
+				// It finished resolving without the model, so the absence is final.
+				resolve('flowleap-trial/claude-sonnet-5', [], ['flowleap-trial']),
+				// It published other models, so the absence is final.
+				resolve('flowleap-trial/claude-sonnet-5', ['flowleap-trial'], []),
+			], ['pending', 'unavailable', 'unavailable']);
+		});
+
+		test('Copilot stays pending until it publishes models, because it resolves in batches', () => {
+			assert.deepStrictEqual([
+				resolve('copilot/missing', [], ['copilot']),
+				resolve('copilot/missing', ['copilot'], ['copilot']),
+			], ['pending', 'unavailable']);
+		});
+
+		test('an identifier with no vendor prefix cannot be waited on', () => {
+			assert.strictEqual(resolve('bare-identifier', [], []), 'unavailable');
+		});
+	});
+
+	suite('isNewConversation', () => {
+
+		test('a started contributed session is never a new conversation, even before its requests load', () => {
+			const startedContributed = URI.parse('copilotcli:/933e7602-f84e-431e-8756-c5e85c8f33d0');
+			const untitledContributed = URI.parse('copilotcli:/untitled-933e7602');
+			const localSession = LocalChatSessionUri.getNewSessionUri();
+
+			assert.deepStrictEqual([
+				isNewConversation(startedContributed, true),
+				isNewConversation(startedContributed, false),
+				isNewConversation(untitledContributed, true),
+				isNewConversation(untitledContributed, false),
+				isNewConversation(localSession, true),
+				isNewConversation(localSession, false),
+			], [false, false, true, false, true, false]);
+		});
+	});
+
 	suite('resolveConfiguredModel', () => {
 
 		test('returns undefined for empty or whitespace configured value', () => {
@@ -1872,6 +1944,45 @@ suite('ChatModelSelectionLogic', () => {
 
 		test('accepts a Set of live ids', () => {
 			assert.strictEqual(reason({ trusted: false, requiresSetup: true, pickerModels: [gpt], liveModelIds: new Set([gpt.identifier]) }), undefined);
+		});
+	});
+
+	suite('shouldShowCacheBreakHint', () => {
+
+		function show(opts: { dismissed?: boolean; cacheWarm?: boolean; noModelsAvailable?: boolean; excludeAutoModel?: boolean; selectedModelIsAuto?: boolean }): boolean {
+			return shouldShowCacheBreakHint({
+				dismissed: opts.dismissed ?? false,
+				cacheWarm: opts.cacheWarm ?? true,
+				noModelsAvailable: opts.noModelsAvailable ?? false,
+				excludeAutoModel: opts.excludeAutoModel ?? true,
+				selectedModelIsAuto: opts.selectedModelIsAuto ?? false,
+			});
+		}
+
+		test('shown only for a warm cache with a real model to switch to', () => {
+			assert.deepStrictEqual(
+				{
+					default: show({}),
+					dismissed: show({ dismissed: true }),
+					coldCache: show({ cacheWarm: false }),
+					// Signed out / Restricted Mode / empty list: nothing to switch to.
+					noModels: show({ noModelsAvailable: true }),
+					autoInModelPicker: show({ selectedModelIsAuto: true }),
+					// The options picker: reasoning effort / context size reset the cache under Auto too.
+					autoInOptionsPicker: show({ selectedModelIsAuto: true, excludeAutoModel: false }),
+					// A suppressing condition still wins in the options picker.
+					noModelsInOptionsPicker: show({ noModelsAvailable: true, excludeAutoModel: false }),
+				},
+				{
+					default: true,
+					dismissed: false,
+					coldCache: false,
+					noModels: false,
+					autoInModelPicker: false,
+					autoInOptionsPicker: true,
+					noModelsInOptionsPicker: false,
+				}
+			);
 		});
 	});
 });

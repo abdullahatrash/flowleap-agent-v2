@@ -34,6 +34,8 @@ Each session row displays:
 - **Status description or timestamp** — InProgress/NeedsInput/Error show a status message; otherwise a relative timestamp
 - **Approval row** (optional) — pending agent approvals with an "Allow" button
 
+Continuous row animations preserve their existing appearance while limiting rendering work: the title shimmer follows the same three-second path with at most 30 visual updates per second, then rests for three seconds before repeating. Both it and the shared pixel spinner pause outside the viewport and whenever their document is hidden.
+
 ### Grouping
 
 Sessions are organized into sections with fixed priority:
@@ -122,6 +124,8 @@ The insertion line relies on the base list widget's `drop-target-before`/`drop-t
 
 Archived sessions do not show the session group context menu actions ("Create Group", "Add to Group", "Move to Group", or "Remove from Group").
 
+Transient context-menu actions are non-disposable values; the contributed session-row menu remains owned for the menu lifetime and is disposed when it closes.
+
 ### Read / Unread
 
 - Sessions start as **unread**
@@ -132,6 +136,7 @@ Archived sessions do not show the session group context menu actions ("Create Gr
 ### Navigation
 
 - **Clicking a session** marks it read and calls `SessionsManagementService.openSession()`
+- **Double-clicking a rename-capable session title** opens the existing **Rename...** Quick Input after the first click opens the session. The title handler consumes the `dblclick` so it does not issue a second open. The gesture is gated live on `ISession.capabilities.supportsRename` and is limited to unmodified primary-button double-clicks on the rendered title text. Keyboard users can focus the row, open its context menu (for example with Shift+F10), and choose **Rename...**.
 - **Active session tracking** — the list auto-scrolls to and selects the active session via an `autorun` on `activeSession`
 - **Keyboard shortcuts** — `Ctrl/Cmd+1..9` opens sessions by index; `Ctrl+Alt+-` / `Ctrl+Alt+Shift+-` for back/forward navigation
 - **Mobile** — opening a session also closes the sidebar drawer

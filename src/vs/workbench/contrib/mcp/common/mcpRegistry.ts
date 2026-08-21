@@ -461,7 +461,7 @@ export class McpRegistry extends Disposable implements IMcpRegistry {
 		]);
 
 		// pre-fill the variables we already resolved to avoid extra prompting
-		const expr = ConfigurationResolverExpression.parse(withRemoteFilled);
+		const expr = ConfigurationResolverExpression.parse(McpServerLaunch.toSerialized(withRemoteFilled));
 		for (const replacement of expr.unresolved()) {
 			if (previouslyStored.hasOwnProperty(replacement.id)) {
 				expr.resolve(replacement, previouslyStored[replacement.id]);
@@ -481,7 +481,8 @@ export class McpRegistry extends Disposable implements IMcpRegistry {
 		await this._updateStorageWithExpressionInputs(inputStorage, expr);
 
 		// resolve other non-interactive variables, returning the final object
-		return await this._configurationResolverService.resolveAsync(folder, expr);
+		const resolved = await this._configurationResolverService.resolveAsync(folder, expr);
+		return McpServerLaunch.fromSerialized(resolved);
 	}
 
 	public async resolveConnection(opts: IMcpResolveConnectionOptions): Promise<IMcpServerConnection | undefined> {

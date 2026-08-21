@@ -159,6 +159,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private _latestXtermWriteData: number = 0;
 	private _latestXtermParseData: number = 0;
 	private _isExiting: boolean;
+	private _isDisposing: boolean;
 	private _hadFocusOnExit: boolean;
 	private _exitCode: number | undefined;
 	private _exitReason: TerminalExitReason | undefined;
@@ -319,6 +320,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	// itself is disposed
 	private readonly _onExit = new Emitter<number | ITerminalLaunchError | undefined>();
 	readonly onExit = this._onExit.event;
+	private readonly _onWillDispose = this._register(new Emitter<ITerminalInstance>());
+	readonly onWillDispose = this._onWillDispose.event;
 	private readonly _onDisposed = this._register(new Emitter<ITerminalInstance>());
 	readonly onDisposed = this._onDisposed.event;
 	private readonly _onProcessIdReady = this._register(new Emitter<ITerminalInstance>());
@@ -413,6 +416,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this._widgetManager = this._register(instantiationService.createInstance(TerminalWidgetManager));
 
 		this._isExiting = false;
+		this._isDisposing = false;
 		this._hadFocusOnExit = false;
 		this._isVisible = false;
 		this._instanceId = TerminalInstance._instanceIdCounter++;
@@ -654,7 +658,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 					contribution.xtermReady?.(xterm);
 				}
 			});
-			this._register(this.onDisposed(() => {
+			this._register(this.onWillDispose(() => {
 				contribution.dispose();
 				this._contributions.delete(desc.id);
 			}));
@@ -1292,6 +1296,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			return;
 		}
 		this._logService.trace(`terminalInstance#dispose (instanceId: ${this.instanceId})`);
+		this._isDisposing = true;
 		dispose(this._widgetManager);
 
 		if (this.xterm?.raw.element) {
@@ -1303,6 +1308,29 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this._horizontalScrollbar) {
 			this._horizontalScrollbar.dispose();
 			this._horizontalScrollbar = undefined;
+		}
+
+		// Fire onWillDispose before disposing xterm so that contributions can clean
+		// up their xterm addons while the raw terminal is still alive. Disposing
+		// xterm first would cause AddonManager to remove addons from its list,
+		// and subsequent contribution disposal would fail with "Could not dispose
+		// an addon that has not been loaded".
+		this._onWillDispose.fire(this);
+
+		try {
+			this.xterm?.dispose();
+		} catch (err: unknown) {
+			// See https://github.com/microsoft/vscode/issues/153486
+			this._logService.error('Exception occurred during xterm disposal', err);
+		}
+
+		// HACK: Workaround for Firefox bug https://bugzilla.mozilla.org/show_bug.cgi?id=559561,
+		// as 'blur' event in xterm.raw.textarea is not triggered on xterm.dispose()
+		// See https://github.com/microsoft/vscode/issues/138358
+		if (isFirefox) {
+			this.resetFocusContextKey();
+			this._terminalHasTextContextKey.reset();
+			this._onDidBlur.fire(this);
 		}
 
 		if (this._pressAnyKeyToCloseListener) {
@@ -1324,28 +1352,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		// hasn't happened yet
 		this._onProcessExit(undefined);
 
-		// Fire onDisposed before disposing xterm so that contributions can clean
-		// up their xterm addons while the raw terminal is still alive. Disposing
-		// xterm first would cause AddonManager to remove addons from its list,
-		// and subsequent contribution disposal would fail with "Could not dispose
-		// an addon that has not been loaded".
+		// Fire onDisposed only after xterm has been disposed so that subscribers
+		// observe a fully disposed instance.
 		this._onDisposed.fire(this);
-
-		try {
-			this.xterm?.dispose();
-		} catch (err: unknown) {
-			// See https://github.com/microsoft/vscode/issues/153486
-			this._logService.error('Exception occurred during xterm disposal', err);
-		}
-
-		// HACK: Workaround for Firefox bug https://bugzilla.mozilla.org/show_bug.cgi?id=559561,
-		// as 'blur' event in xterm.raw.textarea is not triggered on xterm.dispose()
-		// See https://github.com/microsoft/vscode/issues/138358
-		if (isFirefox) {
-			this.resetFocusContextKey();
-			this._terminalHasTextContextKey.reset();
-			this._onDidBlur.fire(this);
-		}
 
 		super.dispose();
 	}
@@ -1598,11 +1607,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const isRemoteTerminal = !!this.remoteAuthority;
 		if (!trusted && !(isRemoteTerminal && this._workbenchEnvironmentService.remoteAuthority)) {
 			this._onProcessExit({ message: nls.localize('workspaceNotTrustedCreateTerminal', "Cannot launch a terminal process in an untrusted workspace") });
+			return;
 		} else if (this._workspaceContextService.getWorkspace().folders.length === 0 && this._cwd && this._userHome && normalizeDriveLetter(this._cwd) !== normalizeDriveLetter(this._userHome)) {
 			// something strange is going on if cwd is not userHome in an empty workspace
 			this._onProcessExit({
 				message: nls.localize('workspaceEmptyCreateTerminalCwd', "Cannot launch a terminal process in an empty workspace with cwd {0} different from userHome {1}", this._cwd, this._userHome)
 			});
+			return;
 		}
 		// Re-evaluate dimensions if the container has been set since the xterm instance was created
 		if (this._container && this._cols === 0 && this._rows === 0) {
@@ -2028,7 +2039,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private async _resize(immediate?: boolean): Promise<void> {
-		if (!this.xterm || !this._resizeDebouncer) {
+		if (!this.xterm || !this._resizeDebouncer || this.isDisposed || this._isDisposing) {
 			return;
 		}
 

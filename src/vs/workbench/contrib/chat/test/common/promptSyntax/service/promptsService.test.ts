@@ -5,7 +5,8 @@
 
 import assert from 'assert';
 import * as sinon from 'sinon';
-import { CancellationToken } from '../../../../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { match } from '../../../../../../../base/common/glob.js';
 import { ResourceSet } from '../../../../../../../base/common/map.js';
@@ -41,7 +42,7 @@ import { ComputeAutomaticInstructions, newInstructionsCollectionEvent, newInstru
 import { PromptsConfig } from '../../../../common/promptSyntax/config/config.js';
 import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, HOOKS_SOURCE_FOLDER, INSTRUCTION_FILE_EXTENSION, INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, LEGACY_MODE_DEFAULT_SOURCE_FOLDER, PROMPT_DEFAULT_SOURCE_FOLDER, PROMPT_FILE_EXTENSION } from '../../../../common/promptSyntax/config/promptFileLocations.js';
 import { INSTRUCTIONS_LANGUAGE_ID, PROMPT_LANGUAGE_ID, PromptFileSource, PromptsType, Target } from '../../../../common/promptSyntax/promptTypes.js';
-import { IAgentDiscoveryResult, IAgentSource, ICustomAgent, IPromptFileContext, IPromptsService, PromptsStorage } from '../../../../common/promptSyntax/service/promptsService.js';
+import { IAgentDiscoveryResult, IAgentSource, IBuiltinPromptPath, ICustomAgent, IPromptFileContext, IPromptPath, IPromptsService, PromptsStorage } from '../../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../common/promptSyntax/service/promptsServiceImpl.js';
 import { mockFiles } from '../testUtils/mockFilesystem.js';
 import { InMemoryStorageService, IStorageService } from '../../../../../../../platform/storage/common/storage.js';
@@ -96,10 +97,12 @@ suite('PromptsService', () => {
 	let fileService: IFileService;
 	let testPluginsObservable: ISettableObservable<readonly IAgentPlugin[]>;
 	let workspaceTrustService: TestWorkspaceTrustManagementService;
+	let logService: NullLogService;
 
 	setup(async () => {
 		instaService = disposables.add(new TestInstantiationService());
-		instaService.stub(ILogService, new NullLogService());
+		logService = new NullLogService();
+		instaService.stub(ILogService, logService);
 
 		workspaceContextService = new TestContextService();
 		instaService.stub(IWorkspaceContextService, workspaceContextService);
@@ -2174,6 +2177,46 @@ suite('PromptsService', () => {
 		});
 	});
 
+	suite('getSourceFolders - skills', () => {
+		test('includes user-level skill source folders', async () => {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+
+			const rootFolderUri = URI.file('/skills-source-folders');
+			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
+
+			const folders = await service.getSourceFolders(PromptsType.skill);
+
+			const userFolders = folders.filter(f => f.storage === PromptsStorage.user);
+			const localFolders = folders.filter(f => f.storage === PromptsStorage.local);
+
+			assert.ok(userFolders.length > 0, 'Should include user-level skill source folders');
+			assert.ok(localFolders.length > 0, 'Should include workspace-level skill source folders');
+			assert.ok(
+				userFolders.some(f => f.uri.path === '/home/user/.copilot/skills'),
+				'Should include ~/.copilot/skills as a user source folder'
+			);
+		});
+
+		test('excludes defaults explicitly disabled via configuration', async () => {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {
+				'.github/skills': false,
+				'~/.copilot/skills': false,
+			});
+
+			const rootFolderUri = URI.file('/skills-disabled-defaults');
+			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
+
+			const folders = await service.getSourceFolders(PromptsType.skill);
+			const paths = folders.map(f => f.uri.path);
+
+			assert.ok(!paths.some(p => p.endsWith('/.github/skills')), 'Disabled .github/skills must not appear');
+			assert.ok(!paths.includes('/home/user/.copilot/skills'), 'Disabled ~/.copilot/skills must not appear');
+			assert.ok(paths.includes('/home/user/.agents/skills'), 'Non-disabled ~/.agents/skills must still appear');
+		});
+	});
+
 	suite('listPromptFiles - extensions', () => {
 
 		test('Contributed prompt file', async () => {
@@ -2281,6 +2324,80 @@ suite('PromptsService', () => {
 			// After disposal, the agent should no longer be listed
 			const actualAfterDispose = await service.getCustomAgents(CancellationToken.None);
 			assert.strictEqual(actualAfterDispose.length, 0);
+		});
+
+		test('Canceled prompt file provider is skipped without logging', async () => {
+			const extension = {
+				identifier: { value: 'test.my-extension' },
+				enabledApiProposals: ['chatParticipantPrivate']
+			} as unknown as IExtensionDescription;
+			const logErrorSpy = sinon.spy(logService, 'error');
+			const registered = service.registerPromptFileProvider(extension, PromptsType.instructions, {
+				providePromptFiles: async () => { throw new CancellationError(); }
+			});
+
+			try {
+				const files = await service.listPromptFilesForStorage(PromptsType.instructions, PromptsStorage.extension, CancellationToken.None);
+				assert.deepStrictEqual({ files, errorCalls: logErrorSpy.callCount }, { files: [], errorCalls: 0 });
+			} finally {
+				registered.dispose();
+				logErrorSpy.restore();
+			}
+		});
+
+		test('Prompt file provider error is logged and skipped', async () => {
+			const extension = {
+				identifier: { value: 'test.my-extension' },
+				enabledApiProposals: ['chatParticipantPrivate']
+			} as unknown as IExtensionDescription;
+			const logErrorSpy = sinon.spy(logService, 'error');
+			const registered = service.registerPromptFileProvider(extension, PromptsType.instructions, {
+				providePromptFiles: async () => { throw new Error('provider failed'); }
+			});
+
+			try {
+				const files = await service.listPromptFilesForStorage(PromptsType.instructions, PromptsStorage.extension, CancellationToken.None);
+				assert.deepStrictEqual({ files, errorCalls: logErrorSpy.callCount }, { files: [], errorCalls: 1 });
+			} finally {
+				registered.dispose();
+				logErrorSpy.restore();
+			}
+		});
+
+		test('Canceled provider listing stops without logging an error', async () => {
+			const extension = {
+				identifier: { value: 'test.my-extension' },
+				enabledApiProposals: ['chatParticipantPrivate']
+			} as unknown as IExtensionDescription;
+			const cancellationTokenSource = disposables.add(new CancellationTokenSource());
+			let secondProviderCalled = false;
+			disposables.add(service.registerPromptFileProvider(extension, PromptsType.agent, {
+				providePromptFiles: async () => {
+					cancellationTokenSource.cancel();
+					throw new CancellationError();
+				}
+			}));
+			disposables.add(service.registerPromptFileProvider(extension, PromptsType.agent, {
+				providePromptFiles: async () => {
+					secondProviderCalled = true;
+					return [];
+				}
+			}));
+			const errorSpy = sinon.spy(logService, 'error');
+
+			try {
+				await service.listPromptFiles(PromptsType.agent, cancellationTokenSource.token);
+
+				assert.deepStrictEqual({
+					secondProviderCalled,
+					errorCount: errorSpy.callCount,
+				}, {
+					secondProviderCalled: false,
+					errorCount: 0,
+				});
+			} finally {
+				errorSpy.restore();
+			}
 		});
 
 		test('Contributed agent file that does not exist should not crash', async () => {
@@ -3635,6 +3752,123 @@ suite('PromptsService', () => {
 			assert.strictEqual(skill.description, 'A skill with mismatched name');
 
 			registered.dispose();
+		});
+	});
+
+	suite('built-in prompt files', () => {
+		teardown(() => {
+			sinon.restore();
+		});
+
+		/**
+		 * Stands in for the Agents app's `AgenticPromptsService`: contributes bundled
+		 * skills through the single {@link PromptsService.getBuiltinPromptFiles} seam.
+		 */
+		class TestBuiltinPromptsService extends PromptsService {
+			protected override async getBuiltinPromptFiles(type: PromptsType): Promise<readonly IBuiltinPromptPath[]> {
+				if (type !== PromptsType.skill) {
+					return [];
+				}
+				return [{
+					uri: URI.file('/app/skills/bundled-skill/SKILL.md'),
+					storage: PromptsStorage.builtIn,
+					type: PromptsType.skill,
+					name: 'bundled-skill',
+					description: 'A skill bundled with the application',
+				}];
+			}
+		}
+
+		async function setupBuiltinService(workspaceSkills: Parameters<typeof mockFiles>[1] = []): Promise<IPromptsService> {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+			workspaceContextService.setWorkspace(testWorkspace(URI.file('/builtin-skills-test')));
+
+			await mockFiles(fileService, [
+				{
+					path: '/app/skills/bundled-skill/SKILL.md',
+					contents: [
+						'---',
+						'name: "bundled-skill"',
+						'description: "A skill bundled with the application"',
+						'---',
+						'Bundled skill content',
+					],
+				},
+				...workspaceSkills,
+			]);
+
+			return disposables.add(instaService.createInstance(TestBuiltinPromptsService));
+		}
+
+		test('built-in skills are listed for the builtIn storage and merged into skill discovery', async () => {
+			const builtinService = await setupBuiltinService();
+
+			const forStorage = await builtinService.listPromptFilesForStorage(PromptsType.skill, PromptsStorage.builtIn, CancellationToken.None);
+			const listed = await builtinService.listPromptFiles(PromptsType.skill, CancellationToken.None);
+			const skills = await builtinService.findAgentSkills(CancellationToken.None);
+
+			assert.deepStrictEqual({
+				forStorage: forStorage.map(p => [p.storage, p.uri.path]),
+				listed: listed.map(p => [p.storage, p.uri.path]),
+				skills: skills?.map(s => [s.storage, s.name]),
+			}, {
+				forStorage: [[PromptsStorage.builtIn, '/app/skills/bundled-skill/SKILL.md']],
+				listed: [[PromptsStorage.builtIn, '/app/skills/bundled-skill/SKILL.md']],
+				skills: [[PromptsStorage.builtIn, 'bundled-skill']],
+			});
+		});
+
+		test('a workspace skill of the same folder name wins over the built-in', async () => {
+			const builtinService = await setupBuiltinService([{
+				path: '/builtin-skills-test/.github/skills/bundled-skill/SKILL.md',
+				contents: [
+					'---',
+					'name: "bundled-skill"',
+					'description: "The workspace override"',
+					'---',
+					'Workspace skill content',
+				],
+			}]);
+
+			const skills = await builtinService.findAgentSkills(CancellationToken.None);
+
+			assert.deepStrictEqual(skills?.map(s => [s.storage, s.name, s.description]), [
+				[PromptsStorage.local, 'bundled-skill', 'The workspace override'],
+			]);
+		});
+
+		test('the base service contributes no built-in prompt files', async () => {
+			const forStorage = await service.listPromptFilesForStorage(PromptsType.skill, PromptsStorage.builtIn, CancellationToken.None);
+			assert.deepStrictEqual(forStorage, []);
+		});
+	});
+
+	suite('getPromptSlashCommands - prompt discovery', () => {
+		teardown(() => {
+			sinon.restore();
+		});
+
+		test('CancellationError from parseNew is skipped without logging', async () => {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, false);
+
+			const promptUri = URI.parse('file://extensions/my-extension/cancelled.prompt.md');
+			const logErrorSpy = sinon.spy(logService, 'error');
+			sinon.stub(service, 'listPromptFiles').callsFake(async (type: PromptsType) => {
+				return type === PromptsType.prompt
+					? [{ uri: promptUri, storage: PromptsStorage.local, type: PromptsType.prompt } as IPromptPath]
+					: [];
+			});
+			sinon.stub(service, 'parseNew').rejects(new CancellationError());
+
+			const slashCommands = await service.getPromptSlashCommands(CancellationToken.None);
+			const discoveryInfo = await service.getDiscoveryInfo(PromptsType.prompt, CancellationToken.None);
+
+			assert.deepStrictEqual(slashCommands, []);
+			assert.strictEqual(logErrorSpy.called, false);
+			assert.strictEqual(discoveryInfo.files.length, 1);
+			assert.strictEqual(discoveryInfo.files[0].status, 'skipped');
+			assert.strictEqual(discoveryInfo.files[0].skipReason, 'parse-error');
 		});
 	});
 

@@ -125,6 +125,9 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 	private _useCarouselForConfirmations: boolean = false;
 	private toolsWaitingForCarouselConfirmation: number = 0;
 
+	/** Per-tool-invocation autoruns observing tool state; each is disposed once its tool reaches a terminal state so listeners don't accumulate for the widget's lifetime. */
+	private readonly _toolStateTracking = this._register(new DisposableStore());
+
 	// Working spinner elements for expanded state
 	private workingSpinnerElement: HTMLElement | undefined;
 	private workingSpinnerLabel: HTMLElement | undefined;
@@ -471,6 +474,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 		this.finalizeTitle();
 		// Collapse when done
 		this.setExpanded(false);
+		this.setContentAnimationEnabled(true);
 	}
 
 	public finalizeTitle(): void {
@@ -631,7 +635,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 
 		let wasWaitingForConfirmation = false;
 		let wasWaitingForCarouselConfirmation = false;
-		this._register(autorun(r => {
+		const toolStateAutorun = autorun(r => {
 			const state = toolInvocation.state.read(r);
 
 			const isWaitingForConfirmation = state.type === IChatToolInvocation.StateKind.WaitingForConfirmation ||
@@ -674,7 +678,13 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 
 			wasWaitingForConfirmation = isWaitingForConfirmation;
 			wasWaitingForCarouselConfirmation = isWaitingForCarouselConfirmation;
-		}));
+
+			// On terminal state, dispose this autorun (deferred so we don't dispose it mid-run) to avoid leaking a listener per tool invocation.
+			if (state.type === IChatToolInvocation.StateKind.Completed || state.type === IChatToolInvocation.StateKind.Cancelled) {
+				queueMicrotask(() => this._toolStateTracking.delete(toolStateAutorun));
+			}
+		});
+		this._toolStateTracking.add(toolStateAutorun);
 	}
 
 	private getConfirmationPlaceholderText(): string {
@@ -1073,6 +1083,14 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 		return false;
 	}
 
+	protected override shouldAnimateContent(): boolean {
+		return !this.isActive;
+	}
+
+	protected override shouldPrepareContentAnimation(): boolean {
+		return true;
+	}
+
 	/**
 	 * Creates a ChatToolInvocationPart for the given tool invocation.
 	 */
@@ -1111,7 +1129,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 		// Dynamically add/remove icon based on confirmation state
 		if (toolInvocation.kind === 'toolInvocation') {
 			const shouldUseCarouselForTool = this._shouldUseCarouselForTool;
-			this._register(autorun(r => {
+			const iconAutorun = autorun(r => {
 				const state = toolInvocation.state.read(r);
 				const hasConfirmation = state.type === IChatToolInvocation.StateKind.WaitingForConfirmation ||
 					state.type === IChatToolInvocation.StateKind.WaitingForPostApproval;
@@ -1133,7 +1151,13 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 						this.ensurePlaceholderAtBottom();
 					}
 				}
-			}));
+
+				// Terminal state is final and settles into the non-confirmation branch above, so dispose (deferred so we don't dispose it mid-run) to avoid leaking a listener per tool invocation.
+				if (state.type === IChatToolInvocation.StateKind.Completed || state.type === IChatToolInvocation.StateKind.Cancelled) {
+					queueMicrotask(() => this._toolStateTracking.delete(iconAutorun));
+				}
+			});
+			this._toolStateTracking.add(iconAutorun);
 		} else {
 			// For serialized invocations, always show icon (already completed)
 			itemWrapper.insertBefore(iconElement, itemWrapper.firstChild);

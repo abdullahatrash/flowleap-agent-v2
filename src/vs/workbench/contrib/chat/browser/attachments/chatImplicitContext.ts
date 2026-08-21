@@ -137,7 +137,7 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 				return undefined;
 			}
 
-			if (model) {
+			if (model && model.uri.scheme !== Schemas.vscodeChatResponseResource) {
 				return codeEditor;
 			}
 		}
@@ -147,8 +147,11 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 				continue;
 			}
 
+			// Chat's own resources are already part of the conversation, so an
+			// editor such as an opened pasted-text artifact is passed over rather
+			// than suggested back as an attachment.
 			const model = codeEditor.getModel();
-			if (model) {
+			if (model && model.uri.scheme !== Schemas.vscodeChatResponseResource) {
 				return codeEditor;
 			}
 		}
