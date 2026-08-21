@@ -525,6 +525,10 @@
 			animation: session-title-shimmer 6s steps(90, jump-none) infinite;
 		}
 
+		.monaco-list-row:not(.selected) .session-item.in-progress .session-title.session-title-shimmer-paused {
+			animation-play-state: paused;
+		}
+
 		.vs-dark .monaco-list-row:not(.selected) .session-item.in-progress .session-title,
 		.hc-black .monaco-list-row:not(.selected) .session-item.in-progress .session-title {
 			background-image: linear-gradient(

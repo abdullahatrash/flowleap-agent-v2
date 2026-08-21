@@ -34,6 +34,8 @@ Each session row displays:
 - **Status description or timestamp** — InProgress/NeedsInput/Error show a status message; otherwise a relative timestamp
 - **Approval row** (optional) — pending agent approvals with an "Allow" button
 
+Continuous row animations preserve their existing appearance while limiting rendering work: the title shimmer follows the same three-second path with at most 30 visual updates per second, then rests for three seconds before repeating. Both it and the shared pixel spinner pause outside the viewport and whenever their document is hidden.
+
 ### Grouping
 
 Sessions are organized into sections with fixed priority:
