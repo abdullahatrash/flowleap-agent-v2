@@ -110,6 +110,7 @@ export class ChatEditor extends AbstractEditorWithViewState<IChatEditorViewState
 					renderFollowups: true,
 					supportsFileReferences: true,
 					clear: () => this.clear(),
+					enableFind: true,
 					rendererOptions: {
 						renderTextEditsAsSummary: (uri) => {
 							return true;
