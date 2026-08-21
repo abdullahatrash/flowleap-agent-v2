@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import { URI } from '../../../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../../base/test/common/utils.js';
 import { ExtensionIdentifier } from '../../../../../../../platform/extensions/common/extensions.js';
 import { ChatAgentLocation, ChatModeKind } from '../../../../common/constants.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier } from '../../../../common/languageModels.js';
+import { LocalChatSessionUri } from '../../../../common/model/chatUri.js';
 import {
 	filterModelsForSession,
 	findBestMatchingModel,
@@ -17,6 +19,7 @@ import {
 	isModelSupportedForInlineChat,
 	isModelSupportedForMode,
 	isModelValidForSession,
+	isNewConversation,
 	getModelPickerUnavailableReason,
 	ModelPickerUnavailableReason,
 	mergeModelsWithCache,
@@ -1770,6 +1773,24 @@ suite('ChatModelSelectionLogic', () => {
 				true,
 				'reset fallback should not be a BYOK model',
 			);
+		});
+	});
+
+	suite('isNewConversation', () => {
+
+		test('a started contributed session is never a new conversation, even before its requests load', () => {
+			const startedContributed = URI.parse('copilotcli:/933e7602-f84e-431e-8756-c5e85c8f33d0');
+			const untitledContributed = URI.parse('copilotcli:/untitled-933e7602');
+			const localSession = LocalChatSessionUri.getNewSessionUri();
+
+			assert.deepStrictEqual([
+				isNewConversation(startedContributed, true),
+				isNewConversation(startedContributed, false),
+				isNewConversation(untitledContributed, true),
+				isNewConversation(untitledContributed, false),
+				isNewConversation(localSession, true),
+				isNewConversation(localSession, false),
+			], [false, false, true, false, true, false]);
 		});
 	});
 
