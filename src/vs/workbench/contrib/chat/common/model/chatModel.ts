@@ -2001,6 +2001,14 @@ export function isExportableSessionData(obj: unknown): obj is IExportableChatDat
 		typeof (obj as IExportableChatData).responderUsername === 'string';
 }
 
+export function extractExportableSessionData(data: IExportableChatData): IExportableChatData {
+	return {
+		initialLocation: data.initialLocation,
+		requests: data.requests,
+		responderUsername: data.responderUsername,
+	};
+}
+
 export function isSerializableSessionData(obj: unknown): obj is ISerializableChatData {
 	const data = obj as ISerializableChatData;
 	return isExportableSessionData(obj) &&
