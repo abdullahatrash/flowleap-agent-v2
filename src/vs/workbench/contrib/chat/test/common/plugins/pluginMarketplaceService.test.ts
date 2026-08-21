@@ -1149,7 +1149,7 @@ suite('PluginMarketplaceService - FlowLeap default marketplace (config defaults 
 	}
 
 	test('shipped default is the FlowLeap monorepo with no Copilot marketplace refs', () => {
-		assert.deepStrictEqual([...DEFAULT_PLUGIN_MARKETPLACES], ['abdullahatrash/flowleap-plugins']);
+		assert.deepStrictEqual([...DEFAULT_PLUGIN_MARKETPLACES], ['flowleap-ai/flowleap-plugins']);
 		assert.ok(!DEFAULT_PLUGIN_MARKETPLACES.some(ref => /copilot/i.test(ref)));
 	});
 
@@ -1157,7 +1157,7 @@ suite('PluginMarketplaceService - FlowLeap default marketplace (config defaults 
 		assert.strictEqual(isDefaultMarketplaceReference(defaultRef), true);
 		assert.strictEqual(isDefaultMarketplaceReference(userAddedRef), false);
 		// GitHub URI form of the default collapses to the same canonical id, so it is also recognized.
-		assert.strictEqual(isDefaultMarketplaceReference(parseMarketplaceReference('https://github.com/abdullahatrash/flowleap-plugins.git')!), true);
+		assert.strictEqual(isDefaultMarketplaceReference(parseMarketplaceReference('https://github.com/flowleap-ai/flowleap-plugins.git')!), true);
 	});
 
 	test('the default marketplace is pre-trusted while a user-added ref requires confirmation', () => {
