@@ -456,6 +456,18 @@ suite('CopilotChatSessionsProvider', () => {
 		assert.strictEqual(provider.getSessions().length, 0);
 	});
 
+	test('getSessions does not emit session changes while reading the initial cache', () => {
+		const resource = URI.from({ scheme: AgentSessionProviders.Background, path: '/session' });
+		model.addSession(createMockAgentSession(resource));
+		const provider = createProvider(disposables, model);
+		const changes: ISessionChangeEvent[] = [];
+		disposables.add(provider.onDidChangeSessions(e => changes.push(e)));
+
+		const sessions = provider.getSessions();
+
+		assert.deepStrictEqual({ sessionCount: sessions.length, changes }, { sessionCount: 1, changes: [] });
+	});
+
 	test('getSessions returns adapted sessions from agent model', () => {
 		const resource1 = URI.from({ scheme: AgentSessionProviders.Background, path: '/session-1' });
 		const resource2 = URI.from({ scheme: AgentSessionProviders.Background, path: '/session-2' });

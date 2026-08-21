@@ -1383,6 +1383,7 @@ export class CopilotChatSessionsProvider extends Disposable implements ISessions
 		}));
 
 		this._registerGroupMembershipFanOut();
+		this._ensureSessionCache();
 	}
 
 	// -- Sessions --

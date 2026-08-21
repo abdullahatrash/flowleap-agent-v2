@@ -446,6 +446,8 @@ Backend state change (turn complete, status update, etc.)
 
 Providers may fire `onDidReplaceSession` when a temporary (untitled) session is atomically replaced by a committed one after the first turn.
 
+Providers initialize synchronous session caches before registration completes. Read APIs such as `getSessions()` and `getSession()` must not populate a cache and synchronously emit `onDidChangeSessions`, because callers can read them while rendering a session-list tree update.
+
 ---
 
 ## Adding a New Provider
