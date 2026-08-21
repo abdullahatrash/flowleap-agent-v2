@@ -213,6 +213,41 @@ when one exists or showing the empty placeholder otherwise. Internal callers
 (restore fallback, archive, background reseed, and the close-session fallback)
 invoke `openNewSession()` the same way.
 
+`ClosedItemHistory` (`services/sessions/browser/closedItemHistory.ts`) owns
+reopening entirely: an **in-memory, single-entry** memo of the most recently
+closed chat or session, plus the logic to put it back. It backs
+`SessionsService.reopenLastClosedItem()` (`Ctrl/Cmd+Shift+T`, "Reopen Closed
+Chat or Session"), which is a one-line delegation, as are the three recording
+call sites. It deliberately holds one entry only: reopening consumes it, so
+pressing the chord repeatedly cannot walk further back through history, and a
+reload starts empty. Exactly three things record into it —
+`recordClosedChat` (from `closeChat`), `recordClosedSession` (from
+`closeSession`, which reads the session's current grid slot itself), and
+`recordReplacedSlot`, which `VisibleSessions.setActive` reports through a
+constructor callback when a newly opened slot pushes a non-sticky session out.
+An untitled draft is discarded rather than hidden, so it never records;
+deletions and grid restores never record either. A batch close would pass
+`closeChat(..., { skipHistory: true })` — remembering only the final chat of a
+batch would make one arbitrary member of it reopenable. `reopenLast()` consumes
+the entry **before** acting, then re-resolves the session by id (the recorded
+one may be a disposed wrapper, and a provider can drop a session from its
+catalog without firing `onDidDeleteSession`); consuming first means a
+no-longer-resolvable entry cannot linger and leave the command enabled but
+permanently inert. A chat is reopened with the service's `openChat`; a session
+that was closed explicitly returns via `insertAtIndex` to the grid index it
+occupied, while a session that was pushed out uses `replaceSlot` to take its
+slot back, removing whatever replaced it (including the empty new-session
+slot). It runs inside an internal suspension so its own activations cannot
+re-record, and the entry is dropped when its session is deleted
+(`onDidDeleteSession`). The class also binds `SessionsHasClosedItemContext`,
+which drives command-palette visibility; the keybinding itself is not
+gated on it, so outside the editor scope the chord always belongs to the
+sessions area. "Editor scope" is `SessionsEditorScopeContext`
+(`common/contextkeys.ts`) — `editorAreaFocus || auxiliaryBarFocus`, i.e. an
+editor part or the auxiliary bar, which the single-pane layout docks into the
+side pane as the detail panel. While it holds, `Ctrl/Cmd+Shift+T` falls through
+to VS Code's own **Reopen Closed Editor**.
+
 `sendNewChatRequest(session, options)` accepts a `background` flag: a background
 new-session send returns the agents window to a fresh new-session view (via
 `openNewSession`) **before** creating and sending the session, and skips the

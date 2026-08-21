@@ -61,13 +61,14 @@ suite('VisibleSessions', () => {
 
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
-	function createModel() {
+	function createModel(onSlotReplaced: (replaced: ISession, index: number, sticky: boolean, replacedBySessionId: string | undefined) => void = () => { }) {
 		const uriIdentity = new class extends mock<IUriIdentityService>() {
 			override readonly extUri = extUriBiasedIgnorePathCase;
 		};
 		const model = disposables.add(new VisibleSessions(
 			session => session.mainChat.get(),
 			() => [],
+			onSlotReplaced,
 			uriIdentity,
 		));
 		return model;
