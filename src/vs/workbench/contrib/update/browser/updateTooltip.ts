@@ -12,7 +12,6 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
-import { IMeteredConnectionService } from '../../../../platform/meteredConnection/common/meteredConnection.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { AvailableForDownload, Disabled, DisablementReason, Downloaded, Downloading, Idle, IUpdate, Overwriting, Ready, Restarting, State, StateType, Updating } from '../../../../platform/update/common/update.js';
 import { ShowCurrentReleaseNotesActionId } from '../common/update.js';
@@ -63,7 +62,6 @@ export class UpdateTooltip extends Disposable {
 		@ICommandService private readonly commandService: ICommandService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IHoverService private readonly hoverService: IHoverService,
-		@IMeteredConnectionService private readonly meteredConnectionService: IMeteredConnectionService,
 		@IProductService private readonly productService: IProductService,
 	) {
 		super();
@@ -194,6 +192,9 @@ export class UpdateTooltip extends Disposable {
 			case StateType.Overwriting:
 				this.renderOverwriting(state);
 				break;
+			case StateType.Cancelling:
+				this.renderCancelling();
+				break;
 			case StateType.Restarting:
 				this.renderRestarting(state);
 				break;
@@ -265,8 +266,9 @@ export class UpdateTooltip extends Disposable {
 			return;
 		}
 
+		const updateMode = this.configurationService.getValue<string>('update.mode');
 		this.renderTitleAndInfo(localize('updateTooltip.upToDateTitle', "Up to Date"));
-		switch (this.configurationService.getValue<string>('update.mode')) {
+		switch (updateMode) {
 			case 'none':
 				this.renderMessage(localize('updateTooltip.autoUpdateNone', "Automatic updates are disabled."), Codicon.warning);
 				break;
@@ -277,15 +279,9 @@ export class UpdateTooltip extends Disposable {
 				this.renderMessage(localize('updateTooltip.autoUpdateStart', "Updates will be applied on restart."));
 				break;
 			case 'default':
-				if (this.meteredConnectionService.isConnectionMetered) {
-					this.renderMessage(
-						localize('updateTooltip.meteredConnectionMessage', "Automatic updates are paused because the network connection is metered."),
-						Codicon.radioTower);
-				} else {
-					this.renderMessage(
-						localize('updateTooltip.autoUpdateDefault', "Automatic updates are enabled. Happy Coding!"),
-						Codicon.smiley);
-				}
+				this.renderMessage(
+					localize('updateTooltip.autoUpdateDefault', "Automatic updates are enabled. Happy Coding!"),
+					Codicon.smiley);
 				break;
 		}
 	}
@@ -363,6 +359,11 @@ export class UpdateTooltip extends Disposable {
 	private renderRestarting({ update }: Restarting) {
 		this.renderTitleAndInfo(localize('updateTooltip.restartingTitle', "Restarting {0}", this.productService.nameShort), update);
 		this.renderMessage(localize('updateTooltip.restartingPleaseWait', "Restarting to update, please wait..."));
+	}
+
+	private renderCancelling() {
+		this.renderTitleAndInfo(localize('updateTooltip.cancellingTitle', "Cancelling Update"));
+		this.renderMessage(localize('updateTooltip.cancellingPleaseWait', "Cancelling update, please wait..."));
 	}
 
 	private renderTitleAndInfo(title: string, update?: IUpdate) {
