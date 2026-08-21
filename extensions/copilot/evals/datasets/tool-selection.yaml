@@ -367,12 +367,14 @@
 - vars:
     prompt: "Who cites US10123456, and how impactful is it as prior art?"
   assert:
+    # Call-anywhere, not call-first: sonnet-5 legitimately batches a get_patent_summary
+    # alongside the citations call in the same turn ("how impactful" needs biblio context);
+    # requiring it FIRST failed a correct trajectory ~40% of runs (#263).
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'search_forward_citations';
-      metric: forward_citations_first_for_who_cites
+        return (parsed.tool_calls || []).some(tc => tc.function?.name === 'search_forward_citations');
+      metric: forward_citations_called_for_who_cites
     - type: javascript
       value: |
         const out = JSON.parse(output);

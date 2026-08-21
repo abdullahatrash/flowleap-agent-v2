@@ -19,7 +19,13 @@ const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 // prompt's skip rules where -flash does not. Holding the model fixed is the point — this
 // gate must fire on prompt / tool-string / skill drift, not on model choice (H4 §2).
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
-/** Loop cap: above the ~6-retry grinds seen in H3, below a runaway (H4 §2). */
+/**
+ * Loop cap: above the ~6-retry grinds seen in H3, below a runaway (H4 §2). Deliberately kept
+ * at 8 on sonnet-5 (#263): raising it to 12 changed case semantics — t7_bounded_engagement's
+ * ≤16-call cap is calibrated to 8 rounds, and T3a's eventual success drowned in the extra
+ * rounds. Sonnet-5 hits this cap routinely; the wrap-up nudge below is what turns a capped
+ * run into a gradeable narration, not more rounds.
+ */
 const DEFAULT_MAX_ROUNDS = 8;
 
 function loadSystemPrompt(): string {
@@ -325,13 +331,25 @@ export default class TrajectoryProvider implements ApiProvider {
 		}
 
 		// Loop ran to the cap without a clean stop: take one final no-tools turn so the
-		// judge has the model's actual give-up/summary narration to grade.
+		// judge has the model's actual give-up/summary narration to grade. Sonnet-class models
+		// answer a bare tools-stripped continuation with EMPTY content almost every time (#263),
+		// so the wrap-up carries an explicit user nudge, and an empty or failed attempt is
+		// retried once and logged instead of being silently accepted as a give-up.
 		if (stoppedReason === 'max_rounds') {
-			try {
-				const wrap = await this.chat(apiKey, messages, /*withTools*/ false);
-				finalText = wrap.message.content ?? '';
-			} catch {
-				finalText = '';
+			messages.push({
+				role: 'user',
+				content: 'You have used the available tool budget. Based on what the tools returned above, give your final answer to the original request now, without calling any more tools. If something could not be retrieved, state exactly what you tried and what is missing.',
+			});
+			for (let attempt = 1; attempt <= 2 && finalText === ''; attempt++) {
+				try {
+					const wrap = await this.chat(apiKey, messages, /*withTools*/ false);
+					finalText = wrap.message.content ?? '';
+					if (finalText === '') {
+						console.error(`trajectory-provider: wrap-up attempt ${attempt} returned empty content`);
+					}
+				} catch (err) {
+					console.error(`trajectory-provider: wrap-up attempt ${attempt} failed: ${err instanceof Error ? err.message : String(err)}`);
+				}
 			}
 		}
 		return { finalText, stoppedReason };
