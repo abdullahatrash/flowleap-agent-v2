@@ -60,7 +60,7 @@ export class AgentChatAccessibilityHelp implements IAccessibleViewImplementation
 	}
 }
 
-export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'agentView' | 'quickChat' | 'editsView' | 'agentView', keybindingService: IKeybindingService): string {
+export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'agentView' | 'quickChat' | 'editsView' | 'agentView', keybindingService: IKeybindingService, supportsFileReferences: boolean): string {
 	const content = [];
 	if (type === 'panelChat' || type === 'quickChat' || type === 'agentView') {
 		if (type === 'quickChat') {
@@ -75,6 +75,10 @@ export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'age
 			content.push(localize('workbench.action.chat.openAgentHostFolderPicker', 'When starting an agent session in a multi-root workspace, you can choose which root folder it runs in by invoking the Folder command{0}, then selecting a folder from the list.', '<keybinding:workbench.action.chat.openAgentHostFolderPicker>'));
 		}
 		content.push(localize('chat.requestHistory', 'In the input box, use up and down arrows to navigate your request history. Edit input and use enter or the submit button to run a new request.'));
+		if (supportsFileReferences) {
+			content.push(localize('chat.attachments.inlineReferences', 'To mention an attached context item at a specific position without removing it from the attached context, type # or @ and select the attachment from the suggestions.'));
+			content.push(localize('chat.attachments.inlineReferenceHover', 'To inspect an inline attachment reference, place the cursor on it and invoke Show or Focus Hover{0}. Image references include a preview, while file and folder references include their path.', '<keybinding:editor.action.showHover>'));
+		}
 		content.push(localize('chat.attachments.removal', 'To remove attached contexts, focus an attachment and press Delete or Backspace.'));
 		content.push(localize('chat.inspectResponse', 'In the input box, inspect the last response in the accessible view{0}. Thinking content is included in order by default.', '<keybinding:editor.action.accessibleView>'));
 		content.push(localize('chat.inspectResponseThinkingToggle', 'To include or exclude thinking content in the accessible view, run the Toggle Thinking Content in Accessible View command from the Command Palette.'));
@@ -150,11 +154,12 @@ export function getAccessibilityHelpText(type: 'panelChat' | 'inlineChat' | 'age
 export function getChatAccessibilityHelpProvider(accessor: ServicesAccessor, editor: ICodeEditor | undefined, type: 'panelChat' | 'inlineChat' | 'quickChat' | 'editsView' | 'agentView'): AccessibleContentProvider | undefined {
 	const widgetService = accessor.get(IChatWidgetService);
 	const keybindingService = accessor.get(IKeybindingService);
-	const inputEditor: ICodeEditor | undefined = widgetService.lastFocusedWidget?.inputEditor;
+	const widget = widgetService.lastFocusedWidget;
 
-	if (!inputEditor) {
+	if (!widget) {
 		return;
 	}
+	const inputEditor: ICodeEditor = widget.inputEditor;
 	const domNode = inputEditor.getDomNode() ?? undefined;
 	if (!domNode) {
 		return;
@@ -162,7 +167,7 @@ export function getChatAccessibilityHelpProvider(accessor: ServicesAccessor, edi
 
 	const cachedPosition = inputEditor.getPosition();
 	inputEditor.getSupportedActions();
-	const helpText = getAccessibilityHelpText(type, keybindingService);
+	const helpText = getAccessibilityHelpText(type, keybindingService, widget.supportsFileReferences);
 	return new AccessibleContentProvider(
 		type === 'panelChat' ? AccessibleViewProviderId.PanelChat : type === 'inlineChat' ? AccessibleViewProviderId.InlineChat : type === 'agentView' ? AccessibleViewProviderId.AgentChat : AccessibleViewProviderId.QuickChat,
 		{ type: AccessibleViewType.Help },
