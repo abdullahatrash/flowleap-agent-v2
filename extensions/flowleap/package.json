@@ -35,6 +35,11 @@
           "id": "flowleap-sidebar",
           "title": "FlowLeap",
           "icon": "$(briefcase)"
+        },
+        {
+          "id": "flowleap-browser",
+          "title": "Browser",
+          "icon": "$(globe)"
         }
       ],
       "panel": [
@@ -53,6 +58,15 @@
           "name": "Dashboard",
           "icon": "$(dashboard)",
           "contextualTitle": "FlowLeap Dashboard"
+        }
+      ],
+      "flowleap-browser": [
+        {
+          "type": "webview",
+          "id": "flowleap.browserLauncher",
+          "name": "Browser",
+          "icon": "$(globe)",
+          "contextualTitle": "Browser Launcher"
         }
       ],
       "flowleap-sidebar": [
