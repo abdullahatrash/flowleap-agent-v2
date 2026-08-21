@@ -202,7 +202,7 @@ suite('ChatListRenderer', () => {
 				alternateEndsWithElapsed: container.querySelector('.chat-response-alternate')?.textContent?.endsWith(' \u2022 24s'),
 				hasAlternate: container.querySelector('.chat-response-timing')?.classList.contains('has-alternate'),
 			}, {
-				compact: '1d',
+				compact: '1 day',
 				alternateEndsWithElapsed: true,
 				hasAlternate: true,
 			});
@@ -231,8 +231,8 @@ suite('ChatListRenderer', () => {
 				formatChatRequestTimestamp(Date.now() - 25 * 60 * 60 * 1000)?.text,
 				formatChatRequestTimestamp(Date.now() - 49 * 60 * 60 * 1000)?.text,
 			], [
-				'1d',
-				'2d',
+				'1 day',
+				'2 days',
 			]);
 		});
 
@@ -249,7 +249,7 @@ suite('ChatListRenderer', () => {
 				focusable: rendered?.element.tabIndex,
 				managedHoverText: rendered?.hoverText,
 			}, {
-				compact: '1d',
+				compact: '1 day',
 				fullDate: formatChatRequestTimestamp(timestamp)?.fullText,
 				hasAlternate: true,
 				focusable: 0,

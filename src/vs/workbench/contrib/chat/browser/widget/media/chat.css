@@ -430,10 +430,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.interactive-item-container .chat-response-timing > * {
-		transition: none;
-	}
-
+	.interactive-item-container .chat-response-timing > *,
 	.interactive-item-container .chat-request-timing > * {
 		transition: none;
 	}

@@ -797,7 +797,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[ChatConfiguration.Verbose]: {
 			type: 'boolean',
-			default: false,
+			default: true,
 			description: nls.localize('chat.verbose', "Show request and completion timestamps. Hover over a completion timestamp to show the elapsed response time."),
 		},
 		[ChatConfiguration.ChatPersistentProgressEnabled]: {
