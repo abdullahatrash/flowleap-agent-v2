@@ -18,6 +18,7 @@ import { SessionConversationsMenuContribution, SessionNewChatActionViewItemContr
 import { SessionsView, SessionsViewId } from './views/sessionsView.js';
 import './views/sessionsViewActions.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { SessionsMouseNavigationContribution } from './sessionsMouseNavigation.js';
 
 const agentSessionsViewIcon = registerIcon('chat-sessions-icon', Codicon.commentDiscussionSparkle, localize('agentSessionsViewIcon', 'Icon for Agent Sessions View'));
 const AGENT_SESSIONS_VIEW_TITLE = localize2('agentSessions.view.label', "Sessions");
@@ -56,6 +57,7 @@ Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews
 
 registerWorkbenchContribution2(SessionsTitleBarContribution.ID, SessionsTitleBarContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(NewSessionActionViewItemContribution.ID, NewSessionActionViewItemContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(SessionsMouseNavigationContribution.ID, SessionsMouseNavigationContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(SessionsTelemetryContribution.ID, SessionsTelemetryContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(SessionConversationsMenuContribution.ID, SessionConversationsMenuContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(SessionNewChatActionViewItemContribution.ID, SessionNewChatActionViewItemContribution, WorkbenchPhase.AfterRestored);
