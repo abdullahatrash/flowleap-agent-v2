@@ -1111,6 +1111,17 @@ suite('buildModelPickerItems', () => {
 		assert.strictEqual(gptItem.description, undefined);
 	});
 
+	test('model with a non-string priceCategory does not crash the picker', () => {
+		const auto = createAutoModel();
+		const modelA = createModel('gpt-4o', 'GPT-4o');
+		// Extension provided metadata is untrusted, so the value may not be a string at runtime.
+		modelA.metadata = { ...modelA.metadata, priceCategory: 3 as unknown as string } as ILanguageModelChatMetadata;
+		const items = callBuild([auto, modelA], { isUBB: true });
+		const gptItem = getActionItems(items).find(a => a.label === 'GPT-4o');
+		assert.ok(gptItem);
+		assert.strictEqual(gptItem.ariaDescription, undefined);
+	});
+
 	test('promoted models show inline vendor label when multiple vendors exist across all models', () => {
 		const auto = createAutoModel();
 		const modelA = createModel('gpt-4o', 'GPT-4o', 'copilot');
