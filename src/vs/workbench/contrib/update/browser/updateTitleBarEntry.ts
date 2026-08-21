@@ -5,9 +5,9 @@
 
 import * as dom from '../../../../base/browser/dom.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { IManagedHoverContent } from '../../../../base/browser/ui/hover/hover.js';
+import { IHoverWidget, IManagedHoverContent } from '../../../../base/browser/ui/hover/hover.js';
 import { IAction, WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../../../base/common/actions.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { isWeb } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
@@ -224,6 +224,7 @@ export class UpdateTitleBarContribution extends Disposable implements IWorkbench
 export class UpdateTitleBarEntry extends BaseActionViewItem {
 	private content: HTMLElement | undefined;
 	private showTooltipOnRender = false;
+	private readonly visibleTooltip = this._register(new MutableDisposable<IHoverWidget>());
 
 	constructor(
 		action: IAction,
@@ -239,6 +240,11 @@ export class UpdateTitleBarEntry extends BaseActionViewItem {
 
 		this.action.run = () => this.runAction();
 		this._register(this.updateService.onStateChange(state => this.onStateChange(state)));
+		this._register(this.commandService.onDidExecuteCommand(event => {
+			if (event.commandId === 'workbench.action.showHover' && this.isFocused()) {
+				this.focusTooltip();
+			}
+		}));
 	}
 
 	public override render(container: HTMLElement) {
@@ -260,7 +266,7 @@ export class UpdateTitleBarEntry extends BaseActionViewItem {
 			return;
 		}
 
-		this.hoverService.showInstantHover({
+		const hover = this.hoverService.showInstantHover({
 			content: this.tooltip.domNode,
 			target: {
 				targetElements: [this.element],
@@ -272,7 +278,21 @@ export class UpdateTitleBarEntry extends BaseActionViewItem {
 			},
 			persistence: { sticky: true },
 			appearance: { showPointer: true, compact: true },
+			trapFocus: focus,
 		}, focus);
+
+		if (hover) {
+			this.visibleTooltip.value = hover;
+		}
+	}
+
+	/**
+	 * Re-shows the tooltip with focus trapped inside it, so "Show or Focus Hover"
+	 * moves the keyboard into the tooltip rather than leaving it unreachable.
+	 */
+	private focusTooltip(): void {
+		this.visibleTooltip.clear();
+		this.showTooltip(true);
 	}
 
 	protected override getHoverContents(): IManagedHoverContent {
