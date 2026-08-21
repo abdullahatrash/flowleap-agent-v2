@@ -33,6 +33,7 @@ function createHarness(disposables: Pick<DisposableStore, 'add'>) {
 	instantiationService.stub(ISessionsListModelService, new class extends mock<ISessionsListModelService>() {
 		override readonly onDidChange = Event.None;
 		override isSessionPinned(): boolean { return false; }
+		override isSessionRead(): boolean { return true; }
 		override getStatusIcon(): ThemeIcon { return ThemeIcon.fromId('circle'); }
 	}());
 	instantiationService.stub(ISessionsManagementService, new class extends mock<ISessionsManagementService>() {
