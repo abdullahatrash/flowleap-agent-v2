@@ -41,7 +41,7 @@ import { ComputeAutomaticInstructions, newInstructionsCollectionEvent, newInstru
 import { PromptsConfig } from '../../../../common/promptSyntax/config/config.js';
 import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, HOOKS_SOURCE_FOLDER, INSTRUCTION_FILE_EXTENSION, INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, LEGACY_MODE_DEFAULT_SOURCE_FOLDER, PROMPT_DEFAULT_SOURCE_FOLDER, PROMPT_FILE_EXTENSION } from '../../../../common/promptSyntax/config/promptFileLocations.js';
 import { INSTRUCTIONS_LANGUAGE_ID, PROMPT_LANGUAGE_ID, PromptFileSource, PromptsType, Target } from '../../../../common/promptSyntax/promptTypes.js';
-import { IAgentDiscoveryResult, IAgentSource, ICustomAgent, IPromptFileContext, IPromptsService, PromptsStorage } from '../../../../common/promptSyntax/service/promptsService.js';
+import { IAgentDiscoveryResult, IAgentSource, IBuiltinPromptPath, ICustomAgent, IPromptFileContext, IPromptsService, PromptsStorage } from '../../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../common/promptSyntax/service/promptsServiceImpl.js';
 import { mockFiles } from '../testUtils/mockFilesystem.js';
 import { InMemoryStorageService, IStorageService } from '../../../../../../../platform/storage/common/storage.js';
@@ -3635,6 +3635,95 @@ suite('PromptsService', () => {
 			assert.strictEqual(skill.description, 'A skill with mismatched name');
 
 			registered.dispose();
+		});
+	});
+
+	suite('built-in prompt files', () => {
+		teardown(() => {
+			sinon.restore();
+		});
+
+		/**
+		 * Stands in for the Agents app's `AgenticPromptsService`: contributes bundled
+		 * skills through the single {@link PromptsService.getBuiltinPromptFiles} seam.
+		 */
+		class TestBuiltinPromptsService extends PromptsService {
+			protected override async getBuiltinPromptFiles(type: PromptsType): Promise<readonly IBuiltinPromptPath[]> {
+				if (type !== PromptsType.skill) {
+					return [];
+				}
+				return [{
+					uri: URI.file('/app/skills/bundled-skill/SKILL.md'),
+					storage: PromptsStorage.builtIn,
+					type: PromptsType.skill,
+					name: 'bundled-skill',
+					description: 'A skill bundled with the application',
+				}];
+			}
+		}
+
+		async function setupBuiltinService(workspaceSkills: Parameters<typeof mockFiles>[1] = []): Promise<IPromptsService> {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+			workspaceContextService.setWorkspace(testWorkspace(URI.file('/builtin-skills-test')));
+
+			await mockFiles(fileService, [
+				{
+					path: '/app/skills/bundled-skill/SKILL.md',
+					contents: [
+						'---',
+						'name: "bundled-skill"',
+						'description: "A skill bundled with the application"',
+						'---',
+						'Bundled skill content',
+					],
+				},
+				...workspaceSkills,
+			]);
+
+			return disposables.add(instaService.createInstance(TestBuiltinPromptsService));
+		}
+
+		test('built-in skills are listed for the builtIn storage and merged into skill discovery', async () => {
+			const builtinService = await setupBuiltinService();
+
+			const forStorage = await builtinService.listPromptFilesForStorage(PromptsType.skill, PromptsStorage.builtIn, CancellationToken.None);
+			const listed = await builtinService.listPromptFiles(PromptsType.skill, CancellationToken.None);
+			const skills = await builtinService.findAgentSkills(CancellationToken.None);
+
+			assert.deepStrictEqual({
+				forStorage: forStorage.map(p => [p.storage, p.uri.path]),
+				listed: listed.map(p => [p.storage, p.uri.path]),
+				skills: skills?.map(s => [s.storage, s.name]),
+			}, {
+				forStorage: [[PromptsStorage.builtIn, '/app/skills/bundled-skill/SKILL.md']],
+				listed: [[PromptsStorage.builtIn, '/app/skills/bundled-skill/SKILL.md']],
+				skills: [[PromptsStorage.builtIn, 'bundled-skill']],
+			});
+		});
+
+		test('a workspace skill of the same folder name wins over the built-in', async () => {
+			const builtinService = await setupBuiltinService([{
+				path: '/builtin-skills-test/.github/skills/bundled-skill/SKILL.md',
+				contents: [
+					'---',
+					'name: "bundled-skill"',
+					'description: "The workspace override"',
+					'---',
+					'Workspace skill content',
+				],
+			}]);
+
+			const skills = await builtinService.findAgentSkills(CancellationToken.None);
+
+			assert.deepStrictEqual(skills?.map(s => [s.storage, s.name, s.description]), [
+				[PromptsStorage.local, 'bundled-skill', 'The workspace override'],
+			]);
+		});
+
+		test('the base service contributes no built-in prompt files', async () => {
+			const forStorage = await service.listPromptFilesForStorage(PromptsType.skill, PromptsStorage.builtIn, CancellationToken.None);
+			assert.deepStrictEqual(forStorage, []);
 		});
 	});
 
