@@ -31,6 +31,9 @@ class TestChatWidgetService implements IChatWidgetService {
 	private readonly _onDidAddWidget = new Emitter<IChatWidget>();
 	readonly onDidAddWidget = this._onDidAddWidget.event;
 
+	private readonly _onDidRemoveWidget = new Emitter<IChatWidget>();
+	readonly onDidRemoveWidget = this._onDidRemoveWidget.event;
+
 	private readonly _onDidChangeFocusedSession = new Emitter<void>();
 	readonly onDidChangeFocusedSession = this._onDidChangeFocusedSession.event;
 
