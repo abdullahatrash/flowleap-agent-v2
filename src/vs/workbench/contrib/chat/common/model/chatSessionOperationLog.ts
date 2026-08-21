@@ -126,7 +126,7 @@ const chatVariableSchema = Adapt.object<IChatRequestVariableData, IChatRequestVa
 const requestSchema = Adapt.object<IChatRequestModel, ISerializableChatRequestData>({
 	// request parts
 	requestId: Adapt.t(m => m.id, Adapt.key()),
-	timestamp: Adapt.v(m => m.timestamp),
+	timestamp: Adapt.v(m => m.requestTimestamp),
 	confirmation: Adapt.v(m => m.confirmation),
 	message: Adapt.t(m => m.message, messageSchema),
 	shouldBeRemovedOnSend: Adapt.v(m => m.shouldBeRemovedOnSend, objectsEqual),
@@ -140,6 +140,7 @@ const requestSchema = Adapt.object<IChatRequestModel, ISerializableChatRequestDa
 	// response parts (from ISerializableChatResponseData via response.toJSON())
 	response: Adapt.t(m => m.response?.entireResponse.value, Adapt.array(responsePartSchema)),
 	responseId: Adapt.v(m => m.response?.id),
+	responseTimestamp: Adapt.v(m => m.response?.timestamp),
 	result: Adapt.v(m => m.response?.result, objectsEqual),
 	responseMarkdownInfo: Adapt.v(
 		m => m.response?.codeBlockInfos?.map(info => ({ suggestionId: info.suggestionId })),
