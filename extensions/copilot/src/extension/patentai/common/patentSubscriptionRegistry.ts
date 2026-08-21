@@ -9,9 +9,31 @@
 // patentDataKeysRegistry.ts. FlowLeapAuthenticationProvider — the owner of the backend read —
 // registers its accessor on construction and refreshes the cached snapshot opportunistically.
 
+import { Emitter, Event } from '../../../util/vs/base/common/event';
 import type { FlowLeapSubscriptionSnapshot, FlowLeapSubscriptionStatus } from './trialCountdown';
 
 let _registeredSubscriptionProvider: (() => FlowLeapSubscriptionSnapshot | undefined) | undefined;
+
+const _onDidChangePatentSubscription = new Emitter<void>();
+
+/**
+ * Fires after the last-known subscription STATUS changes — a fresh backend read resolving a
+ * different status than the cached one, or a sign-out clearing the snapshot. A state-change
+ * broadcast only: listeners re-read the current state through
+ * {@link getPatentSubscriptionStatus} / {@link getPatentSubscriptionSnapshot} and decide their own
+ * reaction (e.g. the FlowLeap Trial model provider hides itself and discards its key when the
+ * status leaves `trialing`, #242).
+ */
+export const onDidChangePatentSubscription: Event<void> = _onDidChangePatentSubscription.event;
+
+/**
+ * Called by the snapshot owner (FlowLeapAuthenticationProvider) after the cached snapshot's status
+ * changed. Must fire only on a real status transition — every resolved read re-firing it would turn
+ * the hourly countdown refresh into a busy loop for listeners.
+ */
+export function notifyPatentSubscriptionChanged(): void {
+	_onDidChangePatentSubscription.fire();
+}
 
 /**
  * Called by FlowLeapAuthenticationProvider on construction to register the snapshot accessor.

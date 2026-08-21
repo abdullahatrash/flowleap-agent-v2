@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { getPatentSubscriptionSnapshot, getPatentSubscriptionStatus, registerPatentSubscriptionProvider } from '../../common/patentSubscriptionRegistry';
+import { getPatentSubscriptionSnapshot, getPatentSubscriptionStatus, notifyPatentSubscriptionChanged, onDidChangePatentSubscription, registerPatentSubscriptionProvider } from '../../common/patentSubscriptionRegistry';
 import type { FlowLeapSubscriptionSnapshot } from '../../common/trialCountdown';
 
 describe('patentSubscriptionRegistry', () => {
@@ -33,5 +33,17 @@ describe('patentSubscriptionRegistry', () => {
 			afterTrialRead: { snapshot: { status: 'trialing', currentPeriodEnd: '2026-08-01T00:00:00.000Z' }, status: 'trialing' },
 			afterInconclusiveRead: { snapshot: { status: 'unknown' }, status: 'unknown' },
 		});
+	});
+
+	it('broadcasts change notifications to subscribed listeners, and stops after disposal', () => {
+		let heard = 0;
+		const listener = onDidChangePatentSubscription(() => { heard++; });
+
+		notifyPatentSubscriptionChanged();
+		notifyPatentSubscriptionChanged();
+		listener.dispose();
+		notifyPatentSubscriptionChanged();
+
+		expect(heard).toBe(2);
 	});
 });
