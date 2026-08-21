@@ -6,10 +6,11 @@
 import './media/chatCompositeBar.css';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { $, addDisposableListener, addStandardDisposableListener, DisposableResizeObserver, EventType, getWindow, reset } from '../../../base/browser/dom.js';
+import { $, addDisposableGenericMouseDownListener, addDisposableGenericMouseUpListener, addDisposableListener, addStandardDisposableListener, DisposableResizeObserver, EventHelper, EventType, getWindow, isHTMLElement, reset } from '../../../base/browser/dom.js';
 import { ScrollableElement } from '../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { ScrollbarVisibility } from '../../../base/common/scrollable.js';
 import { autorun } from '../../../base/common/observable.js';
+import { isLinux } from '../../../base/common/platform.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { Action } from '../../../base/common/actions.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
@@ -108,6 +109,17 @@ export class ChatCompositeBar extends Disposable {
 			useShadows: false,
 		}));
 		this._tabsRow.appendChild(this._tabsScrollbar.getDomNode());
+
+		const preventMiddleButtonDefault = (e: MouseEvent) => {
+			if (e.button === 1 && !this._isInTabInput(e)) {
+				e.preventDefault();
+			}
+		};
+		this._register(addDisposableGenericMouseDownListener(this._tabsContainer, preventMiddleButtonDefault));
+		// Prevent Linux primary-selection paste after the middle-button release (https://github.com/microsoft/vscode/issues/201696).
+		if (isLinux) {
+			this._register(addDisposableGenericMouseUpListener(this._tabsContainer, preventMiddleButtonDefault));
+		}
 
 		// "New Chat" button pinned at the end of the tab strip (after the last
 		// tab). Starting a new chat is offered here while the tabs are shown; when
@@ -308,16 +320,7 @@ export class ChatCompositeBar extends Disposable {
 				isDraft ? localize('deleteDraftChat', "Delete Chat") : localize('closeChat', "Close"),
 				ThemeIcon.asClassName(Codicon.close),
 				true,
-				async () => {
-					if (!this._session) {
-						return;
-					}
-					if (chat.status.get() === SessionStatus.Untitled) {
-						await this._sessionsManagementService.deleteChat(this._session, chat.resource, { skipConfirmation: true });
-					} else {
-						await this._sessionsService.closeChat(this._session, chat);
-					}
-				},
+				() => this._closeChat(chat),
 			));
 			const actionBar = this._tabDisposables.add(new ActionBar(tab, { actionViewItemProvider: undefined }));
 			actionBar.push(closeAction, { icon: true, label: false });
@@ -332,6 +335,23 @@ export class ChatCompositeBar extends Disposable {
 			// Cancel any in-progress rename before switching to the clicked tab.
 			this._cancelTabEditing();
 			this._onTabClicked(chat);
+		}));
+
+		this._tabDisposables.add(addDisposableListener(tab, EventType.AUXCLICK, e => {
+			if (e.button !== 1) {
+				return;
+			}
+			if (this._isInTabInput(e)) {
+				return;
+			}
+
+			EventHelper.stop(e, true);
+			if (isMainChat) {
+				return;
+			}
+
+			this._cancelTabEditing();
+			void this._closeChat(chat).catch(onUnexpectedError);
 		}));
 
 		this._tabDisposables.add(addDisposableListener(tab, EventType.KEY_DOWN, (e: KeyboardEvent) => {
@@ -451,6 +471,26 @@ export class ChatCompositeBar extends Disposable {
 
 		store.add(addDisposableListener(inputBox.element, EventType.CLICK, e => e.stopPropagation()));
 		store.add(addDisposableListener(inputBox.element, EventType.DBLCLICK, e => e.stopPropagation()));
+	}
+
+	private _isInTabInput(event: MouseEvent): boolean {
+		return isHTMLElement(event.target) && !!event.target.closest('.chat-composite-bar-tab-input-container');
+	}
+
+	/**
+	 * Close a non-main chat tab: a committed chat is hidden from the tab strip
+	 * (reopenable from the chats dropdown), while an untitled draft has nothing
+	 * to reopen and is deleted outright.
+	 */
+	private async _closeChat(chat: IChat): Promise<void> {
+		if (!this._session) {
+			return;
+		}
+		if (chat.status.get() === SessionStatus.Untitled) {
+			await this._sessionsManagementService.deleteChat(this._session, chat.resource, { skipConfirmation: true });
+		} else {
+			await this._sessionsService.closeChat(this._session, chat);
+		}
 	}
 
 	private _cancelTabEditing(): void {

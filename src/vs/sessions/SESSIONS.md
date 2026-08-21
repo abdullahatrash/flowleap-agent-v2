@@ -333,6 +333,10 @@ its `state.chats` catalog when a chat finishes a turn (moving the just-completed
 chat to the end) — pinning the untitled composer chat last keeps a
 just-completed background chat from visibly jumping past it in the tab strip.
 
+Non-main chat tabs close from their close button or a middle click anywhere on
+the tab. Closing a committed chat hides it until it is reopened from the
+**Chats** menu; closing an untitled draft deletes it.
+
 On the host, `AgentHostStateManager` keeps an authoritative multi-chat catalog
 per session: `addChat`/`removeChat` create/delete a per-chat `ChatState` and
 dispatch `SessionChatAdded`/`SessionChatRemoved`; the default chat (whose
