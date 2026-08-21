@@ -455,6 +455,9 @@ export async function renderHomeDashboard(webview: vscode.Webview, context: vsco
 				case 'browseFiles':
 					vscode.postMessage({ command: 'browseFiles' });
 					break;
+				case 'openSkills':
+					vscode.postMessage({ command: 'openSkills' });
+					break;
 				case 'openRecent':
 					vscode.postMessage({ command: 'openRecent' });
 					break;
@@ -489,6 +492,11 @@ export function handleHomeDashboardMessage(message: HomeDashboardMessage): void 
 		case 'browseFiles':
 			// Reveal the open project's files, never the OS folder picker.
 			vscode.commands.executeCommand('workbench.files.action.focusFilesExplorer');
+			return;
+		case 'openSkills':
+			// The Agent Customizations manager, landed on the Skills section —
+			// built-in and user-added skills in one list.
+			vscode.commands.executeCommand('aiCustomization.openManagementEditor', 'skills');
 			return;
 		case 'newProject':
 			vscode.commands.executeCommand('flowleap.newProject', message.type);
@@ -555,6 +563,7 @@ function renderStartupView(recentProjects: RecentProject[]): string {
 		<div class="open-row">
 			<span class="open-link" data-action="openFolder">Open Folder</span>
 			<span class="open-link" data-action="openRecent">Open Recent</span>
+			<span class="open-link" data-action="openSkills">Skills</span>
 		</div>
 	</div>
 
@@ -623,6 +632,7 @@ function renderProjectView(project: CurrentProject): string {
 		<div class="project-quick-links">
 			<span class="project-quick-link" data-action="newProject">New Project…</span>
 			<span class="project-quick-link" data-action="openRecent">Open Recent…</span>
+			<span class="project-quick-link" data-action="openSkills">Skills…</span>
 		</div>
 	</div>`;
 }
