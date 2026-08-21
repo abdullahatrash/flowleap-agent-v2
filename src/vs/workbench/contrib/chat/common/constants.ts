@@ -28,6 +28,7 @@ export enum ChatConfiguration {
 	UtilityModel = 'chat.utilityModel',
 	UtilitySmallModel = 'chat.utilitySmallModel',
 	RequestQueueingDefaultAction = 'chat.requestQueuing.defaultAction',
+	SaveBeforeSend = 'chat.saveBeforeSend',
 	AgentStatusEnabled = 'chat.agentsControl.enabled',
 	EditorAssociations = 'chat.editorAssociations',
 	UnifiedAgentsBar = 'chat.unifiedAgentsBar.enabled',

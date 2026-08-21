@@ -47,7 +47,9 @@ import { bindContextKey } from '../../../../../platform/observable/common/platfo
 import product from '../../../../../platform/product/common/product.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { SaveReason } from '../../../../common/editor.js';
 import { ChatEntitlementContextKeys, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { checkModeOption } from '../../common/chat.js';
 import { IChatAgentAttachmentCapabilities, IChatAgentCommand, IChatAgentData, IChatAgentService } from '../../common/participants/chatAgents.js';
@@ -138,6 +140,12 @@ export function isQuickChat(widget: IChatWidget): boolean {
 
 function isInlineChat(widget: IChatWidget): boolean {
 	return isIChatResourceViewContext(widget.viewContext) && Boolean(widget.viewContext.isInlineChat);
+}
+
+export async function saveAllBeforeChatSend(configurationService: IConfigurationService, editorService: IEditorService): Promise<void> {
+	if (configurationService.getValue<boolean>(ChatConfiguration.SaveBeforeSend) !== false) {
+		await editorService.saveAll({ includeUntitled: false, reason: SaveReason.EXPLICIT });
+	}
 }
 
 type ChatHandoffClickEvent = {
@@ -415,6 +423,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		private styles: IChatWidgetStyles,
 		@ICodeEditorService private readonly codeEditorService: ICodeEditorService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IEditorService private readonly editorService: IEditorService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -2604,13 +2613,20 @@ export class ChatWidget extends Disposable implements IChatWidget {
 			return;
 		}
 
+		let savedBeforeSend = false;
 		// Check if a custom submit handler wants to handle this submission
 		if (this.viewOptions.submitHandler) {
 			const inputValue = !query ? this.getInput() : query.query;
+			await saveAllBeforeChatSend(this.configurationService, this.editorService);
+			savedBeforeSend = true;
 			const handled = await this.viewOptions.submitHandler(inputValue, this.input.currentModeKind);
 			if (handled) {
 				return;
 			}
+		}
+
+		if (!savedBeforeSend) {
+			await saveAllBeforeChatSend(this.configurationService, this.editorService);
 		}
 
 		this._onDidAcceptInput.fire();
