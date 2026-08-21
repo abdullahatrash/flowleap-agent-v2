@@ -28,6 +28,11 @@ export function buildTrialCheckoutUrl(frontendUrl: string): string {
 /**
  * Whether any of the given model vendors is a real BYO model rather than an agent pseudo-vendor —
  * the same test the Setup tree's model row uses ({@link NON_BYOK_VENDORS}).
+ *
+ * The `flowleap-trial` vendor (ADR 0015, #243) counts as configured by design: while `trialing`
+ * the FlowLeap Trial provider serves working models, so setup must not ask for a key the trial
+ * already covers. The provider itself hides those models for every non-trialing state, so a
+ * non-trialing user without a BYO key still resolves to "not configured" here.
  */
 export function hasByokModel(vendors: readonly string[]): boolean {
 	return vendors.some(vendor => !NON_BYOK_VENDORS.has(vendor));

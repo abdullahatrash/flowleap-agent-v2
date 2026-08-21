@@ -30,4 +30,15 @@ describe('hasByokModel', () => {
 	it('is false when no models are present', () => {
 		expect(hasByokModel([])).toBe(false);
 	});
+
+	it('counts FlowLeap Trial models as configured while trialing (ADR 0015, #243)', () => {
+		// The trial provider only serves this vendor while `trialing`, so its presence IS the
+		// trialing-with-trial-models case — setup must not ask for a key the trial covers.
+		expect(hasByokModel(['flowleap-trial'])).toBe(true);
+		expect(hasByokModel(['copilot', 'flowleap-trial'])).toBe(true);
+	});
+
+	it('still prompts a non-trialing user without BYO-key models (pseudo-vendors only, no trial vendor)', () => {
+		expect(hasByokModel(['copilot', 'patent-ai'])).toBe(false);
+	});
 });

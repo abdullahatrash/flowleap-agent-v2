@@ -18,6 +18,27 @@ const PILL_CLICK_COMMAND = 'flowleap.trialCountdown.focusSetup';
 /** Re-check the subscription roughly hourly; the pill also refreshes on auth change and window focus. */
 const DEFAULT_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
+/**
+ * The trialing tooltip: the deadline line, then the ADR 0015 credential disclosure (required
+ * copy, #243) — both deadlines named plainly: trial models AND patent data run on FlowLeap's
+ * credentials, trial inference runs on FlowLeap-supplied models via OpenRouter, and the user can
+ * switch to their own key at any time. Exported pure so the copy is unit-tested without vscode.
+ */
+export function trialPillTooltip(daysRemaining: number | null): string {
+	let deadline: string;
+	if (daysRemaining === null) {
+		deadline = l10n.t('Your FlowLeap trial is active.');
+	} else if (daysRemaining <= 0) {
+		deadline = l10n.t('Your FlowLeap trial ends today.');
+	} else if (daysRemaining === 1) {
+		deadline = l10n.t('Your FlowLeap trial ends in 1 day.');
+	} else {
+		deadline = l10n.t('Your FlowLeap trial ends in {0} days.', daysRemaining);
+	}
+	const disclosure = l10n.t('During the trial, your trial models and patent data both run on FlowLeap\'s credentials: chat uses FlowLeap-supplied trial models via OpenRouter, and you can switch to your own key at any time. Add your own LLM API key and your EPO/USPTO data keys before the trial ends.');
+	return `${deadline}\n\n${disclosure}\n\n${l10n.t('Click to review your setup.')}`;
+}
+
 /** Telemetry sink for the pill's two funnel signals. Injected so it can be a no-op / fake in tests. */
 export interface TrialPillTelemetry {
 	/** Fired at most once per session, the first time the pill becomes visible. */
@@ -128,7 +149,7 @@ export class TrialCountdownStatusBar implements vscode.Disposable {
 		}
 
 		this._item.text = `$(watch) ${this._pillLabel(decision.daysRemaining)}`;
-		this._item.tooltip = this._pillTooltip(decision.daysRemaining);
+		this._item.tooltip = trialPillTooltip(decision.daysRemaining);
 		this._item.show();
 
 		if (!this._shownReported) {
@@ -148,19 +169,6 @@ export class TrialCountdownStatusBar implements vscode.Disposable {
 			return l10n.t('Trial · 1 day left');
 		}
 		return l10n.t('Trial · {0} days left', daysRemaining);
-	}
-
-	private _pillTooltip(daysRemaining: number | null): string {
-		if (daysRemaining === null) {
-			return l10n.t('Your FlowLeap trial is active. Click to review your setup.');
-		}
-		if (daysRemaining <= 0) {
-			return l10n.t('Your FlowLeap trial ends today. Click to review your setup.');
-		}
-		if (daysRemaining === 1) {
-			return l10n.t('Your FlowLeap trial ends in 1 day. Click to review your setup.');
-		}
-		return l10n.t('Your FlowLeap trial ends in {0} days. Click to review your setup.', daysRemaining);
 	}
 
 	dispose(): void {

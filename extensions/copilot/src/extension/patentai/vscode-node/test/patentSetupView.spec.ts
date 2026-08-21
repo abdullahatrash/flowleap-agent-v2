@@ -38,6 +38,24 @@ describe('buildSetupItems', () => {
 		expect(byId.uspto).toBe('Add before your trial ends — free to obtain');
 	});
 
+	it('satisfies the AI Model row with trial-only models but says who pays and names the deadline (ADR 0015, #243)', () => {
+		const items = buildSetupItems({ signedIn: true, byokModelCount: 0, trialModelCount: 3, epoConfigured: false, usptoConfigured: false, trialing: true });
+
+		const aiModel = items.find(i => i.id === 'aiModel');
+		expect({ description: aiModel?.description, ok: aiModel?.ok, tooltipMentionsOpenRouter: aiModel?.tooltip.includes('OpenRouter') }).toEqual({
+			description: 'FlowLeap Trial — add your own key before the trial ends',
+			ok: true,
+			tooltipMentionsOpenRouter: true,
+		});
+	});
+
+	it('lets the user\'s own models own the AI Model row even when trial models are also present', () => {
+		const items = buildSetupItems({ signedIn: true, byokModelCount: 1, trialModelCount: 3, epoConfigured: false, usptoConfigured: false, trialing: true });
+
+		const aiModel = items.find(i => i.id === 'aiModel');
+		expect(aiModel?.description).toBe('1 connected');
+	});
+
 	it('leaves already-configured key rows as "Configured" even while trialing', () => {
 		const items = buildSetupItems({ signedIn: true, byokModelCount: 1, epoConfigured: true, usptoConfigured: false, trialing: true });
 
