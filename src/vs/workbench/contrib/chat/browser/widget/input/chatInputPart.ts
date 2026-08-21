@@ -81,7 +81,7 @@ import { AccessibilityCommandId } from '../../../../accessibility/common/accessi
 import { getSimpleCodeEditorWidgetOptions, getSimpleEditorOptions, setupSimpleEditorSelectionStyling } from '../../../../codeEditor/browser/simpleEditorOptions.js';
 import { IChatViewTitleActionContext } from '../../../common/actions/chatActions.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
-import { ChatRequestVariableSet, getImageAttachmentLimit, IChatRequestVariableEntry, isBrowserViewVariableEntry, isElementVariableEntry, isExplicitFileOrImageVariableEntry, isImageVariableEntry, isNotebookOutputVariableEntry, isPasteVariableEntry, isPromptFileVariableEntry, isPromptTextVariableEntry, isSCMHistoryItemChangeRangeVariableEntry, isSCMHistoryItemChangeVariableEntry, isSCMHistoryItemVariableEntry, isStringVariableEntry, OmittedState } from '../../../common/attachments/chatVariableEntries.js';
+import { ChatRequestVariableSet, getImageAttachmentLimit, IChatRequestVariableEntry, isPastedTextArtifact, isBrowserViewVariableEntry, isElementVariableEntry, isExplicitFileOrImageVariableEntry, isImageVariableEntry, isNotebookOutputVariableEntry, isPasteVariableEntry, isPromptFileVariableEntry, isPromptTextVariableEntry, isSCMHistoryItemChangeRangeVariableEntry, isSCMHistoryItemChangeVariableEntry, isSCMHistoryItemVariableEntry, isStringVariableEntry, OmittedState } from '../../../common/attachments/chatVariableEntries.js';
 import { ChatMode, getModeNameForTelemetry, IChatMode, IChatModes, IChatModeService } from '../../../common/chatModes.js';
 import { IChatFollowup, IChatPlanReview, IChatQuestionCarousel, IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import { IChatSessionProviderOptionGroup, IChatSessionProviderOptionItem, IChatSessionsService, isAgentHostTarget, isIChatSessionFileChange2, localChatSessionType, SessionType } from '../../../common/chatSessionsService.js';
@@ -120,6 +120,7 @@ import { IChatContentPartRenderContext } from '../chatContentParts/chatContentPa
 import { CollapsibleListPool, IChatCollapsibleListItem } from '../chatContentParts/chatReferencesContentPart.js';
 import { ChatTodoListWidget } from '../chatContentParts/chatTodoListWidget.js';
 import { ChatArtifactsWidget } from '../chatArtifactsWidget.js';
+import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { ChatFollowups } from './chatFollowups.js';
 import { IChatInputNotificationService } from './chatInputNotificationService.js';
@@ -3644,6 +3645,39 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		this._indexOfLastOpenedContext = -1;
 	}
 
+	/**
+	 * Removes the inline reference bound to a deleted attachment, including one
+	 * trailing space, so the input is not left with a token that resolves to
+	 * nothing. The dynamic variable model drops the reference once its text goes.
+	 */
+	private removeInlineReferenceText(attachment: IChatRequestVariableEntry): void {
+		if (!attachment.range || !isPastedTextArtifact(attachment)) {
+			return;
+		}
+		const model = this._inputEditor.getModel();
+		const reference = this._widget?.getContrib<ChatDynamicVariableModel>(ChatDynamicVariableModel.ID)?.variables
+			.find(variable => variable.id === attachment.id);
+		if (!model || !reference) {
+			return;
+		}
+		const range = Range.lift(reference.range);
+		const endColumn = model.getValueInRange(new Range(range.endLineNumber, range.endColumn, range.endLineNumber, range.endColumn + 1)) === ' '
+			? range.endColumn + 1
+			: range.endColumn;
+		this._inputEditor.executeEdits('chatRemoveAttachmentReference', [{
+			range: new Range(range.startLineNumber, range.startColumn, range.endLineNumber, endColumn),
+			text: '',
+		}]);
+	}
+
+	/**
+	 * This fork carries no terminal-command paste veto, so a paste never turns the
+	 * input into a terminal command.
+	 */
+	isTerminalCommandPaste(_pastedText: string, _range: IRange): boolean {
+		return false;
+	}
+
 	private handleAttachmentDeletion(e: KeyboardEvent | unknown, index: number, attachment: IChatRequestVariableEntry) {
 		// Set focus to the next attached context item if deletion was triggered by a keystroke (vs a mouse click)
 		if (dom.isKeyboardEvent(e)) {
@@ -3651,6 +3685,7 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		}
 
 		this._attachmentModel.delete(attachment.id);
+		this.removeInlineReferenceText(attachment);
 
 
 		if (this.configurationService.getValue<boolean>('chat.implicitContext.enableImplicitContext')) {

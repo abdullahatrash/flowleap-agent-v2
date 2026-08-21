@@ -9,7 +9,8 @@ import * as dom from '../../../../base/browser/dom.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, IReference, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IManagedHoverContent } from '../../../../base/browser/ui/hover/hover.js';
@@ -18,6 +19,7 @@ import { CodeEditorWidget, ICodeEditorWidgetOptions } from '../../../../editor/b
 import { EditorExtensionsRegistry } from '../../../../editor/browser/editorExtensions.js';
 import { IEditorConstructionOptions } from '../../../../editor/browser/config/editorConfiguration.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
+import { IResolvedTextEditorModel, ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { SuggestController } from '../../../../editor/contrib/suggest/browser/suggestController.js';
 import { SnippetController2 } from '../../../../editor/contrib/snippet/browser/snippetController2.js';
 import { PlaceholderTextContribution } from '../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
@@ -248,6 +250,7 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 	// Input
 	private _editor!: CodeEditorWidget;
 	private _editorContainer!: HTMLElement;
+	private readonly _inputModelReference = this._register(new MutableDisposable<IReference<IResolvedTextEditorModel>>());
 
 	// Send button
 	private _sendButton: Button | undefined;
@@ -290,6 +293,7 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 		},
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IModelService private readonly modelService: IModelService,
+		@ITextModelService private readonly textModelService: ITextModelService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@ILogService private readonly logService: ILogService,
@@ -448,6 +452,19 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 		return localize('chatInput', "Chat input");
 	}
 
+	/**
+	 * Paste edits are applied through the bulk edit service, which resolves the
+	 * input model and force-destroys it when the last reference is released.
+	 * Holding one keeps the model alive for this editor's lifetime.
+	 */
+	private async _holdInputModelReference(uri: URI): Promise<void> {
+		try {
+			this._inputModelReference.value = await this.textModelService.createModelReference(uri);
+		} catch (error) {
+			this.logService.error('Failed to hold the chat input model reference', error);
+		}
+	}
+
 	private _createEditor(container: HTMLElement, overflowWidgetsDomNode: HTMLElement): void {
 		const editorContainer = this._editorContainer = dom.append(container, dom.$('.sessions-chat-editor'));
 		const minHeight = this.options.minEditorHeight ?? MIN_EDITOR_HEIGHT;
@@ -462,8 +479,9 @@ export class NewChatInputWidget extends Disposable implements IHistoryNavigation
 
 		const scopedInstantiationService = this._register(this.instantiationService.createChild(new ServiceCollection([IContextKeyService, inputScopedContextKeyService])));
 
-		const uri = URI.from({ scheme: 'sessions-chat', path: `input-${Date.now()}` });
+		const uri = URI.from({ scheme: Schemas.sessionsChatInput, path: `input-${Date.now()}` });
 		const textModel = this._register(this.modelService.createModel('', null, uri, true));
+		void this._holdInputModelReference(uri);
 
 		const editorOptions: IEditorConstructionOptions = {
 			...getSimpleEditorOptions(this.configurationService),
