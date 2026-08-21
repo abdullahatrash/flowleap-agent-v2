@@ -2762,6 +2762,7 @@ export interface IChatUsageDto {
 	outputBuffer?: number;
 	copilotCredits?: number;
 	promptTokenDetails?: readonly { category: string; label: string; percentageOfPrompt: number }[];
+	modelTotals?: readonly { model: string; inputTokens: number; cachedTokens: number; outputTokens: number }[];
 }
 
 export interface IQuotaSnapshotDto {

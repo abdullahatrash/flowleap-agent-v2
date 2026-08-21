@@ -159,6 +159,17 @@ function formatHookContext(reasons: readonly string[]): string {
 }
 
 /**
+ * Mutable accumulator behind the `modelTotals` entries reported on the response
+ * usage. Mirrors `vscode.ChatResultModelTotal`, whose fields are readonly.
+ */
+interface IModelTokenTotal {
+	model: string;
+	inputTokens: number;
+	cachedTokens: number;
+	outputTokens: number;
+}
+
+/**
  * This is a base class that can be used to implement a tool calling loop
  * against a model. It requires only that you build a prompt and is decoupled
  * from intents (i.e. the {@link DefaultIntentRequestHandler}), allowing easier
@@ -189,6 +200,19 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 	 * turn ({@link runOne} with `iterationNumber === 0`).
 	 */
 	private _accumulatedCopilotCredits: number | undefined;
+
+	/**
+	 * Running token totals per model for the current turn, keyed by the model ID
+	 * that actually served each call. A turn can route to several models, and the
+	 * response usage hover shows whole-turn numbers, so every call folds into the
+	 * entry of the model that served it. Reset together with
+	 * {@link _accumulatedCopilotCredits} on the first iteration of a turn.
+	 *
+	 * Subagent turns are intentionally excluded: they never report to this stream
+	 * (see {@link shouldReportUsageToContextWidget}), so their tokens do not appear
+	 * in the parent response's breakdown.
+	 */
+	private readonly _accumulatedModelTotals = new Map<string, IModelTokenTotal>();
 
 	/**
 	 * The full {@link ToolCallingLoopFetchOptions} from the most recent fetch.
@@ -1406,10 +1430,12 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 
 	/** Runs a single iteration of the tool calling loop. */
 	public async runOne(outputStream: ChatResponseStream | undefined, iterationNumber: number, token: CancellationToken): Promise<IToolCallSingleResult> {
-		// The first iteration of a turn starts a fresh credit total. Resetting here
-		// (rather than only in run()) keeps runOne() correct when called standalone.
+		// The first iteration of a turn starts a fresh credit and token total.
+		// Resetting here (rather than only in run()) keeps runOne() correct when
+		// called standalone.
 		if (iterationNumber === 0) {
 			this._accumulatedCopilotCredits = undefined;
+			this._accumulatedModelTotals.clear();
 		}
 		let availableTools = await this.getAvailableTools(outputStream, token);
 
@@ -1659,12 +1685,28 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 			if (callCredits !== undefined) {
 				this._accumulatedCopilotCredits = (this._accumulatedCopilotCredits ?? 0) + callCredits;
 			}
+
+			// Attribute this call's tokens to the model that actually served it. The
+			// hover renders `model` verbatim, so prefer the endpoint's display name and
+			// fall back to the raw model ID when a meta-model (e.g. "auto") routed the
+			// request to a model the endpoint does not describe.
+			const modelDisplayName = endpoint.model === fetchResult.resolvedModel ? endpoint.name : fetchResult.resolvedModel;
+			const modelTotal = this._accumulatedModelTotals.get(fetchResult.resolvedModel)
+				?? { model: modelDisplayName, inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
+			modelTotal.inputTokens += fetchResult.usage.prompt_tokens;
+			modelTotal.cachedTokens += fetchResult.usage.prompt_tokens_details?.cached_tokens ?? 0;
+			modelTotal.outputTokens += fetchResult.usage.completion_tokens;
+			this._accumulatedModelTotals.set(fetchResult.resolvedModel, modelTotal);
+
 			stream.usage({
 				completionTokens: fetchResult.usage.completion_tokens,
 				promptTokens: fetchResult.usage.prompt_tokens,
 				outputBuffer: endpoint.maxOutputTokens,
 				copilotCredits: this._accumulatedCopilotCredits,
 				promptTokenDetails,
+				// Snapshot: the accumulator entries keep being mutated by later calls in
+				// the same turn, and an in-process consumer holds on to what it is given.
+				modelTotals: Array.from(this._accumulatedModelTotals.values(), total => ({ ...total })),
 			});
 		}
 
