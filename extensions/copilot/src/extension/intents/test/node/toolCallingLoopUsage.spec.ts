@@ -5,7 +5,7 @@
 
 import { Raw } from '@vscode/prompt-tsx';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ChatRequest, LanguageModelChat, LanguageModelToolInformation } from 'vscode';
+import type { ChatRequest, ChatResultModelTotal, LanguageModelChat, LanguageModelToolInformation } from 'vscode';
 import { ChatFetchResponseType, ChatResponse } from '../../../../platform/chat/common/commonTypes';
 import { toTextPart } from '../../../../platform/chat/common/globalStringUtils';
 import { ITestingServicesAccessor } from '../../../../platform/test/node/services';
@@ -22,9 +22,12 @@ import { IToolCallingLoopOptions, ToolCallingLoop } from '../../node/toolCalling
 
 class UsageCapturingStream extends ChatResponseStreamImpl {
 	public readonly usages: Array<{ promptTokens: number; completionTokens: number; copilotCredits: number | undefined }>;
+	/** Per-report `modelTotals`, kept apart so the older assertions stay unchanged. */
+	public readonly modelTotals: Array<readonly ChatResultModelTotal[] | undefined>;
 
 	constructor() {
 		const usages: Array<{ promptTokens: number; completionTokens: number; copilotCredits: number | undefined }> = [];
+		const modelTotals: Array<readonly ChatResultModelTotal[] | undefined> = [];
 		super(
 			() => { },
 			() => { },
@@ -38,9 +41,11 @@ class UsageCapturingStream extends ChatResponseStreamImpl {
 					completionTokens: usage.completionTokens,
 					copilotCredits: usage.copilotCredits
 				});
+				modelTotals.push(usage.modelTotals);
 			}
 		);
 		this.usages = usages;
+		this.modelTotals = modelTotals;
 	}
 }
 
@@ -96,6 +101,36 @@ class CreditsTestToolCallingLoop extends ToolCallingLoop<IToolCallingLoopOptions
 				completion_tokens: 20,
 				total_tokens: 120,
 				copilot_usage: { total_nano_aiu: 5_000_000_000 }
+			},
+			resolvedModel: 'gpt-4.1'
+		};
+	}
+}
+
+class ModelTotalsTestToolCallingLoop extends ToolCallingLoop<IToolCallingLoopOptions> {
+	protected override async buildPrompt(_buildPromptContext: IBuildPromptContext): Promise<IBuildPromptResult> {
+		return {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('hello world')] }],
+		};
+	}
+
+	protected override async getAvailableTools(): Promise<LanguageModelToolInformation[]> {
+		return [];
+	}
+
+	// Each model call reports 100 prompt tokens (40 of them cache hits) and 20 completion tokens.
+	protected override async fetch(): Promise<ChatResponse> {
+		return {
+			type: ChatFetchResponseType.Success,
+			value: 'test-response',
+			requestId: 'request-id',
+			serverRequestId: undefined,
+			usage: {
+				prompt_tokens: 100,
+				completion_tokens: 20,
+				total_tokens: 120,
+				prompt_tokens_details: { cached_tokens: 40 }
 			},
 			resolvedModel: 'gpt-4.1'
 		};
@@ -210,5 +245,32 @@ describe('ToolCallingLoop usage reporting', () => {
 		await loop.runOne(stream, 1, tokenSource.token);
 
 		expect(stream.usages.map(u => u.copilotCredits)).toEqual([5, 10]);
+	});
+
+	it('accumulates per-model token totals within a turn and resets on the next turn', async () => {
+		const request = createMockChatRequest();
+		const loop = instantiationService.createInstance(
+			ModelTotalsTestToolCallingLoop,
+			{
+				conversation: createConversation(request.prompt),
+				toolCallLimit: 5,
+				request,
+			}
+		);
+		disposables.add(loop);
+		const stream = new UsageCapturingStream();
+
+		await loop.runOne(stream, 0, tokenSource.token);
+		await loop.runOne(stream, 1, tokenSource.token);
+		// Iteration 0 starts a new turn, so the totals restart from this call.
+		await loop.runOne(stream, 0, tokenSource.token);
+
+		// The rendered label comes from the resolved endpoint's metadata, so only the
+		// counts are pinned here: [input, cached, output] per model, per report.
+		expect(stream.modelTotals.map(totals => totals?.map(t => [t.inputTokens, t.cachedTokens, t.outputTokens]))).toEqual([
+			[[100, 40, 20]],
+			[[200, 80, 40]],
+			[[100, 40, 20]],
+		]);
 	});
 });

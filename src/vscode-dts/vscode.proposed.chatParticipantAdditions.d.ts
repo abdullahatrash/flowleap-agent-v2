@@ -838,6 +838,32 @@ declare module 'vscode' {
 	}
 
 	/**
+	 * Whole-turn token consumption attributed to a single model.
+	 */
+	export interface ChatResultModelTotal {
+		/**
+		 * The human-readable model name, rendered verbatim in the UI
+		 * (e.g. "Claude Sonnet 4.5").
+		 */
+		readonly model: string;
+
+		/**
+		 * The total number of input (prompt) tokens sent to this model this turn.
+		 */
+		readonly inputTokens: number;
+
+		/**
+		 * The portion of {@link inputTokens} the provider served from its prompt cache.
+		 */
+		readonly cachedTokens: number;
+
+		/**
+		 * The total number of output (completion) tokens produced by this model this turn.
+		 */
+		readonly outputTokens: number;
+	}
+
+	/**
 	 * Token usage information for a chat request.
 	 */
 	export interface ChatResultUsage {
@@ -867,6 +893,14 @@ declare module 'vscode' {
 		 * If the percentages do not sum to 100%, the remaining will be shown as "Uncategorized".
 		 */
 		readonly promptTokenDetails?: readonly ChatResultPromptTokenDetail[];
+
+		/**
+		 * Whole-turn token consumption broken down per model. A turn can call several
+		 * models, so each entry is the running total for one model rather than the
+		 * numbers of a single call. Rendered on hover of the response footer's model
+		 * stat; omit it to show no breakdown.
+		 */
+		readonly modelTotals?: readonly ChatResultModelTotal[];
 	}
 
 	export interface ChatResult {
