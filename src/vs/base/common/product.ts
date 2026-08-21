@@ -419,6 +419,8 @@ export interface IDefaultChatAgent {
 
 	readonly documentationUrl: string;
 	readonly skusDocumentationUrl: string;
+	/** Optional here: absent from this fork's product.json, so the cache-break "Learn more" link is simply not rendered. */
+	readonly optimizeUsageDocumentationUrl?: string;
 	readonly publicCodeMatchesUrl: string;
 	readonly managePlanUrl: string;
 	readonly upgradePlanUrl: string;

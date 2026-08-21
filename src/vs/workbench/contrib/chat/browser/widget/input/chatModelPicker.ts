@@ -23,20 +23,21 @@ import { formatTokenCount } from '../../../../../../base/common/numbers.js';
 import { ThemeIcon } from '../../../../../../base/common/themables.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { localize } from '../../../../../../nls.js';
-import { ActionListItemKind, IActionListItem } from '../../../../../../platform/actionWidget/browser/actionList.js';
+import { ActionListItemKind, IActionListHeaderLink, IActionListItem } from '../../../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetService } from '../../../../../../platform/actionWidget/browser/actionWidget.js';
 import { IActionWidgetDropdownAction } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../../../platform/product/common/productService.js';
 import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { TelemetryTrustedValue } from '../../../../../../platform/telemetry/common/telemetryUtils.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../common/constants.js';
 import { IModelControlEntry, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService, IModelsControlManifest } from '../../../common/languageModels.js';
 import { ChatEntitlement, chatRequiresSetup, IChatEntitlementService, isProUser } from '../../../../../services/chat/common/chatEntitlementService.js';
 import * as semver from '../../../../../../base/common/semver/semver.js';
 import { IModelConfigurationAccess, IModelPickerDelegate } from './modelPickerActionItem.js';
-import { getModelPickerUnavailableReason, ModelPickerUnavailableReason } from './chatModelSelectionLogic.js';
+import { getModelPickerUnavailableReason, ModelPickerUnavailableReason, shouldShowCacheBreakHint as computeShouldShowCacheBreakHint } from './chatModelSelectionLogic.js';
 import { CHAT_SETUP_ACTION_ID } from '../../actions/chatActions.js';
 import { IUriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { GitHubPaths, IDefaultAccountService } from '../../../../../../platform/defaultAccount/common/defaultAccount.js';
@@ -95,6 +96,9 @@ const SETUP_REQUIRED_SIGN_IN_ACTION_ID = 'setupRequiredSignIn';
 
 /** Synthetic command entries (Trust / Sign in) that are not selectable models. */
 const PICKER_COMMAND_ACTION_IDS: ReadonlySet<string> = new Set([RESTRICTED_MODE_TRUST_ACTION_ID, SETUP_REQUIRED_SIGN_IN_ACTION_ID]);
+
+/** Storage key remembering that the user dismissed the cache-break hint. */
+const CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY = 'chat.cacheBreakHintDismissed';
 
 /**
  * Returns a human-readable display name for a model vendor.
@@ -1036,6 +1040,18 @@ function createUnavailableModelItem(
 
 type ModelPickerBadge = 'info' | 'warning';
 
+/** Why the picker has no model to offer, and the label states that follow from it. */
+interface IModelPickerAvailability {
+	/** Untrusted workspace or sign-in / setup required, or `undefined` when a model is available. */
+	readonly reason: ModelPickerUnavailableReason | undefined;
+	/** Trusted, but models are still loading while the chat extension activates. */
+	readonly activating: boolean;
+	/** Trusted and set up, but the list is empty and there is no Auto fallback. */
+	readonly genericNoModels: boolean;
+	/** Any of the above: the picker has nothing to offer. */
+	readonly noModels: boolean;
+}
+
 /**
  * A model selection dropdown widget.
  *
@@ -1089,6 +1105,7 @@ export class ModelPickerWidget extends Disposable {
 		@IDefaultAccountService private readonly _defaultAccountService: IDefaultAccountService,
 		@IWorkspaceTrustManagementService private readonly _workspaceTrustManagementService: IWorkspaceTrustManagementService,
 		@IWorkspaceTrustRequestService private readonly _workspaceTrustRequestService: IWorkspaceTrustRequestService,
+		@IStorageService private readonly _storageService: IStorageService,
 	) {
 		super();
 		this._register(this._languageModelsService.onDidChangeLanguageModels(() => {
@@ -1307,6 +1324,45 @@ export class ModelPickerWidget extends Disposable {
 		}));
 	}
 
+	/** The "Learn more" header link for cache-break hints; `undefined` when the product has no URL. */
+	private getCacheBreakLearnMoreLink(): IActionListHeaderLink | undefined {
+		const url = this._productService.defaultChatAgent?.optimizeUsageDocumentationUrl;
+		return url ? { label: localize('chat.cacheBreak.learnMore', "Learn more"), uri: URI.parse(url) } : undefined;
+	}
+
+	private isCacheBreakHintDismissed(): boolean {
+		return this._storageService.getBoolean(CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY, StorageScope.APPLICATION, false);
+	}
+
+	private dismissCacheBreakHint(): void {
+		this._storageService.store(CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY, true, StorageScope.APPLICATION, StorageTarget.USER);
+	}
+
+	/**
+	 * The picker's current availability, derived once so the label states and the "nothing to switch
+	 * to" hint suppression (#325185) cannot disagree.
+	 */
+	private _availability(): IModelPickerAvailability {
+		// Queried directly rather than through the isRestrictedMode()/isSetupRequired() wrappers,
+		// which would each recompute it.
+		const reason = this._unavailableReason();
+		const empty = this._delegate.getModels().length === 0;
+		const activating = reason === undefined && empty && this._activatingAfterTrust;
+		const genericNoModels = reason === undefined && !activating && empty && !(this._delegate.showAutoModel?.() ?? false);
+		return { reason, activating, genericNoModels, noModels: reason !== undefined || activating || genericNoModels };
+	}
+
+	/** Thin wrapper over {@link computeShouldShowCacheBreakHint} that supplies this picker's live state. */
+	private shouldShowCacheBreakHint(excludeAutoModel: boolean): boolean {
+		return computeShouldShowCacheBreakHint({
+			dismissed: this.isCacheBreakHintDismissed(),
+			cacheWarm: this._delegate.isCacheWarm?.() ?? false,
+			noModelsAvailable: this._availability().noModels,
+			excludeAutoModel,
+			selectedModelIsAuto: !!this._selectedModel && isAutoModel(this._selectedModel),
+		});
+	}
+
 	show(anchor?: HTMLElement): void {
 		const anchorElement = anchor ?? this._domNode;
 		if (!anchorElement || this._domNode?.classList.contains('disabled')) {
@@ -1395,7 +1451,12 @@ export class ModelPickerWidget extends Disposable {
 			}
 		}
 
+		const showCacheBreakHint = this.shouldShowCacheBreakHint(/* excludeAutoModel */ true);
 		const listOptions = {
+			headerText: showCacheBreakHint ? localize('chat.modelPicker.cacheBreakHint', "Switching models mid-session resets the prompt cache and may increase cost.") : undefined,
+			headerIcon: showCacheBreakHint ? Codicon.info : undefined,
+			headerLink: showCacheBreakHint ? this.getCacheBreakLearnMoreLink() : undefined,
+			headerDismiss: showCacheBreakHint ? () => this.dismissCacheBreakHint() : undefined,
 			// Always show the filter to allow for the secondary heading to show
 			showFilter: true,
 			filterPlaceholder: localize('chat.modelPicker.search', "Search models"),
@@ -1474,34 +1535,20 @@ export class ModelPickerWidget extends Disposable {
 
 		const { name, statusIcon } = this._selectedModel?.metadata || {};
 
-		// Untrusted workspace: present a normal "Pick Model" placeholder (no badge)
-		// rather than a dead-end label; the hover and dropdown carry the Restricted
-		// Mode explanation and the Trust Workspace action.
-		const restrictedMode = this.isRestrictedMode();
-
-		// Trusted, but Chat still needs sign-in / setup before any model is
-		// usable: present the same "Pick Model" placeholder, with the dropdown
-		// carrying a Sign In action instead of a misleading "Auto".
-		const setupRequired = this.isSetupRequired();
-		const unavailable = restrictedMode || setupRequired;
-
-		// Just after Trust, models load asynchronously while the chat extension
-		// activates. Show a transient "Activating..." state — only when there is
-		// nothing else to display — instead of a misleading "Auto" fallback.
-		const activating = !unavailable && this._activatingAfterTrust && this._delegate.getModels().length === 0;
-
-		// Generic empty state (e.g. an agent-host session with no Auto fallback);
-		// not evaluated while unavailable/activating, which take precedence.
-		const genericNoModels = !unavailable && !activating
-			&& !(this._delegate.showAutoModel?.() ?? false)
-			&& this._delegate.getModels().length === 0;
-		const noModelsAvailable = unavailable || activating || genericNoModels;
+		const { reason, activating, genericNoModels, noModels: noModelsAvailable } = this._availability();
+		const restrictedMode = reason === ModelPickerUnavailableReason.Restricted;
+		const setupRequired = reason === ModelPickerUnavailableReason.SetupRequired;
+		const unavailable = reason !== undefined;
 
 		// --- Name section ---
 		const nameChildren: (HTMLElement | string)[] = [];
 		if (statusIcon && !noModelsAvailable) {
 			nameChildren.push(renderIcon(statusIcon));
 		}
+		// A "Pick Model" placeholder (no badge) beats a dead-end label while unavailable — the hover and
+		// dropdown carry the Restricted Mode explanation and the Trust Workspace / Sign In action.
+		// "Activating..." is transient while models load after a Trust grant; "No models available"
+		// is the genuinely empty state (e.g. an agent-host session with no Auto fallback).
 		const modelLabel = unavailable
 			? localize('chat.modelPicker.label', "Pick Model")
 			: activating
@@ -1737,6 +1784,8 @@ export class ModelPickerWidget extends Disposable {
 
 		this._configButton.setAttribute('aria-expanded', 'true');
 
+		const showCacheBreakHint = this.shouldShowCacheBreakHint(/* excludeAutoModel */ false);
+
 		this._actionWidgetService.show(
 			'ChatModelConfigPicker',
 			false,
@@ -1753,8 +1802,10 @@ export class ModelPickerWidget extends Disposable {
 				getWidgetRole: () => 'menu' as const,
 			},
 			{
-				headerText: localize('chat.config.costHint', "Non-default options may increase cost"),
-				headerIcon: Codicon.info,
+				headerText: showCacheBreakHint ? localize('chat.config.cacheBreakHint', "Changing these options mid-session resets the prompt cache and may increase cost.") : undefined,
+				headerIcon: showCacheBreakHint ? Codicon.info : undefined,
+				headerLink: showCacheBreakHint ? this.getCacheBreakLearnMoreLink() : undefined,
+				headerDismiss: showCacheBreakHint ? () => this.dismissCacheBreakHint() : undefined,
 			}
 		);
 
