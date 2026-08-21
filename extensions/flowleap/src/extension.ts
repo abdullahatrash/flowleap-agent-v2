@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { HomeDashboardPanel } from './homeDashboard/homeDashboardPanel';
 import { HomeDashboardViewProvider } from './homeDashboard/homeDashboardViewProvider';
+import { BrowserLauncherViewProvider } from './browserLauncher/browserLauncherViewProvider';
 import {
 	ProjectTreeProvider,
 	PatentProject,
@@ -199,6 +200,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.window.registerWebviewViewProvider(
 			HomeDashboardViewProvider.viewType,
 			new HomeDashboardViewProvider(context.extensionUri, context),
+			{ webviewOptions: { retainContextWhenHidden: true } }
+		)
+	);
+
+	// Integrated-browser launcher — URL box + patent research links; the browser
+	// itself always opens as an editor tab.
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			BrowserLauncherViewProvider.viewType,
+			new BrowserLauncherViewProvider(),
 			{ webviewOptions: { retainContextWhenHidden: true } }
 		)
 	);
