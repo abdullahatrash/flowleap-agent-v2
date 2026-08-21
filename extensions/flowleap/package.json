@@ -27,6 +27,11 @@
     "viewsContainers": {
       "activitybar": [
         {
+          "id": "flowleap-dashboard",
+          "title": "Dashboard",
+          "icon": "$(dashboard)"
+        },
+        {
           "id": "flowleap-sidebar",
           "title": "FlowLeap",
           "icon": "$(briefcase)"
@@ -41,6 +46,15 @@
       ]
     },
     "views": {
+      "flowleap-dashboard": [
+        {
+          "type": "webview",
+          "id": "flowleap.dashboardView",
+          "name": "Dashboard",
+          "icon": "$(dashboard)",
+          "contextualTitle": "FlowLeap Dashboard"
+        }
+      ],
       "flowleap-sidebar": [
         {
           "id": "flowleap.projectSidebar",

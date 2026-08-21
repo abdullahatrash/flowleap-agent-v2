@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { HomeDashboardPanel } from './homeDashboard/homeDashboardPanel';
+import { HomeDashboardViewProvider } from './homeDashboard/homeDashboardViewProvider';
 import {
 	ProjectTreeProvider,
 	PatentProject,
@@ -191,6 +192,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flowleap.openHome', () => {
 			HomeDashboardPanel.createOrShow(context.extensionUri, context);
 		})
+	);
+
+	// The same dashboard, always available from the activity bar
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			HomeDashboardViewProvider.viewType,
+			new HomeDashboardViewProvider(context.extensionUri, context),
+			{ webviewOptions: { retainContextWhenHidden: true } }
+		)
 	);
 
 	// New Project — type picker + name + auto-location
@@ -739,12 +749,14 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 /**
- * Refresh both project surfaces — the sidebar (right panel) and the home
- * dashboard (center tab) — so they always show the same project store.
+ * Refresh every project surface — the sidebar (right panel), the home dashboard
+ * (center tab) and the dashboard view (activity bar) — so they always show the
+ * same project store.
  */
 function refreshProjectViews(): void {
 	projectSidebarProvider.refresh();
 	HomeDashboardPanel.refresh();
+	HomeDashboardViewProvider.refresh();
 }
 
 function resolveProjectPath(projectOrPath?: PatentProject | string): string | undefined {
