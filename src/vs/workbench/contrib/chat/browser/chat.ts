@@ -392,6 +392,7 @@ export interface IChatWidget {
 	logInputHistory(): void;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<IChatResponseModel | undefined>;
 	startEditing(requestId: string): void;
+	cancelEditing(): Promise<void>;
 	finishedEditing(completedEdit?: boolean): void;
 	rerunLastRequest(): Promise<void>;
 	setInputPlaceholder(placeholder: string): void;

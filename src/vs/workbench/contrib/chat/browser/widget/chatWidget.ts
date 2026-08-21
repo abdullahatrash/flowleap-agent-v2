@@ -294,6 +294,8 @@ export class ChatWidget extends Disposable implements IChatWidget {
 	private editorOptions!: ChatEditorOptions;
 
 	private recentlyRestoredCheckpoint: boolean = false;
+	private _requestEditSnapshot: { readonly input: string; readonly attachmentIds: ReadonlySet<string> } | undefined;
+	private _requestEditCancellationPending = false;
 
 	private welcomeMessageContainer!: HTMLElement;
 	private readonly welcomePart: MutableDisposable<ChatViewWelcomePart> = this._register(new MutableDisposable());
@@ -1689,7 +1691,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		}));
 
 		this._register(this.listWidget.onDidFocusOutside(() => {
-			this.finishedEditing();
+			void this.cancelEditing();
 		}));
 
 		this._register(this.listWidget.onDidClickFollowup(item => {
@@ -1827,13 +1829,17 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				}
 			}
 
+			this._requestEditSnapshot = {
+				input: this.getInput(),
+				attachmentIds: this.input.attachmentModel.getAttachmentIDs(),
+			};
 			this.listWidget.suppressAutoScroll = true;
 			this.onDidChangeItems();
 			this.input.inputEditor.focus();
 
 			this._register(this.inputPart.onDidClickOverlay(() => {
 				if (this.viewModel?.editing && this.configurationService.getValue<string>('chat.editRequests') !== 'input') {
-					this.finishedEditing();
+					void this.cancelEditing();
 				}
 			}));
 
@@ -1862,8 +1868,54 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		});
 	}
 
+	async cancelEditing(): Promise<void> {
+		const editing = this.viewModel?.editing;
+		if (!editing || this._requestEditCancellationPending) {
+			return;
+		}
+
+		let confirmed = true;
+		if (this._hasRequestEditChanges()) {
+			this._requestEditCancellationPending = true;
+			try {
+				const result = await this.dialogService.confirm({
+					type: 'warning',
+					message: localize('chat.cancelEditing.confirm', "Discard Edits?"),
+					detail: localize('chat.cancelEditing.confirmDetail', "Your changes to this request will be lost."),
+					primaryButton: localize('chat.cancelEditing.discard', "Discard Edits"),
+				});
+				confirmed = result.confirmed;
+			} finally {
+				this._requestEditCancellationPending = false;
+			}
+		}
+
+		if (this.viewModel?.editing !== editing) {
+			return;
+		}
+		if (!confirmed) {
+			this.input.focus();
+			return;
+		}
+
+		this.finishedEditing();
+	}
+
+	private _hasRequestEditChanges(): boolean {
+		const snapshot = this._requestEditSnapshot;
+		if (!snapshot) {
+			return false;
+		}
+
+		const attachmentIds = this.input.attachmentModel.getAttachmentIDs();
+		return this.getInput() !== snapshot.input
+			|| attachmentIds.size !== snapshot.attachmentIds.size
+			|| [...attachmentIds].some(id => !snapshot.attachmentIds.has(id));
+	}
+
 	finishedEditing(completedEdit?: boolean): void {
 		// reset states
+		this._requestEditSnapshot = undefined;
 		this.listWidget.suppressAutoScroll = false;
 		const editedRequest = this.listWidget.getTemplateDataForRequestId(this.viewModel?.editing?.id);
 		if (this.recentlyRestoredCheckpoint) {
