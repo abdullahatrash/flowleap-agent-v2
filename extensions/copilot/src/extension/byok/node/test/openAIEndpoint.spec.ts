@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Raw } from '@vscode/prompt-tsx';
+import { OpenAI, Raw } from '@vscode/prompt-tsx';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatFetchResponseType, ChatResponse } from '../../../../platform/chat/common/commonTypes';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
@@ -15,8 +15,9 @@ import { ITestingServicesAccessor } from '../../../../platform/test/node/service
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { DisposableStore } from '../../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
+import { CAPIChatMessage } from '../../../../platform/networking/common/openai';
 import { createExtensionUnitTestingServices } from '../../../test/node/services';
-import { OpenAIEndpoint } from '../openAIEndpoint';
+import { hoistToolResultImages, OpenAIEndpoint } from '../openAIEndpoint';
 
 // Test fixtures for thinking content
 const createThinkingMessage = (thinkingId: string, thinkingText: string): Raw.ChatMessage => ({
@@ -599,5 +600,50 @@ describe('OpenAIEndpoint - Reasoning Properties', () => {
 
 			expect(body.reasoning_effort).toBeUndefined();
 		});
+	});
+});
+
+describe('hoistToolResultImages', () => {
+
+	const text = (t: string): OpenAI.ChatCompletionContentPart => ({ type: 'text', text: t });
+	const image = (url: string): OpenAI.ChatCompletionContentPart => ({ type: 'image_url', image_url: { url } });
+
+	it('moves image parts out of a tool message into a user message after the tool run', () => {
+		const messages: CAPIChatMessage[] = [
+			{ role: OpenAI.ChatRole.User, content: 'show me the figures' },
+			{ role: OpenAI.ChatRole.Assistant, content: '', tool_calls: [{ id: 'call1', type: 'function', function: { name: 'get_patent_figures', arguments: '{}' } }] },
+			{ role: OpenAI.ChatRole.Tool, tool_call_id: 'call1', content: [text('Page 7:'), image('data:image/png;base64,AAA'), image('data:image/png;base64,BBB')] },
+		];
+
+		const result = hoistToolResultImages(messages);
+
+		expect(result).toEqual([
+			messages[0],
+			messages[1],
+			{ role: OpenAI.ChatRole.Tool, tool_call_id: 'call1', content: [text('Page 7:'), text('[2 image(s) from this tool result are attached in the next user message.]')] },
+			{ role: OpenAI.ChatRole.User, content: [text('The images attached to the preceding tool result(s):'), image('data:image/png;base64,AAA'), image('data:image/png;base64,BBB')] },
+		]);
+	});
+
+	it('keeps the hoisted user message after ALL tool messages of the same assistant turn', () => {
+		const messages: CAPIChatMessage[] = [
+			{ role: OpenAI.ChatRole.Assistant, content: '', tool_calls: [{ id: 'call1', type: 'function', function: { name: 'a', arguments: '{}' } }, { id: 'call2', type: 'function', function: { name: 'b', arguments: '{}' } }] },
+			{ role: OpenAI.ChatRole.Tool, tool_call_id: 'call1', content: [image('data:image/png;base64,AAA')] },
+			{ role: OpenAI.ChatRole.Tool, tool_call_id: 'call2', content: 'plain result' },
+		];
+
+		const result = hoistToolResultImages(messages);
+
+		expect(result.map(m => m.role)).toEqual([OpenAI.ChatRole.Assistant, OpenAI.ChatRole.Tool, OpenAI.ChatRole.Tool, OpenAI.ChatRole.User]);
+		expect(result[3].content).toEqual([text('The images attached to the preceding tool result(s):'), image('data:image/png;base64,AAA')]);
+	});
+
+	it('returns the input untouched when no tool message carries an image', () => {
+		const messages: CAPIChatMessage[] = [
+			{ role: OpenAI.ChatRole.User, content: [image('data:image/png;base64,AAA')] },
+			{ role: OpenAI.ChatRole.Tool, tool_call_id: 'call1', content: 'plain result' },
+		];
+
+		expect(hoistToolResultImages(messages)).toBe(messages);
 	});
 });

@@ -1609,7 +1609,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(file-media)",
         "userDescription": "Get patent figure/drawing images as viewable PNGs",
-        "modelDescription": "Retrieve patent figure/drawing IMAGES and return them as inline PNG images you can SEE and analyze. USE WHEN: the user asks to see, show, view, or analyze the figures, drawings, or images of a specific patent. The backend fetches the drawings from EPO and rasterizes them to PNG, so they render directly in chat. INPUT: a patent publication number (e.g. 'EP1234567', 'US10000000B2'; hyphens optional). By default returns the actual DRAWING pages (EPO scans put cover/biblio/description pages first, so they are skipped automatically); pass 'pages' (e.g. '1,2,3') to override and fetch specific pages. Do NOT use this for full claims/description text — use get_patent_details for text.",
+        "modelDescription": "Retrieve patent figure/drawing IMAGES and return them as inline PNG images you can SEE and analyze. USE WHEN: the user asks to see, show, view, analyze, save, or download the figures, drawings, or images of a specific patent. The backend fetches the drawings from EPO and rasterizes them to PNG, so they render directly in chat. The inline images exist ONLY in the chat response — they are NOT files on disk, so never try to find or copy them with file tools. TO SAVE the drawings as files, pass 'saveDir' (a workspace folder, e.g. 'figures'); the tool then also writes each page as a PNG file there and reports the file paths. INPUT: a patent publication number (e.g. 'EP1234567', 'US10000000B2'; hyphens optional). By default returns the actual DRAWING pages (EPO scans put cover/biblio/description pages first, so they are skipped automatically); pass 'pages' (e.g. '1,2,3') to override and fetch specific pages. Do NOT use this for full claims/description text — use get_patent_details for text.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1621,6 +1621,10 @@
             "pages": {
               "type": "string",
               "description": "Optional comma-separated page numbers to fetch, e.g. '1,2,3' (max 20). If omitted, returns the first several figure pages."
+            },
+            "saveDir": {
+              "type": "string",
+              "description": "Optional workspace directory (relative or absolute, e.g. 'figures'). When set, each fetched page is also saved there as a PNG file and the file paths are reported."
             }
           },
           "required": [

@@ -2,6 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+import { OpenAI } from '@vscode/prompt-tsx';
 import type { CancellationToken } from 'vscode';
 import { IChatMLFetcher } from '../../../platform/chat/common/chatMLFetcher';
 import { ChatFetchResponseType, ChatResponse } from '../../../platform/chat/common/commonTypes';
@@ -12,7 +13,7 @@ import { ChatEndpoint } from '../../../platform/endpoint/node/chatEndpoint';
 import { ILogService } from '../../../platform/log/common/logService';
 import { isOpenAiFunctionTool } from '../../../platform/networking/common/fetch';
 import { createCapiRequestBody, IChatEndpoint, ICreateEndpointBodyOptions, IEndpointBody, IMakeChatRequestOptions } from '../../../platform/networking/common/networking';
-import { RawMessageConversionCallback } from '../../../platform/networking/common/openai';
+import { CAPIChatMessage, RawMessageConversionCallback } from '../../../platform/networking/common/openai';
 import { IChatWebSocketManager } from '../../../platform/networking/node/chatWebSocketManager';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITokenizerProvider } from '../../../platform/tokenizer/node/tokenizer';
@@ -39,6 +40,51 @@ function hydrateBYOKErrorMessages(response: ChatResponse): ChatResponse {
 		};
 	}
 	return response;
+}
+
+/**
+ * Moves `image_url` parts out of `tool` role messages into a `user` message that follows the run of
+ * tool messages they belong to.
+ *
+ * CAPI accepts images inside tool messages, so the agent prompt inlines tool-result images there —
+ * but the vanilla Chat Completions contract allows only text in `tool` messages, and OpenAI-compatible
+ * proxies mishandle the extra parts. OpenRouter's Gemini conversion drops such a tool message
+ * entirely, so a request whose conversation ends with it reaches Google ending on the assistant
+ * tool-call turn and is rejected with 400 "Requests ending with a model turn are not supported".
+ */
+export function hoistToolResultImages(messages: CAPIChatMessage[]): CAPIChatMessage[] {
+	if (!messages.some(m => m.role === OpenAI.ChatRole.Tool && Array.isArray(m.content) && m.content.some(part => part.type === 'image_url'))) {
+		return messages;
+	}
+	const result: CAPIChatMessage[] = [];
+	let pendingImages: OpenAI.ChatCompletionContentPart[] = [];
+	const flush = () => {
+		if (pendingImages.length > 0) {
+			result.push({
+				role: OpenAI.ChatRole.User,
+				content: [{ type: 'text', text: 'The images attached to the preceding tool result(s):' }, ...pendingImages],
+			});
+			pendingImages = [];
+		}
+	};
+	for (const message of messages) {
+		if (message.role === OpenAI.ChatRole.Tool && Array.isArray(message.content) && message.content.some(part => part.type === 'image_url')) {
+			const images = message.content.filter(part => part.type === 'image_url');
+			const rest = message.content.filter(part => part.type !== 'image_url');
+			rest.push({ type: 'text', text: `[${images.length} image(s) from this tool result are attached in the next user message.]` });
+			result.push({ ...message, content: rest });
+			pendingImages.push(...images);
+			continue;
+		}
+		if (message.role !== OpenAI.ChatRole.Tool) {
+			// The hoisted user message must come after ALL tool messages answering the same
+			// assistant turn, or providers reject the interleaved conversation as malformed.
+			flush();
+		}
+		result.push(message);
+	}
+	flush();
+	return result;
 }
 
 /**
@@ -289,6 +335,9 @@ export class OpenAIEndpoint extends ChatEndpoint {
 				}
 			};
 			const body = createCapiRequestBody(options, this.model, callback);
+			if (body.messages) {
+				body.messages = hoistToolResultImages(body.messages);
+			}
 			this._applyReasoningEffort(body, options);
 			return body;
 		}

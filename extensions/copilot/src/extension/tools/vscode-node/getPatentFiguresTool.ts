@@ -5,21 +5,29 @@
 
 import * as l10n from '@vscode/l10n';
 import type * as vscode from 'vscode';
+import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
+import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
+import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { decodeBase64 } from '../../../util/vs/base/common/buffer';
+import { joinPath } from '../../../util/vs/base/common/resources';
+import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { assertFileOkForTool } from '../node/toolUtils';
 
 interface IGetPatentFiguresParams {
 	/** Patent publication number, e.g. "EP1234567", "US10000000B2" (hyphens optional). */
 	publicationNumber: string;
 	/** Optional comma-separated page numbers, e.g. "1,2,3". Defaults to the first several pages. */
 	pages?: string;
+	/** Optional workspace directory; when set, the fetched pages are also saved there as PNG files. */
+	saveDir?: string;
 }
 
 interface FigureData {
@@ -61,6 +69,8 @@ const FIGURE_RENDER_TIMEOUT_MS = 60_000;
  * page count and where the drawings start), then the selected pages with `include_images` and
  * `render: 'png'`, since EPO serves most patents as PDF only and a PDF cannot be shown as an image.
  * The pages come back as inline image parts so the model can actually see and analyze the figures.
+ * The inline parts exist only in the chat response — they are never files on disk — so `saveDir`
+ * writes the same pages as PNG files into the workspace when the user wants them saved.
  * Routes through the shared {@link IPatentBackendClient} seam for centralized `401`/`402` gating.
  */
 export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParams> {
@@ -70,17 +80,30 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IFileSystemService private readonly fileSystemService: IFileSystemService,
+		@IPromptPathRepresentationService private readonly promptPathRepresentationService: IPromptPathRepresentationService,
+		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentFiguresParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
-		const { publicationNumber } = options.input;
+		const { publicationNumber, saveDir } = options.input;
+		if (saveDir?.trim()) {
+			return {
+				invocationMessage: l10n.t`Fetching patent figures for ${publicationNumber}...`,
+				confirmationMessages: {
+					title: l10n.t`Save Patent Figures`,
+					message: l10n.t`Allow Patent AI to save the figure images of ${publicationNumber} into ${saveDir}?`
+				}
+			};
+		}
 		return {
 			invocationMessage: l10n.t`Fetching patent figures for ${publicationNumber}...`,
 		};
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IGetPatentFiguresParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const { publicationNumber, pages } = options.input;
+		const { publicationNumber, pages, saveDir } = options.input;
 		this.logService.info(`[GetPatentFiguresTool] Fetching figures for ${publicationNumber}${pages ? ` pages=${pages}` : ''}`);
 
 		try {
@@ -163,10 +186,68 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 				));
 			}
 
+			if (saveDir?.trim()) {
+				parts.push(new LanguageModelTextPart(await this.savePages(saveDir.trim(), docId, withImages)));
+			}
+
 			return new LanguageModelToolResult(parts);
 
 		} catch (error) {
 			return handlePatentToolError(error, this.logService, '[GetPatentFiguresTool]', err => `Error fetching figures for ${publicationNumber}: ${err.status} - ${err.message}`);
+		}
+	}
+
+	/**
+	 * Resolves `saveDir` to a URI. {@link IPromptPathRepresentationService.resolveFilePath} accepts
+	 * only absolute paths, but the tool documents relative paths too (e.g. 'figures'), so those are
+	 * resolved against the first workspace folder.
+	 */
+	private resolveSaveDir(saveDir: string): vscode.Uri | undefined {
+		const absolute = this.promptPathRepresentationService.resolveFilePath(saveDir);
+		if (absolute) {
+			return absolute;
+		}
+		const workspaceFolder = this.workspaceService.getWorkspaceFolders()[0];
+		if (!workspaceFolder) {
+			return undefined;
+		}
+		// Normalize Windows-style separators before joining path fragments.
+		const fragments = saveDir.replace(/\\/g, '/').split('/').filter(fragment => fragment.length > 0);
+		return fragments.length > 0 ? joinPath(workspaceFolder, ...fragments) : workspaceFolder;
+	}
+
+	/**
+	 * Saves the fetched pages as PNG files under `saveDir` and reports the outcome as a text line.
+	 * A save failure must not discard the images already fetched, so errors are reported in the
+	 * result text instead of failing the whole tool call.
+	 */
+	private async savePages(saveDir: string, docId: string, figures: FigureData[]): Promise<string> {
+		const dirUri = this.resolveSaveDir(saveDir);
+		if (!dirUri) {
+			return `\nCould not save the images: "${saveDir}" is not a valid directory path. Provide a folder inside the workspace.`;
+		}
+		try {
+			const safeDocId = docId.replace(/[^A-Za-z0-9.-]/g, '') || 'patent';
+			const targets = figures.map(fig => ({ fig, uri: joinPath(dirUri, `${safeDocId}-page-${fig.page}.png`) }));
+
+			// Confine writes to the workspace before touching disk, exactly like write_patent_results.
+			for (const { uri } of targets) {
+				await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+			}
+
+			await createDirectoryIfNotExists(this.fileSystemService, dirUri);
+			const saved: string[] = [];
+			for (const { fig, uri } of targets) {
+				// render=png means base64 is always a PNG image.
+				await this.fileSystemService.writeFile(uri, decodeBase64(fig.base64!).buffer);
+				saved.push(this.promptPathRepresentationService.getFilePath(uri));
+			}
+			this.logService.info(`[GetPatentFiguresTool] Saved ${saved.length} page(s) of ${docId} to ${saveDir}`);
+			return `\nSaved ${saved.length} PNG file(s):\n${saved.map(p => `- ${p}`).join('\n')}`;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.logService.error(`[GetPatentFiguresTool] Failed to save pages to ${saveDir}: ${message}`);
+			return `\nCould not save the images to "${saveDir}": ${message}. The pages above are still shown inline.`;
 		}
 	}
 }
