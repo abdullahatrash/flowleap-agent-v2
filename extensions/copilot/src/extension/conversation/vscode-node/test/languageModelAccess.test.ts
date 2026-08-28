@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Raw } from '@vscode/prompt-tsx';
 import assert from 'assert';
 import * as vscode from 'vscode';
-import { IChatMLFetcher } from '../../../../platform/chat/common/chatMLFetcher';
-import { ChatFetchResponseType } from '../../../../platform/chat/common/commonTypes';
+import { IChatMLFetcher, IFetchMLOptions } from '../../../../platform/chat/common/chatMLFetcher';
+import { ChatFetchResponseType, ChatResponses } from '../../../../platform/chat/common/commonTypes';
 import { MockChatMLFetcher } from '../../../../platform/chat/test/common/mockChatMLFetcher';
 import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
 import { CustomDataPartMimeTypes } from '../../../../platform/endpoint/common/endpointTypes';
@@ -86,6 +87,64 @@ suite('CopilotLanguageModelWrapper', () => {
 
 		test('good tool name', async () => {
 			await runTest([vscode.LanguageModelChatMessage.User('hello2')], [{ name: 'hello_world', description: 'my tool' }]);
+		});
+	});
+
+	suite('trailing assistant guard', () => {
+		let wrapper: CopilotLanguageModelWrapper;
+		let endpoint: IChatEndpoint;
+		let fetcher: CapturingChatMLFetcher;
+
+		/** Records the messages of each request so the outgoing shape can be asserted. */
+		class CapturingChatMLFetcher extends MockChatMLFetcher {
+			readonly requests: Raw.ChatMessage[][] = [];
+			override async fetchMany(options: IFetchMLOptions, token: CancellationToken): Promise<ChatResponses> {
+				this.requests.push(options.messages);
+				return super.fetchMany(options, token);
+			}
+		}
+
+		setup(async () => {
+			const testingServiceCollection = createExtensionTestingServices();
+			fetcher = new CapturingChatMLFetcher();
+			testingServiceCollection.define(IChatMLFetcher, fetcher);
+			accessor = testingServiceCollection.createTestingAccessor();
+			instaService = accessor.get(IInstantiationService);
+			endpoint = await accessor.get(IEndpointProvider).getChatEndpoint('copilot-utility');
+			wrapper = instaService.createInstance(CopilotLanguageModelWrapper);
+		});
+
+		test('appends a synthetic user message when the conversation ends with an assistant turn', async () => {
+			// Some providers (e.g. Google) reject requests whose last message is an assistant turn.
+			await wrapper.provideLanguageModelResponse(
+				endpoint,
+				[vscode.LanguageModelChatMessage.User('hello'), vscode.LanguageModelChatMessage.Assistant('partial answer')],
+				{ requestInitiator: 'unknown', toolMode: vscode.LanguageModelChatToolMode.Auto },
+				vscode.extensions.all[0].id,
+				{ report: () => { } },
+				CancellationToken.None
+			);
+
+			assert.strictEqual(fetcher.requests.length, 1);
+			const sent = fetcher.requests[0];
+			assert.strictEqual(sent[sent.length - 1].role, Raw.ChatRole.User);
+			assert.deepStrictEqual(sent[sent.length - 1].content, [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Please continue.' }]);
+		});
+
+		test('does not touch a conversation that already ends with a user turn', async () => {
+			await wrapper.provideLanguageModelResponse(
+				endpoint,
+				[vscode.LanguageModelChatMessage.User('hello')],
+				{ requestInitiator: 'unknown', toolMode: vscode.LanguageModelChatToolMode.Auto },
+				vscode.extensions.all[0].id,
+				{ report: () => { } },
+				CancellationToken.None
+			);
+
+			assert.strictEqual(fetcher.requests.length, 1);
+			const sent = fetcher.requests[0];
+			assert.strictEqual(sent[sent.length - 1].role, Raw.ChatRole.User);
+			assert.strictEqual(sent.filter(m => m.role === Raw.ChatRole.User).length, 1);
 		});
 	});
 

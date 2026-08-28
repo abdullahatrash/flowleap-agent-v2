@@ -208,6 +208,18 @@ export class CopilotLanguageModelWrapper extends Disposable {
 			throw new Error('Message exceeds token limit.');
 		}
 
+		// Guard: some providers reject a conversation that ends with an assistant message —
+		// Google returns 400 "Requests ending with a model turn are not supported". Mirror the
+		// Messages-API trailing-assistant guard (see messagesApi.ts) on this OpenAI-style path:
+		// append a synthetic user turn so the request stays valid for every provider.
+		if (messages[messages.length - 1].role === Raw.ChatRole.Assistant) {
+			this._logService.warn(`[CopilotLanguageModelWrapper] Trailing assistant message detected — appending synthetic user message. Total messages: ${messages.length}`);
+			messages.push({
+				role: Raw.ChatRole.User,
+				content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Please continue.' }],
+			});
+		}
+
 		if (_options.tools && _options.tools.length > 128 && !_endpoint.supportsToolSearch) {
 			throw new Error('Cannot have more than 128 tools per request.');
 		}

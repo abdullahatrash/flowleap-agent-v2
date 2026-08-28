@@ -15,8 +15,13 @@
 
 import type * as vscode from 'vscode';
 import { describe, expect, it } from 'vitest';
+import type { IFileSystemService } from '../../../../platform/filesystem/common/fileSystemService';
 import type { ILogService } from '../../../../platform/log/common/logService';
+import type { IPromptPathRepresentationService } from '../../../../platform/prompts/common/promptPathRepresentationService';
+import type { IWorkspaceService } from '../../../../platform/workspace/common/workspaceService';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
+import { URI } from '../../../../util/vs/base/common/uri';
+import type { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart } from '../../../../vscodeTypes';
 import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { GetPatentDetailsTool } from '../getPatentDetailsTool';
@@ -50,6 +55,32 @@ function makeBackendClient(dataByTool: Record<string, unknown>) {
 		},
 	};
 	return { client, calls };
+}
+
+/**
+ * File-system, path and instantiation fakes for {@link GetPatentFiguresTool}'s optional `saveDir`
+ * path. The instantiation fake skips the workspace-confinement guard (integration behavior); what
+ * is pinned here is that pages become PNG files at predictable paths.
+ */
+function makeFiguresSaveServices() {
+	const writes: { path: string; bytes: number }[] = [];
+	const fileSystemService = {
+		async stat(): Promise<never> { throw new Error('does not exist'); },
+		async createDirectory(): Promise<void> { },
+		async writeFile(uri: URI, content: Uint8Array): Promise<void> { writes.push({ path: uri.path, bytes: content.length }); },
+	} as unknown as IFileSystemService;
+	const promptPathRepresentationService = {
+		// Like the real service, only absolute paths resolve — relative ones fall back to the workspace.
+		resolveFilePath: (filePath: string) => filePath.startsWith('/') ? URI.file(filePath) : undefined,
+		getFilePath: (uri: URI) => uri.path,
+	} as unknown as IPromptPathRepresentationService;
+	const workspaceService = {
+		getWorkspaceFolders: () => [URI.file('/ws')],
+	} as unknown as IWorkspaceService;
+	const instantiationService = {
+		invokeFunction: () => Promise.resolve(undefined),
+	} as unknown as IInstantiationService;
+	return { writes, fileSystemService, promptPathRepresentationService, workspaceService, instantiationService };
 }
 
 function makeToken(): CancellationToken {
@@ -121,11 +152,9 @@ describe('get_patent_details', () => {
 
 describe('get_patent_figures', () => {
 
-	it('reads page metadata, then fetches the drawing pages as base64 PNGs inside the tool envelope', async () => {
-		const { client, calls } = makeBackendClient({
-			get_patent_image: undefined, // replaced per call below
-		});
-		// Two different answers for the same tool: metadata first, then the images.
+	/** A client whose `post` answers `get_patent_image` with metadata first, then the images. */
+	function makeScriptedImageClient() {
+		const { client, calls } = makeBackendClient({});
 		const answers = [
 			{ docId: 'EP1000000A1', formats: [{ format: 'pdf', pages: 9, link: 'x', drawingStartPage: 7 }] },
 			{
@@ -144,7 +173,18 @@ describe('get_patent_figures', () => {
 				return { success: true, tool: 'get_patent_image', data: answers[call++], executionTimeMs: 1 } as T;
 			},
 		};
-		const tool = new GetPatentFiguresTool(makeLogService(), scripted);
+		return { scripted, calls };
+	}
+
+	function makeFiguresTool(scripted: IPatentBackendClient) {
+		const services = makeFiguresSaveServices();
+		const tool = new GetPatentFiguresTool(makeLogService(), scripted, services.fileSystemService, services.promptPathRepresentationService, services.workspaceService, services.instantiationService);
+		return { tool, writes: services.writes };
+	}
+
+	it('reads page metadata, then fetches the drawing pages as base64 PNGs inside the tool envelope', async () => {
+		const { scripted, calls } = makeScriptedImageClient();
+		const { tool, writes } = makeFiguresTool(scripted);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000A1' }), makeToken());
 
@@ -159,6 +199,36 @@ describe('get_patent_figures', () => {
 		const images = result.content.filter(part => part instanceof LanguageModelDataPart);
 		expect(images).toHaveLength(2);
 		expect(textOf(result)).toContain('the drawings begin on page 7');
+		// Without `saveDir`, nothing is written to disk.
+		expect(writes).toEqual([]);
+	});
+
+	it('with saveDir, also writes each page as a PNG file and reports the paths', async () => {
+		const { scripted } = makeScriptedImageClient();
+		const { tool, writes } = makeFiguresTool(scripted);
+
+		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000A1', saveDir: '/ws/figures' }), makeToken());
+
+		// 'aGVsbG8=' decodes to the 5 bytes of 'hello'.
+		expect(writes).toEqual([
+			{ path: '/ws/figures/EP1000000A1-page-7.png', bytes: 5 },
+			{ path: '/ws/figures/EP1000000A1-page-8.png', bytes: 5 },
+		]);
+		const allText = result.content.filter(part => part instanceof LanguageModelTextPart).map(part => part.value).join('\n');
+		expect(allText).toContain('Saved 2 PNG file(s)');
+		expect(allText).toContain('/ws/figures/EP1000000A1-page-7.png');
+	});
+
+	it('resolves a relative saveDir against the workspace folder', async () => {
+		const { scripted } = makeScriptedImageClient();
+		const { tool, writes } = makeFiguresTool(scripted);
+
+		await tool.invoke(makeOptions({ publicationNumber: 'EP1000000A1', saveDir: 'figures' }), makeToken());
+
+		expect(writes.map(w => w.path)).toEqual([
+			'/ws/figures/EP1000000A1-page-7.png',
+			'/ws/figures/EP1000000A1-page-8.png',
+		]);
 	});
 });
 

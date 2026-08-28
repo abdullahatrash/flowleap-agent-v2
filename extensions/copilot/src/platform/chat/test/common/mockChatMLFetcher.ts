@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Event } from '../../../../util/vs/base/common/event';
-import { IChatMLFetcher } from '../../common/chatMLFetcher';
+import { IChatMLFetcher, IFetchMLOptions } from '../../common/chatMLFetcher';
 import { ChatFetchResponseType, ChatResponse, ChatResponses } from '../../common/commonTypes';
 
 export class MockChatMLFetcher implements IChatMLFetcher {
@@ -24,8 +25,8 @@ export class MockChatMLFetcher implements IChatMLFetcher {
 		this._nextResponse = response;
 	}
 
-	async fetchOne(): Promise<ChatResponse> {
-		return this.fetchMany().then(responses => {
+	async fetchOne(options: IFetchMLOptions, token: CancellationToken): Promise<ChatResponse> {
+		return this.fetchMany(options, token).then(responses => {
 			if (responses.type === ChatFetchResponseType.Success) {
 				return {
 					...responses,
@@ -36,7 +37,7 @@ export class MockChatMLFetcher implements IChatMLFetcher {
 		});
 	}
 
-	async fetchMany(): Promise<ChatResponses> {
+	async fetchMany(_options: IFetchMLOptions, _token: CancellationToken): Promise<ChatResponses> {
 		if (this._nextResponse.type === ChatFetchResponseType.Success) {
 			return {
 				...this._nextResponse,
