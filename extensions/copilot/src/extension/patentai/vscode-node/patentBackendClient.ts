@@ -100,6 +100,28 @@ export class DataKeysRequiredError extends PatentBackendError {
 }
 
 /**
+ * Thrown when the backend answers `429 { error: { code: 'trial_data_budget_exhausted', provider,
+ * remaining, resets_at } }` (ADR 0017 / flowleap-backend#334) — the trialing user's daily shared
+ * data budget on FlowLeap's own patent-data credentials is spent. Checked by CODE before the
+ * generic 429 mapping, so it is never mistaken for "slow down": the budget resets at the next UTC
+ * day (`resetsAt`), and the user's own free keys lift it permanently. Joins the data-keys
+ * notification family — the recovery action is the keys UI. Extends {@link PatentBackendError} so
+ * tool catch paths keep working.
+ */
+export class TrialDataBudgetExhaustedError extends PatentBackendError {
+	readonly code = 'trial_data_budget_exhausted';
+	constructor(
+		message: string,
+		readonly provider: 'epo' | 'uspto' | undefined,
+		readonly resetsAt: string | undefined,
+		readonly retryAfterSeconds: number | undefined,
+	) {
+		super(429, message);
+		this.name = 'TrialDataBudgetExhaustedError';
+	}
+}
+
+/**
  * Thrown when the backend answers `403 { error: { code: 'trial_model_key_unavailable', reason } }`
  * on the Trial Model key route (ADR 0015 / flowleap-backend#302) — the caller's subscription is not
  * `trialing`, so no trial LLM key is served. A first-class typed outcome, not a failure: the
@@ -175,6 +197,10 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	if (error instanceof DataKeysRequiredError) {
 		const providerClause = error.provider ? `${error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP'} ` : 'EPO OPS or USPTO ';
 		return ` Patent data now requires the user's own ${providerClause}key (a notification with an "Add Patent Data Keys" button was shown). Ask the user to run the "FlowLeap: Patent Data Keys" command to add it, then retry this tool. This is a user-action stop, not a dead route: do NOT substitute web or Google Patents data for this office, for searches or for single-document reads. Meanwhile continue with any office whose key is live and with the keyless tools (PATSTAT analytics, legal search, academic search), and name the missing-key gap in your answer.`;
+	}
+	if (error instanceof TrialDataBudgetExhaustedError) {
+		const resetClause = error.resetsAt ? `It resets at ${error.resetsAt}` : 'It resets at the next UTC day';
+		return ` Today's shared trial data budget is used up (a notification with an "Add Patent Data Keys" button was shown). ${resetClause}, and the user's own free EPO/USPTO keys lift it permanently — ask the user to run the "FlowLeap: Patent Data Keys" command. This is a user-action stop, not a dead route: do NOT substitute web or Google Patents data for this office. Meanwhile continue with the keyless tools (PATSTAT analytics, legal search, academic search) and name the budget gap in your answer.`;
 	}
 	if (error instanceof RateLimitError) {
 		const waitClause = error.retryAfterSeconds ? `Wait at least ${error.retryAfterSeconds} seconds` : 'Wait a few seconds';
@@ -297,6 +323,12 @@ interface DataKeysRequiredInfo {
 	readonly provider: 'epo' | 'uspto' | undefined;
 }
 
+interface TrialDataBudgetInfo {
+	readonly message: string;
+	readonly provider: 'epo' | 'uspto' | undefined;
+	readonly resetsAt: string | undefined;
+}
+
 // ── Hardening tunables ───────────────────────────────────────────────────────────
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -354,6 +386,15 @@ export class PatentBackendClient implements IPatentBackendClient {
 	 * reaches every tool. Mirrors the intent of a debounce; there is no shared throttle helper to reuse.
 	 */
 	private readonly _dataKeysRequiredPrompted = new Set<string>();
+
+	/**
+	 * Whether the trial-data-budget notifications fired this session (ADR 0017) — one flag for the
+	 * exhausted toast, one for the ≥80% warn-band note. The budget is one combined daily number, so
+	 * unlike `_dataKeysRequiredPrompted` there is nothing to key by provider; the thrown error (and
+	 * the envelope warning) still reaches every tool.
+	 */
+	private _trialBudgetExhaustedPrompted = false;
+	private _trialBudgetLowNoted = false;
 
 	/**
 	 * Per-session read cache keyed by method+path+body. Patent-data calls are reads (#89), so an
@@ -452,6 +493,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 
 			const value = text ? JSON.parse(text) as T : undefined as T;
 			backendCached = backendCachedFlag(value);
+			this._noteTrialBudgetLowWarning(value);
 			if (cacheable) {
 				this._cacheSet(cacheKey, value);
 			}
@@ -646,6 +688,24 @@ export class PatentBackendClient implements IPatentBackendClient {
 			}
 		}
 
+		// Trial-data-budget gate (ADR 0017): checked by CODE before the generic 429 mapping, so a
+		// spent daily budget is never surfaced as "slow down" — waiting minutes will not clear it
+		// (its Retry-After runs to the next UTC day, past the inline-retry budget by construction).
+		// Joins the data-keys notification family: the durable fix is the user's own free keys.
+		if (response.status === 429) {
+			const budget = parseTrialDataBudgetExhausted(text);
+			if (budget) {
+				this._fireTrialBudgetExhaustedUx(budget);
+				const retryAfterMs = parseRetryAfterMs(response);
+				throw new TrialDataBudgetExhaustedError(
+					budget.message,
+					budget.provider,
+					budget.resetsAt,
+					retryAfterMs !== undefined ? Math.ceil(retryAfterMs / 1000) : undefined,
+				);
+			}
+		}
+
 		// Rate-limit gate: a `429` that survived the inline Retry-After retry (too long a wait, or
 		// budget exhausted). Surface a distinct, clear "wait and retry" error carrying the server hint.
 		if (response.status === 429) {
@@ -815,6 +875,63 @@ export class PatentBackendClient implements IPatentBackendClient {
 		}
 	}
 
+	/**
+	 * Show the "trial data budget used up" prompt (ADR 0017), opening the keys UI when accepted.
+	 * Once per session and fire-and-forget, so it never masks the
+	 * {@link TrialDataBudgetExhaustedError}.
+	 */
+	private _fireTrialBudgetExhaustedUx(info: TrialDataBudgetInfo): void {
+		if (this._trialBudgetExhaustedPrompted) {
+			return;
+		}
+		this._trialBudgetExhaustedPrompted = true;
+		this._promptTrialBudgetExhausted(info).catch(err => this._logService.warn(`[PatentBackendClient] trial-budget prompt failed: ${err}`));
+	}
+
+	private async _promptTrialBudgetExhausted(info: TrialDataBudgetInfo): Promise<void> {
+		const addKeysAction = l10n.t('Add Patent Data Keys');
+		const choice = await this._notificationService.showWarningMessage(info.message, addKeysAction);
+		if (choice === addKeysAction) {
+			// Forward the provider that hit the wall so the keys UI focuses that card (an
+			// unknown/undefined provider harmlessly opens the keys view unfocused).
+			await vscode.commands.executeCommand('flowleap.patentDataKeys', info.provider);
+		}
+	}
+
+	/**
+	 * ADR 0017 warn-band: once ≥80% of today's shared trial data budget is spent, SUCCESS envelopes
+	 * carry a `trial_data_budget_low` warning (`remaining`, `resets_at`). Surface it once per session
+	 * as an info toast with the keys deep link — the wall never arrives unannounced — and log every
+	 * occurrence. Never blocks or alters the response the tool receives.
+	 */
+	private _noteTrialBudgetLowWarning(value: unknown): void {
+		const warnings = (value as { warnings?: unknown })?.warnings;
+		if (!Array.isArray(warnings)) {
+			return;
+		}
+		const low = warnings.find(w => (w as { code?: string })?.code === 'trial_data_budget_low') as
+			| { message?: string; remaining?: number; resets_at?: string }
+			| undefined;
+		if (!low) {
+			return;
+		}
+		const message = typeof low.message === 'string' && low.message
+			? low.message
+			: l10n.t('Your shared trial data budget is almost used up for today. Add your own free EPO/USPTO keys for unlimited access.');
+		this._logService.info(`[PatentBackendClient] trial_data_budget_low: remaining=${low.remaining ?? '?'} resets_at=${low.resets_at ?? '?'}`);
+		if (this._trialBudgetLowNoted) {
+			return;
+		}
+		this._trialBudgetLowNoted = true;
+		(async () => {
+			const addKeysAction = l10n.t('Add Patent Data Keys');
+			const choice = await this._notificationService.showInformationMessage(message, addKeysAction);
+			if (choice === addKeysAction) {
+				await vscode.commands.executeCommand('flowleap.patentDataKeys');
+			}
+		})().catch(err => this._logService.warn(`[PatentBackendClient] trial-budget-low note failed: ${err}`));
+	}
+
 	private async _promptAuthRequired(info: AuthRequiredInfo): Promise<void> {
 		// A signed-out user did nothing wrong — invite with an info toast; reserve the warning
 		// severity for a session that was working and then expired.
@@ -953,6 +1070,26 @@ function parseDataKeysRequired(body: string): DataKeysRequiredInfo | undefined {
 		return { message: error.message || fallback, provider };
 	} catch {
 		// Not JSON — let the caller fall back to generic error handling.
+		return undefined;
+	}
+}
+
+/** Parse a `429` body, returning trial-budget info only when it matches the ADR 0017 contract. */
+function parseTrialDataBudgetExhausted(body: string): TrialDataBudgetInfo | undefined {
+	try {
+		const parsed = JSON.parse(body) as { error?: { code?: string; message?: string; provider?: string; resets_at?: string } };
+		const error = parsed?.error;
+		if (error?.code !== 'trial_data_budget_exhausted') {
+			return undefined;
+		}
+		const provider = error.provider === 'epo' || error.provider === 'uspto' ? error.provider : undefined;
+		return {
+			message: error.message || l10n.t('Today\'s shared trial data budget is used up. Add your own free EPO/USPTO keys for unlimited access.'),
+			provider,
+			resetsAt: typeof error.resets_at === 'string' ? error.resets_at : undefined,
+		};
+	} catch {
+		// Not JSON — let the caller fall through to the generic rate-limit gate.
 		return undefined;
 	}
 }

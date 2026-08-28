@@ -43,6 +43,8 @@ export type OcrBridgeErrorCode =
 	| 'subscription_required'
 	| 'data_keys_required'
 	| 'patent_provider_key_invalid'
+	/** ADR 0017: today's shared trial data budget is spent — resets next UTC day; own keys lift it. */
+	| 'trial_data_budget_exhausted'
 	| 'rate_limited'
 	| 'transient'
 	| 'cancelled'

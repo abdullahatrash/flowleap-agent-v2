@@ -69,6 +69,7 @@ function seamErrorCode(error: PatentBackendError): OcrBridgeErrorCode {
 		case 'subscription_required':
 		case 'data_keys_required':
 		case 'patent_provider_key_invalid':
+		case 'trial_data_budget_exhausted':
 		case 'rate_limited':
 		case 'transient':
 			return code;
