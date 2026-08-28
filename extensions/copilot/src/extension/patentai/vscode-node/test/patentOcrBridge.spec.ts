@@ -69,7 +69,13 @@ describe('runOcrThroughSeam', () => {
 
 		expect(calls).toHaveLength(1);
 		expect(calls[0].path).toBe('/tools/ocr');
-		expect(calls[0].body).toEqual({ file: 'YmFzZTY0', filename: 'office-action.pdf' });
+		// include_images: the PDF viewer saves the images to disk, and the
+		// backend's ocr tool is text-only unless asked.
+		expect(calls[0].body).toEqual({
+			file: 'YmFzZTY0',
+			filename: 'office-action.pdf',
+			include_images: true,
+		});
 		expect(outcome).toEqual({
 			ok: true,
 			markdown: '# Office Action',
