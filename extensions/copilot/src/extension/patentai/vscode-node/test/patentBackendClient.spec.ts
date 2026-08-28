@@ -20,7 +20,7 @@ vi.mock('../configService', () => ({
 	}),
 }));
 
-import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError, TransientBackendError, TrialModelKeyUnavailableError } from '../patentBackendClient';
+import { AuthRequiredError, DataKeyInvalidError, DataKeysRequiredError, PatentBackendClient, PatentBackendError, patentBackendErrorRecoveryHint, RateLimitError, SubscriptionRequiredError, TransientBackendError, TrialDataBudgetExhaustedError, TrialModelKeyUnavailableError } from '../patentBackendClient';
 import { registerPatentDataKeysProvider } from '../../common/patentDataKeysRegistry';
 import { registerPatentAccessTokenProvider } from '../../common/patentTokenRegistry';
 import type { IEnvService } from '../../../../platform/env/common/envService';
@@ -694,6 +694,18 @@ describe('patentBackendErrorRecoveryHint', () => {
 		expect(patentBackendErrorRecoveryHint(new RateLimitError('slow down', undefined))).toContain('a few seconds');
 	});
 
+	it('maps a TrialDataBudgetExhaustedError to the keys steer with the reset instant — never a "wait and retry"', () => {
+		const hint = patentBackendErrorRecoveryHint(new TrialDataBudgetExhaustedError('spent', 'uspto', '2026-08-29T00:00:00.000Z', 50400));
+		expect({
+			namesReset: hint.includes('resets at 2026-08-29T00:00:00.000Z'),
+			steersToKeys: hint.includes('Patent Data Keys'),
+			userActionStop: hint.includes('user-action stop'),
+			noWebSubstitution: hint.includes('do NOT substitute web or Google Patents data'),
+			notARateLimitSteer: !hint.includes('rate-limiting'),
+		}).toEqual({ namesReset: true, steersToKeys: true, userActionStop: true, noWebSubstitution: true, notARateLimitSteer: true });
+		expect(patentBackendErrorRecoveryHint(new TrialDataBudgetExhaustedError('spent', undefined, undefined, undefined))).toContain('next UTC day');
+	});
+
 	it('maps a TransientBackendError to a "transient, wait and retry" hint, naming the status when known', () => {
 		const withStatus = patentBackendErrorRecoveryHint(new TransientBackendError('boom', 504));
 		const noStatus = patentBackendErrorRecoveryHint(new TransientBackendError('boom', undefined));
@@ -790,6 +802,104 @@ describe('rate-limit gate (429, #89)', () => {
 		expect(err.code).toBe('rate_limited');
 		expect(err.retryAfterSeconds).toBe(30);
 		expect(fetch.calls()).toBe(1); // not retried inline
+	}, 5000);
+});
+
+describe('trial data budget gate (429 trial_data_budget_exhausted, ADR 0017)', () => {
+
+	// Message text is deliberately uninformative — the gate matches the CODE only
+	// (backend ADR 0014: wording is freely editable).
+	const BODY = {
+		success: false,
+		error: {
+			message: 'wording the backend is free to change at any time',
+			code: 'trial_data_budget_exhausted',
+			provider: 'uspto',
+			remaining: 0,
+			resets_at: '2026-08-29T00:00:00.000Z',
+			retry_after: 50400,
+		},
+		status: 429,
+	};
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-123'));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('throws a typed TrialDataBudgetExhaustedError — never a RateLimitError — carrying provider, resetsAt, retryAfterSeconds', async () => {
+		const { client } = makeClient(async () => makeResponse(429, BODY, { 'retry-after': '50400' }));
+
+		const thrown = await captureThrow(() => client.post('/tools/search_patents', {}, makeToken()));
+
+		expect(thrown).toBeInstanceOf(PatentBackendError);
+		expect(thrown).toBeInstanceOf(TrialDataBudgetExhaustedError);
+		expect(thrown).not.toBeInstanceOf(RateLimitError);
+		const err = thrown as TrialDataBudgetExhaustedError;
+		expect(err.status).toBe(429);
+		expect(err.code).toBe('trial_data_budget_exhausted');
+		expect(err.provider).toBe('uspto');
+		expect(err.resetsAt).toBe('2026-08-29T00:00:00.000Z');
+		expect(err.retryAfterSeconds).toBe(50400);
+	}, 5000);
+
+	it('shows the budget prompt once per session and deep-links the keys UI focused on the provider that hit the wall', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(429, BODY, { 'retry-after': '50400' }));
+		notification.showWarningMessage.mockResolvedValueOnce(ADD_KEYS_ACTION as never);
+
+		await captureThrow(() => client.post('/tools/search_patents', {}, makeToken()));
+		await captureThrow(() => client.post('/tools/get_claims', {}, makeToken()));
+		await flush();
+
+		expect(notification.showWarningMessage).toHaveBeenCalledTimes(1);
+		expect(executeCommandMock).toHaveBeenCalledWith('flowleap.patentDataKeys', 'uspto');
+	}, 5000);
+
+	it('a 429 without the code stays the generic RateLimitError', async () => {
+		const { client } = makeClient(async () => makeResponse(429, { error: { message: 'rate limited' } }, { 'retry-after': '30' }));
+
+		const thrown = await captureThrow(() => client.post('/tools/search_patents', {}, makeToken()));
+
+		expect(thrown).toBeInstanceOf(RateLimitError);
+		expect(thrown).not.toBeInstanceOf(TrialDataBudgetExhaustedError);
+	}, 5000);
+});
+
+describe('trial_data_budget_low warning on success envelopes (ADR 0017)', () => {
+
+	const SUCCESS = {
+		success: true,
+		tool: 'search_patents',
+		data: { docs: [] },
+		executionTimeMs: 5,
+		warnings: [{ code: 'trial_data_budget_low', message: '12 of 300 remain today.', remaining: 12, resets_at: '2026-08-29T00:00:00.000Z' }],
+	};
+
+	beforeEach(() => registerPatentAccessTokenProvider(() => 'tok-123'));
+	afterEach(() => vi.restoreAllMocks());
+
+	it('returns the envelope unchanged and notes the warning once per session with the keys deep link', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(200, SUCCESS));
+		notification.showInformationMessage.mockResolvedValueOnce(ADD_KEYS_ACTION as never);
+
+		const value = await client.post<typeof SUCCESS>('/tools/search_patents', { q: 1 }, makeToken());
+		await flush();
+
+		expect(value.warnings[0].code).toBe('trial_data_budget_low');
+		expect(notification.showInformationMessage).toHaveBeenCalledTimes(1);
+		expect(executeCommandMock).toHaveBeenCalledWith('flowleap.patentDataKeys');
+
+		// Different body → different cache key → a real second request; still only one note.
+		await client.post('/tools/search_patents', { q: 2 }, makeToken());
+		await flush();
+		expect(notification.showInformationMessage).toHaveBeenCalledTimes(1);
+	}, 5000);
+
+	it('a success envelope without warnings notes nothing', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(200, { success: true, tool: 'search_patents', data: {} }));
+
+		await client.post('/tools/search_patents', {}, makeToken());
+		await flush();
+
+		expect(notification.showInformationMessage).not.toHaveBeenCalled();
 	}, 5000);
 });
 
