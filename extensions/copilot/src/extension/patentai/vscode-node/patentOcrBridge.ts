@@ -33,10 +33,15 @@ export async function runOcrThroughSeam(
 	token: CancellationToken,
 ): Promise<OcrBridgeOutcome> {
 	try {
+		// include_images: the backend's ocr tool is text-only by default; this
+		// bridge exists for the PDF viewer, which saves the extracted images to
+		// disk beside the markdown, so it opts in. Older backends without the
+		// flag ignore it (their schema strips unknown keys) and return images
+		// anyway.
 		const data = await callFacadeTool<OcrToolData>(
 			client,
 			'ocr',
-			{ file: request.file, filename: request.filename },
+			{ file: request.file, filename: request.filename, include_images: true },
 			token,
 			{ timeoutMs: OCR_TIMEOUT_MS },
 		);

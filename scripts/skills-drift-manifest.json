@@ -1,8 +1,8 @@
 {
 	"$comment": "Drift manifest for every bundled skill tree in this repo, checked by scripts/check-skills-drift.ts. Two bundled roots feed the product: src/vs/sessions/skills/ (built-in skills for the Agents/Claude-sessions window) and extensions/copilot/assets/skills/ (typed-tool VS Code panel-chat skills, registered via the `chatSkills` contribution point and explicitly excluded from Claude SDK sessions in claudeSkills.ts). Canonical skill content lives upstream in flowleap-cli. `mirrors` entries must be byte-for-byte identical (directory tree) to the pinned canonicalRepo@ref — re-vendor via `npx tsx scripts/vendor-patent-skills.ts <name>...` (for src/vs/sessions/skills) rather than hand-editing. `excluded` entries record why a bundled skill is NOT drift-checked: `adaptation` = same content intent as a canonical skill but a deliberately different surface (typed-tool calls, not a CLI subprocess) or presentation, hand-synced and reviewed on its own schedule; `app-only` = no canonical counterpart at all, native to this app.",
 	"canonicalRepo": "flowleap-ai/flowleap-cli",
-	"ref": "v0.8.2",
-	"refDisplayName": "v0.8.2",
+	"ref": "v0.8.3",
+	"refDisplayName": "v0.8.3",
 	"canonicalSkillsDir": "skills",
 	"mirrors": [
 		{ "bundledPath": "src/vs/sessions/skills/flowleap", "canonicalPath": "skills/flowleap" },
