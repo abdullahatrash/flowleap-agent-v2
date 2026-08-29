@@ -177,6 +177,31 @@ describe('FlowLeapAuthenticationProvider.cancelSignIn', () => {
 		await expect(second).rejects.toThrow('Sign-in canceled.');
 	});
 
+	// A user who closed the browser mid-flow and clicks Sign In again must get a
+	// new tab for the SAME flow (same CSRF state) — not a silent no-op that only
+	// the 5-minute timeout clears. Automated re-auth never calls this, so the
+	// one-browser-per-flow dedupe below is untouched.
+	it('reopenPendingSignIn re-opens the browser for the in-flight flow with the same URL', async () => {
+		const signIn = provider.signIn();
+		signIn.catch(() => { /* cleaned up below */ });
+		await tick();
+		expect(openExternalMock).toHaveBeenCalledTimes(1);
+
+		expect(provider.reopenPendingSignIn()).toBe(true);
+		await tick();
+
+		expect(openExternalMock).toHaveBeenCalledTimes(2);
+		expect(String(openExternalMock.mock.calls[1][0])).toBe(String(openExternalMock.mock.calls[0][0]));
+
+		provider.cancelSignIn();
+		await expect(signIn).rejects.toThrow('Sign-in canceled.');
+	});
+
+	it('reopenPendingSignIn is a no-op without an in-flight flow', () => {
+		expect(provider.reopenPendingSignIn()).toBe(false);
+		expect(openExternalMock).not.toHaveBeenCalled();
+	});
+
 	it('dedupes concurrent signIn() calls into one browser flow (re-auth debounce)', async () => {
 		// Many 401s in one agent turn fire many re-auth triggers; signIn() dedupes
 		// them onto a single in-flight flow, so the browser opens once.

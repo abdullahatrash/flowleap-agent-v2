@@ -81,6 +81,8 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	private _pendingState?: string;
 	// In-flight sign-in flow, shared so concurrent callers dedupe onto one flow.
 	private _signInInFlight?: Promise<void>;
+	/** The auth URL of the in-flight flow, so a user re-click can re-open the browser for it. */
+	private _pendingAuthUrl?: string;
 	// Handle for the callback timeout, kept so success and cancel can both clear it.
 	private _authTimeout?: ReturnType<typeof setTimeout>;
 
@@ -204,6 +206,23 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 * nothing is in flight. The non-trapping foundation reused by the onboarding modal
 	 * and the reactive 401 re-auth.
 	 */
+	/**
+	 * Re-open the browser for the in-flight sign-in — same auth URL, same CSRF
+	 * state, so whichever tab completes wins. A user who closed the browser
+	 * mid-flow and clicks Sign In again gets a fresh tab instead of a silent
+	 * no-op that only the 5-minute timeout would clear. Only user-initiated
+	 * paths call this; automated re-auth keeps the one-browser-per-flow dedupe
+	 * in {@link signIn}. Returns false when nothing is in flight.
+	 */
+	reopenPendingSignIn(): boolean {
+		if (!this._signInInFlight || !this._pendingAuthUrl) {
+			return false;
+		}
+		this._logService.info('[Patent AI Auth] Sign-in already in progress; re-opening the browser for the same flow');
+		void vscode.env.openExternal(vscode.Uri.parse(this._pendingAuthUrl));
+		return true;
+	}
+
 	cancelSignIn(): void {
 		if (!this._pendingAuthReject) {
 			this._logService.info('[Patent AI Auth] cancelSignIn: no sign-in in progress');
@@ -248,7 +267,8 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		authUrl.searchParams.set('state', state);
 
 		this._logService.info('[Patent AI Auth] Opening browser for authorization');
-		await vscode.env.openExternal(vscode.Uri.parse(authUrl.toString()));
+		this._pendingAuthUrl = authUrl.toString();
+		await vscode.env.openExternal(vscode.Uri.parse(this._pendingAuthUrl));
 
 		// Wait for callback with Clerk token
 		const tokenData = await this._waitForCallback();
@@ -367,6 +387,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		this._pendingAuthResolve = undefined;
 		this._pendingAuthReject = undefined;
 		this._pendingState = undefined;
+		this._pendingAuthUrl = undefined;
 	}
 
 	/**

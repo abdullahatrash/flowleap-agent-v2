@@ -285,6 +285,16 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			return false;
 		}
 
+		// A deliberate click while a sign-in is already waiting on the browser
+		// re-opens that browser (same flow, same state) — the user may have
+		// closed the tab, and a silent no-op here left Sign In looking dead
+		// until the 5-minute timeout. Silent (automated) callers skip this, so
+		// a 401 burst still opens at most one tab. getSession below then
+		// dedupes onto the same in-flight flow.
+		if (!silent) {
+			provider.reopenPendingSignIn();
+		}
+
 		// Onboarding (silent) path: keep the gated helper. It must NOT re-open the browser when a valid
 		// session already exists, suppresses its own toasts (the blocking overlay shows inline status),
 		// and bounds the init wait so a stalled keychain read can't hang it.
