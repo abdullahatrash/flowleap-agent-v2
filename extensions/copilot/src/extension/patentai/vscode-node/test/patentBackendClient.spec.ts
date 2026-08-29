@@ -33,7 +33,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 
 // Action labels the client surfaces — mirror the private consts in patentBackendClient.ts.
 const SIGN_IN_ACTION = 'Sign In';
-const START_TRIAL_ACTION = 'Start Free Trial';
+const SUBSCRIBE_ACTION = 'Subscribe';
 // Localized via l10n.t in the client; with no bundle configured l10n returns the source string.
 const ADD_KEYS_ACTION = 'Add Patent Data Keys';
 
@@ -347,15 +347,28 @@ describe('subscription gate (402 subscription_required)', () => {
 		expect(err.message).not.toContain('"error"');
 	});
 
-	it('shows the "Start free trial" notification and opens the upgrade URL when accepted', async () => {
+	it('shows the "Subscribe" notification and opens the upgrade URL when accepted', async () => {
 		const { client, notification, env } = makeClient(async () => makeResponse(402, BODY));
-		notification.showInformationMessage.mockResolvedValueOnce(START_TRIAL_ACTION as never);
+		notification.showInformationMessage.mockResolvedValueOnce(SUBSCRIBE_ACTION as never);
 
 		await captureThrow(() => client.post('/patent-search', {}, makeToken()));
 		await flush();
 
-		expect(notification.showInformationMessage).toHaveBeenCalledWith(expect.stringContaining('subscription'), START_TRIAL_ACTION);
+		expect(notification.showInformationMessage).toHaveBeenCalledWith(expect.stringContaining('subscription'), SUBSCRIBE_ACTION);
 		expect(env.openExternal).toHaveBeenCalledTimes(1);
+	});
+
+	// A burst of gated tool calls used to stack one identical toast per call; the
+	// prompt is now once per session while the error still reaches every caller.
+	it('prompts once per session for repeated 402s', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(402, BODY));
+
+		await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		const second = await captureThrow(() => client.post('/patent-search', {}, makeToken()));
+		await flush();
+
+		expect(second).toBeInstanceOf(SubscriptionRequiredError);
+		expect(notification.showInformationMessage).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not let a throwing notification mask the SubscriptionRequiredError', async () => {
@@ -662,7 +675,7 @@ describe('patentBackendErrorRecoveryHint', () => {
 			patentBackendErrorRecoveryHint(new PatentBackendError(500, 'boom')),
 		]).toEqual([
 			expect.stringContaining('"FlowLeap: Sign In"'),
-			expect.stringContaining('set up'),
+			expect.stringContaining('subscribe'),
 			expect.stringContaining('"FlowLeap: Patent Data Keys"'),
 			expect.stringContaining('"FlowLeap: Patent Data Keys"'),
 			expect.stringContaining('"FlowLeap: Patent Data Keys"'),

@@ -16,13 +16,15 @@ describe('computeAccountState', () => {
 		expect(computeAccountState(undefined, { status: 'unknown' }, NOW)).toEqual({ signedIn: false });
 	});
 
-	it('trialing shows the day-count pill and can manage the subscription', () => {
+	// App trial (backend ADR 0018): a trialing user has no Stripe customer, so the
+	// billing-portal button would only fail — Manage is paid-only.
+	it('trialing shows the day-count pill and hides Manage', () => {
 		expect(computeAccountState(IDENTITY, { status: 'trialing', currentPeriodEnd: '2026-07-15T00:00:00.000Z' }, NOW)).toEqual({
 			signedIn: true,
 			name: 'Ada Lovelace',
 			email: 'ada@example.com',
 			pill: { label: 'Trial · 9 days left', tone: 'trial' },
-			canManageSubscription: true,
+			canManageSubscription: false,
 		});
 	});
 

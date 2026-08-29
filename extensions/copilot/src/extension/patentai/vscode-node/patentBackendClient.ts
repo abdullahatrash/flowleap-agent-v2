@@ -188,7 +188,7 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 		return ' The user is not signed in to FlowLeap (a notification with a Sign In button was shown). Ask the user to run the "FlowLeap: Sign In" command, then retry this tool.';
 	}
 	if (error instanceof SubscriptionRequiredError) {
-		return ' FlowLeap needs to be set up before patent data is available (a notification with the next step was shown). Ask the user to complete it, then retry this tool.';
+		return ' Patent data needs an active FlowLeap plan — the free trial that starts at sign-up has ended or the account never subscribed (a notification with a Subscribe button was shown). Ask the user to subscribe, then retry this tool.';
 	}
 	if (error instanceof DataKeyInvalidError) {
 		const providerName = error.provider === 'epo' ? 'EPO OPS' : 'USPTO ODP';
@@ -309,7 +309,7 @@ interface AuthRequiredInfo {
 // ── Implementation ──────────────────────────────────────────────────────────────
 
 const SIGN_IN_ACTION = 'Sign In';
-const START_TRIAL_ACTION = 'Start Free Trial';
+const SUBSCRIBE_ACTION = 'Subscribe';
 const UPDATE_KEYS_ACTION = 'Patent Data Keys';
 const SIGNED_OUT_MESSAGE = 'Sign in to FlowLeap to use patent data.';
 
@@ -395,6 +395,13 @@ export class PatentBackendClient implements IPatentBackendClient {
 	 */
 	private _trialBudgetExhaustedPrompted = false;
 	private _trialBudgetLowNoted = false;
+
+	/**
+	 * Once per session, like the trial-budget prompts: a burst of gated tool calls
+	 * used to stack an identical toast per call. The thrown error still reaches
+	 * every caller; only the notification is deduped.
+	 */
+	private _subscriptionRequiredPrompted = false;
 
 	/**
 	 * Per-session read cache keyed by method+path+body. Patent-data calls are reads (#89), so an
@@ -638,7 +645,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 		// Centralized subscription gate: gated patent routes answer
 		// `402 { error: { code: 'subscription_required', upgradeUrl } }` when the user has no
 		// active/trialing subscription. Detect it once here so every tool surfaces a clean
-		// upgrade prompt and a "Start free trial" notification instead of a raw JSON body.
+		// upgrade prompt and a "Subscribe" notification instead of a raw JSON body.
 		if (response.status === 402) {
 			const info = parseSubscriptionRequired(text);
 			if (info) {
@@ -810,10 +817,15 @@ export class PatentBackendClient implements IPatentBackendClient {
 	}
 
 	/**
-	 * Show the "Start free trial" notification for a gated `402`, opening the upgrade URL when the
-	 * user accepts. Fire-and-forget: a failing prompt must never mask the {@link SubscriptionRequiredError}.
+	 * Show the "Subscribe" notification for a gated `402`, opening the upgrade URL when the
+	 * user accepts. Once per session (a burst of gated tool calls must not stack toasts) and
+	 * fire-and-forget: a failing prompt must never mask the {@link SubscriptionRequiredError}.
 	 */
 	private _fireSubscriptionRequiredUx(info: SubscriptionRequiredInfo): void {
+		if (this._subscriptionRequiredPrompted) {
+			return;
+		}
+		this._subscriptionRequiredPrompted = true;
 		this._promptSubscriptionRequired(info).catch(err => this._logService.warn(`[PatentBackendClient] subscription prompt failed: ${err}`));
 	}
 
@@ -822,8 +834,8 @@ export class PatentBackendClient implements IPatentBackendClient {
 			void this._notificationService.showInformationMessage(info.message);
 			return;
 		}
-		const choice = await this._notificationService.showInformationMessage(info.message, START_TRIAL_ACTION);
-		if (choice === START_TRIAL_ACTION) {
+		const choice = await this._notificationService.showInformationMessage(info.message, SUBSCRIBE_ACTION);
+		if (choice === SUBSCRIBE_ACTION) {
 			await this._envService.openExternal(URI.parse(info.upgradeUrl));
 		}
 	}

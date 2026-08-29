@@ -13,7 +13,7 @@
 //
 // The command answers with an OUTCOME rather than throwing: a rejection thrown across
 // `executeCommand` arrives as a bare message, and the caller needs the CODE to tell "sign in" from
-// "start your trial" from "wait and retry". Codes are the seam's own error codes, so this file adds
+// "subscribe" from "wait and retry". Codes are the seam's own error codes, so this file adds
 // no vocabulary of its own.
 
 /** Where the command lives. Hand-mirrored in `pdf-preview`, which cannot import this module. */

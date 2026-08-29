@@ -1249,14 +1249,14 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.check));
 			icon.setAttribute('aria-hidden', 'true');
 			const text = append(confirmation, $('span'));
-			text.textContent = localize('onboarding.trial.active', "Your trial is active. Continue to the next step.");
+			text.textContent = localize('onboarding.trial.active', "You have full access. Continue to the next step.");
 			return;
 		}
 
 		const points = append(wrapper, $('ul.onboarding-a-trial-points'));
 		for (const text of [
-			localize('onboarding.trial.point.data', "7 days of full patent data on FlowLeap's credentials — no key setup."),
-			localize('onboarding.trial.point.card', "Payment method required. Cancel anytime."),
+			localize('onboarding.trial.point.data', "Full patent data, PATSTAT analytics, and the patent brain on one flat plan."),
+			localize('onboarding.trial.point.card', "Billing starts only when you subscribe. Cancel anytime."),
 		]) {
 			const li = append(points, $('li.onboarding-a-trial-point'));
 			const icon = append(li, $('span.onboarding-a-trial-point-icon'));
@@ -1273,7 +1273,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 		const actions = append(wrapper, $('.onboarding-a-trial-actions'));
 		const startBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-trial-start')));
 		startBtn.type = 'button';
-		startBtn.textContent = localize('onboarding.trial.start', "Start free trial");
+		startBtn.textContent = localize('onboarding.trial.start', "Subscribe");
 
 		const status = append(wrapper, $('.onboarding-a-trial-status'));
 		status.setAttribute('role', 'status');
@@ -1288,10 +1288,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 	}
 
 	/**
-	 * Open the trial checkout in the browser and begin polling the subscription. The wizard
+	 * Open the subscribe checkout in the browser and begin polling the subscription. The wizard
 	 * auto-advances the moment the backend reports access (issue #79 flow, step 4), so returning
 	 * from the browser feels seamless. Reuses the extension seam via the `flowleap.startTrial`
-	 * command, mirroring the reactive `402` "Start free trial" path.
+	 * command (id kept for compatibility), mirroring the reactive `402` "Subscribe" path.
 	 */
 	private async _handleStartTrial(status: HTMLElement): Promise<void> {
 		this._logAction('trial_started', OnboardingStepId.Trial);
@@ -1332,7 +1332,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 			if (decision === 'advance') {
 				this._stopTrialPoll();
 				this._logAction('trial_confirmed', OnboardingStepId.Trial);
-				this.accessibilityService.alert(localize('onboarding.trial.confirmed.alert', "Trial active. Continuing."));
+				this.accessibilityService.alert(localize('onboarding.trial.confirmed.alert', "Access confirmed. Continuing."));
 				this._nextStep();
 			} else if (decision === 'timeout') {
 				this._stopTrialPoll();
