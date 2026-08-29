@@ -327,7 +327,26 @@ describe('FlowLeapTrialLMProvider (ADR 0015, #241)', () => {
 
 		expect(storage.deleteAPIKey).toHaveBeenCalledWith(FlowLeapTrialLMProvider.providerName, BYOKAuthType.GlobalApiKey);
 		expect(lifecycle.showWarningMessage).toHaveBeenCalledTimes(1);
+		// Signing out is not the trial ending: the honest ask is to sign back in,
+		// never "add your own API key" (the models return with the session).
+		expect(lifecycle.showWarningMessage.mock.calls[0][0]).toContain('sign back in');
+		expect(lifecycle.showWarningMessage.mock.calls[0][0]).not.toContain('Add your own API key');
 		expect(backend.getTrialModelKey).not.toHaveBeenCalled();
+	});
+
+	it('routes the signed-out nudge action to the sign-in command', async () => {
+		const backend = makeBackendClient(async () => ({ key: TRIAL_KEY, models: SERVED_MODELS, cap: { dailyUsd: 5 } }));
+		const storage = makeStorageService();
+		const lifecycle = makeLifecycleDeps();
+		lifecycle.showWarningMessage.mockResolvedValue('Sign In');
+		const provider = makeProvider(backend, storage, catalogResponse, lifecycle.deps);
+		await listModels(provider);
+
+		registerPatentAccessTokenProvider(() => undefined);
+		notifyPatentSubscriptionChanged();
+		await settle();
+
+		expect(lifecycle.executeCommand).toHaveBeenCalledWith('flowleap.signIn');
 	});
 
 	it('never nudges a user who held no trial key, but still re-lists on the change', async () => {
