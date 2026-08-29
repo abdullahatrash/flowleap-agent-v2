@@ -21,7 +21,7 @@ interface OcrImage {
  * mirroring the consent command id already documents.
  *
  * The bridge answers rather than throws, because a rejection thrown across `executeCommand` arrives
- * as a bare message: the CODE is what tells "sign in" from "start your trial" from "wait and retry",
+ * as a bare message: the CODE is what tells "sign in" from "subscribe" from "wait and retry",
  * and this side must never branch on message wording (backend policy makes wording editable).
  */
 const OCR_RUN_COMMAND_ID = 'flowleap.ocr.run';

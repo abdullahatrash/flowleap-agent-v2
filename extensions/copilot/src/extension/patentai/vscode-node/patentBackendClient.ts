@@ -394,14 +394,14 @@ export class PatentBackendClient implements IPatentBackendClient {
 	 * the envelope warning) still reaches every tool.
 	 */
 	private _trialBudgetExhaustedPrompted = false;
+	private _trialBudgetLowNoted = false;
 
 	/**
-	 * Once per session, like the trial-budget prompt: a burst of gated tool calls
+	 * Once per session, like the trial-budget prompts: a burst of gated tool calls
 	 * used to stack an identical toast per call. The thrown error still reaches
 	 * every caller; only the notification is deduped.
 	 */
 	private _subscriptionRequiredPrompted = false;
-	private _trialBudgetLowNoted = false;
 
 	/**
 	 * Per-session read cache keyed by method+path+body. Patent-data calls are reads (#89), so an
@@ -645,7 +645,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 		// Centralized subscription gate: gated patent routes answer
 		// `402 { error: { code: 'subscription_required', upgradeUrl } }` when the user has no
 		// active/trialing subscription. Detect it once here so every tool surfaces a clean
-		// upgrade prompt and a "Start free trial" notification instead of a raw JSON body.
+		// upgrade prompt and a "Subscribe" notification instead of a raw JSON body.
 		if (response.status === 402) {
 			const info = parseSubscriptionRequired(text);
 			if (info) {
