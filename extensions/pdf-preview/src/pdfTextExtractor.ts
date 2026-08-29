@@ -31,6 +31,8 @@ type OcrBridgeErrorCode =
 	| 'subscription_required'
 	| 'data_keys_required'
 	| 'patent_provider_key_invalid'
+	/** ADR 0017: today's shared trial data budget is spent — resets next UTC day; own keys lift it. */
+	| 'trial_data_budget_exhausted'
 	| 'rate_limited'
 	| 'transient'
 	| 'cancelled'
@@ -248,6 +250,8 @@ export class PdfTextExtractor {
 			case 'data_keys_required':
 			case 'patent_provider_key_invalid':
 				return vscode.l10n.t('Text extraction needs your FlowLeap patent-data keys. Add or update them in FlowLeap Settings, then try again.');
+			case 'trial_data_budget_exhausted':
+				return vscode.l10n.t("Today's shared trial data allowance is used up. It resets tomorrow (UTC) — or add your own free patent-data keys in FlowLeap Settings to lift it now.");
 			case 'rate_limited':
 				return vscode.l10n.t('FlowLeap is rate-limiting requests right now. Wait a few seconds and try again.');
 			case 'transient':

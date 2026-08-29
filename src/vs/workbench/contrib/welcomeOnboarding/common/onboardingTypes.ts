@@ -37,7 +37,7 @@ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
 		case OnboardingStepId.AgentSessions:
 			return localize('onboarding.step.agentSessions', "Build with AI Agents");
 		case OnboardingStepId.Trial:
-			return localize('onboarding.step.trial', "Start Your Trial");
+			return localize('onboarding.step.trial', "Subscribe to Continue");
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model', "Connect Your AI Model");
 		case OnboardingStepId.Finale:
@@ -61,7 +61,7 @@ export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
 		case OnboardingStepId.AgentSessions:
 			return localize('onboarding.step.agentSessions.subtitle', "Open Chat anytime with {0}", isMacintosh ? '\u2318\u2303I' : 'Ctrl+Alt+I');
 		case OnboardingStepId.Trial:
-			return localize('onboarding.step.trial.subtitle', "Explore the full patent backend on our credentials \u2014 no key setup required.");
+			return localize('onboarding.step.trial.subtitle', "Your free 7-day trial ran at sign-up. One flat plan keeps the patent data and analytics.");
 		case OnboardingStepId.Model:
 			return localize('onboarding.step.model.subtitle', "FlowLeap runs on your own AI model. One key connects it.");
 		case OnboardingStepId.Finale:
@@ -98,9 +98,9 @@ export interface OnboardingStepContext {
 
 /**
  * The steps visible for a given runtime {@link OnboardingStepContext}, in {@link ONBOARDING_STEPS}
- * order. The trial step is value-framed on FlowLeap's own credentials, so it only makes sense once
- * signed in AND without access yet: a user who continues without signing in never sees it, and a
- * user who already has an active/trialing subscription has nothing to start (issue #79 flow, step 4).
+ * order. The Trial step only makes sense once signed in AND without access: the trial itself starts
+ * at account creation (backend ADR 0018), so a fresh signed-in user has access and skips it — the
+ * step reaches only expired or never-subscribed users, and its offer is Subscribe.
  */
 export function computeVisibleSteps(context: OnboardingStepContext): OnboardingStepId[] {
 	return ONBOARDING_STEPS.filter(stepId => stepId !== OnboardingStepId.Trial || (context.signedIn && !context.hasAccess));

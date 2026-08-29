@@ -98,8 +98,9 @@ export function computeAccountState(identity: AccountIdentity | undefined, snaps
 		name: identity.name ?? null,
 		email: identity.email ?? null,
 		pill: computePill(snapshot, now),
-		// Manage-subscription (the Stripe billing portal) is only meaningful for a recognised customer —
-		// active or trialing. Inactive/unknown users have no portal to open.
-		canManageSubscription: snapshot.status === 'active' || snapshot.status === 'trialing',
+		// Manage-subscription (the Stripe billing portal) is only meaningful for a paying
+		// customer. An app-trial user (backend ADR 0018) reports `trialing` with NO Stripe
+		// customer behind it, so the portal call can only fail — Manage is paid-only.
+		canManageSubscription: snapshot.status === 'active',
 	};
 }

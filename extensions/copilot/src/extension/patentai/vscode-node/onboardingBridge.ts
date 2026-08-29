@@ -16,11 +16,12 @@ import { NON_BYOK_VENDORS } from './patentEndpointProvider';
  *
  * - `flowleap.checkSubscription` → the tri-state access the Trial step polls until active/trialing.
  * - `flowleap.checkModelConfigured` → whether a BYO model exists, so the Model step reflects done-state.
- * - `flowleap.startTrial` → opens the trial checkout in the browser (the proactive twin of the
- *   reactive `402` "Start free trial" path).
+ * - `flowleap.startTrial` → opens the subscribe checkout in the browser (id kept from the
+ *   card-trial era; the trial itself now starts at account creation, backend ADR 0018 — this
+ *   is the proactive twin of the reactive `402` "Subscribe" path).
  */
 
-/** Build the proactive trial-checkout URL from the frontend origin. */
+/** Build the proactive subscribe-checkout URL (the pricing page) from the frontend origin. */
 export function buildTrialCheckoutUrl(frontendUrl: string): string {
 	return `${frontendUrl.replace(/\/+$/, '')}/pricing`;
 }
@@ -58,7 +59,7 @@ export function registerOnboardingBridgeCommands(
 		}
 	}));
 
-	// Open the trial checkout proactively in the browser.
+	// Open the subscribe checkout proactively in the browser.
 	disposables.push(vscode.commands.registerCommand('flowleap.startTrial', async (): Promise<void> => {
 		const url = buildTrialCheckoutUrl(getPatentAIConfig().frontendUrl);
 		await vscode.env.openExternal(vscode.Uri.parse(url));
