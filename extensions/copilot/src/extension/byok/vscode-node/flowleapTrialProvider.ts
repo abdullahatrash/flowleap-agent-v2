@@ -110,10 +110,12 @@ export class FlowLeapTrialLMProvider extends AbstractOpenRouterLMProvider implem
 
 	/**
 	 * Reaction to a subscription-status broadcast. Leaving `trialing` — conversion, cancellation,
-	 * or sign-out — discards the stored trial key (it must not outlive access) and nudges toward a
-	 * BYO key, but only when a key was actually held: a user who never trialed gets no nudge. Every
-	 * change re-lists the models, so entering `trialing` (fresh sign-in mid-trial) surfaces the
-	 * trial models and leaving it hides them, both without a manual refresh.
+	 * or sign-out — discards the stored trial key (it must not outlive access), but only when a key
+	 * was actually held: a user who never trialed gets no nudge. The nudge names the honest way
+	 * back: sign-out pauses the trial models (they return with the session), while a conclusive
+	 * non-trialing status ends them (the ask is a BYO key). Every change re-lists the models, so
+	 * entering `trialing` (fresh sign-in mid-trial) surfaces the trial models and leaving it hides
+	 * them, both without a manual refresh.
 	 */
 	private async _handleSubscriptionChange(): Promise<void> {
 		const status = getPatentSubscriptionStatus();
@@ -123,13 +125,35 @@ export class FlowLeapTrialLMProvider extends AbstractOpenRouterLMProvider implem
 			if (hadKey) {
 				this._logService.info(`[FlowLeap Trial] Subscription left 'trialing' (${signedOut ? 'signed out' : status}); discarding the trial key.`);
 				await this._discardStoredKey();
-				this._nudgeTowardOwnKey();
+				if (signedOut) {
+					this._nudgeTowardSignIn();
+				} else {
+					this._nudgeTowardOwnKey();
+				}
 			}
 		}
 		this._onDidChangeModels.fire();
 	}
 
-	/** The first-class BYO-key steer shown when the trial models go away (#242). */
+	/**
+	 * Sign-out variant of the nudge: the trial did not end — the session did — so the ask is to
+	 * sign back in, never to add a key the user does not need yet.
+	 */
+	private _nudgeTowardSignIn(): void {
+		const signIn = l10n.t('Sign In');
+		// Fire-and-forget: the nudge must never block or fail the state change that triggered it.
+		Promise.resolve(this._lifecycleDeps.showWarningMessage(
+			l10n.t('You signed out of FlowLeap, so the Trial models are paused — sign back in to keep using them.'),
+			signIn
+		)).then(choice => {
+			if (choice === signIn) {
+				return this._lifecycleDeps.executeCommand('flowleap.signIn');
+			}
+			return undefined;
+		}).then(undefined, () => undefined);
+	}
+
+	/** The first-class BYO-key steer shown when the trial models go away for good (#242). */
 	private _nudgeTowardOwnKey(): void {
 		const manageModels = l10n.t('Manage Models');
 		// Fire-and-forget: the nudge must never block or fail the state change that triggered it.
