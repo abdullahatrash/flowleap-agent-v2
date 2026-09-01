@@ -26,6 +26,11 @@ describe('modelSupportsPDFDocuments', () => {
 		expect(modelSupportsPDFDocuments(fakeModel('Anthropic-custom'))).toBe(true);
 	});
 
+	test('returns true for OpenRouter-style anthropic/ families', () => {
+		expect(modelSupportsPDFDocuments(fakeModel('anthropic/claude-opus-5'))).toBe(true);
+		expect(modelSupportsPDFDocuments(fakeModel('anthropic/claude-sonnet-4.5'))).toBe(true);
+	});
+
 	test('returns true for gpt-5 plus families', () => {
 		expect(modelSupportsPDFDocuments(fakeModel('gpt-5.4'))).toBe(true);
 		expect(modelSupportsPDFDocuments(fakeModel('gpt-5.4-mini'))).toBe(true);

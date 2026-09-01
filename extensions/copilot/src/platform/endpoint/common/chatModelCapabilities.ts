@@ -337,7 +337,8 @@ export function modelSupportsSimplifiedApplyPatchInstructions(model: LanguageMod
 }
 
 export function isAnthropicFamily(model: LanguageModelChat | IChatEndpoint): boolean {
-	return model.family.startsWith('claude') || model.family.startsWith('Anthropic');
+	// OpenRouter model ids use the `anthropic/claude-*` format
+	return model.family.startsWith('claude') || model.family.startsWith('Anthropic') || model.family.startsWith('anthropic/');
 }
 
 export function isGeminiFamily(model: LanguageModelChat | IChatEndpoint | string): boolean {

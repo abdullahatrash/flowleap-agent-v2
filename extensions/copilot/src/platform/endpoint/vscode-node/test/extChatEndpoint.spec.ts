@@ -66,6 +66,26 @@ describe('ExtensionContributedChatEndpoint', () => {
 		expect(capturedOptions.map(options => options.modelOptions?._telemetryTurn)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
 	});
 
+	it('converts document parts to data parts instead of dropping them', () => {
+		const pdfBase64 = Buffer.from('%PDF-1.7 fake').toString('base64');
+		const [message] = convertToApiChatMessage([{
+			role: Raw.ChatRole.User,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'see attached' },
+				{ type: Raw.ChatCompletionContentPartKind.Document, documentData: { data: pdfBase64, mediaType: 'application/pdf' } },
+			],
+		}]);
+
+		expect((message.content as (vscode.LanguageModelTextPart | vscode.LanguageModelDataPart)[]).map(part =>
+			part instanceof vscode.LanguageModelDataPart
+				? { mimeType: part.mimeType, data: Buffer.from(part.data).toString() }
+				: { text: (part as vscode.LanguageModelTextPart).value }
+		)).toEqual([
+			{ text: 'see attached' },
+			{ mimeType: 'application/pdf', data: '%PDF-1.7 fake' },
+		]);
+	});
+
 	// https://github.com/microsoft/vscode/issues/313920: the internal cache_control sentinel
 	// must only reach providers that handle it, or a naive serializer leaks it upstream.
 	it('omits the internal cache_control sentinel for providers that do not handle it, keeps it for those that do', () => {

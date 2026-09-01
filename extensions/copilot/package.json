@@ -1709,7 +1709,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(file-pdf)",
         "userDescription": "Extract text content from PDF files",
-        "modelDescription": "Extract text content from a local PDF file. Use this tool when users reference PDF documents (patent PDFs, research papers, technical documents) and need to analyze their content. Reads all pages by default, a single page via 'pageNumber', or a range via 'startPage'/'endPage'. Returns extracted text plus metadata (title, author, page count). The PDF must be a local file accessible from the workspace.",
+        "modelDescription": "Extract text content from a local PDF file. Use this tool when users reference PDF documents (patent PDFs, research papers, technical documents) and need to analyze their content. Reads all pages by default, a single page via 'pageNumber', or a range via 'startPage'/'endPage'. Returns extracted text plus metadata (title, author, page count). The PDF must be a local file accessible from the workspace. If the user attached the PDF to the chat message, its full content — including figures and scanned pages — is already visible to you; do not use this tool for attached PDFs. Use it only for PDF files on disk that are not attached.",
         "tags": [],
         "inputSchema": {
           "type": "object",
