@@ -48,6 +48,15 @@ function apiContentToAnthropicContent(content: (LanguageModelTextPart | Language
 					cache_control: { type: 'ephemeral' }
 				});
 			}
+		} else if (part instanceof LanguageModelDataPart && part.mimeType === 'application/pdf') {
+			convertedContent.push({
+				type: 'document',
+				source: {
+					type: 'base64',
+					media_type: 'application/pdf',
+					data: Buffer.from(part.data).toString('base64')
+				}
+			});
 		} else if (part instanceof LanguageModelDataPart) {
 			if (part.mimeType !== CustomDataPartMimeTypes.StatefulMarker) {
 				convertedContent.push({

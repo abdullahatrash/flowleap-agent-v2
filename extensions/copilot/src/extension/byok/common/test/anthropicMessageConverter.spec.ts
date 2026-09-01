@@ -5,7 +5,38 @@
 
 import { MessageParam, TextBlockParam } from '@anthropic-ai/sdk/resources';
 import { expect, suite, test } from 'vitest';
-import { anthropicMessagesToRawMessages } from '../anthropicMessageConverter';
+import { LanguageModelChatMessageRole, LanguageModelDataPart, LanguageModelTextPart } from '../../../../vscodeTypes';
+import { anthropicMessagesToRawMessages, apiMessageToAnthropicMessage } from '../anthropicMessageConverter';
+
+suite('apiMessageToAnthropicMessage', function () {
+
+	test('converts pdf data parts to document blocks, not image blocks', function () {
+		const pdfBytes = new TextEncoder().encode('%PDF-1.7 fake');
+		const { messages } = apiMessageToAnthropicMessage([{
+			role: LanguageModelChatMessageRole.User,
+			name: undefined,
+			content: [
+				new LanguageModelTextPart('see attached'),
+				new LanguageModelDataPart(pdfBytes, 'application/pdf'),
+			],
+		}]);
+
+		expect(messages).toEqual([{
+			role: 'user',
+			content: [
+				{ type: 'text', text: 'see attached' },
+				{
+					type: 'document',
+					source: {
+						type: 'base64',
+						media_type: 'application/pdf',
+						data: Buffer.from(pdfBytes).toString('base64'),
+					},
+				},
+			],
+		}]);
+	});
+});
 
 suite('anthropicMessagesToRawMessages', function () {
 
