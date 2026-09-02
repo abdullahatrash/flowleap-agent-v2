@@ -1541,7 +1541,11 @@ configurationRegistry.registerConfiguration({
 			type: 'boolean',
 			title: nls.localize('chat.useClaudeMd.title', "Use CLAUDE.md file",),
 			markdownDescription: nls.localize('chat.useClaudeMd.description', "Controls whether instructions from `CLAUDE.md` file found in workspace roots, .claude and ~/.claude folder are attached to all chat requests.",),
-			default: true,
+			// Patent AI: off by default. A personal ~/.claude/CLAUDE.md belongs to the user's coding
+			// assistant, not their patent assistant; with it on, every chat opened by hunting for the
+			// files it names (2026-09-02). Claude sessions in the Agents window read CLAUDE.md through
+			// their own provider and are unaffected.
+			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
 			tags: ['prompts', 'reusable prompts', 'prompt snippets', 'instructions']
