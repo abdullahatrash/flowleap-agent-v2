@@ -54,6 +54,11 @@
 			"expected": "PASS",
 			"observed": "2/2 valid (1 provider-error void; 2026-08-21)",
 			"note": "Explicitly worldwide/comprehensive request must not ask a jurisdiction question before searching."
+		},
+		"T9": {
+			"expected": "PASS",
+			"observed": "not yet measured (added 2026-09-02 with the sourceAttributionRules block)",
+			"note": "Two-document comparison: name the source beside each fact, no source wording outside quotation marks, no leak of the prompt's worked example, and a judged attribution/organization check. Record the first eval:trajectory:repeat run here before relying on the verdict."
 		}
 	}
 }
