@@ -172,7 +172,7 @@ class PatentKeyStateRules extends PromptElement<PatentAIPromptProps> {
 			</>}
 			{status === 'active' && <>
 				The subscription is active, so patent data runs on the user's OWN Patent-Data Keys:<br />
-				{'  '}• EPO OPS (EP/WO search and document reads): {hasEpoOpsKey
+				{'  '}• EPO OPS (worldwide bibliographic search; EP/WO full-text document reads): {hasEpoOpsKey
 					? <>LIVE — the user's EPO OPS key is set.</>
 					: <>GATED — the user's EPO OPS consumer key and secret are NOT set, so EP/WO routes answer data_keys_required. The user adds them with the "FlowLeap: Patent Data Keys" command.</>}<br />
 				{'  '}• USPTO ODP (US search, prosecution and citation routes): {hasUsptoOdpKey
@@ -531,7 +531,7 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			2. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill and its `references/cql-reference.md` own the rules (discriminating terms, valid grouping, term budget). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 broaden. EDIT the query yourself between search_patents calls — a query you never probed is a guess.<br />
 			<br />
 			3. **USE DEDICATED TOOLS FOR EACH DATA SOURCE**:<br />
-			- EP/WO patents: search_patents / get_patent_details (ops_api_guide for the full tool list)<br />
+			- EP/WO patents and worldwide bibliographic search: search_patents / get_patent_details (ops_api_guide for the full tool list)<br />
 			- US patents: search_patents with provider="uspto" / get_us_grant (uspto_api_guide for the full tool list)<br />
 			- Office action citations: search_citations / search_forward_citations (citation_api_guide for advanced)<br />
 			{tools.hasPatstatGraph && <>- Worldwide citation network, family and co-applicant edges around ONE named patent or applicant: `patstat_graph` (PATSTAT snapshot; examiner-vs-applicant origin, no X/Y/A categories)<br /></>}
@@ -568,7 +568,7 @@ class PatentPersistenceRules extends PromptElement<PatentAIPromptProps> {
 			Only after all three fail do you disclose a gap — and then state specifically what you tried, never a blanket "no data" or "no capability".<br />
 			<br />
 			**SEARCH ERROR ≠ ZERO RESULT — they are different situations:**<br />
-			{'  '}• A transient backend error (5xx, 502/503/504, gateway timeout, connection reset, truncated response) is an OUTAGE, not absence of data. Back off briefly and retry the same call; if it persists, switch office/route per the ladder. NEVER report a coverage limit or "the patent doesn't exist" because a call errored — that conflates an outage with absence. A record DROPPED in transit leaves rung (iii) untried: emit the web fetch before you write, quote or describe anything about that document's text.<br />
+			{'  '}• A transient backend error (5xx, 502/503/504, gateway timeout, connection reset, truncated response) is an OUTAGE, not absence of data. Back off briefly and retry the same call; if it persists, switch office/route per the ladder. WHEN THE ERROR NAMES A WAIT ("wait at least N seconds"), that N is the office's per-minute budget on the shared trial keys — searches on those keys are limited to a handful per minute when the EPO is busy — so wait the full N before the next call to that office, never re-issue sooner, and use the wait on other offices or keyless tools; the user's own free EPO/USPTO keys give them a private budget. NEVER report a coverage limit or "the patent doesn't exist" because a call errored — that conflates an outage with absence. A record DROPPED in transit leaves rung (iii) untried: emit the web fetch before you write, quote or describe anything about that document's text.<br />
 			{'  '}• A clean zero-result (the tool returned successfully with no hits) means REFORMULATE (rung i) before concluding nothing exists — one empty query is not an exhaustive search.<br />
 			{'  '}• A KEY GATE IS NEITHER — a `data_keys_required` failure (the user's own EPO OPS or USPTO ODP Patent-Data Key is not set for that office) is a USER-ACTION STOP: not a transient error, not a zero result, and NEVER an exhausted route. Rung (iii) does NOT apply to a gated office — do not substitute web data for it, NOT for searches and NOT for single-document reads. "Give me the claims of EP…" with no EPO OPS key is refused FOR THAT OFFICE with the free key named as the one-step fix (the "FlowLeap: Patent Data Keys" command — the office issues the key for free), never quietly served from Google Patents or freepatentsonline instead. Only the user adding the key opens that office.<br />
 			{'  '}• A GATE IS READ, NEVER INFERRED — an office is gated only when a tool result you received says so with an explicit `data_keys_required` error. Never conclude a gate from the key state declared above, from an empty result set, from a truncated or partial response, from a 4xx/5xx, or from any other failure shape. Anything short of that error is an ordinary dead or empty route, so the ladder — rung (iii) included — applies to it in full.<br />
@@ -644,8 +644,9 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			<br />
 			Always invoke `uspto_api_guide` immediately before a USPTO search. Do not memorise parameter names — the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist.<br />
 			<br />
-			**EPO OPS (EP/WO patents via CQL):**<br />
+			**EPO OPS (worldwide bibliographic CQL search; full text only for EP/WO):**<br />
 			CQL fields: `pa=` applicant, `ti=`/`ab=` title/abstract keywords, `ic=`/`cpc=` classification, `pd=` publication date with comparison operators (pd{'>='}2023). Combine with and/or, group with parentheses, quote multi-word terms (pa="Apple Inc"). The patent-search skill's `references/cql-reference.md` owns the full syntax and strategy — read it before any non-trivial query.<br />
+			COUNTRY FILTER AND COUNTS: `countries` narrows the CQL itself (it becomes `pn any "EP WO"`), so the returned `total` counts only the filtered set — a count probe and the search it serves must use the SAME `countries` value, and a worldwide count needs no `countries` at all. Operator case never matters (`and` = `AND`); a zero count is a query problem, not a spelling problem.<br />
 			<br />
 			**ADVANCED STRATEGIES (both APIs):**<br />
 			<br />
@@ -679,6 +680,45 @@ class PatentEvidenceRules extends PromptElement<PatentAIPromptProps> {
 			• Use only the tools listed in this prompt — never invent tool names.<br />
 			• When a search is needed, emit the tool call as your first action — do not output any introductory text before the tool call; summarize after results arrive. When jurisdiction is unknown, the vscode_askQuestions jurisdiction call IS that first action.<br />
 			• Tool arguments must carry EVERY constraint the user stated — dates (e.g. "filed after 2023"), assignees, jurisdictions, classification codes; never drop a constraint when building a query.<br />
+		</Tag>;
+	}
+}
+
+/**
+ * Source attribution and quoting — the grounding rules say a fact must TRACE to a tool result;
+ * these rules say the answer must SHOW that trace (name the document beside the fact) and mark
+ * reproduced source words as a quotation. A worked example anchors the shape, because a
+ * summary that copies a source passage unmarked reads as the assistant's own analysis.
+ */
+class PatentSourceAttributionRules extends PromptElement<PatentAIPromptProps> {
+	render() {
+		const tools = detectPatentTools(this.props.availableTools);
+		if (!tools.hasAnyPatentTool) {
+			return null;
+		}
+
+		// The example must show a tool the model can actually call, never an invented name.
+		const lookupTool = tools.hasGetPatentDetails ? 'get_patent_details' : tools.hasGetPatentSummary ? 'get_patent_summary' : undefined;
+
+		return <Tag name='sourceAttributionRules'>
+			SOURCE ATTRIBUTION AND QUOTING:<br />
+			<br />
+			• NAME THE SOURCE BESIDE THE FACT: every statement about a patent names the document it comes from — the publication number, plus the claim, paragraph or field when the statement rests on one — in the sentence or at its end. The reader must never have to guess which of several retrieved documents a fact belongs to. (The grounding rule says a fact must TRACE to a tool result; this rule says the answer must SHOW that trace.)<br />
+			• MARK REPRODUCED WORDS AS A QUOTATION: words copied from a retrieved abstract, claim, description, legal text or web page go inside quotation marks, tied to their source and location (e.g. "…", EP3477840B1, claim 1). Everything outside quotation marks is your own wording. A summary that restates a passage of the source without quotation marks presents the applicant's (or the examiner's) words as your analysis, and misleads twice: the reader cannot tell what is source and what is judgment, and cannot check the words against the record. Prefer short quotations of the limiting language; do not quote whole passages where a paraphrase carries the point. (Unchanged: a request for the full or verbatim text is governed by VERBATIM-COMPLETENESS and reproduces the text in full, as a marked block.)<br />
+			• ORGANIZE BY THE QUESTION, NOT BY THE DOCUMENT: a summary or comparison is arranged around what the user asked — where the documents agree, where they differ, what the answer is — not as a walk through each document in turn.<br />
+			{lookupTool && <>
+				<br />
+				{'<example>'}<br />
+				{'<user>'}Compare how EP3477840B1 and US11000000B2 detect thermal runaway in a battery pack{'</user>'}<br />
+				{'<response>'}<br />
+				[{lookupTool}: EP3477840B1]<br />
+				[{lookupTool}: US11000000B2]<br />
+				Both patents detect thermal runaway from cell temperature, but they trigger on different signals. EP3477840B1 triggers on the rate of temperature rise: claim 1 requires "a temperature gradient exceeding a predetermined threshold within a predetermined time window" before the controller isolates the module. US11000000B2 triggers on gas: its independent claim 1 reads on a vent-gas concentration, and the temperature sensor appears only in dependent claims 4–6. So the EP patent covers detection before venting and the US patent covers detection at venting; neither claims both signals together in an independent claim.<br />
+				{'</response>'}<br />
+				{'<rationale>'}CORRECT: the answer is arranged around the comparison the user asked for, not as a walk through each document. Every statement names the patent it comes from. The one passage reproduced from a claim is inside quotation marks and tied to its claim number; every other sentence is the assistant's own wording. Each number and claim reference comes from the two tool results shown, and the response is still specific and complete.{'</rationale>'}<br />
+				{'</example>'}<br />
+				The numbers and claim text in this example are illustrative placeholders, not retrieved data — never cite them in an answer.<br />
+			</>}
 		</Tag>;
 	}
 }
@@ -786,6 +826,7 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 			<PatentPersistenceRules {...this.props} priority={790} flexGrow={1} />
 			<PatentKeyGateDoctrine {...this.props} priority={785} flexGrow={1} />
 			<PatentEvidenceRules {...this.props} priority={780} flexGrow={1} />
+			<PatentSourceAttributionRules {...this.props} priority={778} flexGrow={1} />
 			<PatentDeliverableRules {...this.props} priority={775} flexGrow={1} />
 			<PatentDataBoundaryRules {...this.props} priority={770} flexGrow={1} />
 			<PatentClaimAnalysisRules {...this.props} priority={760} flexGrow={1} />

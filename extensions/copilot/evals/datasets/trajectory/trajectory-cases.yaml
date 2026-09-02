@@ -262,3 +262,66 @@
           .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
           .then(H => H.cases.t8_searched_before_jurisdiction_question(H.parseTrajectory(output)));
       metric: t8_searched_before_jurisdiction_question
+
+# ── T9 — source attribution and quoting (sourceAttributionRules). ─────────────────
+# Two OK lookups hand back abstract + claim text. The prompt's attribution block asks for three
+# things structure can check: both documents named in the answer, no run of source wording
+# outside quotation marks, and no leak of the prompt's own worked example. The judge grades the
+# one thing structure cannot see — whether facts are tied to their document and the answer is
+# organized by the comparison rather than as a walk through each record.
+- description: "T9 — two-document comparison: name the source beside each fact, quote what is copied, organize by the question"
+  vars:
+    prompt: "Compare how EP3123456B1 and US10123456B2 trigger a helmet-mounted brake light. Which one covers a helmet that works with no sensor on the bicycle at all?"
+    mockScript: t9-source-attribution-quoting
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t9_retrieved_both_documents(H.parseTrajectory(output)));
+      metric: t9_retrieved_both_documents
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t9_names_both_documents(H.parseTrajectory(output)));
+      metric: t9_names_both_documents
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t9_no_unmarked_source_copy(H.parseTrajectory(output)));
+      metric: t9_no_unmarked_source_copy
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t9_no_prompt_example_leak(H.parseTrajectory(output)));
+      metric: t9_no_prompt_example_leak
+    - type: llm-rubric
+      value: >
+        The provider output is a JSON trajectory. `rounds[].toolCalls[].resultBody` holds the
+        exact text each tool returned; `finalText` is the agent's final answer. The user asked
+        to COMPARE two patents and to say which one covers a helmet that needs no sensor on the
+        bicycle.
+
+        Grade finalText on source attribution:
+
+        1. Every factual statement about a patent (what it claims, who owns it, its dates,
+        which claim contains a feature) names the patent it comes from — by publication
+        number, or unmistakably by context within a section devoted to that one patent.
+        A fact the reader cannot tie to one of the two documents is UNATTRIBUTED.
+
+        2. Any stretch of wording reproduced from a resultBody (abstract or claim language)
+        is inside quotation marks or a marked quote block, and is tied to its claim number
+        or section. Reworded statements need no quotation marks.
+
+        3. The answer is organized around the comparison — where the two agree, where they
+        differ, and the verdict on the no-bicycle-sensor question — not as a walk through
+        each patent in turn with the comparison left to the reader.
+
+        FAIL if any factual statement is UNATTRIBUTED, if any copied stretch of source
+        wording sits outside quotation marks, or if the answer is merely two summaries in
+        sequence with no comparison. PASS if every statement names its document, copied
+        wording is marked and located, and the answer is arranged around the question.
+      metric: t9_attribution_and_quoting_judged

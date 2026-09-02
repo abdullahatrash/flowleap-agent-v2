@@ -184,7 +184,7 @@ describe('mock-table resolver (deterministic sequences)', () => {
 describe('every fixture is a well-formed MockScript', () => {
 	const ids = fs.readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
 
-	it('all 8 T-case fixtures are present', () => {
+	it('all 9 T-case fixtures are present', () => {
 		expect(ids.sort()).toStrictEqual([
 			't1-us-claims-exhausted',
 			't2-empty-citation-sibling',
@@ -195,6 +195,7 @@ describe('every fixture is a well-formed MockScript', () => {
 			't6-true-zero-reformulate',
 			't7-negative-control-bounded',
 			't8-jurisdiction-nonblock',
+			't9-source-attribution-quoting',
 		].sort());
 	});
 
@@ -529,5 +530,92 @@ This analysis provides a snapshot of the competitive landscape.`;
 	it('the T3b catch-all body no longer claims to carry results (#208)', () => {
 		// The bait this issue was filed for: a body reading "results returned" while carrying none.
 		expect(t3bScript.default?.body).toBe('OK. Request acknowledged (no data payload).');
+	});
+});
+
+describe('T9 source attribution: copied runs, quoting marks, and the worked-example leak', () => {
+	const t9Script = loadFixture('t9-source-attribution-quoting');
+	const epBody = t9Script.rules.find(r => r.tool === 'get_patent_details' && r.argMatch?.publicationNumber === '3123456')!.response!.body;
+	const usBody = t9Script.rules.find(r => r.tool === 'get_patent_details' && r.argMatch?.publicationNumber === '10123456')!.response!.body;
+	const t9Run = (finalText: string) => traj([
+		['get_patent_details', 'OK', { publicationNumber: 'EP3123456B1' }, epBody],
+		['get_patent_details', 'OK', { publicationNumber: 'US10123456B2' }, usBody],
+	], finalText);
+
+	it('a copied abstract sentence outside quotation marks is an unmarked run; the same words in quotes are marked', () => {
+		const bare = 'EP3123456B1: a controller compares the measured longitudinal deceleration with a threshold and switches the light module from a steady running mode to a high-intensity flashing mode.';
+		const quoted = 'EP3123456B1 claim 1 requires "a controller configured to compare a longitudinal deceleration measured by the accelerometer with a predetermined threshold".';
+		expect({
+			bareRuns: H.copiedRuns(bare, [epBody]).map(r => r.marked),
+			quotedRuns: H.copiedRuns(quoted, [epBody]).map(r => r.marked),
+			curlyQuotesCount: H.copiedRuns('It requires “a controller configured to compare a longitudinal deceleration measured by the accelerometer” here.', [epBody]).map(r => r.marked),
+			blockQuoteCount: H.copiedRuns('Claim 1 reads:\n> A protective helmet comprising: a shell; a rear-facing light module fixed to the shell', [epBody]).map(r => r.marked),
+		}).toEqual({
+			bareRuns: [false],
+			quotedRuns: [true],
+			curlyQuotesCount: [true],
+			blockQuoteCount: [true],
+		});
+	});
+
+	it('lead-in words before an opening quotation mark do not make a quoted phrase unmarked', () => {
+		// Measured on the first T9 probe (2026-09-02): the run began at "the rear lamp", two words
+		// before the quote, because the source also reads "illuminate the rear lamp in response to".
+		const leadIn = 'US10123456B2 lights the rear lamp "in response to the brake-actuation signal" (claim 1).';
+		const longTail = 'It adds an accelerometer "in response to a deceleration measured by the accelerometer when no brake-actuation signal has been received for a predetermined period" (claim 6).';
+		expect({
+			leadIn: H.copiedRuns(leadIn, [usBody]).map(r => r.marked),
+			longTail: H.copiedRuns(longTail, [usBody]).map(r => r.marked),
+			// Eight copied words fully outside the quote still count, quote or no quote nearby.
+			stillCaught: H.copiedRuns('a wireless receiver configured to receive a brake-actuation signal from a lever sensor mounted on a bicycle, "and a controller"', [usBody]).map(r => r.marked),
+		}).toEqual({ leadIn: [true], longTail: [true], stillCaught: [false] });
+	});
+
+	it('a paraphrase shares no eight-word run and passes; a short common phrase is not a run', () => {
+		const paraphrase = 'EP3123456B1 fires its rear light from an accelerometer reading alone, so nothing on the bicycle is needed; US10123456B2 listens for a radio signal from a lever sensor on the handlebar and only falls back to an accelerometer in dependent claim 6.';
+		expect(H.copiedRuns(paraphrase, [epBody, usBody])).toEqual([]);
+		expect(H.cases.t9_no_unmarked_source_copy(t9Run(paraphrase))).toBe(true);
+	});
+
+	it('the full-answer predicates: an attributed, quoting, comparison answer is GREEN', () => {
+		const good = t9Run('Both patents put a brake lamp on the helmet, but they trigger it differently. EP3123456B1 (Lumos Helmet Ltd) triggers on deceleration alone: claim 1 requires "a controller configured to compare a longitudinal deceleration measured by the accelerometer with a predetermined threshold", with no link to the bicycle. US10123456B2 (Rider Signal Inc) triggers on a radio signal from a lever sensor on the bicycle, and uses an accelerometer only as a fallback in dependent claim 6. So EP3123456B1 is the one that covers a helmet with no sensor on the bicycle.');
+		expect({
+			retrieved: H.cases.t9_retrieved_both_documents(good),
+			named: H.cases.t9_names_both_documents(good),
+			noUnmarkedCopy: H.cases.t9_no_unmarked_source_copy(good),
+			noLeak: H.cases.t9_no_prompt_example_leak(good),
+		}).toEqual({ retrieved: true, named: true, noUnmarkedCopy: true, noLeak: true });
+	});
+
+	it('the full-answer predicates: an unmarked copy, a missing source name, and an example leak each go RED', () => {
+		const copied = t9Run(`EP3123456B1: ${epBody.split('Abstract: ')[1].split('\n')[0]} US10123456B2 uses a wireless lever signal instead.`);
+		const unnamed = t9Run('The first patent triggers on deceleration; the second listens for a lever signal. The first one covers a helmet with no bicycle sensor.');
+		const leaked = t9Run('EP3123456B1 and US10123456B2 differ as in US11000000B2, whose claim 1 requires "a temperature gradient exceeding a predetermined threshold within a predetermined time window".');
+		expect({
+			copiedIsUnmarked: H.cases.t9_no_unmarked_source_copy(copied),
+			unnamedFails: H.cases.t9_names_both_documents(unnamed),
+			leakFails: H.cases.t9_no_prompt_example_leak(leaked),
+		}).toEqual({ copiedIsUnmarked: false, unnamedFails: false, leakFails: false });
+	});
+
+	it('publication numbers match by value across tools and separators', () => {
+		const viaSummary = traj([
+			['get_patent_summary', 'OK', { patentNumber: 'EP 3123456' }, ''],
+			['get_patent_summary', 'OK', { patentNumber: 'US-10123456-B2' }, ''],
+		], 'EP 3 123 456 B1 and US 10,123,456 B2 both ...');
+		expect({
+			retrieved: H.cases.t9_retrieved_both_documents(viaSummary),
+			named: H.cases.t9_names_both_documents(viaSummary),
+			onlyOne: H.cases.t9_retrieved_both_documents(traj([['get_patent_details', 'OK', { publicationNumber: 'EP3123456B1' }, '']], '')),
+		}).toEqual({ retrieved: true, named: true, onlyOne: false });
+	});
+
+	it('the fixture serves both lookup tools by number and acknowledges without data otherwise', () => {
+		const state = createMockScriptState(t9Script);
+		expect({
+			detailsEp: resolveMock(t9Script, state, 'get_patent_details', { publicationNumber: 'EP3123456B1' }).body.startsWith('EP3123456B1'),
+			summaryUs: resolveMock(t9Script, state, 'get_patent_summary', { patentNumber: 'US10123456' }).body.startsWith('US10123456B2'),
+			unknownIsBare: resolveMock(t9Script, state, 'search_patents', { query: 'helmet' }).body,
+		}).toEqual({ detailsEp: true, summaryUs: true, unknownIsBare: 'OK. Request acknowledged (no data payload).' });
 	});
 });

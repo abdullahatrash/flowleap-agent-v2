@@ -1,0 +1,42 @@
+{
+	"id": "t9-source-attribution-quoting",
+	"description": "Source attribution: two OK document lookups hand back abstract + claim 1 text. The answer must name the document beside each fact, mark any reproduced source words as a quotation, and be organized by the comparison asked for — not a walk through each record.",
+	"rules": [
+		{
+			"tool": "get_patent_details",
+			"argMatch": { "publicationNumber": "3123456" },
+			"response": {
+				"tag": "OK",
+				"body": "EP3123456B1 — \"Helmet with deceleration-triggered brake light\". Applicant: Lumos Helmet Ltd. Published 2019-05-15 (B1). Priority 2016-09-02.\n\nAbstract: A protective helmet has a rear-facing light module and a three-axis accelerometer mounted in the shell. A controller compares the measured longitudinal deceleration with a threshold and switches the light module from a steady running mode to a high-intensity flashing mode while the deceleration exceeds the threshold, so that following road users receive a braking signal without any connection to the bicycle.\n\nClaims:\n1. A protective helmet comprising: a shell; a rear-facing light module fixed to the shell; a three-axis accelerometer mounted in the shell; and a controller configured to compare a longitudinal deceleration measured by the accelerometer with a predetermined threshold and to switch the light module from a steady mode to a flashing mode while the deceleration exceeds the threshold.\n2. The helmet of claim 1, wherein the predetermined threshold is adjustable by the wearer.\n3. The helmet of claim 1, wherein the controller filters the measured deceleration with a low-pass filter before the comparison.\n4. The helmet of claim 1, wherein the light module comprises a plurality of light-emitting diodes arranged in a horizontal strip.\n5. The helmet of claim 1, further comprising a battery housed in the shell and a charging port at the rear of the shell."
+			}
+		},
+		{
+			"tool": "get_patent_details",
+			"argMatch": { "publicationNumber": "10123456" },
+			"response": {
+				"tag": "OK",
+				"body": "US10123456B2 — \"Wireless bicycle brake indicator worn on the head\". Assignee: Rider Signal Inc. Granted 2018-11-13. Filed 2016-03-21.\n\nAbstract: A head-worn indicator receives a wireless signal from a brake-lever sensor mounted on the bicycle handlebar and illuminates a rear lamp while the brake lever is actuated. An optional accelerometer in the indicator provides a fallback illumination when the wireless link is lost.\n\nClaims:\n1. A head-worn brake indicator comprising: a housing adapted to attach to a helmet; a rear lamp; a wireless receiver configured to receive a brake-actuation signal from a lever sensor mounted on a bicycle; and a controller configured to illuminate the rear lamp in response to the brake-actuation signal.\n2. The indicator of claim 1, wherein the wireless receiver is a Bluetooth Low Energy receiver.\n3. The indicator of claim 1, wherein the housing attaches to the helmet by a hook-and-loop strap.\n4. The indicator of claim 1, wherein the rear lamp is red.\n5. The indicator of claim 1, further comprising a battery and a charging port.\n6. The indicator of claim 1, further comprising an accelerometer, wherein the controller illuminates the rear lamp in response to a deceleration measured by the accelerometer when no brake-actuation signal has been received for a predetermined period."
+			}
+		},
+		{
+			"tool": "get_patent_summary",
+			"argMatch": { "patentNumber": "3123456" },
+			"response": {
+				"tag": "OK",
+				"body": "EP3123456B1 — \"Helmet with deceleration-triggered brake light\". Applicant: Lumos Helmet Ltd. Published 2019-05-15 (B1). Priority 2016-09-02.\n\nAbstract: A protective helmet has a rear-facing light module and a three-axis accelerometer mounted in the shell. A controller compares the measured longitudinal deceleration with a threshold and switches the light module from a steady running mode to a high-intensity flashing mode while the deceleration exceeds the threshold, so that following road users receive a braking signal without any connection to the bicycle.\n\nClaim 1: A protective helmet comprising: a shell; a rear-facing light module fixed to the shell; a three-axis accelerometer mounted in the shell; and a controller configured to compare a longitudinal deceleration measured by the accelerometer with a predetermined threshold and to switch the light module from a steady mode to a flashing mode while the deceleration exceeds the threshold. (5 claims total.)"
+			}
+		},
+		{
+			"tool": "get_patent_summary",
+			"argMatch": { "patentNumber": "10123456" },
+			"response": {
+				"tag": "OK",
+				"body": "US10123456B2 — \"Wireless bicycle brake indicator worn on the head\". Assignee: Rider Signal Inc. Granted 2018-11-13. Filed 2016-03-21.\n\nAbstract: A head-worn indicator receives a wireless signal from a brake-lever sensor mounted on the bicycle handlebar and illuminates a rear lamp while the brake lever is actuated. An optional accelerometer in the indicator provides a fallback illumination when the wireless link is lost.\n\nClaim 1: A head-worn brake indicator comprising: a housing adapted to attach to a helmet; a rear lamp; a wireless receiver configured to receive a brake-actuation signal from a lever sensor mounted on a bicycle; and a controller configured to illuminate the rear lamp in response to the brake-actuation signal. (6 claims total; claim 6 adds an accelerometer fallback when no brake-actuation signal has been received for a predetermined period.)"
+			}
+		}
+	],
+	"default": {
+		"tag": "OK",
+		"body": "OK. Request acknowledged (no data payload)."
+	}
+}

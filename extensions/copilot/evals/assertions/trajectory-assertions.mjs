@@ -419,6 +419,179 @@ export function noUntracedTableRows(traj) {
 }
 
 /**
+ * ── Source attribution and quoting (T9) ───────────────────────────────────────────────────
+ *
+ * The inverse of {@link untracedClaimWindows}: that one asks whether answer text is MISSING from
+ * the tool results (fabrication); these ask whether tool-result text is PRESENT in the answer
+ * without being marked as a quotation (unattributed copying). A summary that lifts a run of the
+ * applicant's abstract or claim wording and presents it bare reads as the agent's own analysis —
+ * the reader cannot tell source from judgment, and cannot check the words against the record.
+ */
+
+/** Minimum consecutive shared words for a stretch of the answer to count as copied, not coincidence. */
+const COPIED_RUN_MIN_WORDS = 8;
+
+/**
+ * Word tokens of `text` with their character offsets, lower-cased, apostrophes and hyphens kept
+ * inside a word so "rear-facing" is one token on both sides of the comparison.
+ * @param {string} text
+ * @returns {{ word: string, start: number }[]}
+ */
+function wordTokens(text) {
+	const tokens = [];
+	for (const match of String(text ?? '').matchAll(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu)) {
+		tokens.push({ word: match[0].toLowerCase().replace(/’/g, "'"), start: match.index ?? 0 });
+	}
+	return tokens;
+}
+
+/**
+ * Character spans of `text` that are marked as quoted: straight or curly double-quote pairs,
+ * markdown block-quote lines, and fenced code blocks.
+ * @param {string} text
+ * @returns {{ start: number, end: number }[]}
+ */
+export function quotedSpans(text) {
+	const source = String(text ?? '');
+	const spans = [];
+	for (const match of source.matchAll(/"[^"]{1,2000}"|“[^”]{1,2000}”|«[^»]{1,2000}»/gs)) {
+		spans.push({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+	}
+	for (const match of source.matchAll(/```[\s\S]*?```/g)) {
+		spans.push({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+	}
+	for (const match of source.matchAll(/^[ \t]*>.*$/gm)) {
+		spans.push({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+	}
+	return spans;
+}
+
+/**
+ * Runs of at least {@link COPIED_RUN_MIN_WORDS} consecutive words that `text` shares with any of
+ * `sources`, each tagged with whether it sits inside a quoted span. Overlapping windows are merged
+ * into one run so a copied sentence counts once, however long.
+ *
+ * @param {string} text the answer
+ * @param {readonly string[]} sources tool-result bodies the agent received
+ * @param {number} [minWords]
+ * @returns {{ start: number, end: number, words: string, marked: boolean }[]}
+ */
+export function copiedRuns(text, sources, minWords = COPIED_RUN_MIN_WORDS) {
+	const grams = new Set();
+	for (const source of sources) {
+		const words = wordTokens(source).map(t => t.word);
+		for (let i = 0; i + minWords <= words.length; i++) {
+			grams.add(words.slice(i, i + minWords).join(' '));
+		}
+	}
+	if (grams.size === 0) {
+		return [];
+	}
+	const tokens = wordTokens(text);
+	const spans = quotedSpans(text);
+	const inQuote = offset => spans.some(span => offset >= span.start && offset < span.end);
+	const runs = [];
+	let current = null;
+	for (let i = 0; i + minWords <= tokens.length; i++) {
+		const key = tokens.slice(i, i + minWords).map(t => t.word).join(' ');
+		if (!grams.has(key)) {
+			if (current) {
+				runs.push(current);
+				current = null;
+			}
+			continue;
+		}
+		const last = tokens[i + minWords - 1];
+		const end = last.start + last.word.length;
+		if (current && i <= current.lastIndex + 1) {
+			current.end = end;
+			current.lastIndex = i;
+		} else {
+			if (current) {
+				runs.push(current);
+			}
+			current = { start: tokens[i].start, end, firstIndex: i, lastIndex: i };
+		}
+	}
+	if (current) {
+		runs.push(current);
+	}
+	// A run is MARKED unless at least `minWords` consecutive words of it sit outside every
+	// quoted span. The lead-in words before an opening quotation mark ("the rear lamp "in
+	// response to…"") often also precede the phrase in the source, so a run can begin a few
+	// words before the quote; that is attribution done right, not an unmarked copy.
+	const unmarkedStretch = run => {
+		let longest = 0;
+		let streak = 0;
+		for (let i = run.firstIndex; i <= run.lastIndex + minWords - 1; i++) {
+			streak = inQuote(tokens[i].start) ? 0 : streak + 1;
+			longest = Math.max(longest, streak);
+		}
+		return longest;
+	};
+	return runs.map(run => ({
+		start: run.start,
+		end: run.end,
+		words: String(text).slice(run.start, run.end),
+		marked: unmarkedStretch(run) < minWords,
+	}));
+}
+
+/**
+ * Copied runs in the FINAL ANSWER that are not inside a quoted span — source wording presented as
+ * the agent's own. Zero on an honest answer that paraphrases, or that quotes what it copies.
+ * @param {Trajectory} traj
+ * @returns {{ start: number, end: number, words: string, marked: boolean }[]}
+ */
+export function unmarkedFinalCopiedRuns(traj) {
+	return copiedRuns(traj.finalText ?? '', resultBodies(traj)).filter(run => !run.marked);
+}
+
+/**
+ * Digits-only form of a publication number, so "EP 3 123 456 B1", "EP3123456" and "EP-3123456-B1"
+ * all read as the same document.
+ * @param {string} text
+ */
+function squashNumber(text) {
+	return String(text ?? '').replace(/[\s,\-–]/g, '').toUpperCase();
+}
+
+/**
+ * Does the final answer name every one of `numbers` (publication numbers, separators ignored)?
+ * @param {Trajectory} traj
+ * @param {readonly string[]} numbers
+ */
+export function finalNamesEvery(traj, numbers) {
+	const haystack = squashNumber(traj.finalText ?? '');
+	return numbers.every(n => haystack.includes(squashNumber(n)));
+}
+
+/**
+ * Did any call to one of `names` carry `needle` inside ANY argument value? Tool arg keys differ
+ * per tool (publicationNumber vs patentNumber), so the number is matched by value alone.
+ * @param {Trajectory} traj
+ * @param {string|string[]} names
+ * @param {string} needle
+ */
+export function calledWithValue(traj, names, needle) {
+	const wanted = Array.isArray(names) ? names : [names];
+	const target = squashNumber(needle);
+	return flatCalls(traj).some(call =>
+		wanted.includes(call.name) && Object.values(call.args ?? {}).some(v => squashNumber(String(v)).includes(target)),
+	);
+}
+
+/** The two T9 fixture documents (number core without kind code, so 'EP 3123456' and 'EP3123456B1' both match) and the lookup tools that return them. */
+const T9_DOCUMENTS = ['EP3123456', 'US10123456'];
+const T9_LOOKUP_TOOLS = ['get_patent_details', 'get_patent_summary'];
+/**
+ * Fingerprints of the worked example inside the system prompt's sourceAttributionRules block.
+ * The example's numbers and claim text are placeholders the prompt says never to cite; an
+ * answer that repeats them has learned the example as data.
+ */
+const PROMPT_EXAMPLE_FINGERPRINTS = ['US11000000', 'temperature gradient exceeding a predetermined threshold'];
+
+/**
  * Per-case structural predicates (H4 §4). Each takes a parsed trajectory and returns the
  * boolean the gate asserts. Kept HERE (not inline in the dataset YAML) so the promptfoo
  * asserts and the offline vitest spec exercise the exact same logic — no drift. Every one
@@ -498,6 +671,17 @@ export const cases = {
 	t7_bounded_engagement: traj => countTool(traj, 'search_patents') >= 1 && flatCalls(traj).length <= 16,
 
 	/** T8 — a search/build tool ran before any jurisdiction question. */
+	/** T9 — both documents were actually looked up (by value, whichever lookup tool). */
+	t9_retrieved_both_documents: traj => T9_DOCUMENTS.every(n => calledWithValue(traj, T9_LOOKUP_TOOLS, n)),
+	/** T9 — the answer names both documents, so each fact can be tied to its source. */
+	t9_names_both_documents: traj => finalNamesEvery(traj, T9_DOCUMENTS),
+	/** T9 — no run of source wording is presented outside quotation marks. */
+	t9_no_unmarked_source_copy: traj => unmarkedFinalCopiedRuns(traj).length === 0,
+	/** T9 — the system prompt's worked example did not leak into the answer as data. */
+	t9_no_prompt_example_leak: traj => {
+		const text = squashNumber(traj.finalText ?? '').toLowerCase();
+		return PROMPT_EXAMPLE_FINGERPRINTS.every(f => !text.includes(squashNumber(f).toLowerCase()));
+	},
 	t8_searched_before_jurisdiction_question: traj => {
 		const calls = flatCalls(traj);
 		const searchIdx = calls.findIndex(c => ['search_patents', 'build_patent_query', 'build_uspto_query'].includes(c.name));

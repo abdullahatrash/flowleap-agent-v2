@@ -76,7 +76,7 @@ async function renderPatentInstructions(toolNames: readonly ToolName[], keyState
 
 /** Text that only ever appears when the prompt commits to an office being reachable or gated. */
 const OFFICE_AVAILABILITY_CLAIMS: readonly string[] = [
-	'EPO OPS (EP/WO search and document reads)',
+	'EPO OPS (worldwide bibliographic search; EP/WO full-text document reads)',
 	'USPTO ODP (US search, prosecution and citation routes)',
 	'EVERY patent-data office is live',
 	'LIVE — the user',
@@ -170,7 +170,7 @@ suite('PatentAIInstructions key state', () => {
 	test('active with only the USPTO key marks USPTO live, EPO gated, and annotates the EP carousel option', async () => {
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'active', hasUsptoOdpKey: true });
 		expect({
-			epoGated: output.includes('EPO OPS (EP/WO search and document reads): GATED — the user\'s EPO OPS consumer key and secret are NOT set'),
+			epoGated: output.includes('EPO OPS (worldwide bibliographic search; EP/WO full-text document reads): GATED — the user\'s EPO OPS consumer key and secret are NOT set'),
 			namesTheKeysCommand: output.includes('"FlowLeap: Patent Data Keys" command'),
 			usptoLive: output.includes('USPTO ODP (US search, prosecution and citation routes): LIVE'),
 			keylessRoutesNamed: output.includes('Keyless routes need no Patent-Data Key and stay live'),
@@ -191,7 +191,7 @@ suite('PatentAIInstructions key state', () => {
 	test('active with only the EPO key mirrors it: EPO live, USPTO gated and annotated', async () => {
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS, { subscriptionStatus: 'active', hasEpoOpsKey: true });
 		expect({
-			epoLive: output.includes('EPO OPS (EP/WO search and document reads): LIVE'),
+			epoLive: output.includes('EPO OPS (worldwide bibliographic search; EP/WO full-text document reads): LIVE'),
 			usptoGated: output.includes('USPTO ODP (US search, prosecution and citation routes): GATED — the user\'s USPTO ODP API key is NOT set'),
 			usCarouselAnnotated: output.includes('"US patents only (USPTO) — needs your USPTO ODP key (not set)"'),
 			epCarouselAnnotated: output.includes('needs your EPO OPS key (not set)'),
@@ -528,5 +528,49 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 			verbatimCompletenessUnchanged: true,
 			completenessIsBoundedByRetrieval: true,
 		});
+	});
+});
+
+suite('PatentAIInstructions source attribution', () => {
+	test('the answer names the source beside the fact and marks reproduced words as a quotation', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			nameTheSource: output.includes('NAME THE SOURCE BESIDE THE FACT'),
+			markQuotations: output.includes('MARK REPRODUCED WORDS AS A QUOTATION'),
+			organizeByQuestion: output.includes('ORGANIZE BY THE QUESTION, NOT BY THE DOCUMENT'),
+			verbatimCarveOutKept: output.includes('governed by VERBATIM-COMPLETENESS'),
+			// The example is a template: templated calls to a real tool, then a rationale.
+			exampleUsesRealTool: output.includes('[get_patent_details: EP3477840B1]'),
+			exampleHasRationale: output.includes('<rationale>CORRECT:'),
+			examplePlaceholdersDisarmed: output.includes('illustrative placeholders, not retrieved data'),
+			// The grounding rules the block builds on stay in place.
+			groundingSweepUnchanged: output.includes('FINAL-ANSWER GROUNDING'),
+		}).toEqual({
+			nameTheSource: true,
+			markQuotations: true,
+			organizeByQuestion: true,
+			verbatimCarveOutKept: true,
+			exampleUsesRealTool: true,
+			exampleHasRationale: true,
+			examplePlaceholdersDisarmed: true,
+			groundingSweepUnchanged: true,
+		});
+	});
+
+	test('the example never shows a tool the model cannot call', async () => {
+		const withoutDetails = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.GetPatentDetails));
+		const searchOnly = await renderPatentInstructions([ToolName.SearchPatents]);
+		expect({
+			fallsBackToSummary: withoutDetails.includes('[get_patent_summary: EP3477840B1]') && !withoutDetails.includes('[get_patent_details:'),
+			rulesWithoutExampleWhenNoLookupTool: searchOnly.includes('NAME THE SOURCE BESIDE THE FACT') && !searchOnly.includes('<example>'),
+		}).toEqual({
+			fallsBackToSummary: true,
+			rulesWithoutExampleWhenNoLookupTool: true,
+		});
+	});
+
+	test('renders no attribution block on a stock configuration', async () => {
+		const output = await renderPatentInstructions([]);
+		expect(output.includes('SOURCE ATTRIBUTION AND QUOTING')).toBe(false);
 	});
 });

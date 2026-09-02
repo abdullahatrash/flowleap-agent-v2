@@ -769,6 +769,32 @@ describe('retry with backoff (#89)', () => {
 		expect(fetch.calls()).toBe(2);
 	}, 5000);
 
+	it('absorbs a short 503 Retry-After inline and then succeeds (PRD 0001 S6)', async () => {
+		const backpressure = { error: { message: 'EPO OPS asked us to wait 0.2 seconds.', type: 'upstream', code: 'upstream_unavailable' } };
+		const fetch = scriptedFetch([makeResponse(503, backpressure, { 'retry-after': '0.2' }), makeResponse(200, { success: true })]);
+		const { client } = makeClient(fetch);
+
+		const result = await client.get<{ success: boolean }>('/patent-search-bq/EP-1-A1', makeToken());
+
+		expect({ result, calls: fetch.calls() }).toEqual({ result: { success: true }, calls: 2 });
+	}, 5000);
+
+	it('returns a long 503 Retry-After at once, with the seconds in the model-facing hint', async () => {
+		const backpressure = { error: { message: 'EPO OPS asked us to wait 60 seconds.', type: 'upstream', code: 'upstream_unavailable' } };
+		const fetch = scriptedFetch([makeResponse(503, backpressure, { 'retry-after': '60' })]);
+		const { client } = makeClient(fetch);
+
+		const thrown = await captureThrow(() => client.get('/patent-search-bq/EP-1-A1', makeToken())) as TransientBackendError;
+
+		expect({
+			type: thrown.constructor.name,
+			status: thrown.status,
+			retryAfterSeconds: thrown.retryAfterSeconds,
+			calls: fetch.calls(),
+			hintNamesTheWait: patentBackendErrorRecoveryHint(thrown).includes('Wait at least 60 seconds before retrying this tool'),
+		}).toEqual({ type: 'TransientBackendError', status: 503, retryAfterSeconds: 60, calls: 1, hintNamesTheWait: true });
+	}, 5000);
+
 	it('surfaces the error once retries are exhausted (persistent 5xx)', async () => {
 		const fetch = scriptedFetch([makeResponse(500, { error: 'boom' })]);
 		const { client } = makeClient(fetch);

@@ -168,7 +168,11 @@ export class RateLimitError extends PatentBackendError {
  */
 export class TransientBackendError extends PatentBackendError {
 	readonly code = 'transient';
-	constructor(message: string, status: number | undefined) {
+	/**
+	 * @param retryAfterSeconds The server's `Retry-After`, when the backend supplied one that was too
+	 * long to absorb inline — the model must wait that long, not re-issue the call at once.
+	 */
+	constructor(message: string, status: number | undefined, readonly retryAfterSeconds?: number) {
 		super(status, message);
 		this.name = 'TransientBackendError';
 	}
@@ -208,6 +212,9 @@ export function patentBackendErrorRecoveryHint(error: PatentBackendError): strin
 	}
 	if (error instanceof TransientBackendError) {
 		const statusClause = error.status !== undefined ? ` (HTTP ${error.status})` : '';
+		if (error.retryAfterSeconds !== undefined) {
+			return ` The patent data office asked for a wait${statusClause}: its per-minute budget on the shared trial keys is used up. Wait at least ${error.retryAfterSeconds} seconds before retrying this tool — do NOT re-issue it sooner, and do not spend the wait on other calls to the same office. Work on other offices or keyless tools meanwhile. The user's own free EPO/USPTO keys give them a private budget ("FlowLeap: Patent Data Keys").`;
+		}
 		return ` The patent backend is temporarily unavailable${statusClause} — this is transient, not a coverage limit. Wait briefly and retry the same query, or try a different office (USPTO) meanwhile.`;
 	}
 	return '';
@@ -338,6 +345,14 @@ const RETRY_BASE_DELAY_MS = 250;
 const RETRY_MAX_DELAY_MS = 4_000;
 /** A 429's `Retry-After` is only honored inline (retry) when it is within this budget; longer waits surface a {@link RateLimitError}. */
 const RATE_LIMIT_MAX_RETRY_WAIT_MS = 5_000;
+/**
+ * A `503`'s `Retry-After` is honored inline (one wait, then retry) when it is within this budget. The
+ * backend answers 503 `upstream_unavailable` + Retry-After the moment EPO OPS backpressure would make
+ * it sleep (PRD 0001); on the shared trial keys OPS allows ~5 searches/min when busy, i.e. one every
+ * 12 s, so absorbing the wait here turns a normal 2-3 query turn into a slower success instead of an
+ * error the model has to loop on. Longer waits surface at once, with the seconds, and are not retried.
+ */
+const UPSTREAM_WAIT_MAX_RETRY_WAIT_MS = 15_000;
 /** Short TTL for the per-session read cache — long enough to dedupe a burst of identical tool calls, short enough to stay fresh. */
 const CACHE_TTL_MS = 60_000;
 const CACHE_MAX_ENTRIES = 100;
@@ -598,6 +613,19 @@ export class PatentBackendClient implements IPatentBackendClient {
 					if (parseOdpKeyMissing(bodyText)) {
 						return { response, retries: attempt, bodyText };
 					}
+					// Upstream backpressure (PRD 0001): the backend already knows how long EPO wants us to
+					// wait. A short wait is absorbed here; a long one is returned at once — exponential
+					// backoff would only re-ask inside the same window and burn the retry budget.
+					const retryAfterMs = parseRetryAfterMs(response);
+					if (retryAfterMs !== undefined) {
+						if (retryAfterMs > UPSTREAM_WAIT_MAX_RETRY_WAIT_MS) {
+							return { response, retries: attempt, bodyText };
+						}
+						this._logService.debug(`[PatentBackendClient] 503 on ${url}; honoring Retry-After ${retryAfterMs} ms (retry ${attempt + 1}/${MAX_RETRIES})`);
+						await this._delay(retryAfterMs, token);
+						attempt++;
+						continue;
+					}
 				} else {
 					response.body.destroy();
 				}
@@ -739,7 +767,9 @@ export class PatentBackendClient implements IPatentBackendClient {
 		// that reads as a permanent dead end — so surface only a short, body-free status line and let
 		// the recovery hint say "transient, wait and retry."
 		if (response.status >= 500 && response.status <= 599) {
-			throw new TransientBackendError(transientStatusLine(response.status), response.status);
+			const retryAfterMs = parseRetryAfterMs(response);
+			const retryAfterSeconds = retryAfterMs !== undefined ? Math.ceil(retryAfterMs / 1000) : undefined;
+			throw new TransientBackendError(transientStatusLine(response.status), response.status, retryAfterSeconds);
 		}
 
 		const truncated = text.length > 500 ? text.substring(0, 500) + '…' : text;

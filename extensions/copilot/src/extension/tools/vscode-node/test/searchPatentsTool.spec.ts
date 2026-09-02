@@ -111,4 +111,42 @@ describe('SearchPatentsTool', () => {
 
 		expect(textOf(result)).toBe('No patents found for query: ti=(nothing)');
 	});
+
+	it('a page emptied by the country post-filter is reported as filtered, never as zero hits', async () => {
+		// 2026-09-02 false negative: OPS matched 38 worldwide, the 1-1 count probe's only hit was
+		// Canadian, and the tool told the agent "No patents found".
+		const { client } = makeBackendClient(facadeEnvelope({ total: 38, returned: 0, countryFilter: ['EP', 'WO'], range: { begin: 1, end: 1 }, docs: [] }));
+		const tool = new SearchPatentsTool(makeLogService(), client);
+
+		const result = await tool.invoke(makeOptions({ query: 'ti=helmet and ti=brake', range: '1-1', countries: 'EP,WO' }), makeToken());
+
+		expect(textOf(result)).toMatchInlineSnapshot(`
+			"Found 38 patents matching query: "ti=helmet and ti=brake" worldwide, but none of the 1-1 on this page are in the country filter [EP,WO].
+			This is NOT a zero-hit query. To count the [EP,WO] hits, either re-run with a wider range (e.g. "1-100") or put the filter into the CQL instead (e.g. append \`and pn any "EP WO"\`) so the total reflects it."
+		`);
+	});
+
+	it('a backend that compiles the filter into the CQL reports the filtered total and the CQL sent', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({
+			total: 2, returned: 1, countryFilter: ['EP', 'WO'], effectiveQuery: '(ti=helmet and ti=brake) and pn any "EP WO"', range: { begin: 1, end: 1 },
+			docs: [{ docId: 'WO9836213A1', title: 'HELMET WITH BRAKE LIGHT', abstract: null, applicants: [], publicationDate: '1998-08-20' }],
+		}));
+		const tool = new SearchPatentsTool(makeLogService(), client);
+
+		const result = await tool.invoke(makeOptions({ query: 'ti=helmet and ti=brake', range: '1-1', countries: 'EP,WO' }), makeToken());
+
+		expect(textOf(result).split('\n')[0]).toBe('Found 2 patents matching CQL: "(ti=helmet and ti=brake) and pn any "EP WO"" (country filter [EP,WO] is part of the query, so this total counts only those offices)');
+	});
+
+	it('a filtered page with hits says the worldwide total is not the filtered count', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({
+			total: 38, returned: 1, countryFilter: ['EP', 'WO'], range: { begin: 1, end: 5 },
+			docs: [{ docId: 'EP0185922A2', title: 'Motorcycle safety helmet and brake lamp system', abstract: null, applicants: [], publicationDate: '1986-07-02' }],
+		}));
+		const tool = new SearchPatentsTool(makeLogService(), client);
+
+		const result = await tool.invoke(makeOptions({ query: 'ti=helmet and ti=brake', range: '1-5', countries: 'EP,WO' }), makeToken());
+
+		expect(textOf(result).split('\n')[0]).toBe('Found 38 patents matching query: "ti=helmet and ti=brake" worldwide; 1 of the 1-5 on this page are in the country filter [EP,WO]. The worldwide total is not a count of [EP,WO] hits.');
+	});
 });
