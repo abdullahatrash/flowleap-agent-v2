@@ -31,7 +31,14 @@ interface PatentDoc {
 
 /** `data` payload of the `search_patents` facade tool with `provider: 'epo_ops'`. */
 interface PatentSearchData {
+	/** OPS's count of every CQL match worldwide — NOT reduced by `countryFilter`. */
 	total?: number;
+	/** Documents left on this page after the backend's country post-filter. */
+	returned?: number;
+	/** The country filter the backend applied to this page, when one was requested. */
+	countryFilter?: string[];
+	/** The CQL actually sent to OPS — carries the compiled country clause when a filter was requested. */
+	effectiveQuery?: string;
 	range?: {
 		begin: number;
 		end: number;
@@ -106,20 +113,45 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	 * the caller's own query text is threaded through for the summary line.
 	 */
 	private formatSearchResults(result: PatentSearchData, query: string): string {
-		if (!result.docs || result.docs.length === 0) {
+		const docs = result.docs ?? [];
+		const filter = result.countryFilter && result.countryFilter.length > 0 ? result.countryFilter.join(',') : undefined;
+		const worldwideTotal = result.total ?? 0;
+		// A backend that compiles the filter into the CQL echoes `effectiveQuery` (PRD 0001 S7);
+		// then `total` already counts the filtered set. Older backends post-filter the page.
+		const filterInQuery = result.effectiveQuery !== undefined;
+		const sentQuery = result.effectiveQuery ?? query;
+
+		if (docs.length === 0) {
+			if (filterInQuery && worldwideTotal > 0) {
+				return `Found ${worldwideTotal} patents matching CQL: "${sentQuery}", but range ${result.range?.begin}-${result.range?.end} holds none of them — request a range within 1-${worldwideTotal}.`;
+			}
+			// Legacy backend: the country filter is a page-level post-filter — OPS matched `total`
+			// documents worldwide, and none on THIS page carried an allowed country code.
+			// Reporting that as "no patents found" was a false negative (2026-09-02: a count
+			// probe on `ti=helmet and ti=brake` read 0 while OPS held 38, two of them EP/WO).
+			if (filter && worldwideTotal > 0) {
+				return [
+					`Found ${worldwideTotal} patents matching query: "${query}" worldwide, but none of the ${result.range?.begin}-${result.range?.end} on this page are in the country filter [${filter}].`,
+					`This is NOT a zero-hit query. To count the [${filter}] hits, either re-run with a wider range (e.g. "1-100") or put the filter into the CQL instead (e.g. append \`and pn any "${result.countryFilter!.join(' ')}"\`) so the total reflects it.`,
+				].join('\n');
+			}
 			return `No patents found for query: ${query}`;
 		}
 
 		// `total` is optional in the backend response; fall back to the number of
 		// returned docs so the summary never reads "Found undefined patents".
-		const total = result.total ?? result.docs.length;
+		const total = result.total ?? docs.length;
 		const lines: string[] = [
-			`Found ${total} patents matching query: "${query}"`,
+			filterInQuery && filter
+				? `Found ${total} patents matching CQL: "${sentQuery}" (country filter [${filter}] is part of the query, so this total counts only those offices)`
+				: filter
+					? `Found ${total} patents matching query: "${query}" worldwide; ${result.returned ?? docs.length} of the ${result.range?.begin}-${result.range?.end} on this page are in the country filter [${filter}]. The worldwide total is not a count of [${filter}] hits.`
+					: `Found ${total} patents matching query: "${query}"`,
 			`Showing results ${result.range?.begin}-${result.range?.end}:`,
 			''
 		];
 
-		lines.push(renderMarkdownTable(result.docs, [
+		lines.push(renderMarkdownTable(docs, [
 			{ header: 'Publication', cell: doc => doc.docId },
 			{ header: 'Title', cell: doc => doc.title ?? '—' },
 			{ header: 'Assignee', cell: doc => doc.applicants.length > 0 ? doc.applicants.join(', ') : '—' },
@@ -127,7 +159,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 		]));
 
 		// Abstracts are too long for a table cell; render them as per-row snippets below the table.
-		const withAbstract = result.docs.filter(doc => doc.abstract);
+		const withAbstract = docs.filter(doc => doc.abstract);
 		if (withAbstract.length > 0) {
 			lines.push('');
 			lines.push('### Abstracts');
