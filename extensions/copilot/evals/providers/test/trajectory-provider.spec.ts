@@ -33,6 +33,29 @@ function createProvider(body: unknown): TrajectoryProvider {
 }
 
 describe('TrajectoryProvider', () => {
+	it('marks the system prompt as a prompt-cache breakpoint, and not when EVAL_PROMPT_CACHE=0', async () => {
+		const bodies: Array<Record<string, unknown>> = [];
+		const capture: typeof fetch = async (_url, init) => {
+			bodies.push(JSON.parse(String(init?.body)));
+			return jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: 'done' } }] });
+		};
+		const cached = new TrajectoryProvider(undefined, { fetch: capture, env: { OPENROUTER_API_KEY: 'k' }, loadScript: () => SCRIPT });
+		const plain = new TrajectoryProvider(undefined, { fetch: capture, env: { OPENROUTER_API_KEY: 'k', EVAL_PROMPT_CACHE: '0' }, loadScript: () => SCRIPT });
+
+		await cached.callApi('q', CONTEXT);
+		await plain.callApi('q', CONTEXT);
+
+		const system = (i: number) => (bodies[i].messages as Array<{ role: string; content: unknown }>)[0];
+		const cachedContent = system(0).content as Array<{ type: string; cache_control?: unknown; text: string }>;
+		expect({
+			cachedShape: { role: system(0).role, parts: cachedContent.length, type: cachedContent[0].type, cache_control: cachedContent[0].cache_control, sameText: cachedContent[0].text === system(1).content },
+			plainIsString: typeof system(1).content,
+		}).toEqual({
+			cachedShape: { role: 'system', parts: 1, type: 'text', cache_control: { type: 'ephemeral' }, sameText: true },
+			plainIsString: 'string',
+		});
+	});
+
 	it('settles a normal answer into a trajectory', async () => {
 		const provider = createProvider({ choices: [{ finish_reason: 'stop', message: { content: 'here are the results' } }] });
 

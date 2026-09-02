@@ -113,6 +113,20 @@ OPENROUTER_API_KEY=sk-or-... npm run eval:trajectory:repeat
 OPENROUTER_API_KEY=sk-or-... npm run eval:key-gate:repeat
 ```
 
+## Cost: prompt caching is on by default
+
+The trajectory provider sends the system prompt with an Anthropic `cache_control` breakpoint,
+so the fixed prefix (tool definitions + system prompt) is billed at the cache-read rate from the
+second round of every trajectory on. Measured 2026-09-02 on `anthropic/claude-sonnet-5` via
+OpenRouter with the real prefix (41 149 tokens): first call **$0.103**, identical second call
+**$0.008** (`cached_tokens: 41149`). A full 3-run gate cost ~$20 before this; expect a few
+dollars now. `EVAL_PROMPT_CACHE=0` sends the plain string (to measure the uncached cost).
+OpenRouter ignores the breakpoint for non-Anthropic models, so it is safe under `EVAL_MODEL`.
+
+Spend discipline: probe the cases a change touches (`-- --filter-pattern T9`, ~$0.50 cached)
+and reserve the full repeat gate for release time. The gate's per-case flake is real
+(see Repeat policy); paying for three runs of every case on every prompt edit is not.
+
 ## promptfoo version policy
 
 **The gate runs one pinned promptfoo version. A global install must never run it.** (#186)

@@ -87,10 +87,23 @@ interface Trajectory {
 	readonly stoppedReason: 'no_more_tools' | 'max_rounds';
 }
 
+/**
+ * A system-message content part carrying an Anthropic prompt-cache breakpoint. OpenRouter
+ * forwards `cache_control` to Anthropic models and ignores it for the rest, so the fixed
+ * prefix (tool definitions + system prompt, ~31k tokens, resent on every round of every
+ * trajectory) is billed at the cache-read rate from the second round on. Measured need: the
+ * 2026-09-02 gate spent ~$20 with the prefix at full input price on every round.
+ */
+interface CachedTextPart {
+	readonly type: 'text';
+	readonly text: string;
+	readonly cache_control: { readonly type: 'ephemeral' };
+}
+
 /** OpenAI-shaped chat message the loop appends as it runs. */
 interface ChatMessage {
 	readonly role: 'system' | 'user' | 'assistant' | 'tool';
-	readonly content: string | null;
+	readonly content: string | null | readonly CachedTextPart[];
 	readonly tool_calls?: ReadonlyArray<{ id: string; type: string; function: { name: string; arguments: string } }>;
 	readonly tool_call_id?: string;
 }
@@ -157,6 +170,8 @@ function safeParseArgs(raw: string): Record<string, unknown> {
  *   EVAL_API_KEY        API key (falls back to OPENROUTER_API_KEY). Required.
  *   EVAL_MODEL          Model slug when config omits one. Default anthropic/claude-sonnet-5
  *   EVAL_MAX_ROUNDS     Loop cap. Default 8.
+ *   EVAL_PROMPT_CACHE   Set to 0 to send the system prompt without an Anthropic cache
+ *                       breakpoint (full input price every round). Default: cached.
  */
 export default class TrajectoryProvider implements ApiProvider {
 	private readonly configModel: string | undefined;
@@ -270,7 +285,12 @@ export default class TrajectoryProvider implements ApiProvider {
 		const followUp = context?.vars?.followUpPrompt;
 		const userTurns = [prompt, ...(typeof followUp === 'string' && followUp ? [followUp] : [])];
 
-		const messages: ChatMessage[] = [{ role: 'system', content: systemText }];
+		// Prompt caching is on unless EVAL_PROMPT_CACHE=0 (e.g. to measure the uncached cost).
+		const cachePrefix = this.env.EVAL_PROMPT_CACHE !== '0';
+		const messages: ChatMessage[] = [{
+			role: 'system',
+			content: cachePrefix ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }] : systemText,
+		}];
 		const rounds: Array<{ turn: number; toolCalls: TrajectoryToolCall[] }> = [];
 		const turnTexts: string[] = [];
 		let stoppedReason: Trajectory['stoppedReason'] = 'max_rounds';
