@@ -726,6 +726,32 @@ class PatentSourceAttributionRules extends PromptElement<PatentAIPromptProps> {
 }
 
 /**
+ * Project notes — the `notes.md` that "New Patent Project" scaffolds (extensions/flowleap) is the
+ * project's memory across sessions: read once as a brief, appended once at task end. It is never
+ * evidence: a number read from notes must be re-retrieved before it can be cited, so the grounding
+ * rule stays intact. Bounded read and append-only write keep it from polluting context or the
+ * user's own text.
+ */
+class PatentProjectNotesRules extends PromptElement<PatentAIPromptProps> {
+	render() {
+		const tools = detectPatentTools(this.props.availableTools);
+		if (!tools.hasAnyPatentTool) {
+			return null;
+		}
+
+		return <Tag name='projectNotesRules'>
+			PROJECT NOTES (memory, never evidence):<br />
+			<br />
+			• A FlowLeap patent project is a workspace whose root holds `.flowleap/config.json` and a `notes.md` with headings for the project type (e.g. Search Scope, Search Queries, Relevant References, Gaps). That file is the project's memory across sessions. Only when both files exist do these rules apply; otherwise ignore them and do not go looking for notes or context files.<br />
+			• READ ONCE, AT THE START OF A TASK: read `notes.md` before your first tool call so you know the scope, what was already searched and what is still open. If it is long, read the headings and the "Open Questions" / "Gaps" section only. Do not re-read it mid-task.<br />
+			• NOTES ARE A BRIEF AND A LEAD LIST, NOT RETRIEVED DATA: a query recorded there is one you need not repeat; a reference recorded there is a lead you re-retrieve (a lookup by number) before it appears in an answer. The grounding rule is unchanged — nothing from notes is citable until a tool result in THIS conversation carries it.<br />
+			• WRITE ONCE, AT TASK END, APPEND-ONLY: when a task produced findings, append one compact dated entry marked "(agent)" under the matching heading — the queries with their counts, the top hits by publication number with one line each, and the path of any report you saved under `outputs/`. Never rewrite or delete text that is already there; the user owns the file. Do not write for a task that produced nothing new.<br />
+			• THE ANSWER STILL CARRIES THE RESULT: the notes entry is a copy for next time, never a replacement for the answer in this turn.<br />
+		</Tag>;
+	}
+}
+
+/**
  * Deliverable discipline — full-text completeness and multi-part sub-task targeting
  */
 class PatentDeliverableRules extends PromptElement<PatentAIPromptProps> {
@@ -829,6 +855,7 @@ export class PatentAIInstructions extends PromptElement<PatentAIPromptProps> {
 			<PatentKeyGateDoctrine {...this.props} priority={785} flexGrow={1} />
 			<PatentEvidenceRules {...this.props} priority={780} flexGrow={1} />
 			<PatentSourceAttributionRules {...this.props} priority={778} flexGrow={1} />
+			<PatentProjectNotesRules {...this.props} priority={776} flexGrow={1} />
 			<PatentDeliverableRules {...this.props} priority={775} flexGrow={1} />
 			<PatentDataBoundaryRules {...this.props} priority={770} flexGrow={1} />
 			<PatentClaimAnalysisRules {...this.props} priority={760} flexGrow={1} />

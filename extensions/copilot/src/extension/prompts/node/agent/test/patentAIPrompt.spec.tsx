@@ -581,6 +581,19 @@ suite('PatentAIInstructions source attribution', () => {
 		}).toEqual({ toolNamesInternal: true, rulesNotNarrated: true, countsMatchTable: true });
 	});
 
+	test('project notes are memory read once and appended once, never evidence', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		const stock = await renderPatentInstructions([]);
+		expect({
+			gatedOnScaffold: output.includes('Only when both files exist do these rules apply'),
+			readOnce: output.includes('READ ONCE, AT THE START OF A TASK'),
+			neverEvidence: output.includes('NOTES ARE A BRIEF AND A LEAD LIST, NOT RETRIEVED DATA'),
+			appendOnly: output.includes('WRITE ONCE, AT TASK END, APPEND-ONLY'),
+			answerStillCarries: output.includes('the notes entry is a copy for next time'),
+			absentOnStock: stock.includes('PROJECT NOTES'),
+		}).toEqual({ gatedOnScaffold: true, readOnce: true, neverEvidence: true, appendOnly: true, answerStillCarries: true, absentOnStock: false });
+	});
+
 	test('renders no attribution block on a stock configuration', async () => {
 		const output = await renderPatentInstructions([]);
 		expect(output.includes('SOURCE ATTRIBUTION AND QUOTING')).toBe(false);
