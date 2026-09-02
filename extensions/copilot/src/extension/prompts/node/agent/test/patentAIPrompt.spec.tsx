@@ -569,6 +569,17 @@ suite('PatentAIInstructions source attribution', () => {
 		});
 	});
 
+	test('tool identifiers are declared internal and list counts must match the rows', async () => {
+		// 2026-09-02: the agent asked the user "Would you like me to pull full claims (get_patent_details)…"
+		// and headed a 7-row table "5 total". The prompt names tools in backticks everywhere, so it
+		// has to say, once, that those names never reach the user.
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			toolNamesInternal: output.includes('TOOL NAMES ARE INTERNAL'),
+			countsMatchTable: output.includes('COUNTS MUST MATCH THE TABLE'),
+		}).toEqual({ toolNamesInternal: true, countsMatchTable: true });
+	});
+
 	test('renders no attribution block on a stock configuration', async () => {
 		const output = await renderPatentInstructions([]);
 		expect(output.includes('SOURCE ATTRIBUTION AND QUOTING')).toBe(false);
