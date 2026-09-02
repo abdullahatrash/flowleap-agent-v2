@@ -510,17 +510,30 @@ export function copiedRuns(text, sources, minWords = COPIED_RUN_MIN_WORDS) {
 			if (current) {
 				runs.push(current);
 			}
-			current = { start: tokens[i].start, end, lastIndex: i };
+			current = { start: tokens[i].start, end, firstIndex: i, lastIndex: i };
 		}
 	}
 	if (current) {
 		runs.push(current);
 	}
+	// A run is MARKED unless at least `minWords` consecutive words of it sit outside every
+	// quoted span. The lead-in words before an opening quotation mark ("the rear lamp "in
+	// response to…"") often also precede the phrase in the source, so a run can begin a few
+	// words before the quote; that is attribution done right, not an unmarked copy.
+	const unmarkedStretch = run => {
+		let longest = 0;
+		let streak = 0;
+		for (let i = run.firstIndex; i <= run.lastIndex + minWords - 1; i++) {
+			streak = inQuote(tokens[i].start) ? 0 : streak + 1;
+			longest = Math.max(longest, streak);
+		}
+		return longest;
+	};
 	return runs.map(run => ({
 		start: run.start,
 		end: run.end,
 		words: String(text).slice(run.start, run.end),
-		marked: inQuote(run.start),
+		marked: unmarkedStretch(run) < minWords,
 	}));
 }
 
