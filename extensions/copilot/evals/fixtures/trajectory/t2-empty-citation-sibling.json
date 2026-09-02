@@ -1,12 +1,19 @@
 {
 	"id": "t2-empty-citation-sibling",
-	"description": "S3: cited-AGAINST question; forward citations empty; correct route is search_citations on app 16473445.",
+	"description": "S3: cited-AGAINST question; forward citations empty; correct route is search_citations on app 16473445. Document reads carry a real claim 1 (2026-09-02: the old '... (independent claim text)' stub read as a dropped record under the elision/attribution rules and the model spent every round hunting claim text instead of routing citations).",
 	"rules": [
 		{
 			"tool": "get_patent_details",
 			"response": {
 				"tag": "OK",
-				"body": "EP3564557A1 — Claim 1: A vibration-damping device comprising ... (independent claim text). Applicant: (JP national-stage). Abstract and bibliography returned."
+				"body": "EP3564557A1 — \"Vibration damping device\". Applicant: Sumitomo Riko Company Limited (JP). Published 2019-11-06 (A1). Priority JP 2016-12-27.\n\nAbstract: A vibration damping device for a vehicle powertrain has an inner shaft member and an outer cylindrical member joined by a rubber elastic body, with a liquid chamber whose stiffness is tuned by an orifice passage.\n\nClaims:\n1. A vibration damping device comprising: an inner shaft member; an outer cylindrical member disposed around the inner shaft member; a rubber elastic body elastically connecting the inner shaft member and the outer cylindrical member; and a liquid chamber formed between the inner shaft member and the outer cylindrical member and partitioned by the rubber elastic body, wherein the liquid chamber is divided into a pressure receiving chamber and an equilibrium chamber that communicate through an orifice passage, and the orifice passage is tuned to a resonance frequency of the vehicle powertrain.\n2. The vibration damping device of claim 1, wherein the orifice passage extends circumferentially around the inner shaft member.\n3. The vibration damping device of claim 1, wherein the rubber elastic body has a pair of leg portions.\n4. The vibration damping device of claim 1, further comprising a stopper limiting relative displacement of the inner shaft member and the outer cylindrical member."
+			}
+		},
+		{
+			"tool": "get_patent_summary",
+			"response": {
+				"tag": "OK",
+				"body": "EP3564557A1 — \"Vibration damping device\". Applicant: Sumitomo Riko Company Limited (JP). Published 2019-11-06 (A1). Priority JP 2016-12-27.\n\nAbstract: A vibration damping device for a vehicle powertrain has an inner shaft member and an outer cylindrical member joined by a rubber elastic body, with a liquid chamber whose stiffness is tuned by an orifice passage.\n\nClaim 1: A vibration damping device comprising: an inner shaft member; an outer cylindrical member disposed around the inner shaft member; a rubber elastic body elastically connecting the inner shaft member and the outer cylindrical member; and a liquid chamber formed between the inner shaft member and the outer cylindrical member and partitioned by the rubber elastic body, wherein the liquid chamber is divided into a pressure receiving chamber and an equilibrium chamber that communicate through an orifice passage, and the orifice passage is tuned to a resonance frequency of the vehicle powertrain. (4 claims total.)"
 			}
 		},
 		{
@@ -67,6 +74,6 @@
 	],
 	"default": {
 		"tag": "OK",
-		"body": "OK. Request acknowledged; results returned."
+		"body": "OK. Request acknowledged (no data payload)."
 	}
 }
