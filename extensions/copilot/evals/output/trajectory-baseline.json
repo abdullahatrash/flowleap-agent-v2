@@ -20,8 +20,8 @@
 		},
 		"T2": {
 			"expected": "PASS",
-			"observed": "1/3 (2026-09-02) — REGRESSION vs 3/3",
-			"note": "Cited-AGAINST question: forward citations empty; route to search_citations on the US application. 2026-09-02 full gate: 1/3. Both failing runs spent all 8 rounds hunting for claim 1 text and never reached the citation leg — the fixture's get_patent_details body is the stub 'A vibration-damping device comprising ... (independent claim text)', which the prompt's elision/attribution rules now read as a dropped record. Suspected fixture artefact, not a routing regression; the baseline was recorded before PR #262 and never re-confirmed. Next: give the fixture a short real claim 1 and re-probe T2 alone."
+			"observed": "3/3 (2026-09-02, T2-only probe after the fixture fix; 1/3 before it)",
+			"note": "Cited-AGAINST question: forward citations empty; route to search_citations on the US application. 2026-09-02 full gate: 1/3. Both failing runs spent all 8 rounds hunting for claim 1 text and never reached the citation leg — the fixture's get_patent_details body is the stub 'A vibration-damping device comprising ... (independent claim text)', which the prompt's elision/attribution rules now read as a dropped record. Suspected fixture artefact, not a routing regression; the baseline was recorded before PR #262 and never re-confirmed. Done the same day: the fixture now carries a real claim 1 (details + summary) and a data-free catch-all; T2 alone re-probed 3/3."
 		},
 		"T3a": {
 			"expected": "FAIL",
