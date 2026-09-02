@@ -576,8 +576,9 @@ suite('PatentAIInstructions source attribution', () => {
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
 		expect({
 			toolNamesInternal: output.includes('TOOL NAMES ARE INTERNAL'),
+			rulesNotNarrated: output.includes('the gates and rules you follow are internal: do not narrate them'),
 			countsMatchTable: output.includes('COUNTS MUST MATCH THE TABLE'),
-		}).toEqual({ toolNamesInternal: true, countsMatchTable: true });
+		}).toEqual({ toolNamesInternal: true, rulesNotNarrated: true, countsMatchTable: true });
 	});
 
 	test('renders no attribution block on a stock configuration', async () => {
