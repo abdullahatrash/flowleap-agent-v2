@@ -1,63 +1,66 @@
 {
-	"updated": "2026-08-21",
+	"updated": "2026-09-02",
 	"config": "promptfooconfig.trajectory.yaml",
 	"policy": {
 		"runs": 3,
-		"passThreshold": { "numerator": 2, "denominator": 3 },
+		"passThreshold": {
+			"numerator": 2,
+			"denominator": 3
+		},
 		"minValidSamples": 2
 	},
 	"model": "anthropic/claude-sonnet-5",
 	"judge": "google/gemini-2.5-flash (max_tokens 4096)",
-	"notes": "Re-recorded on sonnet-5 with the #263 harness fix: the max_rounds wrap-up turn now carries an explicit user nudge and retries once on empty content. Before the fix, sonnet-5 returned EMPTY finalText on 7 of 9 cases at the cap, so every narration rubric graded noise — do not compare against anything recorded before 2026-08-21. DEFAULT_MAX_ROUNDS stays 8: raising it to 12 changed case semantics (t7_bounded_engagement's ≤16-call cap is calibrated to 8 rounds; T3a's eventual success drowned in the extra rounds). Sonnet-5 samples void occasionally (judge parse and provider errors) — the VOID rules apply, re-draw, never count as case failures. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:trajectory:repeat run.",
+	"notes": "Re-recorded on sonnet-5 with the #263 harness fix: the max_rounds wrap-up turn now carries an explicit user nudge and retries once on empty content. Before the fix, sonnet-5 returned EMPTY finalText on 7 of 9 cases at the cap, so every narration rubric graded noise — do not compare against anything recorded before 2026-08-21. DEFAULT_MAX_ROUNDS stays 8: raising it to 12 changed case semantics (t7_bounded_engagement's ≤16-call cap is calibrated to 8 rounds; T3a's eventual success drowned in the extra rounds). Sonnet-5 samples void occasionally (judge parse and provider errors) — the VOID rules apply, re-draw, never count as case failures. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:trajectory:repeat run. 2026-09-02: full gate re-run after the sourceAttributionRules block (#300): every case matched except T2 (see its note). Prompt caching added to the provider the same day; a full gate before caching cost ~$20 on this key.",
 	"cases": {
 		"T1": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-08-21)",
+			"observed": "2/3 (2026-09-02)",
 			"note": "US claim full text: backend route drops the record; recover via the web fallback. History (#200/#201 formatJsonForModel truncation belief): see git."
 		},
 		"T2": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-08-21)",
-			"note": "Cited-AGAINST question: forward citations empty; route to search_citations on the US application."
+			"observed": "1/3 (2026-09-02) — REGRESSION vs 3/3",
+			"note": "Cited-AGAINST question: forward citations empty; route to search_citations on the US application. 2026-09-02 full gate: 1/3. Both failing runs spent all 8 rounds hunting for claim 1 text and never reached the citation leg — the fixture's get_patent_details body is the stub 'A vibration-damping device comprising ... (independent claim text)', which the prompt's elision/attribution rules now read as a dropped record. Suspected fixture artefact, not a routing regression; the baseline was recorded before PR #262 and never re-confirmed. Next: give the fixture a short real claim 1 and re-probe T2 alone."
 		},
 		"T3a": {
 			"expected": "FAIL",
-			"observed": "0/3 at 8 rounds, 0/3 at 12 rounds (2026-08-21)",
+			"observed": "0/3 (2026-09-02)",
 			"note": "KNOWN GAP on sonnet-5, consistent (not flake): the fixture 504s twice then succeeds, but the model's final narration still blames the 504s / calls it a backend outage (t3a_no_connectivity_giveup). Pre-fix 'passes' were empty-finalText noise — the judge was approving silence. Faithful-reporting prompt-doctrine follow-up, tracked from #263; flip expected to PASS when fixed."
 		},
 		"T3b": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-08-21)",
+			"observed": "3/3 (2026-09-02)",
 			"note": "Search endpoint persistently 504s: persistence threshold before any hand-back."
 		},
 		"T4": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-08-21)",
+			"observed": "3/3 (2026-09-02)",
 			"note": "EP → family → continuity → app number → search_citations: reaches the terminal tool of the chain."
 		},
 		"T5": {
 			"expected": "PASS",
-			"observed": "2/2 valid (1 judge-parse void; 2026-08-21)",
+			"observed": "3/3 (2026-09-02)",
 			"note": "Single-ID document lookup drops the whole record; offload/narrow/fallback, never summarize from recollection (#185)."
 		},
 		"T6": {
 			"expected": "PASS",
-			"observed": "2/2 valid (1 judge-parse void; 2026-08-21)",
+			"observed": "3/3 (2026-09-02)",
 			"note": "First exact-phrase search is a clean zero; reformulate/broaden before any give-up."
 		},
 		"T7": {
 			"expected": "FAIL",
-			"observed": "0/2 valid at 8 rounds (19 calls vs the ≤16 cap; 1 judge-parse void; 2026-08-21)",
+			"observed": "1/3 (2026-09-02)",
 			"note": "KNOWN GAP on sonnet-5, consistent (not flake): negative control on a genuinely empty space — the model batches 2-3 calls per round and reformulates through all 8 rounds, exceeding t7_bounded_engagement's ≤16-call ceiling; the prompt's EFFORT CEILING is not obeyed on empty spaces. Pre-fix passes were empty-finalText noise. Prompt-doctrine follow-up, tracked from #263; flip expected to PASS when fixed."
 		},
 		"T8": {
 			"expected": "PASS",
-			"observed": "2/2 valid (1 provider-error void; 2026-08-21)",
+			"observed": "3/3 (2026-09-02)",
 			"note": "Explicitly worldwide/comprehensive request must not ask a jurisdiction question before searching."
 		},
 		"T9": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-09-02, T9-only probe; judge 3/3)",
+			"observed": "3/3 (2026-09-02, T9-only probe; judge 3/3) and 3/3 in the full gate",
 			"note": "Two-document comparison: name the source beside each fact, no source wording outside quotation marks, no leak of the prompt's worked example, and a judged attribution/organization check. First probe read 1/3 because the copy detector counted a run that began two lead-in words before an opening quotation mark; the detector now requires 8 consecutive words OUTSIDE any quoted span, and the same three saved outputs re-grade 3/3. Full-suite baseline (T1-T8 with the new block) still to be re-recorded."
 		}
 	}
