@@ -27,6 +27,7 @@ import { ActionListItemKind, IActionListHeaderLink, IActionListItem } from '../.
 import { IActionWidgetService } from '../../../../../../platform/actionWidget/browser/actionWidget.js';
 import { IActionWidgetDropdownAction } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../../../platform/product/common/productService.js';
 import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
@@ -459,6 +460,27 @@ function createManageModelsAction(commandService: ICommandService): IActionWidge
 }
 
 /**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
+
+/**
+ * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
+ * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
+ */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
+
+/**
+ * Describes how to escape the "no models" state in FlowLeap's BYOK-only mode: adding an own API key
+ * always works, and while signed out signing in additionally unlocks the free Trial models.
+ */
+export interface IByokNoModelActions {
+	/** Whether there is no FlowLeap Session, in which case the Sign In path is offered as well. */
+	readonly signedOut: boolean;
+}
+
+/**
  * Builds the grouped items for the model picker dropdown.
  *
  * Layout:
@@ -484,6 +506,9 @@ function createManageModelsAction(commandService: ICommandService): IActionWidge
  * `setupRequired` is set (trusted, but Chat still needs sign-in / setup), a
  * "Sign in to use FlowLeap" header and a Sign In action (invoking
  * `onRequestSetup`) replace all of the above. `restrictedMode` takes precedence.
+ *
+ * `byokNoModelActions`, honoured only while `clientByokEnabled` is set, turns the otherwise
+ * dead "No models available" entry into the ways out of that state (sign in, add a key).
  */
 export function buildModelPickerItems(
 	models: ILanguageModelChatMetadataAndIdentifier[],
@@ -511,6 +536,7 @@ export function buildModelPickerItems(
 	onRequestTrust?: () => void,
 	setupRequired: boolean = false,
 	onRequestSetup?: () => void,
+	byokNoModelActions?: IByokNoModelActions,
 ): IActionListItem<IActionWidgetDropdownAction>[] {
 	const items: IActionListItem<IActionWidgetDropdownAction>[] = [];
 	if (restrictedMode) {
@@ -573,16 +599,25 @@ export function buildModelPickerItems(
 		if (!showAutoModel) {
 			// Auto is not available for this session type (e.g. the Claude agent
 			// host), so the empty list cannot fall back to Auto. Surface a single
-			// disabled "No models available" entry. For Copilot Free / Student
-			// users, attach an inline upgrade link on the right (matching the
-			// unavailable-model upgrade affordance elsewhere in the picker).
+			// disabled "No models available" entry. In FlowLeap's BYOK-only mode the
+			// entry carries the ways out of that state; otherwise, for Copilot Free /
+			// Student users, it carries an inline upgrade link on the right (matching
+			// the unavailable-model upgrade affordance elsewhere in the picker).
+			const byokActions = chatEntitlementService.clientByokEnabled ? byokNoModelActions : undefined;
 			const entitlement = chatEntitlementService.entitlement;
-			const canUpgrade = entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU;
-			const description = canUpgrade
-				? new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true })
-				: undefined;
+			const canUpgrade = !byokActions && (entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU);
+			let description: MarkdownString | undefined;
 			let hover: MarkdownString | undefined;
-			if (canUpgrade) {
+			if (byokActions) {
+				description = new MarkdownString(byokActions.signedOut
+					? localize('chat.modelPicker.byokNoModels.linksSignedOut', "[Sign In](command:{0} \" \") · [Add Model](command:{1} \" \")", FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID)
+					: localize('chat.modelPicker.byokNoModels.links', "[Add Model](command:{0} \" \")", MANAGE_CHAT_COMMAND_ID), { isTrusted: true });
+				hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
+				hover.appendMarkdown(byokActions.signedOut
+					? localize('chat.modelPicker.byokNoModels.hoverSignedOut', "[Sign in](command:{0} \" \") to FlowLeap to use the free Trial models, or [add your AI model](command:{1} \" \") with your own API key.", FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID)
+					: localize('chat.modelPicker.byokNoModels.hover', "[Add your AI model](command:{0} \" \") with your own API key to start chatting.", MANAGE_CHAT_COMMAND_ID));
+			} else if (canUpgrade) {
+				description = new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true });
 				hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
 				hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to FlowLeap Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
 			}
@@ -1106,6 +1141,7 @@ export class ModelPickerWidget extends Disposable {
 		@IWorkspaceTrustManagementService private readonly _workspaceTrustManagementService: IWorkspaceTrustManagementService,
 		@IWorkspaceTrustRequestService private readonly _workspaceTrustRequestService: IWorkspaceTrustRequestService,
 		@IStorageService private readonly _storageService: IStorageService,
+		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 	) {
 		super();
 		this._register(this._languageModelsService.onDidChangeLanguageModels(() => {
@@ -1439,6 +1475,7 @@ export class ModelPickerWidget extends Disposable {
 			() => { void this._requestWorkspaceTrust(); },
 			this.isSetupRequired(),
 			() => { this._requestSetup(); },
+			{ signedOut: this._contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true },
 		);
 
 		// Collect all hover disposables so they are properly cleaned up when the
