@@ -96,6 +96,34 @@ the backend facade rather than in-app typed tools.
 _Avoid_: "skill store" / standalone skill installs; unbundling the built-in Patent Skills into
 packs (they stay bundled and are panel-chat-only).
 
+## App updates
+
+**Silent Update**:
+The app-update contract: the desktop app downloads a newer release in the background and
+installs it on the next restart. The user sees only a passive "Restart to Update" affordance
+and can turn the behavior off in settings. The app never relaunches itself uninvited and never
+sends the user to a browser to reinstall.
+_Avoid_: "auto-update" meaning forced relaunch; conflating with plugin updates (the Plugin
+Marketplace is the update channel for **plugins**, not the app).
+
+**Update Feed**:
+The endpoint the desktop app polls to learn whether a newer release exists for its exact
+platform and architecture. It answers "no update" or exactly one release, and it is the single
+authority on what version users receive.
+_Avoid_: "download page" (a human marketing surface, not the feed); pointing the app at raw
+release listings.
+
+**Notify-Only Checker**:
+The legacy update surface: a toast announcing a new version, whose Download button sends the
+user to the download page for a manual reinstall. Retained only where Silent Update is not yet
+armed; never shown alongside it.
+_Avoid_: treating it as the update mechanism — it informs, it does not update.
+
+**Stamped Build**:
+A release build carrying its real version and release identity, injected at release time. Only
+Stamped Builds participate in update checks; dev/local builds are unstamped and never poll.
+_Avoid_: letting an unstamped build prompt for updates.
+
 ## Authentication & model path
 
 **Model Path**:
