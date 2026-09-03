@@ -5,6 +5,9 @@ var fs = require('fs');
 var url = require('url');
 var os = require('os');
 var INSTALL_CHECK = false;
+// Files written by this extension in this session. Overwriting our own previous export is silent;
+// overwriting any other existing file (e.g. a downloaded patent PDF) asks first.
+var exportedPaths = new Set();
 
 // Get user-writable path for Chromium download (fixes EPERM on Windows Program Files)
 function getChromiumDownloadPath() {
@@ -142,7 +145,7 @@ async function markdownPdf(option_type) {
       for (var i = 0; i < types.length; i++) {
         var type = types[i];
         if (types_format.indexOf(type) >= 0) {
-          filename = mdfilename.replace(ext, '.' + type);
+          filename = path.join(path.dirname(mdfilename), path.basename(mdfilename, ext) + '.' + type);
           var text = editor.document.getText();
           var content = convertMarkdownToHtml(mdfilename, type, text);
           var html = makeHtml(content, uri);
@@ -464,7 +467,7 @@ function exportHtml(data, filename) {
 /*
  * export a html to a pdf file (html-pdf)
  */
-function exportPdf(data, filename, type, uri) {
+async function exportPdf(data, filename, type, uri) {
 
   if (!INSTALL_CHECK) {
     return;
@@ -478,6 +481,13 @@ function exportPdf(data, filename, type, uri) {
   var StatusbarMessageTimeout = vscode.workspace.getConfiguration('markdown-pdf')['StatusbarMessageTimeout'];
   vscode.window.setStatusBarMessage('');
   var exportFilename = getOutputDir(filename, uri);
+  if (!exportFilename) {
+    return;
+  }
+  exportFilename = await resolveExportTarget(exportFilename);
+  if (!exportFilename) {
+    return;
+  }
 
   return vscode.window.withProgress({
     location: vscode.ProgressLocation.Notification,
@@ -487,6 +497,7 @@ function exportPdf(data, filename, type, uri) {
         // export html
         if (type == 'html') {
           exportHtml(data, exportFilename);
+          exportedPaths.add(exportFilename);
           vscode.window.setStatusBarMessage('$(markdown) ' + exportFilename, StatusbarMessageTimeout);
           return;
         }
@@ -637,6 +648,7 @@ function exportPdf(data, filename, type, uri) {
         }
 
         await browser.close();
+        exportedPaths.add(exportFilename);
 
         // delete temporary file
         var debug = vscode.workspace.getConfiguration('markdown-pdf')['debug'] || false;
@@ -708,6 +720,50 @@ function isExistsDir(dirname) {
 function deleteFile (path) {
   var rimraf = require('rimraf')
   rimraf.sync(path);
+}
+
+/**
+ * Guard against replacing a file the user did not export with this extension.
+ * Returns the path to write to, or undefined when the user cancels.
+ */
+async function resolveExportTarget(exportFilename) {
+  if (!isExistsPath(exportFilename) || exportedPaths.has(exportFilename)) {
+    return exportFilename;
+  }
+  var alternative = getAlternativeExportName(exportFilename);
+  var overwrite = 'Overwrite';
+  var saveAs = 'Save as ' + path.basename(alternative);
+  var choice = await vscode.window.showWarningMessage(
+    'Markdown PDF: "' + path.basename(exportFilename) + '" already exists and was not created by this export. Overwrite it?',
+    { modal: true },
+    overwrite,
+    saveAs
+  );
+  if (choice === overwrite) {
+    return exportFilename;
+  }
+  if (choice === saveAs) {
+    return alternative;
+  }
+  vscode.window.setStatusBarMessage('$(markdown) Export cancelled: ' + path.basename(exportFilename), 5000);
+  return undefined;
+}
+
+/**
+ * First free name of the form name.export.ext, name.export.2.ext, ...
+ * A file this session already exported is treated as free.
+ */
+function getAlternativeExportName(exportFilename) {
+  var dir = path.dirname(exportFilename);
+  var ext = path.extname(exportFilename);
+  var base = path.basename(exportFilename, ext);
+  var candidate = path.join(dir, base + '.export' + ext);
+  var counter = 2;
+  while (isExistsPath(candidate) && !exportedPaths.has(candidate)) {
+    candidate = path.join(dir, base + '.export.' + counter + ext);
+    counter++;
+  }
+  return candidate;
 }
 
 function getOutputDir(filename, resource) {
