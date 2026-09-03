@@ -1,5 +1,9 @@
 # Change Log
 
+## Unreleased (FlowLeap)
+* Fix: Exporting no longer replaces an existing file that this extension did not create (for example a downloaded patent PDF next to its OCR markdown). A modal asks to Overwrite or Save as `name.export.pdf`. Re-exports of the same session stay silent.
+* Fix: The output name is built from the file extension only. A folder name that contains `.md` no longer gets rewritten.
+
 ## 1.5.0 (2023/09/08)
 * Improve: The default date format for headers and footers has been changed to the ISO-based format (YYYY-MM-DD).
   * Support different date formats in templates [#197](https://github.com/yzane/vscode-markdown-pdf/pull/197)
