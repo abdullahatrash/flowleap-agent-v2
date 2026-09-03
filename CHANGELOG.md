@@ -16,6 +16,23 @@ test-only work, CI) belong in the commit message, not here.
 
 <!-- Nothing yet. Add entries under a `### Heading` as changes land. -->
 
+## [0.3.1] - 2026-09-03
+
+### Fixed
+
+- **Exporting a Markdown file no longer silently overwrites a patent PDF.**
+  Exporting `EP1234567.md` wrote `EP1234567.pdf` straight over a patent PDF you
+  had downloaded under the same name, with no warning. FlowLeap now asks first
+  when the target was not produced by the export itself, offering Overwrite or
+  a safe `name.export.pdf` alternative. Repeat exports of your own file stay
+  silent, so convert-on-save is unaffected. A folder whose name contains `.md`
+  is also no longer mangled in the output name.
+- **Chat now names the way out when no AI model is connected.** Signed out with
+  no key of your own, sending a message failed with a bare "Language model
+  unavailable" that pointed nowhere. Chat now offers **Sign In** and **Add Your
+  AI Model** before the send, keeps the text you typed, and carries the same
+  links in the welcome view and the model picker.
+
 ## [0.3.0] - 2026-09-03
 
 ### Automatic updates on macOS
