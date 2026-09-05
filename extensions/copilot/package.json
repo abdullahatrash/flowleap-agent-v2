@@ -2352,6 +2352,11 @@
           }
         ],
         "commands": [
+      {
+        "command": "flowleap.openPatentDocument",
+        "title": "%flowleap.openPatentDocument.title%",
+        "category": "FlowLeap"
+      },
           {
             "name": "semanticSearch",
             "description": "%copilot.workspace.semanticSearch.description%",

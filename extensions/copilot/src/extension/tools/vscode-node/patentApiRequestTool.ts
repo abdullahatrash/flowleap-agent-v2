@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
+import { addPatentReaderLinks } from '../../patentai/vscode-node/patentCitationLink';
 import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
@@ -104,7 +105,7 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 			// classifier reads the response as well as the request, because a by-number lookup routed through
 			// a search endpoint is only recognisable from the single record it came back with.
 			const singleRecord = isSingleRecordDocumentLookup({ path: normalisedPath, body: parsedBody }, result);
-			const formatted = formatJsonForModel(result, ToolResponseBudgets.PatentApiRequest, { singleRecord });
+			const formatted = formatJsonForModel(addPatentReaderLinks(result), ToolResponseBudgets.PatentApiRequest, { singleRecord });
 
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted.content)]);
 
