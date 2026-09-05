@@ -8,6 +8,8 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
@@ -22,6 +24,7 @@ interface ISearchPatentsParams {
 }
 
 interface PatentDoc {
+	documentReference?: PatentDocumentReference | null;
 	docId: string;
 	title: string | null;
 	abstract: string | null;
@@ -152,7 +155,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 		];
 
 		lines.push(renderMarkdownTable(docs, [
-			{ header: 'Publication', cell: doc => doc.docId },
+			{ header: 'Publication', cell: doc => patentCitationLink(doc.docId, doc.documentReference) },
 			{ header: 'Title', cell: doc => doc.title ?? '—' },
 			{ header: 'Assignee', cell: doc => doc.applicants.length > 0 ? doc.applicants.join(', ') : '—' },
 			{ header: 'Published', cell: doc => doc.publicationDate ?? '—' },

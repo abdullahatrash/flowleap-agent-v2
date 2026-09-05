@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
+import { PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
@@ -20,6 +22,7 @@ interface IGetPatentDetailsParams {
 
 /** `data` payload of the `get_bibliography` facade tool. */
 interface BiblioData {
+	documentReference?: PatentDocumentReference | null;
 	docId: string;
 	title: string | null;
 	abstract: string | null;
@@ -36,14 +39,16 @@ interface BiblioData {
 
 /** `data` payload of the `get_claims` facade tool — numbered claims, not bare strings. */
 interface ClaimsData {
+	documentReference?: PatentDocumentReference | null;
 	docId: string;
-	claims: { number: string; text: string }[];
+	claims: { number: string; text: string; documentReference?: PatentDocumentReference | null }[];
 	totalClaims: number;
 	language: string;
 }
 
 /** `data` payload of the `get_description` facade tool. */
 interface DescriptionData {
+	documentReference?: PatentDocumentReference | null;
 	docId: string;
 	description: string | null;
 	language: string;
@@ -147,7 +152,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 		const fulltextFallback = `Full text is not available for this document and section. ${this.usptoFallbackHint(doc)}`;
 
 		const lines: string[] = [
-			`# Patent: ${biblio.docId || doc}`,
+			`# Patent: ${patentCitationLink(biblio.docId || doc, biblio.documentReference)}`,
 			'',
 			`**Title:** ${biblio.title || 'N/A'}`,
 			`**Country:** ${countryCode}`,
@@ -164,10 +169,10 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			'## Abstract',
 			biblio.abstract || 'No abstract available.',
 			'',
-			'## Claims',
-			claims && claims.claims.length > 0 ? claims.claims.map(c => c.text).join('\n\n') : fulltextFallback,
+			`## ${patentCitationLink('Claims', claims?.documentReference)}`,
+			claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}\n${c.text}`).join('\n\n') : fulltextFallback,
 			'',
-			'## Description',
+			`## ${patentCitationLink('Description', description?.documentReference)}`,
 			description?.description || fulltextFallback,
 			'',
 			'---',

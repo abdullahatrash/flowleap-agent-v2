@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+
 /**
  * One enriched USPTO citation record, as returned by the backend citation-search routes. Shared by
  * the backward-citation tool ({@link SearchCitationsTool}) and the forward-citation tool
@@ -10,6 +12,7 @@
  * routes (`citations by application` vs `patents citing a document`).
  */
 export interface CitationDoc {
+	documentReference?: PatentDocumentReference | null;
 	id?: string;
 	applicationNumber?: string;
 	citedDocument?: string;

@@ -8,6 +8,7 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -45,7 +46,7 @@ function citedDocumentLabel(doc: CitationDoc): string {
 	}
 	const nplTag = doc.isNPL ? ' (non-patent literature)' : '';
 	const countryTag = doc.country && !doc.isNPL ? ` [${doc.country}]` : '';
-	return `${doc.citedDocument}${countryTag}${nplTag}`;
+	return `${patentCitationLink(doc.citedDocument, doc.documentReference)}${countryTag}${nplTag}`;
 }
 
 /** Renders which parties cited a reference (examiner and/or applicant) for a table cell. */

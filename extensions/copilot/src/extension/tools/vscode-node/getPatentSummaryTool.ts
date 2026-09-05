@@ -8,6 +8,8 @@ import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -20,6 +22,7 @@ interface IGetPatentSummaryParams {
 
 /** `data` payload of the `/v1/tools/get_patent_summary` facade endpoint (biblio + status + family + term). */
 interface SummaryData {
+	documentReference?: PatentDocumentReference | null;
 	patentNumber: string;
 	bibliography: {
 		docId: string;
@@ -102,7 +105,7 @@ export class GetPatentSummaryTool implements ICopilotTool<IGetPatentSummaryParam
 	private formatSummary(summary: SummaryData, patentNumber: string): string {
 		const biblio = summary.bibliography;
 		const lines: string[] = [
-			`# Patent Summary: ${summary.patentNumber || biblio?.docId || patentNumber}`,
+			`# Patent Summary: ${patentCitationLink(summary.patentNumber || biblio?.docId || patentNumber, summary.documentReference)}`,
 			'',
 			`**Title:** ${biblio?.title || 'N/A'}`,
 			`**Applicants:** ${this.joinOrNa(biblio?.applicants)}`,
