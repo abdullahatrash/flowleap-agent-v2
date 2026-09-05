@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import { Disposable, DisposableStore } from '../../../util/vs/base/common/lifecycle';
-import { callFacadeTool } from '../../tools/vscode-node/patentFacade';
+import { loadPatentDocument } from './patentDocumentData';
 import { registerUriRoute } from '../../uriHandler/vscode-node/extensionUriHandler';
 import { OPEN_PATENT_DOCUMENT_COMMAND, parsePatentDocumentReference, PATENT_DOCUMENT_AUTHORITY, PATENT_DOCUMENT_PATH, PatentDocumentReference } from '../common/patentDocumentReference';
 import { IPatentBackendClient } from './patentBackendClient';
@@ -16,13 +16,6 @@ interface ReaderEntry {
 	readonly panel: vscode.WebviewPanel;
 	reference: PatentDocumentReference;
 	data?: PatentReaderData;
-}
-
-interface Bibliography {
-	title: string | null;
-	applicants: string[];
-	abstract: string | null;
-	dates: { publication: string | null };
 }
 
 /** Auth and data-key handling stay in the existing backend client; the webview never sees tokens. */
@@ -81,27 +74,11 @@ export class PatentDocumentViewer extends Disposable {
 		}));
 		panel.webview.html = renderPatentDocument(reference, randomUUID());
 		try {
-			const input = { patent_number: reference.publicationNumber };
-			const [bibliography, claims, description] = await Promise.allSettled([
-				callFacadeTool<Bibliography>(this.client, 'get_bibliography', input, cancellation.token),
-				callFacadeTool<{ claims: { number: string; text: string }[] }>(this.client, 'get_claims', input, cancellation.token),
-				callFacadeTool<{ description: string | null }>(this.client, 'get_description', input, cancellation.token),
-			]);
+			const data = await loadPatentDocument(this.client, reference, cancellation.token);
 			if (cancellation.token.isCancellationRequested) {
 				return;
 			}
-			if (bibliography.status === 'rejected') {
-				throw bibliography.reason;
-			}
-			entry.data = {
-				...bibliography.value,
-				publicationDate: bibliography.value.dates?.publication,
-				claims: claims.status === 'fulfilled' ? claims.value.claims : [],
-				description: description.status === 'fulfilled' ? description.value.description : null,
-				claimsError: claims.status === 'rejected' ? this.errorMessage(claims.reason) : undefined,
-				descriptionError: description.status === 'rejected' ? this.errorMessage(description.reason) : undefined,
-				loadedAt: new Date().toLocaleString(),
-			};
+			entry.data = data;
 			panel.webview.html = renderPatentDocument(entry.reference, randomUUID(), entry.data);
 		} catch (error) {
 			if (!cancellation.token.isCancellationRequested) {

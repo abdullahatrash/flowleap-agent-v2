@@ -562,7 +562,7 @@ class PatentPersistenceRules extends PromptElement<PatentAIPromptProps> {
 			Patent data lives across offices, number formats, and routes — a dead or empty route for ONE office rarely means the fact is unavailable. Persist across routes before handing anything back.<br />
 			<br />
 			**ESCALATION LADDER — exhaust ALL THREE rungs before any hand-back.** Before you offer to "retry later", ask "would you like me to…", say coverage is limited, or point the user to commercial databases (Derwent/PatBase/Orbit) or to counsel as a SUBSTITUTE for doing the work, you MUST have tried, in order:<br />
-			{'  '}(i) **Reformulate** — synonyms, broader/narrower CPC/IPC, drop a filter, a different number format (kind code vs bare numeric, application vs publication number).<br />
+			{'  '}(i) **Reformulate** — synonyms, broader/narrower CPC/IPC, drop a filter, a different supported number format. For publication-specific claims or description, retain the requested kind; a kindless lookup or another publication is not a substitute.<br />
 			{'  '}(ii) **Alternate office / tool / route** — e.g. `get_us_grant` for a US number that 404s on OPS, get_patent_summary when get_patent_details returns empty, a sibling citation tool, or another family member.<br />
 			{'  '}(iii) **Web fallback** — fetch_webpage (always available) against Google Patents or freepatentsonline{this.props.webSearchAvailable ? <>, or web_search</> : <></>} to fetch-and-verify a document the backend cannot return (branch L). This is the exact route that recovers full-text claims when no backend route carries them. A rung counts as tried only when its tool call is EMITTED — saying you can reach a public source, or writing the document's text as though you had, is not a fetch.<br />
 			Only after all three fail do you disclose a gap — and then state specifically what you tried, never a blanket "no data" or "no capability".<br />
@@ -671,6 +671,7 @@ class PatentEvidenceRules extends PromptElement<PatentAIPromptProps> {
 
 		return <Tag name='patentEvidenceRules'>
 			EVIDENCE AND CITATION RULES:<br />
+			• Preserve publication kinds in retrieval and citations: EP1234567A2 and EP1234567B1 can have different claims. Use the returned kind-bearing document reference verbatim. If the requested kind is unavailable, report that gap; do not cite another kind as its text.<br />
 			<br />
 			• Never cite a specific patent or application number unless it appeared in a tool result in this conversation. To reference one, search for it first — call the tool immediately, no preamble text.<br />
 			• Never characterize a document as prior art without stating its publication/priority date alongside the claim date it predates.<br />
