@@ -68,12 +68,13 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<ISearchPatentsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
-		const { query } = options.input;
+		const { query, countries, range = '1-25' } = options.input;
+		const requestedCountries = countries || l10n.t`Not specified separately`;
 		return {
-			invocationMessage: l10n.t`Searching patents: ${query}`,
+			invocationMessage: l10n.t`Searching patents: ${query} (requested countries: ${requestedCountries}; range: ${range})`,
 			confirmationMessages: {
 				title: l10n.t`Search Patents`,
-				message: l10n.t`Allow Patent AI to search for patents using query: ${query}?`
+				message: l10n.t`Allow Patent AI to search for patents using query: ${query}? Requested countries: ${requestedCountries}. Range: ${range}.`
 			}
 		};
 	}
@@ -138,7 +139,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 					`This is NOT a zero-hit query. To count the [${filter}] hits, either re-run with a wider range (e.g. "1-100") or put the filter into the CQL instead (e.g. append \`and pn any "${result.countryFilter!.join(' ')}"\`) so the total reflects it.`,
 				].join('\n');
 			}
-			return `No patents found for query: ${query}`;
+			return filterInQuery ? `No patents found for CQL: ${sentQuery}` : `No patents found for query: ${query}`;
 		}
 
 		// `total` is optional in the backend response; fall back to the number of

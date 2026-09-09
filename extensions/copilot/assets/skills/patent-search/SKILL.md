@@ -18,7 +18,7 @@ Before ANY search, determine jurisdiction. If not specified by the user, ask (vi
 ## EPO OPS Search (EP/WO Patents)
 
 ### Tool Chain
-1. Write the CQL yourself (see below) → `search_patents` with it → returns EP/WO results
+1. Write the CQL yourself (see below) → `search_patents` with it → returns worldwide bibliographic results; pass `countries="EP,WO"` for EP/WO scope and record the backend effective query
 2. `get_patent_details` for full claims/description of interesting hits
 3. Other detail endpoints (family, legal, register): `ops_api_guide` → execute with `patent_api_request`
 
@@ -52,7 +52,7 @@ weak results.
 
 **Step 3 — probe the count. Mandatory, before trusting any results.** Run the query with
 a small limit and read the total. **Over ~1,000 hits: the query is too broad — add the
-next discriminating term from your Step 1 list and probe again.** Under 10: broaden (see
+next discriminating term from your Step 1 list and probe again.** Under 10: inspect relevance before broadening (see
 Refinement). A query you never probed is a guess, and in a prior-art search a query
 returning thousands of hits instead of tens means the closest art is never seen.
 
@@ -92,7 +92,7 @@ syntax, not in strategy:
 
 ## Search Refinement
 - Too many results (>1,000): add the next discriminating term from your Step 1 list; then a date filter or a narrower classification
-- Too few results (<10): try synonyms, remove filters, use the parent CPC class
+- Few results (<10): review them first; test synonyms or a parent CPC class if a feature remains unresolved. Preserve user-confirmed country/date constraints.
 - Off-topic results: the discriminating term is too broad — replace the category word with the specific subject matter
 - Try subsidiary companies: Google → also Alphabet, DeepMind, Waymo
 - Try keyword variations: "machine learning" → "neural network", "deep learning"

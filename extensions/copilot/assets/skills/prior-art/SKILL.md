@@ -6,7 +6,7 @@ user-invocable: true
 
 # Prior Art Search
 
-Systematic prior art search across all available databases using USPTO-recommended broad-to-narrow methodology with full documentation.
+Systematic prior art search within the user-confirmed jurisdictions, sources, and date basis. Separate a focused candidate review from a patentability opinion; provide the requested depth and record unsearched coverage.
 
 For CPC/IPC section tables, common codes, and classification search syntax, see [references/cpc-classification.md](references/cpc-classification.md).
 
@@ -35,7 +35,9 @@ Identify **2-3 CPC/IPC codes** covering the invention (see [references/cpc-class
 ## Phase 2: Broad-to-Narrow Search (USPTO Core Methodology)
 
 ### 2a. Build Search Sets
-Start broad, narrow progressively. Document hit counts at every step:
+Start broad, narrow progressively. Keep a running audit after each call: exact input query, separate countries/date/range parameters, effective query returned by the backend, total matches, documents returned, and documents/passages reviewed. Label unavailable values as unavailable. Total matches are not the number reviewed; retain each failed call as an error, not zero hits.
+
+Use this planning table, then replace planned sets with the actual execution log:
 
 | Set | Query | Purpose |
 |-----|-------|---------|
@@ -46,10 +48,11 @@ Start broad, narrow progressively. Document hit counts at every step:
 
 **Primary concept** = the single concept ALL relevant results must contain.
 
-### 2b. EPO OPS (EP/WO)
+### 2b. EPO OPS (worldwide bibliographic index)
+For EP/WO scope, pass `countries="EP,WO"` to `search_patents` or explicitly constrain publication authority in CQL. Record the effective query the backend echoes; the database name alone does not establish an authority filter.
 1. Write the CQL from the concept-synonym table — see `patent-search` for the field reference
 2. `search_patents` with the CQL → record result count
-3. Run at least **3 query variations** with different synonym combinations; combine with CPC: `ic=[CPC] AND (kw1 OR kw2)`
+3. Test different synonym combinations and classification refinements. For each next query, name the unresolved feature or coverage gap it tests. When variants repeat reviewed documents, synthesize; further searches need a distinct unresolved question, not a target query count. Update the todo phase when switching to document analysis or writing.
 4. For top 3-5 results: `get_patent_details` → full claims and description
 
 ### 2c. USPTO (US)
@@ -84,15 +87,21 @@ Before handing back or recording a coverage gap in the audit trail, work the lad
 2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER record "no results" or "doesn't exist" from an errored call.
 3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
 
-Log a gap in the audit trail only after all three, naming what you tried.
+Apply this ladder within the confirmed scope. Record an intentionally excluded source as not searched, and a focused review as incomplete coverage; neither requires an out-of-scope search. Log operational failures separately, naming what you tried.
 
 ## Phase 3: Relevance Assessment
 
-For each reference, map elements (✅ teaches / ⚠️ similar / ❌ missing) against each claim element, then classify X/Y/A per the **patent-examination** skill — the short version: X = one reference defeats the claim alone (all elements disclosed, or obvious over that single reference); Y = defeats it only in combination with another reference plus a motivation to combine; A = background. Use patent-examination for the rigorous feature-by-feature classification and scoring.
+For each feature, identify its exact supporting passage and scope: independent claim, dependent claim with its dependencies, embodiment, example, or background discussion. Preserve material identity, units, percentage denominator, and qualifiers. A numerical range overlap is partial support; an example or dependent-claim amount does not become a requirement of the whole publication.
+
+Use supported / partial / not found in reviewed passages / uncertain. A negative finding describes the passages actually reviewed, not the whole technical field. Mark translations as translations and use only claim-specific links supplied by the source tool; if claims are not individually addressable, use the returned claims-section link and name the printed claim number in prose.
+
+For a requested novelty/patentability assessment, apply the **patent-examination** skill to the retrieved evidence. A candidate review does not itself establish a novelty conclusion, and missing results do not establish patentability.
 
 ## Phase 4: Report
 
-Save via `write_patent_results`: search summary (3-sentence output, critical date, CPC codes), the concept-synonym table, broad-to-narrow set documentation with hit counts, every query executed per database (audit trail), results table with ratings and source database, element-by-element analysis of the top 3-5 references, NPL findings, novelty conclusion with potential 102/103 issues, and databases searched. Then generate the companion audit report (see the audit-report skill).
+Save via `write_patent_results`: confirmed scope and cutoff basis, concept-synonym table, actual execution log, candidate summary, detailed feature evidence, and coverage limitations. Keep the candidate summary to four columns (publication, publication date, relevance, limitations); put filing dates, applicants, and feature mappings in per-candidate sections with exact source links. Include NPL findings and a novelty assessment only within the requested scope.
+
+Before finalizing, reconcile each log row to its tool response, each feature label to its cited passage, and every generalization to the breadth of evidence reviewed. These checks apply equally to summary tables and saved files. Generate the companion audit report when requested (see the audit-report skill).
 
 ## Rules
 - NEVER invent patent numbers — only cite what search tools returned
