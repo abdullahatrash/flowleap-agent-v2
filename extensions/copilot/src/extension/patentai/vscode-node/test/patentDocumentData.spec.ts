@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import woClaims from './fixtures/wo9951190a1-claims.json';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { IPatentBackendClient } from '../patentBackendClient';
 import { loadPatentDocument } from '../patentDocumentData';
@@ -75,4 +76,28 @@ describe('patent reader publication retrieval', () => {
 		const rejected = await loadPatentDocument(backend({ ...overrides, get_claims: { ...claims, docId: 'US-2026069159-A2' } }).client, usReference, CancellationToken.None);
 		expect([accepted.claims.length, rejected.claims.length]).toEqual([2, 0]);
 	});
+	it('retains unsegmented claims and language without creating claim IDs', async () => {
+		const { client } = backend({ get_claims: { docId: 'EP1234567B1', claims: [], unsegmentedText: '不明な番号 <img />', language: 'ja' } });
+		const data = await loadPatentDocument(client, reference, CancellationToken.None);
+		const html = renderPatentDocument(reference, 'nonce', data);
+		expect(html).toContain('<section id="claims" lang="ja">');
+		expect(html).toContain('不明な番号 &lt;img /&gt;');
+		expect(html).toContain('Cite the claims section only.');
+		expect(html).toContain('Claim 4 was not returned');
+		expect(html).not.toContain('id="claim-');
+		expect(html).not.toContain('No claims were returned.');
+	});
+
+	it('renders every recovered WO claim at the citation target supplied by the facade', async () => {
+		const { client } = backend({ get_bibliography: { ...bibliography, docId: woClaims.docId }, get_claims: woClaims });
+		for (const claim of woClaims.claims) {
+			const woReference: PatentDocumentReference = { publicationNumber: woClaims.docId, section: 'claims', claimNumber: claim.number };
+			const data = await loadPatentDocument(client, woReference, CancellationToken.None);
+			const html = renderPatentDocument(woReference, 'nonce', data);
+			expect(html).toContain(`id="claim-${claim.number}" tabindex="-1" class="claim selected"`);
+			expect(data.claims.find(item => item.number === claim.number)?.text).toBe(claim.text);
+			expect(data.claimsLanguage).toBe('ja');
+		}
+	});
+
 });

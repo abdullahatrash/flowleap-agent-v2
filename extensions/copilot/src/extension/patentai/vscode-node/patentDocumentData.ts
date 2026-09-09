@@ -44,7 +44,7 @@ export async function loadPatentDocument(client: IPatentBackendClient, reference
 	const read = async <T extends { docId: string }>(tool: string): Promise<T> => verifyPublication(await callFacadeTool<T>(client, tool, input, token), requested);
 	const [bibliography, claims, description] = await Promise.allSettled([
 		read<Bibliography>('get_bibliography'),
-		read<{ docId: string; claims: { number: string; text: string }[] }>('get_claims'),
+		read<{ docId: string; claims: { number: string; text: string }[]; unsegmentedText?: string; language?: string }>('get_claims'),
 		read<{ docId: string; description: string | null }>('get_description'),
 	]);
 	if (bibliography.status === 'rejected') {
@@ -55,6 +55,8 @@ export async function loadPatentDocument(client: IPatentBackendClient, reference
 		...bibliography.value,
 		publicationDate: bibliography.value.dates?.publication,
 		claims: claims.status === 'fulfilled' ? claims.value.claims : [],
+		unsegmentedClaimsText: claims.status === 'fulfilled' ? claims.value.unsegmentedText : undefined,
+		claimsLanguage: claims.status === 'fulfilled' ? claims.value.language : undefined,
 		description: description.status === 'fulfilled' ? description.value.description : null,
 		claimsError: claims.status === 'rejected' ? errorMessage(claims.reason) : undefined,
 		descriptionError: description.status === 'rejected' ? errorMessage(description.reason) : undefined,

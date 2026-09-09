@@ -14,7 +14,7 @@
  */
 
 import type * as vscode from 'vscode';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { IFileSystemService } from '../../../../platform/filesystem/common/fileSystemService';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import type { IPromptPathRepresentationService } from '../../../../platform/prompts/common/promptPathRepresentationService';
@@ -24,10 +24,14 @@ import { URI } from '../../../../util/vs/base/common/uri';
 import type { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart } from '../../../../vscodeTypes';
 import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
+import woClaims from '../../../patentai/vscode-node/test/fixtures/wo9951190a1-claims.json';
 import { GetPatentDetailsTool } from '../getPatentDetailsTool';
 import { GetPatentFiguresTool } from '../getPatentFiguresTool';
 import { SearchAcademicTool } from '../searchAcademicTool';
 import { SearchLegalTool } from '../searchLegalTool';
+
+vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
+vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -131,6 +135,31 @@ describe('get_patent_details', () => {
 		// The claims tool returns NUMBERED claims; the rendered text is their text, in order.
 		expect(textOf(result)).toContain('1. A battery pack.');
 		expect(textOf(result)).toContain('The description.');
+	});
+
+	it('emits only the returned WO claim anchors while preserving all recovered source text', async () => {
+		const { client } = makeBackendClient({
+			get_bibliography: { docId: woClaims.docId, title: 'Composition', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: null, publication: null, priority: [] } },
+			get_claims: woClaims,
+		});
+		const body = textOf(await new GetPatentDetailsTool(makeLogService(), client).invoke(makeOptions({ publicationNumber: woClaims.docId }), makeToken()));
+		expect([...body.matchAll(/&claim=(\d+)\)/g)].map(match => match[1])).toEqual(woClaims.claims.map(claim => claim.number));
+		for (const claim of woClaims.claims) {
+			expect(body).toContain(claim.text);
+		}
+	});
+
+	it('keeps uncertain claim text readable with only the returned section link', async () => {
+		const { client } = makeBackendClient({
+			get_bibliography: { docId: 'WO9951190A1', title: 'Composition', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: null, publication: null, priority: [] } },
+			get_claims: { docId: 'WO9951190A1', claims: [], totalClaims: null, language: 'ja', unsegmentedText: '1. Source text.\n3. Uncertain numbering.', documentReference: { publicationNumber: 'WO9951190A1', section: 'claims' } },
+		});
+		const tool = new GetPatentDetailsTool(makeLogService(), client);
+		const body = textOf(await tool.invoke(makeOptions({ publicationNumber: 'WO9951190A1' }), makeToken()));
+		expect(body).toContain('Cite the claims section only.');
+		expect(body).toContain('1. Source text.\n3. Uncertain numbering.');
+		expect(body).toContain('publication=WO9951190A1&section=claims)');
+		expect(body).not.toContain('&claim=');
 	});
 
 	it('degrades a missing section to the fallback line instead of failing the whole lookup', async () => {
