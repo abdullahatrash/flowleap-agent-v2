@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Raw } from '@vscode/prompt-tsx';
+import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { IChatModelInformation, ModelSupportedEndpoint } from '../../../../platform/endpoint/common/endpointProvider';
 import { ITestingServicesAccessor } from '../../../../platform/test/node/services';
 import { TokenizerType } from '../../../../util/common/tokenizer';
@@ -113,6 +115,25 @@ describe('OpenRouterEndpoint', () => {
 				'https://openrouter.ai/api/v1/chat/completions');
 
 			expect(endpoint.apiType).toBe('chatCompletions');
+		});
+
+		it('preserves PDF bytes as a file input for Gemini Chat Completions', () => {
+			nonAnthropicMetadata.id = 'google/gemini-3.8-flash';
+			nonAnthropicMetadata.capabilities.family = nonAnthropicMetadata.id;
+			const endpoint = instaService.createInstance(OpenRouterEndpoint, nonAnthropicMetadata, 'test-api-key', 'https://openrouter.ai/api/v1/chat/completions');
+			const data = Buffer.from('%PDF-1.7\nfigure and text bytes').toString('base64');
+			const body = endpoint.createRequestBody({
+				debugName: 'pdf-test', requestId: 'pdf-test', location: ChatLocation.Panel,
+				postOptions: {}, finishedCb: undefined,
+				messages: [{ role: Raw.ChatRole.User, content: [
+					{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Read the disclosure' },
+					{ type: Raw.ChatCompletionContentPartKind.Document, documentData: { mediaType: 'application/pdf', data } },
+				] }],
+			});
+			expect(body.messages?.[0].content).toEqual([
+				{ type: 'text', text: 'Read the disclosure' },
+				{ type: 'file', file: { filename: 'document.pdf', file_data: `data:application/pdf;base64,${data}` } },
+			]);
 		});
 	});
 });

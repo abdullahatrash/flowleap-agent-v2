@@ -44,6 +44,18 @@ describe('modelSupportsPDFDocuments', () => {
 		expect(modelSupportsPDFDocuments(fakeModel('gemini-2.0-flash'))).toBe(false);
 		expect(modelSupportsPDFDocuments(fakeModel('o4-mini'))).toBe(false);
 	});
+
+	test.each([
+		['gemini', 'gemini-3.8-flash', true],
+		['Gemini', 'models/gemini-2.5-pro', true],
+		['openrouter', 'google/gemini-3.8-flash', true],
+		['FlowLeap Trial', 'google/gemini-3.7-flash', true],
+		['flowleap-trial', 'google/gemini-3.7-flash', true],
+		['customoai', 'gemini-3.8-flash', false],
+		['openrouter', 'google/gemma-3-27b', false],
+	])('PDF support for %s / %s is %s', (modelProvider, family, supported) => {
+		expect(modelSupportsPDFDocuments({ ...fakeModel(family), modelProvider })).toBe(supported);
+	});
 });
 
 describe('modelSupportsToolSearch', () => {

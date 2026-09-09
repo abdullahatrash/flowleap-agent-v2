@@ -72,6 +72,7 @@ extensions/media-preview/media/audioPreview.js
 extensions/media-preview/media/imagePreview.js
 extensions/media-preview/media/videoPreview.js
 extensions/pdf-preview/media/pdfPreview.js
+extensions/pdf-preview/test/pdfTextExtractor.test.cjs
 extensions/postinstall.mjs
 extensions/search-result/syntaxes/generateTMLanguage.js
 extensions/sql/build/update-grammar.mjs

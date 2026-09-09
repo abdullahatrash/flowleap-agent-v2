@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { pathToFileURL } from 'node:url';
 import type { PdfMetadata } from './extension';
 
 /**
@@ -73,18 +74,19 @@ let pdfjsLib: PDFJSLib | null = null;
 
 async function getPdfJs(extensionPath: string): Promise<PDFJSLib> {
 	if (!pdfjsLib) {
-		// Use dynamic import for ESM module
+		// Native ESM imports require file URLs, including on Windows and paths containing # or %.
 		const pdfjsPath = vscode.Uri.joinPath(vscode.Uri.file(extensionPath), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.mjs').fsPath;
 		const workerPath = vscode.Uri.joinPath(vscode.Uri.file(extensionPath), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs').fsPath;
 
 		try {
-			// pdfjs-dist ships ESM-only, so a static import can't work from the CJS extension host
+			// Node16 module emit preserves import() here instead of lowering it to require().
+			// PDF.js is ESM-only and its dependency graph uses top-level await.
 			// eslint-disable-next-line no-restricted-syntax
-			const pdfjs = await import(/* webpackIgnore: true */ pdfjsPath);
+			const pdfjs = await import(/* webpackIgnore: true */ pathToFileURL(pdfjsPath).href);
 			pdfjsLib = pdfjs as unknown as PDFJSLib;
 
 			// Set up the worker path
-			pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
+			pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
 		} catch (err) {
 			console.error('[PDF Preview] Failed to load PDF.js:', err);
 			throw new Error(`Failed to load PDF.js library: ${err}`);
