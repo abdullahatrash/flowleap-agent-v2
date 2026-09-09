@@ -10,7 +10,11 @@ Orchestrates the full path from a raw invention disclosure to a patentability as
 
 ## Phase 0: Intake
 
-Read the disclosure: `read_pdf` for PDF IDFs, the editor for Word/text, or take pasted text. Extract a **structured invention record**:
+Read the disclosure content available in the conversation. For a PDF supplied as native document input, inspect its text, tables, figures, and captions directly. A visible attachment name or a PDF-capable model alone does not establish that the document content was delivered.
+
+Use `read_pdf` with the local file path when PDF text is unavailable or a passage needs exact extraction. Its text output does not establish that figures were inspected: use native document content or accessible page images for visual evidence, and identify any figures that remain unavailable. Report an attachment or extraction failure precisely; request missing content before relying on it. For Word/text, read the document or supplied text.
+
+Extract a **structured invention record**:
 
 | Field | What to capture |
 |-------|-----------------|
@@ -19,6 +23,7 @@ Read the disclosure: `read_pdf` for PDF IDFs, the editor for Word/text, or take 
 | Solution | How the invention solves it — the mechanism, not the benefit |
 | Novel features | Ranked list; what the inventors believe is new |
 | Embodiments & variations | Alternatives, ranges, optional features (future dependent claims) |
+| Figures & supporting evidence | Page/figure references, observed structures and labels; distinguish illustrative drawings from measured results and flag unreadable evidence |
 | Inventors | Names/roles as given — flag inventorship questions for the attorney |
 | Known prior art | Every reference the inventors cite |
 | Disclosure events | EVERY date: papers, talks, posters, demos, sales, offers, websites, theses |

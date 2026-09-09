@@ -112,6 +112,7 @@
 		]
 	},
 	"scripts": {
+		"test": "gulp compile-extension:pdf-preview && node --test test/*.test.cjs",
 		"compile": "gulp compile-extension:pdf-preview",
 		"watch": "gulp watch-extension:pdf-preview",
 		"vscode:prepublish": "npm run build-ext",

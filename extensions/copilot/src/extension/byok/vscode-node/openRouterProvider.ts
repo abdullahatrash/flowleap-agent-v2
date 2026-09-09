@@ -2,12 +2,14 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+import { Raw } from '@vscode/prompt-tsx';
 import { IChatMLFetcher } from '../../../platform/chat/common/chatMLFetcher';
 import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { IDomainService } from '../../../platform/endpoint/common/domainService';
 import { IChatModelInformation, ModelSupportedEndpoint } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IFetcherService } from '../../../platform/networking/common/fetcherService';
+import { ICreateEndpointBodyOptions, IEndpointBody } from '../../../platform/networking/common/networking';
 
 import { IChatWebSocketManager } from '../../../platform/networking/node/chatWebSocketManager';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
@@ -178,6 +180,25 @@ export class OpenRouterEndpoint extends OpenAIEndpoint {
 	 */
 	protected override get useMessagesApi(): boolean {
 		return !!this.modelMetadata.supported_endpoints?.includes(ModelSupportedEndpoint.Messages);
+	}
+
+	override createRequestBody(options: ICreateEndpointBodyOptions): IEndpointBody {
+		if (this.useMessagesApi || this.useResponsesApi) {
+			return super.createRequestBody(options);
+		}
+		// prompt-tsx's OpenAI conversion discards Document parts. OpenRouter accepts
+		// native PDFs as file inputs; opaque parts preserve that provider-specific shape.
+		// See https://openrouter.ai/docs/guides/overview/multimodal/pdfs.
+		return super.createRequestBody({
+			...options,
+			messages: options.messages.map(message => message.role !== Raw.ChatRole.User ? message : {
+				...message,
+				content: message.content.map(part => part.type === Raw.ChatCompletionContentPartKind.Document && part.documentData.mediaType === 'application/pdf' ? {
+					type: Raw.ChatCompletionContentPartKind.Opaque,
+					value: { type: 'file', file: { filename: 'document.pdf', file_data: `data:application/pdf;base64,${part.documentData.data}` } },
+				} : part),
+			}),
+		});
 	}
 
 	public override getExtraHeaders(): Record<string, string> {

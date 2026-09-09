@@ -305,7 +305,14 @@ export function modelCanUseImageURL(model: LanguageModelChat | IChatEndpoint): b
  * The model supports native PDF document processing via document content parts.
  */
 export function modelSupportsPDFDocuments(model: LanguageModelChat | IChatEndpoint): boolean {
-	return isAnthropicFamily(model) || isGpt5PlusFamily(model) || isHiddenModelM(model);
+	const provider = ('vendor' in model ? model.vendor : model.modelProvider)?.toLowerCase();
+	const family = model.family.toLowerCase();
+	// A model name alone is insufficient: custom OpenAI-compatible transports may
+	// discard documents. These providers implement Gemini inlineData or OpenRouter file inputs.
+	const supportsGeminiPDF = provider === 'gemini'
+		? /^(?:models\/)?gemini-/.test(family)
+		: (provider === 'openrouter' || provider === 'flowleap-trial' || provider === 'flowleap trial') && family.startsWith('google/gemini-');
+	return isAnthropicFamily(model) || isGpt5PlusFamily(model) || isHiddenModelM(model) || supportsGeminiPDF;
 }
 
 /**

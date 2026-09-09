@@ -5,7 +5,9 @@
 
 import { type JSONTree, OutputMode, Raw } from '@vscode/prompt-tsx';
 import { beforeAll, describe, expect, test } from 'vitest';
+import type { LanguageModelChatMessage } from 'vscode';
 import { IEndpointProvider } from '../../../../../platform/endpoint/common/endpointProvider';
+import { convertToApiChatMessage } from '../../../../../platform/endpoint/vscode-node/extChatEndpoint';
 import { IFileSystemService } from '../../../../../platform/filesystem/common/fileSystemService';
 import { MockFileSystemService } from '../../../../../platform/filesystem/node/test/mockFileSystemService';
 import type { IChatEndpoint } from '../../../../../platform/networking/common/networking';
@@ -18,6 +20,7 @@ import { Event } from '../../../../../util/vs/base/common/event';
 import { IInstantiationService } from '../../../../../util/vs/platform/instantiation/common/instantiation';
 import { Uri } from '../../../../../vscodeTypes';
 import { createExtensionUnitTestingServices } from '../../../../test/node/services';
+import { apiMessageToGeminiMessage } from '../../../../byok/common/geminiMessageConverter';
 import { PromptRenderer, renderPromptElementJSON } from '../../base/promptRenderer';
 import { FileVariable } from '../fileVariable';
 
@@ -142,6 +145,28 @@ describe('FileVariable PDF support', () => {
 	// Valid PDF magic bytes: %PDF (\x25\x50\x44\x46) followed by version
 	const VALID_PDF_CONTENT = '%PDF-1.4\n1 0 obj\n<</Type /Catalog>>\nendobj';
 	const INVALID_PDF_CONTENT = 'This is not a PDF file at all';
+
+	test('preserves an attached PDF through rendering and native Gemini serialization', async () => {
+		const { testingServiceCollection, mockEndpoint } = createPdfTestServices({ family: 'gemini-3.8-flash', supportsVision: true });
+		Object.assign(mockEndpoint, { modelProvider: 'gemini' });
+		const pdfUri = Uri.parse('file:///workspace/disclosure.pdf');
+		const mockFs = new MockFileSystemService();
+		mockFs.mockFile(pdfUri, VALID_PDF_CONTENT);
+		testingServiceCollection.define(IFileSystemService, mockFs);
+		const accessor = testingServiceCollection.createTestingAccessor();
+		try {
+			const renderer = PromptRenderer.create(accessor.get(IInstantiationService), mockEndpoint, FileVariable, {
+				variableName: 'disclosure', variableValue: pdfUri,
+			});
+			const { messages } = await renderer.render();
+			const { contents } = apiMessageToGeminiMessage(convertToApiChatMessage(messages) as LanguageModelChatMessage[]);
+			expect(contents.flatMap(content => content.parts ?? []).flatMap(part => part.inlineData ? [part.inlineData] : [])).toEqual([{
+				mimeType: 'application/pdf', data: Buffer.from(VALID_PDF_CONTENT).toString('base64'),
+			}]);
+		} finally {
+			accessor.dispose();
+		}
+	});
 
 	function createPdfTestServices(options: { family: string; supportsVision: boolean }) {
 		const testingServiceCollection = createExtensionUnitTestingServices();

@@ -37,7 +37,7 @@ export class PatentSearchSubagentPrompt extends PromptElement<PatentSearchSubage
 					1. Build optimized CQL queries using the query builder tools<br />
 					2. Search EPO patents via search_patents tool<br />
 					3. Search academic sources via search_academic tool<br />
-					4. When the user has attached or referenced a local PDF file, read it with the read_pdf tool for deeper analysis (read_pdf only accepts a local file path — it cannot fetch remote URLs)<br />
+					4. Use disclosure content and figure evidence actually supplied in your context. When native PDF content or page images are available, inspect them directly. If PDF text is missing or an exact passage needs extraction, use read_pdf with a local file path (it cannot fetch remote URLs). Text extraction alone does not establish that figures were inspected; report missing visual evidence or document-loading failures before relying on that content.<br />
 					5. ALWAYS search both patents AND academic sources<br />
 					<br />
 					Once you have thoroughly searched, return a message with ONLY: the &lt;patent_results&gt; tag containing your structured findings.<br />
