@@ -42,7 +42,8 @@ interface ClaimsData {
 	documentReference?: PatentDocumentReference | null;
 	docId: string;
 	claims: { number: string; text: string; documentReference?: PatentDocumentReference | null }[];
-	totalClaims: number;
+	totalClaims: number | null;
+	unsegmentedText?: string;
 	language: string;
 }
 
@@ -170,7 +171,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			biblio.abstract || 'No abstract available.',
 			'',
 			`## ${patentCitationLink('Claims', claims?.documentReference)}`,
-			claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}\n${c.text}`).join('\n\n') : fulltextFallback,
+			claims?.unsegmentedText ? `Individual claim numbers could not be established. Cite the claims section only.\n\n${claims.unsegmentedText}` : claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}\n${c.text}`).join('\n\n') : fulltextFallback,
 			'',
 			`## ${patentCitationLink('Description', description?.documentReference)}`,
 			description?.description || fulltextFallback,
