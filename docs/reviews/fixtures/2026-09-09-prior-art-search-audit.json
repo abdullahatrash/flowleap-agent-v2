@@ -1,0 +1,202 @@
+{
+  "sessionId": "b1e318ac-d161-4029-8ac7-245076f5c33c",
+  "note": "Only public-demo search arguments and response summaries; no model reasoning, credentials, or full request payloads. observedTotal means matched publications, not returned/reviewed documents. Zero-hit responses did not echo effectiveQuery.",
+  "searches": [
+    {
+      "n": 1,
+      "callId": "call_4395338",
+      "input": {
+        "range": "1-10",
+        "query": "ic=A61K6/083 and pd<20020221",
+        "countries": "EP,WO"
+      },
+      "reported": 589,
+      "observedTotal": 589,
+      "queryMatches": true,
+      "summary": "Found 589 patents matching CQL: \"(ic=A61K6/083 and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:01:28.474Z"
+    },
+    {
+      "n": 2,
+      "callId": "call_3825179",
+      "input": {
+        "range": "1-25",
+        "query": "(ti any \"dental composite\" or ab any \"dental composite\") and (ti any \"composite filler\" or ab any \"composite filler\" or ab any \"organic-inorganic\") and pd<20020221",
+        "countries": "EP,WO"
+      },
+      "reported": 20272,
+      "observedTotal": 20272,
+      "queryMatches": true,
+      "summary": "Found 20272 patents matching CQL: \"((ti any \"dental composite\" or ab any \"dental composite\") and (ti any \"composite filler\" or ab any \"composite filler\" or ab any \"organic-inorganic\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:03:09.631Z"
+    },
+    {
+      "n": 3,
+      "callId": "call_1944216",
+      "input": {
+        "countries": "EP,WO",
+        "range": "1-15",
+        "query": "ic=A61K6/083 and (ti=\"composite filler\" or ab=\"composite filler\") and pd<20020221"
+      },
+      "reported": 6,
+      "observedTotal": 6,
+      "queryMatches": true,
+      "summary": "Found 6 patents matching CQL: \"(ic=A61K6/083 and (ti=\"composite filler\" or ab=\"composite filler\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:04:25.174Z"
+    },
+    {
+      "n": 4,
+      "callId": "call_3221195",
+      "input": {
+        "query": "ic=A61K6/083 and (ti=\"organic-inorganic composite\" or ab=\"organic-inorganic composite\") and pd<20020221",
+        "range": "1-25",
+        "countries": "EP,WO"
+      },
+      "reported": 1,
+      "observedTotal": 1,
+      "queryMatches": true,
+      "summary": "Found 1 patents matching CQL: \"(ic=A61K6/083 and (ti=\"organic-inorganic composite\" or ab=\"organic-inorganic composite\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:04:57.819Z"
+    },
+    {
+      "n": 5,
+      "callId": "call_3990733",
+      "input": {
+        "countries": "EP,WO",
+        "range": "1-25",
+        "query": "ic=A61K6/083 and (ti=\"composite filler\" or ab=\"composite filler\" or ti=\"organic composite filler\" or ab=\"organic composite filler\" or ti=\"composite filler particles\" or ab=\"composite filler particles\") and pd<20020221"
+      },
+      "reported": 6,
+      "observedTotal": 6,
+      "queryMatches": true,
+      "summary": "Found 6 patents matching CQL: \"(ic=A61K6/083 and (ti=\"composite filler\" or ab=\"composite filler\" or ti=\"organic composite filler\" or ab=\"organic composite filler\" or ti=\"composite filler particles\" or ab=\"composite filler particles\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:05:53.997Z"
+    },
+    {
+      "n": 6,
+      "callId": "call_101830",
+      "input": {
+        "query": "ic=A61K6/083 and (ti=\"classified\" or ab=\"classified\" or ti=\"classification\" or ab=\"classification\" or ti=\"particle size\" or ab=\"particle size\") and pd<20020221",
+        "range": "1-20",
+        "countries": "EP,WO"
+      },
+      "reported": 30,
+      "observedTotal": 30,
+      "queryMatches": true,
+      "summary": "Found 30 patents matching CQL: \"(ic=A61K6/083 and (ti=\"classified\" or ab=\"classified\" or ti=\"classification\" or ab=\"classification\" or ti=\"particle size\" or ab=\"particle size\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:06:32.463Z"
+    },
+    {
+      "n": 7,
+      "callId": "call_101366",
+      "input": {
+        "countries": "EP,WO",
+        "range": "1-25",
+        "query": "(ti any \"classified\" or ab any \"classified\" or ti any \"classification\" or ab any \"classification\") and (ti any \"composite filler\" or ab any \"composite filler\" or ti any \"dental\" or ab any \"dental\") and pd<20020221"
+      },
+      "reported": 44,
+      "observedTotal": 44,
+      "queryMatches": true,
+      "summary": "Found 44 patents matching CQL: \"((ti any \"classified\" or ab any \"classified\" or ti any \"classification\" or ab any \"classification\") and (ti any \"composite filler\" or ab any \"composite filler\" or ti any \"dental\" or ab any \"dental\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:09:13.640Z"
+    },
+    {
+      "n": 8,
+      "callId": "call_95111",
+      "input": {
+        "countries": "EP,WO",
+        "range": "1-25",
+        "query": "(ti any \"dental\" or ab any \"dental\") and (ti any \"composite\" or ab any \"composite\") and (ti any \"filler\" or ab any \"filler\") and (ti any \"average particle size\" or ab any \"average particle size\") and pd<20020221"
+      },
+      "reported": 9,
+      "observedTotal": 9,
+      "queryMatches": true,
+      "summary": "Found 9 patents matching CQL: \"((ti any \"dental\" or ab any \"dental\") and (ti any \"composite\" or ab any \"composite\") and (ti any \"filler\" or ab any \"filler\") and (ti any \"average particle size\" or ab any \"average particle size\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:10:17.858Z"
+    },
+    {
+      "n": 9,
+      "callId": "call_621623",
+      "input": {
+        "range": "1-15",
+        "query": "(ti=\"composite filler\" or ab=\"composite filler\") and (ti=\"pulveriz*\" or ab=\"pulveriz*\" or ti=\"grind*\" or ab=\"grind*\") and pd<20020221",
+        "countries": "EP,WO"
+      },
+      "reported": 2,
+      "observedTotal": 2,
+      "queryMatches": true,
+      "summary": "Found 2 patents matching CQL: \"((ti=\"composite filler\" or ab=\"composite filler\") and (ti=\"pulveriz*\" or ab=\"pulveriz*\" or ti=\"grind*\" or ab=\"grind*\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:11:16.834Z"
+    },
+    {
+      "n": 10,
+      "callId": "call_1567141",
+      "input": {
+        "query": "pa=Kuraray* and (ti=\"composite filler\" or ab=\"composite filler\" or ti=\"organic-inorganic\" or ab=\"organic-inorganic\") and pd<20020221",
+        "range": "1-10",
+        "countries": "EP,WO"
+      },
+      "reported": 0,
+      "observedTotal": 0,
+      "queryMatches": true,
+      "summary": "No patents found for query: pa=Kuraray* and (ti=\"composite filler\" or ab=\"composite filler\" or ti=\"organic-inorganic\" or ab=\"organic-inorganic\") and pd<20020221",
+      "timestamp": "2026-09-09T12:11:31.895Z"
+    },
+    {
+      "n": 11,
+      "callId": "call_4147971",
+      "input": {
+        "query": "pa=Tokuyama* and ic=A61K6/083 and pd<20020221",
+        "range": "1-15",
+        "countries": "EP,WO"
+      },
+      "reported": 8,
+      "observedTotal": 8,
+      "queryMatches": true,
+      "summary": "Found 8 patents matching CQL: \"(pa=Tokuyama* and ic=A61K6/083 and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:12:58.502Z"
+    },
+    {
+      "n": 12,
+      "callId": "call_3965474",
+      "input": {
+        "query": "ic=A61K6/083 and (ti=\"classified\" or ab=\"classified\" or ti=\"classifying\" or ab=\"classifying\") and pd<20020221",
+        "range": "1-10",
+        "countries": "EP,WO"
+      },
+      "reported": 0,
+      "observedTotal": 0,
+      "queryMatches": true,
+      "summary": "No patents found for query: ic=A61K6/083 and (ti=\"classified\" or ab=\"classified\" or ti=\"classifying\" or ab=\"classifying\") and pd<20020221",
+      "timestamp": "2026-09-09T12:13:52.503Z"
+    },
+    {
+      "n": 13,
+      "callId": "call_3963686",
+      "input": {
+        "query": "ic=A61K6/083 and (ti=\"pulveriz*\" or ab=\"pulveriz*\") and pd<20020221",
+        "countries": "EP,WO",
+        "range": "1-20"
+      },
+      "reported": 1,
+      "observedTotal": 1,
+      "queryMatches": true,
+      "summary": "Found 1 patents matching CQL: \"(ic=A61K6/083 and (ti=\"pulveriz*\" or ab=\"pulveriz*\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:14:28.900Z"
+    },
+    {
+      "n": 14,
+      "callId": "call_4140748",
+      "input": {
+        "query": "ic=A61K6/083 and (ti=\"milling\" or ab=\"milling\" or ti=\"milled\" or ab=\"milled\" or ti=\"siev*\" or ab=\"siev*\") and pd<20020221",
+        "range": "1-20",
+        "countries": "EP,WO"
+      },
+      "reported": 1,
+      "observedTotal": 1,
+      "queryMatches": true,
+      "summary": "Found 1 patents matching CQL: \"(ic=A61K6/083 and (ti=\"milling\" or ab=\"milling\" or ti=\"milled\" or ab=\"milled\" or ti=\"siev*\" or ab=\"siev*\") and pd<20020221) and pn any \"EP WO\"\" (country filter [EP,WO] is part of the query, so this total counts only those offices)",
+      "timestamp": "2026-09-09T12:15:12.992Z"
+    }
+  ]
+}

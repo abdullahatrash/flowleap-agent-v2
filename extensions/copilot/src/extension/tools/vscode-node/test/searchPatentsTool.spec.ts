@@ -103,6 +103,21 @@ describe('SearchPatentsTool', () => {
 		`);
 	});
 
+	it('shows the requested country filter and range before a search is approved', async () => {
+		const { client } = makeBackendClient();
+		const tool = new SearchPatentsTool(makeLogService(), client);
+		const prepared = await tool.prepareInvocation(makeOptions({ query: 'ic=A61K6/083 and pd<20020221', countries: 'EP,WO', range: '1-10' }), makeToken());
+		expect(prepared?.confirmationMessages?.message).toBe('Allow Patent AI to search for patents using query: ic=A61K6/083 and pd<20020221? Requested countries: EP,WO. Range: 1-10.');
+	});
+
+	it('preserves the backend effective query when a scoped search has zero matches', async () => {
+		const effectiveQuery = '(pa=Kuraray* and pd<20020221) and pn any "EP WO"';
+		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [], countryFilter: ['EP', 'WO'], effectiveQuery }));
+		const tool = new SearchPatentsTool(makeLogService(), client);
+		const result = await tool.invoke(makeOptions({ query: 'pa=Kuraray* and pd<20020221', countries: 'EP,WO' }), makeToken());
+		expect(textOf(result)).toBe(`No patents found for CQL: ${effectiveQuery}`);
+	});
+
 	it('reports no results when the backend returns an empty doc list', async () => {
 		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [] }));
 		const tool = new SearchPatentsTool(makeLogService(), client);
