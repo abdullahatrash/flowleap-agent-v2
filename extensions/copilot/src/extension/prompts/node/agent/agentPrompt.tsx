@@ -813,7 +813,7 @@ interface WorkspaceFoldersHintProps extends BasePromptElementProps {
 	readonly workingDir: WorkingDirectory;
 }
 
-class WorkspaceFoldersHint extends PromptElement<WorkspaceFoldersHintProps> {
+export class WorkspaceFoldersHint extends PromptElement<WorkspaceFoldersHintProps> {
 	constructor(
 		props: WorkspaceFoldersHintProps,
 		@IPromptPathRepresentationService private readonly promptPathRepresentationService: IPromptPathRepresentationService,
@@ -827,7 +827,7 @@ class WorkspaceFoldersHint extends PromptElement<WorkspaceFoldersHintProps> {
 			return (
 				<>
 					I am working in a workspace with the following folders:<br />
-					{folders.map(folder => `- ${this.promptPathRepresentationService.getFilePath(folder)} `).join('\n')}
+					{folders.map(folder => `- ${this.promptPathRepresentationService.getFilePath(folder)}`).join('\n')}
 				</>);
 		} else {
 			return <>There is no workspace currently open.</>;

@@ -14,8 +14,8 @@ describe('writePatentResults report templates', () => {
 	});
 
 	it('wraps content in the prior-art-report structure', () => {
-		expect(buildPatentReport('Found US-1234567-B2 (X, novelty-destroying).', 'prior-art-report')).toMatchInlineSnapshot(`
-			"# Prior Art Search Report
+		expect(buildPatentReport('US-1234567-B2 describes a related mechanism; combination coverage remains unresolved.', 'prior-art-report')).toMatchInlineSnapshot(`
+			"# Prior Art Candidate Review
 
 			| Field | Details |
 			| --- | --- |
@@ -25,19 +25,16 @@ describe('writePatentResults report templates', () => {
 			| Prepared By | _(to be completed)_ |
 
 			## 1. Objective
-			_Describe the invention and the question the search is intended to answer._
+			Objective not supplied.
 
 			## 2. Search Strategy
-			_Databases searched, classification codes, keyword sets, and date ranges._
+			Search strategy not supplied.
 
-			## 3. Documents Considered Relevant
-			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`. For the closest X references, follow it with an element-by-element mapping table — \`| Claim element | <Reference 1> | <Reference 2> |\`, one row per claim element, each cell quoting the disclosing passage (original language plus a translation where applicable) — so anticipation is shown per element, not asserted per document._
-			Found US-1234567-B2 (X, novelty-destroying).
+			## 3. Candidate Evidence
+			US-1234567-B2 describes a related mechanism; combination coverage remains unresolved.
 
-			**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.
-
-			## 4. Relevance Assessment
-			_Novelty (§102) and obviousness (§103) observations for the most relevant references._
+			## 4. Review-Limited Assessment
+			Assessment not supplied; no patentability conclusion established.
 
 			---
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
@@ -283,10 +280,10 @@ describe('writePatentResults report templates', () => {
 			preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
 			objective: 'Find prior art for a sulfide glass-ceramic electrolyte before filing.',
 			searchStrategy: 'EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).',
-			relevanceAssessment: 'EP1 anticipates the base composition; novelty must rest on narrower ranges.',
+			relevanceAssessment: 'EP1 describes a related composition; narrower ranges remain unresolved.',
 		});
 		expect(report).toMatchInlineSnapshot(`
-			"# Prior Art Search Report
+			"# Prior Art Candidate Review
 
 			| Field | Details |
 			| --- | --- |
@@ -301,14 +298,11 @@ describe('writePatentResults report templates', () => {
 			## 2. Search Strategy
 			EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).
 
-			## 3. Documents Considered Relevant
-			_ISR-style citation table (Form PCT/ISA/210 section C): \`| Category | Citation of document, with relevant passages | Relevant to claim No. |\`. For the closest X references, follow it with an element-by-element mapping table — \`| Claim element | <Reference 1> | <Reference 2> |\`, one row per claim element, each cell quoting the disclosing passage (original language plus a translation where applicable) — so anticipation is shown per element, not asserted per document._
+			## 3. Candidate Evidence
 			- EP1 (close art)
 
-			**Categories of cited documents:** X — particularly relevant alone (novelty or inventive step); Y — particularly relevant in combination with another such document; A — general state of the art; E — earlier application published on/after the filing date; P — published between the priority date and the filing date; & — member of the same patent family.
-
-			## 4. Relevance Assessment
-			EP1 anticipates the base composition; novelty must rest on narrower ranges.
+			## 4. Review-Limited Assessment
+			EP1 describes a related composition; narrower ranges remain unresolved.
 
 			---
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*

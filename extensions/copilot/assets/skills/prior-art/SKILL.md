@@ -13,9 +13,14 @@ For CPC/IPC section tables, common codes, and classification search syntax, see 
 ## Phase 1: Invention Analysis (USPTO 3-Sentence Technique)
 
 ### 1a. Three-Sentence Description
-Describe the invention three different ways (ask the user, or derive from their description): 1. structure/components, 2. function/use case, 3. novelty/differentiation. Review all three for **repeated words and phrases** — these are the core concepts. If the user is describing THEIR OWN invention, decompose it yourself with the `claim-analysis` skill (Step 3b) — it turns the claim into keywords, synonyms and classification codes. Their unfiled invention text never leaves the machine.
+Describe the invention three different ways (ask the user, or derive from their description): 1. structure/components, 2. function/use case, 3. novelty/differentiation. Review all three for **repeated words and phrases** — these are the core concepts. If the user is describing THEIR OWN invention, decompose it yourself with the `claim-analysis` skill (Step 3b) — it turns the claim into keywords, synonyms and classification codes. Preserve the disclosure’s essential features, optional embodiments, and relationships between components; distinguish inventor assertions from verified source evidence.
 
-### 1b. Concept-Synonym Table (MANDATORY)
+### 1b. Feature Coverage
+Build a coverage record before searching. For each essential or optional feature and each important interaction/combination, record: `feature`, `importance`, `status`, `sourceAnchors`, and `gap`. Start at `unresolved`; update only after inspecting source evidence. Separate findings about individual components do not establish disclosure of their combination.
+
+Assign search tracks to unresolved essentials, interactions, alternative mechanisms, terminology, and relevant adjacent fields. Adapt these tracks to the invention: software data flow, mechanical component relationships, electronic timing, and chemical composition/process conditions need different evidence. Completion means each important track has supporting passages or an explicit remaining gap, not that every feature has a matching patent.
+
+### 1c. Concept-Synonym Table (MANDATORY)
 Build a table of every concept with synonyms, technical equivalents, and related terms:
 
 | Concept | Synonyms & Variations |
@@ -24,18 +29,18 @@ Build a table of every concept with synonyms, technical equivalents, and related
 
 Use dictionaries, technical manuals, and `web_search` (when available) to discover terms. Aim for **at least 3 variations per concept**.
 
-### 1c. Classification Mapping
+### 1d. Classification Mapping
 Identify **2-3 CPC/IPC codes** covering the invention (see [references/cpc-classification.md](references/cpc-classification.md)). Note both broad parent codes and specific subgroups.
 
-### 1d. Critical Date & Prior Art Scope
-- **Critical date**: priority or filing date — all prior art must predate this
+### 1e. Critical Date & Prior Art Scope
+- **Date basis**: preserve the user-confirmed publication cutoff, including whether it is strict or inclusive. Keep a demonstration cutoff separate from an actual priority/filing date; resolve legal eligibility separately when requested.
 - **Prior art includes** (per 35 USC 102): patents and published applications (US and foreign); printed publications (journals, manuals, websites); public use or on sale (trade shows, demos, launches); otherwise available to the public (talks, social media, videos)
 - Ask the user: was the invention publicly demonstrated, sold, or shown anywhere before filing?
 
 ## Phase 2: Broad-to-Narrow Search (USPTO Core Methodology)
 
 ### 2a. Build Search Sets
-Start broad, narrow progressively. Keep a running audit after each call: exact input query, separate countries/date/range parameters, effective query returned by the backend, total matches, documents returned, and documents/passages reviewed. Label unavailable values as unavailable. Total matches are not the number reviewed; retain each failed call as an error, not zero hits.
+Start broad, narrow progressively. Use the session execution evidence recorded by tools for exact queries, filters, ranges, totals and returned IDs. Keep a separate record of passages actually inspected; retrieval alone does not establish review. Mark review status unavailable when it cannot be established. Failed or cancelled calls are not zero-hit results. The report writer generates the execution audit; do not reconstruct or embellish it from memory.
 
 Use this planning table, then replace planned sets with the actual execution log:
 
@@ -52,7 +57,7 @@ Use this planning table, then replace planned sets with the actual execution log
 For EP/WO scope, pass `countries="EP,WO"` to `search_patents` or explicitly constrain publication authority in CQL. Record the effective query the backend echoes; the database name alone does not establish an authority filter.
 1. Write the CQL from the concept-synonym table — see `patent-search` for the field reference
 2. `search_patents` with the CQL → record result count
-3. Test different synonym combinations and classification refinements. For each next query, name the unresolved feature or coverage gap it tests. When variants repeat reviewed documents, synthesize; further searches need a distinct unresolved question, not a target query count. Update the todo phase when switching to document analysis or writing.
+3. Test different synonym combinations and classification refinements. For each next query, name the unresolved feature or coverage gap it tests. When variants repeat reviewed documents without useful new evidence, update coverage and synthesize; continue only for a distinct unresolved essential feature or combination. Record `stopReason` and outstanding tracks. Use neither a universal query cap nor a required number of searches. Update the todo phase when switching to document analysis or writing.
 4. For top 3-5 results: `get_patent_details` → full claims and description
 
 ### 2c. USPTO (US)
@@ -83,7 +88,7 @@ For very broad sweeps, `patent_search_subagent` can run the multi-database searc
 ## When a search fails
 
 Before handing back or recording a coverage gap in the audit trail, work the ladder in order:
-1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — swap synonyms from the concept table, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty).
+1. **Clean zero result** (call succeeded, no hits): inspect the unresolved track before deciding whether another query is useful. Try a justified synonym, classification or number-format change within the agreed scope. Preserve confirmed dates and jurisdictions. A bounded lookup may finish with zero results and explicit limitations.
 2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER record "no results" or "doesn't exist" from an errored call.
 3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
 
@@ -99,9 +104,9 @@ For a requested novelty/patentability assessment, apply the **patent-examination
 
 ## Phase 4: Report
 
-Save via `write_patent_results`: confirmed scope and cutoff basis, concept-synonym table, actual execution log, candidate summary, detailed feature evidence, and coverage limitations. Keep the candidate summary to four columns (publication, publication date, relevance, limitations); put filing dates, applicants, and feature mappings in per-candidate sections with exact source links. Include NPL findings and a novelty assessment only within the requested scope.
+Save via `write_patent_results` with `template="prior-art-report"`: confirmed scope and cutoff basis, concept-synonym table, candidate summary and detailed feature evidence. Supply structured `coverage`, `limitations`, `semanticReview` and `stopReason`; the writer derives the execution/source audit from recorded tool outcomes. Use exact evidence anchor IDs emitted by the detail tool. When anchors or records are unavailable, disclose the gap rather than inventing IDs or counts. Keep the candidate summary to four columns (publication, publication date, relevance, limitations); put filing dates, applicants, and feature mappings in per-candidate sections with exact source links. Include NPL findings and a novelty assessment only within the requested scope.
 
-Before finalizing, reconcile each log row to its tool response, each feature label to its cited passage, and every generalization to the breadth of evidence reviewed. These checks apply equally to summary tables and saved files. Generate the companion audit report when requested (see the audit-report skill).
+Before saving, review each summary and feature assessment against inspected source passages. Check independent/dependent scope, preferred/example qualifiers, units, denominators, strict/inclusive boundaries, and combination support. Record concrete checks in `semanticReview.observations` and remaining uncertainties in `semanticReview.unresolvedConcerns`. This declaration is not proof that the model is correct. Address tool validation errors and open the saved report plus its audit and source citations; update the existing report with the same writer when refinement is needed. Formal opinions remain a separate requested deliverable.
 
 ## Rules
 - NEVER invent patent numbers — only cite what search tools returned

@@ -56,9 +56,7 @@ next discriminating term from your Step 1 list and probe again.** Under 10: insp
 Refinement). A query you never probed is a guess, and in a prior-art search a query
 returning thousands of hits instead of tens means the closest art is never seen.
 
-**Query budget — probing is not sweeping.** A standard search finishes in **4-6 queries
-total**, probe included. A Prior-Art Search may go deeper, but stop when new variants
-return the same documents. Never spend a call on what you already know:
+**Stopping — probing is not sweeping.** Use the requested scope and unresolved evidence to decide whether another query is useful. A prior-art review may need multiple tracks for essential features and their interactions. When variants repeat reviewed documents without useful new evidence, synthesize with explicit remaining gaps. A distinct unresolved track can justify further searching; there is no universal query-count target. Never spend a call on what you already know:
 - A single neighbourhood term alone (`ta=pipeline`, `ta=sensor`) is always huge — never
   execute it; probe only queries you would actually accept.
 - `AND` order does not matter: `X AND Y AND Z` equals `Z AND X AND Y` — never re-run a
@@ -101,7 +99,8 @@ A **Prior-Art Search** starts broad and narrows. You cannot notice what a too-na
 never returned.
 
 ## Output
-- Save results via `write_patent_results`
+- Save simple lookup results via `write_patent_results`; for a prior-art candidate review follow the `prior-art` skill and supply the structured coverage, limitations, semantic review and stop reason required by its template.
+- Preserve the execution records emitted by tools. Totals, returned IDs and fetched sources are different from passages actually reviewed; leave missing accounting unknown. Use source-provided anchor IDs and citations.
 - Include: patent number, title, applicant, date, relevance summary
 - Use tables for >5 results
 - Reference the saved file in your response

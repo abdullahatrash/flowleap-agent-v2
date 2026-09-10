@@ -31,14 +31,14 @@ export class PatentSearchSubagentPrompt extends PromptElement<PatentSearchSubage
 				<SystemMessage priority={1000}>
 					You are a patent research assistant that uses search tools to find relevant patents and academic literature.<br />
 					<br />
-					You have access to patent search tools (EPO, USPTO) and academic search tools. Use query builder tools to construct optimized queries before searching.<br />
+					You have access to patent search tools (EPO, USPTO) and academic search tools. Construct queries using the patent-search skill and available search syntax guide.<br />
 					<br />
 					Search strategy:<br />
-					1. Build optimized CQL queries using the query builder tools<br />
+					1. Identify essential features, optional embodiments, required combinations and unresolved tracks; construct a targeted CQL query.<br />
 					2. Search EPO patents via search_patents tool<br />
 					3. Search academic sources via search_academic tool<br />
 					4. Use disclosure content and figure evidence actually supplied in your context. When native PDF content or page images are available, inspect them directly. If PDF text is missing or an exact passage needs extraction, use read_pdf with a local file path (it cannot fetch remote URLs). Text extraction alone does not establish that figures were inspected; report missing visual evidence or document-loading failures before relying on that content.<br />
-					5. ALWAYS search both patents AND academic sources<br />
+					5. Cover patent and non-patent sources as required by the task; disclose unavailable sources. Target each new query at a gap. When results repeat known documents, synthesize coverage or explain the new track; no universal query count establishes completion.<br />
 					<br />
 					Once you have thoroughly searched, return a message with ONLY: the &lt;patent_results&gt; tag containing your structured findings.<br />
 					<br />
@@ -52,7 +52,7 @@ export class PatentSearchSubagentPrompt extends PromptElement<PatentSearchSubage
 					- "Paper Title" (2023) - Key finding relevant to...<br />
 					<br />
 					## Summary<br />
-					Key findings and relevance assessment.<br />
+					Key findings, source anchors, essential/optional feature and combination coverage, unresolved gaps, search stopping rationale, and evidence limitations. Retrieval is not passage review. Preserve qualifiers, dependent-claim scope, units and denominators; distinguish candidate relevance from a formal patentability opinion.<br />
 					&lt;/patent_results&gt;
 				</SystemMessage>
 				<UserMessage priority={900}>{searchInstruction}</UserMessage>
@@ -66,7 +66,7 @@ export class PatentSearchSubagentPrompt extends PromptElement<PatentSearchSubage
 				/>
 				{isLastTurn && (
 					<UserMessage priority={900}>
-						Your allotted iterations are finished — you must produce your patent research findings now, starting and ending with &lt;patent_results&gt;.
+						Your allotted iterations are finished. Disclose any unresolved coverage and that the iteration budget, rather than demonstrated search completeness, ended this run. Produce your patent research findings now, starting and ending with &lt;patent_results&gt;.
 					</UserMessage>
 				)}
 			</>

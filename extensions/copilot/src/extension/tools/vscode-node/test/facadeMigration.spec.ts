@@ -25,6 +25,7 @@ import type { IInstantiationService } from '../../../../util/vs/platform/instant
 import { LanguageModelDataPart, LanguageModelTextPart } from '../../../../vscodeTypes';
 import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import woClaims from '../../../patentai/vscode-node/test/fixtures/wo9951190a1-claims.json';
+import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 import { GetPatentDetailsTool } from '../getPatentDetailsTool';
 import { GetPatentFiguresTool } from '../getPatentFiguresTool';
 import { SearchAcademicTool } from '../searchAcademicTool';
@@ -123,7 +124,7 @@ describe('get_patent_details', () => {
 			},
 			get_description: { docId: 'EP1000000A1', description: 'The description.', language: 'en' },
 		});
-		const tool = new GetPatentDetailsTool(makeLogService(), client);
+		const tool = new GetPatentDetailsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP-1000000-A1' }), makeToken());
 
@@ -142,7 +143,7 @@ describe('get_patent_details', () => {
 			get_bibliography: { docId: woClaims.docId, title: 'Composition', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: null, publication: null, priority: [] } },
 			get_claims: woClaims,
 		});
-		const body = textOf(await new GetPatentDetailsTool(makeLogService(), client).invoke(makeOptions({ publicationNumber: woClaims.docId }), makeToken()));
+		const body = textOf(await new GetPatentDetailsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ publicationNumber: woClaims.docId }), makeToken()));
 		expect([...body.matchAll(/&claim=(\d+)\)/g)].map(match => match[1])).toEqual(woClaims.claims.map(claim => claim.number));
 		for (const claim of woClaims.claims) {
 			expect(body).toContain(claim.text);
@@ -154,7 +155,7 @@ describe('get_patent_details', () => {
 			get_bibliography: { docId: 'WO9951190A1', title: 'Composition', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: null, publication: null, priority: [] } },
 			get_claims: { docId: 'WO9951190A1', claims: [], totalClaims: null, language: 'ja', unsegmentedText: '1. Source text.\n3. Uncertain numbering.', documentReference: { publicationNumber: 'WO9951190A1', section: 'claims' } },
 		});
-		const tool = new GetPatentDetailsTool(makeLogService(), client);
+		const tool = new GetPatentDetailsTool(makeLogService(), client, unrecordedPatentLedger);
 		const body = textOf(await tool.invoke(makeOptions({ publicationNumber: 'WO9951190A1' }), makeToken()));
 		expect(body).toContain('Cite the claims section only.');
 		expect(body).toContain('1. Source text.\n3. Uncertain numbering.');
@@ -167,7 +168,7 @@ describe('get_patent_details', () => {
 			get_bibliography: { docId: 'US7654321B2', title: 'A device', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: null, publication: null, priority: [] } },
 			// get_claims / get_description answer with no data — the facade's soft-failure shape.
 		});
-		const tool = new GetPatentDetailsTool(makeLogService(), client);
+		const tool = new GetPatentDetailsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const body = textOf(await tool.invoke(makeOptions({ publicationNumber: 'US7654321B2' }), makeToken()));
 

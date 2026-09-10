@@ -11,6 +11,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
@@ -65,6 +66,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<ISearchPatentsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -99,16 +101,25 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 			const data = await callFacadeTool<PatentSearchData>(this.patentBackendClient, 'search_patents', input, token);
 
+			const audit = await this.ledger.record(options.chatSessionResource, {
+				kind: 'search', status: 'succeeded', query, requestedRange: range, requestedCountries: countries,
+				effectiveQuery: data.effectiveQuery, countryFilter: data.countryFilter, total: data.total,
+				returned: data.returned ?? data.docs?.length, range: data.range, publicationIds: data.docs?.map(doc => doc.docId),
+			});
+
 			// Format results for LLM
 			const formattedResponse = this.formatSearchResults(data, query);
 			this.logService.info(`[SearchPatentsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(formattedResponse)
+				new LanguageModelTextPart(formattedResponse),
+				new LanguageModelTextPart(audit)
 			]);
 
 		} catch (error) {
-			return handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`);
+			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'search', status: token.isCancellationRequested ? 'cancelled' : 'failed', query, requestedRange: range, requestedCountries: countries });
+			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`);
+			return new LanguageModelToolResult([...result.content, new LanguageModelTextPart(audit)]);
 		}
 	}
 
