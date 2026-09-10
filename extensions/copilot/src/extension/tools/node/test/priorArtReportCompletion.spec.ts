@@ -8,7 +8,7 @@ import { MockFileSystemService } from '../../../../platform/filesystem/node/test
 import { URI } from '../../../../util/vs/base/common/uri';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { ToolName } from '../../common/toolNames';
-import { checkPriorArtReportCompletion, priorArtReportReceipt, ReportCompletionTurn, requestsPriorArtReport } from '../../node/priorArtReportCompletion';
+import { checkPriorArtReportCompletion, priorArtReportReceipt, ReportCompletionTurn, requestsPriorArtReport } from '../priorArtReportCompletion';
 
 const message = 'Search for prior art and save "outputs/研究 review.md".';
 const report = URI.file('/workspace/outputs/研究 review.md');
@@ -87,6 +87,18 @@ describe('prior-art report completion contract', () => {
 		await fs.writeFile(report, new TextEncoder().encode('Manually edited later'));
 		expect(await checkPriorArtReportCompletion([first], turn([ToolName.CreateFile], 'Create a README for my code'), fs)).toBeUndefined();
 	});
+	it('matches a Windows deliverable across separators and drive-letter case', async () => {
+		const fs = files();
+		const windows = 'Search for prior art and save "C:\\Users\\Ann\\outputs\\Report.md".';
+		const finalized = { ...await saved(fs, URI.file('c:/Users/Ann/outputs/report.md')), message: windows };
+		const research = turn([ToolName.SearchPatents], windows);
+		const backslashDraft: ReportCompletionTurn = { message: 'Add the last hit', results: {}, rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: '0', name: ToolName.CreateFile, arguments: '{"filePath":"C:\\\\Users\\\\Ann\\\\outputs\\\\Report.md"}' }] }] };
+		expect({
+			finalized: await checkPriorArtReportCompletion([], finalized, fs),
+			draft: (await checkPriorArtReportCompletion([research], backslashDraft, fs))?.includes('no successful structured finalization'),
+		}).toEqual({ finalized: undefined, draft: true });
+	});
+
 	it('local inspection after finalization does not require another evidence revision', async () => {
 		const fs = files();
 		const valid = await saved(fs);

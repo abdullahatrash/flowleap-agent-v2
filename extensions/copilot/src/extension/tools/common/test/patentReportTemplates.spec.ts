@@ -277,7 +277,6 @@ describe('writePatentResults report templates', () => {
 			preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
 			objective: 'Find prior art for a sulfide glass-ceramic electrolyte before filing.',
 			searchStrategy: 'EPO OPS CQL; H01M paired with discriminating ta terms; 3 probed queries (54/37/15 hits).',
-			relevanceAssessment: 'EP1 describes a related composition; narrower ranges remain unresolved.',
 		});
 		expect(report).toMatchInlineSnapshot(`
 			"# Prior Art Candidate Review

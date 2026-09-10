@@ -1,451 +1,77 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`patent routing at the assembled provider and tool-result boundary > renders the hash-selected provider path isHiddenFamilyH 1`] = `
-{
-  "codingScoped": true,
-  "identity": true,
-  "resolver": "DefaultFamilyHAgentPrompt",
-  "sourceRoute": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > renders the hash-selected provider path isHiddenFamilyH 1`] = `"DefaultFamilyHAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > renders the hash-selected provider path isHiddenModelM 1`] = `
-{
-  "codingScoped": true,
-  "identity": true,
-  "resolver": "HiddenModelMPrompt",
-  "sourceRoute": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > renders the hash-selected provider path isHiddenModelM 1`] = `"HiddenModelMPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for anthropic/claude-sonnet-4.6 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for anthropic/claude-sonnet-4.6 1`] = `"DefaultAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-3.5-sonnet 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Claude46OpusPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-3.5-sonnet 1`] = `"Claude46OpusPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-haiku-4.5 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Claude45DefaultPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-haiku-4.5 1`] = `"Claude45DefaultPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-opus-4.5 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Claude45DefaultPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-opus-4.5 1`] = `"Claude45DefaultPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-opus-4.6 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Claude46OpusPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-opus-4.6 1`] = `"Claude46OpusPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-sonnet-4.5 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Claude45DefaultPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-sonnet-4.5 1`] = `"Claude45DefaultPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-sonnet-4.6 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Claude46SonnetPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-sonnet-4.6 1`] = `"Claude46SonnetPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for default 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for default 1`] = `"DefaultAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gemini-2.0-flash 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultGeminiAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gemini-2.0-flash 1`] = `"DefaultGeminiAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gemini-3.5-flash 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultGeminiAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gemini-3.5-flash 1`] = `"DefaultGeminiAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gemini-3.8-flash 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultGeminiAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gemini-3.8-flash 1`] = `"DefaultGeminiAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for glm-4.7 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultZaiAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for glm-4.7 1`] = `"DefaultZaiAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for google/gemini-3.8-flash 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for google/gemini-3.8-flash 1`] = `"DefaultAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-4.1 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultOpenAIAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-4.1 1`] = `"DefaultOpenAIAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultGpt5AgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5 1`] = `"DefaultGpt5AgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.1 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt51Prompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.1 1`] = `"Gpt51Prompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.1-codex 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt51CodexPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.1-codex 1`] = `"Gpt51CodexPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.1-codex-mini 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt51CodexPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.1-codex-mini 1`] = `"Gpt51CodexPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.2 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "HiddenModelBPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.2 1`] = `"HiddenModelBPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.2-codex 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt51CodexPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.2-codex 1`] = `"Gpt51CodexPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.3-codex 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt53CodexPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.3-codex 1`] = `"Gpt53CodexPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.4 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt54Prompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.4 1`] = `"Gpt54Prompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.5 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "Gpt55Prompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.5 1`] = `"Gpt55Prompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5-codex 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "CodexStyleGpt5CodexPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5-codex 1`] = `"CodexStyleGpt5CodexPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5-mini 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultGpt5AgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5-mini 1`] = `"DefaultGpt5AgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for grok-code-fast-1 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultGrokCodeFastAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for grok-code-fast-1 1`] = `"DefaultGrokCodeFastAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for minimax/minimax-m2 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultMinimaxAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for minimax/minimax-m2 1`] = `"DefaultMinimaxAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for minimax-m2 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultMinimaxAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for minimax-m2 1`] = `"DefaultMinimaxAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for o4-mini 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultOpenAIAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for o4-mini 1`] = `"DefaultOpenAIAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for openai/gpt-5.5 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for openai/gpt-5.5 1`] = `"DefaultAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for unrecognized-provider/model 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for unrecognized-provider/model 1`] = `"DefaultAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelA 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "VSCModelPromptA",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelA 1`] = `"VSCModelPromptA"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelB 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "VSCModelPromptB",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelB 1`] = `"VSCModelPromptB"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelC 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "VSCModelPromptC",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelC 1`] = `"VSCModelPromptC"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelD 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "VSCModelPromptD",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for vscModelD 1`] = `"VSCModelPromptD"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for z-ai/glm-4.7 1`] = `
-{
-  "codingScoped": true,
-  "explicitCoding": true,
-  "gapFallback": true,
-  "identity": true,
-  "resolver": "DefaultZaiAgentPrompt",
-  "sourceRoute": true,
-  "writer": true,
-}
-`;
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for z-ai/glm-4.7 1`] = `"DefaultZaiAgentPrompt"`;

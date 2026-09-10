@@ -112,6 +112,25 @@ describe('SearchPatentsTool', () => {
 		expect(prepared?.confirmationMessages?.message).toBe('Allow Patent AI to search for patents using query: ic=A61K6/083 and pd<20020221? Requested countries: EP,WO. Range: 1-10.');
 	});
 
+	it('rejects country entries that are not two-letter codes instead of searching worldwide', async () => {
+		const { client, calls } = makeBackendClient(facadeEnvelope({ total: 0, docs: [] }));
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const result = await tool.invoke(makeOptions({ query: 'ti=helmet', countries: 'USA, EP, Germany' }), makeToken());
+
+		expect({ message: textOf(result), calls: calls.length }).toEqual({
+			message: 'Error: countries must be ISO 3166-1 alpha-2 codes, comma-separated (for example "EP,WO,US"). These entries are not codes: USA, Germany. No search was sent and none was recorded in the execution audit. Correct the codes and retry, or omit countries to search worldwide.',
+			calls: 0,
+		});
+	});
+
+	it('warns in the confirmation that an invalid country scope will be rejected', async () => {
+		const { client } = makeBackendClient();
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
+		const prepared = await tool.prepareInvocation(makeOptions({ query: 'ti=helmet', countries: 'USA' }), makeToken());
+		expect(prepared?.confirmationMessages?.message).toBe('Allow Patent AI to search for patents using query: ti=helmet? The requested countries USA are not two-letter country codes, so this search will be rejected instead of run without a country scope. Range: 1-25.');
+	});
+
 	it('preserves the backend effective query when a scoped search has zero matches', async () => {
 		const effectiveQuery = '(pa=Kuraray* and pd<20020221) and pn any "EP WO"';
 		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [], countryFilter: ['EP', 'WO'], effectiveQuery }));

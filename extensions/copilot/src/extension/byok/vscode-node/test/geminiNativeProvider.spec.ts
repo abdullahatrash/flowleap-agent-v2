@@ -174,6 +174,62 @@ describe('GeminiNativeBYOKLMProvider', () => {
 		expect(responseSuccessEvent?.measurements?.turn).toBe(3);
 	}, 30_000);
 
+	it('keeps the call id Gemini sent for each function call and only invents one when it is missing', async () => {
+		const { GeminiNativeBYOKLMProvider } = await import('../geminiNativeProvider');
+		const genai = await import('@google/genai');
+		const MockGoogleGenAI = genai.GoogleGenAI as unknown as { streamChunks: any[] };
+		MockGoogleGenAI.streamChunks.length = 0;
+		MockGoogleGenAI.streamChunks.push({
+			candidates: [{
+				content: {
+					parts: [
+						// Two concurrent calls to the same function: only the id tells them apart.
+						{ functionCall: { id: 'gemini-call-1', name: 'get_patent_details', args: { publicationNumber: 'EP0983762A1' } } },
+						{ functionCall: { id: 'gemini-call-2', name: 'get_patent_details', args: { publicationNumber: 'US1234567B2' } } },
+						{ functionCall: { name: 'search_patents', args: {} } },
+					]
+				}
+			}]
+		});
+
+		const provider = new GeminiNativeBYOKLMProvider(undefined, createStorageService(), new TestLogService(), createRequestLogger(), new NullTelemetryService(), new NoopOTelService(resolveOTelConfig({ env: {}, extensionVersion: '1.0.0', sessionId: 'test' })));
+		const model = {
+			id: 'gemini-2.0-flash',
+			name: 'Gemini 2.0 Flash',
+			family: 'Gemini',
+			version: '1.0.0',
+			maxInputTokens: 1000,
+			maxOutputTokens: 1000,
+			capabilities: { toolCalling: true, imageInput: false },
+			configuration: { apiKey: 'k_test' }
+		} as any;
+		const messages: vscode.LanguageModelChatMessage[] = [
+			new vscode.LanguageModelChatMessage(vscode.LanguageModelChatMessageRole.User, 'find prior art')
+		];
+
+		const progress = new TestProgress();
+		const tokenSource = new vscode.CancellationTokenSource();
+		try {
+			await provider.provideLanguageModelChatResponse(
+				model,
+				messages,
+				{ requestInitiator: 'test', tools: [], toolMode: vscode.LanguageModelChatToolMode.Auto } as any,
+				progress,
+				tokenSource.token
+			);
+		} finally {
+			tokenSource.dispose();
+		}
+
+		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+		const toolCalls = progress.items.filter((item): item is vscode.LanguageModelToolCallPart => item instanceof vscode.LanguageModelToolCallPart);
+		expect(toolCalls.map(call => ({ name: call.name, callId: uuidPattern.test(call.callId) ? '<generated-uuid>' : call.callId }))).toEqual([
+			{ name: 'get_patent_details', callId: 'gemini-call-1' },
+			{ name: 'get_patent_details', callId: 'gemini-call-2' },
+			{ name: 'search_patents', callId: '<generated-uuid>' },
+		]);
+	}, 30_000);
+
 	it.skip('throws a clear error when no API key is configured (no silent return)', async () => {
 		const { GeminiNativeBYOKLMProvider } = await import('../geminiNativeProvider');
 		const storage = createStorageService({ getAPIKey: vi.fn().mockResolvedValue(undefined) });

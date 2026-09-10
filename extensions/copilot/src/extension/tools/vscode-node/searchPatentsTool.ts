@@ -51,6 +51,19 @@ interface PatentSearchData {
 }
 
 /**
+ * Split the caller's comma-separated `countries` input into the two-letter codes the facade accepts
+ * and the entries that are not codes. An entry such as "USA" must stop the search rather than be
+ * dropped: dropping it turns a scoped search into a silent worldwide one under a scoped confirmation.
+ */
+function parseCountries(countries: string | undefined): { readonly codes: string[]; readonly invalid: string[] } {
+	const entries = (countries ?? '').split(',').map(entry => entry.trim()).filter(entry => entry.length > 0);
+	return {
+		codes: entries.filter(entry => /^[A-Za-z]{2}$/.test(entry)).map(entry => entry.toUpperCase()),
+		invalid: entries.filter(entry => !/^[A-Za-z]{2}$/.test(entry)),
+	};
+}
+
+/**
  * Tool for searching patent databases using CQL (Common Patent Query Language). Calls the
  * `search_patents` tool on the FlowLeap backend's `/v1/tools` facade (which handles EPO OPS
  * authentication) through the shared {@link IPatentBackendClient} seam, so it inherits the
@@ -72,11 +85,15 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<ISearchPatentsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const { query, countries, range = '1-25' } = options.input;
 		const requestedCountries = countries || l10n.t`Not specified separately`;
+		// Show the same verdict the invocation will act on, so a confirmed country scope is the real one.
+		const invalid = parseCountries(countries).invalid.join(', ');
 		return {
 			invocationMessage: l10n.t`Searching patents: ${query} (requested countries: ${requestedCountries}; range: ${range})`,
 			confirmationMessages: {
 				title: l10n.t`Search Patents`,
-				message: l10n.t`Allow Patent AI to search for patents using query: ${query}? Requested countries: ${requestedCountries}. Range: ${range}.`
+				message: invalid
+					? l10n.t`Allow Patent AI to search for patents using query: ${query}? The requested countries ${invalid} are not two-letter country codes, so this search will be rejected instead of run without a country scope. Range: ${range}.`
+					: l10n.t`Allow Patent AI to search for patents using query: ${query}? Requested countries: ${requestedCountries}. Range: ${range}.`
 			}
 		};
 	}
@@ -86,6 +103,11 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 		const { query, range = '1-25', countries } = options.input;
 
+		const { codes, invalid } = parseCountries(countries);
+		if (invalid.length > 0) {
+			return new LanguageModelToolResult([new LanguageModelTextPart(`Error: countries must be ISO 3166-1 alpha-2 codes, comma-separated (for example "EP,WO,US"). These entries are not codes: ${invalid.join(', ')}. No search was sent and none was recorded in the execution audit. Correct the codes and retry, or omit countries to search worldwide.`)]);
+		}
+
 		try {
 			// The facade takes snake_case params and a countries ARRAY (the legacy route took a
 			// comma-separated string); this tool keeps its own string input and splits it here.
@@ -94,9 +116,8 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 				provider: 'epo_ops',
 				range,
 			};
-			const countryList = countries?.split(',').map(c => c.trim().toUpperCase()).filter(c => c.length === 2);
-			if (countryList && countryList.length > 0) {
-				input.countries = countryList;
+			if (codes.length > 0) {
+				input.countries = codes;
 			}
 
 			const data = await callFacadeTool<PatentSearchData>(this.patentBackendClient, 'search_patents', input, token);

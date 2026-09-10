@@ -120,9 +120,10 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 
 		const omitBaseAgentInstructions = this.configurationService.getConfig(ConfigKey.Advanced.OmitBaseAgentInstructions);
 		const hasMemoryTool = !!this.props.promptContext.tools?.availableTools?.find(tool => tool.name === ToolName.Memory);
+		const patentToolsAvailable = hasPatentTools(this.props.promptContext.tools?.availableTools);
 		const baseAgentInstructions = <>
 			<SystemMessage>
-				{hasPatentTools(this.props.promptContext.tools?.availableTools) ? 'You are a patent intelligence agent working with a user in the VS Code editor; your coding capabilities serve the task scope defined by the patent identity.' : 'You are an expert AI programming assistant, working with a user in the VS Code editor.'}<br />
+				{patentToolsAvailable ? 'You are a patent intelligence agent working with a user in the VS Code editor; your coding capabilities serve the task scope defined by the patent identity.' : 'You are an expert AI programming assistant, working with a user in the VS Code editor.'}<br />
 				<CopilotIdentityRules />
 				<SafetyRules />
 			</SystemMessage>
@@ -155,11 +156,11 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		const userQueryTagName = customizations.userQueryTagName;
 		const ReminderInstructionsClass = customizations.ReminderInstructionsClass;
 		const ToolReferencesHintClass = customizations.ToolReferencesHintClass;
-		const evidenceReading = hasPatentTools(this.props.promptContext.tools?.availableTools) && patentEvidenceReadingContext([
+		const evidenceReading = patentToolsAvailable && patentEvidenceReadingContext([
 			...this.props.promptContext.history.map(turn => ({ rounds: turn.rounds, results: turn.resultMetadata?.toolCallResults ?? {}, maxToolCallsExceeded: turn.resultMetadata?.maxToolCallsExceeded })),
 			{ rounds: this.props.promptContext.toolCallRounds ?? [], results: this.props.promptContext.toolCallResults ?? {} },
 		]);
-		const evidenceReminder = evidenceReading ? <UserMessage priority={901}><Tag name="patentEvidenceReading">{evidenceReading}</Tag></UserMessage> : undefined;
+		const evidenceReminder = evidenceReading ? <UserMessage priority={899}><Tag name="patentEvidenceReading">{evidenceReading}</Tag></UserMessage> : undefined;
 
 		if (this.props.enableSummarization) {
 			return <>

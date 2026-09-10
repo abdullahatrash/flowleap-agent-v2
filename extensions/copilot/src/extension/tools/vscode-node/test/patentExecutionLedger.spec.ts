@@ -44,11 +44,30 @@ describe('durable patent execution audit', () => {
 		const { ledger, session, files } = setup();
 		await ledger.record(session, { kind: 'search', status: 'succeeded', query: 'brake' });
 		await ledger.record(session, { kind: 'search', status: 'succeeded', query: 'software' });
-		files.mockFile(files.committed[0], JSON.stringify({ id: 'bad', recordedAt: 'now', kind: 'search', status: 'succeeded', publicationIds: 'not-an-array' }));
+		files.mockFile(files.committed[0], JSON.stringify({ id: 'bad', recordedAt: 'now', status: 'succeeded', publicationIds: [] }));
 		const snapshot = await ledger.read(session);
 		expect(snapshot.executions.map(row => row.query)).toEqual(['software']);
 		expect(snapshot.limitation).toContain('unreadable or incomplete');
 		expect((await ledger.read(undefined)).limitation).toContain('unavailable');
+	});
+
+	it('keeps a recorded outcome whose individual fields are unreadable, and says which are unknown', async () => {
+		const { ledger, session, files } = setup();
+		await ledger.record(session, { kind: 'search', status: 'succeeded', query: 'brake' });
+		files.mockFile(files.committed[0], JSON.stringify({
+			id: 'partial', recordedAt: '2026-09-10', kind: 'search', status: 'succeeded', query: 'brake',
+			total: null, returned: 4, publicationIds: ['EP1000000A1', { docId: undefined }, 7], range: 'not-a-range',
+		}));
+		const snapshot = await ledger.read(session);
+		expect(snapshot.executions).toEqual([{
+			id: 'partial', recordedAt: '2026-09-10', kind: 'search', status: 'succeeded', query: 'brake',
+			total: undefined, returned: 4, publicationIds: ['EP1000000A1'], range: undefined,
+			requestedRange: undefined, requestedCountries: undefined, effectiveQuery: undefined, countryFilter: undefined,
+			totalClaims: undefined, returnedClaims: undefined, publicationTitle: undefined, publicationDate: undefined,
+			sources: undefined, unavailableSections: undefined,
+		}]);
+		expect(snapshot.limitation).toContain('recovered with unreadable fields dropped');
+		expect(snapshot.limitation).not.toContain('unreadable or incomplete');
 	});
 
 	it('preserves publication kind, language and claim identity while review remains unknown', async () => {

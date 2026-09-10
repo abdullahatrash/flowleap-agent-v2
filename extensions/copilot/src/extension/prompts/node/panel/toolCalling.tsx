@@ -884,6 +884,19 @@ export interface IToolResultProps extends IPrimitiveToolResultProps {
 }
 
 
+const TOOL_RESULT_TRUNCATION_MESSAGE = '\n[Tool response was too long and was truncated.]\n';
+
+/** Upper bound on characters per token, used when a result is bounded without tokenizing it. */
+const MAX_CHARS_PER_TOKEN = 4;
+
+/** Keep the head and tail of a result, dropping the middle where the budget runs out. */
+function truncateAroundMiddle(content: string, targetChars: number): string {
+	const budget = Math.max(0, targetChars);
+	const keepInFirstHalf = Math.round(budget * 0.4);
+	const keepInSecondHalf = budget - keepInFirstHalf;
+	return content.slice(0, keepInFirstHalf) + TOOL_RESULT_TRUNCATION_MESSAGE + (keepInSecondHalf > 0 ? content.slice(-keepInSecondHalf) : '');
+}
+
 /**
  * Inlined from prompt-tsx. In prompt-tsx it does `require('vscode)` for the instanceof checks which breaks in vitest
  * and unfortunately I can't figure out how to work around that with the tools we have!
@@ -942,7 +955,8 @@ export class ToolResult extends PrimitiveToolResult<IToolResultProps> {
 		// (8KB plus its header) at the generic 8KB threshold creates another read loop.
 		const evidence = this.getPatentEvidenceRoute();
 		if (evidence?.localLookup) {
-			return content;
+			// Keep the disk offload skipped, but still cap a page that came back unexpectedly large.
+			return this.truncateToCharCeiling(content);
 		}
 		const isDiskCachingEnabled = this._configurationService.getExperimentBasedConfig(
 			ConfigKey.Advanced.LargeToolResultsToDiskEnabled,
@@ -1013,13 +1027,25 @@ export class ToolResult extends PrimitiveToolResult<IToolResultProps> {
 		}
 
 		const approxCharsPerToken = content.length / tokens;
-		const removedMessage = '\n[Tool response was too long and was truncated.]\n';
-		const targetChars = Math.round(approxCharsPerToken * (truncateAtTokens - removedMessage.length));
+		const targetChars = Math.round(approxCharsPerToken * (truncateAtTokens - TOOL_RESULT_TRUNCATION_MESSAGE.length));
 
-		const keepInFirstHalf = Math.round(targetChars * 0.4);
-		const keepInSecondHalf = targetChars - keepInFirstHalf;
+		return truncateAroundMiddle(content, targetChars);
+	}
 
-		return content.slice(0, keepInFirstHalf) + removedMessage + content.slice(-keepInSecondHalf);
+	/**
+	 * Bound a result that bypasses the tokenizer-based truncation, using the same token
+	 * budget converted with an upper bound on characters per token.
+	 */
+	private truncateToCharCeiling(content: string): string {
+		const truncateAtTokens = this.props.truncate;
+		if (!truncateAtTokens) {
+			return content;
+		}
+		const maxChars = truncateAtTokens * MAX_CHARS_PER_TOKEN;
+		if (content.length <= maxChars) {
+			return content;
+		}
+		return truncateAroundMiddle(content, maxChars - TOOL_RESULT_TRUNCATION_MESSAGE.length);
 	}
 
 	protected override onResourceLink(data: string) {

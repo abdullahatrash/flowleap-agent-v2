@@ -52,6 +52,18 @@ describe('patent document reader', () => {
 		expect(html).toContain('fresh document lookup');
 	});
 
+	it('shows numbered claims rather than the unsegmented fallback when the backend returns both', () => {
+		const html = renderPatentDocument(reference, 'test-nonce', { ...data, unsegmentedClaimsText: 'Whole claims block.' });
+		expect({ numbered: html.includes('id="claim-2"'), fallback: html.includes('Whole claims block.'), notice: html.includes('Individual claim numbers could not be established') })
+			.toEqual({ numbered: true, fallback: false, notice: false });
+	});
+
+	it('escapes quotes in attribute values so retrieved text cannot end the attribute', () => {
+		const html = renderPatentDocument(reference, 'test-nonce', { ...data, claimsLanguage: 'en" onload="untrusted()' });
+		expect(html).toContain('lang="en&quot; onload=&quot;untrusted()"');
+		expect(html).not.toContain('onload="untrusted()"');
+	});
+
 	it('reports a missing claim instead of highlighting an unrelated passage', () => {
 		const html = renderPatentDocument({ ...reference, claimNumber: '9' }, 'test-nonce', data);
 		expect(html).toContain('Claim 9 was not returned');

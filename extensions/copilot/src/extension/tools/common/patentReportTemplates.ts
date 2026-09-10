@@ -59,7 +59,6 @@ export interface PatentReportFields {
 	readonly preparedBy?: string;
 	readonly objective?: string;
 	readonly searchStrategy?: string;
-	readonly relevanceAssessment?: string;
 }
 
 /** Render a `| Field | Value |` metadata table; empty values fall back to the placeholder. */

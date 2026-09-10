@@ -5,7 +5,7 @@
 
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
-import { PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { PatentEvidenceSource, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 
 export interface PatentCandidateReview {
@@ -14,19 +14,24 @@ export interface PatentCandidateReview {
 		readonly kind?: 'feature' | 'combination';
 		readonly importance: 'essential' | 'optional';
 		readonly status: 'supported' | 'partial' | 'unresolved';
-		readonly sourceAnchors: readonly string[];
+		/** Required by the tool schema, but an unresolved row may arrive without it; never dereference unguarded. */
+		readonly sourceAnchors?: readonly string[];
 		readonly gap: string;
 		readonly evidence?: readonly { readonly anchor: string; readonly quote?: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
 	}[];
 	readonly content?: string;
-	readonly relevanceAssessment?: string;
 	readonly limitations?: readonly string[];
 	readonly stopReason?: string;
 }
 
+/** Anchor to recorded source, the single index every pass over a snapshot shares. */
+function sourceIndex(snapshot: PatentExecutionSnapshot): Map<string, PatentEvidenceSource> {
+	return new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+}
+
 /** Numbered claims can be copied from the ledger instead of transcribed by the model. */
 export function materializeCandidateReview<T extends PatentCandidateReview>(review: T, snapshot: PatentExecutionSnapshot): T {
-	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+	const sources = sourceIndex(snapshot);
 	return { ...review, coverage: review.coverage?.map(row => ({ ...row, evidence: row.evidence?.map(evidence => {
 		const source = sources.get(evidence.anchor);
 		return { ...evidence, quote: evidence.quote ?? (source?.reference.claimNumber ? source.text : undefined) };
@@ -36,11 +41,13 @@ export function materializeCandidateReview<T extends PatentCandidateReview>(revi
 /** Validate explicit review structure and anchor identity, not the truth or entailment of prose. */
 export function validateCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, citedText = ''): string[] {
 	const errors: string[] = [];
-	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+	const sources = sourceIndex(snapshot);
 	const anchors = new Set(sources.keys());
-	if (review.content?.trim() || review.relevanceAssessment?.trim()) { errors.push('For prior-art-report, content and relevanceAssessment must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.'); }
+	if (review.content?.trim()) { errors.push('For prior-art-report, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.'); }
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
-	for (const match of citedText.matchAll(/[a-z][a-z0-9+.-]*:\/\/flowleap\.patent-ai\/patent\?[^\s)>]+/gi)) {
+	// The match stops before trailing prose punctuation and closers, so a sentence-final period or a
+	// surrounding bracket is not read as part of the claim number.
+	for (const match of citedText.matchAll(/[a-z][a-z0-9+.-]*:\/\/flowleap\.patent-ai\/patent\?[^\s)>\]}"'`]*[^\s)>\]}"'`.,;:!?]/gi)) {
 		const url = new URL(match[0]);
 		const reference = parsePatentDocumentReference({ publicationNumber: url.searchParams.get('publication'), section: url.searchParams.get('section'), ...(url.searchParams.has('claim') ? { claimNumber: url.searchParams.get('claim') } : {}) });
 		const known = reference && snapshot.executions.some(execution => execution.sources?.some(source => source.reference.publicationNumber === reference.publicationNumber && source.reference.section === reference.section && source.reference.claimNumber === reference.claimNumber));
@@ -64,7 +71,7 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 				if (![evidence.scope, evidence.qualifiers, evidence.quantityBasis].every(value => value?.trim())) { errors.push(`Review scope/dependency, qualifiers and original quantity basis for ${anchor}. Keep original units and all constituents; do not substitute an unverified percentage conversion.`); }
 			}
 		}
-		if (row.evidence?.some(item => !row.sourceAnchors.includes(item.anchor))) { errors.push(`Evidence for "${row.feature}" must use that row's sourceAnchors.`); }
+		if (row.evidence?.some(item => !(row.sourceAnchors ?? []).includes(item.anchor))) { errors.push(`Evidence for "${row.feature}" must use that row's sourceAnchors.`); }
 		if (row.status !== 'supported' && !row.gap?.trim()) { errors.push(`Describe the remaining gap for "${row.feature}".`); }
 	}
 	if (!review.coverage?.some(row => row.importance === 'essential')) { errors.push('Identify at least one essential feature or combination.'); }
@@ -88,7 +95,7 @@ function quotation(text: string): string {
 
 /** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
 export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
-	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+	const sources = sourceIndex(snapshot);
 	const candidates = new Map(snapshot.executions.filter(execution => execution.kind === 'details' && execution.status === 'succeeded').flatMap(execution => (execution.publicationIds ?? []).map(publication => [publication, execution] as const)));
 	return [
 		'## Retrieved documents',
@@ -102,7 +109,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 			`### ${cell(row.feature)}`,
 			`**${row.kind} · ${row.importance} · ${row.status}**`,
 			row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
-			...row.sourceAnchors.flatMap(anchor => {
+			...(row.sourceAnchors ?? []).flatMap(anchor => {
 				const source = sources.get(anchor);
 				const evidence = row.evidence?.find(item => item.anchor === anchor);
 				return ['', source ? patentCitationLink(anchor, source.reference) : anchor,

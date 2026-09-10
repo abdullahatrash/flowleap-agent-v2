@@ -408,6 +408,8 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		this._logService.trace(`[ToolCallingLoop] Stop hook blocked stopping: ${reasons.join('; ')}`);
 	}
 
+	/** Nudges spent on re-saving an unvalidated prior-art report before the loop gives up on it. */
+	private static readonly MAX_REPORT_RECOVERIES = 2;
 	private static readonly MAX_AUTOPILOT_RETRIES = 3;
 	private static readonly MAX_AUTOPILOT_ITERATIONS = 3;
 	private autopilotRetryCount = 0;
@@ -1224,20 +1226,26 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 						continue;
 					}
 
-					if (result.response.type === ChatFetchResponseType.Success) {
-						const issue = await checkPriorArtReportCompletion(
-							this.options.conversation.turns.slice(0, -1).map(turn => ({ message: turn.request.message, rounds: turn.rounds, results: turn.resultMetadata?.toolCallResults ?? {} })),
+					// Only meaningful when the structured writer is offered: subagents and restricted tool
+					// sets cannot finalize a report, so validating one there would stop honest work.
+					if (result.response.type === ChatFetchResponseType.Success && result.availableTools.some(tool => tool.name === ToolName.WritePatentResults)) {
+						const priorArtHistory = this.options.conversation.turns.slice(0, -1)
+							.filter(turn => turn.responseStatus !== TurnStatus.PromptFiltered)
+							.map(turn => ({ message: turn.request.message, rounds: turn.rounds, results: turn.resultMetadata?.toolCallResults ?? {} }));
+						const issue = await checkPriorArtReportCompletion(priorArtHistory,
 							{ message: this.turn.request.message, rounds: this.toolCallRounds, results: this.toolCallResults }, this._fileSystemService);
-						if (issue) {
-							const writerAvailable = result.availableTools.some(tool => tool.name === ToolName.WritePatentResults);
-							if (writerAvailable && reportRecoveryCount++ < 2) {
-								outputStream?.progress(l10n.t('Checking the prior-art report and its saved evidence…'));
-								this.stopHookReason = issue;
-								result.round.hookContext = formatHookContext([issue]);
-								continue;
-							}
+						if (issue && reportRecoveryCount < ToolCallingLoop.MAX_REPORT_RECOVERIES) {
+							reportRecoveryCount++;
+							outputStream?.progress(l10n.t('Checking the prior-art report and its saved evidence…'));
+							this.stopHookReason = issue;
+							result.round.hookContext = formatHookContext([issue]);
+							continue;
+						}
+						// Recoveries are spent: warn once, then fall through so the stop hooks still run.
+						// A hook that resumes the loop re-enters here with the budget already past the cap.
+						if (issue && reportRecoveryCount === ToolCallingLoop.MAX_REPORT_RECOVERIES) {
+							reportRecoveryCount++;
 							outputStream?.markdown(l10n.t('\n\n**Report validation incomplete.** A current prior-art report with matching saved evidence was not confirmed. Any free-form or changed artifact remains an unvalidated draft. Source interpretation and research completeness also require review.'));
-							break;
 						}
 					}
 

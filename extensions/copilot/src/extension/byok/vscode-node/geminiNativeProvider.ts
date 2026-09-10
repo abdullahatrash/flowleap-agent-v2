@@ -464,7 +464,8 @@ export class GeminiNativeBYOKLMProvider extends AbstractLanguageModelChatProvide
 									ttfte = Date.now() - issuedTime;
 								}
 								progress.report(new LanguageModelToolCallPart(
-									generateUuid(),
+									// Keep Gemini's own call id so the response we send back can match it.
+									part.functionCall.id || generateUuid(),
 									part.functionCall.name,
 									part.functionCall.args || {}
 								));
