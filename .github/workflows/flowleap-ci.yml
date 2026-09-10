@@ -100,6 +100,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # The unit tests read the committed simulation cache
+      # (extensions/copilot/test/simulation/cache/*.sqlite), which lives in
+      # Git LFS. A plain checkout leaves LFS pointer files behind and every
+      # cache-backed spec fails with "file is not a database". The objects
+      # (~260 MB) are cached by their LFS ids so a run only downloads them
+      # when a .sqlite file actually changes.
+      - name: List LFS objects
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Cache LFS objects
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Pull LFS objects
+        run: git lfs pull
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -116,12 +134,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The diff service and notebook specs spawn dist/diffWorker.js, which
+      # only exists after the esbuild dev bundle (a few seconds).
+      - name: Build copilot extension bundles
+        run: npm run compile
+        working-directory: extensions/copilot
+
       # Vitest unit tests for the copilot extension. The opt-in live provider
       # specs (*.live.spec.ts) skip themselves unless PATENT_ROUTING_LIVE_EVAL
       # is set, which CI deliberately leaves unset so no metered provider call
       # is ever made here.
       - name: Run copilot unit tests
-        run: npx vitest run
+        run: npm run test:unit
         working-directory: extensions/copilot
 
   skills-drift:
