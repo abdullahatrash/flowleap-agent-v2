@@ -34,6 +34,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../util/vs/pla
 import { ServiceCollection } from '../../../../util/vs/platform/instantiation/common/serviceCollection';
 import { LanguageModelDataPart, LanguageModelDataPart2, LanguageModelPartAudience, LanguageModelPromptTsxPart, LanguageModelTextPart, LanguageModelTextPart2, LanguageModelToolMCPSource, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { isImageDataPart } from '../../../conversation/common/languageModelChatMessageHelpers';
+import { parsePatentDocumentReference } from '../../../patentai/common/patentDocumentReference';
 import { IResultMetadata } from '../../../prompt/common/conversation';
 import { IBuildPromptContext, IToolCall, IToolCallRound } from '../../../prompt/common/intents';
 import { toJsonSchema } from '../../../tools/common/toJsonSchema';
@@ -931,7 +932,7 @@ export class ToolResult extends PrimitiveToolResult<IToolResultProps> {
 			const input: { publicationNumber?: string; evidenceLookup?: object } = JSON.parse(this.props.toolArguments);
 			if (typeof input.publicationNumber !== 'string') { return undefined; }
 			const publicationNumber = input.publicationNumber.replace(/[-.\s/]/g, '').toUpperCase();
-			if (!/^[A-Z]{2}\d+[A-Z]\d?$/.test(publicationNumber)) { return undefined; }
+			if (!parsePatentDocumentReference({ publicationNumber, section: 'bibliography' })) { return undefined; }
 			return { publicationNumber, localLookup: !!input.evidenceLookup && typeof input.evidenceLookup === 'object' };
 		} catch { return undefined; }
 	}

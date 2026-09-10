@@ -24,6 +24,7 @@ import { getContributedToolName, ToolName } from '../../../../tools/common/toolN
 import { checkPriorArtReportCompletion } from '../../../../tools/node/priorArtReportCompletion';
 import { lookupPatentEvidence } from '../../../../tools/vscode-node/patentEvidenceLookup';
 import { WritePatentResultsTool } from '../../../../tools/vscode-node/writePatentResultsTool';
+import { completedEvaluationText } from './patentToolRoutingCompletion';
 import { assemble, details, fixtureSnapshot, claim8 } from './patentToolRoutingTestUtils';
 
 vi.mock('../../../../../vscodeTypes', async () => import('../../../../../util/common/test/shims/vscodeTypesShim'));
@@ -62,7 +63,7 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 		const log = new class extends mock<ILogService>() { override trace() { } override info() { } override warn() { } override error() { } }();
 		const validationService = disposables.add(new NullToolsService(log));
 		validationService.tools = tools;
-		const workspace = new TestWorkspaceService([URI.file('/workspace')]);
+		const workspace = disposables.add(new TestWorkspaceService([URI.file('/workspace')]));
 		const ledger: IPatentExecutionLedger = { _serviceBrand: undefined, record: async () => 'Recorded', read: async () => fixtureSnapshot };
 		const instantiation = new class extends mock<IInstantiationService>() { override invokeFunction<R>(): R { return undefined as R; } }();
 		const writer = new WritePatentResultsTool(log, files, new PromptPathRepresentationService(workspace), instantiation, ledger, workspace);
@@ -70,7 +71,7 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 		const rounds = [new ToolCallRound('Retrieved the candidate source.', [{ id: 'details', name: ToolName.GetPatentDetails, arguments: '{"publicationNumber":"EP0983762A1"}' }])];
 		const results: Record<string, LanguageModelToolResult> = { details: new LanguageModelToolResult([new LanguageModelTextPart(details)]) };
 		const calls: string[] = [];
-		let finalText = '';
+		let lastMessage: Completion['choices'][number]['message'] | undefined;
 		for (let round = 0; round < 32; round++) {
 			const assembled = await assemble(family, undefined, undefined, true, false, undefined, { query, rounds, results, tools });
 			const response = await fetch(`${process.env.EVAL_BASE_URL || 'https://openrouter.ai/api/v1'}/chat/completions`, {
@@ -81,10 +82,10 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 			if (!response.ok) { throw new Error(`Live provider returned HTTP ${response.status}; response body omitted.`); }
 			const completion = await response.json() as Completion;
 			const message = completion.choices[0].message;
-			finalText = message.content ?? '';
+			lastMessage = message;
 			if (!message.tool_calls?.length) { break; }
 			const toolCalls = message.tool_calls.map(call => ({ id: call.id, name: call.function.name, arguments: call.function.arguments }));
-			rounds.push(new ToolCallRound(finalText, toolCalls));
+			rounds.push(new ToolCallRound(message.content ?? '', toolCalls));
 			for (const call of toolCalls) {
 				calls.push(call.name);
 				console.info(JSON.stringify({ round, tool: call.name }));
@@ -107,6 +108,7 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 				}
 			}
 		}
+		const finalText = completedEvaluationText(lastMessage);
 		expect(calls).toContain(ToolName.GetPatentDetails);
 		expect(calls).toContain(ToolName.WritePatentResults);
 		expect(await checkPriorArtReportCompletion([], { message: query, rounds, results }, files)).toBeUndefined();

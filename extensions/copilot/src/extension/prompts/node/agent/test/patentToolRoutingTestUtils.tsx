@@ -68,4 +68,3 @@ export async function assemble(family: string, toolName = ToolName.GetPatentDeta
 		return { messages: result.messages, text: result.messages.map(m => messageToMarkdown(m)).join('\n'), toolText: result.messages.filter(m => m.role === Raw.ChatRole.Tool).map(m => messageToMarkdown(m)).join('\n'), saved, resolver: customizations.SystemPrompt.name };
 	} finally { accessor.dispose(); services.dispose(); }
 }
-

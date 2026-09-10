@@ -7,10 +7,24 @@ import { Raw } from '@vscode/prompt-tsx';
 import { describe, expect, it } from 'vitest';
 import type { LanguageModelChatMessage } from 'vscode';
 import { CustomDataPartMimeTypes } from '../../../../platform/endpoint/common/endpointTypes';
-import { LanguageModelChatMessageRole, LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResultPart, LanguageModelTextPart as LMText } from '../../../../vscodeTypes';
+import { LanguageModelChatMessageRole, LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolCallPart, LanguageModelToolResultPart, LanguageModelTextPart as LMText } from '../../../../vscodeTypes';
 import { apiMessageToGeminiMessage } from '../geminiMessageConverter';
 
 describe('GeminiMessageConverter', () => {
+	it('matches opaque call IDs to exact tool names across parallel calls and repeated functions', () => {
+		const calls = [
+			new LanguageModelToolCallPart('11b401f7-bc49-4110-8455-9b487705834d__vscode-1', 'get_patent_details', {}),
+			new LanguageModelToolCallPart('call_945805__vscode-2', 'run_in_terminal', {}),
+			new LanguageModelToolCallPart('call_535573__vscode-3', 'get_patent_details', {}),
+		];
+		const result = apiMessageToGeminiMessage([
+			{ role: LanguageModelChatMessageRole.Assistant, name: undefined, content: calls },
+			{ role: LanguageModelChatMessageRole.User, name: undefined, content: [...calls].reverse().map(call => new LanguageModelToolResultPart(call.callId, [new LanguageModelTextPart(call.callId)])) },
+		]);
+		const responses = result.contents.flatMap(content => content.parts ?? []).flatMap(part => part.functionResponse ? [part.functionResponse] : []);
+		expect(responses.map(response => [response.name, response.response])).toEqual([...calls].reverse().map(call => [call.name, { result: call.callId }]));
+	});
+
 	it('should convert basic user and assistant messages', () => {
 		const messages: LanguageModelChatMessage[] = [
 			{

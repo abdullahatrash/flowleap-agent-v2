@@ -7,11 +7,15 @@ import { Raw } from '@vscode/prompt-tsx';
 import { describe, expect, it, vi } from 'vitest';
 import * as modelCapabilities from '../../../../../platform/endpoint/common/chatModelCapabilities';
 import { convertToApiChatMessage } from '../../../../../platform/endpoint/vscode-node/extChatEndpoint';
-import { LanguageModelTextPart } from '../../../../../vscodeTypes';
+import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../../vscodeTypes';
 import { apiMessageToGeminiMessage } from '../../../../byok/common/geminiMessageConverter';
 import { apiMessageToAnthropicMessage } from '../../../../byok/common/anthropicMessageConverter';
+import { ToolCallRound } from '../../../../prompt/common/toolCallRound';
 import { ToolName } from '../../../../tools/common/toolNames';
 import { assemble, details } from './patentToolRoutingTestUtils';
+
+vi.mock('../../../../../vscodeTypes', async () => import('../../../../../util/common/test/shims/vscodeTypesShim'));
+vi.mock('vscode', async importOriginal => ({ ...await importOriginal<object>(), ...await import('../../../../../util/common/test/shims/vscodeTypesShim') }));
 
 const families = [
 	'default', 'unrecognized-provider/model', 'gpt-4.1', 'o4-mini', 'gpt-5', 'gpt-5-mini', 'gpt-5-codex',
@@ -46,9 +50,9 @@ describe('patent routing at the assembled provider and tool-result boundary', ()
 			expect({ resolver: result.resolver, identity: result.text.includes('<patentAIIdentity>'), codingScoped: result.text.includes('<codingTaskReminders>'), sourceRoute: result.toolText.includes('evidenceLookup') }).toMatchSnapshot();
 		} finally { matcher.mockRestore(); }
 	});
-	it('keeps an already bounded local evidence page inline even when its header exceeds the generic threshold', async () => {
+	it.each(['EP0983762A1', 'EP0983762'])('keeps an already bounded local evidence page inline for %s even when its header exceeds the generic threshold', async publicationNumber => {
 		const page = 'Local returned-text lines: 1 results.\n[EP0983762A1:description:en; line 1] ' + 'x'.repeat(7980) + '\nContinue with evidenceLookup={"anchor":"EP0983762A1:description:en","start":1,"offset":7980}.';
-		const result = await assemble('gemini-3.8-flash', ToolName.GetPatentDetails, page, true, false, JSON.stringify({ publicationNumber: 'EP0983762A1', evidenceLookup: { anchor: 'EP0983762A1:description:en' } }));
+		const result = await assemble('gemini-3.8-flash', ToolName.GetPatentDetails, page, true, false, JSON.stringify({ publicationNumber, evidenceLookup: { anchor: 'EP0983762A1:description:en' } }));
 		expect({ offloads: result.saved.length, exactPage: result.toolText.includes(page), continuation: result.toolText.includes('"offset":7980') }).toEqual({ offloads: 0, exactPage: true, continuation: true });
 	});
 	it('keeps search candidates and explicit preview limits inline without losing the full returned list', async () => {
@@ -66,11 +70,25 @@ describe('patent routing at the assembled provider and tool-result boundary', ()
 	});
 
 	it.each(['gemini-3.8-flash', 'google/gemini-3.8-flash', 'claude-sonnet-4.6', 'gpt-5.5'])('retains the actual assembled system blocks through native API conversion for %s', async family => {
-		const result = await assemble(family);
+		// Native Gemini generates UUID call IDs; VS Code can append its invocation suffix.
+		const callId = '11b401f7-bc49-4110-8455-9b487705834d__vscode-1789042212369';
+		const result = await assemble(family, undefined, undefined, true, false, undefined, { query: 'Review this source.', rounds: [new ToolCallRound('Retrieved source.', [{ id: callId, name: ToolName.GetPatentDetails, arguments: '{"publicationNumber":"EP0983762A1"}' }])], results: { [callId]: new LanguageModelToolResult([new LanguageModelTextPart(details)]) }, tools: [ToolName.GetPatentDetails, ToolName.WritePatentResults].map(name => ({ name, description: '', inputSchema: {}, tags: [], source: undefined })) });
 		const sourceSystems = result.messages.filter(message => message.role === Raw.ChatRole.System).flatMap(message => message.content.filter(part => part.type === Raw.ChatCompletionContentPartKind.Text).map(part => part.text));
-		const apiMessages = convertToApiChatMessage(result.messages).map(message => ({ ...message, content: message.content.flatMap(part => part instanceof LanguageModelTextPart ? [new LanguageModelTextPart(part.value)] : []) }));
-		const geminiSystem = apiMessageToGeminiMessage(apiMessages).systemInstruction?.parts?.map(part => part.text ?? '').join('\n') ?? '';
-		const anthropicSystem = apiMessageToAnthropicMessage(apiMessages).system.text;
+		const apiMessages = convertToApiChatMessage(result.messages);
+		const gemini = apiMessageToGeminiMessage(apiMessages as Parameters<typeof apiMessageToGeminiMessage>[0]);
+		const anthropic = apiMessageToAnthropicMessage(apiMessages as Parameters<typeof apiMessageToAnthropicMessage>[0]);
+		const geminiSystem = gemini.systemInstruction?.parts?.map(part => part.text ?? '').join('\n') ?? '';
+		const anthropicSystem = anthropic.system.text;
+		const geminiResponse = gemini.contents.flatMap(content => content.parts ?? []).find(part => part.functionResponse)?.functionResponse;
+		expect(geminiResponse?.name).toBe(ToolName.GetPatentDetails);
+		expect(JSON.stringify(geminiResponse?.response)).toContain('evidenceLookup');
+		expect(JSON.stringify(geminiResponse?.response)).toContain('EP0983762A1');
+		const anthropicBlocks = anthropic.messages.flatMap(message => typeof message.content === 'string' ? [] : message.content);
+		expect(anthropicBlocks).toContainEqual(expect.objectContaining({ type: 'tool_use', id: callId, name: ToolName.GetPatentDetails }));
+		const anthropicResult = anthropicBlocks.find(block => block.type === 'tool_result');
+		expect(anthropicResult).toEqual(expect.objectContaining({ tool_use_id: callId }));
+		expect(JSON.stringify(anthropicResult)).toContain('evidenceLookup');
+		expect(JSON.stringify(anthropicResult)).toContain('EP0983762A1');
 		expect({ sourceHasPatentRole: sourceSystems.some(text => text.includes('<patentAIIdentity>')), geminiRetainsEverySystem: sourceSystems.every(text => geminiSystem.includes(text)), anthropicRetainsEverySystem: sourceSystems.every(text => anthropicSystem.includes(text)) }).toEqual({ sourceHasPatentRole: true, geminiRetainsEverySystem: true, anthropicRetainsEverySystem: true });
 	});
 	it.each(families)('keeps explicit coding and uncovered local analysis requests within provider capabilities for %s', async family => {
