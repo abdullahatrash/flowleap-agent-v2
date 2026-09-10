@@ -35,8 +35,9 @@ export interface PatentCandidateReview {
 const LEGAL_CONCLUSION_PHRASES: readonly string[] = [
 	'teach away', 'teaches away', 'teaching away', 'core novelty', 'novelty gap', 'novelty gaps',
 	'is novel', 'are novel', 'not novel', 'clearly novel', 'anticipate', 'anticipates', 'anticipated by',
-	'anticipation', 'obvious over', 'would have been obvious', 'non-obvious', 'nonobvious', 'inventive step',
-	'patentable', 'unpatentable', 'freedom to operate',
+	'anticipation', 'obvious over', 'would have been obvious', 'obvious combination', 'is obvious', 'obviousness',
+	'non-obvious', 'nonobvious', 'inventive step', 'patentable', 'unpatentable', 'patentability', 'novelty assessment',
+	'novelty evaluation', 'novelty determination', 'novelty conclusion', 'freedom to operate',
 ];
 
 /**
@@ -81,12 +82,15 @@ function citedAnchors(review: PatentCandidateReview): Set<string> {
 function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly RetrievedDocument[] {
 	const cited = citedAnchors(review);
 	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; languages: Map<string, string>; cited: boolean }
+	// The backend echoes ids as `EP0983762.A1` while source references carry `EP0983762A1`; both
+	// name one document, so records are keyed on the separator-free form and shown that way.
 	const documents = new Map<string, DocumentRecord>();
 	const entry = (publication: string): DocumentRecord => {
-		const existing = documents.get(publication);
+		const key = publication.replace(/[-.\s/]/g, '').toUpperCase();
+		const existing = documents.get(key);
 		if (existing) { return existing; }
 		const created: DocumentRecord = { sections: new Set<string>(), languages: new Map<string, string>(), cited: false };
-		documents.set(publication, created);
+		documents.set(key, created);
 		return created;
 	};
 	for (const execution of snapshot.executions) {

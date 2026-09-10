@@ -137,6 +137,23 @@ describe('prior-art evidence recovery and review contract', () => {
 		}).toEqual({ cited: true, count: false, claimsOnly: false, tail: false, classification: false, language: true });
 	});
 
+	it('merges the backend dotted id and the source publication number into one inventory row', () => {
+		const dotted = { ...retrieval, executions: [retrieval.executions[0], { ...retrieval.executions[1], publicationIds: ['WO9951190.A1'] }, ...retrieval.executions.slice(2)] };
+		const rendered = renderCandidateReview(claimsOnly, dotted, 'evidence.json');
+		expect({
+			rows: (rendered.match(/^\| WO9951190/gm) ?? []).length,
+			merged: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en |'),
+			count: rendered.includes('- 1 of 2 retrieved documents are not cited'),
+		}).toEqual({ rows: 1, merged: true, count: true });
+	});
+
+	it('rejects the framing and obviousness phrases a candidate review must not use', () => {
+		const errors = validateCandidateReview({ ...review, objective: 'Prior-art search and patentability evaluation.', stopReason: 'No single reference or obvious combination discloses it.' }, snapshot);
+		expect(errors.filter(error => error.startsWith('Legal conclusions'))).toEqual([
+			'Legal conclusions in a candidate review: "patentability" in objective; "obvious combination" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.',
+		]);
+	});
+
 	it('rejects legal conclusions in model prose while accepting an explicit non-establishment disclaimer', () => {
 		const conclusions = validateCandidateReview({ ...review, stopReason: 'The reference teaches away from the combination.', limitations: ['Claim 1 is novel over the retrieved art.'] }, snapshot);
 		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.'] }, snapshot);
