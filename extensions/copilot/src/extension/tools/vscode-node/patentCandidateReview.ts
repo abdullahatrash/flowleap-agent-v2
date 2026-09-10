@@ -4,25 +4,31 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 
 export interface PatentCandidateReview {
 	readonly coverage?: readonly {
 		readonly feature: string;
+		readonly kind?: 'feature' | 'combination';
 		readonly importance: 'essential' | 'optional';
 		readonly status: 'supported' | 'partial' | 'unresolved';
 		readonly sourceAnchors: readonly string[];
 		readonly gap: string;
+		readonly evidence?: readonly { readonly anchor: string; readonly quote: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
 	}[];
+	readonly content?: string;
+	readonly relevanceAssessment?: string;
 	readonly limitations?: readonly string[];
-	readonly semanticReview?: { readonly observations: readonly string[]; readonly unresolvedConcerns: readonly string[] };
 	readonly stopReason?: string;
 }
 
 /** Validate explicit review structure and anchor identity, not the truth or entailment of prose. */
 export function validateCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, citedText = ''): string[] {
 	const errors: string[] = [];
-	const anchors = new Set(snapshot.executions.flatMap(execution => execution.sources?.map(source => source.anchor) ?? []));
+	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+	const anchors = new Set(sources.keys());
+	if (review.content?.trim() || review.relevanceAssessment?.trim()) { errors.push('For prior-art-report, content and relevanceAssessment must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.'); }
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
 	for (const match of citedText.matchAll(/[a-z][a-z0-9+.-]*:\/\/flowleap\.patent-ai\/patent\?[^\s)>]+/gi)) {
 		const url = new URL(match[0]);
@@ -34,15 +40,26 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 	for (const row of review.coverage ?? []) {
 		if (!row.feature?.trim() || !['essential', 'optional'].includes(row.importance) || !['supported', 'partial', 'unresolved'].includes(row.status)) { errors.push('Every coverage row needs a feature, importance, and valid status.'); }
 		if (row.status !== 'unresolved' && !row.sourceAnchors?.length) { errors.push(`Coverage for "${row.feature}" needs known source anchors or unresolved status.`); }
-		for (const anchor of row.sourceAnchors ?? []) { if (!anchors.has(anchor)) { errors.push(`Unknown source anchor: ${anchor}. Retrieve this source in the current session or mark the feature unresolved without this anchor.`); } }
+		for (const anchor of row.sourceAnchors ?? []) { if (!anchors.has(anchor)) { errors.push(`Unknown source anchor: ${anchor}. Recover known IDs with get_patent_details(publicationNumber, evidenceLookup: {}); do not repeat searches or downgrade a conclusion merely to pass validation.`); } }
+		if (!['feature', 'combination'].includes(row.kind ?? '')) { errors.push(`Identify coverage kind (feature or combination) for "${row.feature}".`); }
+		for (const anchor of row.sourceAnchors ?? []) {
+			const source = sources.get(anchor);
+			const evidence = row.evidence?.find(item => item.anchor === anchor);
+			if (row.status !== 'unresolved' && !evidence) { errors.push(`Supply an exact quotation and source review for ${anchor}.`); }
+			if (evidence) {
+				const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+				if (!evidence.quote?.trim() || !source?.text || !normalize(source.text).includes(normalize(evidence.quote))) { errors.push(`Quotation for ${anchor} must match recorded text. Recover it with evidenceLookup.anchor; older records without text require one detail retrieval.`); }
+				if (source?.reference.claimNumber && source.text && normalize(evidence.quote ?? '') !== normalize(source.text)) { errors.push(`Quote the complete claim for ${anchor}, including dependency language, qualifiers and every constituent; do not extract only a numeric range.`); }
+				if (![evidence.scope, evidence.qualifiers, evidence.quantityBasis].every(value => value?.trim())) { errors.push(`Review scope/dependency, qualifiers and original quantity basis for ${anchor}. Keep original units and all constituents; do not substitute an unverified percentage conversion.`); }
+			}
+		}
+		if (row.evidence?.some(item => !row.sourceAnchors.includes(item.anchor))) { errors.push(`Evidence for "${row.feature}" must use that row's sourceAnchors.`); }
 		if (row.status !== 'supported' && !row.gap?.trim()) { errors.push(`Describe the remaining gap for "${row.feature}".`); }
 	}
 	if (!review.coverage?.some(row => row.importance === 'essential')) { errors.push('Identify at least one essential feature or combination.'); }
 	if (!review.limitations?.some(value => value.trim())) { errors.push('Supply the search and evidence limitations.'); }
 	if (!review.stopReason?.trim()) { errors.push('Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.'); }
-	if (!review.semanticReview?.observations?.some(value => value.trim()) || !Array.isArray(review.semanticReview?.unresolvedConcerns)) {
-		errors.push('Complete a source-grounded semantic review: observations on scope, dependent claims, qualifiers, units/denominators and absence statements; include unresolvedConcerns (an empty array is allowed). This is a model declaration, not automated semantic verification.');
-	}
+	if (!review.coverage?.some(row => row.kind === 'combination' && row.importance === 'essential')) { errors.push('Include an explicit essential combination row; it may honestly remain unresolved.'); }
 	return errors;
 }
 
@@ -50,18 +67,31 @@ function cell(value: string): string { return value.replace(/\|/g, '\\|').replac
 
 /** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
 export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
+	const candidates = new Map(snapshot.executions.filter(execution => execution.kind === 'details' && execution.status === 'succeeded').flatMap(execution => (execution.publicationIds ?? []).map(publication => [publication, execution] as const)));
 	return [
+		'## Retrieved candidates',
+		'| Publication | Publication date | Title |',
+		'| --- | --- | --- |',
+		...[...candidates].map(([publication, execution]) => '| ' + [publication, execution.publicationDate ?? 'Unknown', execution.publicationTitle ?? 'Unknown'].map(cell).join(' | ') + ' |'),
+		'',
 		'## Coverage and remaining search tracks',
-		'| Feature / combination | Importance | Status | Source anchors | Gap |',
-		'| --- | --- | --- | --- | --- |',
-		...(review.coverage ?? []).map(row => '| ' + [row.feature, row.importance, row.status, row.sourceAnchors.join(', '), row.gap].map(cell).join(' | ') + ' |'),
+		...(review.coverage ?? []).flatMap(row => [
+			`### ${cell(row.feature)}`,
+			`**${row.kind} · ${row.importance} · ${row.status}**`,
+			row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
+			...row.sourceAnchors.flatMap(anchor => {
+				const source = snapshot.executions.flatMap(execution => execution.sources ?? []).find(source => source.anchor === anchor);
+				const evidence = row.evidence?.find(item => item.anchor === anchor);
+				return [source ? patentCitationLink(anchor, source.reference) : anchor,
+					...(evidence ? [evidence.quote.split(/\r?\n/).map(line => '> ' + line).join('\n'),
+						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`] : [])];
+			}),
+			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
+		]),
 		'', '## Search stopping rationale', review.stopReason ?? '',
 		'', '## Limitations', ...(review.limitations ?? []).map(value => '- ' + value),
 		snapshot.limitation,
-		'', '## Source-grounded semantic review (model declaration)',
-		...(review.semanticReview?.observations ?? []).map(value => '- ' + value),
-		'Unresolved concerns:', ...(review.semanticReview?.unresolvedConcerns.length ? review.semanticReview.unresolvedConcerns.map(value => '- ' + value) : ['None declared by the model.']),
-		'Anchor identity and required fields were checked mechanically. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.',
+		'Anchor identity, quotation identity and required fields were checked mechanically. Source review notes are model judgments, not verified facts. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.',
 		'', `## Execution audit`,
 		`${snapshot.executions.filter(execution => execution.kind === 'search').length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes. These are tool invocations, not counts of documents reviewed.`,
 		'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range |',
