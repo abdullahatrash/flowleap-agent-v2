@@ -2,13 +2,13 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import type { Content, FunctionCall, FunctionResponse, Part } from '@google/genai';
+import type { Content, FunctionResponse, Part } from '@google/genai';
 import { Raw } from '@vscode/prompt-tsx';
 import type { LanguageModelChatMessage } from 'vscode';
 import { CustomDataPartMimeTypes } from '../../../platform/endpoint/common/endpointTypes';
 import { LanguageModelChatMessageRole, LanguageModelDataPart, LanguageModelTextPart, LanguageModelThinkingPart, LanguageModelToolCallPart, LanguageModelToolResultPart, LanguageModelToolResultPart2 } from '../../../vscodeTypes';
 
-function apiContentToGeminiContent(content: (LanguageModelTextPart | LanguageModelToolResultPart | LanguageModelToolCallPart | LanguageModelDataPart | LanguageModelThinkingPart)[]): Part[] {
+function apiContentToGeminiContent(content: (LanguageModelTextPart | LanguageModelToolResultPart | LanguageModelToolCallPart | LanguageModelDataPart | LanguageModelThinkingPart)[], toolNamesByCallId: ReadonlyMap<string, string>): Part[] {
 	const convertedContent: Part[] = [];
 	let pendingSignature: string | undefined;
 
@@ -68,8 +68,11 @@ function apiContentToGeminiContent(content: (LanguageModelTextPart | LanguageMod
 				imageDescription = `\n[Contains ${imageParts.length} image(s) with types: ${imageParts.map(p => p.mimeType).join(', ')}]`;
 			}
 
-			// extraction: functionName_timestamp => split on first underscore
-			const functionName = part.callId?.split('_')[0] || 'unknown_function';
+			// Native calls use opaque UUIDs. Recover the name from the matching call,
+			// retaining legacy functionName_timestamp support for orphaned old history.
+			const functionName = toolNamesByCallId.get(part.callId)
+				?? /^(.*)_\d+$/.exec(part.callId.replace(/__vscode.*$/, ''))?.[1]
+				?? 'unknown_function';
 
 			// Preserve structured JSON if possible
 			let responsePayload: any = {};
@@ -124,8 +127,16 @@ export function apiMessageToGeminiMessage(messages: LanguageModelChatMessage[]):
 	const contents: Content[] = [];
 	let systemInstruction: Content | undefined;
 
-	// Track tool calls to match with their responses
-	const pendingToolCalls = new Map<string, FunctionCall>();
+	// Preserve the actual call identity; names can contain underscores and calls
+	// to the same function can occur more than once.
+	const toolNamesByCallId = new Map<string, string>();
+	for (const message of messages) {
+		for (const part of message.content) {
+			if (part instanceof LanguageModelToolCallPart) {
+				toolNamesByCallId.set(part.callId, part.name);
+			}
+		}
+	}
 
 	for (const message of messages) {
 		if (message.role === LanguageModelChatMessageRole.System) {
@@ -142,21 +153,14 @@ export function apiMessageToGeminiMessage(messages: LanguageModelChatMessage[]):
 				};
 			}
 		} else if (message.role === LanguageModelChatMessageRole.Assistant) {
-			const parts = apiContentToGeminiContent(message.content);
-
-			// Store function calls for later matching with responses
-			parts.forEach(part => {
-				if (part.functionCall && part.functionCall.name) {
-					pendingToolCalls.set(part.functionCall.name, part.functionCall);
-				}
-			});
+			const parts = apiContentToGeminiContent(message.content, toolNamesByCallId);
 
 			contents.push({
 				role: 'model',
 				parts
 			});
 		} else if (message.role === LanguageModelChatMessageRole.User) {
-			const parts = apiContentToGeminiContent(message.content);
+			const parts = apiContentToGeminiContent(message.content, toolNamesByCallId);
 
 			contents.push({
 				role: 'user',

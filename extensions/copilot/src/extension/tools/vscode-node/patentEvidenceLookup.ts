@@ -35,7 +35,11 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 	if (!lookup.anchor && !lookup.query) {
 		if (offset) { return 'Evidence index uses start only; offset applies to source text.'; }
 		const page = selected.slice(start - 1, start - 1 + pageRows);
+		const details = [...snapshot.executions].reverse().find(execution => execution.kind === 'details' && execution.status === 'succeeded' && execution.sources?.some(source => source.reference.publicationNumber === publication));
+		const title = details?.publicationTitle;
+		const metadata = `Recorded publication: ${publication}. Publication date: ${details?.publicationDate ?? 'not recorded'}. Title: ${title ? title.slice(0, 500) + (title.length > 500 ? '… (shortened)' : '') : 'not recorded'}.`;
 		return [`Local evidence index: ${selected.length} sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.`,
+			metadata,
 			...page.map(source => `${source.anchor} — ${source.text === undefined ? 'text unavailable in this older record' : `${source.text.split(/\r?\n/).length} lines`} — ${patentCitationLink('Open source', source.reference)}`),
 			start - 1 + page.length < selected.length ? continuation({ start: start + page.length }) : 'End of index.'].join('\n');
 	}

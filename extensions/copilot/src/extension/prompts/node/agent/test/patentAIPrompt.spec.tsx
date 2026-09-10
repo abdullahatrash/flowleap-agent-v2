@@ -84,6 +84,10 @@ const OFFICE_AVAILABILITY_CLAIMS: readonly string[] = [
 ];
 
 suite('PatentAIInstructions', () => {
+	test.each([ToolName.PatentApiRequest, ToolName.SearchCitations, ToolName.SearchForwardCitations])('retains the patent role when %s is the only available domain tool', async name => {
+		expect(await renderPatentInstructions([name])).toContain('<patentAIIdentity>');
+	});
+
 	test('renders nothing when no patent tool is available', async () => {
 		const output = await renderPatentInstructions([]);
 		expect(output.includes('PATENT TOOL DECISION TREE')).toBe(false);
@@ -505,7 +509,7 @@ suite('PatentAIInstructions prompt-debt fixes', () => {
 			answerCarriesTheResult: output.includes('THE ANSWER ITSELF CARRIES THE RESULT'),
 			emptyMessagePlusFileIsNotAnAnswer: output.includes('pointing at a file you created has not answered'),
 			noSmugglingIntoTheFile: output.includes('must not be written into the file either'),
-			toolOffloadCarveOutKept: output.includes('where a TOOL offloaded an oversized record to a path, you still read that path and hand it back'),
+			toolOffloadCarveOutKept: output.includes('For an explicit full-text/file delivery request, provide the complete retrieved file') && output.includes('ordinary evidence analysis uses local lookup'),
 			gapDisclosedOnlyAfterTheLadder: output.includes('the gap is disclosed only after the ladder is exhausted'),
 			// Measured interaction: the anti-fabrication pressure bought honesty by SKIPPING the
 			// web rung and offering it instead, so the honest report is bound to the ladder here.

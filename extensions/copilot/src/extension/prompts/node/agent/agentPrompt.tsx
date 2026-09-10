@@ -49,7 +49,7 @@ import { AgentMultirootWorkspaceStructure } from '../panel/workspace/workspaceSt
 import { AgentConversationHistory, AgentUserMessageInHistory } from './agentConversationHistory';
 import './allAgentPrompts';
 import { AlternateGPTPrompt, DefaultReminderInstructions, DefaultToolReferencesHint, ReminderInstructionsProps, ToolReferencesHintProps } from './defaultAgentInstructions';
-import { PatentAIInstructions } from './patentAIPrompt';
+import { hasPatentTools, PatentAIInstructions } from './patentAIPrompt';
 import { AgentPromptCustomizations, ReminderInstructionsConstructor, ToolReferencesHintConstructor } from './promptRegistry';
 import { SummarizedConversationHistory } from './summarizedConversationHistory';
 import { DeferredToolListReminder } from './toolSearchInstructions';
@@ -113,7 +113,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		if (!customizations) {
 			throw new Error('AgentPrompt requires customizations to be provided. Use PromptRegistry.resolveAllCustomizations() to resolve them.');
 		}
-		const instructions = await this.getSystemPrompt(customizations);
+		const { providerInstructions, patentInstructions } = await this.getSystemPrompt(customizations);
 		const CopilotIdentityRules = customizations.CopilotIdentityRulesClass;
 		const SafetyRules = customizations.SafetyRulesClass;
 
@@ -121,11 +121,11 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		const hasMemoryTool = !!this.props.promptContext.tools?.availableTools?.find(tool => tool.name === ToolName.Memory);
 		const baseAgentInstructions = <>
 			<SystemMessage>
-				You are an expert AI programming assistant, working with a user in the VS Code editor.<br />
+				{hasPatentTools(this.props.promptContext.tools?.availableTools) ? 'You are a patent intelligence agent working with a user in the VS Code editor; your coding capabilities serve the task scope defined by the patent identity.' : 'You are an expert AI programming assistant, working with a user in the VS Code editor.'}<br />
 				<CopilotIdentityRules />
 				<SafetyRules />
 			</SystemMessage>
-			{instructions}
+			{providerInstructions}
 			{hasMemoryTool && <SystemMessage>
 				<MemoryInstructionsPrompt />
 			</SystemMessage>}
@@ -137,6 +137,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		const templateVariablesContext = this.promptVariablesService.buildTemplateVariablesContext(sessionId, debugTargetSessionIds);
 		const customizationsSnapshot = this.getOrFreezeCustomizationsIndex();
 		const baseInstructions = <>
+			{patentInstructions}
 			{!omitBaseAgentInstructions && baseAgentInstructions}
 			{await this.getAgentCustomInstructions(customizationsSnapshot?.frozen)}
 			{isAutopilot && <SystemMessage priority={80}>
@@ -201,24 +202,22 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		// construction, since `unknown` never claims an office is live or gated.
 		const patentDataKeys = getPatentDataKeys();
 
-		// Single prompt-include seam for the Patent AI overlay: PatentAIInstructions is a
-		// self-contained system block that renders only when a patent tool is available, so
-		// it adds nothing on a stock configuration. Including it here once covers every model
-		// family instead of editing each model-family prompt file.
-		return <>
-			<PromptClass
+		// Domain instructions are independent of the optional provider coding base. Keep
+		// one shared include for every resolver, including fallback and custom modes.
+		return {
+			providerInstructions: <PromptClass
 				availableTools={availableTools}
 				modelFamily={modelFamily}
 				codesearchMode={this.props.codesearchMode}
-			/>
-			<PatentAIInstructions
+			/>,
+			patentInstructions: <PatentAIInstructions
 				availableTools={availableTools}
 				webSearchAvailable={webSearchAvailable}
 				subscriptionStatus={getPatentSubscriptionStatus()}
 				hasEpoOpsKey={!!patentDataKeys?.epo}
 				hasUsptoOdpKey={!!patentDataKeys?.usptoOdp}
-			/>
-		</>;
+			/>,
+		};
 	}
 
 	private async getAgentCustomInstructions(frozenCustomizationsIndex?: { value: string; toolReferences: readonly ChatLanguageModelToolReference[] | undefined }) {
@@ -552,7 +551,10 @@ export class AgentUserMessage extends PromptElement<AgentUserMessageProps> {
 					<CurrentEditorContext endpoint={this.props.endpoint} />
 					<Tag name='reminderInstructions'>
 						{/* Critical reminders that are effective when repeated right next to the user message */}
-						<ReminderInstructionsClass {...reminderProps} />
+						{hasPatentTools(this.props.availableTools) ? <Tag name='codingTaskReminders'>
+							The following provider reminders apply when writing code or filling a concrete tool capability gap. For patent operations covered by native tools, follow the patent task routing and evidence workflow.<br />
+							<ReminderInstructionsClass {...reminderProps} />
+						</Tag> : <ReminderInstructionsClass {...reminderProps} />}
 						<NotebookReminderInstructions chatVariables={this.props.chatVariables} query={this.props.request} />
 						{this.configurationService.getNonExtensionConfig<boolean>(USE_SKILL_ADHERENCE_PROMPT_SETTING) && <SkillAdherenceReminder chatVariables={this.props.chatVariables} />}
 					</Tag>
