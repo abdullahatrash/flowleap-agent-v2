@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import { PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+import { evidenceAnchor, IPatentExecutionLedger, PatentEvidenceSource } from '../../patentai/vscode-node/patentExecutionLedger';
+import { parsePatentDocumentReference, PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import type * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
@@ -72,6 +73,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentDetailsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -105,21 +107,36 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			const biblio = await biblioPromise;
 			const [claims, description] = await Promise.all([claimsPromise, descriptionPromise]);
 
+			const sources: PatentEvidenceSource[] = [];
+			const addSource = (value: PatentDocumentReference | null | undefined, language?: string, unsegmented = false) => {
+				const reference = parsePatentDocumentReference(value);
+				if (reference) { sources.push({ anchor: evidenceAnchor(reference, language), reference, language, retrieval: unsegmented ? 'unsegmented' : 'returned', review: 'unknown', completeness: 'unknown' }); }
+			};
+			addSource(biblio.documentReference);
+			if (claims?.claims.length || claims?.unsegmentedText) {
+				addSource(claims.documentReference, claims.language, !!claims.unsegmentedText);
+				for (const claim of claims.claims) { addSource(claim.documentReference, claims.language); }
+			}
+			if (description?.description) { addSource(description.documentReference, description.language); }
+			const unavailableSections = [!claims?.claims.length && !claims?.unsegmentedText ? 'claims' : '', !description?.description ? 'description' : ''].filter(Boolean);
+			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'details', status: 'succeeded', publicationIds: [biblio.docId || doc], sources, unavailableSections, totalClaims: claims?.totalClaims ?? undefined, returnedClaims: claims?.claims.length });
 			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc);
 			this.logService.info(`[GetPatentDetailsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(formattedResponse)
+				new LanguageModelTextPart(formattedResponse + '\n\n' + audit + '\nKnown source anchors (retrieved, review unknown):\n' + sources.map(source => source.anchor).join('\n'))
 			]);
 
 		} catch (error) {
-			return handlePatentToolError(
+			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'details', status: token.isCancellationRequested ? 'cancelled' : 'failed', publicationIds: [doc] });
+			const result = handlePatentToolError(
 				error,
 				this.logService,
 				'[GetPatentDetailsTool]',
 				err => `Error fetching patent ${publicationNumber}: ${err.status} - ${err.message}`,
 				err => err.status === 404 ? `\n\n${this.usptoFallbackHint(doc)}` : '',
 			);
+			return new LanguageModelToolResult([...result.content, new LanguageModelTextPart(audit)]);
 		}
 	}
 

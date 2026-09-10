@@ -5,6 +5,8 @@
 
 import type * as vscode from 'vscode';
 import { describe, expect, it } from 'vitest';
+import { PatentExecution } from '../../../patentai/vscode-node/patentExecutionLedger';
+import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
@@ -78,7 +80,7 @@ describe('SearchPatentsTool', () => {
 				{ docId: 'US7654321B2', title: null, applicants: [], publicationDate: null, abstract: null },
 			],
 		}));
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=("solar cell")', range: '1-25', countries: 'ep, wo' }), makeToken());
 
@@ -105,7 +107,7 @@ describe('SearchPatentsTool', () => {
 
 	it('shows the requested country filter and range before a search is approved', async () => {
 		const { client } = makeBackendClient();
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 		const prepared = await tool.prepareInvocation(makeOptions({ query: 'ic=A61K6/083 and pd<20020221', countries: 'EP,WO', range: '1-10' }), makeToken());
 		expect(prepared?.confirmationMessages?.message).toBe('Allow Patent AI to search for patents using query: ic=A61K6/083 and pd<20020221? Requested countries: EP,WO. Range: 1-10.');
 	});
@@ -113,14 +115,14 @@ describe('SearchPatentsTool', () => {
 	it('preserves the backend effective query when a scoped search has zero matches', async () => {
 		const effectiveQuery = '(pa=Kuraray* and pd<20020221) and pn any "EP WO"';
 		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [], countryFilter: ['EP', 'WO'], effectiveQuery }));
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 		const result = await tool.invoke(makeOptions({ query: 'pa=Kuraray* and pd<20020221', countries: 'EP,WO' }), makeToken());
 		expect(textOf(result)).toBe(`No patents found for CQL: ${effectiveQuery}`);
 	});
 
 	it('reports no results when the backend returns an empty doc list', async () => {
 		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [] }));
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=(nothing)' }), makeToken());
 
@@ -131,7 +133,7 @@ describe('SearchPatentsTool', () => {
 		// 2026-09-02 false negative: OPS matched 38 worldwide, the 1-1 count probe's only hit was
 		// Canadian, and the tool told the agent "No patents found".
 		const { client } = makeBackendClient(facadeEnvelope({ total: 38, returned: 0, countryFilter: ['EP', 'WO'], range: { begin: 1, end: 1 }, docs: [] }));
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=helmet and ti=brake', range: '1-1', countries: 'EP,WO' }), makeToken());
 
@@ -146,7 +148,7 @@ describe('SearchPatentsTool', () => {
 			total: 2, returned: 1, countryFilter: ['EP', 'WO'], effectiveQuery: '(ti=helmet and ti=brake) and pn any "EP WO"', range: { begin: 1, end: 1 },
 			docs: [{ docId: 'WO9836213A1', title: 'HELMET WITH BRAKE LIGHT', abstract: null, applicants: [], publicationDate: '1998-08-20' }],
 		}));
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=helmet and ti=brake', range: '1-1', countries: 'EP,WO' }), makeToken());
 
@@ -158,10 +160,18 @@ describe('SearchPatentsTool', () => {
 			total: 38, returned: 1, countryFilter: ['EP', 'WO'], range: { begin: 1, end: 5 },
 			docs: [{ docId: 'EP0185922A2', title: 'Motorcycle safety helmet and brake lamp system', abstract: null, applicants: [], publicationDate: '1986-07-02' }],
 		}));
-		const tool = new SearchPatentsTool(makeLogService(), client);
+		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=helmet and ti=brake', range: '1-5', countries: 'EP,WO' }), makeToken());
 
 		expect(textOf(result).split('\n')[0]).toBe('Found 38 patents matching query: "ti=helmet and ti=brake" worldwide; 1 of the 1-5 on this page are in the country filter [EP,WO]. The worldwide total is not a count of [EP,WO] hits.');
 	});
+	it('records actual effective query and returned IDs without inferring total or reviewed counts', async () => {
+		const executions: Omit<PatentExecution, 'id' | 'recordedAt'>[] = [];
+		const ledger = { ...unrecordedPatentLedger, record: async (_session: vscode.Uri | undefined, execution: Omit<PatentExecution, 'id' | 'recordedAt'>) => { executions.push(execution); return 'Recorded.'; } };
+		const { client } = makeBackendClient(facadeEnvelope({ effectiveQuery: 'ti=brake and pn=EP', countryFilter: ['EP'], docs: [{ docId: 'EP1234567A1', title: 'Brake', applicants: [] }] }));
+		await new SearchPatentsTool(makeLogService(), client, ledger).invoke(makeOptions({ query: 'ti=brake', countries: 'EP' }), makeToken());
+		expect(executions).toEqual([{ kind: 'search', status: 'succeeded', query: 'ti=brake', requestedRange: '1-25', requestedCountries: 'EP', effectiveQuery: 'ti=brake and pn=EP', countryFilter: ['EP'], total: undefined, returned: 1, range: undefined, publicationIds: ['EP1234567A1'] }]);
+	});
+
 });

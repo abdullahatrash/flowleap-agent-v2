@@ -6,7 +6,7 @@ user-invocable: true
 
 # Invention Disclosure (IDF) Processing
 
-Orchestrates the full path from a raw invention disclosure to a patentability assessment and draft claims. Output is preparatory work for a patent attorney — always say so.
+Route the disclosure to the user-requested deliverable. For an IDF-based candidate search, perform intake and the scoped search/report; patentability assessment, filing advice and claim drafting are separate stages only when requested. For a full intake-to-drafting task, follow the remaining phases. Output is preparatory work for review.
 
 ## Phase 0: Intake
 
@@ -21,14 +21,15 @@ Extract a **structured invention record**:
 | Title & technical field | One line each |
 | Problem | What existing solutions fail to do |
 | Solution | How the invention solves it — the mechanism, not the benefit |
-| Novel features | Ranked list; what the inventors believe is new |
+| Essential features and interactions | Required components, process steps, and relationships; distinguish individual features from their combination |
+| Novel features | Ranked inventor assertions; not established novelty |
 | Embodiments & variations | Alternatives, ranges, optional features (future dependent claims) |
 | Figures & supporting evidence | Page/figure references, observed structures and labels; distinguish illustrative drawings from measured results and flag unreadable evidence |
 | Inventors | Names/roles as given — flag inventorship questions for the attorney |
 | Known prior art | Every reference the inventors cite |
 | Disclosure events | EVERY date: papers, talks, posters, demos, sales, offers, websites, theses |
 
-If fields are missing (especially disclosure events and known prior art), ask the user (via the `vscode_askQuestions` tool) before proceeding.
+Resolve missing information that affects the requested deliverable. For a candidate search with an agreed scope/cutoff, proceed with disclosed assumptions and gaps; do not require unrelated filing-intake details. For filing-related work, clarify missing disclosure events and known prior art before the relevant assessment.
 
 ## Phase 1: Bar-Date Triage (FIRST — can moot everything else)
 
@@ -45,10 +46,12 @@ Also note: the inventor-known prior art has a **duty-of-candor consequence** (ID
 
 Run the **prior-art** skill using the invention record as input:
 1. Decompose the solution + novel features yourself (see `claim-analysis` Step 3b) → keywords, synonyms, CPC codes
-2. Full broad-to-narrow search per that skill (EPO, USPTO, Google Patents/WIPO, NPL via `search_academic`)
-3. Explicitly retrieve and assess every inventor-cited reference — these are guaranteed-relevant and will be in front of the examiner
+2. Search the confirmed jurisdictions, sources and cutoff basis per that skill. Track essential features, optional embodiments and important combinations; use additional tracks only for unresolved evidence. Record excluded sources rather than silently expanding scope.
+3. Retrieve and assess inventor-cited references when relevant to the requested task; distinguish post-cutoff concept examples from qualifying earlier publications. Record unavailable evidence and do not assume relevance from citation alone.
 
-## Phase 3: Patentability Assessment
+For a candidate-review request, save the `prior-art-report` with structured coverage, limitations, semantic-review observations/concerns and stop reason, then finish after checking the saved report, generated audit and sources. Do not proceed to a legal opinion or drafting without that scope.
+
+## Phase 3: Patentability Assessment (when requested)
 
 Map the top references against the **novel features list** (not claims — none exist yet) using the **patent-examination** skill's feature-mapping discipline:
 - Any single reference teaching all novel features → novelty problem (X)
@@ -71,7 +74,7 @@ Save via `write_patent_results`, as separate files:
 6. **Audit trail** (run the audit-report skill — mandatory for IDF work relied on for filing decisions)
 
 ## Rules
-- Bar-date triage comes BEFORE searching — a barred invention changes everything
+- For filing-related work, complete relevant bar-date triage before offering filing advice; a demonstration publication cutoff is not a legal priority date
 - NEVER skip the inventor-cited references; they carry duty-of-candor weight
 - No novelty gap → no claim drafting; report the negative result honestly
 - Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice."

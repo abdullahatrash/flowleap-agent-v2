@@ -2154,18 +2154,18 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write patent search results or analysis to a local file. Use this tool when the user asks to save patent search results to a file. When using a template, fill the metadata the conversation already knows — subject always, and for prior-art reports objective, searchStrategy and relevanceAssessment — so the saved report is a finished document, not an empty form; date and authorship are stamped automatically, and only practitioner-owned fields (e.g. matter reference) may stay as placeholders. This tool does not require GitHub Copilot authentication and works directly with the file system.",
+        "modelDescription": "Write or update patent research results in a workspace file. For a candidate review use prior-art-report and provide subject, objective, searchStrategy, relevanceAssessment, coverage, limitations, semanticReview and stopReason. The tool supplies recorded session execution/source evidence; do not recreate its audit from memory. Semantic review is your source-grounded assessment, not proof of correctness. Other templates and free-form saves retain their existing behavior. Date and authorship are stamped automatically.",
         "tags": [],
         "inputSchema": {
           "type": "object",
           "properties": {
             "filePath": {
               "type": "string",
-              "description": "Absolute path to the file to write (e.g., '/Users/username/Desktop/patents.md')"
+              "description": "Absolute or workspace-relative path to the report. Use the actual workspace path; existing files can be updated with this tool."
             },
             "content": {
               "type": "string",
-              "description": "The content to write to the file (markdown, plain text, JSON, etc.). When a 'template' is supplied, this content is placed in the report's results/analysis section. Format it to the template's convention: prior-art-report — an ISR-style table `| Category (X/Y/A) | Citation with relevant passages | Relevant to claim No. |`, then for the closest X references an element-by-element mapping table `| Claim element | <Ref 1> | <Ref 2> |` quoting each disclosing passage; eou-infringement-chart — one row per claim element with a Literal/DOE column; invalidity-claim-chart — one row per element per reference; patentability-opinion — analysis narrative (the per-claim Y/N grid renders as its own section)."
+              "description": "Report results/analysis in Markdown. For prior-art-report use a concise candidate table (publication, publication date, relevance, limitations), one brief sentence per cell, followed by detailed passage evidence. Keep claim dependencies, preferred embodiments, examples, units and numerical denominators explicit. Use source-supplied citation URLs and plain Unicode comparison symbols. Execution and source audit comes from the tool, not a model-authored log. Formal opinion/chart conventions apply only to the separately selected opinion or chart template."
             },
             "template": {
               "type": "string",
@@ -2179,7 +2179,7 @@
                 "landscape-report",
                 "portfolio-due-diligence-memo"
               ],
-              "description": "Optional report template that wraps 'content' in a professional structure (title block, matter/date fields, standard sections, results area, and a not-legal-advice disclaimer). 'prior-art-report' for prior-art search reports, 'fto-memo' for freedom-to-operate memoranda, 'office-action-scaffold' for office-action responses, 'invalidity-claim-chart' for element-by-element invalidity charts, 'eou-infringement-chart' for element-by-element evidence-of-use/infringement charts, 'patentability-opinion' for novelty and non-obviousness opinions, 'landscape-report' for technology landscape analyses, 'portfolio-due-diligence-memo' for portfolio due-diligence memoranda. Omit for a free-form save of the raw content."
+              "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts, landscape-report for landscapes, portfolio-due-diligence-memo for portfolios. Omit for free-form content."
             },
             "matter": {
               "type": "string",
@@ -2195,11 +2195,98 @@
             },
             "searchStrategy": {
               "type": "string",
-              "description": "prior-art-report and landscape-report: short summary of databases searched, classification codes, and the key queries with their result counts. Provide it — the information is in this conversation."
+              "description": "Confirmed search scope and cutoff basis, sources and strategy. Actual query/count history is generated from recorded executions for prior-art-report; identify unavailable or unsearched sources in limitations."
             },
             "relevanceAssessment": {
               "type": "string",
-              "description": "prior-art-report: novelty/obviousness observations for the closest references. Provide it when the findings support one."
+              "description": "prior-art-report: evidence-limited findings and unresolved features/combinations. Separate partial overlap, dependent limitations and preferred embodiments; missing results do not establish novelty."
+            },
+            "coverage": {
+              "type": "array",
+              "description": "Required for prior-art-report. Cover essential/optional features and their important relationships or combinations. Source anchor IDs must come from the detail tool evidence appendix. supported/partial are model assessments checked against the cited passages, not automatic entailment.",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "feature": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "importance": {
+                    "type": "string",
+                    "enum": [
+                      "essential",
+                      "optional"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "supported",
+                      "partial",
+                      "unresolved"
+                    ]
+                  },
+                  "sourceAnchors": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "gap": {
+                    "type": "string",
+                    "description": "Remaining limitation or search/review gap; use an empty string only when none is identified."
+                  }
+                },
+                "required": [
+                  "feature",
+                  "importance",
+                  "status",
+                  "sourceAnchors",
+                  "gap"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "limitations": {
+              "type": "array",
+              "description": "Required for prior-art-report. State review scope, unsearched tracks, unavailable sources and uncertainties.",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "semanticReview": {
+              "type": "object",
+              "description": "Required for prior-art-report. Before saving, review every summary and feature assessment against inspected passages. Record concrete checks of claim/embodiment scope, numeric units/denominators/boundaries, combination support and review-limited negatives; retain unresolved concerns. This is a model declaration, not an independent correctness guarantee.",
+              "properties": {
+                "observations": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "unresolvedConcerns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "observations",
+                "unresolvedConcerns"
+              ],
+              "additionalProperties": false
+            },
+            "stopReason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Required for prior-art-report. Explain why synthesis is appropriate given coverage and repeated/new evidence, or identify the user-directed/bounded stop and remaining tracks. No universal query-count target."
             }
           },
           "required": [
@@ -2352,11 +2439,11 @@
           }
         ],
         "commands": [
-      {
-        "command": "flowleap.openPatentDocument",
-        "title": "%flowleap.openPatentDocument.title%",
-        "category": "FlowLeap"
-      },
+          {
+            "command": "flowleap.openPatentDocument",
+            "title": "%flowleap.openPatentDocument.title%",
+            "category": "FlowLeap"
+          },
           {
             "name": "semanticSearch",
             "description": "%copilot.workspace.semanticSearch.description%",

@@ -9,7 +9,10 @@ import { createDirectoryIfNotExists, IFileSystemService } from '../../../platfor
 import { ILogService } from '../../../platform/log/common/logService';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { dirname } from '../../../util/vs/base/common/resources';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
+import { PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
+import { generateUuid } from '../../../util/vs/base/common/uuid';
+import { basename, dirname } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { ToolName } from '../common/toolNames';
@@ -17,7 +20,7 @@ import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, PatentReportTemplate } from '../common/patentReportTemplates';
 import { assertFileOkForTool } from '../node/toolUtils';
 
-interface IWritePatentResultsParams {
+interface IWritePatentResultsParams extends PatentCandidateReview {
 	filePath: string;
 	content: string;
 	/** Optional report template. Omitted = free-form save of `content` unchanged. */
@@ -42,7 +45,7 @@ interface IWritePatentResultsParams {
  * {@link IFileSystemService} for I/O (testable, cross-platform, web-capable) and {@link ILogService}
  * for tracing.
  */
-class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> {
+export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> {
 
 	public static readonly toolName = ToolName.WritePatentResults;
 
@@ -51,6 +54,7 @@ class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> 
 		@IFileSystemService private readonly fileSystemService: IFileSystemService,
 		@IPromptPathRepresentationService private readonly promptPathRepresentationService: IPromptPathRepresentationService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IWritePatentResultsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -83,11 +87,20 @@ class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> 
 		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
 
 		try {
+			const snapshot = template === 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			if (snapshot) {
+				const errors = validateCandidateReview(options.input, snapshot, [content, options.input.relevanceAssessment, options.input.objective, options.input.searchStrategy, ...(options.input.coverage ?? []).flatMap(row => [row.feature, row.gap]), ...(options.input.semanticReview?.observations ?? []), ...(options.input.semanticReview?.unresolvedConcerns ?? []), ...(options.input.limitations ?? []), options.input.stopReason].filter(Boolean).join('\n'));
+				if (errors.length) {
+					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
+				}
+			}
+			const evidenceUri = uri.with({ path: uri.path + '.' + generateUuid() + '.evidence.json' });
+			if (snapshot) { await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, evidenceUri)); }
 			// Wrap the model's content in the chosen professional report structure, or write it
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const document = buildPatentReport(content, template, {
+			let document = buildPatentReport(content, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,
 				objective: options.input.objective,
@@ -97,9 +110,14 @@ class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsParams> 
 				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
 			});
 
+			if (snapshot) { document += '\n' + renderCandidateReview(options.input, snapshot, basename(evidenceUri)) + '\n'; }
+
 			// Ensure the parent directory exists before writing.
 			await createDirectoryIfNotExists(this.fileSystemService, dirname(uri));
 
+			if (snapshot) {
+				await this.fileSystemService.writeFile(evidenceUri, new TextEncoder().encode(JSON.stringify({ schemaVersion: 1, ...snapshot }, null, 2)));
+			}
 			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(document));
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
