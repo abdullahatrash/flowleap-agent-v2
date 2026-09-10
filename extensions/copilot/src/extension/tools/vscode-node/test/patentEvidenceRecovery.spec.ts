@@ -37,6 +37,12 @@ describe('prior-art evidence recovery and review contract', () => {
 		const incomplete = { ...review, coverage: [{ ...row, evidence: [{ ...evidence, quote: fragment }] }, combination] };
 		expect({ rejected: validateCandidateReview(incomplete, snapshot).some(error => error.includes('Quote the complete claim')), errors: validateCandidateReview(complete, snapshot), retains: renderCandidateReview(complete, snapshot, 'evidence.json').includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
 	});
+	it('rejects bibliography-only feature support even when its quotation matches', () => {
+		const source = { ...snapshot.executions[0].sources![0], anchor: 'WO9951190A1:bibliography', reference: { publicationNumber: 'WO9951190A1', section: 'bibliography' as const } };
+		const state = { ...snapshot, executions: [{ ...snapshot.executions[0], sources: [source] }] };
+		const row = { ...combination, status: 'partial' as const, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: claim10, scope: 'Abstract', qualifiers: 'Unknown', quantityBasis: 'Original' }] };
+		expect(validateCandidateReview({ ...review, coverage: [row] }, state).some(error => error.includes('claim or description passage'))).toBe(true);
+	});
 	it('requires an explicit combination and refuses invented quotation text', () => {
 		const row = { ...combination, kind: 'feature' as const, sourceAnchors: ['WO9951190A1:claims:10:en'], evidence: [{ anchor: 'WO9951190A1:claims:10:en', quote: 'The filler is 28.5–80 wt%.', scope: 'Claim 10', qualifiers: 'None', quantityBasis: 'Percent of paste' }] };
 		const errors = validateCandidateReview({ ...review, coverage: [row] }, snapshot);

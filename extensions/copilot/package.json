@@ -1609,7 +1609,12 @@
                 "start": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "One-based source line or matching-result offset; 30 rows per page."
+                  "description": "One-based source line, matching-result or index offset. Pages are bounded by rows and text size; follow the returned continuation."
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Character offset within the selected line, supplied by a continuation when a long line spans pages. Copy the returned continuation to recover complete text."
                 }
               },
               "additionalProperties": false

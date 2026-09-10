@@ -54,6 +54,7 @@ import { SummarizedConversationHistoryMetadata } from '../../prompts/node/agent/
 import { ToolFailureEncountered, ToolResultMetadata } from '../../prompts/node/panel/toolCalling';
 import { ToolName } from '../../tools/common/toolNames';
 import { IToolsService, ToolCallCancelledError } from '../../tools/common/toolsService';
+import { checkPriorArtReportCompletion } from '../../tools/node/priorArtReportCompletion';
 import { ReadFileParams } from '../../tools/node/readFileTool';
 import { isHookAbortError, processHookResults } from './hookResultProcessor';
 import { applyConfiguredPromptOverrides } from './promptOverride';
@@ -1149,6 +1150,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		let lastResult: IToolCallSingleResult | undefined;
 		let lastRequestMessagesStartingIndexForRun: number | undefined;
 		let stopHookActive = false;
+		let reportRecoveryCount = 0;
 		const sessionId = this.options.conversation.sessionId;
 
 		// Store span context so runOne() can emit tools_available on first call
@@ -1220,6 +1222,23 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 						}
 						await timeout(1000, token);
 						continue;
+					}
+
+					if (result.response.type === ChatFetchResponseType.Success) {
+						const issue = await checkPriorArtReportCompletion(
+							this.options.conversation.turns.slice(0, -1).map(turn => ({ message: turn.request.message, rounds: turn.rounds, results: turn.resultMetadata?.toolCallResults ?? {} })),
+							{ message: this.turn.request.message, rounds: this.toolCallRounds, results: this.toolCallResults }, this._fileSystemService);
+						if (issue) {
+							const writerAvailable = result.availableTools.some(tool => tool.name === ToolName.WritePatentResults);
+							if (writerAvailable && reportRecoveryCount++ < 2) {
+								outputStream?.progress(l10n.t('Checking the prior-art report and its saved evidence…'));
+								this.stopHookReason = issue;
+								result.round.hookContext = formatHookContext([issue]);
+								continue;
+							}
+							outputStream?.markdown(l10n.t('\n\n**Report validation incomplete.** A current prior-art report with matching saved evidence was not confirmed. Any free-form or changed artifact remains an unvalidated draft. Source interpretation and research completeness also require review.'));
+							break;
+						}
 					}
 
 					// Before stopping, execute the stop hook
@@ -1400,9 +1419,9 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 	private hitToolCallLimit(stream: ChatResponseStream | undefined, lastResult: IToolCallSingleResult) {
 		if (stream && this.options.onHitToolCallLimit === ToolCallLimitBehavior.Confirm) {
 			const messageString = new MarkdownString(l10n.t({
-				message: 'Copilot has been working on this problem for a while. It can continue to iterate, or you can send a new message to refine your prompt. [Configure max requests]({0}).',
+				message: 'FlowLeap has reached the request limit for this task. Continue working, or send a new message to adjust the task. [Configure request limit]({0}).',
 				args: [`command:workbench.action.openSettings?${encodeURIComponent('["chat.agent.maxRequests"]')}`],
-				comment: 'Link to workbench settings for chat.maxRequests, which controls the maximum number of requests Copilot will make before stopping. This is used in the tool calling loop to determine when to stop iterating on a problem.'
+				comment: 'Link to workbench settings for chat.agent.maxRequests, which controls the maximum number of requests FlowLeap will make before pausing the task.'
 			}));
 			messageString.isTrusted = { enabledCommands: ['workbench.action.openSettings'] };
 
