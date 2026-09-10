@@ -27,6 +27,16 @@ function nextLookup(result: string): PatentEvidenceLookup | undefined {
 }
 
 describe('bounded local patent evidence inspection', () => {
+	it('uses the useful-row budget for source text while preserving original line numbers', () => {
+		const text = Array.from({ length: 60 }, (_, i) => i % 2 ? '' : `Passage ${i + 1}`).join('\n');
+		const result = lookupPatentEvidence(snapshot([{ ...source, text }]), publication, { anchor: source.anchor });
+		expect({ lastUsefulLine: result.includes('; line 59] Passage 59'), continuation: nextLookup(result) }).toEqual({ lastUsefulLine: true, continuation: undefined });
+	});
+	it('provides a valid recovery route for a guessed anchor instead of inviting another text search', () => {
+		const result = lookupPatentEvidence(snapshot([{ ...source, text: 'A source.' }]), publication, { anchor: 'claims' });
+		expect(result).toContain('evidenceLookup: {}');
+		expect(result).toContain('Do not guess an anchor');
+	});
 	it('exposes recorded publication metadata in the local index without reading the offload', () => {
 		const state = snapshot([{ ...source, text: 'Returned description.' }]);
 		const withMetadata = { ...state, executions: [{ ...state.executions[0], publicationTitle: 'Dental restorative composition', publicationDate: '2000-03-08' }] };

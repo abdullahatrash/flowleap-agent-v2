@@ -2281,7 +2281,7 @@
                         "quote": {
                           "type": "string",
                           "minLength": 1,
-                          "description": "Verbatim returned passage. For numbered claims include the entire claim, preserving dependency language and all constituents."
+                          "description": "Optional for a numbered claim: omit to copy its entire recorded text verbatim by anchor. For a description passage this field is required and must match returned text. Never re-fetch a claim merely to transcribe it for this field."
                         },
                         "scope": {
                           "type": "string",
@@ -2301,7 +2301,6 @@
                       },
                       "required": [
                         "anchor",
-                        "quote",
                         "scope",
                         "qualifiers",
                         "quantityBasis"

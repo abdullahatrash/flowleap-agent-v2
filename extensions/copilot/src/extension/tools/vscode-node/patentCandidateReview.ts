@@ -6,6 +6,7 @@
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { escape } from '../../../util/vs/base/common/strings';
 
 export interface PatentCandidateReview {
 	readonly coverage?: readonly {
@@ -15,12 +16,21 @@ export interface PatentCandidateReview {
 		readonly status: 'supported' | 'partial' | 'unresolved';
 		readonly sourceAnchors: readonly string[];
 		readonly gap: string;
-		readonly evidence?: readonly { readonly anchor: string; readonly quote: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
+		readonly evidence?: readonly { readonly anchor: string; readonly quote?: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
 	}[];
 	readonly content?: string;
 	readonly relevanceAssessment?: string;
 	readonly limitations?: readonly string[];
 	readonly stopReason?: string;
+}
+
+/** Numbered claims can be copied from the ledger instead of transcribed by the model. */
+export function materializeCandidateReview<T extends PatentCandidateReview>(review: T, snapshot: PatentExecutionSnapshot): T {
+	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+	return { ...review, coverage: review.coverage?.map(row => ({ ...row, evidence: row.evidence?.map(evidence => {
+		const source = sources.get(evidence.anchor);
+		return { ...evidence, quote: evidence.quote ?? (source?.reference.claimNumber ? source.text : undefined) };
+	}) })) };
 }
 
 /** Validate explicit review structure and anchor identity, not the truth or entailment of prose. */
@@ -66,6 +76,16 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
 
+/** Render retrieved text as literal quotation content, never as Markdown or active source HTML. */
+function quotation(text: string): string {
+	const missingImage = /<img\b[^>]*>/i.test(text);
+	const literal = text.replace(/<img\b[^>]*>/gi, '[Formula/image unavailable in retrieved text]');
+	const escaped = escape(literal).replace(/\r?\n/g, '<br />');
+	// HTML block content is not parsed as Markdown; pre-wrap preserves indentation without code styling.
+	return ['', `<blockquote>\n<p style="white-space: pre-wrap">${escaped}</p>\n</blockquote>`, '',
+		...(missingImage ? ['Formula/image placeholders were replaced by omission notices above. Consult the original document for the missing structures.', ''] : [])].join('\n');
+}
+
 /** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
 export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
 	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
@@ -85,9 +105,9 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 			...row.sourceAnchors.flatMap(anchor => {
 				const source = sources.get(anchor);
 				const evidence = row.evidence?.find(item => item.anchor === anchor);
-				return [source ? patentCitationLink(anchor, source.reference) : anchor,
-					...(evidence ? [evidence.quote.split(/\r?\n/).map(line => '> ' + line).join('\n'),
-						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`] : [])];
+				return ['', source ? patentCitationLink(anchor, source.reference) : anchor,
+					...(evidence ? [quotation(evidence.quote ?? ''),
+						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 			}),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
