@@ -36,8 +36,6 @@ interface IWritePatentResultsParams extends PatentCandidateReview {
 	objective?: string;
 	/** Short summary of databases, codes, and key queries used (prior-art and landscape reports). */
 	searchStrategy?: string;
-	/** Novelty/obviousness observations for the closest references (prior-art-report). */
-	relevanceAssessment?: string;
 }
 
 /**
@@ -100,7 +98,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const snapshot = template === 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
 			const input = snapshot ? materializeCandidateReview(options.input, snapshot) : options.input;
 			if (snapshot) {
-				const errors = validateCandidateReview(input, snapshot, [content, input.relevanceAssessment, input.objective, input.searchStrategy, ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'));
+				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'));
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -117,7 +115,6 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				subject: options.input.subject,
 				objective: options.input.objective,
 				searchStrategy: options.input.searchStrategy,
-				relevanceAssessment: options.input.relevanceAssessment,
 				date: new Date().toISOString().slice(0, 10),
 				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
 			});
@@ -131,6 +128,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				await this.fileSystemService.writeFile(evidenceUri, new TextEncoder().encode(evidenceDocument));
 			}
 			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(document));
+			if (evidenceDocument) {
+				await this.removeSupersededCompanions(uri, evidenceUri);
+			}
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
 
@@ -151,6 +151,27 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
 			]);
+		}
+	}
+
+	/**
+	 * A report has exactly one evidence companion: the one the receipt names. Companions left by
+	 * earlier saves of the same report describe superseded validations, so they are removed once the
+	 * replacement is on disk. Only this tool's own `<report>.<uuid>.evidence.json` siblings qualify,
+	 * and a cleanup failure never fails a save that already succeeded.
+	 */
+	private async removeSupersededCompanions(report: URI, companion: URI): Promise<void> {
+		const directory = dirname(report);
+		const prefix = basename(report) + '.';
+		const current = basename(companion);
+		const companionName = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.evidence\.json$/i;
+		try {
+			for (const [name] of await this.fileSystemService.readDirectory(directory)) {
+				if (name === current || !name.startsWith(prefix) || !companionName.test(name.slice(prefix.length))) { continue; }
+				await this.fileSystemService.delete(URI.joinPath(directory, name));
+			}
+		} catch (error) {
+			this.logService.warn(`[WritePatentResultsTool] Kept superseded evidence companions: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 }

@@ -37,9 +37,11 @@ describe('patent routing at the assembled provider and tool-result boundary', ()
 	});
 	it.each(families)('scopes provider capabilities and preserves native evidence navigation for %s', async family => {
 		const result = await assemble(family);
-		// An assembly contract, not proof that a live model obeys it. Snapshot the actual
-		// selected class, since prefixed BYOK names may legitimately use the fallback.
-		expect({ resolver: result.resolver, identity: result.text.includes('<patentAIIdentity>'), codingScoped: result.text.includes('<codingTaskReminders>'), explicitCoding: result.text.includes('Explicit coding requests remain coding tasks'), gapFallback: result.text.includes('use local code for that gap'), writer: result.text.includes('template=prior-art-report'), sourceRoute: result.toolText.includes('evidenceLookup') }).toMatchSnapshot();
+		// An assembly contract, not proof that a live model obeys it. Every block below is an
+		// invariant of the assembly, so assert it; only the selected provider class varies per
+		// family — prefixed BYOK names may legitimately use the fallback — so that is snapshotted.
+		expect({ identity: result.text.includes('<patentAIIdentity>'), codingScoped: result.text.includes('<codingTaskReminders>'), explicitCoding: result.text.includes('Explicit coding requests remain coding tasks'), gapFallback: result.text.includes('use local code for that gap'), writer: result.text.includes('template=prior-art-report'), sourceRoute: result.toolText.includes('evidenceLookup') }).toEqual({ identity: true, codingScoped: true, explicitCoding: true, gapFallback: true, writer: true, sourceRoute: true });
+		expect(result.resolver).toMatchSnapshot();
 	});
 	it.each(['isHiddenFamilyH', 'isHiddenModelM'] as const)('renders the hash-selected provider path %s', async predicate => {
 		// Hidden family IDs are not published. Force only selection; render the real
@@ -47,7 +49,8 @@ describe('patent routing at the assembled provider and tool-result boundary', ()
 		const matcher = vi.spyOn(modelCapabilities, predicate).mockReturnValue(true);
 		try {
 			const result = await assemble('hidden-routing-fixture');
-			expect({ resolver: result.resolver, identity: result.text.includes('<patentAIIdentity>'), codingScoped: result.text.includes('<codingTaskReminders>'), sourceRoute: result.toolText.includes('evidenceLookup') }).toMatchSnapshot();
+			expect({ identity: result.text.includes('<patentAIIdentity>'), codingScoped: result.text.includes('<codingTaskReminders>'), sourceRoute: result.toolText.includes('evidenceLookup') }).toEqual({ identity: true, codingScoped: true, sourceRoute: true });
+			expect(result.resolver).toMatchSnapshot();
 		} finally { matcher.mockRestore(); }
 	});
 	it.each(['EP0983762A1', 'EP0983762'])('keeps an already bounded local evidence page inline for %s even when its header exceeds the generic threshold', async publicationNumber => {

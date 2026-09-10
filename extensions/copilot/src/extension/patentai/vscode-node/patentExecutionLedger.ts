@@ -100,17 +100,22 @@ export class PatentExecutionLedger implements IPatentExecutionLedger {
 		try {
 			const files = await this.fileSystem.readDirectory(directory);
 			const executions: PatentExecution[] = [];
-			let incomplete = false;
+			let unreadable = false;
+			let partial = false;
 			for (const [name] of files) {
-				if (!name.endsWith('.json')) { incomplete = true; continue; }
+				if (!name.endsWith('.json')) { unreadable = true; continue; }
 				try {
 					const value: unknown = JSON.parse(new TextDecoder().decode(await this.fileSystem.readFile(URI.joinPath(directory, name))));
-					if (!isPatentExecution(value)) { throw new Error('Invalid record'); }
-					executions.push(value);
-				} catch { incomplete = true; }
+					const recovered = readPatentExecution(value);
+					if (!recovered) { throw new Error('Invalid record'); }
+					if (recovered.dropped) { partial = true; }
+					executions.push(recovered.execution);
+				} catch { unreadable = true; }
 			}
 			executions.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
-			return { executions, limitation: (incomplete ? 'Some audit records are unreadable or incomplete. ' : '') + LIMITATION };
+			const disclosure = (unreadable ? 'Some audit records are unreadable or incomplete. ' : '')
+				+ (partial ? 'Some audit records were recovered with unreadable fields dropped; those fields are unknown, not zero. ' : '');
+			return { executions, limitation: disclosure + LIMITATION };
 		} catch {
 			return { executions: [], limitation: 'No readable execution audit is available. ' + LIMITATION };
 		}
@@ -122,23 +127,95 @@ export function evidenceAnchor(reference: PatentDocumentReference, language?: st
 	return [reference.publicationNumber, reference.section, reference.claimNumber, language].filter(Boolean).join(':');
 }
 
-/** Storage is untrusted across upgrades or interrupted writes. Reject malformed records, retaining other outcomes. */
-function isPatentExecution(value: unknown): value is PatentExecution {
-	if (!value || typeof value !== 'object') { return false; }
+/**
+ * A recovered record together with whether any stored field was unusable, so the reader can
+ * disclose partial recovery without discarding the outcome.
+ */
+interface RecoveredExecution {
+	readonly execution: PatentExecution;
+	readonly dropped: boolean;
+}
+
+/**
+ * A source whose anchor does not match its own reference cannot be cited, so it is dropped on its
+ * own rather than taking the surrounding outcome with it.
+ */
+function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
+	if (!value || typeof value !== 'object') { return undefined; }
+	const source = value as { anchor?: unknown; text?: unknown; reference?: unknown; language?: unknown; retrieval?: unknown; review?: unknown; completeness?: unknown };
+	const reference = parsePatentDocumentReference(source.reference);
+	const text = typeof source.text === 'string' ? source.text : undefined;
+	const language = typeof source.language === 'string' ? source.language : undefined;
+	if (!reference || (source.text !== undefined && text === undefined) || (source.language !== undefined && language === undefined)) { return undefined; }
+	if (source.anchor !== evidenceAnchor(reference, language) || source.review !== 'unknown' || source.completeness !== 'unknown') { return undefined; }
+	if (source.retrieval !== 'returned' && source.retrieval !== 'unsegmented') { return undefined; }
+	return { anchor: evidenceAnchor(reference, language), text, reference, language, retrieval: source.retrieval, review: 'unknown', completeness: 'unknown' };
+}
+
+/**
+ * Storage is untrusted across upgrades or interrupted writes. Recover each field on its own: one
+ * unusable value must not discard an outcome the audit would otherwise report, and a dropped value
+ * stays unknown rather than being coerced into a number or an identity. Only `kind` and `status`
+ * are required, because they carry the outcome itself.
+ */
+function readPatentExecution(value: unknown): RecoveredExecution | undefined {
+	if (!value || typeof value !== 'object') { return undefined; }
 	const record = value as Record<string, unknown>;
-	const strings = ['query', 'requestedRange', 'requestedCountries', 'effectiveQuery', 'publicationTitle', 'publicationDate'];
-	const arrays = ['countryFilter', 'publicationIds', 'unavailableSections'];
-	if (typeof record.id !== 'string' || typeof record.recordedAt !== 'string' || typeof record.kind !== 'string' || !['search', 'details'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return false; }
-	if (strings.some(key => record[key] !== undefined && typeof record[key] !== 'string')) { return false; }
-	if (arrays.some(key => record[key] !== undefined && (!Array.isArray(record[key]) || !record[key].every(item => typeof item === 'string')))) { return false; }
-	if (['total', 'returned', 'totalClaims', 'returnedClaims'].some(key => record[key] !== undefined && (typeof record[key] !== 'number' || !Number.isFinite(record[key]) || record[key] < 0))) { return false; }
-	if (record.range !== undefined) {
-		if (!record.range || typeof record.range !== 'object' || !('begin' in record.range) || !('end' in record.range) || typeof record.range.begin !== 'number' || typeof record.range.end !== 'number' || !Number.isFinite(record.range.begin) || !Number.isFinite(record.range.end)) { return false; }
-	}
-	if (record.sources !== undefined && (!Array.isArray(record.sources) || !record.sources.every(source => {
-		if (!source || typeof source !== 'object') { return false; }
-		const reference = parsePatentDocumentReference(source.reference);
-		return reference && (source.text === undefined || typeof source.text === 'string') && (source.language === undefined || typeof source.language === 'string') && source.anchor === evidenceAnchor(reference, source.language) && ['returned', 'unsegmented'].includes(source.retrieval) && source.review === 'unknown' && source.completeness === 'unknown';
-	}))) { return false; }
-	return true;
+	if (typeof record.kind !== 'string' || !['search', 'details'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
+	let dropped = false;
+	// `null` is an absent value from JSON, not a corrupt one, so it never counts as a dropped field.
+	const absent = (raw: unknown) => raw === undefined || raw === null;
+	const text = (raw: unknown): string | undefined => {
+		if (absent(raw)) { return undefined; }
+		if (typeof raw !== 'string') { dropped = true; return undefined; }
+		return raw;
+	};
+	const count = (raw: unknown): number | undefined => {
+		if (absent(raw)) { return undefined; }
+		if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) { dropped = true; return undefined; }
+		return raw;
+	};
+	const list = (raw: unknown): readonly string[] | undefined => {
+		if (absent(raw)) { return undefined; }
+		if (!Array.isArray(raw)) { dropped = true; return undefined; }
+		// `Array.isArray` narrows an unknown to `any[]`; restate the element type instead of using it.
+		const items = (raw as readonly unknown[]).filter((item): item is string => typeof item === 'string');
+		if (items.length !== raw.length) { dropped = true; }
+		return items;
+	};
+	const span = (raw: unknown): { begin: number; end: number } | undefined => {
+		if (absent(raw)) { return undefined; }
+		const value = raw as { begin?: unknown; end?: unknown };
+		if (typeof raw !== 'object' || typeof value.begin !== 'number' || typeof value.end !== 'number' || !Number.isFinite(value.begin) || !Number.isFinite(value.end)) { dropped = true; return undefined; }
+		return { begin: value.begin, end: value.end };
+	};
+	const evidence = (raw: unknown): readonly PatentEvidenceSource[] | undefined => {
+		if (absent(raw)) { return undefined; }
+		if (!Array.isArray(raw)) { dropped = true; return undefined; }
+		const items = (raw as readonly unknown[]).map(readEvidenceSource).filter((source): source is PatentEvidenceSource => !!source);
+		if (items.length !== raw.length) { dropped = true; }
+		return items;
+	};
+	const execution: PatentExecution = {
+		id: text(record.id) ?? '',
+		recordedAt: text(record.recordedAt) ?? '',
+		kind: record.kind === 'details' ? 'details' : 'search',
+		status: record.status === 'failed' ? 'failed' : record.status === 'cancelled' ? 'cancelled' : 'succeeded',
+		query: text(record.query),
+		requestedRange: text(record.requestedRange),
+		requestedCountries: text(record.requestedCountries),
+		effectiveQuery: text(record.effectiveQuery),
+		countryFilter: list(record.countryFilter),
+		total: count(record.total),
+		returned: count(record.returned),
+		totalClaims: count(record.totalClaims),
+		returnedClaims: count(record.returnedClaims),
+		range: span(record.range),
+		publicationTitle: text(record.publicationTitle),
+		publicationDate: text(record.publicationDate),
+		publicationIds: list(record.publicationIds),
+		sources: evidence(record.sources),
+		unavailableSections: list(record.unavailableSections),
+	};
+	return { execution, dropped };
 }

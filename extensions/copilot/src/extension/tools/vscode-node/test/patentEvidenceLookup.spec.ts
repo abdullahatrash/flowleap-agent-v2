@@ -37,6 +37,31 @@ describe('bounded local patent evidence inspection', () => {
 		expect(result).toContain('evidenceLookup: {}');
 		expect(result).toContain('Do not guess an anchor');
 	});
+
+	it.each([
+		['EP1000000', 'a caller-normalized number without the resolved kind code'],
+		['ep1000000a1', 'the recorded number in another case'],
+	])('matches %s against the recorded publication (%s)', requested => {
+		const index = lookupPatentEvidence(snapshot([{ ...source, text: 'Returned description.' }]), requested, {});
+		expect({ found: index.includes(source.anchor), recorded: index.includes(`Recorded publication: ${publication}`) }).toEqual({ found: true, recorded: true });
+	});
+
+	it('matches a kind-coded request against a source recorded without one', () => {
+		const bare = { ...source, anchor: 'EP1000000:description:de', reference: { publicationNumber: 'EP1000000', section: 'description' as const }, text: 'Returned description.' };
+		expect(lookupPatentEvidence(snapshot([bare]), publication, {})).toContain(bare.anchor);
+	});
+
+	it('names the recorded publications when none matches, instead of repeating the same failed lookup', () => {
+		const sources = ['EP1000001A1', 'EP1000002A1', 'EP1000003A1', 'EP1000004A1', 'EP1000005A1', 'EP1000006A1']
+			.map(number => ({ ...source, anchor: `${number}:description`, reference: { publicationNumber: number, section: 'description' as const }, language: undefined, text: 'Text.' }));
+		const result = lookupPatentEvidence(snapshot(sources), 'EP9999999A1', {});
+		expect({ listed: sources.slice(0, 5).every(item => result.includes(item.reference.publicationNumber)), capped: result.includes('EP1000006A1'), more: result.includes('and 1 more'), route: result.includes('evidenceLookup: {}') })
+			.toEqual({ listed: true, capped: false, more: true, route: true });
+	});
+
+	it('states that nothing is recorded rather than naming a publication to look up', () => {
+		expect(lookupPatentEvidence({ executions: [], limitation: 'Nothing recorded.' }, publication, {})).toContain('No sources are recorded in this session.');
+	});
 	it('exposes recorded publication metadata in the local index without reading the offload', () => {
 		const state = snapshot([{ ...source, text: 'Returned description.' }]);
 		const withMetadata = { ...state, executions: [{ ...state.executions[0], publicationTitle: 'Dental restorative composition', publicationDate: '2000-03-08' }] };

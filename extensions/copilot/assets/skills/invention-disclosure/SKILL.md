@@ -49,7 +49,7 @@ Run the **prior-art** skill using the invention record as input:
 2. Search the confirmed jurisdictions, sources and cutoff basis per that skill. Track essential features, optional embodiments and important combinations; use additional tracks only for unresolved evidence. Record excluded sources rather than silently expanding scope.
 3. Retrieve and assess inventor-cited references when relevant to the requested task; distinguish post-cutoff concept examples from qualifying earlier publications. Record unavailable evidence and do not assume relevance from citation alone.
 
-For a candidate-review request, save the `prior-art-report` with structured coverage, limitations, semantic-review observations/concerns and stop reason, then finish after checking the saved report, generated audit and sources. Do not proceed to a legal opinion or drafting without that scope.
+For a candidate-review request, save the `prior-art-report` with structured coverage, limitations and stop reason, then finish after checking the saved report, generated audit and sources. Do not proceed to a legal opinion or drafting without that scope.
 
 ## Phase 3: Patentability Assessment (when requested)
 

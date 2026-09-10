@@ -25,6 +25,39 @@ describe('GeminiMessageConverter', () => {
 		expect(responses.map(response => [response.name, response.response])).toEqual([...calls].reverse().map(call => [call.name, { result: call.callId }]));
 	});
 
+	it('round-trips ids for concurrent calls to the same function, and omits an id for an orphaned call', () => {
+		const calls = [
+			new LanguageModelToolCallPart('call-a', 'get_patent_details', { publicationNumber: 'EP0983762A1' }),
+			new LanguageModelToolCallPart('call-b', 'get_patent_details', { publicationNumber: 'US1234567B2' }),
+		];
+		const result = apiMessageToGeminiMessage([
+			{ role: LanguageModelChatMessageRole.Assistant, name: undefined, content: calls },
+			{
+				role: LanguageModelChatMessageRole.User, name: undefined, content: [
+					new LanguageModelToolResultPart('call-b', [new LanguageModelTextPart('{"result":"b"}')]),
+					new LanguageModelToolResultPart('call-a', [new LanguageModelTextPart('{"result":"a"}')]),
+					// No matching call: a legacy id recovers the name but must not claim an id.
+					new LanguageModelToolResultPart('get_patent_details_12345', [new LanguageModelTextPart('{"result":"orphan"}')]),
+				]
+			},
+		]);
+		const parts = result.contents.flatMap(content => content.parts ?? []);
+		expect({
+			calls: parts.flatMap(part => part.functionCall ? [{ id: part.functionCall.id, name: part.functionCall.name }] : []),
+			responses: parts.flatMap(part => part.functionResponse ? [{ id: part.functionResponse.id, name: part.functionResponse.name, response: part.functionResponse.response }] : []),
+		}).toEqual({
+			calls: [
+				{ id: 'call-a', name: 'get_patent_details' },
+				{ id: 'call-b', name: 'get_patent_details' },
+			],
+			responses: [
+				{ id: 'call-b', name: 'get_patent_details', response: { result: 'b' } },
+				{ id: 'call-a', name: 'get_patent_details', response: { result: 'a' } },
+				{ id: undefined, name: 'get_patent_details', response: { result: 'orphan' } },
+			],
+		});
+	});
+
 	it('should convert basic user and assistant messages', () => {
 		const messages: LanguageModelChatMessage[] = [
 			{

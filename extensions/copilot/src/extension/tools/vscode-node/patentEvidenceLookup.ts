@@ -22,22 +22,44 @@ function continuation(lookup: PatentEvidenceLookup): string {
 	return `Continue with evidenceLookup=${JSON.stringify(lookup)}. Keep the same publicationNumber. Join continued parts of the same source line without adding whitespace.`;
 }
 
+/**
+ * Compare a caller-supplied publication number with a recorded one. The backend resolves the kind
+ * code, so a caller asking for `EP1234567` must still reach a source recorded as `EP1234567A1`.
+ */
+function samePublication(recorded: string, requested: string): boolean {
+	const stripKindCode = (value: string) => value.toUpperCase().replace(/[A-Z]\d?$/, '');
+	return recorded.toUpperCase() === requested.toUpperCase() || stripKindCode(recorded) === stripKindCode(requested);
+}
+
+/** Recorded publication numbers, in retrieval order, so a failed lookup can name real alternatives. */
+function recordedPublications(snapshot: PatentExecutionSnapshot): string[] {
+	return [...new Set(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => source.reference.publicationNumber))];
+}
+
 /** Recover identities and exact returned text locally. This is not a new search or a declaration of review. */
 export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publication: string, lookup: PatentEvidenceLookup): string {
 	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? [])
-		.filter(source => source.reference.publicationNumber === publication).map(source => [source.anchor, source]));
+		.filter(source => samePublication(source.reference.publicationNumber, publication)).map(source => [source.anchor, source]));
 	const start = lookup.start ?? 1;
 	if (!Number.isInteger(start) || start < 1) { return 'Evidence lookup start must be a positive integer.'; }
 	const offset = lookup.offset ?? 0;
 	if (!Number.isInteger(offset) || offset < 0) { return 'Evidence lookup offset must be a non-negative integer.'; }
 	const selected = lookup.anchor ? [...sources.values()].filter(source => source.anchor === lookup.anchor) : [...sources.values()];
-	if (!selected.length) { return `No recorded source matches ${lookup.anchor ?? publication}. Discover exact anchors with get_patent_details(publicationNumber: "${publication}", evidenceLookup: {}). Do not guess an anchor or search the source text for an anchor ID. ${snapshot.limitation}`; }
+	if (!selected.length) {
+		// Repeating this same lookup cannot succeed, so name the publications that are actually recorded.
+		const known = recordedPublications(snapshot);
+		const route = known.length
+			? `Recorded publications in this session: ${known.slice(0, 5).join(', ')}${known.length > 5 ? `, and ${known.length - 5} more` : ''}. Pick the one you meant and call get_patent_details(publicationNumber: "<recorded number>", evidenceLookup: {}) for its anchor index.`
+			: 'No sources are recorded in this session. Retrieve the publication once with get_patent_details without evidenceLookup before an evidence lookup.';
+		return `No recorded source matches ${lookup.anchor ?? publication}. ${route} Do not guess an anchor or search the source text for an anchor ID. ${snapshot.limitation}`;
+	}
 	if (!lookup.anchor && !lookup.query) {
 		if (offset) { return 'Evidence index uses start only; offset applies to source text.'; }
 		const page = selected.slice(start - 1, start - 1 + pageRows);
-		const details = [...snapshot.executions].reverse().find(execution => execution.kind === 'details' && execution.status === 'succeeded' && execution.sources?.some(source => source.reference.publicationNumber === publication));
+		const details = [...snapshot.executions].reverse().find(execution => execution.kind === 'details' && execution.status === 'succeeded' && execution.sources?.some(source => samePublication(source.reference.publicationNumber, publication)));
 		const title = details?.publicationTitle;
-		const metadata = `Recorded publication: ${publication}. Publication date: ${details?.publicationDate ?? 'not recorded'}. Title: ${title ? title.slice(0, 500) + (title.length > 500 ? '… (shortened)' : '') : 'not recorded'}.`;
+		const recorded = selected[0]?.reference.publicationNumber ?? publication;
+		const metadata = `Recorded publication: ${recorded}. Publication date: ${details?.publicationDate ?? 'not recorded'}. Title: ${title ? title.slice(0, 500) + (title.length > 500 ? '… (shortened)' : '') : 'not recorded'}.`;
 		return [`Local evidence index: ${selected.length} sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.`,
 			metadata,
 			...page.map(source => `${source.anchor} — ${source.text === undefined ? 'text unavailable in this older record' : `${source.text.split(/\r?\n/).length} lines`} — ${patentCitationLink('Open source', source.reference)}`),

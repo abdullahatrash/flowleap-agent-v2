@@ -12,8 +12,9 @@ describe('Configurations', () => {
 	it('package.json configuration contains stable, experimental, preview, and advanced sections', () => {
 		const configurationContributions = packageJson.contributes.configuration;
 
-		// Should have 4 sections
-		expect(configurationContributions, 'package.json should have exactly 4 sections').toHaveLength(4);
+		// The four Copilot sections plus the fork's Patent AI section (id 'patent-ai').
+		expect(configurationContributions, 'package.json should have exactly 5 sections').toHaveLength(5);
+		expect(configurationContributions.find(section => section.id === 'patent-ai'), 'patent-ai configuration section is missing').toBeDefined();
 
 		// Should have a stable section
 		const stableSection = configurationContributions.find(section => section.id === 'stable');
@@ -65,9 +66,11 @@ describe('Configurations', () => {
 
 	it('settings in code should match package.json', () => {
 
-		const configurationsInPackageJson = packageJson.contributes.configuration.flatMap(section => Object.keys(section.properties));
-		const advancedConfigurationsInPackageJson = packageJson.contributes.configuration.filter(section => section.id === 'advanced').flatMap(section => Object.keys(section.properties));
-		const otherConfigurationsInPackageJson = packageJson.contributes.configuration.filter(section => section.id !== 'advanced').flatMap(section => Object.keys(section.properties));
+		// Patent AI settings are read through the VS Code configuration API (patentai/vscode-node/configService.ts), not the ConfigKey registry.
+		const copilotSections = packageJson.contributes.configuration.filter(section => section.id !== 'patent-ai');
+		const configurationsInPackageJson = copilotSections.flatMap(section => Object.keys(section.properties));
+		const advancedConfigurationsInPackageJson = copilotSections.filter(section => section.id === 'advanced').flatMap(section => Object.keys(section.properties));
+		const otherConfigurationsInPackageJson = copilotSections.filter(section => section.id !== 'advanced').flatMap(section => Object.keys(section.properties));
 
 		// Get keys from code
 		const internalKeys = Object.values(ConfigKey.TeamInternal).map(setting => setting.fullyQualifiedId);

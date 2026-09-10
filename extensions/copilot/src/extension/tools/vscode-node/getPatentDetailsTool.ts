@@ -122,8 +122,11 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 				if (reference) { sources.push({ anchor: evidenceAnchor(reference, language), reference, language, text, retrieval: unsegmented ? 'unsegmented' : 'returned', review: 'unknown', completeness: 'unknown' }); }
 			};
 			addSource(biblio.documentReference, undefined, false, biblio.abstract ?? undefined);
-			if (claims?.claims.length || claims?.unsegmentedText) {
-				addSource(claims.documentReference, claims.language, !!claims.unsegmentedText, claims.unsegmentedText ?? claims.claims.map(claim => claim.text).join('\n\n'));
+			// Segmented claims win whenever the backend returns both: unsegmented text is the fallback
+			// for a document whose claim numbers could not be established, not a replacement.
+			const segmented = (claims?.claims.length ?? 0) > 0;
+			if (claims && (segmented || claims.unsegmentedText)) {
+				addSource(claims.documentReference, claims.language, !segmented, segmented ? claims.claims.map(claim => claim.text).join('\n\n') : claims.unsegmentedText);
 				for (const claim of claims.claims) { addSource(claim.documentReference, claims.language, false, claim.text); }
 			}
 			if (description?.description) { addSource(description.documentReference, description.language, false, description.description); }
@@ -201,7 +204,8 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			biblio.abstract || 'No abstract available.',
 			'',
 			`## ${patentCitationLink('Claims', claims?.documentReference)}${anchorLabel(claims?.documentReference, claims?.language)}`,
-			claims?.unsegmentedText ? `Individual claim numbers could not be established. Cite the claims section only.\n\n${claims.unsegmentedText}` : claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}${anchorLabel(c.documentReference, claims.language)}\n${c.text}`).join('\n\n') : fulltextFallback,
+			// Numbered claims are citable and unsegmented text is not, so prefer them whenever both arrive.
+			claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}${anchorLabel(c.documentReference, claims.language)}\n${c.text}`).join('\n\n') : claims?.unsegmentedText ? `Individual claim numbers could not be established. Cite the claims section only.\n\n${claims.unsegmentedText}` : fulltextFallback,
 			'',
 			`## ${patentCitationLink('Description', description?.documentReference)}`,
 			description?.description ? description.description.split(/\r?\n/).map(line => line.trim() ? `${anchorLabel(description.documentReference, description.language).trim()} ${line}` : '').join('\n') : fulltextFallback,

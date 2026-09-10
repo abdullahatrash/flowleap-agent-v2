@@ -99,7 +99,7 @@ A **Prior-Art Search** starts broad and narrows. You cannot notice what a too-na
 never returned.
 
 ## Output
-- Save simple lookup results via `write_patent_results`; for a prior-art candidate review follow the `prior-art` skill and supply the structured coverage, limitations, semantic review and stop reason required by its template.
+- Save simple lookup results via `write_patent_results`; for a prior-art candidate review follow the `prior-art` skill and supply the structured coverage, limitations and stop reason required by its template.
 - Preserve the execution records emitted by tools. Totals, returned IDs and fetched sources are different from passages actually reviewed; leave missing accounting unknown. Use source-provided anchor IDs and citations.
 - Include: patent number, title, applicant, date, relevance summary
 - Use tables for >5 results

@@ -90,7 +90,7 @@ describe('candidate report save path', () => {
 		const { tool, files } = setup();
 		const input = { filePath: '/workspace/review.md', content: '| Filler loading | Disclosed |', template: 'prior-art-report' as const, coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Evidence unavailable.' }], limitations: ['Interim.'], stopReason: 'Bounded stop.' };
 		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
-		expect((result.content[0] as LanguageModelTextPart).value).toContain('content and relevanceAssessment must be empty');
+		expect((result.content[0] as LanguageModelTextPart).value).toContain('For prior-art-report, content must be empty');
 		await expect(files.readFile(URI.file(input.filePath))).rejects.toThrow('ENOENT');
 		await tool.invoke({ input: { ...input, content: '' }, toolInvocationToken: undefined }, CancellationToken.None);
 		const report = new TextDecoder().decode(await files.readFile(URI.file(input.filePath)));
@@ -116,13 +116,14 @@ describe('candidate report save path', () => {
 		expect(new TextDecoder().decode(await files.readFile(URI.file(filePath)))).toBe('Verbatim notes');
 	});
 
-	it('replaces an existing candidate document without nesting wrappers, retaining each evidence revision', async () => {
+	it('replaces an existing candidate document without nesting wrappers, keeping only the companion the receipt names', async () => {
 		const { tool, files, checked } = setup();
 		const input = { filePath: '/workspace/report.md', template: 'prior-art-report' as const, content: '', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Interim review.'], stopReason: 'Requested interim report.' };
 		await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
-		await tool.invoke({ input: { ...input, stopReason: 'Corrected stopping rationale' }, toolInvocationToken: undefined }, CancellationToken.None);
+		const revised = await tool.invoke({ input: { ...input, stopReason: 'Corrected stopping rationale' }, toolInvocationToken: undefined }, CancellationToken.None);
 		const report = new TextDecoder().decode(await files.readFile(URI.file(input.filePath)));
-		expect({ wrappers: report.match(/# Prior Art Candidate Review/g)?.length, corrected: report.includes('Corrected stopping rationale'), stale: report.includes('First candidate draft'), companions: (await files.readDirectory(URI.file('/workspace'))).filter(([name]) => name.endsWith('.evidence.json')).length, checks: checked.length }).toEqual({ wrappers: 1, corrected: true, stale: false, companions: 2, checks: 4 });
+		const companions = (await files.readDirectory(URI.file('/workspace'))).filter(([name]) => name.endsWith('.evidence.json')).map(([name]) => name);
+		expect({ wrappers: report.match(/# Prior Art Candidate Review/g)?.length, corrected: report.includes('Corrected stopping rationale'), stale: report.includes('First candidate draft'), companions: companions.length, named: (revised.content[0] as LanguageModelTextPart).value.includes(companions[0]), checks: checked.length }).toEqual({ wrappers: 1, corrected: true, stale: false, companions: 1, named: true, checks: 4 });
 	});
 	it('checks raw source URLs in report notes without JSON punctuation', async () => {
 		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', sources: [{ anchor: 'EP1234567A1:claims:1:en', reference: { publicationNumber: 'EP1234567A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Partial.' }) };

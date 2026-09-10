@@ -30,6 +30,10 @@ class PriorArtLoop extends ToolCallingLoop<IToolCallingLoopOptions> {
 	protected override async buildPrompt(): Promise<IBuildPromptResult> { return nullRenderPromptResult(); }
 	protected override async getAvailableTools(): Promise<LanguageModelToolInformation[]> { return []; }
 	protected override async fetch(): Promise<never> { throw new Error('Scripted runOne supplies the model response.'); }
+	/** Record the stop hooks so a spent report budget can be shown not to skip them. */
+	readonly hooks: string[] = [];
+	protected override async executeStopHook() { this.hooks.push('stop'); return { shouldContinue: false }; }
+	protected override async executeSubagentStopHook() { this.hooks.push('subagentStop'); return { shouldContinue: false }; }
 	override async runOne(output: ChatResponseStream | undefined): Promise<IToolCallSingleResult> {
 		const context = this.createPromptContext([], output);
 		this.queries.push(context.query);
@@ -46,13 +50,13 @@ class PriorArtLoop extends ToolCallingLoop<IToolCallingLoopOptions> {
 
 const disposables = new DisposableStore();
 afterEach(() => { disposables.clear(); vi.restoreAllMocks(); });
-function setup(prior?: Turn) {
+function setup(prior?: Turn, subAgentInvocationId?: string) {
 	const services = disposables.add(createExtensionUnitTestingServices());
 	const files = new MockFileSystemService();
 	services.define(IFileSystemService, files);
 	const accessor = disposables.add(services.createTestingAccessor());
 	const message = prior ? 'Continue' : 'Search for prior art and save /workspace/report.md';
-	const request = { prompt: message, references: [], toolReferences: [], tools: new Map(), id: 'request', sessionId: 'session', hasHooksEnabled: false } as Partial<ChatRequest>;
+	const request = { prompt: message, references: [], toolReferences: [], tools: new Map(), id: 'request', sessionId: 'session', hasHooksEnabled: false, subAgentInvocationId, subAgentName: subAgentInvocationId && 'patent_search' } as Partial<ChatRequest>;
 	const loop = disposables.add(accessor.get(IInstantiationService).createInstance(PriorArtLoop, { conversation: new Conversation('session', [...(prior ? [prior] : []), new Turn('turn', { type: 'user', message })]), request: request as ChatRequest, toolCallLimit: 20 }));
 	const stream = new ChatResponseStreamImpl(() => { }, () => { });
 	const markdown = vi.spyOn(stream, 'markdown');
@@ -79,17 +83,22 @@ describe('prior-art finalization in the production tool loop', () => {
 		await loop.run(stream, CancellationToken.None);
 		expect({ rounds: loop.queries.length, recovery: loop.queries[2].includes('no successful structured finalization'), warnings: markdown.mock.calls.length }).toEqual({ rounds: 4, recovery: true, warnings: 0 });
 	});
-	it('limits recovery to two nudges and marks the remaining draft unvalidated', async () => {
+	it('warns once when recovery is spent and still lets the stop hook run', async () => {
 		const { loop, stream, markdown } = setup();
 		await loop.run(stream, CancellationToken.None);
-		expect(loop.queries).toHaveLength(4);
-		expect(markdown.mock.calls.at(-1)?.[0]).toContain('Report validation incomplete');
+		expect({ rounds: loop.queries.length, hooks: loop.hooks, warnings: markdown.mock.calls.length, banner: String(markdown.mock.calls.at(-1)?.[0]).includes('Report validation incomplete') })
+			.toEqual({ rounds: 4, hooks: ['stop'], warnings: 1, banner: true });
 	});
-	it('reports incomplete validation immediately when the writer is unavailable', async () => {
+	it('skips validation entirely when the structured writer is not offered', async () => {
 		const { loop, stream, markdown } = setup();
 		loop.writerAvailable = false;
 		await loop.run(stream, CancellationToken.None);
-		expect(loop.queries).toHaveLength(2);
-		expect(markdown.mock.calls.at(-1)?.[0]).toContain('unvalidated draft');
+		expect({ rounds: loop.queries.length, hooks: loop.hooks, warnings: markdown.mock.calls.length }).toEqual({ rounds: 2, hooks: ['stop'], warnings: 0 });
+	});
+	it('leaves a search subagent, which cannot finalize a report, untouched', async () => {
+		const { loop, stream, markdown } = setup(undefined, 'subagent-invocation');
+		loop.writerAvailable = false;
+		await loop.run(stream, CancellationToken.None);
+		expect({ rounds: loop.queries.length, hooks: loop.hooks, warnings: markdown.mock.calls.length }).toEqual({ rounds: 2, hooks: ['subagentStop'], warnings: 0 });
 	});
 });

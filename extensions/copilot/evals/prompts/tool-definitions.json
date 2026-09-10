@@ -917,7 +917,7 @@
     "type": "function",
     "function": {
       "name": "write_patent_results",
-      "description": "Write or update patent research results in a workspace file. For prior-art-report use empty content and omit relevanceAssessment: the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Other templates and free-form saves retain their existing behavior.",
+      "description": "Write or update patent research results in a workspace file. For prior-art-report use empty content: the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Other templates and free-form saves retain their existing behavior.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -958,10 +958,6 @@
           "searchStrategy": {
             "type": "string",
             "description": "Confirmed search scope and cutoff basis, sources and strategy. Actual query/count history is generated from recorded executions for prior-art-report; identify unavailable or unsearched sources in limitations."
-          },
-          "relevanceAssessment": {
-            "type": "string",
-            "description": "Legacy field; leave empty for prior-art-report, whose assessment is generated from coverage."
           },
           "coverage": {
             "type": "array",
@@ -1019,7 +1015,7 @@
                       "quote": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "Verbatim returned passage. For numbered claims include the entire claim, preserving dependency language and all constituents."
+                        "description": "Optional for a numbered claim: omit to copy its entire recorded text verbatim by anchor. For a description passage this field is required and must match returned text. Never re-fetch a claim merely to transcribe it for this field."
                       },
                       "scope": {
                         "type": "string",
@@ -1039,7 +1035,6 @@
                     },
                     "required": [
                       "anchor",
-                      "quote",
                       "scope",
                       "qualifiers",
                       "quantityBasis"

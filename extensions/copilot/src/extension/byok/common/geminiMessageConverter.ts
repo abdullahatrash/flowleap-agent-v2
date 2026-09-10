@@ -26,6 +26,9 @@ function apiContentToGeminiContent(content: (LanguageModelTextPart | LanguageMod
 		} else if (part instanceof LanguageModelToolCallPart) {
 			const functionCallPart: Part = {
 				functionCall: {
+					// Gemini matches a response to its call by id, which is the only way to tell
+					// apart two concurrent calls to the same function.
+					...(part.callId ? { id: part.callId } : {}),
 					name: part.name,
 					args: part.input as Record<string, unknown> || {}
 				},
@@ -70,7 +73,8 @@ function apiContentToGeminiContent(content: (LanguageModelTextPart | LanguageMod
 
 			// Native calls use opaque UUIDs. Recover the name from the matching call,
 			// retaining legacy functionName_timestamp support for orphaned old history.
-			const functionName = toolNamesByCallId.get(part.callId)
+			const matchedCallName = toolNamesByCallId.get(part.callId);
+			const functionName = matchedCallName
 				?? /^(.*)_\d+$/.exec(part.callId.replace(/__vscode.*$/, ''))?.[1]
 				?? 'unknown_function';
 
@@ -106,6 +110,9 @@ function apiContentToGeminiContent(content: (LanguageModelTextPart | LanguageMod
 			}
 
 			const functionResponse: FunctionResponse = {
+				// Only echo an id that matches a functionCall we actually emit; an orphaned
+				// legacy call id has no counterpart for Gemini to match against.
+				...(matchedCallName ? { id: part.callId } : {}),
 				name: functionName,
 				response: responsePayload
 			};
@@ -266,7 +273,7 @@ export function geminiMessagesToRawMessages(contents: Content[], systemInstructi
 				} else if (part.functionCall && part.functionCall.name) {
 					toolCalls ??= [];
 					toolCalls.push({
-						id: part.functionCall.name, // Gemini doesn't have call IDs, use name
+						id: part.functionCall.id ?? part.functionCall.name, // Fall back to the name when the call carries no id
 						type: 'function',
 						function: {
 							name: part.functionCall.name,
@@ -307,7 +314,7 @@ export function geminiMessagesToRawMessages(contents: Content[], systemInstructi
 					rawMessages.push({
 						role: Raw.ChatRole.Tool,
 						content: toolContent,
-						toolCallId: part.functionResponse.name
+						toolCallId: part.functionResponse.id ?? part.functionResponse.name
 					});
 				}
 			});

@@ -76,8 +76,53 @@ jobs:
         run: npm run typecheck
         working-directory: extensions/copilot
 
+      # Runs against the JavaScript emitted into extensions/pdf-preview/out by
+      # the `gulp compile-extensions` step above.
+      - name: Test pdf-preview extension
+        run: npm test
+        working-directory: extensions/pdf-preview
+
       - name: Validate layers
         run: npm run valid-layers-check
+
+  copilot-unit-tests:
+    name: Copilot Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # @vscode/ripgrep's postinstall hits the GitHub API to download a
+      # release asset; anonymous requests are rate-limited and flake on
+      # shared runners.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Native modules built during npm ci need system headers:
+      # kerberos -> libkrb5-dev, native-keymap -> libxkbfile-dev.
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Vitest unit tests for the copilot extension. The opt-in live provider
+      # specs (*.live.spec.ts) skip themselves unless PATENT_ROUTING_LIVE_EVAL
+      # is set, which CI deliberately leaves unset so no metered provider call
+      # is ever made here.
+      - name: Run copilot unit tests
+        run: npx vitest run
+        working-directory: extensions/copilot
 
   skills-drift:
     name: Bundled Skills Drift

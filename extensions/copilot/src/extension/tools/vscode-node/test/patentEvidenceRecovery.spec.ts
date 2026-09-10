@@ -63,6 +63,28 @@ describe('prior-art evidence recovery and review contract', () => {
 		const incomplete = { ...review, coverage: [{ ...row, evidence: [{ ...evidence, quote: fragment }] }, combination] };
 		expect({ rejected: validateCandidateReview(incomplete, snapshot).some(error => error.includes('Quote the complete claim')), errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'evidence.json')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
 	});
+	it.each([
+		['a sentence-final period', 'Scope checked against [claim 10](URL).'],
+		['surrounding parentheses', 'Scope checked (see [claim 10](URL)) before drafting.'],
+		['a trailing comma and semicolon', 'Scope: URL, and URL; both were read.'],
+	])('accepts a recorded citation followed by %s', (_case, template) => {
+		const url = 'flowleap://flowleap.patent-ai/patent?publication=WO9951190A1&section=claims&claim=10';
+		const errors = validateCandidateReview(review, snapshot, template.replace(/URL/g, url));
+		expect(errors).toEqual([]);
+	});
+
+	it('still rejects an unrecorded claim when prose punctuation follows the citation', () => {
+		const url = 'flowleap://flowleap.patent-ai/patent?publication=WO9951190A1&section=claims&claim=6';
+		expect(validateCandidateReview(review, snapshot, `See [claim 6](${url}).`).some(error => error.includes('Unresolved patent reader citation'))).toBe(true);
+	});
+
+	it('validates and renders an unresolved row that arrives without sourceAnchors', () => {
+		const row: PatentCandidateReview['coverage'] = [{ feature: 'Essential combination', kind: 'combination', importance: 'essential', status: 'unresolved', gap: 'No source recorded.' }];
+		const draft = { ...review, coverage: row };
+		expect(validateCandidateReview(draft, snapshot)).toEqual([]);
+		expect(renderCandidateReview(draft, snapshot, 'evidence.json')).toContain('No supported conclusion is established');
+	});
+
 	it('rejects bibliography-only feature support even when its quotation matches', () => {
 		const source = { ...snapshot.executions[0].sources![0], anchor: 'WO9951190A1:bibliography', reference: { publicationNumber: 'WO9951190A1', section: 'bibliography' as const } };
 		const state = { ...snapshot, executions: [{ ...snapshot.executions[0], sources: [source] }] };

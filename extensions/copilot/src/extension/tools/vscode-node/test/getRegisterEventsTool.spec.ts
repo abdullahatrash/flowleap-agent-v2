@@ -112,6 +112,6 @@ describe('GetRegisterEventsTool', () => {
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000' }), makeToken());
 
 		expect(textOf(result)).toContain('Error fetching register events for EP1000000: 402 - An active FlowLeap subscription is required.');
-		expect(textOf(result)).toContain('FlowLeap needs to be set up');
+		expect(textOf(result)).toContain('Ask the user to subscribe');
 	});
 });

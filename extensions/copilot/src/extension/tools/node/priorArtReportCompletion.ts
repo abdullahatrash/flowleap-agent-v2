@@ -56,7 +56,7 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 		if (call.name !== ToolName.WritePatentResults) { return false; }
 		try { return JSON.parse(call.arguments).template === 'prior-art-report'; } catch { return false; }
 	});
-	const mentionsTarget = target && currentCalls.some(call => call.arguments.includes(target));
+	const mentionsTarget = !!target && currentCalls.some(call => mentionsPath(call, target));
 	const continuing = /^\s*continue\b/i.test(current.message) || /\b(revise|update|correct)\b.*\b(report|review)\b/i.test(current.message);
 	const pendingResearch = !priorReceipts.length && activeHistory.some(turn => turn.rounds.some(round => round.toolCalls.some(isRetrieval)));
 	const genericWrite = currentCalls.some(call => [ToolName.CreateFile, ToolName.EditFile, ToolName.ApplyPatch, ToolName.ReplaceString, ToolName.MultiReplaceString, ToolName.CoreRunInTerminal, ToolName.CoreSendToTerminal].some(name => name === call.name));
@@ -82,7 +82,10 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 			const report = await files.readFile(URI.parse(receipt.reportUri));
 			const evidence = await files.readFile(URI.parse(receipt.evidenceUri));
 			if (digest(report) === receipt.reportDigest && digest(evidence) === receipt.evidenceDigest) { continue; }
-		} catch { /* Missing or unreadable artifacts cannot retain their validation status. */ }
+		} catch (error) {
+			// A removed artifact loses its validation, but a transient read failure must not block the user.
+			if (!isNotFound(error)) { continue; }
+		}
 		return `The prior-art report or its evidence companion changed after validation: ${receipt.reportUri}. Its previous validation no longer applies. If this is the requested deliverable, re-save it through write_patent_results with template="prior-art-report" and revised structured evidence. If it was intentionally removed, explain that no validated deliverable remains. Do not restore a deliberately deleted file without user authorization.`;
 	}
 	return undefined;
@@ -124,7 +127,48 @@ function isTextPart(part: unknown): part is { value: string } {
 	return !!part && typeof part === 'object' && 'value' in part && typeof part.value === 'string';
 }
 
+/**
+ * Compare two path-like strings on one shape: either separator, and drive-letter paths case-folded.
+ * `extUriBiasedIgnorePathCase` keys case sensitivity on the host platform, which would validate the
+ * same transcript differently per machine, so the drive-letter shape decides it here instead.
+ */
+function comparable(left: string, right: string): readonly [string, string] {
+	const first = left.replace(/[\\/]+/g, '/');
+	const second = right.replace(/[\\/]+/g, '/');
+	const drivePath = /(?:^|\/)[a-zA-Z]:\//;
+	return drivePath.test(first) || drivePath.test(second) ? [first.toLowerCase(), second.toLowerCase()] : [first, second];
+}
+
+/** Absolute targets must be the whole path; a relative target matches any trailing segment run. */
 function matchesPath(reportUri: string, target: string): boolean {
-	const path = URI.parse(reportUri).path;
-	return target.startsWith('/') ? path === target : path.endsWith('/' + target);
+	const [path, wanted] = comparable(URI.parse(reportUri).path, target);
+	return /^(?:\/|[a-zA-Z]:\/)/.test(wanted) ? path === wanted || path === '/' + wanted : path.endsWith('/' + wanted);
+}
+
+/** Windows separators are escaped inside the arguments JSON, so prefer the parsed path argument. */
+function mentionsPath(call: IToolCallRound['toolCalls'][number], target: string): boolean {
+	if (call.name === ToolName.WritePatentResults) {
+		const filePath = parsedFilePath(call.arguments);
+		if (filePath !== undefined) {
+			const [path, wanted] = comparable(filePath, target);
+			return path === wanted || path.endsWith('/' + wanted.replace(/^\//, ''));
+		}
+	}
+	const [text, wanted] = comparable(call.arguments, target);
+	return text.includes(wanted);
+}
+
+function parsedFilePath(argumentsText: string): string | undefined {
+	try {
+		const value: { filePath?: unknown } = JSON.parse(argumentsText);
+		return typeof value.filePath === 'string' ? value.filePath : undefined;
+	} catch { return undefined; }
+}
+
+/** Only a genuinely absent artifact invalidates a receipt; an unreachable file system is not an answer. */
+function isNotFound(error: unknown): boolean {
+	if (!error || typeof error !== 'object') { return false; }
+	const code = 'code' in error && typeof error.code === 'string' ? error.code : '';
+	const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+	return /ENOENT|FileNotFound|EntryNotFound/i.test(code + ' ' + message);
 }
