@@ -25,6 +25,7 @@ import type { IInstantiationService } from '../../../../util/vs/platform/instant
 import { LanguageModelDataPart, LanguageModelTextPart } from '../../../../vscodeTypes';
 import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import woClaims from '../../../patentai/vscode-node/test/fixtures/wo9951190a1-claims.json';
+import { PatentExecution, IPatentExecutionLedger } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 import { GetPatentDetailsTool } from '../getPatentDetailsTool';
 import { GetPatentFiguresTool } from '../getPatentFiguresTool';
@@ -136,6 +137,18 @@ describe('get_patent_details', () => {
 		// The claims tool returns NUMBERED claims; the rendered text is their text, in order.
 		expect(textOf(result)).toContain('1. A battery pack.');
 		expect(textOf(result)).toContain('The description.');
+	});
+
+	it('recovers actual retrieved claim text and anchor without another backend invocation', async () => {
+		const { client, calls } = makeBackendClient({ get_bibliography: { docId: woClaims.docId, title: 'Composition', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: null, publication: null, priority: [] } }, get_claims: woClaims });
+		const executions: PatentExecution[] = [];
+		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, record: async (_session, execution) => { executions.push({ ...execution, id: 'saved', recordedAt: '2026-09-10' }); return 'Recorded'; }, read: async () => ({ executions, limitation: 'Instrumented tools only.' }) };
+		const tool = new GetPatentDetailsTool(makeLogService(), client, ledger);
+		const returned = textOf(await tool.invoke(makeOptions({ publicationNumber: woClaims.docId }), makeToken()));
+		const callsBefore = calls.length;
+		const source = executions[0].sources!.find(source => source.reference.claimNumber === '10')!;
+		const recovered = textOf(await tool.invoke(makeOptions({ publicationNumber: woClaims.docId, evidenceLookup: { anchor: source.anchor } }), makeToken()));
+		expect({ callsAfter: calls.length, callsBefore, inline: returned.includes(`Claim 10](flowleap://flowleap.patent-ai/patent?publication=${woClaims.docId}&section=claims&claim=10) [source anchor: ${source.anchor}]`), text: recovered.includes(woClaims.claims.find(claim => claim.number === '10')!.text), anchor: recovered.includes(source.anchor), outcomes: executions.length }).toEqual({ callsAfter: callsBefore, callsBefore, inline: true, text: true, anchor: true, outcomes: 1 });
 	});
 
 	it('emits only the returned WO claim anchors while preserving all recovered source text', async () => {

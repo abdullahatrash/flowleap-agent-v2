@@ -17,8 +17,11 @@ import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 
+import { lookupPatentEvidence, PatentEvidenceLookup } from './patentEvidenceLookup';
+
 interface IGetPatentDetailsParams {
 	publicationNumber: string;
+	evidenceLookup?: PatentEvidenceLookup;
 }
 
 /** `data` payload of the `get_bibliography` facade tool. */
@@ -99,6 +102,10 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 		const doc = this.normalizePublicationNumber(publicationNumber);
 		this.logService.info(`[GetPatentDetailsTool] Normalized: ${publicationNumber} -> ${doc}`);
 
+		if (options.input.evidenceLookup) {
+			return new LanguageModelToolResult([new LanguageModelTextPart(lookupPatentEvidence(await this.ledger.read(options.chatSessionResource), doc, options.input.evidenceLookup))]);
+		}
+
 		try {
 			const biblioPromise = callFacadeTool<BiblioData>(this.patentBackendClient, 'get_bibliography', { patent_number: doc }, token);
 			const claimsPromise = this.fetchOptionalSection<ClaimsData>('get_claims', doc, token);
@@ -108,23 +115,23 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			const [claims, description] = await Promise.all([claimsPromise, descriptionPromise]);
 
 			const sources: PatentEvidenceSource[] = [];
-			const addSource = (value: PatentDocumentReference | null | undefined, language?: string, unsegmented = false) => {
+			const addSource = (value: PatentDocumentReference | null | undefined, language?: string, unsegmented = false, text?: string) => {
 				const reference = parsePatentDocumentReference(value);
-				if (reference) { sources.push({ anchor: evidenceAnchor(reference, language), reference, language, retrieval: unsegmented ? 'unsegmented' : 'returned', review: 'unknown', completeness: 'unknown' }); }
+				if (reference) { sources.push({ anchor: evidenceAnchor(reference, language), reference, language, text, retrieval: unsegmented ? 'unsegmented' : 'returned', review: 'unknown', completeness: 'unknown' }); }
 			};
-			addSource(biblio.documentReference);
+			addSource(biblio.documentReference, undefined, false, biblio.abstract ?? undefined);
 			if (claims?.claims.length || claims?.unsegmentedText) {
-				addSource(claims.documentReference, claims.language, !!claims.unsegmentedText);
-				for (const claim of claims.claims) { addSource(claim.documentReference, claims.language); }
+				addSource(claims.documentReference, claims.language, !!claims.unsegmentedText, claims.unsegmentedText ?? claims.claims.map(claim => claim.text).join('\n\n'));
+				for (const claim of claims.claims) { addSource(claim.documentReference, claims.language, false, claim.text); }
 			}
-			if (description?.description) { addSource(description.documentReference, description.language); }
+			if (description?.description) { addSource(description.documentReference, description.language, false, description.description); }
 			const unavailableSections = [!claims?.claims.length && !claims?.unsegmentedText ? 'claims' : '', !description?.description ? 'description' : ''].filter(Boolean);
-			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'details', status: 'succeeded', publicationIds: [biblio.docId || doc], sources, unavailableSections, totalClaims: claims?.totalClaims ?? undefined, returnedClaims: claims?.claims.length });
+			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'details', status: 'succeeded', publicationIds: [biblio.docId || doc], publicationTitle: biblio.title ?? undefined, publicationDate: biblio.dates?.publication ?? undefined, sources, unavailableSections, totalClaims: claims?.totalClaims ?? undefined, returnedClaims: claims?.claims.length });
 			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc);
 			this.logService.info(`[GetPatentDetailsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(formattedResponse + '\n\n' + audit + '\nKnown source anchors (retrieved, review unknown):\n' + sources.map(source => source.anchor).join('\n'))
+				new LanguageModelTextPart('Evidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index; use evidenceLookup.query to find later passages or evidenceLookup.anchor and start to page through stored text. No repeated retrieval needed.\n\n' + formattedResponse + '\n\n' + audit)
 			]);
 
 		} catch (error) {
@@ -169,6 +176,10 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 		const countryCode = biblio.docId?.substring(0, 2) || doc.substring(0, 2);
 		const fulltextFallback = `Full text is not available for this document and section. ${this.usptoFallbackHint(doc)}`;
 
+		const anchorLabel = (value: PatentDocumentReference | null | undefined, language?: string) => {
+			const reference = parsePatentDocumentReference(value);
+			return reference ? ` [source anchor: ${evidenceAnchor(reference, language)}]` : '';
+		};
 		const lines: string[] = [
 			`# Patent: ${patentCitationLink(biblio.docId || doc, biblio.documentReference)}`,
 			'',
@@ -184,14 +195,14 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			`**IPC Classifications:** ${biblio.ipc?.length > 0 ? biblio.ipc.join(', ') : 'N/A'}`,
 			`**CPC Classifications:** ${biblio.cpc?.length > 0 ? biblio.cpc.join(', ') : 'N/A'}`,
 			'',
-			'## Abstract',
+			`## Abstract${anchorLabel(biblio.documentReference)}`,
 			biblio.abstract || 'No abstract available.',
 			'',
-			`## ${patentCitationLink('Claims', claims?.documentReference)}`,
-			claims?.unsegmentedText ? `Individual claim numbers could not be established. Cite the claims section only.\n\n${claims.unsegmentedText}` : claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}\n${c.text}`).join('\n\n') : fulltextFallback,
+			`## ${patentCitationLink('Claims', claims?.documentReference)}${anchorLabel(claims?.documentReference, claims?.language)}`,
+			claims?.unsegmentedText ? `Individual claim numbers could not be established. Cite the claims section only.\n\n${claims.unsegmentedText}` : claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}${anchorLabel(c.documentReference, claims.language)}\n${c.text}`).join('\n\n') : fulltextFallback,
 			'',
 			`## ${patentCitationLink('Description', description?.documentReference)}`,
-			description?.description || fulltextFallback,
+			description?.description ? description.description.split(/\r?\n/).map(line => line.trim() ? `${anchorLabel(description.documentReference, description.language).trim()} ${line}` : '').join('\n') : fulltextFallback,
 			'',
 			'---',
 			'For citations use search_citations / search_forward_citations; for the patent family use get_patent_family.',

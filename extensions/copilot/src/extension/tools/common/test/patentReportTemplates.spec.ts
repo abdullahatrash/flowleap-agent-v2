@@ -33,9 +33,6 @@ describe('writePatentResults report templates', () => {
 			## 3. Candidate Evidence
 			US-1234567-B2 describes a related mechanism; combination coverage remains unresolved.
 
-			## 4. Review-Limited Assessment
-			Assessment not supplied; no patentability conclusion established.
-
 			---
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
 			"
@@ -300,9 +297,6 @@ describe('writePatentResults report templates', () => {
 
 			## 3. Candidate Evidence
 			- EP1 (close art)
-
-			## 4. Review-Limited Assessment
-			EP1 describes a related composition; narrower ranges remain unresolved.
 
 			---
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*

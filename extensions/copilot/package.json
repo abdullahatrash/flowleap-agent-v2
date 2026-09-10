@@ -1586,7 +1586,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(file-text)",
         "userDescription": "Get full patent details including claims and description",
-        "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use search_patents (with CQL you write) to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request).",
+        "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use search_patents (with CQL you write) to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request). For previously retrieved sources, use evidenceLookup: {} to recover exact source anchor IDs locally, evidenceLookup.query for literal matches anywhere in the stored text, or evidenceLookup.anchor plus start for paginated source lines. These lookups do not call the backend. Inspect later relevant passages before absence claims; include full dependent claims and keep every constituent in the original quantity basis.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1594,6 +1594,25 @@
             "publicationNumber": {
               "type": "string",
               "description": "Patent publication number (e.g., 'US-7654321-B2', 'EP-1234567-A1', 'WO-2020123456-A1')"
+            },
+            "evidenceLookup": {
+              "type": "object",
+              "description": "Optional local-only recovery of earlier returned evidence in this session; omitting this performs a backend detail retrieval.",
+              "properties": {
+                "anchor": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string",
+                  "description": "Literal case-insensitive text search across stored passages, including later description lines."
+                },
+                "start": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "One-based source line or matching-result offset; 30 rows per page."
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -2154,7 +2173,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write or update patent research results in a workspace file. For a candidate review use prior-art-report and provide subject, objective, searchStrategy, relevanceAssessment, coverage, limitations, semanticReview and stopReason. The tool supplies recorded session execution/source evidence; do not recreate its audit from memory. Semantic review is your source-grounded assessment, not proof of correctness. Other templates and free-form saves retain their existing behavior. Date and authorship are stamped automatically.",
+        "modelDescription": "Write or update patent research results in a workspace file. For prior-art-report use empty content and omit relevanceAssessment: the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Other templates and free-form saves retain their existing behavior.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -2165,7 +2184,7 @@
             },
             "content": {
               "type": "string",
-              "description": "Report results/analysis in Markdown. For prior-art-report use a concise candidate table (publication, publication date, relevance, limitations), one brief sentence per cell, followed by detailed passage evidence. Keep claim dependencies, preferred embodiments, examples, units and numerical denominators explicit. Use source-supplied citation URLs and plain Unicode comparison symbols. Execution and source audit comes from the tool, not a model-authored log. Formal opinion/chart conventions apply only to the separately selected opinion or chart template."
+              "description": "Free-form content for other templates or untemplated saves. Must be empty for prior-art-report: use structured coverage instead."
             },
             "template": {
               "type": "string",
@@ -2199,11 +2218,11 @@
             },
             "relevanceAssessment": {
               "type": "string",
-              "description": "prior-art-report: evidence-limited findings and unresolved features/combinations. Separate partial overlap, dependent limitations and preferred embodiments; missing results do not establish novelty."
+              "description": "Legacy field; leave empty for prior-art-report, whose assessment is generated from coverage."
             },
             "coverage": {
               "type": "array",
-              "description": "Required for prior-art-report. Cover essential/optional features and their important relationships or combinations. Source anchor IDs must come from the detail tool evidence appendix. supported/partial are model assessments checked against the cited passages, not automatic entailment.",
+              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields.",
               "minItems": 1,
               "items": {
                 "type": "object",
@@ -2236,6 +2255,54 @@
                   "gap": {
                     "type": "string",
                     "description": "Remaining limitation or search/review gap; use an empty string only when none is identified."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "feature",
+                      "combination"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "anchor": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "One of this row’s sourceAnchors."
+                        },
+                        "quote": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Verbatim returned passage. For numbered claims include the entire claim, preserving dependency language and all constituents."
+                        },
+                        "scope": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Identify independent/dependent claim or description/embodiment scope and reviewed dependency chain."
+                        },
+                        "qualifiers": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Preserve restrictions and distinguish overlapping ranges from exact feature support."
+                        },
+                        "quantityBasis": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "State original units, basis and every constituent. Keep parts as parts; do not substitute an unverified percentage conversion. Say not applicable when appropriate."
+                        }
+                      },
+                      "required": [
+                        "anchor",
+                        "quote",
+                        "scope",
+                        "qualifiers",
+                        "quantityBasis"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
@@ -2243,7 +2310,8 @@
                   "importance",
                   "status",
                   "sourceAnchors",
-                  "gap"
+                  "gap",
+                  "kind"
                 ],
                 "additionalProperties": false
               }
@@ -2256,32 +2324,6 @@
                 "type": "string",
                 "minLength": 1
               }
-            },
-            "semanticReview": {
-              "type": "object",
-              "description": "Required for prior-art-report. Before saving, review every summary and feature assessment against inspected passages. Record concrete checks of claim/embodiment scope, numeric units/denominators/boundaries, combination support and review-limited negatives; retain unresolved concerns. This is a model declaration, not an independent correctness guarantee.",
-              "properties": {
-                "observations": {
-                  "type": "array",
-                  "minItems": 1,
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "unresolvedConcerns": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                }
-              },
-              "required": [
-                "observations",
-                "unresolvedConcerns"
-              ],
-              "additionalProperties": false
             },
             "stopReason": {
               "type": "string",

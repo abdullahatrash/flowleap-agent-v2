@@ -14,6 +14,8 @@ import { parsePatentDocumentReference, PatentDocumentReference } from '../common
 
 export interface PatentEvidenceSource {
 	readonly anchor: string;
+	/** Exact returned text for local recovery and quotation identity checks; absent in older records. */
+	readonly text?: string;
 	readonly reference: PatentDocumentReference;
 	readonly language?: string;
 	readonly retrieval: 'returned' | 'unsegmented';
@@ -36,6 +38,8 @@ export interface PatentExecution {
 	readonly totalClaims?: number;
 	readonly returnedClaims?: number;
 	readonly range?: { begin: number; end: number };
+	readonly publicationTitle?: string;
+	readonly publicationDate?: string;
 	readonly publicationIds?: readonly string[];
 	readonly sources?: readonly PatentEvidenceSource[];
 	readonly unavailableSections?: readonly string[];
@@ -122,7 +126,7 @@ export function evidenceAnchor(reference: PatentDocumentReference, language?: st
 function isPatentExecution(value: unknown): value is PatentExecution {
 	if (!value || typeof value !== 'object') { return false; }
 	const record = value as Record<string, unknown>;
-	const strings = ['query', 'requestedRange', 'requestedCountries', 'effectiveQuery'];
+	const strings = ['query', 'requestedRange', 'requestedCountries', 'effectiveQuery', 'publicationTitle', 'publicationDate'];
 	const arrays = ['countryFilter', 'publicationIds', 'unavailableSections'];
 	if (typeof record.id !== 'string' || typeof record.recordedAt !== 'string' || typeof record.kind !== 'string' || !['search', 'details'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return false; }
 	if (strings.some(key => record[key] !== undefined && typeof record[key] !== 'string')) { return false; }
@@ -134,7 +138,7 @@ function isPatentExecution(value: unknown): value is PatentExecution {
 	if (record.sources !== undefined && (!Array.isArray(record.sources) || !record.sources.every(source => {
 		if (!source || typeof source !== 'object') { return false; }
 		const reference = parsePatentDocumentReference(source.reference);
-		return reference && (source.language === undefined || typeof source.language === 'string') && source.anchor === evidenceAnchor(reference, source.language) && ['returned', 'unsegmented'].includes(source.retrieval) && source.review === 'unknown' && source.completeness === 'unknown';
+		return reference && (source.text === undefined || typeof source.text === 'string') && (source.language === undefined || typeof source.language === 'string') && source.anchor === evidenceAnchor(reference, source.language) && ['returned', 'unsegmented'].includes(source.retrieval) && source.review === 'unknown' && source.completeness === 'unknown';
 	}))) { return false; }
 	return true;
 }

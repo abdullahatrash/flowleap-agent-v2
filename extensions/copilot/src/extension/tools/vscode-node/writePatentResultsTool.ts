@@ -7,12 +7,14 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
+import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+import { URI } from '../../../util/vs/base/common/uri';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { basename, dirname } from '../../../util/vs/base/common/resources';
+import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { ToolName } from '../common/toolNames';
@@ -55,6 +57,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		@IPromptPathRepresentationService private readonly promptPathRepresentationService: IPromptPathRepresentationService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
+		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IWritePatentResultsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -75,11 +78,17 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 		// Resolve relative paths against the workspace (and reject invalid input) rather than
 		// mapping them to the filesystem root via `URI.file`.
-		const uri = this.promptPathRepresentationService.resolveFilePath(filePath);
+		const folders = this.workspaceService.getWorkspaceFolders();
+		const relative = filePath.trim().length > 0 && !/^(?:[a-z][a-z0-9+.-]*:|[\\/])/i.test(filePath) && !filePath.includes('\0');
+		const uri = this.promptPathRepresentationService.resolveFilePath(filePath) ?? (relative && folders.length === 1 ? URI.joinPath(folders[0], filePath.replace(/\\/g, '/')) : undefined);
 		if (!uri) {
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Error: Invalid file path "${filePath}". Provide a valid absolute path within the workspace.`)
+				new LanguageModelTextPart(`Error: Invalid file path "${filePath}". Provide an absolute workspace path, or a relative path when exactly one workspace folder is open.`)
 			]);
+		}
+
+		if (!folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(uri, folder))) {
+			return new LanguageModelToolResult([new LanguageModelTextPart('Error: Patent result writes must stay within a workspace folder.')]);
 		}
 
 		// Confine writes to the workspace before touching disk. Throws a clear "outside of the
@@ -89,7 +98,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		try {
 			const snapshot = template === 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
 			if (snapshot) {
-				const errors = validateCandidateReview(options.input, snapshot, [content, options.input.relevanceAssessment, options.input.objective, options.input.searchStrategy, ...(options.input.coverage ?? []).flatMap(row => [row.feature, row.gap]), ...(options.input.semanticReview?.observations ?? []), ...(options.input.semanticReview?.unresolvedConcerns ?? []), ...(options.input.limitations ?? []), options.input.stopReason].filter(Boolean).join('\n'));
+				const errors = validateCandidateReview(options.input, snapshot, [content, options.input.relevanceAssessment, options.input.objective, options.input.searchStrategy, ...(options.input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(options.input.limitations ?? []), options.input.stopReason].filter(Boolean).join('\n'));
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -100,7 +109,8 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			let document = buildPatentReport(content, template, {
+			const candidateContent = snapshot ? renderCandidateReview(options.input, snapshot, basename(evidenceUri)) : content;
+			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,
 				objective: options.input.objective,
@@ -110,7 +120,6 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
 			});
 
-			if (snapshot) { document += '\n' + renderCandidateReview(options.input, snapshot, basename(evidenceUri)) + '\n'; }
 
 			// Ensure the parent directory exists before writing.
 			await createDirectoryIfNotExists(this.fileSystemService, dirname(uri));

@@ -26,9 +26,8 @@ function setup() {
 }
 
 const review: PatentCandidateReview = {
-	coverage: [{ feature: 'Essential combination', importance: 'essential', status: 'unresolved', sourceAnchors: [], gap: 'Combination evidence remains unavailable.' }],
+	coverage: [{ feature: 'Essential combination', kind: 'combination', importance: 'essential', status: 'unresolved', sourceAnchors: [], gap: 'Combination evidence remains unavailable.' }],
 	limitations: ['Claims unavailable for one candidate.'], stopReason: 'User requested an interim candidate review.',
-	semanticReview: { observations: ['No complete-combination or absence conclusion is supported by the available sources.'], unresolvedConcerns: ['Dependency chain remains unresolved.'] },
 };
 
 describe('durable patent execution audit', () => {
@@ -55,7 +54,7 @@ describe('durable patent execution audit', () => {
 	it('preserves publication kind, language and claim identity while review remains unknown', async () => {
 		const { ledger, session } = setup();
 		const reference = { publicationNumber: 'WO2020123456A1', section: 'claims' as const, claimNumber: '1' };
-		const source = { anchor: evidenceAnchor(reference, 'de'), reference, language: 'de', retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const };
+		const source = { text: '1. Recorded claim text.', anchor: evidenceAnchor(reference, 'de'), reference, language: 'de', retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const };
 		await ledger.record(session, { kind: 'details', status: 'succeeded', sources: [source], unavailableSections: ['description'] });
 		const snapshot = await ledger.read(session);
 		expect(snapshot.executions[0].sources).toEqual([source]);
@@ -69,7 +68,7 @@ describe('durable patent execution audit', () => {
 		expect(validateCandidateReview({ ...draft, coverage: [{ ...draft.coverage[0], status: 'supported' }] }, { executions: [], limitation: '' })).toContain(`Coverage for "${feature}" needs known source anchors or unresolved status.`);
 	});
 
-	it('rejects invented coverage anchors and missing semantic review while allowing declared concerns', () => {
-		expect(validateCandidateReview({ ...review, semanticReview: undefined, coverage: [{ ...review.coverage![0], sourceAnchors: ['invented:claims:6'] }] }, { executions: [], limitation: '' })).toHaveLength(2);
+	it('rejects invented coverage anchors with a recovery instruction', () => {
+		expect(validateCandidateReview({ ...review, coverage: [{ ...review.coverage![0], sourceAnchors: ['invented:claims:6'] }] }, { executions: [], limitation: '' })).toHaveLength(1);
 	});
 });
