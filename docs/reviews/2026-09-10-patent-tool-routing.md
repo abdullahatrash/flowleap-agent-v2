@@ -48,7 +48,7 @@ Run from `extensions/copilot` after compilation:
 PATENT_ROUTING_LIVE_EVAL=1 EVAL_MODEL=anthropic/claude-sonnet-4.6 PATENT_ROUTING_EVAL_OUTPUT=/private/tmp/patent-routing-report.md ./node_modules/.bin/vitest run src/extension/prompts/node/agent/test/patentToolRouting.live.spec.ts --no-cache
 ```
 
-Use `EVAL_API_KEY` or the existing `OPENROUTER_API_KEY`; optionally set `EVAL_BASE_URL` and `EVAL_PROMPT_FAMILY`. No key is printed. Provider inference is metered. The report is saved outside the repository only when `PATENT_ROUTING_EVAL_OUTPUT` is explicitly set.
+Use `EVAL_API_KEY` or the existing `OPENROUTER_API_KEY`; optionally set `EVAL_BASE_URL`, `EVAL_PROMPT_FAMILY` and `EVAL_MAX_OUTPUT_TOKENS` (default 16,000). Malformed tool input is returned through the production input validator so the model can repair it. No key is printed. Provider inference is metered. The report is saved outside the repository only when `PATENT_ROUTING_EVAL_OUTPUT` is explicitly set.
 
 Earlier exploratory samples are not successful completion evidence: a synthetic fixture was inconsistent across its two data surfaces; later captured-source samples used native lookups but hit the evaluation allowance or sought missing publication metadata. These observations motivated the native-index metadata regression. Absence of a shell call alone does not establish timely completion or source fidelity.
 
@@ -56,7 +56,9 @@ Earlier exploratory samples are not successful completion evidence: a synthetic 
 
 - `npm run gulp compile-extensions`: passed. The worktree uses existing dependency trees; initial missing nested dependency links were resolved without modifying the owner's checkout.
 - `extensions/copilot/node_modules/.bin/tsgo --noEmit --project tsconfig.json` from the extension: passed.
-- Focused prompt/tool-result, lookup, writer and completion tests: final result recorded in the commit handoff.
+- Focused prompt/tool-result, lookup, writer and completion tests: **164 tests passed across seven suites**. Four native conversion cases are included.
 - Existing `agentPrompt.spec.tsx`: the exact base production source and the changed source both report the same 165 snapshot failures and 15 passes. The old snapshots contain stale patent instructions and whitespace differences. They were not blindly refreshed. New focused snapshots cover this change.
+
+The final captured-source Anthropic sample after the metadata fix used **17 local evidence lookups, zero shell calls and zero file detours**, then called the structured writer. Its arguments were malformed/truncated JSON at approximately 18KB; the then-current harness failed to parse them under its 6,000-output-token limit. No valid saved report or receipt was produced, so **live completion and semantic acceptance did not pass**. The committed harness now exposes the output budget and uses the production input validator to allow repair, but that revised live harness has not been rerun. Gemini samples demonstrated local evidence routing but did not complete within the earlier evaluation allowances. No live coding-capability sample was run; coding preservation is covered at the assembly boundary.
 
 The real attached-IDF end-to-end rehearsal has not been rerun, and the owner's app has not been launched or restarted. No deployment, merge or external message is part of this change. Live sample results and remaining semantic limits are recorded in the handoff; do not present mechanical receipt validation as semantic proof.

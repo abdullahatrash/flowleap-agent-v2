@@ -5,7 +5,7 @@
 
 import { Raw } from '@vscode/prompt-tsx';
 import { readFileSync, writeFileSync } from 'fs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { MockFileSystemService } from '../../../../../platform/filesystem/node/test/mockFileSystemService';
 import { ILogService } from '../../../../../platform/log/common/logService';
@@ -13,11 +13,13 @@ import { PromptPathRepresentationService } from '../../../../../platform/prompts
 import { TestWorkspaceService } from '../../../../../platform/test/node/testWorkspaceService';
 import { mock } from '../../../../../util/common/test/simpleMock';
 import { CancellationToken } from '../../../../../util/vs/base/common/cancellation';
+import { DisposableStore } from '../../../../../util/vs/base/common/lifecycle';
 import { URI } from '../../../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../../vscodeTypes';
 import { IPatentExecutionLedger } from '../../../../patentai/vscode-node/patentExecutionLedger';
 import { ToolCallRound } from '../../../../prompt/common/toolCallRound';
+import { NullToolsService } from '../../../../tools/common/toolsService';
 import { getContributedToolName, ToolName } from '../../../../tools/common/toolNames';
 import { checkPriorArtReportCompletion } from '../../../../tools/node/priorArtReportCompletion';
 import { lookupPatentEvidence } from '../../../../tools/vscode-node/patentEvidenceLookup';
@@ -39,6 +41,9 @@ function wireMessage(message: Raw.ChatMessage): object {
 	return { role: message.role === Raw.ChatRole.System ? 'system' : 'user', content };
 }
 
+const disposables = new DisposableStore();
+afterEach(() => disposables.clear());
+
 const enabled = process.env.PATENT_ROUTING_LIVE_EVAL === '1';
 describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolated captured public source)', () => {
 	it('reads offloaded evidence through local lookup and completes a structured source-grounded report', async () => {
@@ -55,6 +60,8 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 		tools.push({ name: ToolName.CoreRunInTerminal, description: 'Run a shell command to execute code or inspect local files.', inputSchema: { type: 'object', properties: { command: { type: 'string' }, explanation: { type: 'string' }, isBackground: { type: 'boolean' } }, required: ['command', 'explanation', 'isBackground'] }, tags: [], source: undefined });
 		const files = new MockFileSystemService();
 		const log = new class extends mock<ILogService>() { override trace() { } override info() { } override warn() { } override error() { } }();
+		const validationService = disposables.add(new NullToolsService(log));
+		validationService.tools = tools;
 		const workspace = new TestWorkspaceService([URI.file('/workspace')]);
 		const ledger: IPatentExecutionLedger = { _serviceBrand: undefined, record: async () => 'Recorded', read: async () => fixtureSnapshot };
 		const instantiation = new class extends mock<IInstantiationService>() { override invokeFunction<R>(): R { return undefined as R; } }();
@@ -68,7 +75,7 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 			const assembled = await assemble(family, undefined, undefined, true, false, undefined, { query, rounds, results, tools });
 			const response = await fetch(`${process.env.EVAL_BASE_URL || 'https://openrouter.ai/api/v1'}/chat/completions`, {
 				method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-				body: JSON.stringify({ model, messages: assembled.messages.map(wireMessage), tools: tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } })), temperature: 0, max_tokens: 6000 }),
+				body: JSON.stringify({ model, messages: assembled.messages.map(wireMessage), tools: tools.map(tool => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.inputSchema } })), temperature: 0, max_tokens: Number(process.env.EVAL_MAX_OUTPUT_TOKENS || 16000) }),
 				signal: AbortSignal.timeout(120000),
 			});
 			if (!response.ok) { throw new Error(`Live provider returned HTTP ${response.status}; response body omitted.`); }
@@ -81,6 +88,11 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 			for (const call of toolCalls) {
 				calls.push(call.name);
 				console.info(JSON.stringify({ round, tool: call.name }));
+				const validation = validationService.validateToolInput(call.name, call.arguments);
+				if ('error' in validation) {
+					results[call.id] = new LanguageModelToolResult([new LanguageModelTextPart(validation.error)]);
+					continue;
+				}
 				if (call.name === ToolName.GetPatentDetails) {
 					const input: { publicationNumber: string; evidenceLookup?: Parameters<typeof lookupPatentEvidence>[2] } = JSON.parse(call.arguments);
 					expect(input.evidenceLookup, 'Already retrieved text should use local lookup, not another backend retrieval').toBeDefined();
