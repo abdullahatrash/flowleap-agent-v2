@@ -18,6 +18,11 @@ export interface PatentCandidateReview {
 		readonly sourceAnchors?: readonly string[];
 		readonly gap: string;
 		readonly evidence?: readonly { readonly anchor: string; readonly quote?: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
+		/**
+		 * The constituents the feature requires, each with the cited passage that discloses it. A
+		 * status is otherwise a one-bit judgment: the element map is what makes it checkable.
+		 */
+		readonly elements?: readonly { readonly element: string; readonly anchor?: string; readonly disclosedBy?: string }[];
 	}[];
 	readonly content?: string;
 	readonly limitations?: readonly string[];
@@ -86,7 +91,7 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 	// name one document, so records are keyed on the separator-free form and shown that way.
 	const documents = new Map<string, DocumentRecord>();
 	const entry = (publication: string): DocumentRecord => {
-		const key = publication.replace(/[-.\s/]/g, '').toUpperCase();
+		const key = publicationKey(publication);
 		const existing = documents.get(key);
 		if (existing) { return existing; }
 		const created: DocumentRecord = { sections: new Set<string>(), languages: new Map<string, string>(), cited: false };
@@ -125,6 +130,9 @@ function untranslated(document: RetrievedDocument): boolean {
 /** CQL classification fields (`ic`, `cpc`, `cl`) plus the plain code names a query may spell out. */
 const CLASSIFICATION_QUERY = /\b(?:cpc|ipc|cpci)\b|\b(?:ic|cl)\s*[=:]/i;
 
+/** Below this many characters an element fragment matches too much text to prove disclosure. */
+const WEAK_FRAGMENT_LENGTH = 12;
+
 /**
  * Limitations the report states on its own behalf, generated from the execution record rather than
  * supplied by the model, so an undisclosed gap cannot survive the writer's own summary.
@@ -153,12 +161,97 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 	if (searches.length && !searches.some(execution => CLASSIFICATION_QUERY.test(execution.effectiveQuery ?? execution.query ?? ''))) {
 		lines.push('No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.');
 	}
+	const weak = (review.coverage ?? []).filter(row => row.status !== 'unresolved').flatMap(row => (row.elements ?? [])
+		.filter(element => element.disclosedBy !== undefined && element.disclosedBy.trim().length < WEAK_FRAGMENT_LENGTH)
+		.map(element => `${row.feature} / ${element.element}`));
+	if (weak.length) {
+		lines.push(`Element fragments under ${WEAK_FRAGMENT_LENGTH} characters: ${weak.join(', ')}; short fragments prove little.`);
+	}
 	return lines;
 }
 
 /** Anchor to recorded source, the single index every pass over a snapshot shares. */
 function sourceIndex(snapshot: PatentExecutionSnapshot): Map<string, PatentEvidenceSource> {
 	return new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+}
+
+/** Collapse runs of whitespace so a line-wrapped passage still contains its quoted fragment. */
+function normalizeText(value: string): string {
+	return value.replace(/\s+/g, ' ').trim();
+}
+
+/** `EP0983762.A1` and `EP0983762A1` name one document; both reduce to the same key. */
+function publicationKey(publication: string): string {
+	return publication.replace(/[-.\s/]/g, '').toUpperCase();
+}
+
+type PatentCoverageRow = NonNullable<PatentCandidateReview['coverage']>[number];
+type PatentCoverageElement = NonNullable<PatentCoverageRow['elements']>[number];
+
+/** An element claims disclosure once either locator is present; a bare topic match claims neither. */
+function claimsDisclosure(element: PatentCoverageElement): boolean {
+	return Boolean(element.anchor?.trim() || element.disclosedBy?.trim());
+}
+
+/**
+ * Check one element's locators against the recorded text, so "supported" rests on a fragment that
+ * actually exists in a cited passage rather than on a passage that merely shares the topic.
+ */
+function elementDisclosureErrors(row: PatentCoverageRow, element: PatentCoverageElement, sources: Map<string, PatentEvidenceSource>): string[] {
+	const errors: string[] = [];
+	const anchor = element.anchor?.trim();
+	const fragment = element.disclosedBy?.trim();
+	if (!anchor || !fragment) {
+		errors.push(`Element "${element.element}" of "${row.feature}" cites ${anchor ? 'no literal fragment' : 'no source anchor'}. Give both the anchor and a literal fragment of its recorded text, or omit both and name the element in the gap.`);
+		return errors;
+	}
+	if (!(row.sourceAnchors ?? []).includes(anchor)) {
+		errors.push(`Element "${element.element}" of "${row.feature}" cites ${anchor}, which is not one of that row's sourceAnchors. Cite one of: ${(row.sourceAnchors ?? []).join(', ') || 'none listed'}.`);
+		return errors;
+	}
+	const source = sources.get(anchor);
+	if (!source?.text) {
+		errors.push(`Recorded text for ${anchor} is an older record; retrieve once with get_patent_details(publicationNumber, evidenceLookup: {}) so the fragment for element "${element.element}" can be checked.`);
+		return errors;
+	}
+	if (!normalizeText(source.text).toLowerCase().includes(normalizeText(fragment).toLowerCase())) {
+		errors.push(`disclosedBy "${fragment}" for element "${element.element}" is not found in the recorded text of ${anchor}; copy a literal fragment from evidenceLookup output.`);
+	}
+	return errors;
+}
+
+/**
+ * Enforce the element map: a supported row discloses every element by cited text, a partial row
+ * discloses some and names the rest, and a supported combination rests on a single publication.
+ */
+function elementMapErrors(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string[] {
+	if (row.status === 'unresolved') { return []; }
+	const elements = row.elements ?? [];
+	if (!elements.length) {
+		return [`Coverage for "${row.feature}" is marked ${row.status} but lists no elements. List each constituent the feature requires with the literal fragment of cited text that discloses it; an element without a fragment makes the row partial at most.`];
+	}
+	const errors: string[] = [];
+	for (const element of elements) {
+		if (!element.element?.trim()) { errors.push(`Every element of "${row.feature}" needs the constituent it names.`); continue; }
+		if (row.status === 'supported' && !claimsDisclosure(element)) {
+			errors.push(`Element "${element.element}" of "${row.feature}" is not disclosed by any cited text, so the row cannot be supported. Either cite the passage that discloses it (anchor + literal fragment) or mark the row partial and name the missing element in the gap.`);
+			continue;
+		}
+		if (row.status === 'supported' || claimsDisclosure(element)) { errors.push(...elementDisclosureErrors(row, element, sources)); }
+	}
+	if (row.status === 'partial') {
+		const disclosed = elements.filter(claimsDisclosure).length;
+		if (disclosed === elements.length) { errors.push(`Every element of "${row.feature}" is disclosed; mark the row supported or add the undisclosed element.`); }
+		if (!disclosed) { errors.push(`No element of "${row.feature}" is disclosed by cited text; mark the row unresolved.`); }
+	}
+	if (row.kind === 'combination' && row.status === 'supported') {
+		const publications = new Set(elements.flatMap(element => {
+			const publication = element.anchor ? sources.get(element.anchor)?.reference.publicationNumber : undefined;
+			return publication ? [publicationKey(publication)] : [];
+		}));
+		if (publications.size > 1) { errors.push(`Elements of "${row.feature}" are disclosed by ${[...publications].join(' and ')}: separate documents do not establish the combination; mark partial and say which document lacks which element.`); }
+	}
+	return errors;
 }
 
 /** Numbered claims can be copied from the ledger instead of transcribed by the model. */
@@ -197,13 +290,13 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 			if (row.status !== 'unresolved' && source && !['claims', 'description'].includes(source.reference.section)) { errors.push(`Feature support for ${anchor} requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.`); }
 			if (row.status !== 'unresolved' && !evidence) { errors.push(`Supply an exact quotation and source review for ${anchor}.`); }
 			if (evidence) {
-				const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
-				if (!evidence.quote?.trim() || !source?.text || !normalize(source.text).includes(normalize(evidence.quote))) { errors.push(`Quotation for ${anchor} must match recorded text. Recover it with evidenceLookup.anchor; older records without text require one detail retrieval.`); }
-				if (source?.reference.claimNumber && source.text && normalize(evidence.quote ?? '') !== normalize(source.text)) { errors.push(`Quote the complete claim for ${anchor}, including dependency language, qualifiers and every constituent; do not extract only a numeric range.`); }
+				if (!evidence.quote?.trim() || !source?.text || !normalizeText(source.text).includes(normalizeText(evidence.quote))) { errors.push(`Quotation for ${anchor} must match recorded text. Recover it with evidenceLookup.anchor; older records without text require one detail retrieval.`); }
+				if (source?.reference.claimNumber && source.text && normalizeText(evidence.quote ?? '') !== normalizeText(source.text)) { errors.push(`Quote the complete claim for ${anchor}, including dependency language, qualifiers and every constituent; do not extract only a numeric range.`); }
 				if (![evidence.scope, evidence.qualifiers, evidence.quantityBasis].every(value => value?.trim())) { errors.push(`Review scope/dependency, qualifiers and original quantity basis for ${anchor}. Keep original units and all constituents; do not substitute an unverified percentage conversion.`); }
 			}
 		}
 		if (row.evidence?.some(item => !(row.sourceAnchors ?? []).includes(item.anchor))) { errors.push(`Evidence for "${row.feature}" must use that row's sourceAnchors.`); }
+		errors.push(...elementMapErrors(row, sources));
 		if (row.status !== 'supported' && !row.gap?.trim()) { errors.push(`Describe the remaining gap for "${row.feature}".`); }
 	}
 	if (!review.coverage?.some(row => row.importance === 'essential')) { errors.push('Identify at least one essential feature or combination.'); }
@@ -244,6 +337,23 @@ function quotation(text: string): string {
 		...(missingImage ? ['Formula/image placeholders were replaced by omission notices above. Consult the original document for the missing structures.', ''] : [])].join('\n');
 }
 
+/**
+ * The row's element map: what the feature requires beside the literal fragment that discloses it,
+ * so a reader can see which constituent each cited passage actually covers.
+ */
+function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string[] {
+	if (!row.elements?.length) { return []; }
+	return ['', '| Element | Disclosed by | Source |', '| --- | --- | --- |',
+		...row.elements.map(element => {
+			const anchor = element.anchor;
+			const fragment = element.disclosedBy?.trim();
+			const source = anchor ? sources.get(anchor) : undefined;
+			return '| ' + [cell(element.element),
+				anchor && fragment ? '`' + cell(fragment) + '`' : 'not disclosed in cited text',
+				anchor && fragment ? (source ? patentCitationLink(anchor, source.reference) : anchor) : '—'].join(' | ') + ' |';
+		}), ''];
+}
+
 /** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
 export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
 	const sources = sourceIndex(snapshot);
@@ -270,6 +380,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 					...(evidence ? [quotation(evidence.quote ?? ''),
 						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 			}),
+			...elementMap(row, sources),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
 		'', '## Retrieved but not cited in coverage',

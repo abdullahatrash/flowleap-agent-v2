@@ -71,7 +71,8 @@ describe('prior-art evidence recovery and review contract', () => {
 		['EP0983762A1:claims:8:en', claim8, '1 to 20 wt%'],
 	])('rejects a selected range that hides constituents or dependency in %s, and preserves the complete original basis', (anchor, quote, fragment) => {
 		const evidence = { anchor, quote, scope: anchor.startsWith('EP') ? 'Dependent Claim 8; Claim 1 does not inherit this restriction.' : 'Claim 10 composition.', qualifiers: 'Exact IDF range not established.', quantityBasis: anchor.startsWith('WO') ? '100 monomer + 0.01–10 initiator + 40–400 filler, all parts by weight; no conversion.' : '1–20 wt% only in the dependent claim.' };
-		const row = { feature: 'Loading', kind: 'feature' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [anchor], gap: 'Range overlap only.', evidence: [evidence] };
+		const elements = [{ element: 'Filler present in a recited amount', anchor, disclosedBy: fragment }, { element: 'Exact IDF loading window' }];
+		const row = { feature: 'Loading', kind: 'feature' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [anchor], gap: 'Range overlap only.', evidence: [evidence], elements };
 		const complete = { ...review, coverage: [row, combination] };
 		const incomplete = { ...review, coverage: [{ ...row, evidence: [{ ...evidence, quote: fragment }] }, combination] };
 		expect({ rejected: validateCandidateReview(incomplete, snapshot).some(error => error.includes('Quote the complete claim')), errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'evidence.json')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
@@ -101,7 +102,7 @@ describe('prior-art evidence recovery and review contract', () => {
 	it('rejects bibliography-only feature support even when its quotation matches', () => {
 		const source = { ...snapshot.executions[0].sources![0], anchor: 'WO9951190A1:bibliography', reference: { publicationNumber: 'WO9951190A1', section: 'bibliography' as const } };
 		const state = { ...snapshot, executions: [{ ...snapshot.executions[0], sources: [source] }] };
-		const row = { ...combination, status: 'partial' as const, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: claim10, scope: 'Abstract', qualifiers: 'Unknown', quantityBasis: 'Original' }] };
+		const row = { ...combination, status: 'partial' as const, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: claim10, scope: 'Abstract', qualifiers: 'Unknown', quantityBasis: 'Original' }], elements: [{ element: 'Dental composition', anchor: source.anchor, disclosedBy: 'A dental composition' }, { element: 'Composite filler loading' }] };
 		expect(validateCandidateReview({ ...review, coverage: [row] }, state).some(error => error.includes('claim or description passage'))).toBe(true);
 	});
 	it('requires an explicit combination and refuses invented quotation text', () => {
@@ -164,5 +165,75 @@ describe('prior-art evidence recovery and review contract', () => {
 			flagged: ['Legal conclusions in a candidate review: "is novel" in limitations[0]; "teaches away" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.'],
 			exempt: [],
 		});
+	});
+
+	const feature = 'F1: Photocurable composition intended for a dental filling material';
+	const supported = {
+		feature, kind: 'feature' as const, importance: 'essential' as const, status: 'supported' as const,
+		sourceAnchors: ['WO9951190A1:claims:10:en'], gap: '',
+		evidence: [{ anchor: 'WO9951190A1:claims:10:en', quote: claim10, scope: 'Independent claim 10.', qualifiers: 'Composition claim only.', quantityBasis: 'Parts by weight exactly as recited.' }],
+		elements: [
+			{ element: 'dental composition', anchor: 'WO9951190A1:claims:10:en', disclosedBy: 'A dental composition' },
+			{ element: 'polymerization initiator', anchor: 'WO9951190A1:claims:10:en', disclosedBy: 'parts by weight initiator' },
+		],
+	};
+
+	it('refuses a supported row whose element no cited passage discloses', () => {
+		const elements = [supported.elements[0], { element: 'polymerization initiator' }];
+		expect(validateCandidateReview({ ...review, coverage: [{ ...supported, elements }, combination] }, snapshot)).toEqual([
+			`Element "polymerization initiator" of "${feature}" is not disclosed by any cited text, so the row cannot be supported. Either cite the passage that discloses it (anchor + literal fragment) or mark the row partial and name the missing element in the gap.`,
+		]);
+	});
+
+	it('refuses an element fragment that is absent from the recorded text of its anchor', () => {
+		const elements = [supported.elements[0], { ...supported.elements[1], disclosedBy: 'light-curing initiator' }];
+		expect(validateCandidateReview({ ...review, coverage: [{ ...supported, elements }, combination] }, snapshot)).toEqual([
+			'disclosedBy "light-curing initiator" for element "polymerization initiator" is not found in the recorded text of WO9951190A1:claims:10:en; copy a literal fragment from evidenceLookup output.',
+		]);
+	});
+
+	it('accepts a partial row that discloses one element and leaves another undisclosed, and refuses one that discloses all', () => {
+		const partial = { ...supported, status: 'partial' as const, gap: 'The initiator is not recited as photocurable.' };
+		const honest = { ...partial, elements: [supported.elements[0], { element: 'photocurable / light-curing initiator' }] };
+		const bare = { ...partial, elements: undefined };
+		expect({
+			honest: validateCandidateReview({ ...review, coverage: [honest, combination] }, snapshot),
+			complete: validateCandidateReview({ ...review, coverage: [partial, combination] }, snapshot),
+			bare: validateCandidateReview({ ...review, coverage: [bare, combination] }, snapshot),
+		}).toEqual({
+			honest: [],
+			complete: [`Every element of "${feature}" is disclosed; mark the row supported or add the undisclosed element.`],
+			bare: [`Coverage for "${feature}" is marked partial but lists no elements. List each constituent the feature requires with the literal fragment of cited text that discloses it; an element without a fragment makes the row partial at most.`],
+		});
+	});
+
+	it('refuses a supported combination whose elements are disclosed by separate publications', () => {
+		const row = {
+			feature: 'Combination of composition and filler content', kind: 'combination' as const, importance: 'essential' as const, status: 'supported' as const,
+			sourceAnchors: ['WO9951190A1:claims:10:en', 'EP0983762A1:claims:8:en'], gap: '',
+			evidence: [
+				{ anchor: 'WO9951190A1:claims:10:en', quote: claim10, scope: 'Independent claim 10.', qualifiers: 'Composition claim only.', quantityBasis: 'Parts by weight as recited.' },
+				{ anchor: 'EP0983762A1:claims:8:en', quote: claim8, scope: 'Dependent claim 8.', qualifiers: 'Restriction inherited from claim 1.', quantityBasis: 'Weight percent as recited.' },
+			],
+			elements: [
+				{ element: 'dental composition', anchor: 'WO9951190A1:claims:10:en', disclosedBy: 'A dental composition' },
+				{ element: 'inorganic filler content', anchor: 'EP0983762A1:claims:8:en', disclosedBy: 'the inorganic filler is present' },
+			],
+		};
+		expect(validateCandidateReview({ ...review, coverage: [row] }, snapshot)).toEqual([
+			'Elements of "Combination of composition and filler content" are disclosed by WO9951190A1 and EP0983762A1: separate documents do not establish the combination; mark partial and say which document lacks which element.',
+		]);
+	});
+
+	it('renders the element map with the literal fragment and marks an undisclosed element', () => {
+		const row = { ...supported, status: 'partial' as const, gap: 'The initiator is not recited as photocurable.', elements: [supported.elements[1], { element: 'photocurable / light-curing initiator' }] };
+		const rendered = renderCandidateReview({ ...review, coverage: [row, combination] }, snapshot, 'evidence.json');
+		expect({
+			header: rendered.includes('| Element | Disclosed by | Source |'),
+			disclosed: rendered.includes('| polymerization initiator | `parts by weight initiator` | [WO9951190A1:claims:10:en](flowleap://flowleap.patent-ai/patent?publication=WO9951190A1&section=claims&claim=10) |'),
+			undisclosed: rendered.includes('| photocurable / light-curing initiator | not disclosed in cited text | \u2014 |'),
+			beforeGap: rendered.indexOf('| Element | Disclosed by |') < rendered.indexOf('Remaining gap (model judgment)'),
+			weak: rendered.includes('Element fragments under 12 characters'),
+		}).toEqual({ header: true, disclosed: true, undisclosed: true, beforeGap: true, weak: false });
 	});
 });

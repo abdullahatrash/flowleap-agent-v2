@@ -917,7 +917,7 @@
     "type": "function",
     "function": {
       "name": "write_patent_results",
-      "description": "Write or update patent research results in a workspace file. For prior-art-report use empty content: the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Other templates and free-form saves retain their existing behavior.",
+      "description": "Write or update patent research results in a workspace file. For prior-art-report use empty content: the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Other templates and free-form saves retain their existing behavior.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1001,6 +1001,34 @@
                     "feature",
                     "combination"
                   ]
+                },
+                "elements": {
+                  "type": "array",
+                  "description": "Required for supported/partial rows (feature and combination alike): one entry per constituent the feature requires. A supported row discloses every element by cited text; a partial row discloses some and leaves at least one undisclosed; a supported combination row must rest on a single publication.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "element": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "One required constituent of the feature in your own words (for example \"dental filling material\", \"photocurable / light-curing initiator\")."
+                      },
+                      "anchor": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The one of this row’s sourceAnchors whose passage discloses this element. Omit together with disclosedBy when no cited text discloses it."
+                      },
+                      "disclosedBy": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A literal fragment copied from that anchor’s recorded text that discloses the element; matching ignores case and whitespace. Fragments under 12 characters are disclosed as weak in the report. Omit together with anchor when no cited text discloses the element."
+                      }
+                    },
+                    "required": [
+                      "element"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "evidence": {
                   "type": "array",
