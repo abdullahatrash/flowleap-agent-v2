@@ -17,6 +17,10 @@ interface ReportReceipt {
 	readonly evidenceDigest: string;
 }
 
+interface ParsedReportReceipt extends ReportReceipt {
+	readonly callIndex: number;
+}
+
 const receiptPrefix = 'Prior-art artifact receipt: ';
 
 /** Bind the report and its evidence revision to the bytes the structured writer actually saved. */
@@ -40,7 +44,6 @@ export interface ReportCompletionTurn {
 /** Generic writes are allowed as drafts, but only a current structured-writer receipt finalizes research. */
 export async function checkPriorArtReportCompletion(history: readonly ReportCompletionTurn[], current: ReportCompletionTurn, files: IFileSystemService): Promise<string | undefined> {
 	const currentCalls = current.rounds.flatMap(round => round.toolCalls);
-	if (!currentCalls.length) { return undefined; }
 	const hasResearch = currentCalls.some(isRetrieval);
 	const turns = [...history, current];
 	const requestIndex = turns.map(turn => requestsPriorArtReport(turn.message)).lastIndexOf(true);
@@ -57,20 +60,18 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 	const continuing = /^\s*continue\b/i.test(current.message) || /\b(revise|update|correct)\b.*\b(report|review)\b/i.test(current.message);
 	const pendingResearch = !priorReceipts.length && activeHistory.some(turn => turn.rounds.some(round => round.toolCalls.some(isRetrieval)));
 	const genericWrite = currentCalls.some(call => [ToolName.CreateFile, ToolName.EditFile, ToolName.ApplyPatch, ToolName.ReplaceString, ToolName.MultiReplaceString, ToolName.CoreRunInTerminal, ToolName.CoreSendToTerminal].some(name => name === call.name));
-	const required = writingReport || (!!reportRequest && hasResearch) || (requestsPriorArtReport(current.message) && genericWrite) || (pendingResearch && (continuing || !!mentionsTarget));
+	const currentReportRequest = requestsPriorArtReport(current.message);
+	const required = writingReport || (currentReportRequest && (hasResearch || genericWrite)) || (!!reportRequest && hasResearch && (continuing || !!mentionsTarget)) || (pendingResearch && (hasResearch || continuing || !!mentionsTarget));
 	if (required && !currentReceipts.length) {
 		return 'The requested prior-art report has no successful structured finalization in this turn. Generic file writes and free-form writer calls are unvalidated drafts. Save the requested report with write_patent_results, template="prior-art-report", empty content and the evidence-backed coverage fields. An honest interim report with unresolved features and explicit limitations is valid; do not invent support or repeat searches merely to pass validation.';
 	}
-	if (required && currentReceipts.length && reportRequest) {
-		if (target && !currentReceipts.some(receipt => {
-			const path = URI.parse(receipt.reportUri).path;
-			return target.startsWith('/') ? path === target : path.endsWith('/' + target);
-		})) {
+	if (required && currentReceipts.length) {
+		const finalization = [...currentReceipts].reverse().find(receipt => !target || matchesPath(receipt.reportUri, target));
+		if (!finalization) {
 			return `The validated report was saved to a different path. Finalize the requested deliverable at ${target} with write_patent_results and template="prior-art-report".`;
 		}
 		const lastResearch = currentCalls.map(isRetrieval).lastIndexOf(true);
-		const lastWriter = currentCalls.map(call => call.name === ToolName.WritePatentResults && (current.results[call.id]?.content ?? []).some(part => isTextPart(part) && part.value.includes(receiptPrefix))).lastIndexOf(true);
-		if (lastResearch > lastWriter) { return 'More patent evidence was retrieved after the saved report. Reconcile it and re-save the structured prior-art report so its evidence companion reflects the final research boundary.'; }
+		if (lastResearch > finalization.callIndex) { return 'More patent evidence was retrieved after the saved report. Reconcile it and re-save the structured prior-art report so its evidence companion reflects the final research boundary.'; }
 	}
 	// Read actual bytes, so edits made by any tool (including terminal/MCP) invalidate the receipt.
 	// Latest receipt per path supersedes earlier revisions; unrelated notes do not invalidate reports.
@@ -87,8 +88,9 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 	return undefined;
 }
 
-function receipts(turn: ReportCompletionTurn): ReportReceipt[] {
-	return turn.rounds.flatMap(round => round.toolCalls).filter(call => call.name === ToolName.WritePatentResults).flatMap(call => {
+function receipts(turn: ReportCompletionTurn): ParsedReportReceipt[] {
+	return turn.rounds.flatMap(round => round.toolCalls).flatMap((call, callIndex) => {
+		if (call.name !== ToolName.WritePatentResults) { return []; }
 		try { if (JSON.parse(call.arguments).template !== 'prior-art-report') { return []; } } catch { return []; }
 		const parts = turn.results[call.id]?.content ?? [];
 		return parts.flatMap(part => {
@@ -98,7 +100,7 @@ function receipts(turn: ReportCompletionTurn): ReportReceipt[] {
 			try {
 				const value: Partial<ReportReceipt> = JSON.parse(line.slice(receiptPrefix.length));
 				if ([value.reportUri, value.reportDigest, value.evidenceUri, value.evidenceDigest].every(field => typeof field === 'string') && value.reportUri && value.evidenceUri && value.reportDigest && value.evidenceDigest) {
-					return [{ reportUri: value.reportUri, reportDigest: value.reportDigest, evidenceUri: value.evidenceUri, evidenceDigest: value.evidenceDigest }];
+					return [{ reportUri: value.reportUri, reportDigest: value.reportDigest, evidenceUri: value.evidenceUri, evidenceDigest: value.evidenceDigest, callIndex }];
 				}
 			} catch { /* Older or malformed result: no receipt. */ }
 			return [];
@@ -120,4 +122,9 @@ function isRetrieval(call: IToolCallRound['toolCalls'][number]): boolean {
 
 function isTextPart(part: unknown): part is { value: string } {
 	return !!part && typeof part === 'object' && 'value' in part && typeof part.value === 'string';
+}
+
+function matchesPath(reportUri: string, target: string): boolean {
+	const path = URI.parse(reportUri).path;
+	return target.startsWith('/') ? path === target : path.endsWith('/' + target);
 }

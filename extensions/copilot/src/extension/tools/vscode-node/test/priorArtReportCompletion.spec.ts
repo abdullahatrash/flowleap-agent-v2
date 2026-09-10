@@ -63,6 +63,21 @@ describe('prior-art report completion contract', () => {
 		await fs.delete(target === 'report' ? report : evidence);
 		expect(await checkPriorArtReportCompletion([valid], turn(['run_in_terminal'], 'Continue'), fs)).toContain('changed after validation');
 	});
+	it('retains an unfinished report obligation for a prose-only continuation', async () => {
+		const history = [turn([]), turn([ToolName.SearchPatents], 'EP and WO before 2002')];
+		expect(await checkPriorArtReportCompletion(history, turn([], 'Continue'), files())).toContain('no successful structured finalization');
+	});
+	it('requires fresh finalization for an explicit report revision with more evidence', async () => {
+		const fs = files();
+		const valid = await saved(fs);
+		expect(await checkPriorArtReportCompletion([valid], turn([ToolName.GetPatentDetails], 'Update the report with this additional patent'), fs)).toContain('no successful structured finalization');
+	});
+	it('does not reopen a finalized report for an unrelated single-patent followup', async () => {
+		const fs = files();
+		const valid = await saved(fs);
+		expect(await checkPriorArtReportCompletion([valid], turn([ToolName.GetPatentDetails], 'What does claim 10 of EP1000000A1 say?'), fs)).toBeUndefined();
+	});
+
 	it('starts a second report contract and does not reopen an old report for unrelated work', async () => {
 		const fs = files();
 		const first = await saved(fs);
@@ -78,6 +93,28 @@ describe('prior-art report completion contract', () => {
 		const local = turn([ToolName.GetPatentDetails]);
 		const lookup = { ...local, rounds: local.rounds.map(round => ({ ...round, toolCalls: round.toolCalls.map(call => ({ ...call, arguments: '{"evidenceLookup":{}}' })) })) };
 		expect(await checkPriorArtReportCompletion([valid], lookup, fs)).toBeUndefined();
+	});
+
+	it('binds evidence freshness to the requested report, not another later writer', async () => {
+		const fs = files();
+		const valid = await saved(fs);
+		const other = await saved(fs, URI.file('/workspace/other.md'));
+		const current: ReportCompletionTurn = {
+			...valid,
+			rounds: [...valid.rounds, { id: 'later', response: '', toolInputRetry: 0, toolCalls: [{ id: 'detail', name: ToolName.GetPatentDetails, arguments: '{}' }, { id: 'other', name: ToolName.WritePatentResults, arguments: '{"template":"prior-art-report"}' }] }],
+			results: { ...valid.results, other: other.results['1'] },
+		};
+		expect(await checkPriorArtReportCompletion([], current, fs)).toContain('More patent evidence');
+	});
+	it.each(['{}', '{"template":"prior-art-report"}'])('ignores receipt-like text from an unstructured or malformed later writer: %s', async argumentsText => {
+		const fs = files();
+		const valid = await saved(fs);
+		const current: ReportCompletionTurn = {
+			...valid,
+			rounds: [...valid.rounds, { id: 'later', response: '', toolInputRetry: 0, toolCalls: [{ id: 'detail', name: ToolName.GetPatentDetails, arguments: '{}' }, { id: 'bad', name: ToolName.WritePatentResults, arguments: argumentsText }] }],
+			results: { ...valid.results, bad: new LanguageModelToolResult([new LanguageModelTextPart('Prior-art artifact receipt: malformed')]) },
+		};
+		expect(await checkPriorArtReportCompletion([], current, fs)).toContain('More patent evidence');
 	});
 
 	it('does not accept another output path, or an older receipt after new retrieval', async () => {
