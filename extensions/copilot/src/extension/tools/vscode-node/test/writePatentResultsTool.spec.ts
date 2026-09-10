@@ -125,6 +125,20 @@ describe('candidate report save path', () => {
 		const companions = (await files.readDirectory(URI.file('/workspace'))).filter(([name]) => name.endsWith('.evidence.json')).map(([name]) => name);
 		expect({ wrappers: report.match(/# Prior Art Candidate Review/g)?.length, corrected: report.includes('Corrected stopping rationale'), stale: report.includes('First candidate draft'), companions: companions.length, named: (revised.content[0] as LanguageModelTextPart).value.includes(companions[0]), checks: checked.length }).toEqual({ wrappers: 1, corrected: true, stale: false, companions: 1, named: true, checks: 4 });
 	});
+	it('states the chat summary contract above a receipt the completion check still parses', async () => {
+		const { tool, files } = setup();
+		const input = { filePath: '/workspace/review.md', template: 'prior-art-report' as const, content: '', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Interim review.'], stopReason: 'Bounded interim result.' };
+		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+		const message = (result.content[0] as LanguageModelTextPart).value;
+		const turn: ReportCompletionTurn = { message: 'Search for prior art and save /workspace/review.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(input) }] }], results: { write: result } };
+		expect({
+			contract: message.includes('Chat summary contract: repeat each coverage row\'s status word exactly (supported / partial / unresolved)'),
+			certainty: message.includes('The summary must not be more certain than the saved report.'),
+			receipts: message.split('\n').filter(line => line.startsWith('Prior-art artifact receipt: ')).length,
+			completion: await checkPriorArtReportCompletion([], turn, files),
+		}).toEqual({ contract: true, certainty: true, receipts: 1, completion: undefined });
+	});
+
 	it('checks raw source URLs in report notes without JSON punctuation', async () => {
 		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', sources: [{ anchor: 'EP1234567A1:claims:1:en', reference: { publicationNumber: 'EP1234567A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Partial.' }) };
 		const { tool } = setup(ledger);
