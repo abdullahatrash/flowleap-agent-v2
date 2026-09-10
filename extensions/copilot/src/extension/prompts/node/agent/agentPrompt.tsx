@@ -50,6 +50,7 @@ import { AgentConversationHistory, AgentUserMessageInHistory } from './agentConv
 import './allAgentPrompts';
 import { AlternateGPTPrompt, DefaultReminderInstructions, DefaultToolReferencesHint, ReminderInstructionsProps, ToolReferencesHintProps } from './defaultAgentInstructions';
 import { hasPatentTools, PatentAIInstructions } from './patentAIPrompt';
+import { patentEvidenceReadingContext } from './patentEvidenceReading';
 import { AgentPromptCustomizations, ReminderInstructionsConstructor, ToolReferencesHintConstructor } from './promptRegistry';
 import { SummarizedConversationHistory } from './summarizedConversationHistory';
 import { DeferredToolListReminder } from './toolSearchInstructions';
@@ -154,6 +155,11 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 		const userQueryTagName = customizations.userQueryTagName;
 		const ReminderInstructionsClass = customizations.ReminderInstructionsClass;
 		const ToolReferencesHintClass = customizations.ToolReferencesHintClass;
+		const evidenceReading = hasPatentTools(this.props.promptContext.tools?.availableTools) && patentEvidenceReadingContext([
+			...this.props.promptContext.history.map(turn => ({ rounds: turn.rounds, results: turn.resultMetadata?.toolCallResults ?? {}, maxToolCallsExceeded: turn.resultMetadata?.maxToolCallsExceeded })),
+			{ rounds: this.props.promptContext.toolCallRounds ?? [], results: this.props.promptContext.toolCallResults ?? {} },
+		]);
+		const evidenceReminder = evidenceReading ? <UserMessage priority={901}><Tag name="patentEvidenceReading">{evidenceReading}</Tag></UserMessage> : undefined;
 
 		if (this.props.enableSummarization) {
 			return <>
@@ -174,6 +180,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 					ToolReferencesHintClass={ToolReferencesHintClass}
 					customizationsIndexUpdate={customizationsSnapshot?.drift}
 				/>
+				{evidenceReminder}
 			</>;
 		} else {
 			return <>
@@ -181,6 +188,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 				<AgentConversationHistory flexGrow={1} priority={700} promptContext={this.props.promptContext} userQueryTagName={userQueryTagName} />
 				<AgentUserMessage flexGrow={2} priority={900} {...getUserMessagePropsFromAgentProps(this.props, { userQueryTagName, ReminderInstructionsClass, ToolReferencesHintClass })} customizationsIndexUpdate={customizationsSnapshot?.drift} />
 				<ChatToolCalls priority={899} flexGrow={2} promptContext={this.props.promptContext} toolCallRounds={this.props.promptContext.toolCallRounds} toolCallResults={this.props.promptContext.toolCallResults} truncateAt={maxToolResultLength} enableCacheBreakpoints={false} />
+				{evidenceReminder}
 			</>;
 		}
 	}

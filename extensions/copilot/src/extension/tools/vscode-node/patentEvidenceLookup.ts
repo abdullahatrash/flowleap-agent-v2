@@ -31,7 +31,7 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 	const offset = lookup.offset ?? 0;
 	if (!Number.isInteger(offset) || offset < 0) { return 'Evidence lookup offset must be a non-negative integer.'; }
 	const selected = lookup.anchor ? [...sources.values()].filter(source => source.anchor === lookup.anchor) : [...sources.values()];
-	if (!selected.length) { return `No recorded source matches ${lookup.anchor ?? publication}. ${snapshot.limitation}`; }
+	if (!selected.length) { return `No recorded source matches ${lookup.anchor ?? publication}. Discover exact anchors with get_patent_details(publicationNumber: "${publication}", evidenceLookup: {}). Do not guess an anchor or search the source text for an anchor ID. ${snapshot.limitation}`; }
 	if (!lookup.anchor && !lookup.query) {
 		if (offset) { return 'Evidence index uses start only; offset applies to source text.'; }
 		const page = selected.slice(start - 1, start - 1 + pageRows);
@@ -52,6 +52,8 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 	let remaining = pageCharacters;
 	while (position < matching.length && page.length < pageRows && remaining > 0) {
 		const row = matching[position];
+		// Blank source lines retain their positions but do not consume the useful-row allowance.
+		if (!row.text.trim()) { position++; character = 0; continue; }
 		const prefix = `[${row.source.anchor}; line ${row.line}${character ? `; offset ${character}` : ''}] `;
 		if (remaining <= prefix.length + 1) { break; }
 		let end = Math.min(row.text.length, character + remaining - prefix.length);
@@ -64,6 +66,7 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 		position++;
 		character = 0;
 	}
+	while (position < matching.length && !matching[position].text.trim()) { position++; character = 0; }
 	return [`Local returned-text ${lookup.query ? 'literal matches' : 'lines'}: ${matching.length} results, starting at ${start}. Retrieval is not proof of review or completeness; no match does not establish absence from the publication.`,
 		...page,
 		position < matching.length ? continuation({ ...lookup, start: position + 1, offset: character }) : 'End of results.',

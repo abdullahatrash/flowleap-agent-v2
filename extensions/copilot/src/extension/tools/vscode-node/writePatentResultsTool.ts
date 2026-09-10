@@ -12,7 +12,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
-import { PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
+import { materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -98,8 +98,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 		try {
 			const snapshot = template === 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			const input = snapshot ? materializeCandidateReview(options.input, snapshot) : options.input;
 			if (snapshot) {
-				const errors = validateCandidateReview(options.input, snapshot, [content, options.input.relevanceAssessment, options.input.objective, options.input.searchStrategy, ...(options.input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(options.input.limitations ?? []), options.input.stopReason].filter(Boolean).join('\n'));
+				const errors = validateCandidateReview(input, snapshot, [content, input.relevanceAssessment, input.objective, input.searchStrategy, ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'));
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -110,7 +111,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(options.input, snapshot, basename(evidenceUri)) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri)) : content;
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,

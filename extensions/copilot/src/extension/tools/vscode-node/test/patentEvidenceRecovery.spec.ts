@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import type * as vscode from 'vscode';
+import MarkdownIt from 'markdown-it';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { lookupPatentEvidence } from '../patentEvidenceLookup';
-import { PatentCandidateReview, renderCandidateReview, validateCandidateReview } from '../patentCandidateReview';
+import { materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from '../patentCandidateReview';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
@@ -22,6 +23,31 @@ const combination = { feature: 'Essential combination', kind: 'combination' as c
 const review: PatentCandidateReview = { coverage: [combination], limitations: ['Bounded candidate review.'], stopReason: 'Requested interim report.' };
 
 describe('prior-art evidence recovery and review contract', () => {
+	it('renders source claim numbers literally without continuing a Markdown list', () => {
+		const row = { ...combination, sourceAnchors: snapshot.executions[0].sources!.slice(0, 2).map(source => source.anchor), evidence: snapshot.executions[0].sources!.slice(0, 2).map(source => ({ anchor: source.anchor, quote: source.text!, scope: 'Quoted claim only.', qualifiers: 'Unresolved.', quantityBasis: 'Original units.' })) };
+		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'evidence.json'));
+		expect({ orderedList: html.includes('<ol'), literalClaim10: html.includes('10. A dental'), literalClaim8: html.includes('8. A composition'), reviewOutsideQuote: /<\/blockquote>\s*<p>Source review/.test(html) }).toEqual({ orderedList: false, literalClaim10: true, literalClaim8: true, reviewOutsideQuote: true });
+	});
+	it('discloses missing formula images and treats source markup as literal text', () => {
+		const source = snapshot.executions[0].sources![0];
+		const row = { ...combination, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: '10. A sensor with <img class="EMIRef" id="formula" /> and <script>text</script>, **optional** feedback.', scope: 'Claim.', qualifiers: 'Missing formula.', quantityBasis: 'None.' }] };
+		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'evidence.json'));
+		expect({ image: html.includes('<img'), script: html.includes('<script>'), notice: html.includes('Formula/image unavailable'), literal: html.includes('**optional**'), original: html.includes('Consult the original document') }).toEqual({ image: false, script: false, notice: true, literal: true, original: true });
+	});
+	it('preserves indented subparagraphs without displaying Markdown escapes', () => {
+		const source = snapshot.executions[0].sources![0];
+		const row = { ...combination, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: '    7. A-B < 5\n\n\t(a) **optional** feedback.', scope: 'Claim.', qualifiers: 'Optional.', quantityBasis: 'Original.' }] };
+		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'evidence.json'));
+		expect({ escapedNumber: html.includes('7\\.'), literal: html.includes('7. A-B &lt; 5'), code: html.includes('<code>'), optional: html.includes('**optional**') }).toEqual({ escapedNumber: false, literal: true, code: false, optional: true });
+	});
+	it('copies a missing numbered-claim quote from its source but never substitutes a whole description', () => {
+		const sources = snapshot.executions[0].sources!;
+		const evidence = sources.map(source => ({ anchor: source.anchor, scope: 'Quoted source.', qualifiers: 'Unknown.', quantityBasis: 'Original.' }));
+		const input: PatentCandidateReview = { ...review, coverage: [{ ...combination, sourceAnchors: sources.map(source => source.anchor), evidence }] };
+		const materialized = materializeCandidateReview(input, snapshot);
+		expect(materialized.coverage![0].evidence!.map(item => item.quote)).toEqual([claim10, claim8, undefined]);
+		expect(validateCandidateReview(materialized, snapshot).some(error => error.includes('must match recorded text'))).toBe(true);
+	});
 	it('recovers a sieve passage beyond line 100 and pages directly to its source with the same anchor', () => {
 		const match = lookupPatentEvidence(snapshot, 'WO9951190A1', { query: 'sieve' });
 		const page = lookupPatentEvidence(snapshot, 'WO9951190A1', { anchor: 'WO9951190A1:description:en', start: 180 });
@@ -35,7 +61,7 @@ describe('prior-art evidence recovery and review contract', () => {
 		const row = { feature: 'Loading', kind: 'feature' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [anchor], gap: 'Range overlap only.', evidence: [evidence] };
 		const complete = { ...review, coverage: [row, combination] };
 		const incomplete = { ...review, coverage: [{ ...row, evidence: [{ ...evidence, quote: fragment }] }, combination] };
-		expect({ rejected: validateCandidateReview(incomplete, snapshot).some(error => error.includes('Quote the complete claim')), errors: validateCandidateReview(complete, snapshot), retains: renderCandidateReview(complete, snapshot, 'evidence.json').includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
+		expect({ rejected: validateCandidateReview(incomplete, snapshot).some(error => error.includes('Quote the complete claim')), errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'evidence.json')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
 	});
 	it('rejects bibliography-only feature support even when its quotation matches', () => {
 		const source = { ...snapshot.executions[0].sources![0], anchor: 'WO9951190A1:bibliography', reference: { publicationNumber: 'WO9951190A1', section: 'bibliography' as const } };
