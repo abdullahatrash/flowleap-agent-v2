@@ -36,6 +36,7 @@ Identify **2-3 CPC/IPC codes** covering the invention (see [references/cpc-class
 - **Date basis**: preserve the user-confirmed publication cutoff, including whether it is strict or inclusive. Keep a demonstration cutoff separate from an actual priority/filing date; resolve legal eligibility separately when requested.
 - **Prior art includes** (per 35 USC 102): patents and published applications (US and foreign); printed publications (journals, manuals, websites); public use or on sale (trade shows, demos, launches); otherwise available to the public (talks, social media, videos)
 - Ask the user: was the invention publicly demonstrated, sold, or shown anywhere before filing?
+- **Scope confirmation**: when the disclosure or the user asks you to confirm the search scope before searching, ask once with `vscode_askQuestions` before the first query and record the confirmed scope in the report objective. Otherwise do not re-confirm a scope that was stated explicitly.
 
 ## Phase 2: Broad-to-Narrow Search (USPTO Core Methodology)
 
@@ -95,6 +96,8 @@ Before handing back or recording a coverage gap in the audit trail, work the lad
 Apply this ladder within the confirmed scope. Record an intentionally excluded source as not searched, and a focused review as incomplete coverage; neither requires an out-of-scope search. Log operational failures separately, naming what you tried.
 
 ## Phase 3: Relevance Assessment
+
+`supported` means the passage discloses the feature as specified, not a broader genus that could include it: an unspecified initiator does not support a light-curing initiator, and an unclassified filler does not support a fine-fraction limit. Cite the narrowing passage or mark the row `partial` with the missing element named in the gap. Every document you retrieve is either cited in coverage or appears in the report's retrieved-but-not-cited list; read it or say you did not.
 
 For each feature, identify its exact supporting passage and scope: independent claim, dependent claim with its dependencies, embodiment, example, or background discussion. Preserve the identity of the recited subject matter, units, denominators and qualifiers exactly as written. A numerical range overlap is partial support; an example or dependent-claim limitation does not become a requirement of the whole publication, and it never narrows the independent claim.
 

@@ -22,6 +22,19 @@ const snapshot: PatentExecutionSnapshot = { limitation: 'Returned text only.', e
 const combination = { feature: 'Essential combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Exact combination remains unresolved.' };
 const review: PatentCandidateReview = { coverage: [combination], limitations: ['Bounded candidate review.'], stopReason: 'Requested interim report.' };
 
+// One keyword search with an unreviewed tail, one cited English document and one uncited Japanese one.
+const retrieval: PatentExecutionSnapshot = { limitation: 'Recorded outcomes only.', executions: [
+	{ id: 'search', recordedAt: '2026-09-10T01:00:00Z', kind: 'search', status: 'succeeded', query: 'ta=dental AND ta=filler', total: 33, returned: 10 },
+	{ id: 'english', recordedAt: '2026-09-10T02:00:00Z', kind: 'details', status: 'succeeded', publicationIds: ['WO9951190A1'], publicationDate: '1999-10-14', publicationTitle: 'Dental composition', sources: [
+		{ anchor: 'WO9951190A1:claims:10:en', reference: { publicationNumber: 'WO9951190A1', section: 'claims', claimNumber: '10' }, language: 'en', text: claim10, retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+		{ anchor: 'WO9951190A1:description:en', reference: { publicationNumber: 'WO9951190A1', section: 'description' }, language: 'en', text: 'The powder was passed through a sieve.', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+	] },
+	{ id: 'japanese', recordedAt: '2026-09-10T03:00:00Z', kind: 'details', status: 'succeeded', publicationIds: ['JP2001010910A'], publicationDate: '2001-01-16', publicationTitle: 'Japanese filler', sources: [
+		{ anchor: 'JP2001010910A:claims:1:ja', reference: { publicationNumber: 'JP2001010910A', section: 'claims', claimNumber: '1' }, language: 'ja', text: '1. 歯科用組成物。', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+	] },
+] };
+const claimsOnly: PatentCandidateReview = { ...review, coverage: [{ ...combination, sourceAnchors: ['WO9951190A1:claims:10:en'] }] };
+
 describe('prior-art evidence recovery and review contract', () => {
 	it('renders source claim numbers literally without continuing a Markdown list', () => {
 		const row = { ...combination, sourceAnchors: snapshot.executions[0].sources!.slice(0, 2).map(source => source.anchor), evidence: snapshot.executions[0].sources!.slice(0, 2).map(source => ({ anchor: source.anchor, quote: source.text!, scope: 'Quoted claim only.', qualifiers: 'Unresolved.', quantityBasis: 'Original units.' })) };
@@ -95,5 +108,44 @@ describe('prior-art evidence recovery and review contract', () => {
 		const row = { ...combination, kind: 'feature' as const, sourceAnchors: ['WO9951190A1:claims:10:en'], evidence: [{ anchor: 'WO9951190A1:claims:10:en', quote: 'The filler is 28.5–80 wt%.', scope: 'Claim 10', qualifiers: 'None', quantityBasis: 'Percent of paste' }] };
 		const errors = validateCandidateReview({ ...review, coverage: [row] }, snapshot);
 		expect({ combination: errors.some(error => error.includes('explicit essential combination')), quote: errors.some(error => error.includes('must match recorded text')) }).toEqual({ combination: true, quote: true });
+	});
+
+	it('discloses the uncited Japanese document, the claims-only basis, the unreviewed tail and the missing classification query', () => {
+		const rendered = renderCandidateReview(claimsOnly, retrieval, 'evidence.json');
+		expect({
+			table: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en |'),
+			uncited: rendered.includes('| JP2001010910A | 2001-01-16 | Japanese filler | claims | ja (untranslated; not reviewable in this report without translation) |'),
+			count: rendered.includes('- 1 of 2 retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.'),
+			language: rendered.includes('- Retrieved text is not in English for JP2001010910A (ja); those documents are untranslated'),
+			claimsOnly: rendered.includes('- No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: WO9951190A1.'),
+			tail: rendered.includes('- Query 1 returned 10 of 33 matches; the remaining 23 were not retrieved.'),
+			classification: rendered.includes('- No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.'),
+		}).toEqual({ table: true, uncited: true, count: true, language: true, claimsOnly: true, tail: true, classification: true });
+	});
+
+	it('stays silent when every document is cited, a description is quoted, the tail is exhausted and a class was searched', () => {
+		const searched = { ...retrieval.executions[0], query: 'ta=dental AND ic=A61K', total: 10, returned: 10 };
+		const cited = { ...combination, sourceAnchors: ['WO9951190A1:claims:10:en', 'WO9951190A1:description:en', 'JP2001010910A:claims:1:ja'] };
+		const rendered = renderCandidateReview({ ...review, coverage: [cited] }, { ...retrieval, executions: [searched, ...retrieval.executions.slice(1)] }, 'evidence.json');
+		expect({
+			cited: rendered.includes('Every retrieved document is cited in at least one coverage row.'),
+			count: rendered.includes('retrieved documents are not cited'),
+			claimsOnly: rendered.includes('No description passage is cited'),
+			tail: rendered.includes('were not retrieved.'),
+			classification: rendered.includes('No classification-code'),
+			language: rendered.includes('Retrieved text is not in English for JP2001010910A (ja)'),
+		}).toEqual({ cited: true, count: false, claimsOnly: false, tail: false, classification: false, language: true });
+	});
+
+	it('rejects legal conclusions in model prose while accepting an explicit non-establishment disclaimer', () => {
+		const conclusions = validateCandidateReview({ ...review, stopReason: 'The reference teaches away from the combination.', limitations: ['Claim 1 is novel over the retrieved art.'] }, snapshot);
+		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.'] }, snapshot);
+		expect({
+			flagged: conclusions.filter(error => error.startsWith('Legal conclusions')),
+			exempt: disclaimer,
+		}).toEqual({
+			flagged: ['Legal conclusions in a candidate review: "is novel" in limitations[0]; "teaches away" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.'],
+			exempt: [],
+		});
 	});
 });

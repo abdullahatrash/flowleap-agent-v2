@@ -22,6 +22,134 @@ export interface PatentCandidateReview {
 	readonly content?: string;
 	readonly limitations?: readonly string[];
 	readonly stopReason?: string;
+	/** Report prose the template renders outside the appendix; checked like every other model-written field. */
+	readonly objective?: string;
+	readonly searchStrategy?: string;
+}
+
+/**
+ * Assertive legal conclusions a candidate review must not draw. Matched case-insensitively and on
+ * word boundaries, so "anticipate" never fires on "anticipated" (its own entry) and "novelty gap"
+ * never fires on "novelty gaps".
+ */
+const LEGAL_CONCLUSION_PHRASES: readonly string[] = [
+	'teach away', 'teaches away', 'teaching away', 'core novelty', 'novelty gap', 'novelty gaps',
+	'is novel', 'are novel', 'not novel', 'clearly novel', 'anticipate', 'anticipates', 'anticipated by',
+	'anticipation', 'obvious over', 'would have been obvious', 'non-obvious', 'nonobvious', 'inventive step',
+	'patentable', 'unpatentable', 'freedom to operate',
+];
+
+/**
+ * Report the legal conclusions written into model-supplied prose. A disclaimer of the form
+ * "does not establish novelty" is the opposite of a conclusion, so a match whose preceding 60
+ * characters disclaim establishment is exempt.
+ */
+function legalConclusions(fields: readonly (readonly [string, string | undefined])[]): string[] {
+	const findings: string[] = [];
+	for (const [field, value] of fields) {
+		if (!value) { continue; }
+		for (const phrase of LEGAL_CONCLUSION_PHRASES) {
+			const pattern = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')}\\b`, 'gi');
+			for (const match of value.matchAll(pattern)) {
+				const start = match.index ?? 0;
+				if (/not\s+establish/i.test(value.slice(Math.max(0, start - 60), start))) { continue; }
+				findings.push(`"${match[0]}" in ${field}`);
+			}
+		}
+	}
+	return findings;
+}
+
+/** A retrieved document with the recorded facts every automatic disclosure is generated from. */
+interface RetrievedDocument {
+	readonly publication: string;
+	readonly publicationDate: string;
+	readonly publicationTitle: string;
+	/** Sections whose text was actually recorded, so an empty retrieval is not reported as available. */
+	readonly sectionsWithText: readonly string[];
+	/** Claims language, else description language, else `unrecorded`; never inferred from the text. */
+	readonly language: string;
+	readonly cited: boolean;
+}
+
+/** Anchors the model put in coverage, by either sourceAnchors or evidence. */
+function citedAnchors(review: PatentCandidateReview): Set<string> {
+	return new Set((review.coverage ?? []).flatMap(row => [...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor)]));
+}
+
+/** Inventory of documents a succeeded detail retrieval brought into the session. */
+function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly RetrievedDocument[] {
+	const cited = citedAnchors(review);
+	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; languages: Map<string, string>; cited: boolean }
+	const documents = new Map<string, DocumentRecord>();
+	const entry = (publication: string): DocumentRecord => {
+		const existing = documents.get(publication);
+		if (existing) { return existing; }
+		const created: DocumentRecord = { sections: new Set<string>(), languages: new Map<string, string>(), cited: false };
+		documents.set(publication, created);
+		return created;
+	};
+	for (const execution of snapshot.executions) {
+		if (execution.kind !== 'details' || execution.status !== 'succeeded') { continue; }
+		for (const publication of execution.publicationIds ?? []) {
+			const document = entry(publication);
+			document.date ??= execution.publicationDate;
+			document.title ??= execution.publicationTitle;
+		}
+		for (const source of execution.sources ?? []) {
+			const document = entry(source.reference.publicationNumber);
+			if (source.text?.trim()) { document.sections.add(source.reference.section); }
+			if (source.language && !document.languages.has(source.reference.section)) { document.languages.set(source.reference.section, source.language); }
+			if (cited.has(source.anchor)) { document.cited = true; }
+		}
+	}
+	return [...documents].map(([publication, document]) => ({
+		publication,
+		publicationDate: document.date ?? 'Unknown',
+		publicationTitle: document.title ?? 'Unknown',
+		sectionsWithText: [...document.sections],
+		language: document.languages.get('claims') ?? document.languages.get('description') ?? 'unrecorded',
+		cited: document.cited,
+	}));
+}
+
+/** A recorded language that is neither English nor absent; only such text needs a translation notice. */
+function untranslated(document: RetrievedDocument): boolean {
+	return document.language !== 'unrecorded' && !/^en$/i.test(document.language);
+}
+
+/** CQL classification fields (`ic`, `cpc`, `cl`) plus the plain code names a query may spell out. */
+const CLASSIFICATION_QUERY = /\b(?:cpc|ipc|cpci)\b|\b(?:ic|cl)\s*[=:]/i;
+
+/**
+ * Limitations the report states on its own behalf, generated from the execution record rather than
+ * supplied by the model, so an undisclosed gap cannot survive the writer's own summary.
+ */
+function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, documents: readonly RetrievedDocument[]): string[] {
+	const lines: string[] = [];
+	const uncited = documents.filter(document => !document.cited);
+	if (uncited.length) {
+		lines.push(`${uncited.length} of ${documents.length} retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.`);
+	}
+	const foreign = documents.filter(untranslated);
+	if (foreign.length) {
+		lines.push(`Retrieved text is not in English for ${foreign.map(document => `${document.publication} (${document.language})`).join(', ')}; those documents are untranslated and were not reviewable in this report without translation.`);
+	}
+	const sources = sourceIndex(snapshot);
+	const cited = citedAnchors(review);
+	if (cited.size && ![...cited].some(anchor => sources.get(anchor)?.reference.section === 'description')) {
+		const retrieved = documents.filter(document => document.sectionsWithText.includes('description')).map(document => document.publication);
+		lines.push(`No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: ${retrieved.join(', ') || 'none'}.`);
+	}
+	const searches = snapshot.executions.filter(execution => execution.kind === 'search');
+	const tails = searches.flatMap((execution, index) => execution.status === 'succeeded' && execution.total !== undefined && execution.returned !== undefined && execution.total > execution.returned
+		? [`Query ${index + 1} returned ${execution.returned} of ${execution.total} matches; the remaining ${execution.total - execution.returned} were not retrieved.`]
+		: []);
+	if (tails.length) { lines.push(tails.join(' ')); }
+	if (searches.length && !searches.some(execution => CLASSIFICATION_QUERY.test(execution.effectiveQuery ?? execution.query ?? ''))) {
+		lines.push('No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.');
+	}
+	return lines;
 }
 
 /** Anchor to recorded source, the single index every pass over a snapshot shares. */
@@ -78,6 +206,25 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 	if (!review.limitations?.some(value => value.trim())) { errors.push('Supply the search and evidence limitations.'); }
 	if (!review.stopReason?.trim()) { errors.push('Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.'); }
 	if (!review.coverage?.some(row => row.kind === 'combination' && row.importance === 'essential')) { errors.push('Include an explicit essential combination row; it may honestly remain unresolved.'); }
+	// Quotations are verbatim source text and are never scanned; only prose the model wrote itself is.
+	const conclusions = legalConclusions([
+		['objective', review.objective],
+		['searchStrategy', review.searchStrategy],
+		...(review.coverage ?? []).flatMap(row => [
+			[`coverage feature for "${row.feature}"`, row.feature] as const,
+			[`coverage gap for "${row.feature}"`, row.gap] as const,
+			...(row.evidence ?? []).flatMap(evidence => [
+				[`evidence scope for ${evidence.anchor}`, evidence.scope] as const,
+				[`evidence qualifiers for ${evidence.anchor}`, evidence.qualifiers] as const,
+				[`evidence quantity basis for ${evidence.anchor}`, evidence.quantityBasis] as const,
+			]),
+		]),
+		...(review.limitations ?? []).map((value, index) => [`limitations[${index}]`, value] as const),
+		['stopReason', review.stopReason],
+	]);
+	if (conclusions.length) {
+		errors.push(`Legal conclusions in a candidate review: ${conclusions.join('; ')}. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.`);
+	}
 	return errors;
 }
 
@@ -96,13 +243,16 @@ function quotation(text: string): string {
 /** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
 export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
 	const sources = sourceIndex(snapshot);
-	const candidates = new Map(snapshot.executions.filter(execution => execution.kind === 'details' && execution.status === 'succeeded').flatMap(execution => (execution.publicationIds ?? []).map(publication => [publication, execution] as const)));
+	const documents = retrievedDocuments(review, snapshot);
+	const uncited = documents.filter(document => !document.cited);
+	const language = (document: RetrievedDocument) => document.language + (untranslated(document) ? ' (untranslated; not reviewable in this report without translation)' : '');
+	const automatic = automaticLimitations(review, snapshot, documents);
 	return [
 		'## Retrieved documents',
 		'Retrieval does not establish eligibility as prior art. This inventory may include post-cutoff background documents. Check each publication date and jurisdiction against the requested scope; unknown dates remain unresolved.',
-		'| Publication | Publication date | Title |',
-		'| --- | --- | --- |',
-		...[...candidates].map(([publication, execution]) => '| ' + [publication, execution.publicationDate ?? 'Unknown', execution.publicationTitle ?? 'Unknown'].map(cell).join(' | ') + ' |'),
+		'| Publication | Publication date | Title | Text language |',
+		'| --- | --- | --- | --- |',
+		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, language(document)].map(cell).join(' | ') + ' |'),
 		'',
 		'## Coverage and remaining search tracks',
 		...(review.coverage ?? []).flatMap(row => [
@@ -118,8 +268,16 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 			}),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
+		'', '## Retrieved but not cited in coverage',
+		'Retrieved text that no coverage row cites was not reviewed for this report; its content is unknown, not absent.',
+		...(uncited.length ? [
+			'| Publication | Publication date | Title | Sections with text | Text language |',
+			'| --- | --- | --- | --- | --- |',
+			...uncited.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, document.sectionsWithText.join(', ') || 'none recorded', language(document)].map(cell).join(' | ') + ' |'),
+		] : ['Every retrieved document is cited in at least one coverage row.']),
 		'', '## Search stopping rationale', review.stopReason ?? '',
 		'', '## Limitations', ...(review.limitations ?? []).map(value => '- ' + value),
+		...(automatic.length ? ['', 'Generated from the execution record, not supplied by the model:', ...automatic.map(value => '- ' + value), ''] : []),
 		snapshot.limitation,
 		'Anchor identity, quotation identity and required fields were checked mechanically. Source review notes are model judgments, not verified facts. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.',
 		'', `## Execution audit`,

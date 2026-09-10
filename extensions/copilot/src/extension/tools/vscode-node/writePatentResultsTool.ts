@@ -39,6 +39,12 @@ interface IWritePatentResultsParams extends PatentCandidateReview {
 }
 
 /**
+ * The saved report is the record; the chat summary that follows it must not become more certain than
+ * that record, so the save states the contract the summary has to keep.
+ */
+const SUMMARY_CONTRACT = 'Chat summary contract: repeat each coverage row\'s status word exactly (supported / partial / unresolved), do not add novelty, anticipation, obviousness or teaching-away conclusions, and state the retrieved-but-not-cited count and any untranslated documents. The summary must not be more certain than the saved report.';
+
+/**
  * Writes patent search results (or analysis) to a local file. Independent of the FlowLeap backend
  * and BYOK inference — it only touches the file system, so it works regardless of auth state.
  *
@@ -143,7 +149,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			}
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
