@@ -480,10 +480,10 @@ class ToolResultElement extends PromptElement<IToolResultElementActualProps & Ba
 		const toolResultElement = this.props.enableCacheBreakpoints ?
 			<>
 				<Chunk>
-					<ToolResult content={content} truncate={this.props.truncateAt} toolCallId={this.props.toolCall.id} sessionId={this.props.sessionId} toolName={this.props.toolCall.name} sharedImageBudget={this.props.sharedImageBudget} />
+					<ToolResult content={content} truncate={this.props.truncateAt} toolCallId={this.props.toolCall.id} sessionId={this.props.sessionId} toolName={this.props.toolCall.name} toolArguments={this.props.toolCall.arguments} sharedImageBudget={this.props.sharedImageBudget} />
 				</Chunk>
 			</> :
-			<ToolResult content={content} truncate={this.props.truncateAt} toolCallId={this.props.toolCall.id} sessionId={this.props.sessionId} toolName={this.props.toolCall.name} sharedImageBudget={this.props.sharedImageBudget} />;
+			<ToolResult content={content} truncate={this.props.truncateAt} toolCallId={this.props.toolCall.id} sessionId={this.props.sessionId} toolName={this.props.toolCall.name} toolArguments={this.props.toolCall.arguments} sharedImageBudget={this.props.sharedImageBudget} />;
 
 		return (
 			<ToolMessage toolCallId={this.props.toolCall.id!}>
@@ -878,6 +878,8 @@ export interface IToolResultProps extends IPrimitiveToolResultProps {
 	 * The name of the tool that produced this result.
 	 */
 	toolName?: string;
+	/** Original invocation arguments, used to preserve native evidence navigation after offload. */
+	toolArguments?: string;
 }
 
 
@@ -920,7 +922,27 @@ export class ToolResult extends PrimitiveToolResult<IToolResultProps> {
 		return '[Image omitted — context image budget exceeded. Try viewing fewer images at once or reference this image by URI.]';
 	}
 
+	/** Use the validated invocation identity, never a publication guessed from retrieved prose. */
+	private getPatentEvidenceRoute(): { publicationNumber: string; localLookup: boolean } | undefined {
+		if (this.props.toolName !== ToolName.GetPatentDetails || !this.props.toolArguments) {
+			return undefined;
+		}
+		try {
+			const input: { publicationNumber?: string; evidenceLookup?: object } = JSON.parse(this.props.toolArguments);
+			if (typeof input.publicationNumber !== 'string') { return undefined; }
+			const publicationNumber = input.publicationNumber.replace(/[-.\s/]/g, '').toUpperCase();
+			if (!/^[A-Z]{2}\d+[A-Z]\d?$/.test(publicationNumber)) { return undefined; }
+			return { publicationNumber, localLookup: !!input.evidenceLookup && typeof input.evidenceLookup === 'object' };
+		} catch { return undefined; }
+	}
+
 	protected override async onText(content: string): Promise<string> {
+		// Local evidence pages are already bounded by the native tool. Offloading a page
+		// (8KB plus its header) at the generic 8KB threshold creates another read loop.
+		const evidence = this.getPatentEvidenceRoute();
+		if (evidence?.localLookup) {
+			return content;
+		}
 		const isDiskCachingEnabled = this._configurationService.getExperimentBasedConfig(
 			ConfigKey.Advanced.LargeToolResultsToDiskEnabled,
 			this._experimentationService
@@ -959,6 +981,16 @@ export class ToolResult extends PrimitiveToolResult<IToolResultProps> {
 					const contentFileUri = URI.joinPath(fileUri, contentFile);
 					const schemaFileUri = schema ? URI.joinPath(fileUri, 'schema.json') : undefined;
 					this._logService?.debug(`[ToolResult] Large tool result (${content.length} bytes) written to disk: ${filePath}`);
+
+					if (evidence) {
+						return `Patent tool output for ${evidence.publicationNumber}. For stored evidence analysis, call ${ToolName.GetPatentDetails} with publicationNumber=${JSON.stringify(evidence.publicationNumber)} and evidenceLookup={} for the local source-anchor index. Use evidenceLookup.query for relevant passages, or evidenceLookup.anchor with start/offset to read exact text and dependencies. Local lookup makes no backend calls; retrieval alone does not establish review or completeness. Do not re-fetch or parse this offload in a shell to perform an available local lookup.\n\nComplete retrieved output (${Math.round(content.length / 1024)}KB): ${contentFileUri.fsPath}. For an explicit full-text/file deliverable, use ${ToolName.ReadFile} to read the needed complete text and provide the file; do not reconstruct missing text.`;
+					}
+					if (this.props.toolName === ToolName.SearchPatents) {
+						// Keep whole lines so the preview never turns a partial title/date into evidence.
+						const preview = content.slice(0, 4000);
+						const endOfLine = preview.lastIndexOf('\n');
+						return `Partial search-result preview (remaining rows and abstracts are in the complete output):\n${endOfLine < 0 ? '(No complete result line fits in the preview.)' : preview.slice(0, endOfLine)}\n\nComplete search output: ${contentFileUri.fsPath}. Use ${ToolName.ReadFile} if more candidates are needed, then ${ToolName.GetPatentDetails} for selected publications. Do not rerun the same search merely because its result was offloaded, or repeatedly inspect this file through shell commands. This preview is not the full result set or a claim-scope conclusion.`;
+					}
 
 					return `Large tool result (${Math.round(content.length / 1024)}KB) written to file. Use the ${ToolName.ReadFile} tool to access the content at: ${contentFileUri.fsPath}${schemaFileUri ? `\n\nData schema found at: ${schemaFileUri.fsPath}` : ''}`;
 				} catch (err) {

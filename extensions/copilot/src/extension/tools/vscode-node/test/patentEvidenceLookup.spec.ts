@@ -27,6 +27,13 @@ function nextLookup(result: string): PatentEvidenceLookup | undefined {
 }
 
 describe('bounded local patent evidence inspection', () => {
+	it('exposes recorded publication metadata in the local index without reading the offload', () => {
+		const state = snapshot([{ ...source, text: 'Returned description.' }]);
+		const withMetadata = { ...state, executions: [{ ...state.executions[0], publicationTitle: 'Dental restorative composition', publicationDate: '2000-03-08' }] };
+		const index = lookupPatentEvidence(withMetadata, publication, {});
+		expect({ publication: index.includes(`Recorded publication: ${publication}`), date: index.includes('Publication date: 2000-03-08'), title: index.includes('Dental restorative composition') }).toEqual({ publication: true, date: true, title: true });
+	});
+
 	it('pages a large claims index without repeating the first page', () => {
 		const sources = Array.from({ length: 75 }, (_, i) => ({ ...source, anchor: `${publication}:claims:${i + 1}:de`, text: `${i + 1}. Eine Batterie.`, reference: { publicationNumber: publication, section: 'claims' as const, claimNumber: String(i + 1) } }));
 		const state = snapshot(sources);
