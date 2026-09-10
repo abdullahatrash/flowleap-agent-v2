@@ -20,6 +20,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, PatentReportTemplate } from '../common/patentReportTemplates';
+import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
 
 interface IWritePatentResultsParams extends PatentCandidateReview {
@@ -124,8 +125,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// Ensure the parent directory exists before writing.
 			await createDirectoryIfNotExists(this.fileSystemService, dirname(uri));
 
-			if (snapshot) {
-				await this.fileSystemService.writeFile(evidenceUri, new TextEncoder().encode(JSON.stringify({ schemaVersion: 1, ...snapshot }, null, 2)));
+			const evidenceDocument = snapshot ? JSON.stringify({ schemaVersion: 1, ...snapshot }, null, 2) : undefined;
+			if (evidenceDocument) {
+				await this.fileSystemService.writeFile(evidenceUri, new TextEncoder().encode(evidenceDocument));
 			}
 			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(document));
 
@@ -140,7 +142,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			}
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}`)
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {

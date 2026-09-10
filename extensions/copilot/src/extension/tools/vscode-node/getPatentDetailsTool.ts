@@ -82,7 +82,9 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentDetailsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const { publicationNumber } = options.input;
 		return {
-			invocationMessage: l10n.t`Fetching patent details for ${publicationNumber}...`,
+			invocationMessage: options.input.evidenceLookup
+				? l10n.t`Reading stored patent evidence for ${publicationNumber}...`
+				: l10n.t`Fetching patent details for ${publicationNumber}...`,
 		};
 	}
 

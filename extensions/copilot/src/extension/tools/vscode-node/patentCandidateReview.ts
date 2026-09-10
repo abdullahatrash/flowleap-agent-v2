@@ -45,6 +45,7 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 		for (const anchor of row.sourceAnchors ?? []) {
 			const source = sources.get(anchor);
 			const evidence = row.evidence?.find(item => item.anchor === anchor);
+			if (row.status !== 'unresolved' && source && !['claims', 'description'].includes(source.reference.section)) { errors.push(`Feature support for ${anchor} requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.`); }
 			if (row.status !== 'unresolved' && !evidence) { errors.push(`Supply an exact quotation and source review for ${anchor}.`); }
 			if (evidence) {
 				const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
@@ -67,9 +68,11 @@ function cell(value: string): string { return value.replace(/\|/g, '\\|').replac
 
 /** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
 export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
+	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
 	const candidates = new Map(snapshot.executions.filter(execution => execution.kind === 'details' && execution.status === 'succeeded').flatMap(execution => (execution.publicationIds ?? []).map(publication => [publication, execution] as const)));
 	return [
-		'## Retrieved candidates',
+		'## Retrieved documents',
+		'Retrieval does not establish eligibility as prior art. This inventory may include post-cutoff background documents. Check each publication date and jurisdiction against the requested scope; unknown dates remain unresolved.',
 		'| Publication | Publication date | Title |',
 		'| --- | --- | --- |',
 		...[...candidates].map(([publication, execution]) => '| ' + [publication, execution.publicationDate ?? 'Unknown', execution.publicationTitle ?? 'Unknown'].map(cell).join(' | ') + ' |'),
@@ -80,7 +83,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 			`**${row.kind} · ${row.importance} · ${row.status}**`,
 			row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
 			...row.sourceAnchors.flatMap(anchor => {
-				const source = snapshot.executions.flatMap(execution => execution.sources ?? []).find(source => source.anchor === anchor);
+				const source = sources.get(anchor);
 				const evidence = row.evidence?.find(item => item.anchor === anchor);
 				return [source ? patentCitationLink(anchor, source.reference) : anchor,
 					...(evidence ? [evidence.quote.split(/\r?\n/).map(line => '> ' + line).join('\n'),
