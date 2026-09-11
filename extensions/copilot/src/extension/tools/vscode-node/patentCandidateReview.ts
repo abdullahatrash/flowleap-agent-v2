@@ -41,7 +41,8 @@ const LEGAL_CONCLUSION_PHRASES: readonly string[] = [
 	'teach away', 'teaches away', 'teaching away', 'core novelty', 'novelty gap', 'novelty gaps',
 	'is novel', 'are novel', 'not novel', 'clearly novel', 'anticipate', 'anticipates', 'anticipated by',
 	'anticipation', 'obvious over', 'would have been obvious', 'obvious combination', 'is obvious', 'obviousness',
-	'non-obvious', 'nonobvious', 'inventive step', 'patentable', 'unpatentable', 'patentability', 'novelty assessment',
+	'non-obvious', 'nonobvious', 'inventive step', 'patentable', 'unpatentable', 'patentability evaluation', 'patentability assessment',
+	'patentability determination', 'patentability conclusion', 'patentability opinion', 'novelty assessment',
 	'novelty evaluation', 'novelty determination', 'novelty conclusion', 'freedom to operate',
 ];
 
@@ -262,7 +263,11 @@ export function materializeCandidateReview<T extends PatentCandidateReview>(revi
 	const sources = sourceIndex(snapshot);
 	return { ...review, coverage: review.coverage?.map(row => ({ ...row, evidence: row.evidence?.map(evidence => {
 		const source = sources.get(evidence.anchor);
-		return { ...evidence, quote: evidence.quote ?? (source?.reference.claimNumber ? source.text : undefined) };
+		if (!source?.reference.claimNumber || !source.text) { return evidence; }
+		// A numbered claim is always rendered whole: an omitted quote is copied from the record, and a
+		// partial quotation that lies inside the claim expands to the whole claim instead of being rejected.
+		const partial = !!evidence.quote?.trim() && normalizeText(source.text).includes(normalizeText(evidence.quote));
+		return { ...evidence, quote: !evidence.quote?.trim() || partial ? source.text : evidence.quote };
 	}) })) };
 }
 
@@ -291,9 +296,11 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 			const source = sources.get(anchor);
 			const evidence = row.evidence?.find(item => item.anchor === anchor);
 			if (row.status !== 'unresolved' && source && !['claims', 'description'].includes(source.reference.section)) { errors.push(`Feature support for ${anchor} requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.`); }
-			if (row.status !== 'unresolved' && !evidence) { errors.push(`Supply an exact quotation and source review for ${anchor}.`); }
+			if (row.status !== 'unresolved' && !evidence) { errors.push(`Row "${row.feature}" lists ${anchor} in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for ${anchor} with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.`); }
 			if (evidence) {
-				if (!evidence.quote?.trim() || !source?.text || !normalizeText(source.text).includes(normalizeText(evidence.quote))) { errors.push(`Quotation for ${anchor} must match recorded text. Recover it with evidenceLookup.anchor; older records without text require one detail retrieval.`); }
+				if (!source?.text) { errors.push(`No recorded text for ${anchor} (older record): retrieve it once with get_patent_details so the quotation can be checked.`); }
+				else if (!evidence.quote?.trim()) { errors.push(`Evidence for ${anchor} needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.`); }
+				else if (!normalizeText(source.text).includes(normalizeText(evidence.quote))) { errors.push(`Quotation for ${anchor} is not found in its recorded text. Copy the passage verbatim from evidenceLookup.anchor output; do not paraphrase or merge lines.`); }
 				if (source?.reference.claimNumber && source.text && normalizeText(evidence.quote ?? '') !== normalizeText(source.text)) { errors.push(`Quote the complete claim for ${anchor}, including dependency language, qualifiers and every constituent; do not extract only a numeric range.`); }
 				if (![evidence.scope, evidence.qualifiers, evidence.quantityBasis].every(value => value?.trim())) { errors.push(`Review scope/dependency, qualifiers and original quantity basis for ${anchor}. Keep original units and all constituents; do not substitute an unverified percentage conversion.`); }
 			}
