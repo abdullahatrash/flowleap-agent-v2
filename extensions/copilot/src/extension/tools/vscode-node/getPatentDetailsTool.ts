@@ -224,7 +224,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 		const shown = entries.slice(0, maxCitedReferences);
 		return [
 			`## Cited references (${origin})`,
-			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve them with get_patent_details before widening the search.',
+			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve only the in-scope, pre-cutoff ones, one at a time, and read each with evidenceLookup before retrieving the next; a retrieved document that is never cited is disclosed in the report as unreviewed.',
 			...shown,
 			...(entries.length > shown.length ? [`… and ${entries.length - shown.length} more`] : []),
 			'',

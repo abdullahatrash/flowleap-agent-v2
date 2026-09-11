@@ -245,8 +245,8 @@ function elementMapErrors(row: PatentCoverageRow, sources: Map<string, PatentEvi
 	}
 	if (row.status === 'partial') {
 		const disclosed = elements.filter(claimsDisclosure).length;
-		if (disclosed === elements.length) { errors.push(`Every element of "${row.feature}" is disclosed; mark the row supported or add the undisclosed element.`); }
-		if (!disclosed) { errors.push(`No element of "${row.feature}" is disclosed by cited text; mark the row unresolved.`); }
+		if (disclosed === elements.length) { errors.push(`Every element of "${row.feature}" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.`); }
+		if (!disclosed) { errors.push(`No element of "${row.feature}" is disclosed by cited text. Either mark the row unresolved, or keep it partial and give at least one element an anchor and a literal disclosedBy fragment; a partial row needs both a disclosed and an undisclosed element.`); }
 	}
 	if (row.kind === 'combination' && row.status === 'supported') {
 		const publications = new Set(elements.flatMap(element => {

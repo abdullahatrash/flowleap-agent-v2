@@ -203,7 +203,7 @@ describe('prior-art evidence recovery and review contract', () => {
 			bare: validateCandidateReview({ ...review, coverage: [bare, combination] }, snapshot),
 		}).toEqual({
 			honest: [],
-			complete: [`Every element of "${feature}" is disclosed; mark the row supported or add the undisclosed element.`],
+			complete: [`Every element of "${feature}" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.`],
 			bare: [`Coverage for "${feature}" is marked partial but lists no elements. List each constituent the feature requires with the literal fragment of cited text that discloses it; an element without a fragment makes the row partial at most.`],
 		});
 	});

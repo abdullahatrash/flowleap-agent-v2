@@ -60,7 +60,7 @@ describe('GetPatentDetailsTool cited references', () => {
 		const text = await detailsText(backend(noClaims, cited));
 		expect(text).toContain([
 			`## Cited references (from this publication's bibliography)`,
-			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve them with get_patent_details before widening the search.',
+			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve only the in-scope, pre-cutoff ones, one at a time, and read each with evidenceLookup before retrieving the next; a retrieved document that is never cited is disclosed in the report as unreviewed.',
 			'- US5356951 (A, 1994-10-18) — examiner, national-search-report, category X, claims 1-7,10-17; passages: column 2, lines 25-41; column 3, lines 44-67',
 			'- US6274644 (B1, 2001-08-14) — applicant',
 		].join('\n'));
@@ -71,7 +71,7 @@ describe('GetPatentDetailsTool cited references', () => {
 		const text = await detailsText(backend(noClaims, undefined, publication, examiner));
 		expect(text).toContain([
 			'## Cited references (from the EP1234567A3 search report)',
-			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve them with get_patent_details before widening the search.',
+			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve only the in-scope, pre-cutoff ones, one at a time, and read each with evidenceLookup before retrieving the next; a retrieved document that is never cited is disclosed in the report as unreviewed.',
 			'- US5356951 (A, 1994-10-18) — examiner, national-search-report, category X, claims 1-7',
 		].join('\n'));
 	});
