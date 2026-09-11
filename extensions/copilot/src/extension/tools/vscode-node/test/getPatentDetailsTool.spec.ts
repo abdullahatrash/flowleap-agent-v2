@@ -21,9 +21,9 @@ const publication = 'EP1234567A1';
 const unsegmented = 'Whole claims block with uncertain numbering.';
 
 /** Both segmented claims and an unsegmented block, the case where a document publishes both forms. */
-function backend(claims: object, citedReferences?: object[]): IPatentBackendClient {
+function backend(claims: object, citedReferences?: object[], docId = publication): IPatentBackendClient {
 	const payloads: Record<string, object> = {
-		get_bibliography: { documentReference: { publicationNumber: publication, section: 'bibliography' }, docId: publication, title: 'Fixture', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { publication: '2000-01-01' }, citedReferences },
+		get_bibliography: { documentReference: { publicationNumber: docId, section: 'bibliography' }, docId, title: 'Fixture', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { publication: '2000-01-01' }, citedReferences },
 		get_claims: claims,
 		get_description: { documentReference: { publicationNumber: publication, section: 'description' }, docId: publication, language: 'en', description: 'A description.' },
 	};
@@ -38,8 +38,8 @@ function logService(): ILogService {
 
 const noClaims = { documentReference: { publicationNumber: publication, section: 'claims' }, docId: publication, language: 'en', totalClaims: null, claims: [] };
 
-async function detailsText(backendClient: IPatentBackendClient): Promise<string> {
-	const result = await new GetPatentDetailsTool(logService(), backendClient, unrecordedPatentLedger).invoke({ input: { publicationNumber: publication }, toolInvocationToken: undefined } as vscode.LanguageModelToolInvocationOptions<{ publicationNumber: string }>, CancellationToken.None);
+async function detailsText(backendClient: IPatentBackendClient, requested = publication): Promise<string> {
+	const result = await new GetPatentDetailsTool(logService(), backendClient, unrecordedPatentLedger).invoke({ input: { publicationNumber: requested }, toolInvocationToken: undefined } as vscode.LanguageModelToolInvocationOptions<{ publicationNumber: string }>, CancellationToken.None);
 	return (result.content[0] as LanguageModelTextPart).value;
 }
 
@@ -62,8 +62,13 @@ describe('GetPatentDetailsTool cited references', () => {
 		const text = await detailsText(backend(noClaims));
 		expect({
 			section: text.includes('## Cited references'),
-			hint: text.includes('**Cited references:** none on this A1 publication. The EPO search-report citations are attached to EP1234567A3 (or the B1 grant); retrieve that kind to see the closest art on record.'),
+			hint: text.includes('**Cited references:** none on this A1 publication. The EPO search-report citations are attached to EP1234567A3; retrieve that kind to see the closest art on record.'),
 		}).toEqual({ section: false, hint: true });
+	});
+
+	it('points an EP B1 grant without citations at the A3 record too', async () => {
+		const text = await detailsText(backend(noClaims, undefined, 'EP1234567B1'), 'EP1234567B1');
+		expect(text).toContain('**Cited references:** none on this B1 publication. The EPO search-report citations are attached to EP1234567A3;');
 	});
 });
 

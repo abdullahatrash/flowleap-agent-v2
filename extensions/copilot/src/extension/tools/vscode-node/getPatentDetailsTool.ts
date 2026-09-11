@@ -201,10 +201,10 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	private formatCitedReferences(references: readonly CitedReference[], docId: string): string[] {
 		const entries = references.map(formatCitedReference).filter((line): line is string => !!line);
 		if (entries.length === 0) {
-			// EPO attaches the search-report citations to the A3 publication (or the B1 grant), so an
-			// A1/A2 record legitimately has none; say where they live instead of implying there are none.
-			const ep = /^EP\d+\.?(?<kind>A[12])$/i.exec(docId);
-			return ep ? ['', `**Cited references:** none on this ${ep.groups?.kind} publication. The EPO search-report citations are attached to ${docId.replace(/\.?(A[12])$/i, '')}A3 (or the B1 grant); retrieve that kind to see the closest art on record.`] : [];
+			// EPO attaches the search-report citations to the A3 publication; the A1/A2 and the B1 grant
+			// legitimately carry none (verified live 2026-09-11), so say where they live instead of implying there are none.
+			const ep = /^EP\d+\.?(?<kind>A[12]|B\d)$/i.exec(docId);
+			return ep ? ['', `**Cited references:** none on this ${ep.groups?.kind} publication. The EPO search-report citations are attached to ${docId.replace(/\.?(A[12]|B\d)$/i, '')}A3; retrieve that kind to see the closest art on record.`] : [];
 		}
 		const shown = entries.slice(0, maxCitedReferences);
 		return [
