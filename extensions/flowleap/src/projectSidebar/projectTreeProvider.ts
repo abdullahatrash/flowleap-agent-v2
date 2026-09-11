@@ -130,6 +130,26 @@ interface NewProjectItem {
 type TreeNode = ProjectRowItem | ArchivedGroupItem | NewProjectItem;
 
 /**
+ * Unwrap the argument a project command receives into a {@link PatentProject}. Context-menu and
+ * inline actions (`view/item/context`) are invoked with the tree's own element, i.e. a
+ * `{ kind: 'project', project }` node, while the row click command and the dashboard pass the
+ * project itself. Anything else (a path string, a group node, undefined) yields `undefined`.
+ */
+export function projectFromCommandArgument(argument: unknown): PatentProject | undefined {
+	if (!argument || typeof argument !== 'object') {
+		return undefined;
+	}
+	const candidate = argument as Partial<ProjectRowItem> & Partial<PatentProject>;
+	if (candidate.kind === 'project' && candidate.project) {
+		return candidate.project;
+	}
+	if (typeof candidate.path === 'string') {
+		return candidate as PatentProject;
+	}
+	return undefined;
+}
+
+/**
  * Native tree for the Projects view. Live projects render as one flat list sorted newest-first;
  * archived projects sit under a single collapsed group at the bottom; a pinned "New Project" row
  * is always visible below everything. Row actions are wired through the extension's commands
