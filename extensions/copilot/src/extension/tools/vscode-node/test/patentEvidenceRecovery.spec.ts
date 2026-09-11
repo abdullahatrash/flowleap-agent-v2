@@ -59,7 +59,7 @@ describe('prior-art evidence recovery and review contract', () => {
 		const input: PatentCandidateReview = { ...review, coverage: [{ ...combination, sourceAnchors: sources.map(source => source.anchor), evidence }] };
 		const materialized = materializeCandidateReview(input, snapshot);
 		expect(materialized.coverage![0].evidence!.map(item => item.quote)).toEqual([claim10, claim8, undefined]);
-		expect(validateCandidateReview(materialized, snapshot).some(error => error.includes('must match recorded text'))).toBe(true);
+		expect(validateCandidateReview(materialized, snapshot).some(error => error.includes('needs a verbatim quote'))).toBe(true);
 	});
 	it('recovers a sieve passage beyond line 100 and pages directly to its source with the same anchor', () => {
 		const match = lookupPatentEvidence(snapshot, 'WO9951190A1', { query: 'sieve' });
@@ -69,13 +69,14 @@ describe('prior-art evidence recovery and review contract', () => {
 	it.each([
 		['WO9951190A1:claims:10:en', claim10, '40 to 400 parts by weight composite filler'],
 		['EP0983762A1:claims:8:en', claim8, '1 to 20 wt%'],
-	])('rejects a selected range that hides constituents or dependency in %s, and preserves the complete original basis', (anchor, quote, fragment) => {
+	])('expands a partial numbered-claim quotation in %s to the whole claim, and preserves the complete original basis', (anchor, quote, fragment) => {
 		const evidence = { anchor, quote, scope: anchor.startsWith('EP') ? 'Dependent Claim 8; Claim 1 does not inherit this restriction.' : 'Claim 10 composition.', qualifiers: 'Exact IDF range not established.', quantityBasis: anchor.startsWith('WO') ? '100 monomer + 0.01–10 initiator + 40–400 filler, all parts by weight; no conversion.' : '1–20 wt% only in the dependent claim.' };
 		const elements = [{ element: 'Filler present in a recited amount', anchor, disclosedBy: fragment }, { element: 'Exact IDF loading window' }];
 		const row = { feature: 'Loading', kind: 'feature' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [anchor], gap: 'Range overlap only.', evidence: [evidence], elements };
 		const complete = { ...review, coverage: [row, combination] };
 		const incomplete = { ...review, coverage: [{ ...row, evidence: [{ ...evidence, quote: fragment }] }, combination] };
-		expect({ rejected: validateCandidateReview(incomplete, snapshot).some(error => error.includes('Quote the complete claim')), errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'evidence.json')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
+		const expanded = materializeCandidateReview(incomplete, snapshot);
+		expect({ rejected: (expanded.coverage![0] as typeof row).evidence![0].quote === quote && validateCandidateReview(expanded, snapshot).length === 0, errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'evidence.json')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
 	});
 	it.each([
 		['a sentence-final period', 'Scope checked against [claim 10](URL).'],
@@ -108,7 +109,7 @@ describe('prior-art evidence recovery and review contract', () => {
 	it('requires an explicit combination and refuses invented quotation text', () => {
 		const row = { ...combination, kind: 'feature' as const, sourceAnchors: ['WO9951190A1:claims:10:en'], evidence: [{ anchor: 'WO9951190A1:claims:10:en', quote: 'The filler is 28.5–80 wt%.', scope: 'Claim 10', qualifiers: 'None', quantityBasis: 'Percent of paste' }] };
 		const errors = validateCandidateReview({ ...review, coverage: [row] }, snapshot);
-		expect({ combination: errors.some(error => error.includes('explicit essential combination')), quote: errors.some(error => error.includes('must match recorded text')) }).toEqual({ combination: true, quote: true });
+		expect({ combination: errors.some(error => error.includes('explicit essential combination')), quote: errors.some(error => error.includes('is not found in its recorded text')) }).toEqual({ combination: true, quote: true });
 	});
 
 	it('discloses the uncited Japanese document, the claims-only basis, the unreviewed tail and the missing classification query', () => {
@@ -151,13 +152,13 @@ describe('prior-art evidence recovery and review contract', () => {
 	it('rejects the framing and obviousness phrases a candidate review must not use', () => {
 		const errors = validateCandidateReview({ ...review, objective: 'Prior-art search and patentability evaluation.', stopReason: 'No single reference or obvious combination discloses it.' }, snapshot);
 		expect(errors.filter(error => error.startsWith('Legal conclusions'))).toEqual([
-			'Legal conclusions in a candidate review: "patentability" in objective; "obvious combination" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.',
+			'Legal conclusions in a candidate review: "patentability evaluation" in objective; "obvious combination" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.',
 		]);
 	});
 
 	it('rejects legal conclusions in model prose while accepting an explicit non-establishment disclaimer', () => {
 		const conclusions = validateCandidateReview({ ...review, stopReason: 'The reference teaches away from the combination.', limitations: ['Claim 1 is novel over the retrieved art.'] }, snapshot);
-		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.'] }, snapshot);
+		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.', 'Patentability is a legal question for counsel; this review does not constitute a patentability opinion.'] }, snapshot);
 		expect({
 			flagged: conclusions.filter(error => error.startsWith('Legal conclusions')),
 			exempt: disclaimer,
