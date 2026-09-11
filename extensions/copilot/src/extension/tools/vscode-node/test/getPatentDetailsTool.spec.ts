@@ -21,14 +21,22 @@ const publication = 'EP1234567A1';
 const unsegmented = 'Whole claims block with uncertain numbering.';
 
 /** Both segmented claims and an unsegmented block, the case where a document publishes both forms. */
-function backend(claims: object, citedReferences?: object[], docId = publication): IPatentBackendClient {
+function backend(claims: object, citedReferences?: object[], docId = publication, searchReport?: object[] | 'unavailable'): IPatentBackendClient {
 	const payloads: Record<string, object> = {
 		get_bibliography: { documentReference: { publicationNumber: docId, section: 'bibliography' }, docId, title: 'Fixture', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { publication: '2000-01-01' }, citedReferences },
 		get_claims: claims,
 		get_description: { documentReference: { publicationNumber: publication, section: 'description' }, docId: publication, language: 'en', description: 'A description.' },
 	};
 	return new class extends mock<IPatentBackendClient>() {
-		override async post<T>(path: string): Promise<T> { return { success: true, data: payloads[path.replace('/tools/', '')] } as T; }
+		override async post<T>(path: string, body?: unknown): Promise<T> {
+			const requested = (body as { patent_number?: string } | undefined)?.patent_number;
+			// The A3 search-report record is a second bibliography read for a different publication.
+			if (path.endsWith('get_bibliography') && requested?.endsWith('A3')) {
+				if (searchReport === 'unavailable' || !searchReport) { throw new Error('not found'); }
+				return { success: true, data: { docId: requested, title: 'Search report', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { publication: '2000-06-01' }, citedReferences: searchReport } } as T;
+			}
+			return { success: true, data: payloads[path.replace('/tools/', '')] } as T;
+		}
 	}();
 }
 
@@ -58,17 +66,28 @@ describe('GetPatentDetailsTool cited references', () => {
 		].join('\n'));
 	});
 
-	it('points an EP A-publication without citations at the A3 search-report record', async () => {
-		const text = await detailsText(backend(noClaims));
-		expect({
-			section: text.includes('## Cited references'),
-			hint: text.includes('**Cited references:** none on this A1 publication. The EPO search-report citations are attached to EP1234567A3; retrieve that kind to see the closest art on record.'),
-		}).toEqual({ section: false, hint: true });
+	it('fetches the A3 search-report citations itself when an EP A-publication carries none', async () => {
+		const examiner = [{ docId: 'US5356951', kind: 'A', date: '19941018', citedBy: 'examiner', phase: 'national-search-report', category: 'X', relevantClaims: '1-7' }];
+		const text = await detailsText(backend(noClaims, undefined, publication, examiner));
+		expect(text).toContain([
+			'## Cited references (from the EP1234567A3 search report)',
+			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve them with get_patent_details before widening the search.',
+			'- US5356951 (A, 1994-10-18) — examiner, national-search-report, category X, claims 1-7',
+		].join('\n'));
 	});
 
-	it('points an EP B1 grant without citations at the A3 record too', async () => {
-		const text = await detailsText(backend(noClaims, undefined, 'EP1234567B1'), 'EP1234567B1');
-		expect(text).toContain('**Cited references:** none on this B1 publication. The EPO search-report citations are attached to EP1234567A3;');
+	it('says so when neither the A-publication nor its A3 record carries citations', async () => {
+		const text = await detailsText(backend(noClaims, undefined, publication, 'unavailable'));
+		expect({
+			section: text.includes('## Cited references'),
+			note: text.includes('**Cited references:** none on this A1 publication, and the EP1234567A3 search-report record returned none or was unavailable.'),
+		}).toEqual({ section: false, note: true });
+	});
+
+	it('fetches the A3 record for a B1 grant too', async () => {
+		const applicant = [{ docId: 'US6274644', kind: 'B1', date: '20010814', citedBy: 'applicant' }];
+		const text = await detailsText(backend(noClaims, undefined, 'EP1234567B1', applicant), 'EP1234567B1');
+		expect(text).toContain('## Cited references (from the EP1234567A3 search report)\n');
 	});
 });
 
