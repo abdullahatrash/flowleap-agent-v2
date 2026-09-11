@@ -129,10 +129,12 @@ describe('get_patent_details', () => {
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP-1000000-A1' }), makeToken());
 
+		// An EP A-publication carries no citations, so the tool also reads the A3 search-report record.
 		expect(calls.map(c => ({ tool: c.tool, input: c.input }))).toEqual([
 			{ tool: 'get_bibliography', input: { patent_number: 'EP1000000A1' } },
 			{ tool: 'get_claims', input: { patent_number: 'EP1000000A1' } },
 			{ tool: 'get_description', input: { patent_number: 'EP1000000A1' } },
+			{ tool: 'get_bibliography', input: { patent_number: 'EP1000000A3' } },
 		]);
 		// The claims tool returns NUMBERED claims; the rendered text is their text, in order.
 		expect(textOf(result)).toContain('1. A battery pack.');

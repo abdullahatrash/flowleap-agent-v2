@@ -58,7 +58,10 @@ function legalConclusions(fields: readonly (readonly [string, string | undefined
 			const pattern = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')}\\b`, 'gi');
 			for (const match of value.matchAll(pattern)) {
 				const start = match.index ?? 0;
-				if (/not\s+establish/i.test(value.slice(Math.max(0, start - 60), start))) { continue; }
+				// A disclaimer ("does not establish novelty", "no assessment of anticipation or obviousness is
+				// made", "does not constitute a patentability opinion") is the opposite of a conclusion.
+				const preceding = value.slice(Math.max(0, start - 80), start);
+				if (/\b(?:no|not|never|without)\b(?:\s+\S+){0,3}\s+(?:establish|assess|determin|constitut|evaluat|address|opin|conclud|provid|offer|render|reach|decid|form|impl|represent|draw|mak|made|claim|purport|intend)\w*/i.test(preceding) || /\b(?:no|not)\s+$/i.test(preceding)) { continue; }
 				findings.push(`"${match[0]}" in ${field}`);
 			}
 		}

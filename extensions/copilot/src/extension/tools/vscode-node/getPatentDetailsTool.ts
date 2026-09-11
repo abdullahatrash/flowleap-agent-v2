@@ -134,6 +134,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			const descriptionPromise = this.fetchOptionalSection<DescriptionData>('get_description', doc, token);
 
 			const biblio = await biblioPromise;
+			const searchReport = await this.fetchSearchReportCitations(biblio, doc, token);
 			const [claims, description] = await Promise.all([claimsPromise, descriptionPromise]);
 
 			const sources: PatentEvidenceSource[] = [];
@@ -152,7 +153,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			if (description?.description) { addSource(description.documentReference, description.language, false, description.description); }
 			const unavailableSections = [!claims?.claims.length && !claims?.unsegmentedText ? 'claims' : '', !description?.description ? 'description' : ''].filter(Boolean);
 			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'details', status: 'succeeded', publicationIds: [biblio.docId || doc], publicationTitle: biblio.title ?? undefined, publicationDate: biblio.dates?.publication ?? undefined, sources, unavailableSections, totalClaims: claims?.totalClaims ?? undefined, returnedClaims: claims?.claims.length });
-			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc);
+			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc, searchReport);
 			this.logService.info(`[GetPatentDetailsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -178,6 +179,20 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	 * formatter point at the fallback. Cancellation still propagates, and so do the seam's typed
 	 * gating errors: the same guards protect `get_bibliography`, so surfacing them once there is enough.
 	 */
+	/**
+	 * EPO attaches search-report citations to the A3 publication, so an A1/A2 or B1 record carries
+	 * none (verified live 2026-09-11). A live run showed the model ignoring a pointer to the A3, so the
+	 * tool fetches that record itself; the cost is one cached bibliography read per EP retrieval.
+	 */
+	private async fetchSearchReportCitations(biblio: BiblioData, doc: string, token: CancellationToken): Promise<{ readonly docId: string; readonly references: readonly CitedReference[] } | undefined> {
+		if (biblio.citedReferences?.length) { return undefined; }
+		const ep = /^EP(?<number>\d+)\.?(?:A[12]|B\d)$/i.exec(biblio.docId || doc);
+		if (!ep) { return undefined; }
+		const a3 = `EP${ep.groups?.number}A3`;
+		const report = await this.fetchOptionalSection<BiblioData>('get_bibliography', a3, token);
+		return report?.citedReferences?.length ? { docId: a3, references: report.citedReferences } : undefined;
+	}
+
 	private async fetchOptionalSection<T>(toolName: string, doc: string, token: CancellationToken): Promise<T | null> {
 		try {
 			return await callFacadeTool<T>(this.patentBackendClient, toolName, { patent_number: doc }, token);
@@ -198,17 +213,17 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	 * Render the cited-references block, or nothing when the bibliography carries no usable entry.
 	 * The block ends with a blank line so the caller can splice it between two existing sections.
 	 */
-	private formatCitedReferences(references: readonly CitedReference[], docId: string): string[] {
+	private formatCitedReferences(references: readonly CitedReference[], docId: string, origin = `from this publication's bibliography`): string[] {
 		const entries = references.map(formatCitedReference).filter((line): line is string => !!line);
 		if (entries.length === 0) {
-			// EPO attaches the search-report citations to the A3 publication; the A1/A2 and the B1 grant
-			// legitimately carry none (verified live 2026-09-11), so say where they live instead of implying there are none.
+			// The A3 lookup above already failed or returned nothing; say where citations live so the
+			// absence is not read as "none exist".
 			const ep = /^EP\d+\.?(?<kind>A[12]|B\d)$/i.exec(docId);
-			return ep ? ['', `**Cited references:** none on this ${ep.groups?.kind} publication. The EPO search-report citations are attached to ${docId.replace(/\.?(A[12]|B\d)$/i, '')}A3; retrieve that kind to see the closest art on record.`] : [];
+			return ep ? ['', `**Cited references:** none on this ${ep.groups?.kind} publication, and the ${docId.replace(/\.?(A[12]|B\d)$/i, '')}A3 search-report record returned none or was unavailable.`] : [];
 		}
 		const shown = entries.slice(0, maxCitedReferences);
 		return [
-			`## Cited references (from this publication's bibliography)`,
+			`## Cited references (${origin})`,
 			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve them with get_patent_details before widening the search.',
 			...shown,
 			...(entries.length > shown.length ? [`… and ${entries.length - shown.length} more`] : []),
@@ -219,7 +234,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	/**
 	 * Format patent details for LLM consumption
 	 */
-	private formatPatentDetails(biblio: BiblioData, claims: ClaimsData | null, description: DescriptionData | null, doc: string): string {
+	private formatPatentDetails(biblio: BiblioData, claims: ClaimsData | null, description: DescriptionData | null, doc: string, searchReport?: { readonly docId: string; readonly references: readonly CitedReference[] }): string {
 		const countryCode = biblio.docId?.substring(0, 2) || doc.substring(0, 2);
 		const fulltextFallback = `Full text is not available for this document and section. ${this.usptoFallbackHint(doc)}`;
 
@@ -242,7 +257,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			`**IPC Classifications:** ${biblio.ipc?.length > 0 ? biblio.ipc.join(', ') : 'N/A'}`,
 			`**CPC Classifications:** ${biblio.cpc?.length > 0 ? biblio.cpc.join(', ') : 'N/A'}`,
 			'',
-			...this.formatCitedReferences(biblio.citedReferences ?? [], biblio.docId || doc),
+			...(searchReport ? this.formatCitedReferences(searchReport.references, searchReport.docId, `from the ${searchReport.docId} search report`) : this.formatCitedReferences(biblio.citedReferences ?? [], biblio.docId || doc)),
 			`## Abstract${anchorLabel(biblio.documentReference)}`,
 			biblio.abstract || 'No abstract available.',
 			'',
