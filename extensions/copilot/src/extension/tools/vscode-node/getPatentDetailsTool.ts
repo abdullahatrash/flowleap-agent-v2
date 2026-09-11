@@ -19,9 +19,28 @@ import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 
 import { lookupPatentEvidence, PatentEvidenceLookup } from './patentEvidenceLookup';
 
+/** Beyond this many cited references the list is elided: the closest art sits at the head of a search report. */
+const maxCitedReferences = 40;
+
 interface IGetPatentDetailsParams {
 	publicationNumber: string;
 	evidenceLookup?: PatentEvidenceLookup;
+}
+
+/**
+ * One entry of a publication's cited-references list — the references printed on its search report
+ * or filed by the applicant. An examiner-cited X or Y entry is the closest art on record.
+ */
+interface CitedReference {
+	docId: string;
+	kind?: string;
+	date?: string;
+	citedBy: 'applicant' | 'examiner' | 'unknown';
+	phase?: string;
+	category?: string;
+	relevantClaims?: string;
+	relevantPassages?: string[];
+	npl?: string;
 }
 
 /** `data` payload of the `get_bibliography` facade tool. */
@@ -39,6 +58,7 @@ interface BiblioData {
 		publication: string | null;
 		priority: string[];
 	};
+	citedReferences?: CitedReference[];
 }
 
 /** `data` payload of the `get_claims` facade tool — numbered claims, not bare strings. */
@@ -175,6 +195,28 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	}
 
 	/**
+	 * Render the cited-references block, or nothing when the bibliography carries no usable entry.
+	 * The block ends with a blank line so the caller can splice it between two existing sections.
+	 */
+	private formatCitedReferences(references: readonly CitedReference[], docId: string): string[] {
+		const entries = references.map(formatCitedReference).filter((line): line is string => !!line);
+		if (entries.length === 0) {
+			// EPO attaches the search-report citations to the A3 publication (or the B1 grant), so an
+			// A1/A2 record legitimately has none; say where they live instead of implying there are none.
+			const ep = /^EP\d+\.?(?<kind>A[12])$/i.exec(docId);
+			return ep ? ['', `**Cited references:** none on this ${ep.groups?.kind} publication. The EPO search-report citations are attached to ${docId.replace(/\.?(A[12])$/i, '')}A3 (or the B1 grant); retrieve that kind to see the closest art on record.`] : [];
+		}
+		const shown = entries.slice(0, maxCitedReferences);
+		return [
+			`## Cited references (from this publication's bibliography)`,
+			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve them with get_patent_details before widening the search.',
+			...shown,
+			...(entries.length > shown.length ? [`… and ${entries.length - shown.length} more`] : []),
+			'',
+		];
+	}
+
+	/**
 	 * Format patent details for LLM consumption
 	 */
 	private formatPatentDetails(biblio: BiblioData, claims: ClaimsData | null, description: DescriptionData | null, doc: string): string {
@@ -200,6 +242,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			`**IPC Classifications:** ${biblio.ipc?.length > 0 ? biblio.ipc.join(', ') : 'N/A'}`,
 			`**CPC Classifications:** ${biblio.cpc?.length > 0 ? biblio.cpc.join(', ') : 'N/A'}`,
 			'',
+			...this.formatCitedReferences(biblio.citedReferences ?? [], biblio.docId || doc),
 			`## Abstract${anchorLabel(biblio.documentReference)}`,
 			biblio.abstract || 'No abstract available.',
 			'',
@@ -216,6 +259,38 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 
 		return lines.join('\n');
 	}
+}
+
+/** `19941018` in bibliographic data, `1994-10-18` everywhere a reader looks; anything else is passed through. */
+function formatCitedDate(date: string | undefined): string | undefined {
+	const value = date?.trim();
+	if (!value) {
+		return undefined;
+	}
+	const match = /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})$/.exec(value);
+	return match ? `${match.groups!.year}-${match.groups!.month}-${match.groups!.day}` : value;
+}
+
+/** Strip the `* ... *` decoration wrapped around a relevant passage in the source record. */
+function formatCitedPassage(passage: string): string {
+	return passage.replace(/^[\s*]+/, '').replace(/[\s*]+$/, '');
+}
+
+/** One rendered bullet, or undefined for an entry that names neither a document nor a non-patent reference. */
+function formatCitedReference(reference: CitedReference): string | undefined {
+	const label = reference.npl?.trim() ? `[NPL] ${reference.npl.trim()}` : reference.docId?.trim();
+	if (!label) {
+		return undefined;
+	}
+	const qualifiers = [reference.kind?.trim(), formatCitedDate(reference.date)].filter(Boolean);
+	const facts = [
+		reference.citedBy || 'unknown',
+		reference.phase?.trim(),
+		reference.category?.trim() ? `category ${reference.category.trim()}` : '',
+		reference.relevantClaims?.trim() ? `claims ${reference.relevantClaims.trim()}` : '',
+	].filter(Boolean);
+	const passages = (reference.relevantPassages ?? []).map(formatCitedPassage).filter(Boolean);
+	return `- ${label}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''} — ${facts.join(', ')}${passages.length ? `; passages: ${passages.join('; ')}` : ''}`;
 }
 
 ToolRegistry.registerTool(GetPatentDetailsTool);
