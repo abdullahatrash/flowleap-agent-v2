@@ -13,7 +13,8 @@ import {
 	mapLegacyStatus,
 	displayStatusOf,
 	isProjectType,
-	projectFromCommandArgument
+	projectFromCommandArgument,
+	projectMatchesFilter
 } from '../projectSidebar/projectTreeProvider';
 
 suite('ProjectTreeProvider', () => {
@@ -113,10 +114,38 @@ suite('ProjectTreeProvider', () => {
 		assert.deepStrictEqual(cases.map(c => projectFromCommandArgument(c)?.path), ['/p/a', '/p/a', undefined, undefined, undefined, undefined]);
 	});
 
+	test('projectMatchesFilter matches name, type, status and tags; #term matches tags only', () => {
+		const project = makeProject({ name: 'Urgent Review', type: 'prior-art-search', status: 'in-review', tags: ['client-abc', 'mechanical'] });
+		const queries = ['', 'urgent', 'prior-art', 'in review', 'mechanical', 'client-abc review', '#client', '#urgent', '#', 'nope', 'urgent nope'];
+		assert.deepStrictEqual(queries.map(q => projectMatchesFilter(project, q)), [true, true, true, true, true, true, true, false, true, false, false]);
+	});
+
+	test('setFilter narrows both live and archived rows and keeps the pinned New Project row on no match', async () => {
+		const projects: PatentProject[] = [
+			makeProject({ id: 'a', path: 'a', name: 'Alpha', tags: ['urgent'] }),
+			makeProject({ id: 'b', path: 'b', name: 'Bravo' }),
+			makeProject({ id: 'd', path: 'd', name: 'Delta', archived: true, tags: ['urgent'] })
+		];
+		const provider = new ProjectTreeProvider(makeContext(projects));
+
+		provider.setFilter('#urgent');
+		const filtered = (await provider.getChildren()).map(node => snapshot(provider.getTreeItem(node)).label);
+		provider.setFilter('zzz');
+		const empty = (await provider.getChildren()).map(node => snapshot(provider.getTreeItem(node)).label);
+		provider.setFilter('');
+		const all = (await provider.getChildren()).map(node => snapshot(provider.getTreeItem(node)).label);
+
+		assert.deepStrictEqual({ filtered, empty, all }, {
+			filtered: ['Alpha', 'Archived (1)', 'New Project'],
+			empty: ['New Project'],
+			all: ['Alpha', 'Bravo', 'Archived (1)', 'New Project']
+		});
+	});
+
 	test('tree renders a flat list sorted by last-opened, an archived group, and a pinned New Project row', async () => {
 		const projects: PatentProject[] = [
 			makeProject({ id: 'b', path: 'b', name: 'Bravo', type: 'prior-art-search', status: 'review' as PatentProject['status'], lastAccessed: new Date('2026-07-10T00:00:00Z') }),
-			makeProject({ id: 'a', path: 'a', name: 'Alpha', type: 'patent-analysis', status: 'active', lastAccessed: new Date('2026-07-11T09:00:00Z') }),
+			makeProject({ id: 'a', path: 'a', name: 'Alpha', type: 'patent-analysis', status: 'active', tags: ['urgent', 'client-abc'], lastAccessed: new Date('2026-07-11T09:00:00Z') }),
 			makeProject({ id: 'c', path: 'c', name: 'Charlie', type: 'claim-analysis', status: 'complete', lastAccessed: new Date('2026-07-11T08:00:00Z') }),
 			makeProject({ id: 'd', path: 'd', name: 'Delta', type: 'custom', status: 'active', archived: true, lastAccessed: new Date('2026-07-05T00:00:00Z') })
 		];
@@ -126,7 +155,7 @@ suite('ProjectTreeProvider', () => {
 		const rootShape = root.map(node => snapshot(provider.getTreeItem(node)));
 
 		assert.deepStrictEqual(rootShape, [
-			{ kind: 'project', label: 'Alpha', description: 'Patent Analysis', iconId: 'circle-filled', iconColor: 'charts.green', contextValue: 'flowleapProject' },
+			{ kind: 'project', label: 'Alpha', description: 'Patent Analysis · #urgent #client-abc', iconId: 'circle-filled', iconColor: 'charts.green', contextValue: 'flowleapProject' },
 			{ kind: 'project', label: 'Charlie', description: 'Claim Analysis · Complete', iconId: 'pass-filled', iconColor: 'charts.blue', contextValue: 'flowleapProject' },
 			{ kind: 'project', label: 'Bravo', description: 'Prior-Art Search · In Review', iconId: 'eye', iconColor: 'charts.yellow', contextValue: 'flowleapProject' },
 			{ kind: 'group', label: 'Archived (1)', collapsed: true },
