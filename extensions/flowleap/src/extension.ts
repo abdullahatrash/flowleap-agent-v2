@@ -25,7 +25,6 @@ import { registerUpdateNotifier } from './updateNotifier/updateNotifier';
 
 let chatBarController: ChatBarController;
 let projectSidebarProvider: ProjectTreeProvider;
-let projectTreeView: vscode.TreeView<unknown>;
 
 /**
  * Per-type creation metadata: the icon, a name placeholder example, and a one-line description
@@ -157,8 +156,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register Project Sidebar (native tree)
 	projectSidebarProvider = new ProjectTreeProvider(context);
-	projectTreeView = vscode.window.createTreeView('flowleap.projectSidebar', { treeDataProvider: projectSidebarProvider });
-	context.subscriptions.push(projectSidebarProvider, projectTreeView);
+	context.subscriptions.push(
+		projectSidebarProvider,
+		vscode.window.registerTreeDataProvider('flowleap.projectSidebar', projectSidebarProvider)
+	);
 
 	// Register Chat Input Panel
 	const chatInputProvider = new ChatInputPanel(context.extensionUri, context);
@@ -346,26 +347,13 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
-	// Filter projects — the built-in type-to-find matches the row label only, so the tree owns
-	// its own filter that also matches type, status and tags (see `projectMatchesFilter`).
+	// Filter projects — focus the tree and open the built-in type-to-find, so the native
+	// filter is discoverable from the view title bar rather than only on keypress. The core
+	// tree matches label and description, so type, status and #tags are all searchable.
 	context.subscriptions.push(
 		vscode.commands.registerCommand('flowleap.filterProjects', async () => {
-			const query = await vscode.window.showInputBox({
-				title: 'Filter Projects',
-				prompt: 'Matches name, type, status and tags. Use #tag to match tags only. Leave empty to clear.',
-				placeHolder: 'e.g., urgent, prior-art, in review, #client-abc',
-				value: projectSidebarProvider.filter
-			});
-			if (query === undefined) {
-				return;
-			}
-			await applyProjectFilter(query);
-		})
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.clearProjectFilter', async () => {
-			await applyProjectFilter('');
+			await vscode.commands.executeCommand('flowleap.projectSidebar.focus');
+			await vscode.commands.executeCommand('list.find');
 		})
 	);
 
@@ -771,28 +759,8 @@ export async function activate(context: vscode.ExtensionContext) {
  */
 function refreshProjectViews(): void {
 	projectSidebarProvider.refresh();
-	updateProjectFilterFeedback();
 	HomeDashboardPanel.refresh();
 	HomeDashboardViewProvider.refresh();
-}
-
-/** Apply a filter to the Projects tree and surface it in the view header. */
-async function applyProjectFilter(query: string): Promise<void> {
-	projectSidebarProvider.setFilter(query);
-	await vscode.commands.executeCommand('setContext', 'flowleap.projectsFiltered', projectSidebarProvider.filter.length > 0);
-	updateProjectFilterFeedback();
-}
-
-/** Show the active filter as the view description and a "no match" message when it hides everything. */
-function updateProjectFilterFeedback(): void {
-	const filter = projectSidebarProvider.filter;
-	if (filter.length === 0) {
-		projectTreeView.description = undefined;
-		projectTreeView.message = undefined;
-		return;
-	}
-	projectTreeView.description = `filter: ${filter}`;
-	projectTreeView.message = projectSidebarProvider.visibleCount === 0 ? `No projects match "${filter}".` : undefined;
 }
 
 /**
