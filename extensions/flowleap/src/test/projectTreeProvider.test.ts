@@ -12,7 +12,8 @@ import {
 	DisplayStatus,
 	mapLegacyStatus,
 	displayStatusOf,
-	isProjectType
+	isProjectType,
+	projectFromCommandArgument
 } from '../projectSidebar/projectTreeProvider';
 
 suite('ProjectTreeProvider', () => {
@@ -102,6 +103,14 @@ suite('ProjectTreeProvider', () => {
 	test('isProjectType accepts only real type keys and rejects stale/non-string values', () => {
 		const cases: unknown[] = ['patent-analysis', 'custom', 'freedom-to-operate', 'prior-art', '', 'undefined', undefined, 42, {}];
 		assert.deepStrictEqual(cases.map(isProjectType), [true, true, true, false, false, false, false, false, false]);
+	});
+
+	test('projectFromCommandArgument unwraps tree nodes and passes projects through', async () => {
+		const project = makeProject({ id: 'a', path: '/p/a', name: 'Alpha' });
+		const provider = new ProjectTreeProvider(makeContext([project]));
+		const [rowNode] = await provider.getChildren();
+		const cases: unknown[] = [rowNode, project, '/p/a', { kind: 'newProject' }, undefined, 42];
+		assert.deepStrictEqual(cases.map(c => projectFromCommandArgument(c)?.path), ['/p/a', '/p/a', undefined, undefined, undefined, undefined]);
 	});
 
 	test('tree renders a flat list sorted by last-opened, an archived group, and a pinned New Project row', async () => {

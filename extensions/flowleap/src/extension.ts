@@ -17,7 +17,8 @@ import {
 	DisplayStatus,
 	PROJECT_TYPE_LABELS,
 	PROJECT_STATUS_LABELS,
-	isProjectType
+	isProjectType,
+	projectFromCommandArgument
 } from './projectSidebar/projectTreeProvider';
 import { ChatBarController, ChatInputPanel } from './chatBar/chatBarController';
 import { registerUpdateNotifier } from './updateNotifier/updateNotifier';
@@ -357,23 +358,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Open notes
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.openNotes', async (projectOrPath?: PatentProject | string) => {
-			let notesPath: string | undefined;
-
-			if (typeof projectOrPath === 'string') {
-				notesPath = path.join(projectOrPath, 'notes.md');
-			} else if (projectOrPath) {
-				notesPath = path.join(projectOrPath.path, 'notes.md');
-			} else if (vscode.workspace.workspaceFolders?.length) {
-				// Current workspace
-				notesPath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'notes.md');
-			}
-
-			if (!notesPath) {
+		vscode.commands.registerCommand('flowleap.openNotes', async (projectOrPath?: unknown) => {
+			const projectPath = resolveProjectPath(projectOrPath);
+			if (!projectPath) {
 				vscode.window.showWarningMessage('No project open');
 				return;
 			}
 
+			const notesPath = path.join(projectPath, 'notes.md');
 			const notesUri = vscode.Uri.file(notesPath);
 
 			// Create notes.md if it doesn't exist
@@ -390,7 +382,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Set project status
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.setProjectStatus', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.setProjectStatus', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project open');
@@ -440,7 +432,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Add tag
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.addTag', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.addTag', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project open');
@@ -494,7 +486,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Remove tag
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.removeTag', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.removeTag', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project open');
@@ -535,7 +527,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Archive project
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.archiveProject', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.archiveProject', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project open');
@@ -560,7 +552,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Unarchive project
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.unarchiveProject', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.unarchiveProject', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project open');
@@ -585,7 +577,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Rename project — renames the folder and updates config + stored state together.
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.renameProject', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.renameProject', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project selected');
@@ -660,7 +652,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Delete project — moves the folder to the OS trash (never a hard delete) after confirmation.
 	context.subscriptions.push(
-		vscode.commands.registerCommand('flowleap.deleteProject', async (projectOrPath?: PatentProject | string) => {
+		vscode.commands.registerCommand('flowleap.deleteProject', async (projectOrPath?: unknown) => {
 			const projectPath = resolveProjectPath(projectOrPath);
 			if (!projectPath) {
 				vscode.window.showWarningMessage('No project selected');
@@ -770,12 +762,18 @@ function refreshProjectViews(): void {
 	HomeDashboardViewProvider.refresh();
 }
 
-function resolveProjectPath(projectOrPath?: PatentProject | string): string | undefined {
+/**
+ * Resolve the project a command should act on. Accepts a path string, a {@link PatentProject},
+ * or the tree's own element (what `view/item/context` menus pass), and falls back to the first
+ * workspace folder when invoked with no argument (command palette).
+ */
+function resolveProjectPath(projectOrPath?: unknown): string | undefined {
 	if (typeof projectOrPath === 'string') {
 		return projectOrPath;
 	}
-	if (projectOrPath) {
-		return projectOrPath.path;
+	const project = projectFromCommandArgument(projectOrPath);
+	if (project) {
+		return project.path;
 	}
 	if (vscode.workspace.workspaceFolders?.length) {
 		return vscode.workspace.workspaceFolders[0].uri.fsPath;
