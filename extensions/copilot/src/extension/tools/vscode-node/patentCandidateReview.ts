@@ -145,7 +145,7 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 	}
 	const foreign = documents.filter(untranslated);
 	if (foreign.length) {
-		lines.push(`Retrieved text is not in English for ${foreign.map(document => `${document.publication} (${document.language})`).join(', ')}; those documents are untranslated and were not reviewable in this report without translation.`);
+		lines.push(`Retrieved text is not in English for ${foreign.map(document => `${document.publication} (${document.language})`).join(', ')}; any quotation or reading of those documents in this report is the model's own translation and was not independently verified.`);
 	}
 	const sources = sourceIndex(snapshot);
 	const cited = citedAnchors(review);
@@ -359,7 +359,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);
-	const language = (document: RetrievedDocument) => document.language + (untranslated(document) ? ' (untranslated; not reviewable in this report without translation)' : '');
+	const language = (document: RetrievedDocument) => document.language + (untranslated(document) ? ' (not in English; any reading of it in this report is the model\'s own translation)' : '');
 	const automatic = automaticLimitations(review, snapshot, documents);
 	return [
 		'## Retrieved documents',

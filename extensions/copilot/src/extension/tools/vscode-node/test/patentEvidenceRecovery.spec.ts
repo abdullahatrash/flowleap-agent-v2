@@ -115,9 +115,9 @@ describe('prior-art evidence recovery and review contract', () => {
 		const rendered = renderCandidateReview(claimsOnly, retrieval, 'evidence.json');
 		expect({
 			table: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en |'),
-			uncited: rendered.includes('| JP2001010910A | 2001-01-16 | Japanese filler | claims | ja (untranslated; not reviewable in this report without translation) |'),
+			uncited: rendered.includes('| JP2001010910A | 2001-01-16 | Japanese filler | claims | ja (not in English; any reading of it in this report is the model\'s own translation) |'),
 			count: rendered.includes('- 1 of 2 retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.'),
-			language: rendered.includes('- Retrieved text is not in English for JP2001010910A (ja); those documents are untranslated'),
+			language: rendered.includes('- Retrieved text is not in English for JP2001010910A (ja); any quotation or reading of those documents in this report is the model\'s own translation'),
 			claimsOnly: rendered.includes('- No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: WO9951190A1.'),
 			tail: rendered.includes('- Query 1 returned 10 of 33 matches; the remaining 23 were not retrieved.'),
 			classification: rendered.includes('- No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.'),
