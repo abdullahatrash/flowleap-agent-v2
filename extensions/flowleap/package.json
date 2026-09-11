@@ -143,6 +143,12 @@
         "icon": "$(search)"
       },
       {
+        "command": "flowleap.clearProjectFilter",
+        "title": "Clear Project Filter",
+        "category": "FlowLeap",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "flowleap.openNotes",
         "title": "Open Project Notes",
         "category": "FlowLeap",
@@ -209,6 +215,11 @@
         {
           "command": "flowleap.filterProjects",
           "when": "view == flowleap.projectSidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "flowleap.clearProjectFilter",
+          "when": "view == flowleap.projectSidebar && flowleap.projectsFiltered",
           "group": "navigation@2"
         },
         {
