@@ -20,7 +20,7 @@ import { OpenAIEndpoint } from '../node/openAIEndpoint';
 import { AbstractOpenAICompatibleLMProvider, LanguageModelChatConfiguration, OpenAICompatibleLanguageModelChatInformation } from './abstractLanguageModelChatProvider';
 import { IBYOKStorageService } from './byokStorageService';
 
-interface OpenRouterModelData {
+export interface OpenRouterModelData {
 	id: string;
 	name: string;
 	supported_parameters?: string[];
@@ -29,6 +29,40 @@ interface OpenRouterModelData {
 	};
 	top_provider: {
 		context_length: number;
+		/** The model's real completion ceiling; null when OpenRouter does not know it. */
+		max_completion_tokens?: number | null;
+	};
+}
+
+/** Fallback when OpenRouter reports no completion ceiling; kept as the pre-existing default. */
+const defaultMaxOutputTokens = 16000;
+/** Upper bound on what we reserve for output, so the prompt budget never collapses on models advertising huge completions. */
+const maxReservedOutputTokens = 64000;
+
+/**
+ * Capabilities for one OpenRouter model listing. Exported for tests; the provider and the
+ * FlowLeap Trial provider both resolve through it.
+ */
+export function openRouterModelCapabilities(model: OpenRouterModelData): BYOKModelCapabilities {
+	const supportedParameters = model.supported_parameters ?? [];
+	// OpenRouter reports reasoning support per model via `supported_parameters`. The unified `reasoning` parameter and
+	// the OpenAI-style `reasoning_effort` alias both indicate the model accepts an effort level.
+	// See https://openrouter.ai/docs/use-cases/reasoning-tokens
+	const supportsReasoningEffort = supportedParameters.includes('reasoning') || supportedParameters.includes('reasoning_effort')
+		? ['low', 'medium', 'high']
+		: undefined;
+	// A single structured report call can exceed 16k output tokens; a fixed ceiling below the
+	// model's real one surfaces as a "Response too long" failure. Reserve what the model can
+	// actually emit, bounded so the prompt budget stays usable.
+	const reported = model.top_provider.max_completion_tokens;
+	const maxOutputTokens = reported ? Math.min(reported, maxReservedOutputTokens) : defaultMaxOutputTokens;
+	return {
+		name: model.name,
+		toolCalling: supportedParameters.includes('tools'),
+		vision: model.architecture?.input_modalities?.includes('image') ?? false,
+		maxInputTokens: model.top_provider.context_length - maxOutputTokens,
+		maxOutputTokens,
+		supportsReasoningEffort
 	};
 }
 
@@ -76,22 +110,7 @@ export abstract class AbstractOpenRouterLMProvider extends AbstractOpenAICompati
 	}
 
 	protected override resolveModelCapabilities(modelData: unknown): BYOKModelCapabilities | undefined {
-		const openRouterModelData = modelData as OpenRouterModelData;
-		const supportedParameters = openRouterModelData.supported_parameters ?? [];
-		// OpenRouter reports reasoning support per model via `supported_parameters`. The unified `reasoning` parameter and
-		// the OpenAI-style `reasoning_effort` alias both indicate the model accepts an effort level.
-		// See https://openrouter.ai/docs/use-cases/reasoning-tokens
-		const supportsReasoningEffort = supportedParameters.includes('reasoning') || supportedParameters.includes('reasoning_effort')
-			? ['low', 'medium', 'high']
-			: undefined;
-		return {
-			name: openRouterModelData.name,
-			toolCalling: supportedParameters.includes('tools'),
-			vision: openRouterModelData.architecture?.input_modalities?.includes('image') ?? false,
-			maxInputTokens: openRouterModelData.top_provider.context_length - 16000,
-			maxOutputTokens: 16000,
-			supportsReasoningEffort
-		};
+		return openRouterModelCapabilities(modelData as OpenRouterModelData);
 	}
 
 	protected override async createOpenAIEndPoint(model: OpenAICompatibleLanguageModelChatInformation<LanguageModelChatConfiguration>): Promise<OpenAIEndpoint> {
