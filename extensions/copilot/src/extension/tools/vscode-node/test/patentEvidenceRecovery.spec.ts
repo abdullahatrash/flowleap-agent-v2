@@ -35,6 +35,17 @@ const retrieval: PatentExecutionSnapshot = { limitation: 'Recorded outcomes only
 ] };
 const claimsOnly: PatentCandidateReview = { ...review, coverage: [{ ...combination, sourceAnchors: ['WO9951190A1:claims:10:en'] }] };
 
+// Two EP/WO-scoped searches plus a US document reached through an examiner citation, not the search.
+const usClaim = '1. A dental filling apparatus comprising a sensor housing and a composite filler reservoir.';
+const scoped: PatentExecutionSnapshot = { limitation: 'Recorded outcomes only.', executions: [
+	{ id: 'filtered', recordedAt: '2026-09-10T01:00:00Z', kind: 'search', status: 'succeeded', query: 'ta=dental', countryFilter: ['EP', 'WO'], total: 5, returned: 5 },
+	{ id: 'requested', recordedAt: '2026-09-10T01:30:00Z', kind: 'search', status: 'succeeded', query: 'ta=filler', requestedCountries: 'EP,WO', total: 4, returned: 4 },
+	retrieval.executions[1],
+	{ id: 'american', recordedAt: '2026-09-10T04:00:00Z', kind: 'details', status: 'succeeded', publicationIds: ['US5356951A'], publicationDate: '1994-10-18', publicationTitle: 'Examiner X reference', sources: [
+		{ anchor: 'US5356951A:claims:1:en', reference: { publicationNumber: 'US5356951A', section: 'claims', claimNumber: '1' }, language: 'en', text: usClaim, retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+	] },
+] };
+
 describe('prior-art evidence recovery and review contract', () => {
 	it('renders source claim numbers literally without continuing a Markdown list', () => {
 		const row = { ...combination, sourceAnchors: snapshot.executions[0].sources!.slice(0, 2).map(source => source.anchor), evidence: snapshot.executions[0].sources!.slice(0, 2).map(source => ({ anchor: source.anchor, quote: source.text!, scope: 'Quoted claim only.', qualifiers: 'Unresolved.', quantityBasis: 'Original units.' })) };
@@ -147,6 +158,30 @@ describe('prior-art evidence recovery and review contract', () => {
 			merged: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en |'),
 			count: rendered.includes('- 1 of 2 retrieved documents are not cited'),
 		}).toEqual({ rows: 1, merged: true, count: true });
+	});
+
+	it('marks a document outside the searched jurisdictions in the inventory, the limitations and the row that cites it', () => {
+		const row = { ...combination, status: 'partial' as const, sourceAnchors: ['US5356951A:claims:1:en'], gap: 'Reached through a cited reference only.',
+			evidence: [{ anchor: 'US5356951A:claims:1:en', quote: usClaim, scope: 'Independent claim 1.', qualifiers: 'Apparatus claim only.', quantityBasis: 'No quantity recited.' }],
+			elements: [{ element: 'composite filler reservoir', anchor: 'US5356951A:claims:1:en', disclosedBy: 'composite filler reservoir' }, { element: 'photocurable monomer' }] };
+		const rendered = renderCandidateReview({ ...review, coverage: [row] }, scoped, 'evidence.json');
+		expect({
+			header: rendered.includes('| Publication | Publication date | Title | Text language | Scope |'),
+			outside: rendered.includes('| US5356951A | 1994-10-18 | Examiner X reference | en | outside searched jurisdictions (US) |'),
+			inside: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en | in scope |'),
+			limitation: rendered.includes('- Outside the searched jurisdictions (EP, WO): US5356951A. These were reached through cited references or direct retrieval, not through the scoped search; findings that rest on them are outside the confirmed scope unless the scope is widened.'),
+			note: rendered.includes('Scope note (generated): US5356951A is outside the searched jurisdictions (EP, WO).'),
+			beforeGap: rendered.indexOf('Scope note (generated)') < rendered.indexOf('Remaining gap (model judgment)'),
+		}).toEqual({ header: true, outside: true, inside: true, limitation: true, note: true, beforeGap: true });
+	});
+
+	it('discloses no scope at all when no recorded search applied a jurisdiction filter', () => {
+		const rendered = renderCandidateReview(claimsOnly, retrieval, 'evidence.json');
+		expect({
+			column: rendered.includes('| Text language | Scope |'),
+			limitation: rendered.includes('Outside the searched jurisdictions'),
+			note: rendered.includes('Scope note (generated)'),
+		}).toEqual({ column: false, limitation: false, note: false });
 	});
 
 	it('renders the framing and obviousness phrases as a wording review instead of failing the save', () => {

@@ -46,8 +46,13 @@ function logService(): ILogService {
 
 const noClaims = { documentReference: { publicationNumber: publication, section: 'claims' }, docId: publication, language: 'en', totalClaims: null, claims: [] };
 
-async function detailsText(backendClient: IPatentBackendClient, requested = publication): Promise<string> {
-	const result = await new GetPatentDetailsTool(logService(), backendClient, unrecordedPatentLedger).invoke({ input: { publicationNumber: requested }, toolInvocationToken: undefined } as vscode.LanguageModelToolInvocationOptions<{ publicationNumber: string }>, CancellationToken.None);
+/** A ledger whose session already holds the given outcomes, so the tool can read the search scope. */
+function recordedPatentLedger(executions: readonly PatentExecution[]): IPatentExecutionLedger {
+	return { ...unrecordedPatentLedger, read: async () => ({ executions, limitation: 'Recorded in this test.' }) };
+}
+
+async function detailsText(backendClient: IPatentBackendClient, requested = publication, ledger = unrecordedPatentLedger): Promise<string> {
+	const result = await new GetPatentDetailsTool(logService(), backendClient, ledger).invoke({ input: { publicationNumber: requested }, toolInvocationToken: undefined } as vscode.LanguageModelToolInvocationOptions<{ publicationNumber: string }>, CancellationToken.None);
 	return (result.content[0] as LanguageModelTextPart).value;
 }
 
@@ -82,6 +87,23 @@ describe('GetPatentDetailsTool cited references', () => {
 			section: text.includes('## Cited references'),
 			note: text.includes('**Cited references:** none on this A1 publication, and the EP1234567A3 search-report record returned none or was unavailable.'),
 		}).toEqual({ section: false, note: true });
+	});
+
+	it('marks each cited reference against the searched jurisdictions, and only when a scoped search was recorded', async () => {
+		const cited = [
+			{ docId: 'US5356951', kind: 'A', date: '19941018', citedBy: 'examiner', category: 'X' },
+			{ docId: 'EP0983762', kind: 'A1', date: '20000308', citedBy: 'applicant' },
+			{ npl: 'Smith, Dental fillers, 1998', citedBy: 'applicant' },
+		];
+		const searches: PatentExecution[] = [{ id: 'search', recordedAt: '2026-09-10T01:00:00Z', kind: 'search', status: 'succeeded', countryFilter: ['EP', 'WO'] }];
+		const scoped = await detailsText(backend(noClaims, cited), publication, recordedPatentLedger(searches));
+		const unscoped = await detailsText(backend(noClaims, cited));
+		expect({
+			outside: scoped.includes('- US5356951 (A, 1994-10-18) — examiner, category X — outside searched jurisdictions (EP, WO)'),
+			inside: scoped.includes('- EP0983762 (A1, 2000-03-08) — applicant — in searched scope'),
+			npl: scoped.includes('- [NPL] Smith, Dental fillers, 1998 — applicant\n'),
+			unscoped: /— (?:in searched scope|outside searched jurisdictions)/.test(unscoped),
+		}).toEqual({ outside: true, inside: true, npl: true, unscoped: false });
 	});
 
 	it('fetches the A3 record for a B1 grant too', async () => {
