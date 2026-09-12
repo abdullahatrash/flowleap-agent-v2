@@ -63,6 +63,12 @@ function legalConclusions(fields: readonly (readonly [string, string | undefined
 				// made", "does not constitute a patentability opinion") is the opposite of a conclusion.
 				const preceding = value.slice(Math.max(0, start - 80), start);
 				if (/\b(?:no|not|never|without)\b(?:\s+\S+){0,3}\s+(?:establish|assess|determin|constitut|evaluat|address|opin|conclud|provid|offer|render|reach|decid|form|impl|represent|draw|mak|made|claim|purport|intend)\w*/i.test(preceding) || /\b(?:no|not)\s+$/i.test(preceding)) { continue; }
+				// A sentence that defers the question to counsel, or disclaims being a legal opinion, is
+				// likewise not a conclusion ("conclusions on novelty should be confirmed by patent counsel").
+				const sentenceStart = Math.max(value.lastIndexOf('.', start - 1), value.lastIndexOf(';', start - 1), value.lastIndexOf('\n', start - 1)) + 1;
+				const sentenceEndIndex = [value.indexOf('.', start), value.indexOf(';', start), value.indexOf('\n', start)].filter(index => index >= 0);
+				const sentence = value.slice(sentenceStart, sentenceEndIndex.length ? Math.min(...sentenceEndIndex) : value.length);
+				if (/\b(?:counsel|attorney|legal (?:question|opinion|advice|determination))\b|\bnot (?:a|an)\b[^.;]{0,60}\bopinion\b/i.test(sentence)) { continue; }
 				findings.push(`"${match[0]}" in ${field}`);
 			}
 		}

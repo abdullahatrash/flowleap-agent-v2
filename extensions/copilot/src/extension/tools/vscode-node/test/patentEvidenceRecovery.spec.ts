@@ -158,7 +158,7 @@ describe('prior-art evidence recovery and review contract', () => {
 
 	it('rejects legal conclusions in model prose while accepting an explicit non-establishment disclaimer', () => {
 		const conclusions = validateCandidateReview({ ...review, stopReason: 'The reference teaches away from the combination.', limitations: ['Claim 1 is novel over the retrieved art.'] }, snapshot);
-		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.', 'Patentability is a legal question for counsel; this review does not constitute a patentability opinion.'] }, snapshot);
+		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.', 'Patentability is a legal question for counsel; this review does not constitute a patentability opinion.', 'This report is prior-art research support, not a legal patentability or freedom-to-operate opinion; conclusions on novelty or inventive step should be confirmed by qualified patent counsel.'] }, snapshot);
 		expect({
 			flagged: conclusions.filter(error => error.startsWith('Legal conclusions')),
 			exempt: disclaimer,
