@@ -149,22 +149,31 @@ describe('prior-art evidence recovery and review contract', () => {
 		}).toEqual({ rows: 1, merged: true, count: true });
 	});
 
-	it('rejects the framing and obviousness phrases a candidate review must not use', () => {
-		const errors = validateCandidateReview({ ...review, objective: 'Prior-art search and patentability evaluation.', stopReason: 'No single reference or obvious combination discloses it.' }, snapshot);
-		expect(errors.filter(error => error.startsWith('Legal conclusions'))).toEqual([
-			'Legal conclusions in a candidate review: "patentability evaluation" in objective; "obvious combination" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.',
-		]);
+	it('renders the framing and obviousness phrases as a wording review instead of failing the save', () => {
+		const framed = { ...review, objective: 'Prior-art search and patentability evaluation.', stopReason: 'No single reference or obvious combination discloses it.' };
+		const rendered = renderCandidateReview(framed, snapshot, 'evidence.json');
+		expect({
+			errors: validateCandidateReview(framed, snapshot),
+			heading: rendered.includes('## Wording review (generated)'),
+			phrases: rendered.split('\n').filter(line => line.startsWith('- "')),
+		}).toEqual({
+			errors: [],
+			heading: true,
+			phrases: ['- "patentability evaluation" in objective', '- "obvious combination" in stopReason'],
+		});
 	});
 
-	it('rejects legal conclusions in model prose while accepting an explicit non-establishment disclaimer', () => {
-		const conclusions = validateCandidateReview({ ...review, stopReason: 'The reference teaches away from the combination.', limitations: ['Claim 1 is novel over the retrieved art.'] }, snapshot);
-		const disclaimer = validateCandidateReview({ ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.', 'Patentability is a legal question for counsel; this review does not constitute a patentability opinion.', 'This report is prior-art research support, not a legal patentability or freedom-to-operate opinion; conclusions on novelty or inventive step should be confirmed by qualified patent counsel.'] }, snapshot);
+	it('flags legal conclusions in model prose while staying silent for an explicit non-establishment disclaimer', () => {
+		const conclusions = { ...review, stopReason: 'The reference teaches away from the combination.', limitations: ['Claim 1 is novel over the retrieved art.'] };
+		const disclaimer = { ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.', 'Patentability is a legal question for counsel; this review does not constitute a patentability opinion.', 'This report is prior-art research support, not a legal patentability or freedom-to-operate opinion; conclusions on novelty or inventive step should be confirmed by qualified patent counsel.'] };
 		expect({
-			flagged: conclusions.filter(error => error.startsWith('Legal conclusions')),
-			exempt: disclaimer,
+			errors: validateCandidateReview(conclusions, snapshot),
+			flagged: renderCandidateReview(conclusions, snapshot, 'evidence.json').split('\n').filter(line => line.startsWith('- "')),
+			exempt: renderCandidateReview(disclaimer, snapshot, 'evidence.json').includes('## Wording review (generated)'),
 		}).toEqual({
-			flagged: ['Legal conclusions in a candidate review: "is novel" in limitations[0]; "teaches away" in stopReason. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.'],
-			exempt: [],
+			errors: [],
+			flagged: ['- "is novel" in limitations[0]', '- "teaches away" in stopReason'],
+			exempt: false,
 		});
 	});
 

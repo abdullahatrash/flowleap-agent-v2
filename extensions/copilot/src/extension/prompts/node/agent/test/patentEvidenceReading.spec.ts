@@ -20,7 +20,8 @@ function turn(id: string, text = 'Local returned-text lines: 5 results.\nA sourc
 describe('patent evidence reuse context', () => {
 	it('counts an identical returned lookup across a Continue boundary without treating it as reviewed', () => {
 		const memo = patentEvidenceReadingContext([turn('first'), turn('second')]);
-		expect({ count: memo?.includes('"count":2'), scope: memo?.includes('not a review certificate'), claimCopy: memo?.includes('quote is omitted') }).toEqual({ count: true, scope: true, claimCopy: true });
+		// The claim-copy instruction moved to the writer schema, so the memo carries data rows and one scope sentence only.
+		expect({ count: memo?.includes('"count":2'), scope: memo?.includes('not a review certificate') }).toEqual({ count: true, scope: true });
 	});
 	it('does not count rejected or missing tool results as returned evidence', () => {
 		expect(patentEvidenceReadingContext([turn('bad', 'ERROR: invalid input'), { rounds: turn('absent').rounds, results: {} }])).toBeUndefined();

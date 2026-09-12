@@ -1011,7 +1011,7 @@
                       "element": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "One required constituent of the feature in your own words (for example \"dental filling material\", \"photocurable / light-curing initiator\")."
+                        "description": "One required constituent of the feature in your own words (e.g. the component, the property it must have, the quantity or range)."
                       },
                       "anchor": {
                         "type": "string",
