@@ -100,34 +100,6 @@ export function isProjectType(value: unknown): value is ProjectType {
 	return typeof value === 'string' && Object.prototype.hasOwnProperty.call(PROJECT_TYPE_LABELS, value);
 }
 
-/**
- * Whether a project matches a free-text filter. Every whitespace-separated term must match
- * (case-insensitive) the project name, its type label, its display-status label, or one of its
- * tags. A term written as `#tag` matches tags only, so "#urgent" never hits a project named
- * "Urgent Review". An empty query matches everything.
- */
-export function projectMatchesFilter(project: PatentProject, query: string): boolean {
-	const terms = query.trim().toLowerCase().split(/\s+/).filter(term => term.length > 0);
-	if (terms.length === 0) {
-		return true;
-	}
-	const tags = (project.tags ?? []).map(tag => tag.toLowerCase());
-	const display = displayStatusOf(project);
-	const haystack = [
-		project.name,
-		PROJECT_TYPE_LABELS[project.type] ?? project.type,
-		PROJECT_STATUS_LABELS[display],
-		...tags
-	].join('\n').toLowerCase();
-	return terms.every(term => {
-		if (term.startsWith('#')) {
-			const wanted = term.slice(1);
-			return wanted.length === 0 ? tags.length > 0 : tags.some(tag => tag.includes(wanted));
-		}
-		return haystack.includes(term);
-	});
-}
-
 interface StatusIconSpec {
 	readonly icon: string;
 	readonly color?: string;
@@ -189,7 +161,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
 	private liveProjects: PatentProject[] = [];
 	private archivedProjects: PatentProject[] = [];
-	private filterQuery = '';
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.loadProjects();
@@ -200,31 +171,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 		this._onDidChangeTreeData.fire();
 	}
 
-	/** The active free-text filter; empty when the tree shows every project. */
-	get filter(): string {
-		return this.filterQuery;
-	}
-
-	/** Apply a free-text filter (see {@link projectMatchesFilter}) and re-render. */
-	setFilter(query: string): void {
-		this.filterQuery = query.trim();
-		this.refresh();
-	}
-
-	/** Number of projects (live + archived) currently shown after filtering. */
-	get visibleCount(): number {
-		return this.liveProjects.length + this.archivedProjects.length;
-	}
-
 	dispose(): void {
 		this._onDidChangeTreeData.dispose();
 	}
 
 	private loadProjects(): void {
 		const stored = this.context.globalState.get<PatentProject[]>('flowleap.projects', []);
-		const matching = stored.filter(p => projectMatchesFilter(p, this.filterQuery));
-		this.liveProjects = this.sortByLastOpened(matching.filter(p => !p.archived));
-		this.archivedProjects = this.sortByLastOpened(matching.filter(p => p.archived));
+		this.liveProjects = this.sortByLastOpened(stored.filter(p => !p.archived));
+		this.archivedProjects = this.sortByLastOpened(stored.filter(p => p.archived));
 	}
 
 	private sortByLastOpened(projects: PatentProject[]): PatentProject[] {
@@ -245,9 +199,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 	getChildren(element?: TreeNode): Thenable<TreeNode[]> {
 		if (!element) {
 			// Empty tree renders the views-welcome content (its own New Project button), so only
-			// pin the New Project row once there is at least one project to sit above. A filter
-			// that matches nothing keeps the pinned row so the welcome copy does not lie.
-			if (this.visibleCount === 0 && this.filterQuery.length === 0) {
+			// pin the New Project row once there is at least one project to sit above.
+			if (this.liveProjects.length === 0 && this.archivedProjects.length === 0) {
 				return Promise.resolve([]);
 			}
 			const nodes: TreeNode[] = this.liveProjects.map(project => ({ kind: 'project' as const, project }));
@@ -309,7 +262,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 	/**
 	 * Row description: "Type · Status · #tags · age". The status word is omitted for Active (it is
 	 * the common case and the timestamp already conveys idleness) and for Archived (the group says
-	 * it). Tags render as `#tag` so they read as labels and match the filter's `#` syntax.
+	 * it). Tags render as `#tag` so they read as labels and are easy to type into the tree filter.
 	 */
 	private describe(project: PatentProject, display: DisplayStatus): string {
 		const parts: string[] = [PROJECT_TYPE_LABELS[project.type] ?? project.type];

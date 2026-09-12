@@ -740,10 +740,18 @@ abstract class AbstractTreeView extends Disposable implements ITreeView {
 			},
 			keyboardNavigationLabelProvider: {
 				getKeyboardNavigationLabel: (item: ITreeItem) => {
+					// Match the description as well as the label so type-to-find (and filter mode)
+					// hits the secondary text a tree shows next to a row, e.g. status or tags.
+					const description = typeof item.description === 'string' ? item.description : undefined;
 					if (item.label) {
-						return isMarkdownString(item.label.label) ? item.label.label.value : item.label.label;
+						const label = isMarkdownString(item.label.label) ? item.label.label.value : item.label.label;
+						return description ? `${label} ${description}` : label;
 					}
-					return item.resourceUri ? basename(URI.revive(item.resourceUri)) : undefined;
+					if (item.resourceUri) {
+						const name = basename(URI.revive(item.resourceUri));
+						return description ? `${name} ${description}` : name;
+					}
+					return description;
 				}
 			},
 			expandOnlyOnTwistieClick: (e: ITreeItem) => {

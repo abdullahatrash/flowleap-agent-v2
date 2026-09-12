@@ -13,8 +13,7 @@ import {
 	mapLegacyStatus,
 	displayStatusOf,
 	isProjectType,
-	projectFromCommandArgument,
-	projectMatchesFilter
+	projectFromCommandArgument
 } from '../projectSidebar/projectTreeProvider';
 
 suite('ProjectTreeProvider', () => {
@@ -112,34 +111,6 @@ suite('ProjectTreeProvider', () => {
 		const [rowNode] = await provider.getChildren();
 		const cases: unknown[] = [rowNode, project, '/p/a', { kind: 'newProject' }, undefined, 42];
 		assert.deepStrictEqual(cases.map(c => projectFromCommandArgument(c)?.path), ['/p/a', '/p/a', undefined, undefined, undefined, undefined]);
-	});
-
-	test('projectMatchesFilter matches name, type, status and tags; #term matches tags only', () => {
-		const project = makeProject({ name: 'Urgent Review', type: 'prior-art-search', status: 'in-review', tags: ['client-abc', 'mechanical'] });
-		const queries = ['', 'urgent', 'prior-art', 'in review', 'mechanical', 'client-abc review', '#client', '#urgent', '#', 'nope', 'urgent nope'];
-		assert.deepStrictEqual(queries.map(q => projectMatchesFilter(project, q)), [true, true, true, true, true, true, true, false, true, false, false]);
-	});
-
-	test('setFilter narrows both live and archived rows and keeps the pinned New Project row on no match', async () => {
-		const projects: PatentProject[] = [
-			makeProject({ id: 'a', path: 'a', name: 'Alpha', tags: ['urgent'] }),
-			makeProject({ id: 'b', path: 'b', name: 'Bravo' }),
-			makeProject({ id: 'd', path: 'd', name: 'Delta', archived: true, tags: ['urgent'] })
-		];
-		const provider = new ProjectTreeProvider(makeContext(projects));
-
-		provider.setFilter('#urgent');
-		const filtered = (await provider.getChildren()).map(node => snapshot(provider.getTreeItem(node)).label);
-		provider.setFilter('zzz');
-		const empty = (await provider.getChildren()).map(node => snapshot(provider.getTreeItem(node)).label);
-		provider.setFilter('');
-		const all = (await provider.getChildren()).map(node => snapshot(provider.getTreeItem(node)).label);
-
-		assert.deepStrictEqual({ filtered, empty, all }, {
-			filtered: ['Alpha', 'Archived (1)', 'New Project'],
-			empty: ['New Project'],
-			all: ['Alpha', 'Bravo', 'Archived (1)', 'New Project']
-		});
 	});
 
 	test('tree renders a flat list sorted by last-opened, an archived group, and a pinned New Project row', async () => {
