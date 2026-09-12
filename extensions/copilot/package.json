@@ -3763,10 +3763,16 @@
             "type": "string",
             "enum": [
               "off",
-              "log"
+              "log",
+              "render"
             ],
-            "default": "log",
+            "default": "render",
             "markdownDescription": "%patent.config.secondRead%"
+          },
+          "patent.secondRead.model": {
+            "type": "string",
+            "default": "anthropic/claude-sonnet-5",
+            "markdownDescription": "%patent.config.secondReadModel%"
           }
         }
       },

@@ -78,6 +78,15 @@ export interface SecondReadSummary {
 	readonly unparsed: number;
 }
 
+/**
+ * What one second read produced: the judged rows, or the reason it did not run. The report renderer,
+ * the verdict file and the tool result all read this one value, so they cannot disagree about what
+ * happened.
+ */
+export type SecondReadOutcome =
+	| { readonly kind: 'judged'; readonly model: string; readonly rows: readonly SecondReadResult[]; readonly summary: SecondReadSummary }
+	| { readonly kind: 'skipped'; readonly reason: string };
+
 /** Only a row that claims disclosure can be second-read; an unresolved row claims none. */
 const JUDGED_STATUSES: readonly string[] = ['supported', 'partial'];
 
@@ -211,4 +220,32 @@ export function summarizeSecondRead(results: readonly SecondReadResult[]): Secon
 		unclear: verdicts.filter(verdict => verdict.verdict === 'unclear').length,
 		unparsed: results.filter(result => result.unparsed !== undefined).length,
 	};
+}
+
+/** An element the judge did not confirm, with the coverage row it belongs to. */
+export interface SecondReadUnconfirmed {
+	readonly feature: string;
+	readonly element: string;
+	readonly verdict: 'disagree' | 'unclear';
+	readonly reason: string;
+}
+
+/**
+ * Everything the judge did not confirm, in report order. A disagreement and an unclear passage are
+ * both reasons a reader should look again; only an `agree` is a confirmation.
+ */
+export function unconfirmedVerdicts(results: readonly SecondReadResult[]): SecondReadUnconfirmed[] {
+	return results.flatMap(result => (result.verdicts ?? [])
+		.filter((verdict): verdict is SecondReadVerdict & { verdict: 'disagree' | 'unclear' } => verdict.verdict !== 'agree')
+		.map(verdict => ({ feature: result.feature, element: verdict.element, verdict: verdict.verdict, reason: verdict.reason })));
+}
+
+/**
+ * The line the report states about its own second read, inside Limitations. It is generated from
+ * the judge's own counts, so a report cannot carry a second read the reader is not told about.
+ */
+export function secondReadLimitation(outcome: SecondReadOutcome): string {
+	if (outcome.kind === 'skipped') { return `Second read: skipped (${outcome.reason}).`; }
+	const { elements, disagree, unclear, unparsed } = outcome.summary;
+	return `Second read by ${outcome.model}: ${elements} elements judged, ${disagree} not confirmed, ${unclear} unclear, ${unparsed} unparsed.`;
 }

@@ -10,6 +10,7 @@ import { ChatFetchResponseType, ChatLocation } from '../../../platform/chat/comm
 import { toTextParts } from '../../../platform/chat/common/globalStringUtils';
 import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
+import { IChatEndpoint } from '../../../platform/networking/common/networking';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
@@ -21,10 +22,10 @@ import { candidateWordingReview, materializeCandidateReview, PatentCandidateRevi
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { ChatRequest, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
-import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadResult, secondReadPrompt, summarizeSecondRead } from '../common/patentSecondRead';
+import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, PatentReportTemplate } from '../common/patentReportTemplates';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
@@ -46,10 +47,20 @@ interface IWritePatentResultsParams extends PatentCandidateReview {
 }
 
 /**
+ * How much of the second read the user sees. `off` disables it, `log` records the verdicts in a
+ * file beside the evidence companion, and `render` also states in the report what an independent
+ * read did not confirm.
+ */
+type SecondReadMode = 'off' | 'log' | 'render';
+
+/**
  * Coverage rows judged by one second read. A report with more rows is judged only in part; the
  * diagnostic is a sample, not an audit, and a per-row model call is neither free nor instant.
  */
 const SECOND_READ_ROW_LIMIT = 12;
+
+/** Unconfirmed elements named in the tool result; the rest are counted and left to the report. */
+const SECOND_READ_RESULT_LIMIT = 6;
 
 /**
  * The saved report is the record; the chat summary that follows it must not become more certain than
@@ -137,11 +148,15 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const companionId = generateUuid();
 			const evidenceUri = uri.with({ path: uri.path + '.' + companionId + '.evidence.json' });
 			if (snapshot) { await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, evidenceUri)); }
+			// The report is written once, with the second read already in it, so the receipt covers the
+			// final bytes. A judge failure is caught below and never reaches the save.
+			const mode = this.secondReadMode();
+			const secondRead = snapshot && mode !== 'off' ? await this.secondRead(input, snapshot, token) : undefined;
 			// Wrap the model's content in the chosen professional report structure, or write it
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri)) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
@@ -164,6 +179,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			if (evidenceDocument) {
 				await this.removeSupersededCompanions(uri, evidenceUri);
 			}
+			const verdictFileName = secondRead ? await this.writeSecondReadFile(uri, companionId, secondRead) : undefined;
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
 
@@ -175,10 +191,8 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				this.logService.warn(`[WritePatentResultsTool] Wrote file but failed to open it: ${openError instanceof Error ? openError.message : String(openError)}`);
 			}
 
-			const secondRead = snapshot ? await this.secondRead(uri, companionId, input, snapshot, token) : undefined;
-
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${secondRead ? `\n${secondRead}` : ''}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
@@ -189,25 +203,47 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		}
 	}
 
+	/** How much of the second read reaches the user: nothing, a file, or the report itself. */
+	private secondReadMode(): SecondReadMode {
+		const configured = this.configurationService.getNonExtensionConfig<string>('patent.secondRead');
+		return configured === 'off' || configured === 'log' || configured === 'render' ? configured : 'render';
+	}
+
 	/**
-	 * Second read of the saved report: one model call per coverage row that claims disclosure, asking
-	 * whether the recorded passage behind each element actually discloses it.
-	 *
-	 * This is a DIAGNOSTIC. It never blocks or alters the save, never enters the report, and its own
-	 * failures are logged and reported as a skip. The verdicts are written next to the evidence
-	 * companion so a human can adjudicate them; the tool result carries only the counts.
-	 *
-	 * @returns the one line to add to the tool result, or undefined when the setting is off.
+	 * The endpoint that judges the report. The configured model is preferred, but the provider
+	 * answers a family it cannot match with an arbitrary BYO-key model rather than an error, so the
+	 * resolved endpoint is checked against what was asked for and the request's own model is used
+	 * when it does not match. The model actually used is the one recorded and rendered.
 	 */
-	private async secondRead(report: URI, companionId: string, review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, token: CancellationToken): Promise<string | undefined> {
-		if (this.configurationService.getNonExtensionConfig<string>('patent.secondRead') === 'off') { return undefined; }
-		const skipped = (reason: string) => `Second read (diagnostic): skipped (${reason}).`;
+	private async judgeEndpoint(request: ChatRequest): Promise<IChatEndpoint> {
+		const configured = this.configurationService.getNonExtensionConfig<string>('patent.secondRead.model')?.trim();
+		if (configured) {
+			try {
+				const endpoint = await this.endpointProvider.getChatEndpoint(configured);
+				if (endpoint && (endpoint.model === configured || endpoint.family === configured)) { return endpoint; }
+				this.logService.warn(`[WritePatentResultsTool] Second-read model '${configured}' is unavailable; judging with the request's model.`);
+			} catch (error) {
+				this.logService.warn(`[WritePatentResultsTool] Second-read model '${configured}' could not be resolved: ${error instanceof Error ? error.message : String(error)}`);
+			}
+		}
+		return this.endpointProvider.getChatEndpoint(request);
+	}
+
+	/**
+	 * Second read of the report being saved: one model call per coverage row that claims disclosure,
+	 * asking whether the recorded passage behind each element actually discloses it.
+	 *
+	 * It never blocks the save and never changes a status. Every failure — no endpoint, a refused
+	 * request, a cancellation — is caught, logged, and returned as a skip the report and the tool
+	 * result both state.
+	 */
+	private async secondRead(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, token: CancellationToken): Promise<SecondReadOutcome> {
 		try {
 			const request = this._inputContext?.request;
-			if (!request) { return skipped('no chat request context'); }
+			if (!request) { return { kind: 'skipped', reason: 'no chat request context' }; }
 			const requests = buildSecondReadRequests(review, snapshot);
-			if (!requests.length) { return skipped('no supported or partial row lists elements'); }
-			const endpoint = await this.endpointProvider.getChatEndpoint(request);
+			if (!requests.length) { return { kind: 'skipped', reason: 'no supported or partial row lists elements' }; }
+			const endpoint = await this.judgeEndpoint(request);
 			const results: SecondReadResult[] = [];
 			for (const secondReadRequest of requests.slice(0, SECOND_READ_ROW_LIMIT)) {
 				const response = await endpoint.makeChatRequest2({
@@ -219,20 +255,54 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 					isConversationRequest: false,
 					requestOptions: { temperature: 0 },
 				}, token);
-				if (response.type !== ChatFetchResponseType.Success) { return skipped(`judge request ${response.type}`); }
+				if (response.type !== ChatFetchResponseType.Success) { return { kind: 'skipped', reason: `judge request ${response.type}` }; }
 				const verdicts = parseSecondReadVerdicts(response.value);
 				results.push({ feature: secondReadRequest.feature, status: secondReadRequest.status, ...(verdicts ? { verdicts } : { unparsed: response.value }) });
 			}
-			const summary = summarizeSecondRead(results);
-			const verdictUri = report.with({ path: report.path + '.' + companionId + '.second-read.json' });
-			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, verdictUri));
-			await this.fileSystemService.writeFile(verdictUri, new TextEncoder().encode(JSON.stringify({ model: endpoint.model, judgedAt: new Date().toISOString(), rows: results, summary }, null, 2)));
-			return `Second read (diagnostic): ${summary.elements} elements judged, ${summary.disagree} disagree, ${summary.unclear} unclear, ${summary.unparsed} unparsed; verdicts in ${basename(verdictUri)}.`;
+			return { kind: 'judged', model: endpoint.model, rows: results, summary: summarizeSecondRead(results) };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			this.logService.warn(`[WritePatentResultsTool] Second read did not complete: ${message}`);
-			return skipped(message);
+			return { kind: 'skipped', reason: message };
 		}
+	}
+
+	/**
+	 * Record the verdicts beside the evidence companion, under the same id. The record is what a
+	 * human adjudicates later, so losing it must not cost the save that already succeeded.
+	 */
+	private async writeSecondReadFile(report: URI, companionId: string, outcome: SecondReadOutcome): Promise<string | undefined> {
+		if (outcome.kind !== 'judged') { return undefined; }
+		const verdictUri = report.with({ path: report.path + '.' + companionId + '.second-read.json' });
+		try {
+			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, verdictUri));
+			await this.fileSystemService.writeFile(verdictUri, new TextEncoder().encode(JSON.stringify({ model: outcome.model, judgedAt: new Date().toISOString(), rows: outcome.rows, summary: outcome.summary }, null, 2)));
+			return basename(verdictUri);
+		} catch (error) {
+			this.logService.warn(`[WritePatentResultsTool] Second-read verdicts were not written: ${error instanceof Error ? error.message : String(error)}`);
+			return undefined;
+		}
+	}
+
+	/**
+	 * What the model is told about the second read. `log` reports counts and the file; `render`
+	 * names what was not confirmed, because in that mode the report states it too and the model has
+	 * to decide whether to revise a row or defend it.
+	 */
+	private secondReadResult(mode: SecondReadMode, outcome: SecondReadOutcome | undefined, verdictFileName: string | undefined): string {
+		if (!outcome) { return ''; }
+		if (outcome.kind === 'skipped') { return `\nSecond read (diagnostic): skipped (${outcome.reason}).`; }
+		const { elements, disagree, unclear, unparsed } = outcome.summary;
+		if (mode === 'log') {
+			return `\nSecond read (diagnostic): ${elements} elements judged, ${disagree} disagree, ${unclear} unclear, ${unparsed} unparsed; verdicts in ${verdictFileName ?? 'no file (write failed)'}.`;
+		}
+		const unconfirmed = unconfirmedVerdicts(outcome.rows);
+		const shown = unconfirmed.slice(0, SECOND_READ_RESULT_LIMIT);
+		// Each reason is its own sentence; the list punctuates itself, so a trailing stop is dropped.
+		const listed = shown.map(item => `${item.feature} / ${item.element} — ${item.reason.trim().replace(/\.$/, '')}`).join('; ')
+			+ (unconfirmed.length > shown.length ? `; and ${unconfirmed.length - shown.length} more in the report` : '');
+		return `\nSecond read (${outcome.model}): ${elements} elements judged, ${disagree} not confirmed${unclear ? `, ${unclear} unclear` : ''}.`
+			+ (unconfirmed.length ? ` Not confirmed: ${listed}.\nIf a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap.` : '');
 	}
 
 	/**
