@@ -12,6 +12,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { publicationCountry, searchedJurisdictions } from './patentCandidateReview';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
@@ -152,8 +153,11 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			}
 			if (description?.description) { addSource(description.documentReference, description.language, false, description.description); }
 			const unavailableSections = [!claims?.claims.length && !claims?.unsegmentedText ? 'claims' : '', !description?.description ? 'description' : ''].filter(Boolean);
+			// The searched jurisdictions come from the recorded searches, so a cited reference can be
+			// placed inside or outside the confirmed scope at the moment the model first reads it.
+			const jurisdictions = searchedJurisdictions(await this.ledger.read(options.chatSessionResource));
 			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'details', status: 'succeeded', publicationIds: [biblio.docId || doc], publicationTitle: biblio.title ?? undefined, publicationDate: biblio.dates?.publication ?? undefined, sources, unavailableSections, totalClaims: claims?.totalClaims ?? undefined, returnedClaims: claims?.claims.length });
-			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc, searchReport);
+			const formattedResponse = this.formatPatentDetails(biblio, claims, description, doc, jurisdictions, searchReport);
 			this.logService.info(`[GetPatentDetailsTool] Formatted response length: ${formattedResponse.length} chars`);
 
 			return new LanguageModelToolResult([
@@ -213,8 +217,8 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	 * Render the cited-references block, or nothing when the bibliography carries no usable entry.
 	 * The block ends with a blank line so the caller can splice it between two existing sections.
 	 */
-	private formatCitedReferences(references: readonly CitedReference[], docId: string, origin = `from this publication's bibliography`): string[] {
-		const entries = references.map(formatCitedReference).filter((line): line is string => !!line);
+	private formatCitedReferences(references: readonly CitedReference[], docId: string, jurisdictions: readonly string[], origin = `from this publication's bibliography`): string[] {
+		const entries = references.map(reference => formatCitedReference(reference, jurisdictions)).filter((line): line is string => !!line);
 		if (entries.length === 0) {
 			// The A3 lookup above already failed or returned nothing; say where citations live so the
 			// absence is not read as "none exist".
@@ -234,7 +238,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	/**
 	 * Format patent details for LLM consumption
 	 */
-	private formatPatentDetails(biblio: BiblioData, claims: ClaimsData | null, description: DescriptionData | null, doc: string, searchReport?: { readonly docId: string; readonly references: readonly CitedReference[] }): string {
+	private formatPatentDetails(biblio: BiblioData, claims: ClaimsData | null, description: DescriptionData | null, doc: string, jurisdictions: readonly string[], searchReport?: { readonly docId: string; readonly references: readonly CitedReference[] }): string {
 		const countryCode = biblio.docId?.substring(0, 2) || doc.substring(0, 2);
 		const fulltextFallback = `Full text is not available for this document and section. ${this.usptoFallbackHint(doc)}`;
 
@@ -257,7 +261,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			`**IPC Classifications:** ${biblio.ipc?.length > 0 ? biblio.ipc.join(', ') : 'N/A'}`,
 			`**CPC Classifications:** ${biblio.cpc?.length > 0 ? biblio.cpc.join(', ') : 'N/A'}`,
 			'',
-			...(searchReport ? this.formatCitedReferences(searchReport.references, searchReport.docId, `from the ${searchReport.docId} search report`) : this.formatCitedReferences(biblio.citedReferences ?? [], biblio.docId || doc)),
+			...(searchReport ? this.formatCitedReferences(searchReport.references, searchReport.docId, jurisdictions, `from the ${searchReport.docId} search report`) : this.formatCitedReferences(biblio.citedReferences ?? [], biblio.docId || doc, jurisdictions)),
 			`## Abstract${anchorLabel(biblio.documentReference)}`,
 			biblio.abstract || 'No abstract available.',
 			'',
@@ -291,8 +295,25 @@ function formatCitedPassage(passage: string): string {
 	return passage.replace(/^[\s*]+/, '').replace(/[\s*]+$/, '');
 }
 
+/**
+ * Whether a cited patent document lies inside the jurisdictions the recorded searches were scoped
+ * to. A non-patent reference and an entry whose id carries no country code stay unmarked, and
+ * without a recorded scope nothing is marked at all.
+ */
+function formatCitedScope(reference: CitedReference, jurisdictions: readonly string[]): string {
+	const docId = reference.docId?.trim();
+	if (!jurisdictions.length || reference.npl?.trim() || !docId) {
+		return '';
+	}
+	const country = publicationCountry(docId);
+	if (!/^[A-Z]{2}$/.test(country)) {
+		return '';
+	}
+	return jurisdictions.includes(country) ? ' — in searched scope' : ` — outside searched jurisdictions (${jurisdictions.join(', ')})`;
+}
+
 /** One rendered bullet, or undefined for an entry that names neither a document nor a non-patent reference. */
-function formatCitedReference(reference: CitedReference): string | undefined {
+function formatCitedReference(reference: CitedReference, jurisdictions: readonly string[]): string | undefined {
 	const label = reference.npl?.trim() ? `[NPL] ${reference.npl.trim()}` : reference.docId?.trim();
 	if (!label) {
 		return undefined;
@@ -305,7 +326,7 @@ function formatCitedReference(reference: CitedReference): string | undefined {
 		reference.relevantClaims?.trim() ? `claims ${reference.relevantClaims.trim()}` : '',
 	].filter(Boolean);
 	const passages = (reference.relevantPassages ?? []).map(formatCitedPassage).filter(Boolean);
-	return `- ${label}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''} — ${facts.join(', ')}${passages.length ? `; passages: ${passages.join('; ')}` : ''}`;
+	return `- ${label}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''} — ${facts.join(', ')}${passages.length ? `; passages: ${passages.join('; ')}` : ''}${formatCitedScope(reference, jurisdictions)}`;
 }
 
 ToolRegistry.registerTool(GetPatentDetailsTool);

@@ -149,6 +149,11 @@ const WEAK_FRAGMENT_LENGTH = 12;
  */
 function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, documents: readonly RetrievedDocument[]): string[] {
 	const lines: string[] = [];
+	const jurisdictions = searchedJurisdictions(snapshot);
+	const outside = documents.filter(document => outsideScope(document.publication, jurisdictions));
+	if (outside.length) {
+		lines.push(`Outside the searched jurisdictions (${jurisdictions.join(', ')}): ${outside.map(document => document.publication).join(', ')}. These were reached through cited references or direct retrieval, not through the scoped search; findings that rest on them are outside the confirmed scope unless the scope is widened.`);
+	}
 	const uncited = documents.filter(document => !document.cited);
 	if (uncited.length) {
 		lines.push(`${uncited.length} of ${documents.length} retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.`);
@@ -193,6 +198,52 @@ function normalizeText(value: string): string {
 /** `EP0983762.A1` and `EP0983762A1` name one document; both reduce to the same key. */
 function publicationKey(publication: string): string {
 	return publication.replace(/[-.\s/]/g, '').toUpperCase();
+}
+
+/**
+ * The office that published a document. Both the ledger's dotted ids and its source references
+ * start with the two-letter country code, so it is read rather than inferred.
+ */
+export function publicationCountry(publication: string): string {
+	return publicationKey(publication).slice(0, 2);
+}
+
+/**
+ * The jurisdictions the recorded searches were actually scoped to: the union of the country filters
+ * the succeeded searches applied, falling back to the two-letter codes of the requested countries
+ * when no effective filter was recorded. An empty result means no jurisdiction scope was applied,
+ * so no document can be reported as lying outside one.
+ */
+export function searchedJurisdictions(snapshot: PatentExecutionSnapshot): readonly string[] {
+	const codes = new Set<string>();
+	for (const execution of snapshot.executions) {
+		if (execution.kind !== 'search' || execution.status !== 'succeeded') { continue; }
+		const requested = [...(execution.requestedCountries ?? '').matchAll(/[A-Za-z]{2}/g)].map(match => match[0]);
+		for (const code of execution.countryFilter?.length ? execution.countryFilter : requested) {
+			const normalized = code.trim().toUpperCase();
+			if (/^[A-Z]{2}$/.test(normalized)) { codes.add(normalized); }
+		}
+	}
+	return [...codes].sort();
+}
+
+/** A document reached outside the confirmed search scope; never true when no scope was applied. */
+function outsideScope(publication: string, jurisdictions: readonly string[]): boolean {
+	return jurisdictions.length > 0 && !jurisdictions.includes(publicationCountry(publication));
+}
+
+/**
+ * Publications a row's own anchors resolve to that lie outside the searched jurisdictions, so a
+ * finding resting on a document the scoped search never covered says so under the row itself.
+ */
+function rowScopeNotes(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>, jurisdictions: readonly string[]): string[] {
+	if (!jurisdictions.length) { return []; }
+	const publications = new Set<string>();
+	for (const anchor of [...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor)]) {
+		const publication = sources.get(anchor)?.reference.publicationNumber;
+		if (publication && outsideScope(publication, jurisdictions)) { publications.add(publicationKey(publication)); }
+	}
+	return [...publications].map(publication => `Scope note (generated): ${publication} is outside the searched jurisdictions (${jurisdictions.join(', ')}).`);
 }
 
 type PatentCoverageRow = NonNullable<PatentCandidateReview['coverage']>[number];
@@ -383,12 +434,18 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 	const language = (document: RetrievedDocument) => document.language + (untranslated(document) ? ' (not in English; any reading of it in this report is the model\'s own translation)' : '');
 	const automatic = automaticLimitations(review, snapshot, documents);
 	const wording = candidateWordingReview(review);
+	// The scope column only exists once a search actually applied a jurisdiction filter; without one
+	// there is no confirmed scope to place a document inside or outside of.
+	const jurisdictions = searchedJurisdictions(snapshot);
+	const scope = (document: RetrievedDocument) => jurisdictions.length
+		? [outsideScope(document.publication, jurisdictions) ? `outside searched jurisdictions (${publicationCountry(document.publication)})` : 'in scope']
+		: [];
 	return [
 		'## Retrieved documents',
 		'Retrieval does not establish eligibility as prior art. This inventory may include post-cutoff background documents. Check each publication date and jurisdiction against the requested scope; unknown dates remain unresolved.',
-		'| Publication | Publication date | Title | Text language |',
-		'| --- | --- | --- | --- |',
-		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, language(document)].map(cell).join(' | ') + ' |'),
+		'| Publication | Publication date | Title | Text language |' + (jurisdictions.length ? ' Scope |' : ''),
+		'| --- | --- | --- | --- |' + (jurisdictions.length ? ' --- |' : ''),
+		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, language(document), ...scope(document)].map(cell).join(' | ') + ' |'),
 		'',
 		'## Coverage and remaining search tracks',
 		...(review.coverage ?? []).flatMap(row => [
@@ -403,6 +460,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 			}),
 			...elementMap(row, sources),
+			...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
 		'', '## Retrieved but not cited in coverage',
