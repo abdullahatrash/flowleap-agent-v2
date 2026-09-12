@@ -3758,6 +3758,15 @@
             "default": "https://api.flowleap.co/v1",
             "format": "uri",
             "markdownDescription": "%patent.config.apiUrl%"
+          },
+          "patent.secondRead": {
+            "type": "string",
+            "enum": [
+              "off",
+              "log"
+            ],
+            "default": "log",
+            "markdownDescription": "%patent.config.secondRead%"
           }
         }
       },
