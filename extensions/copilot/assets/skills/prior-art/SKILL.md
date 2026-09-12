@@ -16,7 +16,7 @@ For CPC/IPC section tables, common codes, and classification search syntax, see 
 Describe the invention three different ways (ask the user, or derive from their description): 1. structure/components, 2. function/use case, 3. novelty/differentiation. Review all three for **repeated words and phrases** — these are the core concepts. If the user is describing THEIR OWN invention, decompose it yourself with the `claim-analysis` skill (Step 3b) — it turns the claim into keywords, synonyms and classification codes. Preserve the disclosure’s essential features, optional embodiments, and relationships between components; distinguish inventor assertions from verified source evidence.
 
 ### 1b. Feature Coverage
-Build a coverage record before searching. For each essential or optional feature and each important interaction/combination, record: `feature`, its required `elements` (each constituent the feature needs, e.g. "dental filling material" and "light-curing initiator"), `importance`, `status`, `sourceAnchors`, and `gap`. Start at `unresolved`; update only after inspecting source evidence. Separate findings about individual components do not establish disclosure of their combination.
+Build a coverage record before searching. For each essential or optional feature and each important interaction/combination, record: `feature`, its required `elements` (each constituent the feature needs), `importance`, `status`, `sourceAnchors`, and `gap`. Start at `unresolved`; update only after inspecting source evidence. Separate findings about individual components do not establish disclosure of their combination.
 
 Assign search tracks to unresolved essentials, interactions, alternative mechanisms, terminology, and relevant adjacent fields. Adapt these tracks to the invention: software data flow, mechanical component relationships, electronic timing, and chemical composition/process conditions need different evidence. Completion means each important track has supporting passages or an explicit remaining gap, not that every feature has a matching patent.
 
@@ -41,7 +41,7 @@ Identify **2-3 CPC/IPC codes** covering the invention (see [references/cpc-class
 ## Phase 2: Broad-to-Narrow Search (USPTO Core Methodology)
 
 ### 2a. Build Search Sets
-Start broad, narrow progressively. Use the session execution evidence recorded by tools for exact queries, filters, ranges, totals and returned IDs. Keep a separate record of passages actually inspected; retrieval alone does not establish review. Mark review status unavailable when it cannot be established. Failed or cancelled calls are not zero-hit results. The report writer generates the execution audit; do not reconstruct or embellish it from memory.
+Start broad, narrow progressively. Use the session execution evidence recorded by tools for exact queries, filters, ranges, totals and returned IDs. Keep a separate record of passages actually inspected; retrieval alone does not establish review. Failed or cancelled calls are not zero-hit results.
 
 Use this planning table, then replace planned sets with the actual execution log:
 
@@ -80,7 +80,7 @@ Prior art is NOT limited to patents:
 3. Consider conference proceedings, standards, product manuals, YouTube demos
 
 ### 2f. Family & Citation Expansion
-- **Known source or family patent first**: when the disclosure names a source, parent or family publication (even a post-cutoff one), retrieve it with `get_patent_details` and work its listed cited references before widening the search. Examiner-cited X/Y entries from its search report are the closest art on record; retrieve each pre-cutoff one and read the relevant passages the citation names. For an EP family the citations sit on the A3 search-report publication, not on the A1/A2 or the B1 grant, so retrieve `EPnnnnnnnA3` when the named publication shows none. Record the source publication itself as post-cutoff context, not as a candidate.
+- **Known source or family patent first**: when the disclosure names a source, parent or family publication (even a post-cutoff one), retrieve it with `get_patent_details` and work its listed cited references before widening the search. For an EP family the citations sit on the A3 search-report publication, not on the A1/A2 or the B1 grant, so retrieve `EPnnnnnnnA3` when the named publication shows none. Record the source publication itself as post-cutoff context, not as a candidate.
 - Family with biblio in one call: `ops_api_guide` action="endpoint" endpoint="family-biblio" → `patent_api_request`
 - Forward citations — "who cites this?": `search_forward_citations` on the publication number → more recent related art
 - Backward citations — the references cited AGAINST a patent: `search_citations` keyed on the US **application** number (resolve it via `get_patent_family` → `get_continuity`, not the publication number); follow 2 hops for key nodes
@@ -98,30 +98,25 @@ Apply this ladder within the confirmed scope. Record an intentionally excluded s
 
 ## Phase 3: Relevance Assessment
 
-`supported` means every element of the feature is disclosed by a literal fragment of cited text, recorded per element as `anchor` + `disclosedBy`; an element without a fragment caps the row at `partial`, and the writer rejects a fragment it cannot find in the recorded text. A passage naming only a broader genus does not disclose the narrower element: an unspecified initiator does not support a light-curing initiator, and an unclassified filler does not support a fine-fraction limit. Cite the narrowing passage or mark the row `partial` with the missing element named in the gap. Every document you retrieve is either cited in coverage or appears in the report's retrieved-but-not-cited list; read it or say you did not.
+`supported` means every element of the feature is disclosed by a literal fragment of cited text, recorded per element as `anchor` + `disclosedBy`. A passage naming only a broader genus does not disclose a narrower element: cite the narrowing passage, or mark the row `partial` with the missing element named in the gap. Every document you retrieve is either cited in coverage or appears in the report's retrieved-but-not-cited list; read it or say you did not.
 
 For each feature, identify its exact supporting passage and scope: independent claim, dependent claim with its dependencies, embodiment, example, or background discussion. Preserve the identity of the recited subject matter, units, denominators and qualifiers exactly as written. A numerical range overlap is partial support; an example or dependent-claim limitation does not become a requirement of the whole publication, and it never narrows the independent claim.
 
 For worked rulings on composition and formulation evidence — narrower terms against a claim's genus, quantity denominators and conversions, exclusion language, and process-step absence — see [references/chemical-composition-evidence.md](references/chemical-composition-evidence.md).
 
-Use supported / partial / not found in reviewed passages / uncertain. A negative finding describes the passages actually reviewed, not the whole technical field. Mark translations as translations and use only claim-specific links supplied by the source tool; if claims are not individually addressable, use the returned claims-section link and name the printed claim number in prose.
+Coverage status is exactly `supported`, `partial` or `unresolved`. A negative finding describes the passages actually reviewed, not the whole technical field. Mark translations as translations and use only claim-specific links supplied by the source tool; if claims are not individually addressable, use the returned claims-section link and name the printed claim number in prose.
 
 For a requested novelty/patentability assessment, apply the **patent-examination** skill to the retrieved evidence. A candidate review does not itself establish a novelty conclusion, and missing results do not establish patentability.
 
 ## Phase 4: Report
 
-Save via `write_patent_results` with `template="prior-art-report"` and empty `content`. Supply subject, confirmed scope/cutoff in objective and searchStrategy, structured `coverage`, `limitations` and `stopReason`. Include `kind="feature"` rows and an explicit essential `kind="combination"` row; the combination can remain unresolved. The writer renders the assessment and execution audit. On refinement, update the same report with revised fields.
+Save via `write_patent_results` with `template="prior-art-report"` and empty `content`. Supply subject, the confirmed scope/cutoff in objective and searchStrategy, structured `coverage`, `limitations` and `stopReason`, with `kind="feature"` rows and an explicit essential `kind="combination"` row that may honestly remain unresolved. Each supported/partial row lists its `elements` and attaches an `evidence` entry per anchor with the scope/dependency chain, qualifiers and original quantity basis; supply the anchor alone for a numbered claim (the writer copies it) and the exact quotation for a description passage. Where only bibliography or abstract text can be retrieved, record the row as unresolved with a "full text unavailable" gap. The writer renders the assessment and execution audit; on refinement, update the same report with revised fields.
 
-For each supported/partial row, list `elements` with the anchor and literal fragment that discloses each (omit both for an undisclosed element), and attach `evidence` with the exact anchor, scope/dependency chain, qualifiers and original quantity basis. For a numbered claim supply the anchor and omit the quotation — the writer copies the full recorded claim. For a description passage supply the exact quotation. A supported or partial status needs a claims or description passage; where only bibliography or abstract text can be retrieved, record the row as unresolved with a "full text unavailable" gap.
+Review the later description passages for further relevant processing steps before making an absence statement; a missing literal match establishes only that the term was not found in returned text.
 
-Recover missing IDs with `get_patent_details` and `evidenceLookup: {}`. Search all stored text using `evidenceLookup.query`, then inspect the relevant source using `evidenceLookup.anchor` and one-based `start`. This local path makes no new backend calls. Review the later description passages for further relevant processing steps before making an absence statement; a missing literal match establishes only that the term was not found in returned text. Older records can expose IDs without cached text; read the original offload or retrieve detail once if exact quotation validation needs it.
-
-The writer checks anchor/quotation identity and report structure, not semantic entailment or the completeness of the model’s review. Keep gaps and source-review notes honest; weakening a status is not a repair for missing evidence. Open the saved report, audit companion and source links. Formal opinions remain a separate requested deliverable.
+Keep gaps and source-review notes honest; weakening a status is not a repair for missing evidence. Open the saved report, audit companion and source links. Formal opinions remain a separate requested deliverable.
 
 ## Rules
 - NEVER invent patent numbers — only cite what search tools returned
-- ALWAYS include publication dates (critical for 102/103)
 - ALWAYS build the concept-synonym table before searching
-- Document ALL queries and hit counts — this is the audit trail
-- Note which database each result came from
 - Consider non-patent prior art (public use, on sale, demos), not just publications

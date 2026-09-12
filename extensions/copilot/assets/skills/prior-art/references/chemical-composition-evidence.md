@@ -16,6 +16,12 @@ recites only the genus does not supply it.
   claim 1 as if it recited the species.
 - The same holds in reverse: an example naming one species does not narrow the claim that recites
   the genus, and must not be reported as a claim limitation.
+- The conclusion needs a **fine-fraction limit** (for example "at least 30 wt% of the filler below
+  2 µm"); the passage recites only "filler", with no size classification. An unclassified filler
+  does not disclose a classified one. Cite the passage stating the size distribution, or leave the
+  row partial and name the missing classification in the gap.
+- The same shape covers a composition element: a recited "filling material" does not disclose a
+  dental filling material, and a recited "initiator" does not disclose a light-curing initiator.
 
 ## A dependent claim's number stays in that dependent claim
 

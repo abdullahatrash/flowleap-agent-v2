@@ -139,6 +139,22 @@ describe('candidate report save path', () => {
 		}).toEqual({ contract: true, certainty: true, receipts: 1, completion: undefined });
 	});
 
+	it('reports flagged wording above the summary contract and leaves the receipt line alone', async () => {
+		const { tool } = setup();
+		const input = { filePath: '/workspace/review.md', template: 'prior-art-report' as const, content: '', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Claim 1 is novel over the retrieved art.'], stopReason: 'The reference teaches away from the combination.' };
+		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+		const lines = (result.content[0] as LanguageModelTextPart).value.split('\n');
+		expect({
+			wording: lines[1],
+			contract: lines[2].startsWith('Chat summary contract: '),
+			receipts: lines.filter(line => line.startsWith('Prior-art artifact receipt: ')).length,
+		}).toEqual({
+			wording: 'Wording review: 2 phrase(s) flagged in the report\'s generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.',
+			contract: true,
+			receipts: 1,
+		});
+	});
+
 	it('checks raw source URLs in report notes without JSON punctuation', async () => {
 		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', sources: [{ anchor: 'EP1234567A1:claims:1:en', reference: { publicationNumber: 'EP1234567A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Partial.' }) };
 		const { tool } = setup(ledger);

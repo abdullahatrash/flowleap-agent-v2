@@ -319,8 +319,17 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 	if (!review.limitations?.some(value => value.trim())) { errors.push('Supply the search and evidence limitations.'); }
 	if (!review.stopReason?.trim()) { errors.push('Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.'); }
 	if (!review.coverage?.some(row => row.kind === 'combination' && row.importance === 'essential')) { errors.push('Include an explicit essential combination row; it may honestly remain unresolved.'); }
-	// Quotations are verbatim source text and are never scanned; only prose the model wrote itself is.
-	const conclusions = legalConclusions([
+	return errors;
+}
+
+/**
+ * Phrases in model-written prose that read as legal conclusions. The filter cannot separate a
+ * conclusion from the disclaimer that denies it reliably enough to refuse a save, so the finding is
+ * rendered in the report and reported to the model instead of rejecting the draft. Quotations are
+ * verbatim source text and are never scanned; only prose the model wrote itself is.
+ */
+export function candidateWordingReview(review: PatentCandidateReview): string[] {
+	return legalConclusions([
 		['objective', review.objective],
 		['searchStrategy', review.searchStrategy],
 		...(review.coverage ?? []).flatMap(row => [
@@ -335,10 +344,6 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 		...(review.limitations ?? []).map((value, index) => [`limitations[${index}]`, value] as const),
 		['stopReason', review.stopReason],
 	]);
-	if (conclusions.length) {
-		errors.push(`Legal conclusions in a candidate review: ${conclusions.join('; ')}. A candidate review states what each passage discloses; it does not draw novelty, anticipation, obviousness or teaching-away conclusions. Replace the phrase with the factual finding.`);
-	}
-	return errors;
 }
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
@@ -377,6 +382,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 	const uncited = documents.filter(document => !document.cited);
 	const language = (document: RetrievedDocument) => document.language + (untranslated(document) ? ' (not in English; any reading of it in this report is the model\'s own translation)' : '');
 	const automatic = automaticLimitations(review, snapshot, documents);
+	const wording = candidateWordingReview(review);
 	return [
 		'## Retrieved documents',
 		'Retrieval does not establish eligibility as prior art. This inventory may include post-cutoff background documents. Check each publication date and jurisdiction against the requested scope; unknown dates remain unresolved.',
@@ -411,6 +417,9 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		...(automatic.length ? ['', 'Generated from the execution record, not supplied by the model:', ...automatic.map(value => '- ' + value), ''] : []),
 		snapshot.limitation,
 		'Anchor identity, quotation identity and required fields were checked mechanically. Source review notes are model judgments, not verified facts. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.',
+		...(wording.length ? ['', '## Wording review (generated)',
+			'The following phrases read as legal conclusions; a candidate review states what each passage discloses and leaves novelty, anticipation, obviousness and teaching-away to counsel. Reword or confirm:',
+			...wording.map(value => '- ' + value)] : []),
 		'', `## Execution audit`,
 		`${snapshot.executions.filter(execution => execution.kind === 'search').length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes. These are tool invocations, not counts of documents reviewed.`,
 		'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range |',

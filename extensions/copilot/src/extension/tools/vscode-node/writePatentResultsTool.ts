@@ -12,7 +12,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
-import { materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
+import { candidateWordingReview, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -116,6 +116,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
 			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri)) : content;
+			const wording = snapshot ? candidateWordingReview(input) : [];
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,
@@ -149,7 +150,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			}
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
