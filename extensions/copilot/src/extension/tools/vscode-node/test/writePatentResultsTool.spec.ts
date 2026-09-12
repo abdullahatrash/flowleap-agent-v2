@@ -3,9 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import type * as vscode from 'vscode';
+import { createHash } from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
+import { ChatFetchResponseType, ChatResponse } from '../../../../platform/chat/common/commonTypes';
+import { IConfigurationService } from '../../../../platform/configuration/common/configurationService';
+import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
 import { MockFileSystemService } from '../../../../platform/filesystem/node/test/mockFileSystemService';
 import { ILogService } from '../../../../platform/log/common/logService';
+import { IChatEndpoint } from '../../../../platform/networking/common/networking';
 import { PromptPathRepresentationService } from '../../../../platform/prompts/common/promptPathRepresentationService';
 import { TestWorkspaceService } from '../../../../platform/test/node/testWorkspaceService';
 import { mock } from '../../../../util/common/test/simpleMock';
@@ -20,12 +25,26 @@ import { IPatentBackendClient } from '../../../patentai/vscode-node/patentBacken
 import { PatentExecution, IPatentExecutionLedger } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { checkPriorArtReportCompletion, ReportCompletionTurn } from '../../node/priorArtReportCompletion';
 import { ToolName } from '../../common/toolNames';
+import { CopilotToolMode } from '../../common/toolsRegistry';
+import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
-function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger) {
+/** How the second-read judge behaves for one test; it is off unless a test asks for it. */
+interface SecondReadStub {
+	readonly setting?: 'off' | 'log' | 'render';
+	/** The value of `patent.secondRead.model`; unset means the request's own model is used. */
+	readonly judgeModel?: string;
+	/** What the provider actually resolves `judgeModel` to; a different id means it is unavailable. */
+	readonly resolvedModel?: string;
+	/** One reply, or one per judged row in order. */
+	readonly reply?: string | readonly string[];
+	readonly failure?: string;
+}
+
+function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRead: SecondReadStub = {}) {
 	const files = new MockFileSystemService();
 	const log = new class extends mock<ILogService>() { override trace() { } override info() { } override warn() { } override error() { } }();
 	const workspace = new class extends TestWorkspaceService { override getWorkspaceFolders() { return [URI.file('/workspace')]; } }();
@@ -33,7 +52,28 @@ function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger) {
 	const checked: string[] = [];
 	// The workspace confinement helper is tested independently; this seam records that validation is requested.
 	const instantiation = new class extends mock<IInstantiationService>() { override invokeFunction<R>(): R { checked.push('checked'); return undefined as R; } }();
-	return { files, checked, log, tool: new WritePatentResultsTool(log, files, paths, instantiation, ledger, workspace) };
+	const configuration = new class extends mock<IConfigurationService>() {
+		override getNonExtensionConfig<T>(key: string): T | undefined {
+			return (key === 'patent.secondRead.model' ? secondRead.judgeModel : secondRead.setting ?? 'off') as T | undefined;
+		}
+	}();
+	let judged = 0;
+	const endpointFor = (model: string) => new class extends mock<IChatEndpoint>() {
+		override readonly model = model;
+		override readonly family = model;
+		override async makeChatRequest2(): Promise<ChatResponse> {
+			if (secondRead.failure) { throw new Error(secondRead.failure); }
+			const replies = secondRead.reply === undefined ? [''] : typeof secondRead.reply === 'string' ? [secondRead.reply] : secondRead.reply;
+			const value = replies[Math.min(judged++, replies.length - 1)];
+			return { type: ChatFetchResponseType.Success, value, requestId: 'request', serverRequestId: undefined, usage: undefined, resolvedModel: model };
+		}
+	}();
+	const endpoints = new class extends mock<IEndpointProvider>() {
+		override async getChatEndpoint(target?: unknown): Promise<IChatEndpoint> {
+			return typeof target === 'string' ? endpointFor(secondRead.resolvedModel ?? target) : endpointFor('judge-model');
+		}
+	}();
+	return { files, checked, log, tool: new WritePatentResultsTool(log, files, paths, instantiation, ledger, workspace, configuration, endpoints) };
 }
 
 describe('candidate report save path', () => {
@@ -152,6 +192,139 @@ describe('candidate report save path', () => {
 			wording: 'Wording review: 2 phrase(s) flagged in the report\'s generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.',
 			contract: true,
 			receipts: 1,
+		});
+	});
+
+	describe('second read diagnostic', () => {
+		const claim = 'A quick release comprising a skewer rod and a cam surface formed in the first head portion.';
+		const anchor = 'EP1000000A1:claims:1:en';
+		const judgedLedger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', publicationIds: ['EP1000000A1'], sources: [{ anchor, text: claim, reference: { publicationNumber: 'EP1000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Synthetic fixture; no live search.' }) };
+		const evidence = [{ anchor, quote: claim, scope: 'Independent claim 1 as quoted.', qualifiers: 'Cam surface recited as formed in the head portion.', quantityBasis: 'Structural claim language; no numeric range.' }];
+		const input = {
+			filePath: '/workspace/review.md', template: 'prior-art-report' as const, content: '',
+			coverage: [
+				{ feature: 'Quick release combination', kind: 'combination' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [anchor], evidence, elements: [{ element: 'a skewer rod', anchor, disclosedBy: 'a skewer rod' }, { element: 'a cam profile carried on the handle stem' }], gap: 'The handle-borne cam profile is not disclosed by the cited text.' },
+				{ feature: 'Skewer heads', kind: 'feature' as const, importance: 'essential' as const, status: 'supported' as const, sourceAnchors: [anchor], evidence, elements: [{ element: 'a skewer rod', anchor, disclosedBy: 'a skewer rod' }, { element: 'a head portion', anchor, disclosedBy: 'the first head portion' }], gap: '' },
+			],
+			limitations: ['Synthetic fixture; semantics require review.'], stopReason: 'Bounded interim result.',
+		};
+		const combinationVerdicts = '```json\n{"verdicts":[{"element":"a skewer rod","verdict":"agree","reason":"The claim recites a skewer rod."},{"element":"a cam profile carried on the handle stem","verdict":"disagree","reason":"The quoted claim puts the cam surface in the head portion."}]}\n```';
+		const headVerdicts = '{"verdicts":[{"element":"a skewer rod","verdict":"agree","reason":"The claim recites a skewer rod."},{"element":"a head portion","verdict":"agree","reason":"The claim recites a first head portion."}]}';
+
+		/** Give the tool the request context the tool-calling loop supplies before an invocation. */
+		async function withRequest(tool: WritePatentResultsTool): Promise<void> {
+			const promptContext = new class extends mock<IBuildPromptContext>() { override readonly request = new class extends mock<vscode.ChatRequest>() { }(); }();
+			await tool.resolveInput(input, promptContext, CopilotToolMode.FullContext);
+		}
+
+		/** The uuid of the evidence companion differs per save; nothing else in a report may. */
+		function withoutCompanionId(report: string): string {
+			return report.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, 'COMPANION');
+		}
+
+		async function save(secondRead: SecondReadStub): Promise<{ files: MockFileSystemService; report: string; lines: string[]; turn: ReportCompletionTurn }> {
+			const { tool, files } = setup(judgedLedger, secondRead);
+			await withRequest(tool);
+			const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+			const turn: ReportCompletionTurn = { message: 'Search for prior art and save /workspace/review.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(input) }] }], results: { write: result } };
+			return { files, report: new TextDecoder().decode(await files.readFile(URI.file(input.filePath))), lines: (result.content[0] as LanguageModelTextPart).value.split('\n'), turn };
+		}
+
+		it('judges each element of a saved row and records the verdicts beside the evidence companion', async () => {
+			const { files, report, lines } = await save({ setting: 'log', reply: [combinationVerdicts, headVerdicts] });
+			const names = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name);
+			const verdictName = names.find(name => name.endsWith('.second-read.json'))!;
+			const evidenceName = names.find(name => name.endsWith('.evidence.json'))!;
+			const recorded = JSON.parse(new TextDecoder().decode(await files.readFile(URI.file('/workspace/' + verdictName))));
+			expect({
+				line: lines[1],
+				contract: lines[2].startsWith('Chat summary contract: '),
+				sharesCompanionId: verdictName.replace('.second-read.json', '') === evidenceName.replace('.evidence.json', ''),
+				model: recorded.model,
+				features: recorded.rows.map((row: { feature: string }) => row.feature),
+				firstRowVerdicts: recorded.rows[0].verdicts,
+				summary: recorded.summary,
+				inReport: report.includes('Second read'),
+			}).toEqual({
+				line: `Second read (diagnostic): 4 elements judged, 1 disagree, 0 unclear, 0 unparsed; verdicts in ${verdictName}.`,
+				contract: true,
+				sharesCompanionId: true,
+				model: 'judge-model',
+				features: ['Quick release combination', 'Skewer heads'],
+				firstRowVerdicts: [{ element: 'a skewer rod', verdict: 'agree', reason: 'The claim recites a skewer rod.' }, { element: 'a cam profile carried on the handle stem', verdict: 'disagree', reason: 'The quoted claim puts the cam surface in the head portion.' }],
+				summary: { elements: 4, agree: 3, disagree: 1, unclear: 0, unparsed: 0 },
+				inReport: false,
+			});
+		});
+
+		it('leaves the saved report byte-identical to a report saved without a second read', async () => {
+			const [logged, disabled] = await Promise.all([
+				save({ setting: 'log', reply: [combinationVerdicts, headVerdicts] }),
+				save({ setting: 'off' }),
+			]);
+			expect({ identical: withoutCompanionId(logged.report) === withoutCompanionId(disabled.report), line: disabled.lines[1].startsWith('Chat summary contract: ') }).toEqual({ identical: true, line: true });
+		});
+
+		it('states what was not confirmed under the affected row only, once in the limitations, and receipts the final bytes', async () => {
+			const { files, report, lines, turn } = await save({ setting: 'render', reply: [combinationVerdicts, headVerdicts] });
+			const [, combination, heads] = report.split('### ');
+			const receipt = JSON.parse(lines.find(line => line.startsWith('Prior-art artifact receipt: '))!.slice('Prior-art artifact receipt: '.length));
+			const written = await files.readFile(URI.file(input.filePath));
+			expect({
+				heading: combination.split('\n')[0],
+				block: combination.includes("Second read (generated, judge-model): the following elements were not confirmed by an independent read of the cited text; the row's status is the author's judgment."),
+				verdict: combination.includes('- a cam profile carried on the handle stem: disagree — The quoted claim puts the cam surface in the head portion.'),
+				beforeGap: combination.indexOf('Second read (generated') < combination.indexOf('Remaining gap (model judgment)'),
+				confirmedRow: heads.includes('Second read (generated'),
+				limitation: report.split('\n').filter(line => line.startsWith('Second read by ')),
+				line: lines[1],
+				guidance: lines[2],
+				receiptDigest: receipt.reportDigest === createHash('sha256').update(written).digest('hex'),
+				completion: await checkPriorArtReportCompletion([], turn, files),
+			}).toEqual({
+				heading: 'Quick release combination',
+				block: true,
+				verdict: true,
+				beforeGap: true,
+				confirmedRow: false,
+				limitation: ['Second read by judge-model: 4 elements judged, 1 not confirmed, 0 unclear, 0 unparsed.'],
+				line: 'Second read (judge-model): 4 elements judged, 1 not confirmed. Not confirmed: Quick release combination / a cam profile carried on the handle stem — The quoted claim puts the cam surface in the head portion.',
+				guidance: 'If a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap.',
+				receiptDigest: true,
+				completion: undefined,
+			});
+		});
+
+		it('judges with the configured model, and falls back to the request model when it is unavailable', async () => {
+			const recordedModel = async (stub: SecondReadStub) => {
+				const { files } = await save(stub);
+				const name = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name).find(name => name.endsWith('.second-read.json'))!;
+				return JSON.parse(new TextDecoder().decode(await files.readFile(URI.file('/workspace/' + name)))).model;
+			};
+			expect(await Promise.all([
+				recordedModel({ setting: 'log', judgeModel: 'anthropic/claude-sonnet-5', reply: headVerdicts }),
+				recordedModel({ setting: 'log', judgeModel: 'anthropic/claude-sonnet-5', resolvedModel: 'some-other-model', reply: headVerdicts }),
+			])).toEqual(['anthropic/claude-sonnet-5', 'judge-model']);
+		});
+
+		it('saves the report and reports a skip when the judge request fails', async () => {
+			const { files, lines } = await save({ setting: 'render', failure: 'judge unavailable' });
+			const names = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name);
+			expect({
+				saved: lines[0],
+				line: lines[1],
+				contract: lines[2].startsWith('Chat summary contract: '),
+				receipts: lines.filter(line => line.startsWith('Prior-art artifact receipt: ')).length,
+				verdictFiles: names.filter(name => name.endsWith('.second-read.json')).length,
+				limitation: new TextDecoder().decode(await files.readFile(URI.file(input.filePath))).includes('Second read: skipped (judge unavailable).'),
+			}).toEqual({
+				saved: 'Successfully wrote patent results to /workspace/review.md',
+				line: 'Second read (diagnostic): skipped (judge unavailable).',
+				contract: true,
+				receipts: 1,
+				verdictFiles: 0,
+				limitation: true,
+			});
 		});
 	});
 

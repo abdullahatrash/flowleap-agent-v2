@@ -3758,6 +3758,21 @@
             "default": "https://api.flowleap.co/v1",
             "format": "uri",
             "markdownDescription": "%patent.config.apiUrl%"
+          },
+          "patent.secondRead": {
+            "type": "string",
+            "enum": [
+              "off",
+              "log",
+              "render"
+            ],
+            "default": "render",
+            "markdownDescription": "%patent.config.secondRead%"
+          },
+          "patent.secondRead.model": {
+            "type": "string",
+            "default": "anthropic/claude-sonnet-5",
+            "markdownDescription": "%patent.config.secondReadModel%"
           }
         }
       },

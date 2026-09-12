@@ -4,21 +4,29 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
+import { Raw } from '@vscode/prompt-tsx';
 import * as vscode from 'vscode';
+import { ChatFetchResponseType, ChatLocation } from '../../../platform/chat/common/commonTypes';
+import { toTextParts } from '../../../platform/chat/common/globalStringUtils';
+import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
+import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
+import { IChatEndpoint } from '../../../platform/networking/common/networking';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
+import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { candidateWordingReview, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { ChatRequest, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
-import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
+import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, PatentReportTemplate } from '../common/patentReportTemplates';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
@@ -39,6 +47,22 @@ interface IWritePatentResultsParams extends PatentCandidateReview {
 }
 
 /**
+ * How much of the second read the user sees. `off` disables it, `log` records the verdicts in a
+ * file beside the evidence companion, and `render` also states in the report what an independent
+ * read did not confirm.
+ */
+type SecondReadMode = 'off' | 'log' | 'render';
+
+/**
+ * Coverage rows judged by one second read. A report with more rows is judged only in part; the
+ * diagnostic is a sample, not an audit, and a per-row model call is neither free nor instant.
+ */
+const SECOND_READ_ROW_LIMIT = 12;
+
+/** Unconfirmed elements named in the tool result; the rest are counted and left to the report. */
+const SECOND_READ_RESULT_LIMIT = 6;
+
+/**
  * The saved report is the record; the chat summary that follows it must not become more certain than
  * that record, so the save states the contract the summary has to keep.
  */
@@ -56,6 +80,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 	public static readonly toolName = ToolName.WritePatentResults;
 
+	/** The request the save was made under; the second read needs it to resolve the user's model. */
+	private _inputContext: IBuildPromptContext | undefined;
+
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IFileSystemService private readonly fileSystemService: IFileSystemService,
@@ -63,7 +90,14 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IEndpointProvider private readonly endpointProvider: IEndpointProvider,
 	) { }
+
+	async resolveInput(input: IWritePatentResultsParams, promptContext: IBuildPromptContext, _mode: CopilotToolMode): Promise<IWritePatentResultsParams> {
+		this._inputContext = promptContext;
+		return input;
+	}
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IWritePatentResultsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const { filePath } = options.input;
@@ -76,7 +110,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		};
 	}
 
-	async invoke(options: vscode.LanguageModelToolInvocationOptions<IWritePatentResultsParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
+	async invoke(options: vscode.LanguageModelToolInvocationOptions<IWritePatentResultsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[WritePatentResultsTool] Invoking write patent results');
 
 		const { filePath, content, template } = options.input;
@@ -109,13 +143,20 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
 			}
-			const evidenceUri = uri.with({ path: uri.path + '.' + generateUuid() + '.evidence.json' });
+			// One id names every companion of this save: the evidence record the receipt cites, and the
+			// second-read verdicts next to it.
+			const companionId = generateUuid();
+			const evidenceUri = uri.with({ path: uri.path + '.' + companionId + '.evidence.json' });
 			if (snapshot) { await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, evidenceUri)); }
+			// The report is written once, with the second read already in it, so the receipt covers the
+			// final bytes. A judge failure is caught below and never reaches the save.
+			const mode = this.secondReadMode();
+			const secondRead = snapshot && mode !== 'off' ? await this.secondRead(input, snapshot, token) : undefined;
 			// Wrap the model's content in the chosen professional report structure, or write it
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri)) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
@@ -138,6 +179,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			if (evidenceDocument) {
 				await this.removeSupersededCompanions(uri, evidenceUri);
 			}
+			const verdictFileName = secondRead ? await this.writeSecondReadFile(uri, companionId, secondRead) : undefined;
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
 
@@ -150,7 +192,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			}
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
@@ -161,17 +203,121 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		}
 	}
 
+	/** How much of the second read reaches the user: nothing, a file, or the report itself. */
+	private secondReadMode(): SecondReadMode {
+		const configured = this.configurationService.getNonExtensionConfig<string>('patent.secondRead');
+		return configured === 'off' || configured === 'log' || configured === 'render' ? configured : 'render';
+	}
+
+	/**
+	 * The endpoint that judges the report. The configured model is preferred, but the provider
+	 * answers a family it cannot match with an arbitrary BYO-key model rather than an error, so the
+	 * resolved endpoint is checked against what was asked for and the request's own model is used
+	 * when it does not match. The model actually used is the one recorded and rendered.
+	 */
+	private async judgeEndpoint(request: ChatRequest): Promise<IChatEndpoint> {
+		const configured = this.configurationService.getNonExtensionConfig<string>('patent.secondRead.model')?.trim();
+		if (configured) {
+			try {
+				const endpoint = await this.endpointProvider.getChatEndpoint(configured);
+				if (endpoint && (endpoint.model === configured || endpoint.family === configured)) { return endpoint; }
+				this.logService.warn(`[WritePatentResultsTool] Second-read model '${configured}' is unavailable; judging with the request's model.`);
+			} catch (error) {
+				this.logService.warn(`[WritePatentResultsTool] Second-read model '${configured}' could not be resolved: ${error instanceof Error ? error.message : String(error)}`);
+			}
+		}
+		return this.endpointProvider.getChatEndpoint(request);
+	}
+
+	/**
+	 * Second read of the report being saved: one model call per coverage row that claims disclosure,
+	 * asking whether the recorded passage behind each element actually discloses it.
+	 *
+	 * It never blocks the save and never changes a status. Every failure — no endpoint, a refused
+	 * request, a cancellation — is caught, logged, and returned as a skip the report and the tool
+	 * result both state.
+	 */
+	private async secondRead(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, token: CancellationToken): Promise<SecondReadOutcome> {
+		try {
+			const request = this._inputContext?.request;
+			if (!request) { return { kind: 'skipped', reason: 'no chat request context' }; }
+			const requests = buildSecondReadRequests(review, snapshot);
+			if (!requests.length) { return { kind: 'skipped', reason: 'no supported or partial row lists elements' }; }
+			const endpoint = await this.judgeEndpoint(request);
+			const results: SecondReadResult[] = [];
+			for (const secondReadRequest of requests.slice(0, SECOND_READ_ROW_LIMIT)) {
+				const response = await endpoint.makeChatRequest2({
+					debugName: 'patentSecondRead',
+					messages: [{ role: Raw.ChatRole.User, content: toTextParts(secondReadPrompt(secondReadRequest)) }],
+					finishedCb: undefined,
+					location: ChatLocation.Other,
+					userInitiatedRequest: false,
+					isConversationRequest: false,
+					requestOptions: { temperature: 0 },
+				}, token);
+				if (response.type !== ChatFetchResponseType.Success) { return { kind: 'skipped', reason: `judge request ${response.type}` }; }
+				const verdicts = parseSecondReadVerdicts(response.value);
+				results.push({ feature: secondReadRequest.feature, status: secondReadRequest.status, ...(verdicts ? { verdicts } : { unparsed: response.value }) });
+			}
+			return { kind: 'judged', model: endpoint.model, rows: results, summary: summarizeSecondRead(results) };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.logService.warn(`[WritePatentResultsTool] Second read did not complete: ${message}`);
+			return { kind: 'skipped', reason: message };
+		}
+	}
+
+	/**
+	 * Record the verdicts beside the evidence companion, under the same id. The record is what a
+	 * human adjudicates later, so losing it must not cost the save that already succeeded.
+	 */
+	private async writeSecondReadFile(report: URI, companionId: string, outcome: SecondReadOutcome): Promise<string | undefined> {
+		if (outcome.kind !== 'judged') { return undefined; }
+		const verdictUri = report.with({ path: report.path + '.' + companionId + '.second-read.json' });
+		try {
+			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, verdictUri));
+			await this.fileSystemService.writeFile(verdictUri, new TextEncoder().encode(JSON.stringify({ model: outcome.model, judgedAt: new Date().toISOString(), rows: outcome.rows, summary: outcome.summary }, null, 2)));
+			return basename(verdictUri);
+		} catch (error) {
+			this.logService.warn(`[WritePatentResultsTool] Second-read verdicts were not written: ${error instanceof Error ? error.message : String(error)}`);
+			return undefined;
+		}
+	}
+
+	/**
+	 * What the model is told about the second read. `log` reports counts and the file; `render`
+	 * names what was not confirmed, because in that mode the report states it too and the model has
+	 * to decide whether to revise a row or defend it.
+	 */
+	private secondReadResult(mode: SecondReadMode, outcome: SecondReadOutcome | undefined, verdictFileName: string | undefined): string {
+		if (!outcome) { return ''; }
+		if (outcome.kind === 'skipped') { return `\nSecond read (diagnostic): skipped (${outcome.reason}).`; }
+		const { elements, disagree, unclear, unparsed } = outcome.summary;
+		if (mode === 'log') {
+			return `\nSecond read (diagnostic): ${elements} elements judged, ${disagree} disagree, ${unclear} unclear, ${unparsed} unparsed; verdicts in ${verdictFileName ?? 'no file (write failed)'}.`;
+		}
+		const unconfirmed = unconfirmedVerdicts(outcome.rows);
+		const shown = unconfirmed.slice(0, SECOND_READ_RESULT_LIMIT);
+		// Each reason is its own sentence; the list punctuates itself, so a trailing stop is dropped.
+		const listed = shown.map(item => `${item.feature} / ${item.element} — ${item.reason.trim().replace(/\.$/, '')}`).join('; ')
+			+ (unconfirmed.length > shown.length ? `; and ${unconfirmed.length - shown.length} more in the report` : '');
+		return `\nSecond read (${outcome.model}): ${elements} elements judged, ${disagree} not confirmed${unclear ? `, ${unclear} unclear` : ''}.`
+			+ (unconfirmed.length ? ` Not confirmed: ${listed}.\nIf a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap.` : '');
+	}
+
 	/**
 	 * A report has exactly one evidence companion: the one the receipt names. Companions left by
 	 * earlier saves of the same report describe superseded validations, so they are removed once the
-	 * replacement is on disk. Only this tool's own `<report>.<uuid>.evidence.json` siblings qualify,
-	 * and a cleanup failure never fails a save that already succeeded.
+	 * replacement is on disk. Only this tool's own `<report>.<uuid>.evidence.json` siblings and the
+	 * `<report>.<uuid>.second-read.json` diagnostics beside them qualify, and a cleanup failure never
+	 * fails a save that already succeeded. The current save's second read is written afterwards, so
+	 * its own file cannot be swept here.
 	 */
 	private async removeSupersededCompanions(report: URI, companion: URI): Promise<void> {
 		const directory = dirname(report);
 		const prefix = basename(report) + '.';
 		const current = basename(companion);
-		const companionName = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.evidence\.json$/i;
+		const companionName = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:evidence|second-read)\.json$/i;
 		try {
 			for (const [name] of await this.fileSystemService.readDirectory(directory)) {
 				if (name === current || !name.startsWith(prefix) || !companionName.test(name.slice(prefix.length))) { continue; }

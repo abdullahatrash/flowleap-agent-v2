@@ -7,6 +7,8 @@ import { Raw } from '@vscode/prompt-tsx';
 import { readFileSync, writeFileSync } from 'fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configurationService';
+import { IEndpointProvider } from '../../../../../platform/endpoint/common/endpointProvider';
 import { MockFileSystemService } from '../../../../../platform/filesystem/node/test/mockFileSystemService';
 import { ILogService } from '../../../../../platform/log/common/logService';
 import { PromptPathRepresentationService } from '../../../../../platform/prompts/common/promptPathRepresentationService';
@@ -66,7 +68,10 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 		const workspace = disposables.add(new TestWorkspaceService([URI.file('/workspace')]));
 		const ledger: IPatentExecutionLedger = { _serviceBrand: undefined, record: async () => 'Recorded', read: async () => fixtureSnapshot };
 		const instantiation = new class extends mock<IInstantiationService>() { override invokeFunction<R>(): R { return undefined as R; } }();
-		const writer = new WritePatentResultsTool(log, files, new PromptPathRepresentationService(workspace), instantiation, ledger, workspace);
+		// The second read is a separate judge call; this evaluation measures routing, so it stays off.
+		const configuration = new class extends mock<IConfigurationService>() { override getNonExtensionConfig<T>(): T { return 'off' as T; } }();
+		const endpoints = new class extends mock<IEndpointProvider>() { }();
+		const writer = new WritePatentResultsTool(log, files, new PromptPathRepresentationService(workspace), instantiation, ledger, workspace, configuration, endpoints);
 		const query = 'The EP/WO scope and cutoff before 2002-02-21 were confirmed. The candidate source was already retrieved below. Finish this bounded candidate review using that retrieved source only and save /workspace/review.md. Compare F1: photocurable dental composite, and F5: essentially free of sub-100 nm filler. Include the essential combination and relevant loading range. Use exact supporting passages and preserve the scope of each claim and embodiment. State limitations; this is not a novelty opinion.';
 		const rounds = [new ToolCallRound('Retrieved the candidate source.', [{ id: 'details', name: ToolName.GetPatentDetails, arguments: '{"publicationNumber":"EP0983762A1"}' }])];
 		const results: Record<string, LanguageModelToolResult> = { details: new LanguageModelToolResult([new LanguageModelTextPart(details)]) };

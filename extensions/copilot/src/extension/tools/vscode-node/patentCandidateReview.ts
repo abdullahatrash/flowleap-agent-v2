@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
+import { SecondReadOutcome, secondReadLimitation, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { PatentEvidenceSource, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
@@ -426,8 +427,32 @@ function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceS
 		}), ''];
 }
 
-/** Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion. */
-export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string): string {
+/** Collapse a model-written phrase onto one line so it cannot break the list it is rendered into. */
+function inline(value: string): string {
+	return value.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * What an independent read of the same passages did not confirm for this row. Only elements the
+ * judge disagreed with or could not resolve are shown; the row's status is left as the author wrote
+ * it, because the second read is a reading of the cited text, not an authority over the report.
+ */
+function secondReadNotes(row: PatentCoverageRow, secondRead: SecondReadOutcome | undefined): string[] {
+	if (secondRead?.kind !== 'judged') { return []; }
+	const unconfirmed = unconfirmedVerdicts(secondRead.rows.filter(result => result.feature === row.feature));
+	if (!unconfirmed.length) { return []; }
+	return ['', `Second read (generated, ${secondRead.model}): the following elements were not confirmed by an independent read of the cited text; the row's status is the author's judgment.`,
+		...unconfirmed.map(item => `- ${inline(item.element)}: ${item.verdict} — ${inline(item.reason)}`), ''];
+}
+
+/**
+ * Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion.
+ *
+ * @param secondRead when present, the report states what an independent read of the cited passages
+ * did not confirm, under each affected row and once in Limitations. Rendering is byte-identical to a
+ * report written without one when it is omitted.
+ */
+export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string, secondRead?: SecondReadOutcome): string {
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);
@@ -460,6 +485,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 			}),
 			...elementMap(row, sources),
+			...secondReadNotes(row, secondRead),
 			...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
@@ -473,6 +499,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		'', '## Search stopping rationale', review.stopReason ?? '',
 		'', '## Limitations', ...(review.limitations ?? []).map(value => '- ' + value),
 		...(automatic.length ? ['', 'Generated from the execution record, not supplied by the model:', ...automatic.map(value => '- ' + value), ''] : []),
+		...(secondRead ? ['', secondReadLimitation(secondRead), ''] : []),
 		snapshot.limitation,
 		'Anchor identity, quotation identity and required fields were checked mechanically. Source review notes are model judgments, not verified facts. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.',
 		...(wording.length ? ['', '## Wording review (generated)',
