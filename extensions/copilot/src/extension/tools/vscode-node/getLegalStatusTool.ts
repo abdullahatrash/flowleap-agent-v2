@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
@@ -58,6 +59,7 @@ export class GetLegalStatusTool implements ICopilotTool<IGetLegalStatusParams> {
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetLegalStatusParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -87,8 +89,16 @@ export class GetLegalStatusTool implements ICopilotTool<IGetLegalStatusParams> {
 			const data = await callFacadeTool<LegalStatusData>(this.patentBackendClient, 'get_legal_status', { patent_number: doc }, token);
 			const formatted = this.formatLegalStatus(data, doc);
 			this.logService.info(`[GetLegalStatusTool] Formatted response length: ${formatted.length} chars`);
+			// A memo that calls a patent in force or lapsed on a date states what this text said; the
+			// record is what lets that sentence be checked. Recorded for the audit only — the answer
+			// the model reads is unchanged by the outcome of the write.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'status', status: 'succeeded', tool: 'get_legal_status', request: doc,
+				rowCount: data.events?.length, publicationIds: [doc], resultText: formatted,
+			});
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted)]);
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'status', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'get_legal_status', request: doc });
 			return handlePatentToolError(error, this.logService, '[GetLegalStatusTool]', err => `Error fetching legal status for ${publicationNumber}: ${err.status} - ${err.message}`);
 		}
 	}

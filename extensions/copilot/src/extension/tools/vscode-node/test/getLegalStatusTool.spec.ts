@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { AuthRequiredError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { GetLegalStatusTool } from '../getLegalStatusTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ describe('GetLegalStatusTool', () => {
 				],
 			},
 		});
-		const tool = new GetLegalStatusTool(makeLogService(), client);
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP-1000000-A1' }), makeToken());
 
@@ -97,7 +98,7 @@ describe('GetLegalStatusTool', () => {
 
 	it('reports no events when the backend returns an empty list', async () => {
 		const { client } = makeBackendClient({ success: true, data: { docId: 'US9999999', events: [] } });
-		const tool = new GetLegalStatusTool(makeLogService(), client);
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'US9999999B2' }), makeToken());
 
@@ -112,11 +113,32 @@ describe('GetLegalStatusTool', () => {
 
 	it('surfaces a backend auth error via the shared error handler with a recovery hint', async () => {
 		const { client } = makeBackendClient(() => { throw new AuthRequiredError('Your FlowLeap session has expired. Please sign in again.'); });
-		const tool = new GetLegalStatusTool(makeLogService(), client);
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000' }), makeToken());
 
 		expect(textOf(result)).toContain('Error fetching legal status for EP1000000: 401 - Your FlowLeap session has expired.');
 		expect(textOf(result)).toContain('FlowLeap: Sign In');
+	});
+
+	it('records the requested publication, the event count and the exact text the model read', async () => {
+		const { client } = makeBackendClient({ success: true, data: { docId: 'EP1000000', events: [{ code: 'MM4A', country: 'FR', date: '2024-01-10', text: 'LAPSE', gazette: null }] } });
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new GetLegalStatusTool(makeLogService(), client, ledger).invoke(makeOptions({ publicationNumber: 'EP-1000000-A1' }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'status', status: 'succeeded', tool: 'get_legal_status', request: 'EP1000000A1',
+			rowCount: 1, publicationIds: ['EP1000000A1'], resultText: textOf(result),
+		}]);
+	});
+
+	it('records a failed lookup with the publication and no status text', async () => {
+		const { client } = makeBackendClient(() => { throw new AuthRequiredError('Session expired.'); });
+		const { ledger, executions } = recordingPatentLedger();
+
+		await new GetLegalStatusTool(makeLogService(), client, ledger).invoke(makeOptions({ publicationNumber: 'EP1000000' }), makeToken());
+
+		expect(executions).toEqual([{ kind: 'status', status: 'failed', tool: 'get_legal_status', request: 'EP1000000' }]);
 	});
 });

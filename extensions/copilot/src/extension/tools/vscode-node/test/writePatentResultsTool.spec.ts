@@ -395,6 +395,56 @@ describe('candidate report save path', () => {
 		});
 	});
 
+	describe('FTO memo save path', () => {
+		/** One retrieved claim the memo quotes, and one legal-status outcome carrying its lapse date. */
+		const claim = 'A charging circuit comprising a resonant converter and a controller arranged to sweep the switching frequency.';
+		const ledger: IPatentExecutionLedger = {
+			...unrecordedPatentLedger,
+			read: async () => ({
+				executions: [
+					{ id: 'one', recordedAt: '2026-09-13T00:00:00.000Z', kind: 'details', status: 'succeeded', publicationIds: ['EP1000000A1'], sources: [{ anchor: 'EP1000000A1:claims:1:en', text: claim, reference: { publicationNumber: 'EP1000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] },
+					{ id: 'two', recordedAt: '2026-09-13T00:00:01.000Z', kind: 'status', status: 'succeeded', tool: 'get_legal_status', request: 'EP1000000A1', rowCount: 2, publicationIds: ['EP1000000A1'], resultText: '| 2024-01-10 | FR | MM4A | LAPSE |' },
+				],
+				limitation: 'Synthetic fixture; no live search.',
+			}),
+		};
+		const citation = 'flowleap://flowleap.patent-ai/patent?publication=EP1000000A1&section=claims&claim=1';
+		const content = [
+			'## 1. Product Cleared',
+			'The wireless charger module.',
+			'',
+			'## 2. Blocking Candidates',
+			`Claim 1 of [EP1000000A1](${citation}) reads: "${claim}" It lapsed in France on 2024-01-10 and expires on 2031-08-02.`,
+			'',
+			'## 3. Risk',
+			'Medium risk on 14 of the screened families.',
+		].join('\n');
+
+		it('appends figure, date, quotation and data provenance to the memo and names what was not traced', async () => {
+			const { tool, files } = setup(ledger);
+			const result = await tool.invoke({ input: { filePath: '/workspace/fto.md', content, template: 'fto-memo' as const, subject: 'Charger module' }, toolInvocationToken: undefined }, CancellationToken.None);
+			const memo = new TextDecoder().decode(await files.readFile(URI.file('/workspace/fto.md')));
+			const line = (text: string) => memo.split('\n').find(row => row.startsWith(text));
+			expect({
+				authoredBody: memo.includes('## 2. Blocking Candidates') && !memo.includes('## 3. Blocking References & Risk'),
+				figures: line('1 figures checked'),
+				dates: line('2 dates checked'),
+				quotations: line('1 claim quotations checked'),
+				data: memo.split('\n').filter(row => row.startsWith('- get_')),
+				beforeDisclaimer: memo.indexOf('## Quotation provenance (generated)') < memo.indexOf('*This document was generated with AI assistance'),
+				result: (result.content[0] as LanguageModelTextPart).value.split('\n')[1],
+			}).toEqual({
+				authoredBody: true,
+				figures: '1 figures checked against recorded tool outputs; 0 found, 0 computed from figures that were found, 1 not found: 14.',
+				dates: '2 dates checked against recorded tool outputs; 1 found, 1 not found: 2031-08-02.',
+				quotations: '1 claim quotations checked against recorded claim text; 1 found verbatim, 0 not found.',
+				data: ['- get_patent_details — EP1000000A1 — count not recorded — succeeded', '- get_legal_status — EP1000000A1 — 2 rows — succeeded'],
+				beforeDisclaimer: true,
+				result: 'FTO provenance: 1 figures checked against recorded tool outputs; 0 found, 0 computed from figures that were found, 1 not found: 14. 2 dates checked against recorded tool outputs; 1 found, 1 not found: 2031-08-02. 1 claim quotations checked against recorded claim text; 1 found verbatim, 0 not found. Source each figure, date and quotation that was not found in a follow-up save, or replace it with one a recorded output supports. The memo lists them in its generated provenance sections.',
+			});
+		});
+	});
+
 	it('checks raw source URLs in report notes without JSON punctuation', async () => {
 		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', sources: [{ anchor: 'EP1234567A1:claims:1:en', reference: { publicationNumber: 'EP1234567A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Partial.' }) };
 		const { tool } = setup(ledger);

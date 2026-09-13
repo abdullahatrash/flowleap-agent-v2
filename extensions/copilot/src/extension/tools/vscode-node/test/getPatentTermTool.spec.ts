@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { PatentBackendError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { GetPatentTermTool } from '../getPatentTermTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 function makeLogService(): ILogService {
 	return { trace: () => { }, debug: () => { }, info: () => { }, warn: () => { }, error: () => { } } as unknown as ILogService;
@@ -62,7 +63,7 @@ describe('GetPatentTermTool', () => {
 				disclaimer: 'Estimated term only: does not account for annuity lapses, terminal disclaimers, SPCs/extensions, or US patent term adjustment (PTA). Check get_legal_status for lapse/withdrawal events.',
 			},
 		});
-		const tool = new GetPatentTermTool(makeLogService(), client);
+		const tool = new GetPatentTermTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ patentNumber: 'EP1000000' }), makeToken());
 
@@ -83,10 +84,22 @@ describe('GetPatentTermTool', () => {
 
 	it('reports a clean message when the backend has no filing date (422)', async () => {
 		const { client } = makeBackendClient(undefined, new PatentBackendError(422, 'No filing date available for EP1000000; cannot estimate term.'));
-		const tool = new GetPatentTermTool(makeLogService(), client);
+		const tool = new GetPatentTermTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ patentNumber: 'EP1000000' }), makeToken());
 
 		expect(textOf(result)).toMatchInlineSnapshot(`"Could not estimate the term for EP1000000: No filing date available for EP1000000; cannot estimate term. A filing date is required; use get_patent_summary or the legal-status events to check current status."`);
+	});
+
+	it('records the estimate text a memo reads its expiry date off', async () => {
+		const { client } = makeBackendClient({ success: true, data: { patentNumber: 'EP1000000', filingDate: '2008-04-16', baseExpiryDate: '2028-04-16', basis: '20 years from filing date', disclaimer: 'Estimated term only.' } });
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new GetPatentTermTool(makeLogService(), client, ledger).invoke(makeOptions({ patentNumber: 'EP1000000' }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'EP1000000',
+			publicationIds: ['EP1000000'], resultText: textOf(result),
+		}]);
 	});
 });

@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
@@ -46,6 +47,7 @@ export class GetPatentTermTool implements ICopilotTool<IGetPatentTermParams> {
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentTermParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -69,8 +71,15 @@ export class GetPatentTermTool implements ICopilotTool<IGetPatentTermParams> {
 			const term = await callFacadeTool<TermData>(this.patentBackendClient, ToolName.GetPatentTerm, { patent_number: patentNumber }, token);
 			const formatted = this.formatTerm(term, patentNumber);
 			this.logService.info(`[GetPatentTermTool] Formatted response length: ${formatted.length} chars`);
+			// An expiry date in a memo is read off this text; the record is what a date check reads
+			// it back from. Recorded for the audit only.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: patentNumber,
+				publicationIds: [patentNumber], resultText: formatted,
+			});
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted)]);
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'status', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'get_patent_term', request: patentNumber });
 			return handlePatentToolError(
 				error,
 				this.logService,

@@ -94,6 +94,16 @@ const AUTHORED_SECTIONS = /^##\s+\S/gm;
 /** How many of its own sections make a body a written report rather than one section's text. */
 const AUTHORED_SECTION_COUNT = 3;
 
+/**
+ * Whether the body is a report the model structured itself. A body that already carries its own
+ * sections is a written document, not the text of one section: the numbered scaffold would then
+ * stand above the model's own headings as empty duplicates, and a reader cannot tell which of the
+ * two structures the analysis actually follows.
+ */
+function isAuthoredReport(content: string): boolean {
+	return (content.match(AUTHORED_SECTIONS) ?? []).length >= AUTHORED_SECTION_COUNT;
+}
+
 /** A body that stands in for content the model did not write. */
 const PLACEHOLDER_BODY = /^(?:to be (?:completed|filled|added)|tbd|todo|placeholder)$/i;
 
@@ -135,8 +145,45 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 	return [...templateSections(content, template, fields ?? {}), ...(generated?.trim() ? [generated.trim(), ''] : []), '---', `*${DISCLAIMER}*`, ''].join('\n');
 }
 
-/** The template's own sections, ending with the blank line that precedes the disclaimer footer. */
+/**
+ * The template's own sections, ending with the blank line that precedes the disclaimer footer.
+ *
+ * Every template but `prior-art-report` wraps a body the model writes, so every one of them steps
+ * aside for a body that is already a structured report: the title block and the field table are
+ * kept, and the model's own sections stand in place of the numbered scaffold. `prior-art-report` is
+ * excluded because its body is generated from structured coverage, not written free-form.
+ */
 function templateSections(content: string, template: PatentReportTemplate, f: PatentReportFields): readonly string[] {
+	if (template !== 'prior-art-report' && isAuthoredReport(content)) {
+		return [...templateHeader(template, f), content.trim(), ''];
+	}
+	return templateScaffold(content, template, f);
+}
+
+/** The title and metadata table every version of a template opens with. */
+function templateHeader(template: PatentReportTemplate, f: PatentReportFields): readonly string[] {
+	switch (template) {
+		case 'prior-art-report':
+			return ['# Prior Art Candidate Review', '', fieldTable([['Matter / Reference', f.matter], ['Subject Technology', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'fto-memo':
+			return ['# Freedom-to-Operate Memorandum', '', fieldTable([['Matter / Reference', f.matter], ['Product / Technology', f.subject], ['Jurisdiction(s)', undefined], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'office-action-scaffold':
+			return ['# Office Action Response', '', fieldTable([['Application No.', f.matter], ['Examiner', undefined], ['Art Unit', undefined], ['Mailing Date', undefined], ['Response Due Date', undefined], ['Prepared By', f.preparedBy]]), ''];
+		case 'invalidity-claim-chart':
+			return ['# Invalidity Claim Chart', '', fieldTable([['Patent No. / Claim(s) at Issue', f.matter], ['Prior Art Reference(s)', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'eou-infringement-chart':
+			return ['# Evidence-of-Use (EoU) Infringement Chart', '', fieldTable([['Patent No. / Claim(s) Asserted', f.matter], ['Accused Product / Service', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'patentability-opinion':
+			return ['# Patentability Opinion', '', fieldTable([['Matter / Reference', f.matter], ['Invention Title', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'landscape-report':
+			return ['# Patent Landscape Report', '', fieldTable([['Technology Area / Scope', f.subject], ['Search Criteria', f.searchStrategy], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'portfolio-due-diligence-memo':
+			return ['# Portfolio Due Diligence Memorandum', '', fieldTable([['Target / Portfolio', f.subject], ['Transaction / Purpose', f.matter], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+	}
+}
+
+/** The template's numbered scaffold, with the model's text in the section that holds the results. */
+function templateScaffold(content: string, template: PatentReportTemplate, f: PatentReportFields): readonly string[] {
 	const results = content.trim().length > 0 ? content.trim() : FIELD;
 
 	switch (template) {
@@ -270,18 +317,6 @@ function templateSections(content: string, template: PatentReportTemplate, f: Pa
 			];
 
 		case 'landscape-report':
-			// A body that already carries its own sections is a written report, not section text: the
-			// numbered scaffold would then stand above the model's own headings as empty duplicates.
-			if ((content.match(AUTHORED_SECTIONS) ?? []).length >= AUTHORED_SECTION_COUNT) {
-				return [
-					'# Patent Landscape Report',
-					'',
-					fieldTable([['Technology Area / Scope', f.subject], ['Search Criteria', f.searchStrategy], ['Date', f.date], ['Prepared By', f.preparedBy]]),
-					'',
-					results,
-					'',
-				];
-			}
 			return [
 				'# Patent Landscape Report',
 				'',
