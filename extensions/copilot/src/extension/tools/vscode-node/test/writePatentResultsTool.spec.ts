@@ -420,6 +420,18 @@ describe('candidate report save path', () => {
 			'Medium risk on 14 of the screened families.',
 		].join('\n');
 
+		it('gives an invalidity chart the same provenance appendix as an FTO memo', async () => {
+			const { tool, files } = setup(ledger);
+			await tool.invoke({ input: { filePath: '/workspace/chart.md', content, template: 'invalidity-claim-chart' as const, subject: 'EP1000000A1' }, toolInvocationToken: undefined }, CancellationToken.None);
+			const chart = new TextDecoder().decode(await files.readFile(URI.file('/workspace/chart.md')));
+			expect({
+				figures: chart.includes('## Figure and date provenance (generated)'),
+				quotations: chart.includes('## Quotation provenance (generated)'),
+				data: chart.includes('## Data provenance (generated)'),
+				scaffoldKept: chart.includes('## 2. Blocking Candidates'),
+			}).toEqual({ figures: true, quotations: true, data: true, scaffoldKept: true });
+		});
+
 		it('appends figure, date, quotation and data provenance to the memo and names what was not traced', async () => {
 			const { tool, files } = setup(ledger);
 			const result = await tool.invoke({ input: { filePath: '/workspace/fto.md', content, template: 'fto-memo' as const, subject: 'Charger module' }, toolInvocationToken: undefined }, CancellationToken.None);
