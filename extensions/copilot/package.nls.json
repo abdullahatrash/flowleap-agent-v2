@@ -2,6 +2,7 @@
   "flowleap.openPatentDocument.title": "Open Patent Document",
 	"flowleap.promptLibrary.name": "Prompts",
 	"flowleap.promptLibrary.copy.title": "Copy Prompt",
+  "flowleap.promptLibrary.copied.title": "Copied",
 	"flowleap.promptLibrary.add.title": "New Prompt",
 	"flowleap.promptLibrary.edit.title": "Edit Prompt",
 	"flowleap.promptLibrary.delete.title": "Delete Prompt",
