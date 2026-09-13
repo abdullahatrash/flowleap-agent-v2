@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
+import { IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
@@ -24,6 +25,7 @@ import { IPatentBackendClient } from './patentBackendClient';
 import { PatentDataKeysStore } from './patentDataKeysStore';
 import { maybeShowSetupOnStartup, PatentDataKeysViewProvider, registerPatentDataKeysCommand } from './patentDataKeysPage';
 import { registerPatentSetupView } from './patentSetupView';
+import { registerPromptLibraryView } from './promptLibraryView';
 import { registerOnboardingBridgeCommands } from './onboardingBridge';
 import { TrialCountdownStatusBar, TrialPillTelemetry } from './trialCountdownStatusBar';
 import { SessionExpiryStatusBar } from './sessionExpiryStatusBar';
@@ -58,6 +60,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		@IPatentBackendClient private readonly _patentBackendClient: IPatentBackendClient,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 		@IOcrConsentService private readonly _ocrConsentService: IOcrConsentService,
+		@IFileSystemService private readonly _fileSystemService: IFileSystemService,
 	) {
 		super();
 		this._initialize();
@@ -95,6 +98,12 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			if (this._dataKeysStore && this._authProvider) {
 				this._register(registerPatentSetupView(this._dataKeysStore, this._authProvider, this._logService));
 			}
+		});
+		this._safeStep('register prompt library view', () => {
+			// The "Prompts" view under the same FlowLeap container (PRD 0014): the prompts this
+			// extension ships plus the user's own, each with a Copy action. Copy-only by design —
+			// it never writes into the chat input.
+			this._register(registerPromptLibraryView(this._extensionContext, this._fileSystemService, this._logService));
 		});
 		this._safeStep('register trial-countdown pill', () => {
 			// Status-bar "Trial · N days left" pill (issue #79, P2). Visible only while trialing;

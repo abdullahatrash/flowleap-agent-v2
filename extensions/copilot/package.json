@@ -3275,6 +3275,36 @@
         "category": "FlowLeap"
       },
       {
+        "command": "flowleap.promptLibrary.copy",
+        "title": "%flowleap.promptLibrary.copy.title%",
+        "category": "FlowLeap",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "flowleap.promptLibrary.add",
+        "title": "%flowleap.promptLibrary.add.title%",
+        "category": "FlowLeap",
+        "icon": "$(add)"
+      },
+      {
+        "command": "flowleap.promptLibrary.edit",
+        "title": "%flowleap.promptLibrary.edit.title%",
+        "category": "FlowLeap",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "flowleap.promptLibrary.delete",
+        "title": "%flowleap.promptLibrary.delete.title%",
+        "category": "FlowLeap",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "flowleap.promptLibrary.refresh",
+        "title": "%flowleap.promptLibrary.refresh.title%",
+        "category": "FlowLeap",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "github.copilot.chat.triggerPermissiveSignIn",
         "title": "%github.copilot.command.triggerPermissiveSignIn%"
       },
@@ -5995,6 +6025,22 @@
           "when": "false"
         },
         {
+          "command": "flowleap.promptLibrary.copy",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.promptLibrary.edit",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.promptLibrary.delete",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.promptLibrary.refresh",
+          "when": "false"
+        },
+        {
           "command": "github.copilot.debug.extensionState",
           "when": "false"
         },
@@ -6201,6 +6247,16 @@
       ],
       "view/title": [
         {
+          "command": "flowleap.promptLibrary.add",
+          "when": "view == flowleap.promptLibrary",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowleap.promptLibrary.refresh",
+          "when": "view == flowleap.promptLibrary",
+          "group": "navigation@2"
+        },
+        {
           "submenu": "github.copilot.chat.debug.filter",
           "when": "view == copilot-chat",
           "group": "navigation"
@@ -6227,6 +6283,31 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "flowleap.promptLibrary.copy",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\./",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowleap.promptLibrary.edit",
+          "when": "view == flowleap.promptLibrary && viewItem == flowleap.prompt.user",
+          "group": "inline@2"
+        },
+        {
+          "command": "flowleap.promptLibrary.copy",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\./",
+          "group": "1_prompt@1"
+        },
+        {
+          "command": "flowleap.promptLibrary.edit",
+          "when": "view == flowleap.promptLibrary && viewItem == flowleap.prompt.user",
+          "group": "1_prompt@2"
+        },
+        {
+          "command": "flowleap.promptLibrary.delete",
+          "when": "view == flowleap.promptLibrary && viewItem == flowleap.prompt.user",
+          "group": "1_prompt@3"
+        },
         {
           "command": "github.copilot.chat.debug.showRawRequestBody",
           "when": "view == copilot-chat && viewItem == request",
@@ -6575,6 +6656,12 @@
     "views": {
       "flowleap-sidebar": [
         {
+          "id": "flowleap.promptLibrary",
+          "name": "%flowleap.promptLibrary.name%",
+          "icon": "$(book)",
+          "contextualTitle": "FlowLeap Prompts"
+        },
+        {
           "id": "flowleap.setupView",
           "name": "Setup",
           "icon": "$(gear)",
@@ -6881,6 +6968,54 @@
     ],
     "chatAgents": [],
     "chatPromptFiles": [
+      {
+        "path": "./assets/prompts/flowleap/prior-art-search.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/claim-analysis.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/freedom-to-operate.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/patent-landscape.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/invalidity-analysis.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/office-action-response.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/patent-dossier.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/literature-review.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
       {
         "path": "./assets/prompts/plan.prompt.md",
         "sessionTypes": [
