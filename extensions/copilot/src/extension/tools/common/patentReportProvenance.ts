@@ -99,6 +99,9 @@ const BASIS_LOOKBACK = 3;
 /** Unmatched figures named in the report; the rest are counted. */
 const LISTED_FIGURES = 12;
 
+/** Recorded calls named one by one in the data provenance appendix; the rest are counted. */
+const LISTED_RECORDS = 60;
+
 /** How much of a recorded request is repeated in the data provenance appendix. */
 const REQUEST_LENGTH = 160;
 
@@ -107,6 +110,12 @@ const IDENTIFIER_SPAN = /\]\([^)]*\)|\b[a-z][\w+.-]*:\/\/[^\s)\]]+|\b[A-HY]\d{2}
 
 /** A bare number, with or without thousands separators, a decimal part, or a percent sign. */
 const PURE_NUMBER = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?%?$/;
+
+/** A numbered or emphasised section heading: `### 3.1 Blocking art`, `**4 Findings**`. */
+const HEADING_NUMBER = /^[ \t]*(?:>[ \t]*)*(?:#{1,6}|\*\*|__)[ \t]*\d+(?:\.\d+)*\.?(?=[ \t*_]|$)/gm;
+
+/** Outline numbering that opens a line: `3.1 Scope`, `2. Summary`, `- 4) Findings`. */
+const OUTLINE_NUMBER = /^[ \t]*(?:>[ \t]*)*(?:[-*+][ \t]+)?(?:\d+(?:\.\d+)+\.?|\d+[.)])(?=[ \t])/gm;
 
 /** The digits of a figure, without separators, percent sign, decimal point or leading zeros. */
 function digits(figure: string): string {
@@ -129,9 +138,13 @@ function isYear(figure: string): boolean {
  * codes, anchors and URLs, whose digits identify a document rather than count anything. Numbers with a
  * single digit are left out (they are ordinals and row counts far more often than findings), as are
  * four-digit years, which a landscape report states on every trend row.
+ *
+ * Section and outline numbering is dropped as well. `3.1` at the head of a heading or a numbered
+ * paragraph names a part of the memo; no tool ever returned it, so reporting it as an untraced
+ * figure buries the figures that carry a finding under the memo's own table of contents.
  */
 export function extractFigures(content: string): readonly string[] {
-	const masked = content.replace(IDENTIFIER_SPAN, ' ');
+	const masked = content.replace(HEADING_NUMBER, ' ').replace(OUTLINE_NUMBER, ' ').replace(IDENTIFIER_SPAN, ' ');
 	const seen = new Set<string>();
 	const figures: string[] = [];
 	for (const raw of masked.split(/[\s|]+/)) {
@@ -251,19 +264,28 @@ function derivedValues(tables: readonly MarkdownTable[]): readonly DerivedValue[
 	return derived;
 }
 
-/** The text succeeded analytics and status calls returned to the model, as one searchable body. */
+/**
+ * Everything the succeeded calls returned, as one searchable body: the recorded result text of every
+ * kind of call, and the passages a document retrieval returned — claims, description and abstract
+ * alike.
+ *
+ * A memo reads its dates off a legal-status or term output and its reference numerals out of the
+ * very claim text it quotes, so a haystack of analytics text alone reports a memo's own quoted
+ * numerals and bibliographic dates as untraced. A record that carries no row count holds text like
+ * any other and is searched with the rest.
+ */
 function returnedText(snapshot: ProvenanceSnapshot): string {
 	return snapshot.executions
-		.filter(execution => execution.status === 'succeeded' && (execution.kind === 'analytics' || execution.kind === 'status'))
-		.map(execution => execution.resultText ?? '')
+		.filter(execution => execution.status === 'succeeded')
+		.flatMap(execution => [execution.resultText ?? '', ...(execution.sources ?? []).map(source => source.text ?? '')])
 		.join('\n');
 }
 
 /**
- * Look each figure up in what the tools actually returned: the recorded result text of succeeded
- * analytics and status calls, and the totals and returned counts of succeeded searches. A figure no tool
- * returned is then checked against the report's own tables, so a row total or a share is reported as
- * computed rather than as unsourced.
+ * Look each figure up in what the tools actually returned: the recorded text of every succeeded call,
+ * the passages a document retrieval returned, and the totals and returned counts of succeeded
+ * searches. A figure no tool returned is then checked against the report's own tables, so a row total
+ * or a share is reported as computed rather than as unsourced.
  *
  * A match is evidence that the number was read off a tool output, not that the reading was right; a
  * miss is not proof the figure is wrong, only that it was not traced.
@@ -455,10 +477,10 @@ export interface DateProvenance {
 }
 
 /**
- * Look each date up in the text succeeded analytics and status calls returned. A grant, a lapse and
- * an expiry date carry the whole weight of an FTO conclusion, and each is read off a tool output or
- * off nothing at all. A match is evidence the date was read from a recorded output, not that the
- * event it is attached to is the right one.
+ * Look each date up in the text the succeeded calls returned, retrieved passages included. A grant, a
+ * lapse and an expiry date carry the whole weight of an FTO conclusion, and each is read off a tool
+ * output or off nothing at all. A match is evidence the date was read from a recorded output, not
+ * that the event it is attached to is the right one.
  */
 export function dateProvenance(dates: readonly string[], snapshot: ProvenanceSnapshot): DateProvenance {
 	const haystack = returnedText(snapshot);
@@ -481,6 +503,8 @@ export interface QuotedClaim {
 /** Quotations checked against the claim text the record holds. */
 export interface QuotationProvenance {
 	readonly matched: readonly QuotedClaim[];
+	/** Quotations whose every substantial fragment stands, in order, in the recorded claim text. */
+	readonly elided: readonly QuotedClaim[];
 	readonly unmatched: readonly QuotedClaim[];
 	/** Publications quoted for their claims whose claim text the record does not hold at all. */
 	readonly unrecorded: readonly string[];
@@ -501,6 +525,39 @@ const BLOCKQUOTE_LINE = /^[ \t]*>[ \t]?(.+)$/gm;
 /** Whitespace and case carry no meaning across a copied quotation; the words do. */
 function normalizeQuotation(text: string): string {
 	return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/** An elision inside a quotation, however the writer marked it: `…`, `...`, `[…]`, `[...]`, `(…)`. */
+const ELISION = /\s*(?:[[(]\s*(?:…|\.{3})\s*[\])]|…|\.{3})\s*/g;
+
+/** The shortest fragment of an elided quotation that is matched; anything shorter says nothing. */
+const FRAGMENT_LENGTH = 12;
+
+/**
+ * Whether every substantial fragment of an elided quotation stands, in that order, in the recorded
+ * claim text. Quoting a claim with the middle cut out is ordinary practice in a memo, and a check
+ * that calls it "not found" reports the memo's normal style as unsourced wording. The fragments must
+ * appear in order, so a quotation that rearranges the claim still fails.
+ *
+ * Fragments under {@link FRAGMENT_LENGTH} characters are skipped: a handful of characters matches
+ * somewhere in any claim, and treating that as evidence would pass a quotation that is mostly cut.
+ * A quotation whose fragments are all that short is not judged as elided at all.
+ */
+function fragmentsInOrder(quote: string, recorded: string): boolean {
+	const parts = normalizeQuotation(quote).split(ELISION);
+	const fragments = parts.filter(fragment => fragment.length >= FRAGMENT_LENGTH);
+	if (parts.length < 2 || !fragments.length) {
+		return false;
+	}
+	let cursor = 0;
+	for (const fragment of fragments) {
+		const found = recorded.indexOf(fragment, cursor);
+		if (found === -1) {
+			return false;
+		}
+		cursor = found + fragment.length;
+	}
+	return true;
 }
 
 /**
@@ -544,8 +601,10 @@ export function extractClaimQuotations(content: string): readonly QuotedClaim[] 
  * A memo's blocking-claim quotation is the sentence its whole infringement reading rests on; a
  * quotation that is not in the retrieved claim text was written from somewhere else.
  *
- * Comparison ignores case and line breaks only. A quotation that paraphrases, translates, or elides
- * with an ellipsis will not match, and is disclosed as unchecked rather than called wrong.
+ * Comparison ignores case and line breaks only. A quotation cut with an ellipsis is matched fragment
+ * by fragment and reported as found with elisions, which is what a memo's claim quotations normally
+ * are. A quotation that paraphrases or translates will not match, and is disclosed as unchecked
+ * rather than called wrong.
  */
 export function quotationProvenance(quotations: readonly QuotedClaim[], snapshot: ProvenanceSnapshot): QuotationProvenance {
 	const claims = new Map<string, string>();
@@ -562,6 +621,7 @@ export function quotationProvenance(quotations: readonly QuotedClaim[], snapshot
 		}
 	}
 	const matched: QuotedClaim[] = [];
+	const elided: QuotedClaim[] = [];
 	const unmatched: QuotedClaim[] = [];
 	const unrecorded = new Set<string>();
 	for (const quotation of quotations) {
@@ -571,11 +631,13 @@ export function quotationProvenance(quotations: readonly QuotedClaim[], snapshot
 			unmatched.push(quotation);
 		} else if (recorded.includes(normalizeQuotation(quotation.quote))) {
 			matched.push(quotation);
+		} else if (fragmentsInOrder(quotation.quote, recorded)) {
+			elided.push(quotation);
 		} else {
 			unmatched.push(quotation);
 		}
 	}
-	return { matched, unmatched, unrecorded: [...unrecorded] };
+	return { matched, elided, unmatched, unrecorded: [...unrecorded] };
 }
 
 /** `N dates checked …`, the sentence the report states. */
@@ -598,14 +660,14 @@ function quotationExcerpt(quotation: QuotedClaim): string {
 
 /** `N claim quotations checked …`, the sentence the report states. */
 export function quotationSentence(provenance: QuotationProvenance): string {
-	const total = provenance.matched.length + provenance.unmatched.length;
+	const total = provenance.matched.length + provenance.elided.length + provenance.unmatched.length;
 	if (total === 0) {
 		return `No quotation of ${QUOTATION_LENGTH} characters or more follows a claims citation in this report; nothing was compared with recorded claim text.`;
 	}
 	const missing = provenance.unmatched.length
 		? `${provenance.unmatched.length} not found: ${provenance.unmatched.slice(0, LISTED_QUOTATIONS).map(quotationExcerpt).join('; ')}${provenance.unmatched.length > LISTED_QUOTATIONS ? `; and ${provenance.unmatched.length - LISTED_QUOTATIONS} more` : ''}`
 		: '0 not found';
-	return `${total} claim quotations checked against recorded claim text; ${provenance.matched.length} found verbatim, ${missing}.`;
+	return `${total} claim quotations checked against recorded claim text; ${provenance.matched.length} found verbatim, ${provenance.elided.length} found with elisions, ${missing}.`;
 }
 
 /** The tool identity a record carries, or the one its kind implies. */
@@ -629,13 +691,18 @@ function executionCounts(execution: ProvenanceExecution): string {
 	return 'count not recorded';
 }
 
-/** Every recorded call behind the report, as one line each. */
+/**
+ * Every recorded call behind the report, as one line each. A call whose record holds no count is
+ * listed with its request all the same: a term or register lookup returns a date, not rows, and
+ * dropping it would hide the very call an expiry date was read from.
+ */
 function dataProvenanceLines(snapshot: ProvenanceSnapshot): readonly string[] {
 	const recorded = snapshot.executions.filter(execution => ['search', 'details', 'analytics', 'status'].includes(execution.kind));
 	if (!recorded.length) {
 		return ['No search, document, analytics or legal-status outcome was recorded for this session, so nothing in this report rests on a recorded retrieval.'];
 	}
-	return recorded.map(execution => `- ${executionLabel(execution)} — ${executionRequest(execution)} — ${executionCounts(execution)} — ${execution.status}`);
+	const lines = recorded.slice(0, LISTED_RECORDS).map(execution => `- ${executionLabel(execution)} — ${executionRequest(execution)} — ${executionCounts(execution)} — ${execution.status}`);
+	return recorded.length > LISTED_RECORDS ? [...lines, `- and ${recorded.length - LISTED_RECORDS} more recorded calls.`] : lines;
 }
 
 /** The sentence that says what a generated provenance section is, and what it is not. */
@@ -658,7 +725,7 @@ export function renderFtoAppendix(content: string, snapshot: ProvenanceSnapshot)
 		dateSentence(dates),
 		'',
 		'## Quotation provenance (generated)',
-		`${GENERATED_NOTE} Every quoted span of ${QUOTATION_LENGTH} characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication.`,
+		`${GENERATED_NOTE} Every quoted span of ${QUOTATION_LENGTH} characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication. A quotation cut with an ellipsis is found when each of its fragments stands, in order, in that text.`,
 		quotationSentence(quotations),
 		...(quotations.unrecorded.length ? [`No claim text is recorded for ${quotations.unrecorded.join(', ')}; quotations cited to them were compared with nothing. Retrieve the claims with get_patent_details before relying on the quoted wording.`] : []),
 		'',

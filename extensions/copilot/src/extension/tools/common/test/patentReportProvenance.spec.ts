@@ -27,6 +27,22 @@ describe('landscape figure extraction', () => {
 		].join('\n');
 		expect(extractFigures(content)).toEqual(['1,240', '91%', '12', '12.5']);
 	});
+
+	it('drops section numbering and finds a claim reference numeral in the retrieved claim text', () => {
+		const content = [
+			'### 3.1 Blocking candidates',
+			'3.2 Secondary art',
+			'',
+			'The skewer (93) engages the hub (108) across 47 screened families.',
+		].join('\n');
+		const claims: ProvenanceSnapshot = {
+			executions: [{ kind: 'details', status: 'succeeded', sources: [{ text: '1. A rack comprising a skewer (93) mounted on a hub (108).', reference: { publicationNumber: 'EP2110298B1', section: 'claims' } }] }],
+		};
+		expect({ figures: extractFigures(content), provenance: figureProvenance(extractFigures(content), claims, content) }).toEqual({
+			figures: ['93', '108', '47'],
+			provenance: { matched: ['93', '108'], derived: [], unmatched: ['47'] },
+		});
+	});
 });
 
 describe('landscape figure provenance', () => {
@@ -144,6 +160,19 @@ describe('report date provenance', () => {
 			provenance: { matched: ['2024-01-10', '20.06.2018', '04/16/2028'], unmatched: ['2025-09-01'] },
 		});
 	});
+
+	it('searches records that carry no row count and the passages a retrieval returned', () => {
+		const snapshot: ProvenanceSnapshot = {
+			executions: [
+				{ kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'EP2110298B1', resultText: '**Estimated Expiry (base):** 2029-01-19' },
+				{ kind: 'details', status: 'succeeded', sources: [{ text: 'Published 2010-04-08; priority 2011-07-18.', reference: { publicationNumber: 'EP2110298B1', section: 'abstract' } }] },
+			],
+		};
+		expect(dateProvenance(['2029-01-19', '2010-04-08', '2011-07-18', '2026-02-02'], snapshot)).toEqual({
+			matched: ['2029-01-19', '2010-04-08', '2011-07-18'],
+			unmatched: ['2026-02-02'],
+		});
+	});
 });
 
 describe('claim quotation extraction', () => {
@@ -181,8 +210,25 @@ describe('claim quotation provenance', () => {
 		];
 		expect(quotationProvenance(quotations, snapshot)).toEqual({
 			matched: [quotations[0]],
+			elided: [],
 			unmatched: [quotations[1], quotations[2]],
 			unrecorded: ['US7000000B2'],
+		});
+	});
+
+	it('accepts a quotation cut with an ellipsis and still rejects one whose words differ', () => {
+		const recorded = '1. A cap comprising a biasing means (140) received in the bore, wherein the biasing means is a spring that biases the shaft (146) to the first position.';
+		const snapshot: ProvenanceSnapshot = { executions: [{ kind: 'details', status: 'succeeded', sources: [{ text: recorded, reference: { publicationNumber: 'EP2110298B1', section: 'claims' } }] }] };
+		const quotations = [
+			{ publication: 'EP2110298B1', quote: 'a biasing means (140) … is a spring that biases the shaft (146) to the first position' },
+			{ publication: 'EP2110298B1', quote: 'a biasing means (140) [...] is a magnet that biases the shaft (146) to the first position' },
+			{ publication: 'EP2110298B1', quote: 'to the first position … a biasing means (140) received in the bore' },
+		];
+		expect(quotationProvenance(quotations, snapshot)).toEqual({
+			matched: [],
+			elided: [quotations[0]],
+			unmatched: [quotations[1], quotations[2]],
+			unrecorded: [],
 		});
 	});
 });
@@ -201,8 +247,8 @@ describe('fto appendix', () => {
 			'2 dates checked against recorded tool outputs; 1 found, 1 not found: 2033-04-16.',
 			'',
 			'## Quotation provenance (generated)',
-			'Generated from this session\'s execution record, not supplied by the model. Every quoted span of 40 characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication.',
-			'1 claim quotations checked against recorded claim text; 0 found verbatim, 1 not found: EP1000000A1: "CLAIM_TEXT and more words to reach the judged length.".',
+			'Generated from this session\'s execution record, not supplied by the model. Every quoted span of 40 characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication. A quotation cut with an ellipsis is found when each of its fragments stands, in order, in that text.',
+			'1 claim quotations checked against recorded claim text; 0 found verbatim, 0 found with elisions, 1 not found: EP1000000A1: "CLAIM_TEXT and more words to reach the judged length.".',
 			'',
 			'## Data provenance (generated)',
 			'- get_legal_status — EP1000000A1 — 2 rows — succeeded',
@@ -210,5 +256,30 @@ describe('fto appendix', () => {
 			'- get_patent_details — EP1000000A1 — count not recorded — succeeded',
 			'- get_register_events — EP2000000 — count not recorded — failed',
 		].join('\n'));
+	});
+});
+
+describe('fto data provenance', () => {
+	it('lists a term lookup that recorded no row count, with the document it asked about', () => {
+		const snapshot: ProvenanceSnapshot = {
+			executions: [
+				{ kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'EP2110298B1', resultText: 'expiry' },
+				{ kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'US7000000B2', resultText: 'expiry' },
+				{ kind: 'search', status: 'succeeded', query: 'ta=skewer', total: 54, returned: 25 },
+			],
+		};
+		expect(renderFtoAppendix('Nothing to check in this body.', snapshot).split('\n').filter(line => line.startsWith('- '))).toEqual([
+			'- get_patent_term — EP2110298B1 — count not recorded — succeeded',
+			'- get_patent_term — US7000000B2 — count not recorded — succeeded',
+			'- search_patents — ta=skewer — 54 total, 25 returned — succeeded',
+		]);
+	});
+
+	it('names the first sixty recorded calls and counts the rest', () => {
+		const snapshot: ProvenanceSnapshot = {
+			executions: Array.from({ length: 62 }, (_, index) => ({ kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: `EP${index}` })),
+		};
+		const lines = renderFtoAppendix('Nothing to check in this body.', snapshot).split('\n').filter(line => line.startsWith('- '));
+		expect({ lines: lines.length, last: lines[lines.length - 1] }).toEqual({ lines: 61, last: '- and 2 more recorded calls.' });
 	});
 });
