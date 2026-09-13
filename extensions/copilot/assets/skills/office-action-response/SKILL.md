@@ -11,13 +11,18 @@ Turn a rejection into a response strategy. Never argue against a reference you h
 ## Step 0: Intake & Deadline (FIRST)
 
 For a US application you do NOT need the user to supply the OA — fetch it from
-the file wrapper: `patent_api_request` GET
-`/patent-search-uspto/applications/{applicationNumberText}/documents` (filter
-documentCode CTNF/CTFR), then the document's `/text` sub-path for the OCR'd
-markdown (see `uspto_api_guide` workflow "read-office-actions"). The
-as-rejected AMENDED claim text also lives only in the wrapper — pull the CLM
-document dated nearest before the OA the same way (the OA's "Responsive to
-communication(s) filed on <date>" line names the filing). Otherwise read the
+the file wrapper through the tools facade: `patent_api_request` POST
+`/tools/get_application_documents` with `{"application_number": "<number>",
+"document_code": "CTNF"}` (or `CTFR` for a final rejection) to list the office
+actions, then POST `/tools/read_application_document` with
+`{"application_number": "<number>", "document_id": "<id>"}` for the OCR'd markdown (`uspto_api_guide` documents both tools;
+the first read of a large document can take tens of seconds). The as-rejected
+AMENDED claim text also lives only in the wrapper — list `document_code: "CLM"`
+and read the listing dated nearest before the OA (the OA's "Responsive to
+communication(s) filed on <date>" line names the filing). The specification as
+filed is the `SPEC` document from the filing date — read it when an amendment
+needs support, because US descriptions are not served by `get_patent_details`.
+Otherwise read the
 office action (`read_pdf` for PDFs, or pasted text). Extract:
 - Application number, examiner, mailing date, and the **response deadline** — flag it immediately (US: typically 3 months shortened statutory, extendable to 6 with fees; EPO: usually 4 months). Verify current periods with `search_legal` if the user's deadline math matters.
 - Per claim: which ground (35 USC 102/103/101/112, obviousness-type double patenting, or EPC Art. 54/56/84/123(2)) and which cited references

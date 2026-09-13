@@ -17,10 +17,10 @@ right column.
 
 ## Step 1 — Applicability guard (run before any computation)
 
-Fetch the grant record: `uspto_api_guide` (endpoint "grants") →
-`patent_api_request` GET `/patent-search-uspto/grants/{patentNumber}` (or
-`/patent-search-uspto/applications/{applicationNumberText}` when you have the
-application number).
+Fetch the grant record: `uspto_api_guide` (tool get_us_grant) →
+`patent_api_request` POST `/tools/get_us_grant` with `{"patent_number": "<number>"}`
+(or POST `/tools/get_us_application` with `{"application_number": "<number>"}`
+when you have the application number).
 
 From `applicationMetaData`, check the application type **first**:
 
@@ -37,9 +37,9 @@ No grant date (pre-grant application) → there is nothing to compute; say so.
 
 ## Step 2 — Read what was actually paid
 
-`patent_api_request` GET
-`/patent-search-uspto/applications/{applicationNumberText}/transactions`
-(see `uspto_api_guide` endpoint "file-wrapper-subresources").
+`patent_api_request` POST `/tools/get_transactions` with
+`{"application_number": "<number>"}` (see `uspto_api_guide` tool
+get_transactions).
 
 Scan `eventDataBag` for:
 
