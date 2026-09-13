@@ -18,6 +18,11 @@ interface BrowserLauncherMessage {
  * itself is a native editor pane, so this view only launches tabs — it never
  * hosts page content.
  */
+/** FlowLeap's own web surfaces, listed above the public patent offices. */
+const FLOWLEAP_LINKS: ReadonlyArray<{ label: string; url: string; description: string }> = [
+	{ label: 'FlowLeap Analytics', url: 'https://www.flowleap.co/analytics', description: 'Portfolio and landscape analytics' }
+];
+
 const QUICK_LINKS: ReadonlyArray<{ label: string; url: string; description: string }> = [
 	{ label: 'Espacenet', url: 'https://worldwide.espacenet.com/', description: 'EPO worldwide patent search' },
 	{ label: 'Google Patents', url: 'https://patents.google.com/', description: 'Full-text patent search' },
@@ -191,6 +196,12 @@ function renderLauncher(webview: vscode.Webview): string {
 		<button class="open-btn" id="open">Open</button>
 	</div>
 	<p class="hint">Opens as a tab in the editor area.</p>
+	<div class="section-title">FlowLeap</div>
+	${FLOWLEAP_LINKS.map(link => `
+	<div class="quick-link" data-url="${link.url}">
+		<div class="quick-link-label">${link.label}</div>
+		<div class="quick-link-desc">${link.description}</div>
+	</div>`).join('')}
 	<div class="section-title">Patent Research</div>
 	${QUICK_LINKS.map(link => `
 	<div class="quick-link" data-url="${link.url}">

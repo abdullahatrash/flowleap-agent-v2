@@ -23,6 +23,9 @@ import { compareBundledPromptNames, humanisePromptName, parsePromptFile, slugify
 export const PROMPT_LIBRARY_VIEW_ID = 'flowleap.promptLibrary';
 
 export const PROMPT_LIBRARY_COPY_COMMAND = 'flowleap.promptLibrary.copy';
+/** Shown in place of Copy for a moment after a copy, the way the chat code blocks confirm a copy with a check. */
+export const PROMPT_LIBRARY_COPIED_COMMAND = 'flowleap.promptLibrary.copied';
+const COPIED_FEEDBACK_MS = 1500;
 export const PROMPT_LIBRARY_ADD_COMMAND = 'flowleap.promptLibrary.add';
 export const PROMPT_LIBRARY_EDIT_COMMAND = 'flowleap.promptLibrary.edit';
 export const PROMPT_LIBRARY_DELETE_COMMAND = 'flowleap.promptLibrary.delete';
@@ -181,11 +184,34 @@ class PromptLibraryTreeProvider implements vscode.TreeDataProvider<PromptTreeNod
 
 	private readonly _onDidChangeTreeData = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+	/** Leaves whose inline action currently shows the "copied" check, with the timer that reverts each. */
+	private readonly _copied = new Map<string, ReturnType<typeof setTimeout>>();
 
 	constructor(private readonly _library: PromptLibrary) { }
 
 	refresh(): void {
 		this._onDidChangeTreeData.fire();
+	}
+
+	/** Swap the leaf's Copy action for a check mark briefly, then restore it. */
+	markCopied(node: PromptLeafNode): void {
+		const existing = this._copied.get(node.id);
+		if (existing) {
+			clearTimeout(existing);
+		}
+		this._copied.set(node.id, setTimeout(() => {
+			this._copied.delete(node.id);
+			this._onDidChangeTreeData.fire();
+		}, COPIED_FEEDBACK_MS));
+		this._onDidChangeTreeData.fire();
+	}
+
+	dispose(): void {
+		for (const timer of this._copied.values()) {
+			clearTimeout(timer);
+		}
+		this._copied.clear();
+		this._onDidChangeTreeData.dispose();
 	}
 
 	async getChildren(element?: PromptTreeNode): Promise<PromptTreeNode[]> {
@@ -213,7 +239,7 @@ class PromptLibraryTreeProvider implements vscode.TreeDataProvider<PromptTreeNod
 		item.id = node.id;
 		item.tooltip = node.tooltip;
 		item.iconPath = new vscode.ThemeIcon('note');
-		item.contextValue = `flowleap.prompt.${node.entry.source}`;
+		item.contextValue = `flowleap.prompt.${node.entry.source}${this._copied.has(node.id) ? '.copied' : ''}`;
 		item.command = { command: 'vscode.open', title: l10n.t('Open Prompt'), arguments: [node.entry.uri] };
 		return item;
 	}
@@ -233,15 +259,20 @@ function asPromptLeaf(node: PromptTreeNode | undefined): PromptLeafNode | undefi
 	return node?.kind === 'prompt' ? node : undefined;
 }
 
-function registerCopyCommand(): vscode.Disposable {
-	return vscode.commands.registerCommand(PROMPT_LIBRARY_COPY_COMMAND, async (node?: PromptTreeNode) => {
-		const leaf = asPromptLeaf(node);
-		if (!leaf) {
-			return;
-		}
-		await vscode.env.clipboard.writeText(leaf.entry.body);
-		vscode.window.setStatusBarMessage(l10n.t('Prompt copied'), 3000);
-	});
+function registerCopyCommand(provider: PromptLibraryTreeProvider): vscode.Disposable {
+	return vscode.Disposable.from(
+		vscode.commands.registerCommand(PROMPT_LIBRARY_COPY_COMMAND, async (node?: PromptTreeNode) => {
+			const leaf = asPromptLeaf(node);
+			if (!leaf) {
+				return;
+			}
+			await vscode.env.clipboard.writeText(leaf.entry.body);
+			provider.markCopied(leaf);
+			vscode.window.setStatusBarMessage(l10n.t('Prompt copied'), 3000);
+		}),
+		// The check mark is an inline action too; clicking it during the feedback window does nothing.
+		vscode.commands.registerCommand(PROMPT_LIBRARY_COPIED_COMMAND, () => { }),
+	);
 }
 
 function registerAddCommand(library: PromptLibrary, provider: PromptLibraryTreeProvider, fileSystemService: IFileSystemService, logService: ILogService): vscode.Disposable {
@@ -328,7 +359,8 @@ export function registerPromptLibraryView(context: IVSCodeExtensionContext, file
 		watcher.onDidCreate(() => provider.refresh()),
 		watcher.onDidChange(() => provider.refresh()),
 		watcher.onDidDelete(() => provider.refresh()),
-		registerCopyCommand(),
+		provider,
+		registerCopyCommand(provider),
 		registerAddCommand(library, provider, fileSystemService, logService),
 		registerEditCommand(),
 		registerDeleteCommand(provider, fileSystemService, logService),

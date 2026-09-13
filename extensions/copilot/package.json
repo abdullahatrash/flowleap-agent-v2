@@ -3275,6 +3275,12 @@
         "category": "FlowLeap"
       },
       {
+        "command": "flowleap.promptLibrary.copied",
+        "title": "%flowleap.promptLibrary.copied.title%",
+        "category": "FlowLeap",
+        "icon": "$(check)"
+      },
+      {
         "command": "flowleap.promptLibrary.copy",
         "title": "%flowleap.promptLibrary.copy.title%",
         "category": "FlowLeap",
@@ -6029,6 +6035,10 @@
           "when": "false"
         },
         {
+          "command": "flowleap.promptLibrary.copied",
+          "when": "false"
+        },
+        {
           "command": "flowleap.promptLibrary.edit",
           "when": "false"
         },
@@ -6285,12 +6295,17 @@
       "view/item/context": [
         {
           "command": "flowleap.promptLibrary.copy",
-          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\./",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\.(bundled|user)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowleap.promptLibrary.copied",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\..*\\.copied$/",
           "group": "inline@1"
         },
         {
           "command": "flowleap.promptLibrary.edit",
-          "when": "view == flowleap.promptLibrary && viewItem == flowleap.prompt.user",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\.user/",
           "group": "inline@2"
         },
         {
@@ -6300,12 +6315,12 @@
         },
         {
           "command": "flowleap.promptLibrary.edit",
-          "when": "view == flowleap.promptLibrary && viewItem == flowleap.prompt.user",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\.user/",
           "group": "1_prompt@2"
         },
         {
           "command": "flowleap.promptLibrary.delete",
-          "when": "view == flowleap.promptLibrary && viewItem == flowleap.prompt.user",
+          "when": "view == flowleap.promptLibrary && viewItem =~ /^flowleap\\.prompt\\.user/",
           "group": "1_prompt@3"
         },
         {
