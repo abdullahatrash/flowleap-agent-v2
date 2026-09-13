@@ -28,7 +28,7 @@ import { ToolName } from '../common/toolNames';
 import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, contentRequirementError, PatentReportTemplate } from '../common/patentReportTemplates';
-import { extractFigures, figureProvenance, renderLandscapeAppendix } from '../common/patentLandscapeReview';
+import { extractFigures, figureProvenance, figureSentence, renderLandscapeAppendix } from '../common/patentLandscapeReview';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
 
@@ -62,9 +62,6 @@ const SECOND_READ_ROW_LIMIT = 12;
 
 /** Unconfirmed elements named in the tool result; the rest are counted and left to the report. */
 const SECOND_READ_RESULT_LIMIT = 6;
-
-/** Untraced figures named in the tool result; the rest are counted and left to the appendix. */
-const LANDSCAPE_FIGURE_LIMIT = 8;
 
 /**
  * The saved report is the record; the chat summary that follows it must not become more certain than
@@ -222,13 +219,10 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 	 * tool result is what lets the model correct an untraceable figure in a follow-up save.
 	 */
 	private landscapeResult(content: string, snapshot: PatentExecutionSnapshot): string {
-		const { matched, unmatched } = figureProvenance(extractFigures(content), snapshot);
-		const shown = unmatched.slice(0, LANDSCAPE_FIGURE_LIMIT);
-		return `\nFigure provenance: ${matched.length + unmatched.length} figures checked against recorded tool outputs; `
-			+ (unmatched.length
-				? `${unmatched.length} not found: ${shown.join(', ')}${unmatched.length > shown.length ? `, and ${unmatched.length - shown.length} more` : ''}. Give each one its counting basis and source in a follow-up save, or replace it with a figure a recorded output supports.`
-				: 'all found.')
-			+ ' They are listed in the report\'s generated provenance appendix.';
+		const provenance = figureProvenance(extractFigures(content), snapshot, content);
+		return `\nFigure provenance: ${figureSentence(provenance)}`
+			+ (provenance.unmatched.length ? ' Give each figure that was not found its counting basis and source in a follow-up save, or replace it with a figure a recorded output supports.' : '')
+			+ ' The report lists them in its generated provenance appendix.';
 	}
 
 	/** How much of the second read reaches the user: nothing, a file, or the report itself. */

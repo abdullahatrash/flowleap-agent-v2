@@ -88,6 +88,12 @@ const CONTENT_REQUIREMENT: Record<Exclude<PatentReportTemplate, 'prior-art-repor
 /** Closing sentence of every missing-content message: the one template the rule does not apply to. */
 const CONTENT_EXCEPTION = 'Only prior-art-report uses empty content with structured fields.';
 
+/** Second-level headings the model wrote itself. */
+const AUTHORED_SECTIONS = /^##\s+\S/gm;
+
+/** How many of its own sections make a body a written report rather than one section's text. */
+const AUTHORED_SECTION_COUNT = 3;
+
 /** A body that stands in for content the model did not write. */
 const PLACEHOLDER_BODY = /^(?:to be (?:completed|filled|added)|tbd|todo|placeholder)$/i;
 
@@ -264,6 +270,18 @@ function templateSections(content: string, template: PatentReportTemplate, f: Pa
 			];
 
 		case 'landscape-report':
+			// A body that already carries its own sections is a written report, not section text: the
+			// numbered scaffold would then stand above the model's own headings as empty duplicates.
+			if ((content.match(AUTHORED_SECTIONS) ?? []).length >= AUTHORED_SECTION_COUNT) {
+				return [
+					'# Patent Landscape Report',
+					'',
+					fieldTable([['Technology Area / Scope', f.subject], ['Search Criteria', f.searchStrategy], ['Date', f.date], ['Prepared By', f.preparedBy]]),
+					'',
+					results,
+					'',
+				];
+			}
 			return [
 				'# Patent Landscape Report',
 				'',

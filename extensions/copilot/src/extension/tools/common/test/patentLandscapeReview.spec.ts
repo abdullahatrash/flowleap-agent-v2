@@ -33,7 +33,34 @@ describe('landscape figure provenance', () => {
 	it('finds figures in recorded analytics text and search counts, and reports the rest as untraced', () => {
 		expect(figureProvenance(['1,240', '91%', '54', '12.5', '4,500'], snapshot)).toEqual({
 			matched: ['1,240', '91%', '54'],
+			derived: [],
 			unmatched: ['12.5', '4,500'],
+		});
+	});
+
+	it('reports row totals, column sums and shares as computed from the figures that were found', () => {
+		const content = [
+			'| Office | 2015-2023 | 2024-2025 | Total |',
+			'| --- | --- | --- | --- |',
+			'| EP | 70 | 77 | 147 |',
+			'| US | 66 | 66 | 132 |',
+			'',
+			'| Applicant | Families | Share |',
+			'| --- | --- | --- |',
+			'| Acme | 34 | 25% |',
+			'| Globex | 103 | 75% |',
+			'',
+			'EP and US together hold 136 families across 3,000 publications.',
+		].join('\n');
+		expect(figureProvenance(['147', '132', '136', '25%', '3,000'], { executions: [] }, content)).toEqual({
+			matched: [],
+			derived: [
+				{ figure: '147', basis: 'row total' },
+				{ figure: '132', basis: 'row total' },
+				{ figure: '136', basis: "column sum of '2015-2023'" },
+				{ figure: '25%', basis: 'share' },
+			],
+			unmatched: ['3,000'],
 		});
 	});
 });
@@ -52,7 +79,7 @@ describe('landscape counting basis', () => {
 			'| --- | --- |',
 			'| Acme | 40% |',
 		].join('\n');
-		expect(tablesWithoutBasis(content)).toEqual(['Applicant']);
+		expect(tablesWithoutBasis(content)).toEqual(['Applicant | Share']);
 	});
 });
 
@@ -72,8 +99,8 @@ describe('landscape appendix', () => {
 		expect(renderLandscapeAppendix(content, snapshot)).toEqual([
 			'## Figure provenance (generated)',
 			'Generated from this session\'s execution record, not supplied by the model. A figure is "found" when it appears in the text a tool returned; that is not a check of what it means, and a figure not found may still be a correct calculation from figures that were.',
-			'3 figures checked against recorded tool outputs; 1 not found: 12.5.',
-			'Tables without a stated counting basis: Applicant. Families, applications and publications are different units; state which one each table counts.',
+			'3 figures checked against recorded tool outputs; 2 found, 0 computed from figures that were found, 1 not found: 12.5.',
+			'Tables without a stated counting basis: Applicant | Share. Families, applications and publications are different units; state which one each table counts.',
 			'',
 			'## Data provenance (generated)',
 			'- patstat_portfolio — applicant=Acme; cpc=H01M — 2 rows — PATSTAT 2025 Autumn',

@@ -368,12 +368,12 @@ describe('candidate report save path', () => {
 				result: lines[1],
 			}).toEqual({
 				body: true,
-				figures: '4 figures checked against recorded tool outputs; 1 not found: 37%.',
-				basis: 'Tables without a stated counting basis: Applicant. Families, applications and publications are different units; state which one each table counts.',
+				figures: '4 figures checked against recorded tool outputs; 3 found, 0 computed from figures that were found, 1 not found: 37%.',
+				basis: 'Tables without a stated counting basis: Applicant | Share. Families, applications and publications are different units; state which one each table counts.',
 				data: '- patstat_portfolio — applicant=Acme; cpc=H01M — 2 rows — PATSTAT 2025 Autumn',
 				beforeDisclaimer: true,
 				afterLimitations: true,
-				result: 'Figure provenance: 4 figures checked against recorded tool outputs; 1 not found: 37%. Give each one its counting basis and source in a follow-up save, or replace it with a figure a recorded output supports. They are listed in the report\'s generated provenance appendix.',
+				result: 'Figure provenance: 4 figures checked against recorded tool outputs; 3 found, 0 computed from figures that were found, 1 not found: 37%. Give each figure that was not found its counting basis and source in a follow-up save, or replace it with a figure a recorded output supports. The report lists them in its generated provenance appendix.',
 			});
 		});
 

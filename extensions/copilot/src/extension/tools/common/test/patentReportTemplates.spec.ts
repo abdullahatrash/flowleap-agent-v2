@@ -331,4 +331,19 @@ describe('writePatentResults report templates', () => {
 			'',
 		]);
 	});
+	it('keeps the numbered landscape scaffold for section text and steps aside for an authored report', () => {
+		const authored = ['## Executive Summary', 'Filing growth is flat.', '', '## Filing Trends', '| Year | Families |', '| --- | --- |', '| 2019 | 1,240 |', '', '## White Space'].join('\n');
+		const sections = '| Year | Families |\n| --- | --- |\n| 2019 | 1,240 |';
+		expect({
+			scaffoldForSectionText: buildPatentReport(sections, 'landscape-report').includes('## 1. Executive Summary'),
+			scaffoldForAuthoredReport: buildPatentReport(authored, 'landscape-report').includes('## 1. Executive Summary'),
+			authoredHeadings: buildPatentReport(authored, 'landscape-report').match(/^## .*$/gm),
+			titleKept: buildPatentReport(authored, 'landscape-report').startsWith('# Patent Landscape Report\n\n| Field | Details |'),
+		}).toEqual({
+			scaffoldForSectionText: true,
+			scaffoldForAuthoredReport: false,
+			authoredHeadings: ['## Executive Summary', '## Filing Trends', '## White Space'],
+			titleKept: true,
+		});
+	});
 });
