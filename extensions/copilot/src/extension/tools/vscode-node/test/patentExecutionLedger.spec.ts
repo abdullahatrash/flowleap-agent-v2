@@ -65,6 +65,7 @@ describe('durable patent execution audit', () => {
 			requestedRange: undefined, requestedCountries: undefined, effectiveQuery: undefined, countryFilter: undefined,
 			totalClaims: undefined, returnedClaims: undefined, publicationTitle: undefined, publicationDate: undefined,
 			sources: undefined, unavailableSections: undefined,
+			tool: undefined, request: undefined, rowCount: undefined, dataEdition: undefined, resultText: undefined, summary: undefined,
 		}]);
 		expect(snapshot.limitation).toContain('recovered with unreadable fields dropped');
 		expect(snapshot.limitation).not.toContain('unreadable or incomplete');
@@ -89,5 +90,46 @@ describe('durable patent execution audit', () => {
 
 	it('rejects invented coverage anchors with a recovery instruction', () => {
 		expect(validateCandidateReview({ ...review, coverage: [{ ...review.coverage![0], sourceAnchors: ['invented:claims:6'] }] }, { executions: [], limitation: '' })).toHaveLength(1);
+	});
+
+	it('round-trips an analytics outcome with its request, counts, edition and returned text', async () => {
+		const { ledger, session } = setup();
+		const analytics = {
+			kind: 'analytics' as const, status: 'succeeded' as const, tool: 'patstat_query' as const,
+			request: 'SELECT office, COUNT(*) FROM flowleap.applications GROUP BY office',
+			rowCount: 2, dataEdition: 'PATSTAT 2026 Spring',
+			resultText: '| office | c |\n| EP | 4210 |', summary: 'EP leads with 4,210 applications.',
+		};
+		await ledger.record(session, analytics);
+		const snapshot = await ledger.read(session);
+		expect(snapshot.executions).toEqual([{
+			...analytics, id: snapshot.executions[0].id, recordedAt: snapshot.executions[0].recordedAt,
+			query: undefined, requestedRange: undefined, requestedCountries: undefined, effectiveQuery: undefined,
+			countryFilter: undefined, total: undefined, returned: undefined, totalClaims: undefined, returnedClaims: undefined,
+			range: undefined, publicationTitle: undefined, publicationDate: undefined, publicationIds: undefined,
+			sources: undefined, unavailableSections: undefined,
+		}]);
+	});
+
+	it('keeps an analytics outcome whose rowCount and tool are unreadable, leaving both unknown', async () => {
+		const { ledger, session, files } = setup();
+		await ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'patstat_portfolio', request: '{"applicant":"Kia"}' });
+		files.mockFile(files.committed[0], JSON.stringify({
+			id: 'partial', recordedAt: '2026-09-13', kind: 'analytics', status: 'succeeded',
+			tool: 'patstat_unknown', request: '{"applicant":"Kia"}', rowCount: 'many', dataEdition: 'PATSTAT 2026 Spring',
+			resultText: 'Applications: 1200', summary: null,
+		}));
+		const snapshot = await ledger.read(session);
+		expect(snapshot.executions.map(row => ({ kind: row.kind, tool: row.tool, rowCount: row.rowCount, request: row.request, dataEdition: row.dataEdition, resultText: row.resultText })))
+			.toEqual([{ kind: 'analytics', tool: undefined, rowCount: undefined, request: '{"applicant":"Kia"}', dataEdition: 'PATSTAT 2026 Spring', resultText: 'Applications: 1200' }]);
+		expect(snapshot.limitation).toContain('recovered with unreadable fields dropped');
+	});
+
+	it('caps a recorded request and result text so one oversized outcome cannot swamp the audit', async () => {
+		const { ledger, session } = setup();
+		await ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'patstat_graph', request: 'x'.repeat(3000), resultText: 'y'.repeat(30000) });
+		const [recorded] = (await ledger.read(session)).executions;
+		expect({ request: recorded.request?.length, result: recorded.resultText?.length, marked: recorded.resultText?.endsWith('… [truncated for the audit record]') })
+			.toEqual({ request: 2000 + 35, result: 20000 + 35, marked: true });
 	});
 });

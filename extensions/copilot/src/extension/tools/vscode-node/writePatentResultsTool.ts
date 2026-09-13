@@ -27,7 +27,8 @@ import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
 import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { buildPatentReport, PatentReportTemplate } from '../common/patentReportTemplates';
+import { buildPatentReport, contentRequirementError, PatentReportTemplate } from '../common/patentReportTemplates';
+import { extractFigures, figureProvenance, figureSentence, renderLandscapeAppendix } from '../common/patentLandscapeReview';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
 
@@ -115,6 +116,13 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 		const { filePath, content, template } = options.input;
 
+		// A templated report with no body saves a shell of section stubs while the findings stay in
+		// the chat, so the requirement is checked before any path resolution or disk access.
+		const requirement = contentRequirementError(template, content);
+		if (requirement) {
+			return new LanguageModelToolResult([new LanguageModelTextPart(`Report was not saved. ${requirement} Retry with the report body in content.`)]);
+		}
+
 		// Resolve relative paths against the workspace (and reject invalid input) rather than
 		// mapping them to the filesystem root via `URI.file`.
 		const folders = this.workspaceService.getWorkspaceFolders();
@@ -158,6 +166,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// practitioner-owned fields keep the placeholder.
 			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
+			// A landscape report is a page of numbers; the appendix states which of them appear in the
+			// text a tool returned, and which tables never say what they count.
+			const landscape = template === 'landscape-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,
@@ -165,7 +176,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				searchStrategy: options.input.searchStrategy,
 				date: new Date().toISOString().slice(0, 10),
 				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
-			});
+			}, landscape ? renderLandscapeAppendix(content, landscape) : undefined);
 
 
 			// Ensure the parent directory exists before writing.
@@ -192,7 +203,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			}
 
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (landscape ? this.landscapeResult(content, landscape) : '') + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : landscape ? '' : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
@@ -201,6 +212,17 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
 			]);
 		}
+	}
+
+	/**
+	 * What the model is told about the figures it just saved. The report states the same thing; the
+	 * tool result is what lets the model correct an untraceable figure in a follow-up save.
+	 */
+	private landscapeResult(content: string, snapshot: PatentExecutionSnapshot): string {
+		const provenance = figureProvenance(extractFigures(content), snapshot, content);
+		return `\nFigure provenance: ${figureSentence(provenance)}`
+			+ (provenance.unmatched.length ? ' Give each figure that was not found its counting basis and source in a follow-up save, or replace it with a figure a recorded output supports.' : '')
+			+ ' The report lists them in its generated provenance appendix.';
 	}
 
 	/** How much of the second read reaches the user: nothing, a file, or the report itself. */

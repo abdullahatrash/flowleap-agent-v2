@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { PatentBackendError, TransientBackendError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { PatstatPortfolioTool } from '../patstatPortfolioTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -104,7 +105,7 @@ describe('PatstatPortfolioTool', () => {
 
 	it('posts the portfolio contract and renders summary, edition, and aggregate tables', async () => {
 		const { client, calls } = makeBackendClient(fixturePortfolio);
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ applicant: 'Kia', fromYear: 2015, toYear: 2024 }), makeToken());
 
@@ -134,7 +135,7 @@ describe('PatstatPortfolioTool', () => {
 
 	it('omits unset year bounds and trims the applicant in the request body', async () => {
 		const { client, calls } = makeBackendClient(fixturePortfolio);
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		// The backend matches the applicant as a harmonized-name PREFIX, so stray whitespace
 		// must never reach the wire.
@@ -145,7 +146,7 @@ describe('PatstatPortfolioTool', () => {
 
 	it('rejects a missing/too-short applicant without calling the backend', async () => {
 		const { client, calls } = makeBackendClient(fixturePortfolio);
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const missing = await tool.invoke(makeOptions({} as { applicant: string }), makeToken());
 		const tooShort = await tool.invoke(makeOptions({ applicant: ' A ' }), makeToken());
@@ -165,7 +166,7 @@ describe('PatstatPortfolioTool', () => {
 			status: 404,
 		});
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(404, envelope); });
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ applicant: 'Siemenz' }), makeToken());
 
@@ -190,7 +191,7 @@ describe('PatstatPortfolioTool', () => {
 			status: 422,
 		});
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(422, envelope); });
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ applicant: 'LG' }), makeToken());
 
@@ -202,7 +203,7 @@ describe('PatstatPortfolioTool', () => {
 
 	it('falls back to the raw message when the error body is not a parseable envelope', async () => {
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(400, 'Bad Request'); });
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ applicant: 'Kia' }), makeToken());
 
@@ -213,12 +214,25 @@ describe('PatstatPortfolioTool', () => {
 		// The shared client strips 5xx bodies, so the tool cannot see `patstat_unavailable`;
 		// it must still steer the agent usefully on any 503.
 		const { client } = makeBackendClient(() => { throw new TransientBackendError('The FlowLeap backend returned HTTP 503.', 503); });
-		const tool = new PatstatPortfolioTool(makeLogService(), client);
+		const tool = new PatstatPortfolioTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ applicant: 'Kia' }), makeToken());
 
 		const text = textOf(result);
 		expect(text).toContain('PATSTAT analytics layer');
 		expect(text).toContain('OPS/USPTO');
+	});
+
+	it('records the request, edition, quotable summary and the exact text returned to the model', async () => {
+		const { client } = makeBackendClient(fixturePortfolio);
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new PatstatPortfolioTool(makeLogService(), client, ledger).invoke(makeOptions({ applicant: 'Kia', fromYear: 2015, toYear: 2024 }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'analytics', status: 'succeeded', tool: 'patstat_portfolio',
+			request: JSON.stringify({ applicant: 'Kia', fromYear: 2015, toYear: 2024 }),
+			dataEdition: 'PATSTAT 2026 Spring', summary: fixturePortfolio.summary, resultText: textOf(result),
+		}]);
 	});
 });

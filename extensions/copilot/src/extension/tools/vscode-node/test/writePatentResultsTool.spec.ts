@@ -328,6 +328,73 @@ describe('candidate report save path', () => {
 		});
 	});
 
+	describe('landscape report save path', () => {
+		/** One recorded analytics outcome whose returned text carries the trend figures, and one search. */
+		const ledger: IPatentExecutionLedger = {
+			...unrecordedPatentLedger,
+			read: async () => ({
+				executions: [
+					{ id: 'one', recordedAt: '2026-09-12T00:00:00.000Z', kind: 'analytics', status: 'succeeded', tool: 'patstat_portfolio', request: 'applicant=Acme; cpc=H01M', rowCount: 2, dataEdition: 'PATSTAT 2025 Autumn', resultText: '| 2019 | 1,240 |\n| 2024 | 1,860 |' },
+					{ id: 'two', recordedAt: '2026-09-12T00:00:01.000Z', kind: 'search', status: 'succeeded', query: 'ta=electrolyte', effectiveQuery: 'ta=electrolyte', total: 54, returned: 25 },
+				],
+				limitation: 'Synthetic fixture; no live search.',
+			}),
+		};
+		const content = [
+			'| Year | Families |',
+			'| --- | --- |',
+			'| 2019 | 1,240 |',
+			'| 2024 | 1,860 |',
+			'',
+			'| Applicant | Share |',
+			'| --- | --- |',
+			'| Acme | 37% |',
+			'',
+			'The live search returned 54 hits.',
+		].join('\n');
+
+		it('appends figure and data provenance to the saved report and names the untraced figure', async () => {
+			const { tool, files } = setup(ledger);
+			const result = await tool.invoke({ input: { filePath: '/workspace/landscape.md', content, template: 'landscape-report' as const, subject: 'Solid electrolytes' }, toolInvocationToken: undefined }, CancellationToken.None);
+			const report = new TextDecoder().decode(await files.readFile(URI.file('/workspace/landscape.md')));
+			const lines = (result.content[0] as LanguageModelTextPart).value.split('\n');
+			expect({
+				body: report.includes('| Acme | 37% |'),
+				figures: report.split('\n').find(line => line.startsWith('4 figures checked')),
+				basis: report.split('\n').find(line => line.startsWith('Tables without a stated counting basis')),
+				data: report.split('\n').find(line => line.startsWith('- patstat_portfolio')),
+				beforeDisclaimer: report.indexOf('## Figure provenance (generated)') < report.indexOf('*This document was generated with AI assistance'),
+				afterLimitations: report.indexOf('## 5. Issues & Limitations') < report.indexOf('## Figure provenance (generated)'),
+				result: lines[1],
+			}).toEqual({
+				body: true,
+				figures: '4 figures checked against recorded tool outputs; 3 found, 0 computed from figures that were found, 1 not found: 37%.',
+				basis: 'Tables without a stated counting basis: Applicant | Share. Families, applications and publications are different units; state which one each table counts.',
+				data: '- patstat_portfolio — applicant=Acme; cpc=H01M — 2 rows — PATSTAT 2025 Autumn',
+				beforeDisclaimer: true,
+				afterLimitations: true,
+				result: 'Figure provenance: 4 figures checked against recorded tool outputs; 3 found, 0 computed from figures that were found, 1 not found: 37%. Give each figure that was not found its counting basis and source in a follow-up save, or replace it with a figure a recorded output supports. The report lists them in its generated provenance appendix.',
+			});
+		});
+
+		it('refuses an empty or placeholder body for a content template and writes no file', async () => {
+			const { tool, files, checked } = setup(ledger);
+			const empty = await tool.invoke({ input: { filePath: '/workspace/landscape.md', content: '', template: 'landscape-report' as const }, toolInvocationToken: undefined }, CancellationToken.None);
+			const placeholder = await tool.invoke({ input: { filePath: '/workspace/landscape.md', content: '## 3. Filing Trends\n_(to be completed)_', template: 'landscape-report' as const }, toolInvocationToken: undefined }, CancellationToken.None);
+			expect({
+				empty: (empty.content[0] as LanguageModelTextPart).value,
+				placeholder: (placeholder.content[0] as LanguageModelTextPart).value.endsWith('A placeholder such as "to be completed" is not content. Retry with the report body in content.'),
+				written: await files.readFile(URI.file('/workspace/landscape.md')).then(() => true, () => false),
+				checks: checked.length,
+			}).toEqual({
+				empty: 'Report was not saved. landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report uses empty content with structured fields. Retry with the report body in content.',
+				placeholder: true,
+				written: false,
+				checks: 0,
+			});
+		});
+	});
+
 	it('checks raw source URLs in report notes without JSON punctuation', async () => {
 		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', sources: [{ anchor: 'EP1234567A1:claims:1:en', reference: { publicationNumber: 'EP1234567A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Partial.' }) };
 		const { tool } = setup(ledger);

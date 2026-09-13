@@ -20,6 +20,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -97,6 +98,7 @@ export class PatstatPortfolioTool implements ICopilotTool<IPatstatPortfolioParam
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IPatstatPortfolioParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -116,20 +118,32 @@ export class PatstatPortfolioTool implements ICopilotTool<IPatstatPortfolioParam
 			]);
 		}
 
+		const recordedRequest = JSON.stringify(request);
+
 		try {
 			const result = await this.patentBackendClient.post<PortfolioResponse>('/patstat/portfolio', request, token);
 
 			if (!result.success || !result.summary) {
+				// A 2xx body that carries an error produced no aggregates: record the attempt as failed.
+				await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: 'failed', tool: 'patstat_portfolio', request: recordedRequest });
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`Error: ${describeBodyError(result.error)}`)
 				]);
 			}
 
+			const resultText = this.formatPortfolio(result);
+			// Recorded for the audit only; the tool's answer is unchanged by the outcome of the write.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'analytics', status: 'succeeded', tool: 'patstat_portfolio', request: recordedRequest,
+				dataEdition: result.data_edition, resultText, summary: result.summary,
+			});
+
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(this.formatPortfolio(result))
+				new LanguageModelTextPart(resultText)
 			]);
 
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'patstat_portfolio', request: recordedRequest });
 			return handlePatentToolError(
 				error,
 				this.logService,

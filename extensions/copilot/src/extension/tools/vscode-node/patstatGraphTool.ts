@@ -36,6 +36,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -383,6 +384,7 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IPatstatGraphParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -406,25 +408,18 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 		}
 
 		try {
-			switch (options.input.operation) {
-				case 'resolve': {
-					const result = await this.patentBackendClient.get<ResolveResponse>(route.path, token);
-					return this.textResult(this.formatResolve(result));
-				}
-				case 'patent_view': {
-					const result = await this.patentBackendClient.get<PatentViewResponse>(route.path, token);
-					return this.textResult(this.formatPatentView(result));
-				}
-				case 'applicant_view': {
-					const result = await this.patentBackendClient.get<ApplicantViewResponse>(route.path, token);
-					return this.textResult(this.formatApplicantView(result));
-				}
-				default: {
-					const result = await this.patentBackendClient.get<GraphVerbResponse>(route.path, token);
-					return this.textResult(this.formatVerb(options.input.operation, result));
-				}
-			}
+			// Each branch answers with the bounded text AND the edition it belongs to, so one audit
+			// record covers every operation without re-deriving the answer from the payload.
+			const answer = await this.runOperation(options.input, route.path, token);
+			const resultText = this.bound(answer.body);
+			// Recorded for the audit only; the tool's answer is unchanged by the outcome of the write.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'analytics', status: 'succeeded', tool: 'patstat_graph', request: route.path,
+				dataEdition: answer.dataEdition, resultText,
+			});
+			return new LanguageModelToolResult([new LanguageModelTextPart(resultText)]);
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'patstat_graph', request: route.path });
 			return handlePatentToolError(
 				error,
 				this.logService,
@@ -434,12 +429,37 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 		}
 	}
 
-	private textResult(body: string): LanguageModelToolResult {
+	/**
+	 * Fetch one graph operation and render it. The composite views carry the Data Edition in their
+	 * `meta`; the agent verbs carry it inside their own `text` header, and `resolve` carries none —
+	 * an absent edition here means "not reported by this route", never "unknown edition".
+	 */
+	private async runOperation(input: IPatstatGraphParams, path: string, token: CancellationToken): Promise<{ body: string; dataEdition?: string }> {
+		switch (input.operation) {
+			case 'resolve': {
+				const result = await this.patentBackendClient.get<ResolveResponse>(path, token);
+				return { body: this.formatResolve(result) };
+			}
+			case 'patent_view': {
+				const result = await this.patentBackendClient.get<PatentViewResponse>(path, token);
+				return { body: this.formatPatentView(result), dataEdition: result.meta?.data_edition };
+			}
+			case 'applicant_view': {
+				const result = await this.patentBackendClient.get<ApplicantViewResponse>(path, token);
+				return { body: this.formatApplicantView(result), dataEdition: result.meta?.data_edition };
+			}
+			default: {
+				const result = await this.patentBackendClient.get<GraphVerbResponse>(path, token);
+				return { body: this.formatVerb(input.operation, result) };
+			}
+		}
+	}
+
+	private bound(body: string): string {
 		const budget = ToolResponseBudgets.PatstatGraph;
-		const bounded = body.length > budget
+		return body.length > budget
 			? body.substring(0, budget) + '\n\n(Output truncated to fit the response budget — scope the call with edge_types, a smaller depth, or a lower token_budget.)'
 			: body;
-		return new LanguageModelToolResult([new LanguageModelTextPart(bounded)]);
 	}
 
 	/**
