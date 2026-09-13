@@ -17,7 +17,7 @@ right column.
 
 ## Step 1 — Applicability guard (run before any computation)
 
-Fetch the grant record: `uspto_api_guide` (tool `get_us_grant`) →
+Fetch the grant record: `uspto_api_guide` (tool get_us_grant) →
 `patent_api_request` POST `/tools/get_us_grant` with `{"patent_number": "<number>"}`
 (or POST `/tools/get_us_application` with `{"application_number": "<number>"}`
 when you have the application number).
@@ -39,7 +39,7 @@ No grant date (pre-grant application) → there is nothing to compute; say so.
 
 `patent_api_request` POST `/tools/get_transactions` with
 `{"application_number": "<number>"}` (see `uspto_api_guide` tool
-`get_transactions`).
+get_transactions).
 
 Scan `eventDataBag` for:
 

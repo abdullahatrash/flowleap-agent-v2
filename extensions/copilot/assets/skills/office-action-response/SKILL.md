@@ -14,8 +14,8 @@ For a US application you do NOT need the user to supply the OA — fetch it from
 the file wrapper through the tools facade: `patent_api_request` POST
 `/tools/get_application_documents` with `{"application_number": "<number>",
 "document_code": "CTNF"}` (or `CTFR` for a final rejection) to list the office
-actions, then POST `/tools/read_application_document` with the chosen
-`document_id` for the OCR'd markdown (`uspto_api_guide` documents both tools;
+actions, then POST `/tools/read_application_document` with
+`{"application_number": "<number>", "document_id": "<id>"}` for the OCR'd markdown (`uspto_api_guide` documents both tools;
 the first read of a large document can take tens of seconds). The as-rejected
 AMENDED claim text also lives only in the wrapper — list `document_code: "CLM"`
 and read the listing dated nearest before the OA (the OA's "Responsive to
