@@ -66,7 +66,7 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 
 describe('GetLegalStatusTool', () => {
 
-	it('renders INPADOC legal-status events as a chronological jurisdiction table', async () => {
+	it('renders a stateless payload as a chronological jurisdiction table with no per-state summary', async () => {
 		const { client, calls } = makeBackendClient({
 			success: true,
 			data: {
@@ -93,6 +93,79 @@ describe('GetLegalStatusTool', () => {
 			| 2019-10-31 | FR | MM4A | LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES | — |
 
 			These are raw INPADOC legal-status events. Read in-force vs. lapsed/expired from the event history (grant, lapse/withdrawal, renewal-fee and opposition codes). For family-wide status across jurisdictions use get_patent_family; for the EP register prosecution timeline use get_register_events."
+		`);
+	});
+
+	it('summarizes the latest post-grant event per contracting state above the event list', async () => {
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				docId: 'EP2110298',
+				events: [
+					{ code: 'PG25', country: 'EP', date: '2024-10-31', text: 'LAPSED IN A CONTRACTING STATE', state: 'DE', effectiveDate: '2024-08-01', detail: 'LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES', gazette: { number: null, date: '2024-10-31' } },
+					{ code: 'PG25', country: 'EP', date: '2024-09-30', text: 'LAPSED IN A CONTRACTING STATE', state: 'FR', effectiveDate: '2024-01-31', gazette: null },
+					{ code: 'PG25', country: 'EP', date: '2024-09-30', text: 'LAPSED IN A CONTRACTING STATE', state: 'GB', effectiveDate: '2024-01-19', gazette: null },
+					{ code: 'PG25', country: 'EP', date: '2024-09-30', text: 'LAPSED IN A CONTRACTING STATE', state: 'NL', effectiveDate: '2024-02-01', gazette: null },
+					{ code: 'PGFP', country: 'EP', date: '2023-01-20', text: 'ANNUAL FEE PAID TO NATIONAL OFFICE', state: 'FR', effectiveDate: '2022-12-08', paymentDate: '2022-12-08', feeYear: 15, gazette: null },
+					{ code: 'PG25', country: 'EP', date: '2016-05-31', text: 'LAPSED IN A CONTRACTING STATE', state: 'IT', effectiveDate: '2015-11-30', gazette: null },
+				],
+			},
+		});
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP2110298B1' }), makeToken());
+
+		expect(textOf(result)).toMatchInlineSnapshot(`
+			"# Legal Status: EP2110298
+
+			6 legal-status event(s) from EPO OPS (INPADOC), newest first.
+
+			## Per-state summary
+
+			| State | Latest event | Effective | Reading |
+			| --- | --- | --- | --- |
+			| DE | PG25 (2024-10-31) | 2024-08-01 | lapsed |
+			| FR | PG25 (2024-09-30) | 2024-01-31 | lapsed |
+			| GB | PG25 (2024-09-30) | 2024-01-19 | lapsed |
+			| IT | PG25 (2016-05-31) | 2015-11-30 | lapsed |
+			| NL | PG25 (2024-09-30) | 2024-02-01 | lapsed |
+
+			Per-state reading is derived from the latest recorded event per state; a state with no event listed has no post-grant event in this feed, which is not evidence it was validated there.
+
+			| Date | Country | State | Code | Event | Effective | Gazette |
+			| --- | --- | --- | --- | --- | --- | --- |
+			| 2024-10-31 | EP | DE | PG25 | LAPSED IN A CONTRACTING STATE — LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES | 2024-08-01 | 2024-10-31 |
+			| 2024-09-30 | EP | FR | PG25 | LAPSED IN A CONTRACTING STATE | 2024-01-31 | — |
+			| 2024-09-30 | EP | GB | PG25 | LAPSED IN A CONTRACTING STATE | 2024-01-19 | — |
+			| 2024-09-30 | EP | NL | PG25 | LAPSED IN A CONTRACTING STATE | 2024-02-01 | — |
+			| 2023-01-20 | EP | FR | PGFP | ANNUAL FEE PAID TO NATIONAL OFFICE — fee year 15 — paid 2022-12-08 | 2022-12-08 | — |
+			| 2016-05-31 | EP | IT | PG25 | LAPSED IN A CONTRACTING STATE | 2015-11-30 | — |
+
+			These are raw INPADOC legal-status events. Read in-force vs. lapsed/expired from the event history (grant, lapse/withdrawal, renewal-fee and opposition codes). For family-wide status across jurisdictions use get_patent_family; for the EP register prosecution timeline use get_register_events."
+		`);
+	});
+
+	it('reads a state whose latest event is a renewal-fee payment as still paid', async () => {
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				docId: 'EP2110298',
+				events: [
+					{ code: 'PGFP', country: 'EP', date: '2023-01-20', text: 'ANNUAL FEE PAID TO NATIONAL OFFICE', state: 'FR', effectiveDate: '2022-12-08', paymentDate: '2022-12-08', feeYear: 15, gazette: null },
+					{ code: 'PG25', country: 'EP', date: '2016-05-31', text: 'LAPSED IN A CONTRACTING STATE', state: 'FR', effectiveDate: '2015-11-30', gazette: null },
+					{ code: 'PLFP', country: 'EP', date: '2021-01-20', text: 'FEE PAYMENT', state: 'BE', gazette: null },
+				],
+			},
+		});
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP2110298B1' }), makeToken());
+
+		expect(textOf(result).split('\n\n')[3]).toMatchInlineSnapshot(`
+			"| State | Latest event | Effective | Reading |
+			| --- | --- | --- | --- |
+			| BE | PLFP (2021-01-20) | — | unknown |
+			| FR | PGFP (2023-01-20) | 2022-12-08 | fee paid (year 15) |"
 		`);
 	});
 

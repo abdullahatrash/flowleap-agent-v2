@@ -14,19 +14,36 @@ import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
-import { renderMarkdownTable } from './patentResponseFormatter';
+import { IMarkdownColumn, renderMarkdownTable } from './patentResponseFormatter';
 
 interface IGetLegalStatusParams {
 	publicationNumber: string;
 }
 
-/** One INPADOC legal-status event, as returned by the `/tools/get_legal_status` facade `data` payload. */
+/**
+ * One INPADOC legal-status event, as returned by the `/tools/get_legal_status` facade `data` payload.
+ *
+ * `country` is the office that published the event and is `EP` for every post-grant event of an EP
+ * patent, which is why it cannot answer "is this patent live in Germany". The optional fields are
+ * add-only: a newer backend attaches the contracting `state` the post-grant event belongs to and the
+ * dates/fee facts around it, an older one sends none of them.
+ */
 interface LegalStatusEvent {
 	code: string;
 	date: string;
 	country: string | null;
 	text: string | null;
 	gazette?: { number: string | null; date: string | null };
+	/** Contracting state an EP post-grant event applies to (e.g. `DE`, `FR`, `GB`). */
+	state?: string;
+	/** Date the national office says the event took effect (`YYYY-MM-DD`), which is not the gazette date. */
+	effectiveDate?: string;
+	/** Longer free-text detail attached to the event by the national office. */
+	detail?: string;
+	/** Date a renewal fee was paid (`YYYY-MM-DD`). */
+	paymentDate?: string;
+	/** Renewal-fee year a fee-payment event covers. */
+	feeYear?: number;
 }
 
 interface LegalStatusData {
@@ -43,6 +60,105 @@ function gazetteLabel(gazette: LegalStatusEvent['gazette']): string {
 		return `${gazette.number} (${gazette.date})`;
 	}
 	return gazette.number || gazette.date || '—';
+}
+
+/** INPADOC code for a post-grant lapse recorded in one EP contracting state. */
+const CONTRACTING_STATE_LAPSE_CODE = 'PG25';
+
+/** INPADOC code for a post-grant renewal-fee payment recorded in one EP contracting state. */
+const CONTRACTING_STATE_FEE_CODE = 'PGFP';
+
+/**
+ * Renders the `Event` cell: the INPADOC event text followed by the post-grant facts a newer backend
+ * attaches to it (a longer detail line, the renewal-fee year, the payment date). An older backend
+ * sends none of them, so the cell stays exactly the event text.
+ */
+function eventLabel(event: LegalStatusEvent): string {
+	const parts: string[] = [event.text || '—'];
+	if (event.detail && event.detail !== event.text) {
+		parts.push(event.detail);
+	}
+	if (typeof event.feeYear === 'number') {
+		parts.push(`fee year ${event.feeYear}`);
+	}
+	if (event.paymentDate) {
+		parts.push(`paid ${event.paymentDate}`);
+	}
+	return parts.join(' — ');
+}
+
+/**
+ * Sort key deciding which event in a state is the most recent. The effective date is when the national
+ * office says the change took effect; the gazette record date is the fallback when the feed carries no
+ * effective date. ISO dates sort lexicographically, so plain string comparison is correct here.
+ */
+function eventRecency(event: LegalStatusEvent): string {
+	return event.effectiveDate || event.date || event.gazette?.date || '';
+}
+
+/**
+ * Reads one event as a per-state conclusion. A post-grant lapse (`PG25`, or a national cessation code
+ * such as `GBPC`) means the right is gone in that state; a `PGFP` renewal-fee payment means it was kept
+ * alive for the named fee year. Any other code is not a status statement, so it reads `unknown` rather
+ * than being guessed at.
+ */
+function perStateReading(event: LegalStatusEvent): string {
+	const code = (event.code || '').toUpperCase();
+	if (code === CONTRACTING_STATE_LAPSE_CODE || code.endsWith('PC')) {
+		return 'lapsed';
+	}
+	if (code === CONTRACTING_STATE_FEE_CODE) {
+		return typeof event.feeYear === 'number' ? `fee paid (year ${event.feeYear})` : 'fee paid';
+	}
+	return 'unknown';
+}
+
+/**
+ * Picks the most recent event per contracting state. Events carrying no `state` — everything an older
+ * backend returns — are ignored, so an old payload yields no per-state summary at all.
+ */
+function latestEventPerState(events: readonly LegalStatusEvent[]): Map<string, LegalStatusEvent> {
+	const latest = new Map<string, LegalStatusEvent>();
+	for (const event of events) {
+		const state = event.state;
+		if (!state) {
+			continue;
+		}
+		const current = latest.get(state);
+		if (!current || eventRecency(event) > eventRecency(current)) {
+			latest.set(state, event);
+		}
+	}
+	return latest;
+}
+
+/**
+ * Renders the per-state summary block shown above the event list: the latest post-grant event per EP
+ * contracting state, with the status it reads as. Returns no lines when no event carries a state, which
+ * keeps an older backend's response byte-identical to what it rendered before. States are ordered
+ * alphabetically — the tool takes no state-of-interest parameter to order by.
+ */
+function renderPerStateSummary(events: readonly LegalStatusEvent[]): string[] {
+	const latest = latestEventPerState(events);
+	if (latest.size === 0) {
+		return [];
+	}
+	const rows = [...latest.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([state, event]) => ({ state, event }));
+	return [
+		'## Per-state summary',
+		'',
+		renderMarkdownTable(rows, [
+			{ header: 'State', cell: r => r.state },
+			{ header: 'Latest event', cell: r => r.event.date ? `${r.event.code || '—'} (${r.event.date})` : (r.event.code || '—') },
+			{ header: 'Effective', cell: r => r.event.effectiveDate || '—' },
+			{ header: 'Reading', cell: r => perStateReading(r.event) },
+		]),
+		'',
+		'Per-state reading is derived from the latest recorded event per state; a state with no event listed has no post-grant event in this feed, which is not evidence it was validated there.',
+		'',
+	];
 }
 
 /**
@@ -103,6 +219,27 @@ export class GetLegalStatusTool implements ICopilotTool<IGetLegalStatusParams> {
 		}
 	}
 
+	/**
+	 * Columns for the event list. The `State` and `Effective` columns only appear when the payload
+	 * actually carries those facts, so an older backend's response renders exactly as it did before.
+	 */
+	private eventColumns(events: readonly LegalStatusEvent[]): IMarkdownColumn<LegalStatusEvent>[] {
+		const columns: IMarkdownColumn<LegalStatusEvent>[] = [
+			{ header: 'Date', cell: e => e.date || '—' },
+			{ header: 'Country', cell: e => e.country || '—' },
+		];
+		if (events.some(e => !!e.state)) {
+			columns.push({ header: 'State', cell: e => e.state || '—' });
+		}
+		columns.push({ header: 'Code', cell: e => e.code || '—' });
+		columns.push({ header: 'Event', cell: e => eventLabel(e) });
+		if (events.some(e => !!e.effectiveDate)) {
+			columns.push({ header: 'Effective', cell: e => e.effectiveDate || '—' });
+		}
+		columns.push({ header: 'Gazette', cell: e => gazetteLabel(e.gazette) });
+		return columns;
+	}
+
 	private formatLegalStatus(data: LegalStatusData, doc: string): string {
 		const events = data.events ?? [];
 		const lines: string[] = [
@@ -119,13 +256,8 @@ export class GetLegalStatusTool implements ICopilotTool<IGetLegalStatusParams> {
 
 		lines.push(`${events.length} legal-status event(s) from EPO OPS (INPADOC), newest first.`);
 		lines.push('');
-		lines.push(renderMarkdownTable(events, [
-			{ header: 'Date', cell: e => e.date || '—' },
-			{ header: 'Country', cell: e => e.country || '—' },
-			{ header: 'Code', cell: e => e.code || '—' },
-			{ header: 'Event', cell: e => e.text || '—' },
-			{ header: 'Gazette', cell: e => gazetteLabel(e.gazette) },
-		]));
+		lines.push(...renderPerStateSummary(events));
+		lines.push(renderMarkdownTable(events, this.eventColumns(events)));
 		lines.push('');
 		lines.push('These are raw INPADOC legal-status events. Read in-force vs. lapsed/expired from the event history (grant, lapse/withdrawal, renewal-fee and opposition codes). For family-wide status across jurisdictions use get_patent_family; for the EP register prosecution timeline use get_register_events.');
 		return lines.join('\n');
