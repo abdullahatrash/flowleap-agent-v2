@@ -457,6 +457,115 @@ describe('candidate report save path', () => {
 		});
 	});
 
+	describe('structured invalidity chart save path', () => {
+		// Two prior-art documents: one that a disclosed row cites by itself, one that only ever appears
+		// beside it. The challenged patent is EP2000000A1 and is never a source.
+		const rodClaim = '1. A quick release comprising a skewer rod and a first head portion.';
+		const camClaim = '1. A fastener comprising a cam surface and a lever arm.';
+		const rod = 'EP1000000A1:claims:1:en';
+		const cam = 'US5000000A:claims:1:en';
+		const ledger: IPatentExecutionLedger = {
+			...unrecordedPatentLedger,
+			read: async () => ({
+				executions: [{
+					id: 'one', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP1000000A1', 'US5000000A'], sources: [
+						{ anchor: rod, text: rodClaim, reference: { publicationNumber: 'EP1000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+						{ anchor: cam, text: camClaim, reference: { publicationNumber: 'US5000000A', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+					],
+				}],
+				limitation: 'Synthetic fixture; no live search.',
+			}),
+		};
+		const review = (anchor: string) => ({ anchor, scope: 'Independent claim 1 as quoted.', qualifiers: 'Structural recitation only.', quantityBasis: 'Structural claim language; no numeric range.' });
+		const input = {
+			filePath: '/workspace/invalidity.md', template: 'invalidity-claim-chart' as const, content: '',
+			challengedPublication: 'EP2000000A1', subject: 'Quick release skewer', objective: 'Art is measured against the 2004-03-01 earliest priority date.',
+			coverage: [
+				{ feature: 'Claim 1 — element (a): a skewer rod', claimNumber: '1', kind: 'feature' as const, importance: 'essential' as const, status: 'supported' as const, sourceAnchors: [rod], evidence: [review(rod)], elements: [{ element: 'a skewer rod', anchor: rod, disclosedBy: 'a skewer rod' }], gap: '' },
+				{ feature: 'Claim 1 — element (b): a cam surface on the head', claimNumber: '1', kind: 'feature' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [cam], evidence: [review(cam)], elements: [{ element: 'a cam surface', anchor: cam, disclosedBy: 'a cam surface' }, { element: 'carried on the head portion' }], gap: 'No cited passage puts the cam surface on the head portion.' },
+				{ feature: 'Claim 1 as a whole', claimNumber: '1', kind: 'combination' as const, importance: 'essential' as const, status: 'partial' as const, sourceAnchors: [rod, cam], evidence: [review(rod), review(cam)], elements: [{ element: 'a skewer rod', anchor: rod, disclosedBy: 'a skewer rod' }, { element: 'a cam surface on that rod’s head portion' }], gap: 'Neither document arranges the elements as claimed.' },
+			],
+			limitations: ['Synthetic fixture; eligibility of each reference requires review.'], stopReason: 'Bounded interim chart.',
+		};
+
+		it('renders the chart from coverage, relabels the statuses and receipts it for the completion check', async () => {
+			const { tool, files } = setup(ledger);
+			const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+			const chart = new TextDecoder().decode(await files.readFile(URI.file(input.filePath)));
+			const lines = chart.split('\n');
+			const message = (result.content[0] as LanguageModelTextPart).value;
+			const turn: ReportCompletionTurn = { message: 'Build the invalidity chart for EP2000000A1 and save /workspace/invalidity.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(input) }] }], results: { write: result } };
+			expect({
+				header: lines.slice(0, 9),
+				statuses: lines.filter(line => line.startsWith('**')),
+				quoted: chart.includes(rodClaim) && chart.includes(camClaim),
+				elementTable: chart.includes('| Element | Disclosed by | Source |'),
+				scaffold: chart.includes('## 3. Element-by-Element Invalidity Chart'),
+				companions: (await files.readDirectory(URI.file('/workspace'))).filter(([name]) => name.endsWith('.evidence.json')).length,
+				receipts: message.split('\n').filter(line => line.startsWith('Prior-art artifact receipt: ')).length,
+				completion: await checkPriorArtReportCompletion([], turn, files),
+			}).toEqual({
+				header: [
+					'# Invalidity Claim Chart',
+					'',
+					'| Field | Details |',
+					'| --- | --- |',
+					'| Challenged patent | EP2000000A1 |',
+					'| Claim(s) at issue | 1 |',
+					'| Critical date basis | Art is measured against the 2004-03-01 earliest priority date. |',
+					`| Date | ${new Date().toISOString().slice(0, 10)} |`,
+					'| Prepared by | FlowLeap Patent AI (AI-assisted draft) |',
+				],
+				statuses: ['**feature · essential · disclosed in the cited art**', '**feature · essential · partially disclosed**', '**combination · essential · partially disclosed**'],
+				quoted: true,
+				elementTable: true,
+				scaffold: false,
+				companions: 1,
+				receipts: 1,
+				completion: undefined,
+			});
+		});
+
+		it('derives the reference roles from the statuses without tagging them X/Y/A', async () => {
+			const { tool, files } = setup(ledger);
+			await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+			const chart = new TextDecoder().decode(await files.readFile(URI.file(input.filePath))).split('\n');
+			const start = chart.indexOf('## Reference roles (generated)');
+			expect(chart.slice(start, start + 6)).toEqual([
+				'## Reference roles (generated)',
+				'Derived from the statuses in this chart, not a legal category: a reference is listed as disclosing on its own where a row marked disclosed cites it and no other document, and as contributing in combination otherwise. This is not an X/Y/A tag and asserts nothing about anticipation, obviousness or inventive step.',
+				'| Reference | Cited in | Role (generated) |',
+				'| --- | --- | --- |',
+				'| EP1000000A1 | Claim 1 — element (a): a skewer rod; Claim 1 as a whole | discloses element(s) on its own |',
+				'| US5000000A | Claim 1 — element (b): a cam surface on the head; Claim 1 as a whole | contributes in combination |',
+			]);
+		});
+
+		it('rejects content beside coverage, and keeps the written-content chart when no coverage is supplied', async () => {
+			const { tool, files } = setup(ledger);
+			const withBoth = await tool.invoke({ input: { ...input, content: '| Claim Element | EP1000000A1 |' }, toolInvocationToken: undefined }, CancellationToken.None);
+			const written = await tool.invoke({ input: { filePath: '/workspace/written.md', content: '| Claim Element | EP1000000A1 |\n| --- | --- |\n| Preamble | Disclosed |', template: 'invalidity-claim-chart' as const, matter: 'EP2000000A1', subject: 'EP1000000A1' }, toolInvocationToken: undefined }, CancellationToken.None);
+			const chart = new TextDecoder().decode(await files.readFile(URI.file('/workspace/written.md')));
+			expect({
+				rejected: (withBoth.content[0] as LanguageModelTextPart).value.includes('For invalidity-claim-chart with coverage, content must be empty'),
+				unwritten: await files.readFile(URI.file(input.filePath)).then(() => true, () => false),
+				saved: (written.content[0] as LanguageModelTextPart).value.split('\n')[0],
+				scaffold: chart.includes('## 3. Element-by-Element Invalidity Chart'),
+				practitionerFields: chart.includes('| Patent No. / Claim(s) at Issue | EP2000000A1 |'),
+				structuredFields: chart.includes('| Challenged patent |'),
+				receipts: (written.content[0] as LanguageModelTextPart).value.includes('Prior-art artifact receipt: '),
+			}).toEqual({
+				rejected: true,
+				unwritten: false,
+				saved: 'Successfully wrote patent results to /workspace/written.md',
+				scaffold: true,
+				practitionerFields: true,
+				structuredFields: false,
+				receipts: false,
+			});
+		});
+	});
+
 	it('checks raw source URLs in report notes without JSON punctuation', async () => {
 		const ledger: IPatentExecutionLedger = { ...unrecordedPatentLedger, read: async () => ({ executions: [{ id: 'one', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', sources: [{ anchor: 'EP1234567A1:claims:1:en', reference: { publicationNumber: 'EP1234567A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] }], limitation: 'Partial.' }) };
 		const { tool } = setup(ledger);

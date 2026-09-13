@@ -32,7 +32,27 @@ function digest(value: string | Uint8Array): string { return createHash('sha256'
 
 /** Conservative routing for explicit English prior-art deliverable requests, not every patent question. */
 export function requestsPriorArtReport(message: string): boolean {
-	return /\bprior[\s-]+art\b/i.test(message) && /\b(report|review|save|write|output)\b/i.test(message);
+	return (/\bprior[\s-]+art\b/i.test(message) && /\b(report|review|save|write|output)\b/i.test(message)) || requestsInvalidityChart(message);
+}
+
+/**
+ * An invalidity deliverable is the same structured report with the challenged patent's elements as
+ * its rows, so it is finalized and checked on the same path.
+ */
+function requestsInvalidityChart(message: string): boolean {
+	return /\binvalidity\b/i.test(message) && /\b(report|chart|analysis|case)\b/i.test(message);
+}
+
+/**
+ * A writer call that finalizes a structured report: `prior-art-report` always, and
+ * `invalidity-claim-chart` when it carries the coverage rows the writer validates and renders.
+ */
+function finalizesStructuredReport(call: IToolCallRound['toolCalls'][number]): boolean {
+	if (call.name !== ToolName.WritePatentResults) { return false; }
+	try {
+		const value: { template?: unknown; coverage?: unknown } = JSON.parse(call.arguments);
+		return value.template === 'prior-art-report' || (value.template === 'invalidity-claim-chart' && Array.isArray(value.coverage) && value.coverage.length > 0);
+	} catch { return false; }
 }
 
 export interface ReportCompletionTurn {
@@ -52,26 +72,28 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 	const currentReceipts = receipts(current);
 	const priorReceipts = activeHistory.flatMap(turn => receipts(turn));
 	const target = reportRequest && requestedReportPath(reportRequest.message);
-	const writingReport = currentCalls.some(call => {
-		if (call.name !== ToolName.WritePatentResults) { return false; }
-		try { return JSON.parse(call.arguments).template === 'prior-art-report'; } catch { return false; }
-	});
+	const writingReport = currentCalls.some(finalizesStructuredReport);
 	const mentionsTarget = !!target && currentCalls.some(call => mentionsPath(call, target));
 	const continuing = /^\s*continue\b/i.test(current.message) || /\b(revise|update|correct)\b.*\b(report|review)\b/i.test(current.message);
 	const pendingResearch = !priorReceipts.length && activeHistory.some(turn => turn.rounds.some(round => round.toolCalls.some(isRetrieval)));
 	const genericWrite = currentCalls.some(call => [ToolName.CreateFile, ToolName.EditFile, ToolName.ApplyPatch, ToolName.ReplaceString, ToolName.MultiReplaceString, ToolName.CoreRunInTerminal, ToolName.CoreSendToTerminal].some(name => name === call.name));
 	const currentReportRequest = requestsPriorArtReport(current.message);
 	const required = writingReport || (currentReportRequest && (hasResearch || genericWrite)) || (!!reportRequest && hasResearch && (continuing || !!mentionsTarget)) || (pendingResearch && (hasResearch || continuing || !!mentionsTarget));
+	// The deliverable the user asked for decides which structured template finalizes it; both take the
+	// same empty content and evidence-backed coverage.
+	const invalidity = requestsInvalidityChart(reportRequest?.message ?? current.message);
+	const deliverable = invalidity ? 'invalidity chart' : 'prior-art report';
+	const structuredTemplate = invalidity ? 'invalidity-claim-chart' : 'prior-art-report';
 	if (required && !currentReceipts.length) {
-		return 'The requested prior-art report has no successful structured finalization in this turn. Generic file writes and free-form writer calls are unvalidated drafts. Save the requested report with write_patent_results, template="prior-art-report", empty content and the evidence-backed coverage fields. An honest interim report with unresolved features and explicit limitations is valid; do not invent support or repeat searches merely to pass validation.';
+		return `The requested ${deliverable} has no successful structured finalization in this turn. Generic file writes and free-form writer calls are unvalidated drafts. Save the requested report with write_patent_results, template="${structuredTemplate}", empty content and the evidence-backed coverage fields. An honest interim report with unresolved features and explicit limitations is valid; do not invent support or repeat searches merely to pass validation.`;
 	}
 	if (required && currentReceipts.length) {
 		const finalization = [...currentReceipts].reverse().find(receipt => !target || matchesPath(receipt.reportUri, target));
 		if (!finalization) {
-			return `The validated report was saved to a different path. Finalize the requested deliverable at ${target} with write_patent_results and template="prior-art-report".`;
+			return `The validated report was saved to a different path. Finalize the requested deliverable at ${target} with write_patent_results and template="${structuredTemplate}".`;
 		}
 		const lastResearch = currentCalls.map(isRetrieval).lastIndexOf(true);
-		if (lastResearch > finalization.callIndex) { return 'More patent evidence was retrieved after the saved report. Reconcile it and re-save the structured prior-art report so its evidence companion reflects the final research boundary.'; }
+		if (lastResearch > finalization.callIndex) { return `More patent evidence was retrieved after the saved report. Reconcile it and re-save the structured ${deliverable} so its evidence companion reflects the final research boundary.`; }
 	}
 	// Read actual bytes, so edits made by any tool (including terminal/MCP) invalidate the receipt.
 	// Latest receipt per path supersedes earlier revisions; unrelated notes do not invalidate reports.
@@ -86,15 +108,14 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 			// A removed artifact loses its validation, but a transient read failure must not block the user.
 			if (!isNotFound(error)) { continue; }
 		}
-		return `The prior-art report or its evidence companion changed after validation: ${receipt.reportUri}. Its previous validation no longer applies. If this is the requested deliverable, re-save it through write_patent_results with template="prior-art-report" and revised structured evidence. If it was intentionally removed, explain that no validated deliverable remains. Do not restore a deliberately deleted file without user authorization.`;
+		return `The report or its evidence companion changed after validation: ${receipt.reportUri}. Its previous validation no longer applies. If this is the requested deliverable, re-save it through write_patent_results with template="${structuredTemplate}" and revised structured evidence. If it was intentionally removed, explain that no validated deliverable remains. Do not restore a deliberately deleted file without user authorization.`;
 	}
 	return undefined;
 }
 
 function receipts(turn: ReportCompletionTurn): ParsedReportReceipt[] {
 	return turn.rounds.flatMap(round => round.toolCalls).flatMap((call, callIndex) => {
-		if (call.name !== ToolName.WritePatentResults) { return []; }
-		try { if (JSON.parse(call.arguments).template !== 'prior-art-report') { return []; } } catch { return []; }
+		if (!finalizesStructuredReport(call)) { return []; }
 		const parts = turn.results[call.id]?.content ?? [];
 		return parts.flatMap(part => {
 			if (!isTextPart(part)) { return []; }

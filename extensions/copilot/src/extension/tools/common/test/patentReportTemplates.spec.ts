@@ -351,6 +351,31 @@ describe('writePatentResults report templates', () => {
 		});
 	});
 
+	it('gives a structured invalidity chart its own header and offers coverage instead of a body', () => {
+		const generated = ['## Retrieved documents', '| Publication | Publication date |', '', '## Coverage and remaining search tracks', '### Claim 1 — element (a)', '', '## Limitations', '- Synthetic fixture.'].join('\n');
+		expect({
+			structured: buildPatentReport(generated, 'invalidity-claim-chart', { challengedPublication: 'EP2000000A1', claimsAtIssue: '1, 7', criticalDateBasis: 'Priority date 2004-03-01.', date: '2026-09-13', preparedBy: 'FlowLeap Patent AI (AI-assisted draft)' }, undefined, true).split('\n').slice(0, 9),
+			writtenHeader: buildPatentReport(generated, 'invalidity-claim-chart', { matter: 'EP2000000A1', subject: 'EP1000000A1' }).split('\n')[4],
+			missingBody: contentRequirementError('invalidity-claim-chart', ''),
+			withCoverage: contentRequirementError('invalidity-claim-chart', '', true),
+		}).toEqual({
+			structured: [
+				'# Invalidity Claim Chart',
+				'',
+				'| Field | Details |',
+				'| --- | --- |',
+				'| Challenged patent | EP2000000A1 |',
+				'| Claim(s) at issue | 1, 7 |',
+				'| Critical date basis | Priority date 2004-03-01. |',
+				'| Date | 2026-09-13 |',
+				'| Prepared by | FlowLeap Patent AI (AI-assisted draft) |',
+			],
+			writtenHeader: '| Patent No. / Claim(s) at Issue | EP2000000A1 |',
+			missingBody: 'invalidity-claim-chart needs content: the element-by-element table, one row per claim element and one column per reference, each cell quoting the disclosing passage. Either write the chart into content, or supply structured coverage and leave content empty; the writer then generates, validates and receipts the chart.',
+			withCoverage: undefined,
+		});
+	});
+
 	it('renders an authored FTO memo as written, under the memorandum title block', () => {
 		const memo = ['## 1. Product and Features Cleared', 'The charger module.', '', '## 2. Blocking Candidates', '| Patent | Status |', '| --- | --- |', '| EP1000000A1 | In force |', '', '## 3. Risk and Design-Arounds', 'Two features carry medium risk.'].join('\n');
 		expect(buildPatentReport(memo, 'fto-memo', { subject: 'Charger module', date: '2026-09-13' })).toMatchInlineSnapshot(`
