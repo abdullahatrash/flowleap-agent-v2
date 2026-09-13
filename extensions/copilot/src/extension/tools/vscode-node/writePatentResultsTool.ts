@@ -166,11 +166,12 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// practitioner-owned fields keep the placeholder.
 			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
-			// A landscape report is a page of numbers, and an FTO memo a page of statuses, dates and
-			// quoted claims. The generated sections state which of them appear in the text a tool
-			// returned, which tables never say what they count, and which quotations stand in the
-			// recorded claim text of the document they are cited to.
-			const provenance = template === 'landscape-report' || template === 'fto-memo' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
+			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of
+			// statuses, dates and quoted claims. The generated sections state which of them appear in the
+			// text a tool returned, which tables never say what they count, and which quotations stand in
+			// the recorded claim text of the document they are cited to.
+			const provenance = template && template !== 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
 			const appendix = !provenance ? undefined : template === 'landscape-report' ? renderLandscapeAppendix(content, provenance) : renderFtoAppendix(content, provenance);
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,

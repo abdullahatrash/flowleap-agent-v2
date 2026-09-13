@@ -1608,7 +1608,10 @@ configurationRegistry.registerConfiguration({
 				SKILL_DOCUMENTATION_URL,
 			),
 			default: {
-				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: true })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
+				// FlowLeap: the personal Claude skills folder holds CLI-oriented recipes (flowleap-cli skill packs)
+				// that describe commands this app does not have; loading them beside the bundled patent skills
+				// gives the agent two conflicting instruction sets for the same task. Users can turn it on.
+				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: folder.path !== '~/.claude/skills' })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
 			},
 			additionalProperties: { type: 'boolean' },
 			propertyNames: {
