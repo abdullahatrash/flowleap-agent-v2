@@ -437,10 +437,10 @@ describe('candidate report save path', () => {
 				authoredBody: true,
 				figures: '1 figures checked against recorded tool outputs; 0 found, 0 computed from figures that were found, 1 not found: 14.',
 				dates: '2 dates checked against recorded tool outputs; 1 found, 1 not found: 2031-08-02.',
-				quotations: '1 claim quotations checked against recorded claim text; 1 found verbatim, 0 not found.',
+				quotations: '1 claim quotations checked against recorded claim text; 1 found verbatim, 0 found with elisions, 0 not found.',
 				data: ['- get_patent_details — EP1000000A1 — count not recorded — succeeded', '- get_legal_status — EP1000000A1 — 2 rows — succeeded'],
 				beforeDisclaimer: true,
-				result: 'FTO provenance: 1 figures checked against recorded tool outputs; 0 found, 0 computed from figures that were found, 1 not found: 14. 2 dates checked against recorded tool outputs; 1 found, 1 not found: 2031-08-02. 1 claim quotations checked against recorded claim text; 1 found verbatim, 0 not found. Source each figure, date and quotation that was not found in a follow-up save, or replace it with one a recorded output supports. The memo lists them in its generated provenance sections.',
+				result: 'FTO provenance: 1 figures checked against recorded tool outputs; 0 found, 0 computed from figures that were found, 1 not found: 14. 2 dates checked against recorded tool outputs; 1 found, 1 not found: 2031-08-02. 1 claim quotations checked against recorded claim text; 1 found verbatim, 0 found with elisions, 0 not found. Source each figure, date and quotation that was not found in a follow-up save, or replace it with one a recorded output supports. The memo lists them in its generated provenance sections.',
 			});
 		});
 	});
