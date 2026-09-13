@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { SubscriptionRequiredError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { GetRegisterEventsTool } from '../getRegisterEventsTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ describe('GetRegisterEventsTool', () => {
 				],
 			},
 		});
-		const tool = new GetRegisterEventsTool(makeLogService(), client);
+		const tool = new GetRegisterEventsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP-1000000-B1' }), makeToken());
 
@@ -92,7 +93,7 @@ describe('GetRegisterEventsTool', () => {
 
 	it('reports no events when the backend returns an empty list', async () => {
 		const { client } = makeBackendClient({ success: true, data: { docId: 'EP1000000', events: [] } });
-		const tool = new GetRegisterEventsTool(makeLogService(), client);
+		const tool = new GetRegisterEventsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000' }), makeToken());
 
@@ -107,11 +108,23 @@ describe('GetRegisterEventsTool', () => {
 
 	it('surfaces a backend subscription error via the shared error handler with a recovery hint', async () => {
 		const { client } = makeBackendClient(() => { throw new SubscriptionRequiredError('An active FlowLeap subscription is required.', 'https://flowleap.co/upgrade'); });
-		const tool = new GetRegisterEventsTool(makeLogService(), client);
+		const tool = new GetRegisterEventsTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000' }), makeToken());
 
 		expect(textOf(result)).toContain('Error fetching register events for EP1000000: 402 - An active FlowLeap subscription is required.');
 		expect(textOf(result)).toContain('Ask the user to subscribe');
+	});
+
+	it('records the prosecution timeline the memo cites, with its event count', async () => {
+		const { client } = makeBackendClient({ success: true, data: { docId: 'EP1000000', events: [{ code: 'OPPO', date: '2004-03-15', description: 'Opposition filed', gazette: null }] } });
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new GetRegisterEventsTool(makeLogService(), client, ledger).invoke(makeOptions({ publicationNumber: 'EP-1000000-B1' }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'status', status: 'succeeded', tool: 'get_register_events', request: 'EP1000000B1',
+			rowCount: 1, publicationIds: ['EP1000000B1'], resultText: textOf(result),
+		}]);
 	});
 });

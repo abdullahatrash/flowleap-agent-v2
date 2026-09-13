@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { PatentBackendError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { GetPatentFamilyTool } from '../getPatentFamilyTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ describe('GetPatentFamilyTool', () => {
 				totalCount: 3,
 			},
 		});
-		const tool = new GetPatentFamilyTool(makeLogService(), client);
+		const tool = new GetPatentFamilyTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP 1000000' }), makeToken());
 
@@ -95,7 +96,7 @@ describe('GetPatentFamilyTool', () => {
 
 	it('reports no family members when the backend returns an empty list', async () => {
 		const { client } = makeBackendClient({ success: true, data: { docId: 'EP1000000', familyMembers: [], totalCount: 0 } });
-		const tool = new GetPatentFamilyTool(makeLogService(), client);
+		const tool = new GetPatentFamilyTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP1000000' }), makeToken());
 
@@ -110,10 +111,22 @@ describe('GetPatentFamilyTool', () => {
 
 	it('surfaces a backend not-found error via the shared error handler', async () => {
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(404, 'OPS error 404: No results found'); });
-		const tool = new GetPatentFamilyTool(makeLogService(), client);
+		const tool = new GetPatentFamilyTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ publicationNumber: 'EP0000000' }), makeToken());
 
 		expect(textOf(result)).toMatchInlineSnapshot(`"Error fetching patent family for EP0000000: 404 - OPS error 404: No results found"`);
+	});
+
+	it('records every family member by its own publication number, not only the count', async () => {
+		const { client } = makeBackendClient({ success: true, data: { docId: 'EP1000000', familyMembers: [{ docId: 'EP1000000', country: 'EP' }, { docId: 'US6000000', country: 'US' }], totalCount: 2 } });
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new GetPatentFamilyTool(makeLogService(), client, ledger).invoke(makeOptions({ publicationNumber: 'EP 1000000' }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'status', status: 'succeeded', tool: 'get_patent_family', request: 'EP1000000',
+			rowCount: 2, publicationIds: ['EP1000000', 'EP1000000', 'US6000000'], resultText: textOf(result),
+		}]);
 	});
 });

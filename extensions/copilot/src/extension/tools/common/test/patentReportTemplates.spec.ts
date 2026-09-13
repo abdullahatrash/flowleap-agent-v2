@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { buildPatentReport, contentRequirementError } from '../patentReportTemplates';
+import { buildPatentReport, contentRequirementError, PATENT_REPORT_TEMPLATES } from '../patentReportTemplates';
 
 describe('writePatentResults report templates', () => {
 
@@ -331,19 +331,53 @@ describe('writePatentResults report templates', () => {
 			'',
 		]);
 	});
-	it('keeps the numbered landscape scaffold for section text and steps aside for an authored report', () => {
+	it('keeps every template\'s numbered scaffold for section text and steps aside for a body that structures itself', () => {
 		const authored = ['## Executive Summary', 'Filing growth is flat.', '', '## Filing Trends', '| Year | Families |', '| --- | --- |', '| 2019 | 1,240 |', '', '## White Space'].join('\n');
 		const sections = '| Year | Families |\n| --- | --- |\n| 2019 | 1,240 |';
+		// `prior-art-report` is excluded: its body is generated from structured coverage, not written free-form.
+		const content = PATENT_REPORT_TEMPLATES.filter(template => template !== 'prior-art-report');
 		expect({
-			scaffoldForSectionText: buildPatentReport(sections, 'landscape-report').includes('## 1. Executive Summary'),
-			scaffoldForAuthoredReport: buildPatentReport(authored, 'landscape-report').includes('## 1. Executive Summary'),
+			scaffoldForSectionText: content.filter(template => buildPatentReport(sections, template).includes('## 1.')),
+			scaffoldForAuthoredReport: content.filter(template => buildPatentReport(authored, template).includes('## 1.')),
 			authoredHeadings: buildPatentReport(authored, 'landscape-report').match(/^## .*$/gm),
-			titleKept: buildPatentReport(authored, 'landscape-report').startsWith('# Patent Landscape Report\n\n| Field | Details |'),
+			titlesKept: content.every(template => buildPatentReport(authored, template).split('\n')[2] === '| Field | Details |'),
+			priorArtKeepsScaffold: buildPatentReport(authored, 'prior-art-report').includes('## 1. Objective'),
 		}).toEqual({
-			scaffoldForSectionText: true,
-			scaffoldForAuthoredReport: false,
+			scaffoldForSectionText: content,
+			scaffoldForAuthoredReport: [],
 			authoredHeadings: ['## Executive Summary', '## Filing Trends', '## White Space'],
-			titleKept: true,
+			titlesKept: true,
+			priorArtKeepsScaffold: true,
 		});
+	});
+
+	it('renders an authored FTO memo as written, under the memorandum title block', () => {
+		const memo = ['## 1. Product and Features Cleared', 'The charger module.', '', '## 2. Blocking Candidates', '| Patent | Status |', '| --- | --- |', '| EP1000000A1 | In force |', '', '## 3. Risk and Design-Arounds', 'Two features carry medium risk.'].join('\n');
+		expect(buildPatentReport(memo, 'fto-memo', { subject: 'Charger module', date: '2026-09-13' })).toMatchInlineSnapshot(`
+			"# Freedom-to-Operate Memorandum
+
+			| Field | Details |
+			| --- | --- |
+			| Matter / Reference | _(to be completed)_ |
+			| Product / Technology | Charger module |
+			| Jurisdiction(s) | _(to be completed)_ |
+			| Date | 2026-09-13 |
+			| Prepared By | _(to be completed)_ |
+
+			## 1. Product and Features Cleared
+			The charger module.
+
+			## 2. Blocking Candidates
+			| Patent | Status |
+			| --- | --- |
+			| EP1000000A1 | In force |
+
+			## 3. Risk and Design-Arounds
+			Two features carry medium risk.
+
+			---
+			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
+			"
+		`);
 	});
 });

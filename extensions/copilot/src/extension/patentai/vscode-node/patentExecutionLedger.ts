@@ -26,7 +26,20 @@ export interface PatentEvidenceSource {
 /** The number-producing analytics tools whose outcomes the audit records. */
 export type PatentAnalyticsTool = 'patstat_query' | 'patstat_portfolio' | 'patent_analytics_viz' | 'patstat_graph' | 'patent_api_request';
 
-/** Cap for a recorded request (SQL or the JSON of the request params). */
+/**
+ * The legal-status tools whose outcomes the audit records. A memo states that a patent is in force,
+ * lapsed on a date, or expires on another; without the returned text those dates are transcriptions
+ * with nothing to check them against.
+ */
+export type PatentStatusTool = 'get_legal_status' | 'get_patent_family' | 'get_patent_term' | 'get_register_events';
+
+/** Every tool identity a record may carry. */
+export type PatentRecordedTool = PatentAnalyticsTool | PatentStatusTool;
+
+/** The tool identities the reader accepts; anything else is a dropped field, not a new tool. */
+const RECORDED_TOOLS: readonly PatentRecordedTool[] = ['patstat_query', 'patstat_portfolio', 'patent_analytics_viz', 'patstat_graph', 'patent_api_request', 'get_legal_status', 'get_patent_family', 'get_patent_term', 'get_register_events'];
+
+/** Cap for a recorded request (SQL, a publication number, or the JSON of the request params). */
 export const ANALYTICS_REQUEST_CAP = 2_000;
 
 /** Cap for the recorded result text a figure check searches. */
@@ -35,7 +48,7 @@ export const ANALYTICS_RESULT_CAP = 20_000;
 export interface PatentExecution {
 	readonly id: string;
 	readonly recordedAt: string;
-	readonly kind: 'search' | 'details' | 'analytics';
+	readonly kind: 'search' | 'details' | 'analytics' | 'status';
 	readonly status: 'succeeded' | 'failed' | 'cancelled';
 	readonly query?: string;
 	readonly requestedRange?: string;
@@ -52,15 +65,15 @@ export interface PatentExecution {
 	readonly publicationIds?: readonly string[];
 	readonly sources?: readonly PatentEvidenceSource[];
 	readonly unavailableSections?: readonly string[];
-	/** `analytics` only: which analytics tool produced the outcome. */
-	readonly tool?: PatentAnalyticsTool;
-	/** `analytics` only: the SQL, or the JSON of the request params, capped at {@link ANALYTICS_REQUEST_CAP}. */
+	/** `analytics` and `status` only: which tool produced the outcome. */
+	readonly tool?: PatentRecordedTool;
+	/** `analytics` and `status` only: the SQL, the publication number, or the JSON of the request params, capped at {@link ANALYTICS_REQUEST_CAP}. */
 	readonly request?: string;
-	/** `analytics` only: the backend's own row count, when it reported one. */
+	/** `analytics` and `status` only: the backend's own row count, or the number of events or family members returned. */
 	readonly rowCount?: number;
 	/** `analytics` only: the PATSTAT edition or corpus label the numbers belong to. */
 	readonly dataEdition?: string;
-	/** `analytics` only: the exact text returned to the model, capped at {@link ANALYTICS_RESULT_CAP}; a figure check searches this. */
+	/** `analytics` and `status` only: the exact text returned to the model, capped at {@link ANALYTICS_RESULT_CAP}; a figure or date check searches this. */
 	readonly resultText?: string;
 	/** `analytics` only: the tool's own quotable summary line, when it has one. */
 	readonly summary?: string;
@@ -78,7 +91,7 @@ export interface IPatentExecutionLedger {
 	read(session: vscode.Uri | undefined): Promise<PatentExecutionSnapshot>;
 }
 
-const LIMITATION = 'Audit covers recorded search_patents, get_patent_details and analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
+const LIMITATION = 'Audit covers recorded search_patents, get_patent_details, analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request) and legal-status (get_legal_status, get_patent_family, get_patent_term, get_register_events) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
 
 /** Durable, append-only outcome records owned by the patent workflow. Separate files avoid lost concurrent writes. */
 export class PatentExecutionLedger implements IPatentExecutionLedger {
@@ -198,7 +211,7 @@ function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
 function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
 	const record = value as Record<string, unknown>;
-	if (typeof record.kind !== 'string' || !['search', 'details', 'analytics'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
+	if (typeof record.kind !== 'string' || !['search', 'details', 'analytics', 'status'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
 	let dropped = false;
 	// `null` is an absent value from JSON, not a corrupt one, so it never counts as a dropped field.
 	const absent = (raw: unknown) => raw === undefined || raw === null;
@@ -233,15 +246,16 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		if (items.length !== raw.length) { dropped = true; }
 		return items;
 	};
-	const analyticsTool = (raw: unknown): PatentAnalyticsTool | undefined => {
+	const recordedTool = (raw: unknown): PatentRecordedTool | undefined => {
 		if (absent(raw)) { return undefined; }
-		if (raw !== 'patstat_query' && raw !== 'patstat_portfolio' && raw !== 'patent_analytics_viz' && raw !== 'patstat_graph' && raw !== 'patent_api_request') { dropped = true; return undefined; }
-		return raw;
+		const named = RECORDED_TOOLS.find(tool => tool === raw);
+		if (!named) { dropped = true; return undefined; }
+		return named;
 	};
 	const execution: PatentExecution = {
 		id: text(record.id) ?? '',
 		recordedAt: text(record.recordedAt) ?? '',
-		kind: record.kind === 'details' ? 'details' : record.kind === 'analytics' ? 'analytics' : 'search',
+		kind: record.kind === 'details' ? 'details' : record.kind === 'analytics' ? 'analytics' : record.kind === 'status' ? 'status' : 'search',
 		status: record.status === 'failed' ? 'failed' : record.status === 'cancelled' ? 'cancelled' : 'succeeded',
 		query: text(record.query),
 		requestedRange: text(record.requestedRange),
@@ -258,7 +272,7 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		publicationIds: list(record.publicationIds),
 		sources: evidence(record.sources),
 		unavailableSections: list(record.unavailableSections),
-		tool: analyticsTool(record.tool),
+		tool: recordedTool(record.tool),
 		request: text(record.request),
 		rowCount: count(record.rowCount),
 		dataEdition: text(record.dataEdition),

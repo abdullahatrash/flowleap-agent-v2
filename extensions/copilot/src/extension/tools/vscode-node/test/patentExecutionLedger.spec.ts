@@ -132,4 +132,24 @@ describe('durable patent execution audit', () => {
 		expect({ request: recorded.request?.length, result: recorded.resultText?.length, marked: recorded.resultText?.endsWith('… [truncated for the audit record]') })
 			.toEqual({ request: 2000 + 35, result: 20000 + 35, marked: true });
 	});
+
+	it('round-trips a legal-status outcome and keeps one whose tool is unreadable, leaving it unknown', async () => {
+		const { ledger, session, files } = setup();
+		const status = {
+			kind: 'status' as const, status: 'succeeded' as const, tool: 'get_legal_status' as const,
+			request: 'EP1000000A1', rowCount: 2, publicationIds: ['EP1000000A1'],
+			resultText: '| 2024-01-10 | FR | MM4A | LAPSE |',
+		};
+		await ledger.record(session, status);
+		await ledger.record(session, { kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'EP2000000' });
+		files.mockFile(files.committed[1], JSON.stringify({
+			id: 'partial', recordedAt: '2026-09-14', kind: 'status', status: 'succeeded',
+			tool: 'get_unknown_status', request: 'EP2000000', rowCount: 1, resultText: 'Base expiry 2028-04-16',
+		}));
+		const snapshot = await ledger.read(session);
+		expect(snapshot.executions.map(row => ({ kind: row.kind, tool: row.tool, request: row.request, rowCount: row.rowCount, publicationIds: row.publicationIds, resultText: row.resultText }))).toEqual([
+			{ kind: 'status', tool: 'get_legal_status', request: 'EP1000000A1', rowCount: 2, publicationIds: ['EP1000000A1'], resultText: '| 2024-01-10 | FR | MM4A | LAPSE |' },
+			{ kind: 'status', tool: undefined, request: 'EP2000000', rowCount: 1, publicationIds: undefined, resultText: 'Base expiry 2028-04-16' },
+		]);
+	});
 });

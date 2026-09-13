@@ -28,7 +28,7 @@ import { ToolName } from '../common/toolNames';
 import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, contentRequirementError, PatentReportTemplate } from '../common/patentReportTemplates';
-import { extractFigures, figureProvenance, figureSentence, renderLandscapeAppendix } from '../common/patentLandscapeReview';
+import { extractFigures, figureProvenance, figureSentence, ftoProvenanceResult, renderFtoAppendix, renderLandscapeAppendix } from '../common/patentReportProvenance';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
 
@@ -166,9 +166,12 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// practitioner-owned fields keep the placeholder.
 			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
-			// A landscape report is a page of numbers; the appendix states which of them appear in the
-			// text a tool returned, and which tables never say what they count.
-			const landscape = template === 'landscape-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			// A landscape report is a page of numbers, and an FTO memo a page of statuses, dates and
+			// quoted claims. The generated sections state which of them appear in the text a tool
+			// returned, which tables never say what they count, and which quotations stand in the
+			// recorded claim text of the document they are cited to.
+			const provenance = template === 'landscape-report' || template === 'fto-memo' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			const appendix = !provenance ? undefined : template === 'landscape-report' ? renderLandscapeAppendix(content, provenance) : renderFtoAppendix(content, provenance);
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,
@@ -176,7 +179,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				searchStrategy: options.input.searchStrategy,
 				date: new Date().toISOString().slice(0, 10),
 				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
-			}, landscape ? renderLandscapeAppendix(content, landscape) : undefined);
+			}, appendix);
 
 
 			// Ensure the parent directory exists before writing.
@@ -202,8 +205,11 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				this.logService.warn(`[WritePatentResultsTool] Wrote file but failed to open it: ${openError instanceof Error ? openError.message : String(openError)}`);
 			}
 
+			// A save that carries a generated provenance appendix is a checked report, not a free-form
+			// artifact, so it states what was traced instead of that nothing was.
+			const provenanceResult = !provenance ? '' : template === 'landscape-report' ? this.landscapeResult(content, provenance) : ftoProvenanceResult(content, provenance);
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + (landscape ? this.landscapeResult(content, landscape) : '') + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : landscape ? '' : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {

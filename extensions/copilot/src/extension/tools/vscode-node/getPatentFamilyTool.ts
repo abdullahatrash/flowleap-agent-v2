@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
@@ -47,6 +48,7 @@ export class GetPatentFamilyTool implements ICopilotTool<IGetPatentFamilyParams>
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentFamilyParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -76,8 +78,18 @@ export class GetPatentFamilyTool implements ICopilotTool<IGetPatentFamilyParams>
 			const data = await callFacadeTool<FamilyData>(this.patentBackendClient, 'get_patent_family', { patent_number: doc }, token);
 			const formatted = this.formatFamily(data, doc);
 			this.logService.info(`[GetPatentFamilyTool] Formatted response length: ${formatted.length} chars`);
+			// The members are the jurisdictions a memo clears or leaves out, so they are recorded by
+			// their own publication numbers, not only counted. Recorded for the audit only.
+			const members = data.familyMembers ?? [];
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'status', status: 'succeeded', tool: 'get_patent_family', request: doc,
+				rowCount: data.totalCount ?? members.length,
+				publicationIds: [doc, ...members.map(member => member.docId || member.docNumber || '').filter(Boolean)],
+				resultText: formatted,
+			});
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted)]);
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'status', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'get_patent_family', request: doc });
 			return handlePatentToolError(error, this.logService, '[GetPatentFamilyTool]', err => `Error fetching patent family for ${publicationNumber}: ${err.status} - ${err.message}`);
 		}
 	}

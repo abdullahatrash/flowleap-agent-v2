@@ -9,6 +9,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
@@ -58,6 +59,7 @@ export class GetRegisterEventsTool implements ICopilotTool<IGetRegisterEventsPar
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetRegisterEventsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -87,8 +89,15 @@ export class GetRegisterEventsTool implements ICopilotTool<IGetRegisterEventsPar
 			const data = await callFacadeTool<RegisterEventsData>(this.patentBackendClient, 'get_register_events', { patent_number: doc }, token);
 			const formatted = this.formatRegisterEvents(data, doc);
 			this.logService.info(`[GetRegisterEventsTool] Formatted response length: ${formatted.length} chars`);
+			// An opposition or a transfer stated in a memo comes from this timeline; the record is
+			// what the stated date is checked against. Recorded for the audit only.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'status', status: 'succeeded', tool: 'get_register_events', request: doc,
+				rowCount: data.events?.length, publicationIds: [doc], resultText: formatted,
+			});
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted)]);
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'status', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'get_register_events', request: doc });
 			return handlePatentToolError(error, this.logService, '[GetRegisterEventsTool]', err => `Error fetching register events for ${publicationNumber}: ${err.status} - ${err.message}`);
 		}
 	}
