@@ -18,7 +18,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
-import { candidateWordingReview, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
+import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -116,9 +116,14 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 		const { filePath, content, template } = options.input;
 
+		// prior-art-report always generates its body from structured coverage; invalidity-claim-chart
+		// does so when the model supplies coverage, and keeps the written-content chart when it does not.
+		const structuredBody = template === 'prior-art-report' || (template === 'invalidity-claim-chart' && !!options.input.coverage?.length);
+		const variant: CandidateReviewVariant = template === 'invalidity-claim-chart' ? 'invalidity' : 'prior-art';
+
 		// A templated report with no body saves a shell of section stubs while the findings stay in
 		// the chat, so the requirement is checked before any path resolution or disk access.
-		const requirement = contentRequirementError(template, content);
+		const requirement = contentRequirementError(template, content, structuredBody);
 		if (requirement) {
 			return new LanguageModelToolResult([new LanguageModelTextPart(`Report was not saved. ${requirement} Retry with the report body in content.`)]);
 		}
@@ -143,10 +148,10 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
 
 		try {
-			const snapshot = template === 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			const snapshot = structuredBody ? await this.ledger.read(options.chatSessionResource) : undefined;
 			const input = snapshot ? materializeCandidateReview(options.input, snapshot) : options.input;
 			if (snapshot) {
-				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'));
+				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -164,15 +169,22 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined, variant) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of
 			// statuses, dates and quoted claims. The generated sections state which of them appear in the
 			// text a tool returned, which tables never say what they count, and which quotations stand in
 			// the recorded claim text of the document they are cited to.
-			const provenance = template && template !== 'prior-art-report' ? await this.ledger.read(options.chatSessionResource) : undefined;
+			const provenance = template && !structuredBody ? await this.ledger.read(options.chatSessionResource) : undefined;
 			const appendix = !provenance ? undefined : template === 'landscape-report' ? renderLandscapeAppendix(content, provenance) : renderFtoAppendix(content, provenance);
+			// The structured chart's header fields are read off the rows themselves, so the claims it
+			// states are the claims it actually charts.
+			const invalidityFields = structuredBody && variant === 'invalidity' ? {
+				challengedPublication: input.challengedPublication ?? options.input.matter,
+				claimsAtIssue: challengedClaims(input).join(', '),
+				criticalDateBasis: options.input.objective,
+			} : {};
 			const document = buildPatentReport(candidateContent, template, {
 				matter: options.input.matter,
 				subject: options.input.subject,
@@ -180,7 +192,8 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				searchStrategy: options.input.searchStrategy,
 				date: new Date().toISOString().slice(0, 10),
 				preparedBy: 'FlowLeap Patent AI (AI-assisted draft)',
-			}, appendix);
+				...invalidityFields,
+			}, appendix, structuredBody);
 
 
 			// Ensure the parent directory exists before writing.

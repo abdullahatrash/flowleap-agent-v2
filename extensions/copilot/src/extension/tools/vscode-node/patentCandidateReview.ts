@@ -9,12 +9,21 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 
+/**
+ * Which structured report the coverage machinery is producing. The checks are identical; only the
+ * wording of the content rule and of the rendered statuses differs, because an invalidity chart's
+ * rows are the challenged patent's claim elements and its sources are the prior art.
+ */
+export type CandidateReviewVariant = 'prior-art' | 'invalidity';
+
 export interface PatentCandidateReview {
 	readonly coverage?: readonly {
 		readonly feature: string;
 		readonly kind?: 'feature' | 'combination';
 		readonly importance: 'essential' | 'optional';
 		readonly status: 'supported' | 'partial' | 'unresolved';
+		/** invalidity-claim-chart: the challenged claim this row is an element of, e.g. `1`. */
+		readonly claimNumber?: string;
 		/** Required by the tool schema, but an unresolved row may arrive without it; never dereference unguarded. */
 		readonly sourceAnchors?: readonly string[];
 		readonly gap: string;
@@ -28,6 +37,8 @@ export interface PatentCandidateReview {
 	readonly content?: string;
 	readonly limitations?: readonly string[];
 	readonly stopReason?: string;
+	/** invalidity-claim-chart: the patent whose claims are being charted against the cited art. */
+	readonly challengedPublication?: string;
 	/** Report prose the template renders outside the appendix; checked like every other model-written field. */
 	readonly objective?: string;
 	readonly searchStrategy?: string;
@@ -330,11 +341,11 @@ export function materializeCandidateReview<T extends PatentCandidateReview>(revi
 }
 
 /** Validate explicit review structure and anchor identity, not the truth or entailment of prose. */
-export function validateCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, citedText = ''): string[] {
+export function validateCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, citedText = '', variant: CandidateReviewVariant = 'prior-art'): string[] {
 	const errors: string[] = [];
 	const sources = sourceIndex(snapshot);
 	const anchors = new Set(sources.keys());
-	if (review.content?.trim()) { errors.push('For prior-art-report, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.'); }
+	if (review.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
 	// The match stops before trailing prose punctuation and closers, so a sentence-final period or a
 	// surrounding bracket is not read as part of the claim number.
@@ -400,6 +411,60 @@ export function candidateWordingReview(review: PatentCandidateReview): string[] 
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
 
+/** How each status word reads in an invalidity chart, where a row is one element of a granted claim. */
+const INVALIDITY_STATUS: Readonly<Record<PatentCoverageRow['status'], string>> = {
+	supported: 'disclosed in the cited art',
+	partial: 'partially disclosed',
+	unresolved: 'not found in the cited art',
+};
+
+/** One cited publication, the rows citing it, and whether a disclosed row rests on it by itself. */
+interface ReferenceRole {
+	readonly publication: string;
+	readonly rows: readonly string[];
+	readonly alone: boolean;
+}
+
+/**
+ * The publications coverage cites, read off the statuses the author wrote: a reference is `alone`
+ * where some supported row cites it and no other document. This is a reading of this chart, not an
+ * X/Y/A category and not a conclusion about anticipation or obviousness.
+ */
+export function referenceRoles(review: PatentCandidateReview, sources: Map<string, PatentEvidenceSource>): readonly ReferenceRole[] {
+	const roles = new Map<string, { rows: string[]; alone: boolean }>();
+	for (const row of review.coverage ?? []) {
+		const publications = new Set([...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor), ...(row.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
+			.flatMap(anchor => {
+				const publication = sources.get(anchor)?.reference.publicationNumber;
+				return publication ? [publicationKey(publication)] : [];
+			}));
+		for (const publication of publications) {
+			const role = roles.get(publication) ?? { rows: [], alone: false };
+			role.rows.push(row.feature);
+			role.alone ||= row.status === 'supported' && publications.size === 1;
+			roles.set(publication, role);
+		}
+	}
+	return [...roles].map(([publication, role]) => ({ publication, rows: role.rows, alone: role.alone }));
+}
+
+/** The distinct challenged claims the rows name, in the order the rows name them. */
+export function challengedClaims(review: PatentCandidateReview): readonly string[] {
+	return [...new Set((review.coverage ?? []).flatMap(row => row.claimNumber?.trim() ? [row.claimNumber.trim()] : []))];
+}
+
+/** The generated roles table; empty for a prior-art review, which states no reference roles. */
+function referenceRoleTable(review: PatentCandidateReview, sources: Map<string, PatentEvidenceSource>): string[] {
+	const roles = referenceRoles(review, sources);
+	if (!roles.length) { return []; }
+	return ['', '## Reference roles (generated)',
+		'Derived from the statuses in this chart, not a legal category: a reference is listed as disclosing on its own where a row marked disclosed cites it and no other document, and as contributing in combination otherwise. This is not an X/Y/A tag and asserts nothing about anticipation, obviousness or inventive step.',
+		'| Reference | Cited in | Role (generated) |',
+		'| --- | --- | --- |',
+		...roles.map(role => '| ' + [role.publication, role.rows.join('; '), role.alone ? 'discloses element(s) on its own' : 'contributes in combination'].map(cell).join(' | ') + ' |'),
+		''];
+}
+
 /** Render retrieved text as literal quotation content, never as Markdown or active source HTML. */
 function quotation(text: string): string {
 	const missingImage = /<img\b[^>]*>/i.test(text);
@@ -451,8 +516,10 @@ function secondReadNotes(row: PatentCoverageRow, secondRead: SecondReadOutcome |
  * @param secondRead when present, the report states what an independent read of the cited passages
  * did not confirm, under each affected row and once in Limitations. Rendering is byte-identical to a
  * report written without one when it is omitted.
+ * @param variant `invalidity` relabels the statuses for a claim chart and adds the generated
+ * reference-roles table. Rendering is byte-identical to a prior-art review when it is omitted.
  */
-export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string, secondRead?: SecondReadOutcome): string {
+export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string, secondRead?: SecondReadOutcome, variant: CandidateReviewVariant = 'prior-art'): string {
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);
@@ -475,7 +542,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		'## Coverage and remaining search tracks',
 		...(review.coverage ?? []).flatMap(row => [
 			`### ${cell(row.feature)}`,
-			`**${row.kind} · ${row.importance} · ${row.status}**`,
+			`**${row.kind} · ${row.importance} · ${variant === 'invalidity' ? INVALIDITY_STATUS[row.status] : row.status}**`,
 			row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
 			...(row.sourceAnchors ?? []).flatMap(anchor => {
 				const source = sources.get(anchor);
@@ -489,6 +556,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 			...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
+		...(variant === 'invalidity' ? referenceRoleTable(review, sources) : []),
 		'', '## Retrieved but not cited in coverage',
 		'Retrieved text that no coverage row cites was not reviewed for this report; its content is unknown, not absent.',
 		...(uncited.length ? [

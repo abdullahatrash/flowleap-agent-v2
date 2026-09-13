@@ -129,6 +129,28 @@ describe('prior-art report completion contract', () => {
 		expect(await checkPriorArtReportCompletion([], current, fs)).toContain('More patent evidence');
 	});
 
+	it('routes an invalidity chart request through the same finalization, and only with coverage', async () => {
+		const fs = files();
+		const request = 'Build the invalidity case against EP2000000A1 and save "outputs/研究 review.md".';
+		const chart = (args: string): ReportCompletionTurn => ({
+			message: request,
+			rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: '0', name: ToolName.SearchPatents, arguments: '{}' }, { id: '1', name: ToolName.WritePatentResults, arguments: args }] }],
+			results: { '1': new LanguageModelToolResult([new LanguageModelTextPart(priorArtReportReceipt(report, 'Evidence-backed interim chart', evidence, 'Snapshot'))]) },
+		});
+		await fs.writeFile(report, new TextEncoder().encode('Evidence-backed interim chart'));
+		await fs.writeFile(evidence, new TextEncoder().encode('Snapshot'));
+		const written = await checkPriorArtReportCompletion([], chart('{"template":"invalidity-claim-chart"}'), fs);
+		expect({
+			recognized: [requestsPriorArtReport(request), requestsPriorArtReport('Write an invalidity report on EP2000000A1'), requestsPriorArtReport('Is this patent still in force?')],
+			structured: await checkPriorArtReportCompletion([], chart('{"template":"invalidity-claim-chart","coverage":[{"feature":"Claim 1 — element (a)"}]}'), fs),
+			written: [written?.startsWith('The requested invalidity chart has no successful structured finalization in this turn.'), written?.includes('template="invalidity-claim-chart"')],
+		}).toEqual({
+			recognized: [true, true, false],
+			structured: undefined,
+			written: [true, true],
+		});
+	});
+
 	it('does not accept another output path, or an older receipt after new retrieval', async () => {
 		const fs = files();
 		expect(await checkPriorArtReportCompletion([], await saved(fs, URI.file('/workspace/wrong.md')), fs)).toContain('different path');

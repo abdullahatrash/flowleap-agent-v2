@@ -59,6 +59,12 @@ export interface PatentReportFields {
 	readonly preparedBy?: string;
 	readonly objective?: string;
 	readonly searchStrategy?: string;
+	/** invalidity-claim-chart, structured path only: the patent whose claims the chart challenges. */
+	readonly challengedPublication?: string;
+	/** invalidity-claim-chart, structured path only: the distinct claims the chart's rows name. */
+	readonly claimsAtIssue?: string;
+	/** invalidity-claim-chart, structured path only: the date the art is measured against. */
+	readonly criticalDateBasis?: string;
 }
 
 /** Render a `| Field | Value |` metadata table; empty values fall back to the placeholder. */
@@ -87,6 +93,9 @@ const CONTENT_REQUIREMENT: Record<Exclude<PatentReportTemplate, 'prior-art-repor
 
 /** Closing sentence of every missing-content message: the one template the rule does not apply to. */
 const CONTENT_EXCEPTION = 'Only prior-art-report uses empty content with structured fields.';
+
+/** `invalidity-claim-chart` has the same structured alternative, so its message offers it instead. */
+const INVALIDITY_EXCEPTION = 'Either write the chart into content, or supply structured coverage and leave content empty; the writer then generates, validates and receipts the chart.';
 
 /** Second-level headings the model wrote itself. */
 const AUTHORED_SECTIONS = /^##\s+\S/gm;
@@ -119,11 +128,11 @@ function bareText(value: string): string {
  * produces a document whose sections all say "to be completed" while the findings stay in the chat,
  * where nothing keeps them. Free-form saves (no template) are unaffected.
  */
-export function contentRequirementError(template: PatentReportTemplate | undefined, content: string): string | undefined {
-	if (!template || template === 'prior-art-report') {
+export function contentRequirementError(template: PatentReportTemplate | undefined, content: string, structuredBody = false): string | undefined {
+	if (!template || template === 'prior-art-report' || structuredBody) {
 		return undefined;
 	}
-	const requirement = `${CONTENT_REQUIREMENT[template]} ${CONTENT_EXCEPTION}`;
+	const requirement = `${CONTENT_REQUIREMENT[template]} ${template === 'invalidity-claim-chart' ? INVALIDITY_EXCEPTION : CONTENT_EXCEPTION}`;
 	if (!content.trim()) {
 		return requirement;
 	}
@@ -138,11 +147,11 @@ export function contentRequirementError(template: PatentReportTemplate | undefin
  * `generated` sections (checks derived from the execution record) above the disclaimer footer. When
  * `template` is undefined the content is returned unchanged (free-form save).
  */
-export function buildPatentReport(content: string, template: PatentReportTemplate | undefined, fields?: PatentReportFields, generated?: string): string {
+export function buildPatentReport(content: string, template: PatentReportTemplate | undefined, fields?: PatentReportFields, generated?: string, structuredBody = false): string {
 	if (!template) {
 		return content;
 	}
-	return [...templateSections(content, template, fields ?? {}), ...(generated?.trim() ? [generated.trim(), ''] : []), '---', `*${DISCLAIMER}*`, ''].join('\n');
+	return [...templateSections(content, template, fields ?? {}, structuredBody), ...(generated?.trim() ? [generated.trim(), ''] : []), '---', `*${DISCLAIMER}*`, ''].join('\n');
 }
 
 /**
@@ -153,15 +162,15 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
  * kept, and the model's own sections stand in place of the numbered scaffold. `prior-art-report` is
  * excluded because its body is generated from structured coverage, not written free-form.
  */
-function templateSections(content: string, template: PatentReportTemplate, f: PatentReportFields): readonly string[] {
-	if (template !== 'prior-art-report' && isAuthoredReport(content)) {
-		return [...templateHeader(template, f), content.trim(), ''];
+function templateSections(content: string, template: PatentReportTemplate, f: PatentReportFields, structuredBody: boolean): readonly string[] {
+	if (template !== 'prior-art-report' && (structuredBody || isAuthoredReport(content))) {
+		return [...templateHeader(template, f, structuredBody), content.trim(), ''];
 	}
 	return templateScaffold(content, template, f);
 }
 
 /** The title and metadata table every version of a template opens with. */
-function templateHeader(template: PatentReportTemplate, f: PatentReportFields): readonly string[] {
+function templateHeader(template: PatentReportTemplate, f: PatentReportFields, structuredBody = false): readonly string[] {
 	switch (template) {
 		case 'prior-art-report':
 			return ['# Prior Art Candidate Review', '', fieldTable([['Matter / Reference', f.matter], ['Subject Technology', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
@@ -170,7 +179,11 @@ function templateHeader(template: PatentReportTemplate, f: PatentReportFields): 
 		case 'office-action-scaffold':
 			return ['# Office Action Response', '', fieldTable([['Application No.', f.matter], ['Examiner', undefined], ['Art Unit', undefined], ['Mailing Date', undefined], ['Response Due Date', undefined], ['Prepared By', f.preparedBy]]), ''];
 		case 'invalidity-claim-chart':
-			return ['# Invalidity Claim Chart', '', fieldTable([['Patent No. / Claim(s) at Issue', f.matter], ['Prior Art Reference(s)', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+			// The structured chart names the challenged patent and the claims its own rows cover, so the
+			// header states what was charted; the written-content chart keeps the practitioner fields.
+			return structuredBody
+				? ['# Invalidity Claim Chart', '', fieldTable([['Challenged patent', f.challengedPublication], ['Claim(s) at issue', f.claimsAtIssue], ['Critical date basis', f.criticalDateBasis], ['Date', f.date], ['Prepared by', f.preparedBy]]), '']
+				: ['# Invalidity Claim Chart', '', fieldTable([['Patent No. / Claim(s) at Issue', f.matter], ['Prior Art Reference(s)', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
 		case 'eou-infringement-chart':
 			return ['# Evidence-of-Use (EoU) Infringement Chart', '', fieldTable([['Patent No. / Claim(s) Asserted', f.matter], ['Accused Product / Service', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
 		case 'patentability-opinion':

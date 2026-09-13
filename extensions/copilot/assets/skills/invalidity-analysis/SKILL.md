@@ -60,7 +60,13 @@ Per target claim, using the **patent-examination** X/Y discipline. Construction 
 
 ## Phase 5: Report
 
-Save via `write_patent_results` (`template: 'invalidity-claim-chart'` for the invalidity charts deliverable):
+Save via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it **structured**: leave `content` empty and supply `coverage`, so the writer validates the quotes, renders the chart and writes the evidence companion.
+- One row per element of each independent claim — `feature: "Claim 1 — element (b): …"`, `claimNumber: "1"`, `kind: 'feature'` — plus one `kind: 'combination'` row per independent claim (`"Claim 1 as a whole"`).
+- `elements` carry literal fragments copied from the **prior art's** claims or description, and `sourceAnchors`/`evidence` cite those prior-art passages, never the challenged patent.
+- Set `challengedPublication` to the target patent, and put the critical-date basis in `objective`.
+- `status` stays supported / partial / unresolved; the chart renders them as disclosed / partially disclosed / not found in the cited art, and derives a reference-roles table from them. Your X/Y/A tagging stays your own judgment in the prose above.
+
+The saved chart covers:
 1. **Target summary** — claims, priority date, legal status, prosecution-history findings
 2. **Venue assessment** — which challenges are still open, on which grounds
 3. **Invalidity charts** — per claim, best grounds first

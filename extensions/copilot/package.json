@@ -2178,7 +2178,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. Free-form saves (no template) retain their existing behavior.",
+        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. Free-form saves (no template) retain their existing behavior.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -2189,7 +2189,7 @@
             },
             "content": {
               "type": "string",
-              "description": "Report body. Required for every template except prior-art-report, which takes structured coverage instead. For landscape-report include the trend, top-filer and jurisdiction tables and the white-space notes, each figure with its counting basis and source."
+              "description": "Report body. Required for every template except prior-art-report, and except invalidity-claim-chart when it is saved with structured coverage; those take coverage instead and must leave content empty. For landscape-report include the trend, top-filer and jurisdiction tables and the white-space notes, each figure with its counting basis and source."
             },
             "template": {
               "type": "string",
@@ -2203,7 +2203,7 @@
                 "landscape-report",
                 "portfolio-due-diligence-memo"
               ],
-              "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts, landscape-report for landscapes, portfolio-due-diligence-memo for portfolios. Omit for free-form content."
+              "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts (invalidity-claim-chart also takes structured coverage, and then requires empty content), landscape-report for landscapes, portfolio-due-diligence-memo for portfolios. Omit for free-form content."
             },
             "matter": {
               "type": "string",
@@ -2221,9 +2221,13 @@
               "type": "string",
               "description": "Confirmed search scope and cutoff basis, sources and strategy. Actual query/count history is generated from recorded executions for prior-art-report; identify unavailable or unsearched sources in limitations."
             },
+            "challengedPublication": {
+              "type": "string",
+              "description": "invalidity-claim-chart: the publication number of the patent whose claims are being charted against the cited art. Falls back to matter when unset."
+            },
             "coverage": {
               "type": "array",
-              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields.",
+              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 \u2014 element (b): \u2026\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart.",
               "minItems": 1,
               "items": {
                 "type": "object",
@@ -2263,6 +2267,11 @@
                       "feature",
                       "combination"
                     ]
+                  },
+                  "claimNumber": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"). The chart's header states the distinct claims its rows name."
                   },
                   "elements": {
                     "type": "array",
