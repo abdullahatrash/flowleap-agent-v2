@@ -72,15 +72,65 @@ function section(stub: string, value: string | undefined): string {
 }
 
 /**
- * Wrap the model-produced `content` in the professional structure named by `template`. When
+ * What each template's `content` must carry. `prior-art-report` is absent: it is the one template
+ * whose body is generated from structured coverage, so its content must be empty.
+ */
+const CONTENT_REQUIREMENT: Record<Exclude<PatentReportTemplate, 'prior-art-report'>, string> = {
+	'fto-memo': 'fto-memo needs content: the per-feature analysis, naming each candidate blocking claim, its legal status and its jurisdiction.',
+	'office-action-scaffold': 'office-action-scaffold needs content: the remarks answering every ground of rejection, each naming the claims affected and the reference applied against them.',
+	'invalidity-claim-chart': 'invalidity-claim-chart needs content: the element-by-element table, one row per claim element and one column per reference, each cell quoting the disclosing passage.',
+	'eou-infringement-chart': 'eou-infringement-chart needs content: the element-by-element table mapping each claim element to the accused feature, its literal or doctrine-of-equivalents marking, and the supporting evidence.',
+	'patentability-opinion': 'patentability-opinion needs content: the novelty and inventive-step analysis, naming the reference relied on for each claim feature.',
+	'landscape-report': 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query).',
+	'portfolio-due-diligence-memo': 'portfolio-due-diligence-memo needs content: the key-asset analysis, one entry per asset with its claim breadth, its status and the observation bearing on value.',
+};
+
+/** Closing sentence of every missing-content message: the one template the rule does not apply to. */
+const CONTENT_EXCEPTION = 'Only prior-art-report uses empty content with structured fields.';
+
+/** A body that stands in for content the model did not write. */
+const PLACEHOLDER_BODY = /^(?:to be (?:completed|filled|added)|tbd|todo|placeholder)$/i;
+
+/** Strip markdown emphasis, brackets and trailing punctuation so a stub reads as its bare words. */
+function bareText(value: string): string {
+	return value.replace(/[_*`()[\]]/g, '').replace(/[.:;!]+$/, '').trim();
+}
+
+/**
+ * Why this `content` cannot be saved under this `template`, or `undefined` when it can.
+ *
+ * Every template but `prior-art-report` wraps a body the model writes; saving one with no body
+ * produces a document whose sections all say "to be completed" while the findings stay in the chat,
+ * where nothing keeps them. Free-form saves (no template) are unaffected.
+ */
+export function contentRequirementError(template: PatentReportTemplate | undefined, content: string): string | undefined {
+	if (!template || template === 'prior-art-report') {
+		return undefined;
+	}
+	const requirement = `${CONTENT_REQUIREMENT[template]} ${CONTENT_EXCEPTION}`;
+	if (!content.trim()) {
+		return requirement;
+	}
+	// A section body that is only a stub is the same failure one heading further down: the body was
+	// never written. Headings themselves are the template's, so only the text under them is judged.
+	const bodies = [content, ...content.split(/^#{1,6} .*$/m).slice(1)];
+	return bodies.some(body => PLACEHOLDER_BODY.test(bareText(body))) ? `${requirement} A placeholder such as "to be completed" is not content.` : undefined;
+}
+
+/**
+ * Wrap the model-produced `content` in the professional structure named by `template`, and append the
+ * `generated` sections (checks derived from the execution record) above the disclaimer footer. When
  * `template` is undefined the content is returned unchanged (free-form save).
  */
-export function buildPatentReport(content: string, template: PatentReportTemplate | undefined, fields?: PatentReportFields): string {
+export function buildPatentReport(content: string, template: PatentReportTemplate | undefined, fields?: PatentReportFields, generated?: string): string {
 	if (!template) {
 		return content;
 	}
+	return [...templateSections(content, template, fields ?? {}), ...(generated?.trim() ? [generated.trim(), ''] : []), '---', `*${DISCLAIMER}*`, ''].join('\n');
+}
 
-	const f = fields ?? {};
+/** The template's own sections, ending with the blank line that precedes the disclaimer footer. */
+function templateSections(content: string, template: PatentReportTemplate, f: PatentReportFields): readonly string[] {
 	const results = content.trim().length > 0 ? content.trim() : FIELD;
 
 	switch (template) {
@@ -99,10 +149,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 3. Candidate Evidence',
 				results,
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'fto-memo':
 			return [
@@ -125,10 +172,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 5. Assumptions & Limitations',
 				'_Scope of the search and any assumptions made._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'office-action-scaffold':
 			return [
@@ -149,10 +193,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 4. Conclusion',
 				'_Request for allowance and any remaining issues._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'invalidity-claim-chart':
 			return [
@@ -176,10 +217,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 5. Claim Language',
 				'_Verbatim text of the challenged claim(s), for reference._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'eou-infringement-chart':
 			return [
@@ -200,10 +238,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 4. Evidentiary Sources',
 				'_Documents, specifications, or public materials relied upon for the evidence-of-use mapping._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'patentability-opinion':
 			return [
@@ -226,10 +261,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 5. Conclusion and Risk Assessment',
 				'_Overall patentability conclusion with a risk rating (low/medium/high) and recommended next steps._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'landscape-report':
 			return [
@@ -252,10 +284,7 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 5. Issues & Limitations',
 				'_What the data cannot show: coverage and language limits, publication lag on the most recent 18 months, family-counting caveats, and any classification ambiguities._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 
 		case 'portfolio-due-diligence-memo':
 			return [
@@ -278,9 +307,6 @@ export function buildPatentReport(content: string, template: PatentReportTemplat
 				'## 5. Valuation-Relevant Observations',
 				'_Factors bearing on portfolio value: claim breadth, remaining term, citation activity, and market relevance._',
 				'',
-				'---',
-				`*${DISCLAIMER}*`,
-				'',
-			].join('\n');
+			];
 	}
 }

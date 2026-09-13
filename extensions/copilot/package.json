@@ -2178,7 +2178,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write or update patent research results in a workspace file. For prior-art-report use empty content: the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Other templates and free-form saves retain their existing behavior.",
+        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. Free-form saves (no template) retain their existing behavior.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -2189,7 +2189,7 @@
             },
             "content": {
               "type": "string",
-              "description": "Free-form content for other templates or untemplated saves. Must be empty for prior-art-report: use structured coverage instead."
+              "description": "Report body. Required for every template except prior-art-report, which takes structured coverage instead. For landscape-report include the trend, top-filer and jurisdiction tables and the white-space notes, each figure with its counting basis and source."
             },
             "template": {
               "type": "string",

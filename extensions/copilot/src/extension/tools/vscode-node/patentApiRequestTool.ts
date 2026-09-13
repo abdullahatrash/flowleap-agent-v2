@@ -10,6 +10,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -29,6 +30,27 @@ interface IPatentApiRequestParams {
 	body?: string;
 }
 
+/** Count fields a backend response may carry, in the order they are trusted. */
+const COUNT_FIELDS = ['total', 'count', 'totalResults', 'numFound'] as const;
+
+/**
+ * The response's own count of matching records, when it states one. This tool calls arbitrary
+ * routes, so the count is read rather than derived: the facade nests its payload under `data`, and
+ * a body that states no count leaves `rowCount` unknown rather than reporting a fabricated zero.
+ */
+function reportedCount(result: unknown): number | undefined {
+	if (!result || typeof result !== 'object') { return undefined; }
+	const body = result as Record<string, unknown>;
+	const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : undefined;
+	for (const source of [body, data]) {
+		for (const field of COUNT_FIELDS) {
+			const value = source?.[field];
+			if (typeof value === 'number' && Number.isFinite(value) && value >= 0) { return value; }
+		}
+	}
+	return undefined;
+}
+
 /**
  * Tool that makes an authenticated request to the FlowLeap backend and returns the JSON response
  * directly to the LLM. Replaces the pattern of running curl in the terminal: authentication is
@@ -40,13 +62,14 @@ interface IPatentApiRequestParams {
  * the `*_api_guide` tools name the tool and publish its schema. PATSTAT is the exception the backend
  * kept as a route surface, so `/patstat/...` paths are still called directly.
  */
-class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
+export class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 
 	public static readonly toolName = ToolName.PatentApiRequest;
 
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(
@@ -69,6 +92,8 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 
 		// Normalise path: strip scheme+host and leading /v1 so the client can prepend apiUrl correctly
 		const normalisedPath = normaliseToRelativePath(rawPath);
+		// The request as SENT, so an audited number can be traced back to the exact call that produced it.
+		const recordedRequest = [`${method} ${normalisedPath}`, bodyStr?.trim()].filter(Boolean).join(' ');
 
 		try {
 			let result: unknown;
@@ -107,9 +132,16 @@ class PatentApiRequestTool implements ICopilotTool<IPatentApiRequestParams> {
 			const singleRecord = isSingleRecordDocumentLookup({ path: normalisedPath, body: parsedBody }, result);
 			const formatted = formatJsonForModel(addPatentReaderLinks(result), ToolResponseBudgets.PatentApiRequest, { singleRecord });
 
+			// Recorded for the audit only; the tool's answer is unchanged by the outcome of the write.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'analytics', status: 'succeeded', tool: 'patent_api_request', request: recordedRequest,
+				rowCount: reportedCount(result), resultText: formatted.content,
+			});
+
 			return new LanguageModelToolResult([new LanguageModelTextPart(formatted.content)]);
 
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'patent_api_request', request: recordedRequest });
 			return handlePatentToolError(error, this.logService, '[PatentApiRequestTool]', err => `Backend error ${err.status}: ${err.message}`);
 		}
 	}

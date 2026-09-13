@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { PatentBackendError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { PatstatGraphTool } from '../patstatGraphTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes (patstatQueryTool.spec.ts pattern) ───────────────────────────────────
 
@@ -148,7 +149,7 @@ describe('PatstatGraphTool', () => {
 
 	it('maps each operation onto its graph route, omitting unset bounds', async () => {
 		const { client, calls } = makeBackendClient(verbFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 		const token = makeToken();
 
 		await tool.invoke(makeOptions({ operation: 'resolve' as const, query: 'EP3477840' }), token);
@@ -170,7 +171,7 @@ describe('PatstatGraphTool', () => {
 
 	it('relays an agent verb\'s text VERBATIM, with the confidence/provenance instruction alongside it', async () => {
 		const { client } = makeBackendClient(verbFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'neighborhood' as const, node: 'EP3477840' }), makeToken()));
 
@@ -181,7 +182,7 @@ describe('PatstatGraphTool', () => {
 
 	it('tells the model a path miss is an answer, not a failure', async () => {
 		const { client } = makeBackendClient({ success: true, text: '# path EP3477840B1 → US5960411A (max_hops=2)\nNOT FOUND within the hop limit.' });
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'path' as const, a: 'EP3477840', b: 'US5960411' }), makeToken()));
 
@@ -192,7 +193,7 @@ describe('PatstatGraphTool', () => {
 
 	it('renders a resolved anchor with the node id the other operations take', async () => {
 		const { client } = makeBackendClient(resolveAnchorFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'resolve' as const, query: 'EP3477840' }), makeToken()));
 
@@ -203,7 +204,7 @@ describe('PatstatGraphTool', () => {
 
 	it('presents entity candidates as a pick-one list with the TRUE total, never an answer', async () => {
 		const { client } = makeBackendClient(resolveEntitiesFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'resolve' as const, query: 'Siemens' }), makeToken()));
 
@@ -215,7 +216,7 @@ describe('PatstatGraphTool', () => {
 
 	it('renders every patent_view section (including the empty ones) with truncation, edition and data-quality flags', async () => {
 		const { client } = makeBackendClient(patentViewFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'patent_view' as const, publication: 'EP3477840' }), makeToken()));
 
@@ -244,7 +245,7 @@ describe('PatstatGraphTool', () => {
 
 	it('renders applicant_view with its entity-boundary warning and no implied cap on filings by year', async () => {
 		const { client } = makeBackendClient(applicantViewFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'applicant_view' as const, psnId: 30138991 }), makeToken()));
 
@@ -261,7 +262,7 @@ describe('PatstatGraphTool', () => {
 	it('renders the whole filing-year distribution, not its oldest rows', async () => {
 		const filings_by_year = Array.from({ length: 126 }, (_, i) => ({ year: 1884 + i, applications: i }));
 		const { client } = makeBackendClient({ ...applicantViewFixture, filings_by_year });
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'applicant_view' as const, psnId: 30138991 }), makeToken()));
 
@@ -284,7 +285,7 @@ describe('PatstatGraphTool', () => {
 			},
 		});
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(422, envelope); });
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'patent_view' as const, publication: 'EP0000001' }), makeToken()));
 
@@ -301,7 +302,7 @@ describe('PatstatGraphTool', () => {
 	it('falls back to the resolve recovery when the ambiguity envelope was truncated by the client', async () => {
 		const truncated = '{"error":{"candidates":[{"application":"EP0000001 (D2)","appln_id":930482825,"at":"tls201:930482825"…';
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(422, truncated); });
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'patent_view' as const, publication: 'EP0000001' }), makeToken()));
 
@@ -321,7 +322,7 @@ describe('PatstatGraphTool', () => {
 		for (const testCase of cases) {
 			const envelope = JSON.stringify({ success: false, status: testCase.status, error: { code: testCase.code, message: testCase.message } });
 			const { client } = makeBackendClient(() => { throw new PatentBackendError(testCase.status, envelope); });
-			const tool = new PatstatGraphTool(makeLogService(), client);
+			const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 
 			const text = textOf(await tool.invoke(makeOptions({ operation: 'explain' as const, node: 'EP9999999' }), makeToken()));
 
@@ -333,7 +334,7 @@ describe('PatstatGraphTool', () => {
 
 	it('short-circuits malformed calls before any network round-trip', async () => {
 		const { client, calls } = makeBackendClient(verbFixture);
-		const tool = new PatstatGraphTool(makeLogService(), client);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
 		const token = makeToken();
 
 		const missingQuery = textOf(await tool.invoke(makeOptions({ operation: 'resolve' as const }), token));
@@ -344,5 +345,17 @@ describe('PatstatGraphTool', () => {
 		expect(missingQuery).toContain('Provide `query`');
 		expect(nameAsPsnId).toContain('a company name will not work here');
 		expect(missingEndpoint).toContain('Provide both `a` and `b`');
+	});
+
+	it('records the graph route, edition and the exact text returned to the model', async () => {
+		const { client } = makeBackendClient(applicantViewFixture);
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new PatstatGraphTool(makeLogService(), client, ledger).invoke(makeOptions({ operation: 'applicant_view' as const, psnId: 30138991 }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'analytics', status: 'succeeded', tool: 'patstat_graph',
+			request: '/patstat/graph/applicant/30138991', dataEdition: 'PATSTAT 2026 Spring', resultText: textOf(result),
+		}]);
 	});
 });

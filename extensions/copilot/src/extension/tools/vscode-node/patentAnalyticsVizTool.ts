@@ -18,6 +18,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
@@ -46,6 +47,12 @@ interface IPatentAnalyticsRequest {
 	dateFrom?: string;
 	dateTo?: string;
 }
+
+/**
+ * The corpus these aggregates are counted over. Rendered in the coverage line AND recorded as the
+ * audit's data edition, so a quoted figure always carries the same provenance label the model read.
+ */
+const CORPUS_LABEL = 'the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus)';
 
 interface AnalyticsAggregates {
 	byYear: { year: number; count: number }[];
@@ -76,6 +83,7 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IPatentAnalyticsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -96,22 +104,34 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 			]);
 		}
 
+		const recordedRequest = JSON.stringify(request);
+
 		try {
 			const data = await callFacadeTool<AnalyticsData>(this.patentBackendClient, 'patent_analytics', request, token);
 
 			if (!data.analytics) {
+				// No aggregates came back, so no number was produced: record the attempt as failed.
+				await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: 'failed', tool: 'patent_analytics_viz', request: recordedRequest });
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart('Error: the analytics tool returned no aggregates for these criteria.')
 				]);
 			}
 
 			const formattedResponse = this.formatAnalytics(data.searchDescription, data.analytics);
+			const { byYear, byCountry, topAssignees, topCPC } = data.analytics;
+			// Recorded for the audit only; the tool's answer is unchanged by the outcome of the write.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'analytics', status: 'succeeded', tool: 'patent_analytics_viz', request: recordedRequest,
+				rowCount: byYear.length + byCountry.length + topAssignees.length + topCPC.length,
+				dataEdition: CORPUS_LABEL, resultText: formattedResponse, summary: data.searchDescription,
+			});
 
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(formattedResponse)
 			]);
 
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'patent_analytics_viz', request: recordedRequest });
 			return handlePatentToolError(error, this.logService, '[PatentAnalyticsTool]', err => `Error: Patent analytics returned ${err.status}: ${err.message}`);
 		}
 	}
@@ -173,7 +193,7 @@ export class PatentAnalyticsVizTool implements ICopilotTool<IPatentAnalyticsPara
 		if (searchDescription) {
 			lines.push(`**Search**: ${searchDescription}`, '');
 		}
-		lines.push('Coverage: full-corpus counts over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus). Each list below is capped at its top 20.', '');
+		lines.push(`Coverage: full-corpus counts over ${CORPUS_LABEL}. Each list below is capped at its top 20.`, '');
 
 		// Filing trend, oldest year first so the table reads as a time series.
 		const yearsAscending = [...byYear].sort((a, b) => a.year - b.year);

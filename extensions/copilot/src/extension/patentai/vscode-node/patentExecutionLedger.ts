@@ -23,10 +23,19 @@ export interface PatentEvidenceSource {
 	readonly completeness: 'unknown';
 }
 
+/** The number-producing analytics tools whose outcomes the audit records. */
+export type PatentAnalyticsTool = 'patstat_query' | 'patstat_portfolio' | 'patent_analytics_viz' | 'patstat_graph' | 'patent_api_request';
+
+/** Cap for a recorded request (SQL or the JSON of the request params). */
+export const ANALYTICS_REQUEST_CAP = 2_000;
+
+/** Cap for the recorded result text a figure check searches. */
+export const ANALYTICS_RESULT_CAP = 20_000;
+
 export interface PatentExecution {
 	readonly id: string;
 	readonly recordedAt: string;
-	readonly kind: 'search' | 'details';
+	readonly kind: 'search' | 'details' | 'analytics';
 	readonly status: 'succeeded' | 'failed' | 'cancelled';
 	readonly query?: string;
 	readonly requestedRange?: string;
@@ -43,6 +52,18 @@ export interface PatentExecution {
 	readonly publicationIds?: readonly string[];
 	readonly sources?: readonly PatentEvidenceSource[];
 	readonly unavailableSections?: readonly string[];
+	/** `analytics` only: which analytics tool produced the outcome. */
+	readonly tool?: PatentAnalyticsTool;
+	/** `analytics` only: the SQL, or the JSON of the request params, capped at {@link ANALYTICS_REQUEST_CAP}. */
+	readonly request?: string;
+	/** `analytics` only: the backend's own row count, when it reported one. */
+	readonly rowCount?: number;
+	/** `analytics` only: the PATSTAT edition or corpus label the numbers belong to. */
+	readonly dataEdition?: string;
+	/** `analytics` only: the exact text returned to the model, capped at {@link ANALYTICS_RESULT_CAP}; a figure check searches this. */
+	readonly resultText?: string;
+	/** `analytics` only: the tool's own quotable summary line, when it has one. */
+	readonly summary?: string;
 }
 
 export interface PatentExecutionSnapshot {
@@ -57,7 +78,7 @@ export interface IPatentExecutionLedger {
 	read(session: vscode.Uri | undefined): Promise<PatentExecutionSnapshot>;
 }
 
-const LIMITATION = 'Audit covers recorded search_patents and get_patent_details outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
+const LIMITATION = 'Audit covers recorded search_patents, get_patent_details and analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
 
 /** Durable, append-only outcome records owned by the patent workflow. Separate files avoid lost concurrent writes. */
 export class PatentExecutionLedger implements IPatentExecutionLedger {
@@ -84,7 +105,7 @@ export class PatentExecutionLedger implements IPatentExecutionLedger {
 		try {
 			await this.fileSystem.createDirectory(directory);
 			const temporary = URI.joinPath(directory, id + '.pending');
-			await this.fileSystem.writeFile(temporary, new TextEncoder().encode(JSON.stringify({ ...execution, id, recordedAt: new Date().toISOString() })));
+			await this.fileSystem.writeFile(temporary, new TextEncoder().encode(JSON.stringify({ ...capAnalyticsText(execution), id, recordedAt: new Date().toISOString() })));
 			await this.fileSystem.rename(temporary, URI.joinPath(directory, id + '.json'));
 			return `Execution audit recorded: ${id}. Retrieval does not establish passage review.`;
 		} catch {
@@ -120,6 +141,22 @@ export class PatentExecutionLedger implements IPatentExecutionLedger {
 			return { executions: [], limitation: 'No readable execution audit is available. ' + LIMITATION };
 		}
 	}
+}
+
+/**
+ * Bound the two free-text analytics fields before they reach storage, so one oversized SQL or
+ * result cannot make a session's audit unreadable. A cut is announced in the stored text: a figure
+ * check that finds no number must be able to tell "not produced" from "beyond the recorded cut".
+ */
+function capAnalyticsText(execution: Omit<PatentExecution, 'id' | 'recordedAt'>): Omit<PatentExecution, 'id' | 'recordedAt'> {
+	const cap = (value: string | undefined, limit: number): string | undefined =>
+		value !== undefined && value.length > limit ? value.substring(0, limit) + '\n… [truncated for the audit record]' : value;
+	const request = cap(execution.request, ANALYTICS_REQUEST_CAP);
+	const resultText = cap(execution.resultText, ANALYTICS_RESULT_CAP);
+	if (request === execution.request && resultText === execution.resultText) {
+		return execution;
+	}
+	return { ...execution, request, resultText };
 }
 
 /** Stable section/claim identity; never infer a claim or paragraph number from prose. */
@@ -161,7 +198,7 @@ function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
 function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
 	const record = value as Record<string, unknown>;
-	if (typeof record.kind !== 'string' || !['search', 'details'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
+	if (typeof record.kind !== 'string' || !['search', 'details', 'analytics'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
 	let dropped = false;
 	// `null` is an absent value from JSON, not a corrupt one, so it never counts as a dropped field.
 	const absent = (raw: unknown) => raw === undefined || raw === null;
@@ -196,10 +233,15 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		if (items.length !== raw.length) { dropped = true; }
 		return items;
 	};
+	const analyticsTool = (raw: unknown): PatentAnalyticsTool | undefined => {
+		if (absent(raw)) { return undefined; }
+		if (raw !== 'patstat_query' && raw !== 'patstat_portfolio' && raw !== 'patent_analytics_viz' && raw !== 'patstat_graph' && raw !== 'patent_api_request') { dropped = true; return undefined; }
+		return raw;
+	};
 	const execution: PatentExecution = {
 		id: text(record.id) ?? '',
 		recordedAt: text(record.recordedAt) ?? '',
-		kind: record.kind === 'details' ? 'details' : 'search',
+		kind: record.kind === 'details' ? 'details' : record.kind === 'analytics' ? 'analytics' : 'search',
 		status: record.status === 'failed' ? 'failed' : record.status === 'cancelled' ? 'cancelled' : 'succeeded',
 		query: text(record.query),
 		requestedRange: text(record.requestedRange),
@@ -216,6 +258,12 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		publicationIds: list(record.publicationIds),
 		sources: evidence(record.sources),
 		unavailableSections: list(record.unavailableSections),
+		tool: analyticsTool(record.tool),
+		request: text(record.request),
+		rowCount: count(record.rowCount),
+		dataEdition: text(record.dataEdition),
+		resultText: text(record.resultText),
+		summary: text(record.summary),
 	};
 	return { execution, dropped };
 }

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { buildPatentReport } from '../patentReportTemplates';
+import { buildPatentReport, contentRequirementError } from '../patentReportTemplates';
 
 describe('writePatentResults report templates', () => {
 
@@ -301,5 +301,34 @@ describe('writePatentResults report templates', () => {
 			*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*
 			"
 		`);
+	});
+	it('refuses a templated save with no body and names what that template\'s body must carry', () => {
+		expect({
+			empty: contentRequirementError('landscape-report', '   '),
+			placeholder: contentRequirementError('landscape-report', '## 3. Filing Trends\n_(to be completed)_\n'),
+			stub: contentRequirementError('fto-memo', 'TBD'),
+			written: contentRequirementError('landscape-report', '| Year | Families |\n| --- | --- |\n| 2019 | 1,240 |'),
+			priorArt: contentRequirementError('prior-art-report', ''),
+			freeForm: contentRequirementError(undefined, ''),
+		}).toEqual({
+			empty: 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report uses empty content with structured fields.',
+			placeholder: 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report uses empty content with structured fields. A placeholder such as "to be completed" is not content.',
+			stub: 'fto-memo needs content: the per-feature analysis, naming each candidate blocking claim, its legal status and its jurisdiction. Only prior-art-report uses empty content with structured fields. A placeholder such as "to be completed" is not content.',
+			written: undefined,
+			priorArt: undefined,
+			freeForm: undefined,
+		});
+	});
+
+	it('places generated sections between the template body and the disclaimer', () => {
+		const report = buildPatentReport('| Year | Families |\n| --- | --- |\n| 2019 | 1,240 |', 'landscape-report', { subject: 'Solid electrolytes' }, '## Figure provenance (generated)\n1 figures checked against recorded tool outputs; all found.');
+		expect(report.split('\n').slice(-6)).toEqual([
+			'## Figure provenance (generated)',
+			'1 figures checked against recorded tool outputs; all found.',
+			'',
+			'---',
+			'*This document was generated with AI assistance for informational purposes only and does not constitute legal advice. Consult a licensed patent attorney before relying on its contents.*',
+			'',
+		]);
 	});
 });

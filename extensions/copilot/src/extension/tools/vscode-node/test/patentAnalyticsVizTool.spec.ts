@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { PatentBackendError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { PatentAnalyticsVizTool } from '../patentAnalyticsVizTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ describe('PatentAnalyticsVizTool', () => {
 
 	it('posts the structured contract and renders each aggregate as a markdown table', async () => {
 		const { client, calls } = makeBackendClient(facadeEnvelope(fixtureAnalytics));
-		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
+		const tool = new PatentAnalyticsVizTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({
 			phrases: ['machine learning'],
@@ -150,7 +151,7 @@ describe('PatentAnalyticsVizTool', () => {
 
 	it('returns a criterion error without calling the backend when no criteria are given', async () => {
 		const { client, calls } = makeBackendClient(facadeEnvelope(fixtureAnalytics));
-		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
+		const tool = new PatentAnalyticsVizTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({}), makeToken());
 
@@ -160,7 +161,7 @@ describe('PatentAnalyticsVizTool', () => {
 
 	it('reports no matches when the backend returns empty aggregates', async () => {
 		const { client } = makeBackendClient(facadeEnvelope({ searchDescription: 'patents about unobtanium', analytics: { byYear: [], byCountry: [], topAssignees: [], topCPC: [] } }));
-		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
+		const tool = new PatentAnalyticsVizTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ keywords: ['unobtanium'] }), makeToken());
 
@@ -181,7 +182,7 @@ describe('PatentAnalyticsVizTool', () => {
 				topCPC: [],
 			},
 		}));
-		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
+		const tool = new PatentAnalyticsVizTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ keywords: ['unobtanium'] }), makeToken());
 
@@ -214,10 +215,24 @@ describe('PatentAnalyticsVizTool', () => {
 
 	it('surfaces a backend error with its recovery hint', async () => {
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(400, 'deprecated_parameter: query is no longer supported'); });
-		const tool = new PatentAnalyticsVizTool(makeLogService(), client);
+		const tool = new PatentAnalyticsVizTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const result = await tool.invoke(makeOptions({ keywords: ['ai'] }), makeToken());
 
 		expect(textOf(result)).toBe('Error: Patent analytics returned 400: deprecated_parameter: query is no longer supported');
+	});
+
+	it('records the criteria, aggregate row count, corpus label and the exact text returned to the model', async () => {
+		const { client } = makeBackendClient(facadeEnvelope(fixtureAnalytics));
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new PatentAnalyticsVizTool(makeLogService(), client, ledger).invoke(makeOptions({ phrases: ['machine learning'], assignee: 'Tesla', countryCode: 'us' }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'analytics', status: 'succeeded', tool: 'patent_analytics_viz',
+			request: JSON.stringify({ phrases: ['machine learning'], assignee: 'Tesla', countryCode: 'US' }),
+			rowCount: 9, dataEdition: 'the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus)',
+			summary: fixtureAnalytics.searchDescription, resultText: textOf(result),
+		}]);
 	});
 });

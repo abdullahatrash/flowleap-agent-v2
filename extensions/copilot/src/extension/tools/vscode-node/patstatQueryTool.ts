@@ -23,6 +23,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -72,6 +73,7 @@ export class PatstatQueryTool implements ICopilotTool<IPatstatQueryParams> {
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IPatentBackendClient private readonly patentBackendClient: IPatentBackendClient,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IPatstatQueryParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -106,16 +108,26 @@ export class PatstatQueryTool implements ICopilotTool<IPatstatQueryParams> {
 				const detail = typeof result.error === 'string' && result.error.length > 0
 					? result.error
 					: JSON.stringify(result.error ?? 'Unknown error from the PATSTAT query endpoint');
+				// A 2xx body that carries an error produced no numbers: record the attempt as failed.
+				await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: 'failed', tool: 'patstat_query', request: sql });
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`Error: ${detail}`)
 				]);
 			}
 
+			const resultText = this.formatResult(result);
+			// Recorded for the audit only; the tool's answer is unchanged by the outcome of the write.
+			await this.ledger.record(options.chatSessionResource, {
+				kind: 'analytics', status: 'succeeded', tool: 'patstat_query', request: sql,
+				rowCount: result.rowCount ?? result.rows.length, dataEdition: result.data_edition, resultText,
+			});
+
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(this.formatResult(result))
+				new LanguageModelTextPart(resultText)
 			]);
 
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'analytics', status: token.isCancellationRequested ? 'cancelled' : 'failed', tool: 'patstat_query', request: sql });
 			return handlePatentToolError(
 				error,
 				this.logService,

@@ -10,6 +10,7 @@ import type { CancellationToken } from '../../../../util/vs/base/common/cancella
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { PatentBackendError, type IPatentBackendClient, type IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
 import { PatstatQueryTool } from '../patstatQueryTool';
+import { recordingPatentLedger, unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 // ── Fakes (patstatPortfolioTool.spec.ts pattern) ───────────────────────────────
 
@@ -75,7 +76,7 @@ describe('PatstatQueryTool', () => {
 
 	it('posts sql + audit-only fields to /patstat/query through the shared client seam', async () => {
 		const { client, calls } = makeBackendClient(fixtureResult);
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		await tool.invoke(makeOptions({ sql: SQL, question: 'where does X hold inventions?', retryOf: 'patstat_sql_error' }), makeToken());
 
@@ -90,7 +91,7 @@ describe('PatstatQueryTool', () => {
 
 	it('renders rows as a table with data_edition and the interpretation contract', async () => {
 		const { client } = makeBackendClient(fixtureResult);
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: SQL }), makeToken()));
 
@@ -105,7 +106,7 @@ describe('PatstatQueryTool', () => {
 			...fixtureResult,
 			warnings: [{ code: 'patstat_sql_expensive', message: 'Estimated plan cost 2,100,000 exceeds the warn threshold — consider narrowing.' }],
 		});
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: SQL }), makeToken()));
 
@@ -115,7 +116,7 @@ describe('PatstatQueryTool', () => {
 
 	it('short-circuits a missing sql before any network call, pointing at the semantic model', async () => {
 		const { client, calls } = makeBackendClient(fixtureResult);
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: '   ' }), makeToken()));
 
@@ -136,7 +137,7 @@ describe('PatstatQueryTool', () => {
 			},
 		});
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(400, envelope); });
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: 'SELECT apln_id FROM flowleap.applications' }), makeToken()));
 
@@ -158,7 +159,7 @@ describe('PatstatQueryTool', () => {
 			},
 		});
 		const { client } = makeBackendClient(() => { throw new PatentBackendError(503, envelope); });
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: SQL }), makeToken()));
 
@@ -168,7 +169,7 @@ describe('PatstatQueryTool', () => {
 
 	it('handles a zero-row result with probe guidance instead of an empty table', async () => {
 		const { client } = makeBackendClient({ success: true, rows: [], rowCount: 0, data_edition: 'PATSTAT 2026 Spring' });
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: SQL }), makeToken()));
 
@@ -179,12 +180,33 @@ describe('PatstatQueryTool', () => {
 	it('caps the rendered table and says how many rows were shown', async () => {
 		const rows = Array.from({ length: 120 }, (_, i) => ({ name: `APPLICANT ${i}`, families: i }));
 		const { client } = makeBackendClient({ success: true, rows, rowCount: 120, data_edition: 'PATSTAT 2026 Spring' });
-		const tool = new PatstatQueryTool(makeLogService(), client);
+		const tool = new PatstatQueryTool(makeLogService(), client, unrecordedPatentLedger);
 
 		const text = textOf(await tool.invoke(makeOptions({ sql: SQL }), makeToken()));
 
 		expect(text).toContain('APPLICANT 49');
 		expect(text).not.toContain('APPLICANT 50 |');
 		expect(text).toContain('(50 of 120 rows shown');
+	});
+
+	it('records the SQL, row count, edition and the exact text returned to the model', async () => {
+		const { client } = makeBackendClient(fixtureResult);
+		const { ledger, executions } = recordingPatentLedger();
+
+		const result = await new PatstatQueryTool(makeLogService(), client, ledger).invoke(makeOptions({ sql: SQL }), makeToken());
+
+		expect(executions).toEqual([{
+			kind: 'analytics', status: 'succeeded', tool: 'patstat_query', request: SQL,
+			rowCount: 2, dataEdition: 'PATSTAT 2026 Spring', resultText: textOf(result),
+		}]);
+	});
+
+	it('records a rejected attempt as failed, with the SQL and no numbers', async () => {
+		const { client } = makeBackendClient(() => { throw new PatentBackendError(400, '{}'); });
+		const { ledger, executions } = recordingPatentLedger();
+
+		await new PatstatQueryTool(makeLogService(), client, ledger).invoke(makeOptions({ sql: SQL }), makeToken());
+
+		expect(executions).toEqual([{ kind: 'analytics', status: 'failed', tool: 'patstat_query', request: SQL }]);
 	});
 });
