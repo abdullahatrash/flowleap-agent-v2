@@ -17,6 +17,8 @@ import { IWorkspaceService } from '../../../platform/workspace/common/workspaceS
 import { URI } from '../../../util/vs/base/common/uri';
 import { IPromptPathRepresentationService } from '../../../platform/prompts/common/promptPathRepresentationService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
+import { IActivationTelemetryService } from '../../patentai/vscode-node/activationTelemetryService';
+import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
@@ -93,6 +95,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IEndpointProvider private readonly endpointProvider: IEndpointProvider,
+		@IActivationTelemetryService private readonly activationTelemetryService: IActivationTelemetryService,
 	) { }
 
 	async resolveInput(input: IWritePatentResultsParams, promptContext: IBuildPromptContext, _mode: CopilotToolMode): Promise<IWritePatentResultsParams> {
@@ -204,6 +207,10 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				await this.fileSystemService.writeFile(evidenceUri, new TextEncoder().encode(evidenceDocument));
 			}
 			await this.fileSystemService.writeFile(uri, new TextEncoder().encode(document));
+			// A deliverable reached disk. The template kind is the whole counter — never the path,
+			// the matter, the subject, or a byte of the report. Fire-and-forget by contract: it
+			// cannot throw, and it never changes what the tool returns.
+			this.activationTelemetryService.recordReportSaved(template ?? FREE_FORM_TEMPLATE_KIND);
 			if (evidenceDocument) {
 				await this.removeSupersededCompanions(uri, evidenceUri);
 			}

@@ -21,6 +21,7 @@ import { LanguageModelTextPart } from '../../../../vscodeTypes';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
 import { GetPatentDetailsTool } from '../getPatentDetailsTool';
 import { SearchPatentsTool } from '../searchPatentsTool';
+import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
 import { IPatentBackendClient } from '../../../patentai/vscode-node/patentBackendClient';
 import { PatentExecution, IPatentExecutionLedger } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { checkPriorArtReportCompletion, ReportCompletionTurn } from '../../node/priorArtReportCompletion';
@@ -46,6 +47,7 @@ interface SecondReadStub {
 
 function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRead: SecondReadStub = {}) {
 	const files = new MockFileSystemService();
+	const reportsSaved: string[] = [];
 	const log = new class extends mock<ILogService>() { override trace() { } override info() { } override warn() { } override error() { } }();
 	const workspace = new class extends TestWorkspaceService { override getWorkspaceFolders() { return [URI.file('/workspace')]; } }();
 	const paths = new PromptPathRepresentationService(workspace);
@@ -73,7 +75,11 @@ function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRe
 			return typeof target === 'string' ? endpointFor(secondRead.resolvedModel ?? target) : endpointFor('judge-model');
 		}
 	}();
-	return { files, checked, log, tool: new WritePatentResultsTool(log, files, paths, instantiation, ledger, workspace, configuration, endpoints) };
+	// A counter must never change what the tool does: the fake records the calls and nothing else.
+	const activationCounters = new class extends mock<IActivationTelemetryService>() {
+		override recordReportSaved(templateKind: string): void { reportsSaved.push(templateKind); }
+	}();
+	return { files, checked, log, reportsSaved, tool: new WritePatentResultsTool(log, files, paths, instantiation, ledger, workspace, configuration, endpoints, activationCounters) };
 }
 
 describe('candidate report save path', () => {
@@ -146,6 +152,15 @@ describe('candidate report save path', () => {
 		await tool.invoke({ input: { filePath: 'outputs/claim review.md', content: 'Saved notes' }, toolInvocationToken: undefined }, CancellationToken.None);
 		expect(new TextDecoder().decode(await files.readFile(URI.file('/workspace/outputs/claim review.md')))).toBe('Saved notes');
 	});
+	it('counts a saved report by template kind only, and counts nothing when no file was written', async () => {
+		const { tool, reportsSaved } = setup();
+		await tool.invoke({ input: { filePath: '/workspace/notes.md', content: 'Saved notes' }, toolInvocationToken: undefined }, CancellationToken.None);
+		await tool.invoke({ input: { filePath: '/workspace/memo.md', content: 'A memo body with enough substance to satisfy the template.', template: 'fto-memo' }, toolInvocationToken: undefined }, CancellationToken.None);
+		await tool.invoke({ input: { filePath: '/workspace/rejected.md', content: 'A draft', template: 'prior-art-report' }, toolInvocationToken: undefined }, CancellationToken.None);
+
+		expect(reportsSaved).toEqual(['free-form', 'fto-memo']);
+	});
+
 	it('rejects incomplete candidate reviews before creating a file, but retains free-form compatibility', async () => {
 		const { tool, files } = setup();
 		const filePath = '/workspace/report.md';

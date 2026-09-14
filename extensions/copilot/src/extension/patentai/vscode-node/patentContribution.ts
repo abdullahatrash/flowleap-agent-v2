@@ -9,11 +9,14 @@ import { IVSCodeExtensionContext } from '../../../platform/extContext/common/ext
 import { IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
+import { hashTelemetryValue } from '../../../util/node/crypto';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IExtensionContribution } from '../../common/contributions';
 import { OCR_RUN_COMMAND_ID, OcrBridgeOutcome, OcrBridgeRequest } from '../common/ocrBridge';
+import { ACTIVATION_FIRST_LAUNCH_STORAGE_KEY, keysAddedTransition, PatentDataKeyPresence } from '../common/activationTelemetry';
 import { OCR_CONSENT_COMMAND_ID } from '../common/ocrConsent';
+import { IActivationTelemetryService } from './activationTelemetryService';
 import { getPatentAIConfig } from './configService';
 import { IOcrConsentService } from './ocrConsentService';
 import { runOcrThroughSeam } from './patentOcrBridge';
@@ -61,6 +64,7 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 		@IOcrConsentService private readonly _ocrConsentService: IOcrConsentService,
 		@IFileSystemService private readonly _fileSystemService: IFileSystemService,
+		@IActivationTelemetryService private readonly _activationTelemetryService: IActivationTelemetryService,
 	) {
 		super();
 		this._initialize();
@@ -81,12 +85,22 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// request (#31); loads from SecretStorage asynchronously.
 			this._dataKeysStore = PatentDataKeysStore.register(this._extensionContext, this._logService);
 		});
+		this._safeStep('count patent-data keys added', () => {
+			if (this._dataKeysStore) {
+				this._watchDataKeysAdded(this._dataKeysStore);
+			}
+		});
+		this._safeStep('count first launch', () => {
+			if (this._authProvider) {
+				this._watchFirstLaunch(this._authProvider);
+			}
+		});
 		this._safeStep('register settings view', () => {
 			// The FlowLeap Settings sidebar (own activity-bar gear icon): patent-data key
 			// fields + the Add AI Model (BYOK) entry point. The flowleap.patentDataKeys
 			// command reveals it, so all deep links land there.
 			if (this._dataKeysStore && this._authProvider) {
-				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService, this._ocrConsentService);
+				const viewProvider = new PatentDataKeysViewProvider(this._dataKeysStore, this._patentBackendClient, this._authProvider, this._logService, this._ocrConsentService, this._activationTelemetryService);
 				this._register(viewProvider.register());
 				this._register(registerPatentDataKeysCommand(viewProvider, this._logService));
 			}
@@ -170,6 +184,75 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		this._safeStep('log authentication status', () => this._logAuthenticationStatus());
 
 		this._logService.info('[Patent AI] FlowLeap authentication ready');
+	}
+
+	/**
+	 * Count the first launch of a signed-in user, once per user, and ask the activation-counters
+	 * question at the same moment — it is the first point where there is an account to count for.
+	 * Runs on startup for an already-signed-in user, and on the sign-in transition for a new one.
+	 */
+	private _watchFirstLaunch(provider: FlowLeapAuthenticationProvider): void {
+		this._register(provider.onDidChangeSessions(e => {
+			if ((e.added?.length ?? 0) > 0) {
+				void this._countFirstLaunch(provider);
+			}
+		}));
+		void provider.waitForInitialization().then(
+			() => this._countFirstLaunch(provider),
+			() => { /* a failed restore is not a launch to count */ },
+		);
+	}
+
+	/**
+	 * Ask once, then count once, for an account never counted before.
+	 *
+	 * The account is remembered as a HASH: the marker only has to answer "seen before?", and an
+	 * account id kept to answer that is an identity kept for no reason. The marker is written
+	 * BEFORE the prompt: a counter is not worth re-asking a user who closed the notification, so
+	 * "handled" means handled, answered or not.
+	 */
+	private async _countFirstLaunch(provider: FlowLeapAuthenticationProvider): Promise<void> {
+		try {
+			const accountId = (await provider.getSessions())[0]?.account.id;
+			if (!accountId) {
+				return;
+			}
+			const seen = this._extensionContext.globalState.get<readonly string[]>(ACTIVATION_FIRST_LAUNCH_STORAGE_KEY) ?? [];
+			const marker = hashTelemetryValue(accountId);
+			if (seen.includes(marker)) {
+				return;
+			}
+			await this._extensionContext.globalState.update(ACTIVATION_FIRST_LAUNCH_STORAGE_KEY, [...seen, marker]);
+			await this._activationTelemetryService.promptOnce();
+			this._activationTelemetryService.recordAppLaunched();
+		} catch (error) {
+			this._logService.debug(`[Patent AI] Could not count the first launch: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	/**
+	 * Count an absent-to-present transition of the Patent-Data Keys — presence booleans only, never
+	 * a key value and never a length.
+	 *
+	 * Seeded from the store once its initial load has settled, so the keys a user already had are
+	 * never counted as newly added, and a clear-then-re-add counts once for the re-add.
+	 */
+	private _watchDataKeysAdded(store: PatentDataKeysStore): void {
+		const presence = (): PatentDataKeyPresence => {
+			const keys = store.getKeys();
+			return { epo: !!keys?.epo, uspto: !!keys?.usptoOdp };
+		};
+		void store.whenReady.then(() => {
+			let previous = presence();
+			this._register(store.onDidChange(() => {
+				const next = presence();
+				const added = keysAddedTransition(previous, next);
+				previous = next;
+				if (added) {
+					this._activationTelemetryService.recordKeysAdded(added.epo, added.uspto);
+				}
+			}));
+		}, () => { /* the store logs its own load failures */ });
 	}
 
 	/**

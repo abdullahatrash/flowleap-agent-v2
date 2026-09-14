@@ -19,6 +19,7 @@ import { DisposableStore } from '../../../../../util/vs/base/common/lifecycle';
 import { URI } from '../../../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../../vscodeTypes';
+import { IActivationTelemetryService } from '../../../../patentai/vscode-node/activationTelemetryService';
 import { IPatentExecutionLedger } from '../../../../patentai/vscode-node/patentExecutionLedger';
 import { ToolCallRound } from '../../../../prompt/common/toolCallRound';
 import { NullToolsService } from '../../../../tools/common/toolsService';
@@ -71,7 +72,8 @@ describe.skipIf(!enabled)('live provider patent routing (opt-in, metered; isolat
 		// The second read is a separate judge call; this evaluation measures routing, so it stays off.
 		const configuration = new class extends mock<IConfigurationService>() { override getNonExtensionConfig<T>(): T { return 'off' as T; } }();
 		const endpoints = new class extends mock<IEndpointProvider>() { }();
-		const writer = new WritePatentResultsTool(log, files, new PromptPathRepresentationService(workspace), instantiation, ledger, workspace, configuration, endpoints);
+		const activationCounters = new class extends mock<IActivationTelemetryService>() { override recordReportSaved(): void { } }();
+		const writer = new WritePatentResultsTool(log, files, new PromptPathRepresentationService(workspace), instantiation, ledger, workspace, configuration, endpoints, activationCounters);
 		const query = 'The EP/WO scope and cutoff before 2002-02-21 were confirmed. The candidate source was already retrieved below. Finish this bounded candidate review using that retrieved source only and save /workspace/review.md. Compare F1: photocurable dental composite, and F5: essentially free of sub-100 nm filler. Include the essential combination and relevant loading range. Use exact supporting passages and preserve the scope of each claim and embodiment. State limitations; this is not a novelty opinion.';
 		const rounds = [new ToolCallRound('Retrieved the candidate source.', [{ id: 'details', name: ToolName.GetPatentDetails, arguments: '{"publicationNumber":"EP0983762A1"}' }])];
 		const results: Record<string, LanguageModelToolResult> = { details: new LanguageModelToolResult([new LanguageModelTextPart(details)]) };

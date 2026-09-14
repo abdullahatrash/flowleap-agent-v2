@@ -120,6 +120,7 @@ import { IPromptVariablesService } from '../../prompt/node/promptVariablesServic
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
 import { DevContainerConfigurationServiceImpl } from '../../prompt/vscode-node/devContainerConfigurationServiceImpl';
 import { PatentAIAuthService } from '../../patentai/vscode-node/patentAuthService';
+import { ActivationTelemetryService, IActivationTelemetryService, vscodeActivationTelemetryEnvironment } from '../../patentai/vscode-node/activationTelemetryService';
 import { IOcrConsentService, OcrConsentService } from '../../patentai/vscode-node/ocrConsentService';
 import { IPatentExecutionLedger, PatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { IPatentBackendClient, PatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
@@ -225,6 +226,11 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	// FlowLeap Patent AI: consent for Document OCR (#213) — the last capability that sends the
 	// user's own content to FlowLeap-Managed Inference. Consulted inside the operation.
 	builder.define(IOcrConsentService, new SyncDescriptor(OcrConsentService));
+
+	// FlowLeap Patent AI: opt-in, content-free activation counters. Nothing is sent until the user
+	// answers the one-time prompt with "Send counters". The environment reader is passed explicitly
+	// so the class keeps one injectable seam for tests without a static-argument gap at construction.
+	builder.define(IActivationTelemetryService, new SyncDescriptor(ActivationTelemetryService, [vscodeActivationTelemetryEnvironment()]));
 
 	builder.define(IGithubCodeSearchService, new SyncDescriptor(GithubCodeSearchService));
 	builder.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(GithubAvailableEmbeddingTypesService));
