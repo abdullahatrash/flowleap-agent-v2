@@ -19,9 +19,11 @@ import { Lazy } from '../../../util/vs/base/common/lazy';
 import { isDisposable } from '../../../util/vs/base/common/lifecycle';
 import { autorunIterableDelta } from '../../../util/vs/base/common/observableInternal';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { getContributedToolName, getToolName, mapContributedToolNamesInSchema, mapContributedToolNamesInString, ToolName } from '../common/toolNames';
 import { ICopilotTool, ICopilotToolExtension, modelSpecificToolApplies, ToolRegistry } from '../common/toolsRegistry';
 import { BaseToolsService } from '../common/toolsService';
+import { terminalExecutionRecord } from '../common/terminalExecutionRecord';
 
 export class ToolsService extends BaseToolsService {
 	declare _serviceBrand: undefined;
@@ -88,12 +90,13 @@ export class ToolsService extends BaseToolsService {
 
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
-		@ILogService logService: ILogService,
+		@ILogService private readonly _logService: ILogService,
 		@IOTelService private readonly _otelService: IOTelService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IExperimentationService private readonly _experimentationService: IExperimentationService,
+		@IPatentExecutionLedger private readonly _patentLedger: IPatentExecutionLedger,
 	) {
-		super(logService);
+		super(_logService);
 		this._copilotTools = new Lazy(() => new Map(ToolRegistry.getTools().map(t => [t.toolName, _instantiationService.createInstance(t)] as const)));
 		this._toolExtensions = new Lazy(() => new Map(ToolRegistry.getToolExtensions().map(t => [t.toolName, _instantiationService.createInstance(t)] as const)));
 	}
@@ -215,8 +218,9 @@ export class ToolsService extends BaseToolsService {
 		}
 
 		return vscode.lm.invokeTool(getContributedToolName(name), options, token).then(
-			result => {
+			async result => {
 				span.setStatus(SpanStatusCode.OK);
+				await this._recordTerminalRun(name, options, result.content);
 				// Always capture tool result for the debug panel
 				try {
 					const parts: string[] = [];
@@ -240,7 +244,8 @@ export class ToolsService extends BaseToolsService {
 				emitToolCallEvent(this._otelService, String(name), durationMs, true);
 				return result;
 			},
-			err => {
+			async err => {
+				await this._recordTerminalRun(name, options, undefined, true);
 				span.setStatus(SpanStatusCode.ERROR, err instanceof Error ? err.message : String(err));
 				span.setAttribute(StdAttr.ERROR_TYPE, err instanceof Error ? err.constructor.name : 'Error');
 				span.setAttribute(GenAiAttr.TOOL_CALL_RESULT, truncateForOTel(`ERROR: ${err instanceof Error ? err.message : String(err)}`, this._otelService.config.maxAttributeSizeChars));
@@ -253,6 +258,24 @@ export class ToolsService extends BaseToolsService {
 				throw err;
 			},
 		);
+	}
+
+	/**
+	 * A terminal run is the only way a figure the model computed itself reaches a report, and the
+	 * terminal tool is the editor's own, so its command and output are recorded here, at the one
+	 * seam every tool call passes through. Recorded for the patent audit only; the tool's answer
+	 * is unchanged by the outcome of the write.
+	 */
+	private async _recordTerminalRun(name: string, options: vscode.LanguageModelToolInvocationOptions<Object>, content: readonly unknown[] | undefined, failed = false): Promise<void> {
+		const record = terminalExecutionRecord(name, options.input, content, failed);
+		if (!record) {
+			return;
+		}
+		try {
+			await this._patentLedger.record(options.chatSessionResource, record);
+		} catch (error) {
+			this._logService.warn(`[ToolsService] could not record the terminal run in the patent execution ledger: ${error}`);
+		}
 	}
 
 	override invokeToolWithEndpoint(name: string, options: vscode.LanguageModelToolInvocationOptions<Object>, endpoint: IChatEndpoint | undefined, token: vscode.CancellationToken): Thenable<vscode.LanguageModelToolResult2> {
