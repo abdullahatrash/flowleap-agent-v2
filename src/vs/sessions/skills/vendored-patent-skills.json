@@ -1,7 +1,7 @@
 {
 	"description": "Vendored snapshot of the FlowLeap patent skills. Do not edit these skill directories by hand; re-run scripts/vendor-patent-skills.ts to update them.",
 	"source": "flowleap-cli/skills",
-	"commit": "be207e89a85f2aa0fcef7afe8625effd7397da1a",
+	"commit": "7a8eecfa86e5da3236a00728a0ebe73d90800a4c",
 	"skills": [
 		"flowleap",
 		"flowleap-academic",
