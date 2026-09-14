@@ -34,6 +34,7 @@ WITH hits AS (
   GROUP BY 1, 2
 )
 SELECT k.cpc_subclass, k.cpc_code, k.families, k.applications,
+       ROUND(100.0 * k.families / (SELECT COUNT(DISTINCT family_id) FROM scoped), 1) AS share_of_hits_pct,
        sub.title AS subclass_title, grp.title AS code_title
 FROM codes k
 LEFT JOIN flowleap.cpc_scheme sub ON sub.symbol = k.cpc_subclass
@@ -66,9 +67,6 @@ legacy and current codes coexist (`H01L` and `H10F` for photovoltaics on this
 edition), so verify every derived code against `flowleap.cpc_scheme` before
 landscaping with it.
 
-Everything below is orientation for when `patstat_query` is unavailable
-(`patstat_unavailable`) or the question cannot be phrased as a concept.
-
 ## CPC Structure (Cooperative Patent Classification)
 
 Joint USPTO + EPO system. Hierarchy:
@@ -96,9 +94,10 @@ B62K3/12 → Subgroup
 
 ## Last-resort fallback (may be stale — CPC is revised quarterly)
 
-Hand-typed common codes by domain. Use only when `patstat_query` is
-unavailable, and say in the answer that the codes came from a static table
-rather than the current edition.
+The table below is orientation for when `patstat_query` is unavailable
+(`patstat_unavailable`) or the question cannot be phrased as a concept. These
+hand-typed codes drift every quarter, so if you use them, say in the answer that
+the codes came from a static table rather than the current edition.
 
 | Code | Domain |
 |------|--------|

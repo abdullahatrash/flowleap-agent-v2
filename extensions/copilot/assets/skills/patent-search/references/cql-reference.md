@@ -226,6 +226,7 @@ WITH hits AS (
   GROUP BY 1, 2
 )
 SELECT k.cpc_subclass, k.cpc_code, k.families, k.applications,
+       ROUND(100.0 * k.families / (SELECT COUNT(DISTINCT family_id) FROM scoped), 1) AS share_of_hits_pct,
        sub.title AS subclass_title, grp.title AS code_title
 FROM codes k
 LEFT JOIN flowleap.cpc_scheme sub ON sub.symbol = k.cpc_subclass

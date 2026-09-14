@@ -171,18 +171,17 @@ jobs:
       #
       # The pin is currently a full commit SHA rather than a release tag: the
       # PATSTAT widening recipes landed on flowleap-cli main (7a8eecf) after
-      # v0.8.5 and have not shipped in a CLI release yet. A tag fetches
-      # reliably at depth 1 but an arbitrary SHA may not, depending on the
-      # host's reachable-SHA policy, so this checkout is unshallowed while the
-      # pin is a SHA. Flip both back to `fetch-depth: 1` and a `vX.Y.Z` tag as
-      # soon as a CLI release contains that commit (issue #347).
+      # v0.8.5 and have not shipped in a CLI release yet. actions/checkout
+      # fetches an explicit full SHA at depth 1 on GitHub, so this stays
+      # shallow. Flip the ref back to a `vX.Y.Z` tag as soon as a CLI release
+      # contains that commit (issue #351).
       - name: Checkout flowleap-cli @ pinned ref
         uses: actions/checkout@v6
         with:
           repository: flowleap-ai/flowleap-cli
           ref: 7a8eecfa86e5da3236a00728a0ebe73d90800a4c
           path: flowleap-cli
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Check bundled skills for drift
         run: npx tsx scripts/check-skills-drift.ts --require-source
