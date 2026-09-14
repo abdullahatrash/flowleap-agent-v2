@@ -48,11 +48,12 @@ describe('parsePromptFile', () => {
 describe('humanisePromptName', () => {
 
 	it('spells the bundled prompts out and opens hyphens up for everything else', () => {
-		const names = ['flowleap-prior-art-search', 'flowleap-office-action-response', 'flowleap-something-new', 'my_own-prompt'];
+		const names = ['flowleap-prior-art-search', 'flowleap-office-action-response', 'flowleap-opposition-rate', 'flowleap-something-new', 'my_own-prompt'];
 
 		expect(names.map(humanisePromptName)).toEqual([
 			'Prior-art search',
 			'Office-action response',
+			'Opposition rate',
 			'Something new',
 			'My own prompt',
 		]);

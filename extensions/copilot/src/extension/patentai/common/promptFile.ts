@@ -70,8 +70,9 @@ export function parsePromptFile(text: string, fileStem: string): ParsedPromptFil
 
 /**
  * Display labels for the bundled prompts. A slug cannot say which of its hyphens joins a compound
- * term ("prior-art") and which separates words, so the eight shipped names are spelled out and
- * everything else falls back to the generic rule.
+ * term ("prior-art") and which separates words, so the shipped names are spelled out and everything
+ * else falls back to the generic rule. The eight document-workflow prompts (PRD 0014) come first;
+ * the PATSTAT analytics prompts (#352) follow, kept contiguous so the tree groups them together.
  */
 const BUNDLED_PROMPT_LABELS = new Map<string, string>([
 	['flowleap-prior-art-search', 'Prior-art search'],
@@ -82,6 +83,14 @@ const BUNDLED_PROMPT_LABELS = new Map<string, string>([
 	['flowleap-office-action-response', 'Office-action response'],
 	['flowleap-patent-dossier', 'Patent dossier'],
 	['flowleap-literature-review', 'Literature review'],
+	['flowleap-classification-codes', 'Classification codes'],
+	['flowleap-family-descendants', 'Family descendants'],
+	['flowleap-opposition-rate', 'Opposition rate'],
+	['flowleap-family-coverage', 'Family coverage'],
+	['flowleap-top-filers', 'Top filers'],
+	['flowleap-sector-mix', 'Sector mix'],
+	['flowleap-regional-filings', 'Regional filings'],
+	['flowleap-cited-literature', 'Cited literature'],
 ]);
 
 /**
