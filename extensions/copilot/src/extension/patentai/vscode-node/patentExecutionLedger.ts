@@ -24,7 +24,7 @@ export interface PatentEvidenceSource {
 }
 
 /** The number-producing analytics tools whose outcomes the audit records. */
-export type PatentAnalyticsTool = 'patstat_query' | 'patstat_portfolio' | 'patent_analytics_viz' | 'patstat_graph' | 'patent_api_request';
+export type PatentAnalyticsTool = 'patstat_query' | 'patstat_portfolio' | 'patent_analytics_viz' | 'patstat_graph' | 'patent_api_request' | 'fetch_webpage';
 
 /**
  * The legal-status tools whose outcomes the audit records. A memo states that a patent is in force,
@@ -37,13 +37,17 @@ export type PatentStatusTool = 'get_legal_status' | 'get_patent_family' | 'get_p
 export type PatentRecordedTool = PatentAnalyticsTool | PatentStatusTool;
 
 /** The tool identities the reader accepts; anything else is a dropped field, not a new tool. */
-const RECORDED_TOOLS: readonly PatentRecordedTool[] = ['patstat_query', 'patstat_portfolio', 'patent_analytics_viz', 'patstat_graph', 'patent_api_request', 'get_legal_status', 'get_patent_family', 'get_patent_term', 'get_register_events'];
+const RECORDED_TOOLS: readonly PatentRecordedTool[] = ['patstat_query', 'patstat_portfolio', 'patent_analytics_viz', 'patstat_graph', 'patent_api_request', 'fetch_webpage', 'get_legal_status', 'get_patent_family', 'get_patent_term', 'get_register_events'];
 
 /** Cap for a recorded request (SQL, a publication number, or the JSON of the request params). */
 export const ANALYTICS_REQUEST_CAP = 2_000;
 
-/** Cap for the recorded result text a figure check searches. */
-export const ANALYTICS_RESULT_CAP = 20_000;
+/**
+ * Cap for the recorded result text a figure or quotation check searches. A file-wrapper document
+ * or a fetched patent page runs to tens of thousands of characters, and a check that only sees
+ * the first twenty thousand reports the figures and quotations past the cut as untraced.
+ */
+export const ANALYTICS_RESULT_CAP = 120_000;
 
 export interface PatentExecution {
 	readonly id: string;
@@ -91,7 +95,7 @@ export interface IPatentExecutionLedger {
 	read(session: vscode.Uri | undefined): Promise<PatentExecutionSnapshot>;
 }
 
-const LIMITATION = 'Audit covers recorded search_patents, get_patent_details, analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request) and legal-status (get_legal_status, get_patent_family, get_patent_term, get_register_events) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
+const LIMITATION = 'Audit covers recorded search_patents, get_patent_details, analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request, fetch_webpage) and legal-status (get_legal_status, get_patent_family, get_patent_term, get_register_events) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
 
 /** Durable, append-only outcome records owned by the patent workflow. Separate files avoid lost concurrent writes. */
 export class PatentExecutionLedger implements IPatentExecutionLedger {

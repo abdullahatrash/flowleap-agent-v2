@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import { BasePromptElementProps, Chunk, PromptElement, PromptSizing, TextChunk, useKeepWith } from '@vscode/prompt-tsx';
-import { CancellationToken, LanguageModelDataPart, LanguageModelPromptTsxPart, LanguageModelTextPart, LanguageModelToolInvocationOptions, LanguageModelToolInvocationPrepareOptions, LanguageModelToolResult, lm, PreparedToolInvocation, ProviderResult } from 'vscode';
+import { CancellationToken, LanguageModelDataPart, LanguageModelPromptTsxPart, LanguageModelTextPart, LanguageModelToolInvocationOptions, LanguageModelToolInvocationPrepareOptions, LanguageModelToolResult, lm, PreparedToolInvocation, ProviderResult, Uri } from 'vscode';
 import { FileChunkAndScore } from '../../../platform/chunking/common/chunk';
 import { ILogService } from '../../../platform/log/common/logService';
 import { UrlChunkEmbeddingsIndex } from '../../../platform/urlChunkSearch/node/urlChunkEmbeddingsIndex';
@@ -11,6 +11,7 @@ import { Lazy } from '../../../util/vs/base/common/lazy';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { isImageDataPart } from '../../conversation/common/languageModelChatMessageHelpers';
+import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { renderPromptElementJSON } from '../../prompts/node/base/promptRenderer';
 import { imageDataPartToTSX } from '../../prompts/node/panel/toolCalling';
 import { ToolName } from '../common/toolNames';
@@ -52,7 +53,8 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
-		@ILogService private readonly _logService: ILogService
+		@ILogService private readonly _logService: ILogService,
+		@IPatentExecutionLedger private readonly _ledger: IPatentExecutionLedger,
 	) {
 		this._index = new Lazy(() => _instantiationService.createInstance(UrlChunkEmbeddingsIndex));
 	}
@@ -115,6 +117,11 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 			}
 		}
 
+		// A fetched page is the only description text a US reference has in this session, and a memo
+		// quotes it. Recorded for the audit only, page by page; the tool's answer is unchanged by the
+		// outcome of the write.
+		await this._recordFetches(options.chatSessionResource, validTextContent, invalidUrls);
+
 		const filesAndTheirChunks = await this._index.value.findInUrls(
 			validTextContent,
 			options.input.query ?? '',
@@ -150,6 +157,19 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 		);
 
 		return new LanguageModelToolResult([new LanguageModelPromptTsxPart(element)]);
+	}
+
+	private async _recordFetches(session: Uri | undefined, pages: ReadonlyArray<{ readonly uri: URI; readonly content: string }>, invalidUrls: readonly string[]): Promise<void> {
+		try {
+			for (const page of pages) {
+				await this._ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'fetch_webpage', request: page.uri.toString(), resultText: page.content });
+			}
+			for (const url of invalidUrls) {
+				await this._ledger.record(session, { kind: 'analytics', status: 'failed', tool: 'fetch_webpage', request: url });
+			}
+		} catch (error) {
+			this._logService.warn(`FetchWebPageTool: could not record the fetch in the patent execution ledger: ${error}`);
+		}
 	}
 }
 

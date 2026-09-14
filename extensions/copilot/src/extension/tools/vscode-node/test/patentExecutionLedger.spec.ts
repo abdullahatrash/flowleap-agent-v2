@@ -127,10 +127,10 @@ describe('durable patent execution audit', () => {
 
 	it('caps a recorded request and result text so one oversized outcome cannot swamp the audit', async () => {
 		const { ledger, session } = setup();
-		await ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'patstat_graph', request: 'x'.repeat(3000), resultText: 'y'.repeat(30000) });
+		await ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'patstat_graph', request: 'x'.repeat(3000), resultText: 'y'.repeat(130000) });
 		const [recorded] = (await ledger.read(session)).executions;
 		expect({ request: recorded.request?.length, result: recorded.resultText?.length, marked: recorded.resultText?.endsWith('… [truncated for the audit record]') })
-			.toEqual({ request: 2000 + 35, result: 20000 + 35, marked: true });
+			.toEqual({ request: 2000 + 35, result: 120000 + 35, marked: true });
 	});
 
 	it('round-trips a legal-status outcome and keeps one whose tool is unreadable, leaving it unknown', async () => {
@@ -143,7 +143,7 @@ describe('durable patent execution audit', () => {
 		await ledger.record(session, status);
 		await ledger.record(session, { kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'EP2000000' });
 		files.mockFile(files.committed[1], JSON.stringify({
-			id: 'partial', recordedAt: '2026-09-14', kind: 'status', status: 'succeeded',
+			id: 'partial', recordedAt: '2999-01-01T00:00:00.000Z', kind: 'status', status: 'succeeded',
 			tool: 'get_unknown_status', request: 'EP2000000', rowCount: 1, resultText: 'Base expiry 2028-04-16',
 		}));
 		const snapshot = await ledger.read(session);
