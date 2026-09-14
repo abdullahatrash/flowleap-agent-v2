@@ -7041,6 +7041,54 @@
         ]
       },
       {
+        "path": "./assets/prompts/flowleap/classification-codes.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/family-descendants.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/opposition-rate.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/family-coverage.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/top-filers.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/sector-mix.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/regional-filings.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/cited-literature.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
         "path": "./assets/prompts/plan.prompt.md",
         "sessionTypes": [
           "local"

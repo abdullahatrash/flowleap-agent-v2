@@ -34,6 +34,29 @@ describe('buildPromptTree', () => {
 		]);
 	});
 
+	it('keeps the PATSTAT analytics prompts after the workflow prompts, in their shipped order, even when given interleaved', () => {
+		const bundled = [
+			entry('flowleap-cited-literature', 'bundled'),
+			entry('flowleap-prior-art-search', 'bundled'),
+			entry('flowleap-top-filers', 'bundled'),
+			entry('flowleap-patent-dossier', 'bundled'),
+			entry('flowleap-classification-codes', 'bundled'),
+		];
+
+		expect(shape(buildPromptTree(bundled, []))).toEqual([
+			{
+				group: 'FlowLeap', children: [
+					'prompt:Prior-art search',
+					'prompt:Patent dossier',
+					'prompt:Classification codes',
+					'prompt:Top filers',
+					'prompt:Cited literature',
+				]
+			},
+			{ group: 'My prompts', children: ['placeholder:Add a prompt to reuse it later'] },
+		]);
+	});
+
 	it('shows a non-copyable placeholder when the user has written no prompts yet', () => {
 		expect(shape(buildPromptTree([entry('flowleap-patent-dossier', 'bundled')], []))).toEqual([
 			{ group: 'FlowLeap', children: ['prompt:Patent dossier'] },
