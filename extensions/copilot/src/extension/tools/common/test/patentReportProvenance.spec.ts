@@ -28,6 +28,14 @@ describe('landscape figure extraction', () => {
 		expect(extractFigures(content)).toEqual(['1,240', '91%', '12', '12.5']);
 	});
 
+	it('leaves citations of law, bracketed paragraph numbers and named patent numbers out', () => {
+		const content = [
+			'Claim 12 is rejected under 35 U.S.C. 112, first paragraph; see MPEP § 2163 and 37 CFR 1.136(a). The IDS cites U.S. Patent No. 5,576,020.',
+			'Montague, paragraph [0180], shows disks 58 and 76; the objection to 5,576,020 stands (§4.2, Art. 56 EPC, Rule 137(3)). 1,240 families remain.',
+		].join('\n');
+		expect(extractFigures(content)).toEqual(['12', '58', '76', '1,240']);
+	});
+
 	it('drops section numbering and finds a claim reference numeral in the retrieved claim text', () => {
 		const content = [
 			'### 3.1 Blocking candidates',
@@ -211,8 +219,31 @@ describe('claim quotation provenance', () => {
 		expect(quotationProvenance(quotations, snapshot)).toEqual({
 			matched: [quotations[0]],
 			elided: [],
+			elsewhere: [],
 			unmatched: [quotations[1], quotations[2]],
 			unrecorded: ['US7000000B2'],
+		});
+	});
+
+	it('finds a quotation that is not claim text in a fetched page or a file-wrapper document', () => {
+		const page = 'US5135330A description. To release the preferred embodiment, the pull knob 50 is once more pulled away from the cover 10c and the lever is operated.';
+		const snapshot: ProvenanceSnapshot = {
+			executions: [
+				{ kind: 'details', status: 'succeeded', sources: [{ text: '1. A quick release clamping device comprising a hollow clamping cap.', reference: { publicationNumber: 'US5135330A', section: 'claims' } }] },
+				{ kind: 'analytics', status: 'succeeded', tool: 'fetch_webpage', request: 'https://patents.google.com/patent/US5135330A/en', resultText: page },
+			],
+		};
+		const quotations = [
+			{ publication: 'US5135330A', quote: 'the pull knob 50 is once more pulled away from the cover 10c and the lever is operated' },
+			{ publication: 'US5135330A', quote: 'the pull knob 50 is once more pushed toward the cover 10c and the lever is operated' },
+			{ publication: 'US9999999B1', quote: 'a quotation cited to a publication whose claims were never retrieved at all' },
+		];
+		expect(quotationProvenance(quotations, snapshot)).toEqual({
+			matched: [],
+			elided: [],
+			elsewhere: [quotations[0]],
+			unmatched: [quotations[1], quotations[2]],
+			unrecorded: ['US9999999B1'],
 		});
 	});
 
@@ -227,6 +258,7 @@ describe('claim quotation provenance', () => {
 		expect(quotationProvenance(quotations, snapshot)).toEqual({
 			matched: [],
 			elided: [quotations[0]],
+			elsewhere: [],
 			unmatched: [quotations[1], quotations[2]],
 			unrecorded: [],
 		});
@@ -247,7 +279,7 @@ describe('fto appendix', () => {
 			'2 dates checked against recorded tool outputs; 1 found, 1 not found: 2033-04-16.',
 			'',
 			'## Quotation provenance (generated)',
-			'Generated from this session\'s execution record, not supplied by the model. Every quoted span of 40 characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication. A quotation cut with an ellipsis is found when each of its fragments stands, in order, in that text.',
+			'Generated from this session\'s execution record, not supplied by the model. Every quoted span of 40 characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication, then with every other text a tool returned. A quotation cut with an ellipsis is found when each of its fragments stands, in order, in that text.',
 			'1 claim quotations checked against recorded claim text; 0 found verbatim, 0 found with elisions, 1 not found: EP1000000A1: "CLAIM_TEXT and more words to reach the judged length.".',
 			'',
 			'## Data provenance (generated)',

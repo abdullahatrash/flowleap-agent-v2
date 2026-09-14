@@ -117,6 +117,22 @@ const HEADING_NUMBER = /^[ \t]*(?:>[ \t]*)*(?:#{1,6}|\*\*|__)[ \t]*\d+(?:\.\d+)*
 /** Outline numbering that opens a line: `3.1 Scope`, `2. Summary`, `- 4) Findings`. */
 const OUTLINE_NUMBER = /^[ \t]*(?:>[ \t]*)*(?:[-*+][ \t]+)?(?:\d+(?:\.\d+)+\.?|\d+[.)])(?=[ \t])/gm;
 
+/**
+ * A citation of law or of the memo's own parts: `35 U.S.C. 112`, `37 CFR 1.136(a)`, `MPEP 2143`,
+ * `§ 4.2`, `Art. 56 EPC`, `Rule 137(3)`. The numbers name a provision, not a finding.
+ */
+const LEGAL_CITATION = /(?:\b\d{1,3}\s+(?:U\.?S\.?C\.?|CFR)\s*(?:§+\s*)?|\bMPEP\s*(?:§+\s*)?|§+\s*|\b(?:Art\.?|Article|Rule|R\.)\s+)\d+(?:\.\d+)*(?:\s*\([a-z0-9]+\))*/gi;
+
+/** A paragraph number as a US publication prints it: `[0180]`. It locates a passage; it counts nothing. */
+const PARAGRAPH_NUMBER = /\[\d{3,5}\]/g;
+
+/**
+ * A US patent number written with thousands separators after a word that says so: `U.S. Patent
+ * No. 5,576,020`, `Pat. No. 7,722,129`, `US 5,135,330`. The digits identify a document; wherever
+ * else the memo repeats the same number, it is still that document and not a figure.
+ */
+const PATENT_NUMBER_REFERENCE = /\b(?:Patent|Pat\.|Nos?\.|US)\s*(?:Nos?\.\s*)?(\d{1,2},\d{3},\d{3})\b/gi;
+
 /** The digits of a figure, without separators, percent sign, decimal point or leading zeros. */
 function digits(figure: string): string {
 	return figure.replace(/[,%.]/g, '').replace(/^0+(?=\d)/, '');
@@ -141,15 +157,19 @@ function isYear(figure: string): boolean {
  *
  * Section and outline numbering is dropped as well. `3.1` at the head of a heading or a numbered
  * paragraph names a part of the memo; no tool ever returned it, so reporting it as an untraced
- * figure buries the figures that carry a finding under the memo's own table of contents.
+ * figure buries the figures that carry a finding under the memo's own table of contents. So are
+ * citations of law, bracketed paragraph numbers, and US patent numbers the memo introduces with
+ * "Patent No." — each names a provision, a passage or a document, and an office-action memo is
+ * made of them.
  */
 export function extractFigures(content: string): readonly string[] {
-	const masked = content.replace(HEADING_NUMBER, ' ').replace(OUTLINE_NUMBER, ' ').replace(IDENTIFIER_SPAN, ' ');
+	const patentNumbers = new Set([...content.matchAll(PATENT_NUMBER_REFERENCE)].map(match => digits(match[1])));
+	const masked = content.replace(HEADING_NUMBER, ' ').replace(OUTLINE_NUMBER, ' ').replace(IDENTIFIER_SPAN, ' ').replace(LEGAL_CITATION, ' ').replace(PARAGRAPH_NUMBER, ' ');
 	const seen = new Set<string>();
 	const figures: string[] = [];
 	for (const raw of masked.split(/[\s|]+/)) {
 		const token = raw.replace(/^[^\w]+/, '').replace(/[^\w%]+$/, '');
-		if (!PURE_NUMBER.test(token) || isYear(token) || digits(token).length < 2) {
+		if (!PURE_NUMBER.test(token) || isYear(token) || digits(token).length < 2 || patentNumbers.has(digits(token))) {
 			continue;
 		}
 		const key = digits(token) + (token.endsWith('%') ? '%' : '');
@@ -505,6 +525,8 @@ export interface QuotationProvenance {
 	readonly matched: readonly QuotedClaim[];
 	/** Quotations whose every substantial fragment stands, in order, in the recorded claim text. */
 	readonly elided: readonly QuotedClaim[];
+	/** Quotations not in the recorded claims but in other text a tool returned: a description, a file-wrapper document, a fetched page. */
+	readonly elsewhere: readonly QuotedClaim[];
 	readonly unmatched: readonly QuotedClaim[];
 	/** Publications quoted for their claims whose claim text the record does not hold at all. */
 	readonly unrecorded: readonly string[];
@@ -605,6 +627,11 @@ export function extractClaimQuotations(content: string): readonly QuotedClaim[] 
  * by fragment and reported as found with elisions, which is what a memo's claim quotations normally
  * are. A quotation that paraphrases or translates will not match, and is disclosed as unchecked
  * rather than called wrong.
+ *
+ * A quotation that is not in the recorded claims is then looked for in everything else the tools
+ * returned. An office-action memo cites a reference's claims link and quotes its description, which
+ * for a US reference reaches the session only as a fetched page; that quotation is reported as found
+ * elsewhere, not as unsourced, and not as claim text either.
  */
 export function quotationProvenance(quotations: readonly QuotedClaim[], snapshot: ProvenanceSnapshot): QuotationProvenance {
 	const claims = new Map<string, string>();
@@ -620,24 +647,29 @@ export function quotationProvenance(quotations: readonly QuotedClaim[], snapshot
 			claims.set(key, (claims.get(key) ?? '') + '\n' + normalizeQuotation(source.text));
 		}
 	}
+	const everything = normalizeQuotation(returnedText(snapshot));
 	const matched: QuotedClaim[] = [];
 	const elided: QuotedClaim[] = [];
+	const elsewhere: QuotedClaim[] = [];
 	const unmatched: QuotedClaim[] = [];
 	const unrecorded = new Set<string>();
 	for (const quotation of quotations) {
 		const recorded = claims.get(quotation.publication.toUpperCase());
-		if (!recorded) {
-			unrecorded.add(quotation.publication);
-			unmatched.push(quotation);
-		} else if (recorded.includes(normalizeQuotation(quotation.quote))) {
+		const normalized = normalizeQuotation(quotation.quote);
+		if (recorded?.includes(normalized)) {
 			matched.push(quotation);
-		} else if (fragmentsInOrder(quotation.quote, recorded)) {
+		} else if (recorded && fragmentsInOrder(quotation.quote, recorded)) {
 			elided.push(quotation);
+		} else if (everything.includes(normalized) || fragmentsInOrder(quotation.quote, everything)) {
+			elsewhere.push(quotation);
 		} else {
+			if (!recorded) {
+				unrecorded.add(quotation.publication);
+			}
 			unmatched.push(quotation);
 		}
 	}
-	return { matched, elided, unmatched, unrecorded: [...unrecorded] };
+	return { matched, elided, elsewhere, unmatched, unrecorded: [...unrecorded] };
 }
 
 /** `N dates checked …`, the sentence the report states. */
@@ -660,14 +692,15 @@ function quotationExcerpt(quotation: QuotedClaim): string {
 
 /** `N claim quotations checked …`, the sentence the report states. */
 export function quotationSentence(provenance: QuotationProvenance): string {
-	const total = provenance.matched.length + provenance.elided.length + provenance.unmatched.length;
+	const total = provenance.matched.length + provenance.elided.length + provenance.elsewhere.length + provenance.unmatched.length;
 	if (total === 0) {
 		return `No quotation of ${QUOTATION_LENGTH} characters or more follows a claims citation in this report; nothing was compared with recorded claim text.`;
 	}
 	const missing = provenance.unmatched.length
 		? `${provenance.unmatched.length} not found: ${provenance.unmatched.slice(0, LISTED_QUOTATIONS).map(quotationExcerpt).join('; ')}${provenance.unmatched.length > LISTED_QUOTATIONS ? `; and ${provenance.unmatched.length - LISTED_QUOTATIONS} more` : ''}`
 		: '0 not found';
-	return `${total} claim quotations checked against recorded claim text; ${provenance.matched.length} found verbatim, ${provenance.elided.length} found with elisions, ${missing}.`;
+	const elsewhere = provenance.elsewhere.length ? `, ${provenance.elsewhere.length} found in other recorded tool text (a description, a file-wrapper document or a fetched page, not the cited claims)` : '';
+	return `${total} claim quotations checked against recorded claim text; ${provenance.matched.length} found verbatim, ${provenance.elided.length} found with elisions${elsewhere}, ${missing}.`;
 }
 
 /** The tool identity a record carries, or the one its kind implies. */
@@ -725,7 +758,7 @@ export function renderFtoAppendix(content: string, snapshot: ProvenanceSnapshot)
 		dateSentence(dates),
 		'',
 		'## Quotation provenance (generated)',
-		`${GENERATED_NOTE} Every quoted span of ${QUOTATION_LENGTH} characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication. A quotation cut with an ellipsis is found when each of its fragments stands, in order, in that text.`,
+		`${GENERATED_NOTE} Every quoted span of ${QUOTATION_LENGTH} characters or more that follows a claims citation is compared, ignoring case and line breaks, with the claim text recorded for that publication, then with every other text a tool returned. A quotation cut with an ellipsis is found when each of its fragments stands, in order, in that text.`,
 		quotationSentence(quotations),
 		...(quotations.unrecorded.length ? [`No claim text is recorded for ${quotations.unrecorded.join(', ')}; quotations cited to them were compared with nothing. Retrieve the claims with get_patent_details before relying on the quoted wording.`] : []),
 		'',
