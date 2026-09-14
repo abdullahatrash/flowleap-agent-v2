@@ -58,3 +58,4 @@ Save via `write_patent_results` (`template: 'portfolio-due-diligence-memo'`):
 - PATSTAT data is a twice-yearly snapshot: for any individual patent's CURRENT legal status use `get_legal_status`/`get_prosecution_timeline`, never snapshot grant counts
 - Objective signals only: citations, families, legal status, term. No monetary valuations
 - For diligence purposes always include the audit trail
+- When a figure comes from a dataset you downloaded and processed with code (a public export, a CSV, a zip), save the script beside the artifact and state in the report the dataset's file name, where it came from, its download date and its row count. A figure without those four facts cannot be rerun

@@ -76,6 +76,7 @@ Save via `write_patent_results` (`template: 'landscape-report'`):
 6. **Key Patents**: the 5-10 most cited/important patents found (`search_forward_citations` on the publication number for who-cites-this-forward counts; for the references cited AGAINST a patent that's `search_citations` on its US **application** number, resolved via `get_patent_family` → `get_continuity`)
 7. **White Spaces**: areas with low filing activity (potential opportunities)
 8. **Data Tables**: raw data for all searches performed
+- When a figure comes from a dataset you downloaded and processed with code (a public export, a CSV, a zip), save the script beside the artifact and state in the report the dataset's file name, where it came from, its download date and its row count. A figure without those four facts cannot be rerun.
 
 ## Visual deliverable
 
