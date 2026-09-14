@@ -182,17 +182,79 @@ ta="artificial intelligence"          ← names the neighbourhood, not the house
 
 ## Classification codes
 
-Do not guess codes — and do not trust this table alone. **CPC reclassifies.** The `H10`
-range (`H10F`, `H10H`, `H10K`, `H10N`) was carved out of `H01L` for radiation-sensitive,
+Do not guess codes, and do not start from the table at the bottom of this file.
+**CPC is revised quarterly and reclassifies in bulk.** The `H10` range (`H10F`,
+`H10H`, `H10K`, `H10N`) was carved out of `H01L` for radiation-sensitive,
 light-emitting and other specialised semiconductor devices; `H01L` is now formally
-"semiconductor devices **not covered by class H10**". Anything filed or classified recently
-may sit in a code this table does not list. (The corpus agrees: `H10F` carries ~1.16M CPC
-assignments in PATSTAT 2026 Spring; `H01L31`, the pre-2023 photovoltaics subclass, carries
-zero — reclassification rewrote the backfile.)
+"semiconductor devices **not covered by class H10**". Anything filed or classified
+recently may sit in a code no hand-typed table lists. (The corpus agrees: `H10F`
+carries ~1.16M CPC assignments in PATSTAT 2026 Spring; `H01L31`, the pre-2023
+photovoltaics subclass, carries zero — reclassification rewrote the backfile.)
 
-**Verify the code — the official CPC scheme is queryable.** The version-stamped scheme
-text lives in `flowleap.cpc_scheme` (columns: `symbol`, `level`, `title`), reachable via
-`patstat_query`:
+Two live lookups answer this, in this order. Both run through `patstat_query`,
+and `patstat_api_guide` with `action='section'`, `section='examples'` serves the
+same SQL with its live status.
+
+### 1. Which codes the corpus actually uses for the concept
+
+Backend verified query: **`concept_to_cpc_codes`**. This is the primary lookup:
+it asks the corpus "which codes are *used* for this technology", which is the
+question you actually have. Discovery returns identifiers and codes — never
+document text as the answer.
+
+The match idiom is exact. The indexes are English-only partial indexes, so any
+other language seq-scans and the gate rejects it:
+
+```sql
+WITH hits AS (
+  SELECT tx.application_id
+  FROM flowleap.application_texts tx
+  WHERE to_tsvector('english', tx.title) @@ plainto_tsquery('english', 'solid state battery electrolyte')
+    AND tx.title_lang = 'en'
+), scoped AS (
+  SELECT h.application_id, a.family_id
+  FROM hits h
+  JOIN flowleap.applications a ON a.application_id = h.application_id
+  WHERE a.ipr_type = 'PI' AND a.earliest_filing_year >= 2015
+), codes AS (
+  SELECT LEFT(c.cpc_code, 4) AS cpc_subclass,
+         c.cpc_code,
+         COUNT(DISTINCT s.family_id)      AS families,
+         COUNT(DISTINCT s.application_id) AS applications
+  FROM scoped s
+  JOIN flowleap.classifications c ON c.application_id = s.application_id
+  GROUP BY 1, 2
+)
+SELECT k.cpc_subclass, k.cpc_code, k.families, k.applications,
+       sub.title AS subclass_title, grp.title AS code_title
+FROM codes k
+LEFT JOIN flowleap.cpc_scheme sub ON sub.symbol = k.cpc_subclass
+LEFT JOIN flowleap.cpc_scheme grp ON grp.symbol = k.cpc_code
+ORDER BY k.families DESC, k.cpc_code
+LIMIT 30
+```
+
+EXPLAIN does not bound a GIN seed, so bound it yourself with `ipr_type = 'PI'`,
+a year floor and/or an office, as above. The English-title slice is
+language-skewed (measured ~21% of the same window's families, JP badly
+under-represented), so use it to **find** the codes and then landscape over
+`flowleap.classifications`, which is the census.
+
+**Three traps, all measured on real answers.** *Circularity* — the seed decides
+the corpus, so cross-check a second phrasing before believing a ranking.
+*Generic co-occurring codes* — never take the mode: on the `solid state battery
+electrolyte` seed rank 1 is `Y02E60/10` "Energy storage using batteries", a
+Y-scheme tag on 86.7% of hits, and the real answer is rank 2; a code whose own
+corpus dwarfs the hit set is a tag, not the area. *Reclassification mix* —
+legacy and current codes coexist (`H01L` and `H10F` for photovoltaics on this
+edition), so verify every derived code against `flowleap.cpc_scheme` before
+landscaping with it.
+
+### 2. Which codes are *named* for the concept
+
+Backend verified query: **`cpc_candidate_codes`**. The companion lookup, and not
+a replacement: this one asks the official, version-stamped scheme text in
+`flowleap.cpc_scheme` (columns: `symbol`, `level`, `title`; ~254k entries).
 
 ```sql
 SELECT symbol, title FROM flowleap.cpc_scheme WHERE symbol = 'H10F';
@@ -203,16 +265,23 @@ WHERE title ILIKE '%photovoltaic%' ORDER BY symbol LIMIT 15;
 -- candidate codes for a technology term
 ```
 
+Run both lookups and compare — a code that is named for the concept but barely
+used, or used but never named, tells you the seed phrasing is off.
+
 Read the results at the right level: a 4-char class carries only the headline
 (`H10F` = "inorganic semiconductor devices sensitive to radiation"); the specific
 technology titles live in its **groups** (`H10F10/00`, `H10F71/00` …). Match keywords
 against group titles, then search with the 4-char class (`ic=H10F`) or the exact group
 (`cpc=H10F10/00`). A wrong class silently returns the wrong corpus; it does not error.
 
-Fall back to `web_search "cpc scheme [term]"` or the prior-art skill's
-`references/cpc-classification.md` only when `patstat_query` is unavailable.
+### Last-resort fallback (may be stale — CPC is revised quarterly)
 
-Common areas (as of 2026-08; treat as a starting point, not an authority):
+Reach for the table below, the prior-art skill's `references/cpc-classification.md`,
+or `web_search "cpc scheme [term]"` **only** when `patstat_query` is unavailable
+(`patstat_unavailable`) or the question cannot be phrased as a concept. These are
+hand-typed and drift every quarter; the two lookups above read the same answer off
+the corpus and the official scheme at the current edition. If you use the table,
+say so in the answer.
 
 | Code | Area |
 |---|---|
@@ -235,7 +304,3 @@ Common areas (as of 2026-08; treat as a starting point, not an authority):
 | H04L | network protocols, telecom |
 | H04W | wireless communication |
 | Y02E | clean energy technologies |
-
-For anything not listed: `patstat_query` on `flowleap.cpc_scheme` (the queries above) —
-then the prior-art skill's `references/cpc-classification.md`, or
-`web_search "cpc scheme [term]"`, when `patstat_query` is unavailable.
