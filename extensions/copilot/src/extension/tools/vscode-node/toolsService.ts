@@ -19,10 +19,12 @@ import { Lazy } from '../../../util/vs/base/common/lazy';
 import { isDisposable } from '../../../util/vs/base/common/lifecycle';
 import { autorunIterableDelta } from '../../../util/vs/base/common/observableInternal';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { IActivationTelemetryService } from '../../patentai/vscode-node/activationTelemetryService';
 import { IPatentExecutionLedger } from '../../patentai/vscode-node/patentExecutionLedger';
 import { getContributedToolName, getToolName, mapContributedToolNamesInSchema, mapContributedToolNamesInString, ToolName } from '../common/toolNames';
 import { ICopilotTool, ICopilotToolExtension, modelSpecificToolApplies, ToolRegistry } from '../common/toolsRegistry';
 import { BaseToolsService } from '../common/toolsService';
+import { skillRunRecord } from '../common/skillRunRecord';
 import { terminalExecutionRecord } from '../common/terminalExecutionRecord';
 
 export class ToolsService extends BaseToolsService {
@@ -95,6 +97,7 @@ export class ToolsService extends BaseToolsService {
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IExperimentationService private readonly _experimentationService: IExperimentationService,
 		@IPatentExecutionLedger private readonly _patentLedger: IPatentExecutionLedger,
+		@IActivationTelemetryService private readonly _activationTelemetryService: IActivationTelemetryService,
 	) {
 		super(_logService);
 		this._copilotTools = new Lazy(() => new Map(ToolRegistry.getTools().map(t => [t.toolName, _instantiationService.createInstance(t)] as const)));
@@ -221,6 +224,7 @@ export class ToolsService extends BaseToolsService {
 			async result => {
 				span.setStatus(SpanStatusCode.OK);
 				await this._recordTerminalRun(name, options, result.content);
+				this._recordSkillRun(name, options);
 				// Always capture tool result for the debug panel
 				try {
 					const parts: string[] = [];
@@ -275,6 +279,22 @@ export class ToolsService extends BaseToolsService {
 			await this._patentLedger.record(options.chatSessionResource, record);
 		} catch (error) {
 			this._logService.warn(`[ToolsService] could not record the terminal run in the patent execution ledger: ${error}`);
+		}
+	}
+
+	/**
+	 * A Patent Skill run that finished, counted at the same seam as the terminal run above — the
+	 * success path only, because a tool call that threw is not a completed run.
+	 *
+	 * Deliberately NOT on the patent execution ledger, though the ledger is recorded two lines up.
+	 * The ledger is the provenance record a report's appendix is rendered from: it answers "where
+	 * did this figure come from", and invoking a skill is not evidence for a figure. The SEAM is
+	 * shared; the sink is not. Synchronous and non-throwing, so it cannot change the tool's answer.
+	 */
+	private _recordSkillRun(name: string, options: vscode.LanguageModelToolInvocationOptions<Object>): void {
+		const skillId = skillRunRecord(name, options.input);
+		if (skillId) {
+			this._activationTelemetryService.recordSkillRunCompleted(skillId);
 		}
 	}
 
