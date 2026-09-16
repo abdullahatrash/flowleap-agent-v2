@@ -3290,6 +3290,12 @@
         "icon": "$(check)"
       },
       {
+        "command": "flowleap.firstRuns",
+        "title": "%flowleap.firstRuns.title%",
+        "category": "FlowLeap",
+        "icon": "$(rocket)"
+      },
+      {
         "command": "flowleap.promptLibrary.copy",
         "title": "%flowleap.promptLibrary.copy.title%",
         "category": "FlowLeap",
@@ -6992,6 +6998,24 @@
     ],
     "chatAgents": [],
     "chatPromptFiles": [
+      {
+        "path": "./assets/prompts/flowleap/read-a-claim.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/search-for-prior-art.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/read-an-office-action.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
       {
         "path": "./assets/prompts/flowleap/prior-art-search.prompt.md",
         "sessionTypes": [

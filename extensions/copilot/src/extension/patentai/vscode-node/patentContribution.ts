@@ -25,6 +25,7 @@ import { IPatentBackendClient } from './patentBackendClient';
 import { PatentDataKeysStore } from './patentDataKeysStore';
 import { maybeShowSetupOnStartup, PatentDataKeysViewProvider, registerPatentDataKeysCommand } from './patentDataKeysPage';
 import { registerPatentSetupView } from './patentSetupView';
+import { registerFirstRuns } from './firstRunsPanel';
 import { registerPromptLibraryView } from './promptLibraryView';
 import { registerOnboardingBridgeCommands } from './onboardingBridge';
 import { TrialCountdownStatusBar, TrialPillTelemetry } from './trialCountdownStatusBar';
@@ -104,6 +105,15 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 			// extension ships plus the user's own, each with a Copy action. Copy-only by design —
 			// it never writes into the chat input.
 			this._register(registerPromptLibraryView(this._extensionContext, this._fileSystemService, this._logService));
+		});
+		this._safeStep('register first runs', () => {
+			// The three published first runs, opened once per account on the first launch after a
+			// FlowLeap Session exists. The website's /welcome page and the day-0 trial email offer
+			// the same three; this is the surface that catches a user who followed either of them
+			// and would otherwise land on an empty editor.
+			if (this._authProvider) {
+				this._register(registerFirstRuns(this._extensionContext, this._authProvider, this._logService));
+			}
 		});
 		this._safeStep('register trial-countdown pill', () => {
 			// Status-bar "Trial · N days left" pill (issue #79, P2). Visible only while trialing;
