@@ -61,9 +61,13 @@ From the export of 2026-09-14, filtering the 4G flag on `1`, counted on `DIPG_PA
 | Distinct 4G families | 38,892 |
 | Declared groups with no family id | 9,013 |
 | Huawei, three spellings merged | 3,530 (9.1%) |
-| Samsung | 3,351 |
-| ZTE | 3,271 |
-| Qualcomm | 2,333 |
+| Samsung Electronics Co, LTD | 3,349 |
+| ZTE Corporation | 3,269 |
+| LG Electronics Inc. | 2,709 |
+| Qualcomm Incorporated | 2,331 |
+
+Huawei leads only once its three spellings are merged. Under the main spelling alone it
+holds 3,195 families and ranks third, behind Samsung and ZTE.
 
 A later export moves these numbers. Treat them as a check that the key and the filter are
 right, not as an answer to quote.
