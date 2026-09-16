@@ -1,6 +1,6 @@
 ---
 name: patent-examination
-description: Match patent claims against prior art passages and classify relevance using EPO examiner methodology (X/Y/A) with feature-by-feature mapping. Use when the user pastes claim text and asks about patentability, asks "is this novel" or "check this claim", wants X/Y/A classification of references, or wants a claim chart against specific prior art. For finding the prior art in the first place use prior-art; for parsing claim structure and scope use claim-analysis.
+description: Match claims against prior-art passages and classify them by EPO examiner methodology, X/Y/A, feature by feature. Use when the user pastes claim text and asks whether it is novel, wants X/Y/A classification, or wants a claim chart against specific art. To find the art first use prior-art; to parse claim structure use claim-analysis.
 user-invocable: true
 ---
 

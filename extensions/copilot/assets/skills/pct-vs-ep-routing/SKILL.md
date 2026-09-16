@@ -1,6 +1,6 @@
 ---
 name: pct-vs-ep-routing
-description: Explains where filing errors surface and when — WIPO's ePCT validates a PCT application's form fields, priority claims, designated states, and fee calculation while the receiving office's own checks stay thin, whereas a direct European (EP) filing gets full EPO formalities and fee validation — plus the route-choice trade-offs (30-month deferral, cost timing, single-filing breadth vs direct-EP speed). Use when the user is deciding between a PCT/international application and a direct EP filing, asks about ePCT vs EPO or receiving-office validation, where PCT errors get caught, the 30-month delay, or which filing route to take. For readiness checks on either route use pre-filing-checklist.
+description: Choose between a PCT application and a direct EP filing, and know which checks each route applies: ePCT validates form, priority, designated states and fees where the receiving office does not. Use when the user is deciding the filing route, asks about ePCT versus EPO validation, where PCT errors surface, or the 30-month deferral. For readiness on either route use pre-filing-checklist.
 user-invocable: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: upc-rop-explainer
-description: Translates Unified Patent Court Rules of Procedure citations into plain language with the typical time windows each involves — e.g. RoP 5 opt-out, RoP 126 revocation, RoP 150/151 damages, RoP 192/199/200 provisional measures and evidence preservation, RoP 206 orders without hearing, RoP 264 interim conference, RoP 333 review of case-management orders, and the RoP 221–228 appeals cluster — plus the written/interim/oral/deliberation case lifecycle. It describes typical windows only and never computes party-specific deadlines. Use when the user cites or asks about a UPC Rule of Procedure number, what a RoP rule means, the typical timing of a UPC procedural step, or the phases of a UPC case. It does not calculate deadlines — recommend counsel/court confirmation. For which division and language hears the case use upc-division-router; for opt-out mechanics use upc-opt-out-actions.
+description: Plain-language reading of a Unified Patent Court Rule of Procedure and the typical window it involves, plus the written, interim, oral and deliberation phases. Never computes party-specific deadlines. Use when the user cites a RoP number, asks what a rule means, or asks about the timing or phases of a UPC case. For division and language use upc-division-router; for opt-out mechanics use upc-opt-out-actions.
 user-invocable: true
 ---
 

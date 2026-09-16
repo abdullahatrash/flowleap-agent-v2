@@ -1,6 +1,6 @@
 ---
 name: upc-opt-out-check
-description: Checks whether a European patent is eligible to be opted out of the Unified Patent Court's jurisdiction, given an EP number — the hard blocker is unitary effect (a patent with unitary effect cannot be opted out), verified from EP Register / legal-status data; authoritative opt-out status is only ever confirmed by linking the public UPC Registry, never asserted from backend data. Use when the user asks whether an EP patent can be opted out of the UPC, about opt-out eligibility, whether unitary effect blocks an opt-out, or whether a patent is already opted out. For the opt-out/withdrawal/correction request types and their requirements use upc-opt-out-actions; for the Rules of Procedure use upc-rop-explainer; for which division hears a case use upc-division-router.
+description: Whether an EP patent can be opted out of the Unified Patent Court, given its number: unitary effect is the hard blocker, and authoritative status comes only from the public UPC Registry. Use when the user asks about opt-out eligibility, whether unitary effect blocks an opt-out, or whether a patent is already opted out. For the request types use upc-opt-out-actions; for the Rules of Procedure use upc-rop-explainer; for which division hears a case use upc-division-router.
 user-invocable: true
 ---
 

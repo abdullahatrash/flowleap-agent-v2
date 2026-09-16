@@ -1,6 +1,6 @@
 ---
 name: audit-report
-description: Generate a traceable audit report documenting every search, source, limitation, and AI decision in a research session. Use after any substantive patent research (prior art, FTO, landscape) or when the user asks for an audit trail, search methodology documentation, due-diligence records, or AI-usage disclosure for patent-office or law-firm requirements.
+description: Audit trail for a patent-research session: every search, source, limitation and AI decision. Use after substantive research, or when the user asks for an audit trail, search methodology, due-diligence record, or AI-usage disclosure.
 user-invocable: true
 ---
 

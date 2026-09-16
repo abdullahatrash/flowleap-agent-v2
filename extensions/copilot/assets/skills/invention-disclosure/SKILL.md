@@ -1,6 +1,6 @@
 ---
 name: invention-disclosure
-description: Process an Invention Disclosure Form (IDF) end to end — parse the disclosure, triage bar dates, run a prior art search, assess patentability, and hand off to claim drafting. Use when the user provides an IDF or invention disclosure (PDF, Word, or pasted text), or asks to evaluate a new invention submission ("here's our IDF", "evaluate this invention disclosure", "take this from disclosure to claims"). For a search without an IDF use prior-art; for drafting claims directly use claim-drafting.
+description: Take an invention disclosure end to end: parse it, triage bar dates, search prior art, assess patentability, hand off to drafting. Use when the user supplies an IDF as a file or pasted text, or asks to evaluate a new invention submission. For a search without an IDF use prior-art; to draft claims directly use claim-drafting.
 user-invocable: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: fee-reduction-advisor
-description: Interviews the filer about jurisdiction, applicant type, filing language, and inventor-is-applicant status, then explains the official-fee reductions they likely qualify for and the proof documents each requires. Use when the user asks about fee reductions or discounts, micro-entity or small-entity status, SME / natural-person / university / non-profit reductions, the EPC language-based reduction, filing more cheaply, or whether they qualify to pay less. For per-claim excess-claim surcharges use excess-claims-estimator; for filing-readiness use pre-filing-checklist.
+description: Official-fee reductions a filer qualifies for, and the proof each one requires. Use when the user asks about fee reductions, micro- or small-entity status, SME, university or non-profit reductions, the EPC language reduction, or filing more cheaply. For excess-claim surcharges use excess-claims-estimator; for filing readiness use pre-filing-checklist.
 user-invocable: true
 ---
 

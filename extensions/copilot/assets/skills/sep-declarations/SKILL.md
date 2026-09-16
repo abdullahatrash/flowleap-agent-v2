@@ -1,6 +1,6 @@
 ---
 name: sep-declarations
-description: Count and rank standard-essential patent declarations from the ETSI IPR database — portfolio size, share of a generation, FRAND commitments, who declared most against a 3GPP specification. Use when the user asks about declared or standard-essential patents, SEPs, ETSI or 3GPP declarations, or a company's 2G/3G/4G/5G declared portfolio. Route "is this patent actually essential" to claim-analysis, and technology share with no declaration angle to patent-landscape.
+description: Count and rank ETSI standard-essential patent declarations: portfolio size, share of a generation, FRAND commitments, who declared most against a 3GPP specification. Use when the user asks about declared or standard-essential patents, SEPs, ETSI or 3GPP declarations, or a company's 2G to 5G declared portfolio. For whether a patent is actually essential use claim-analysis; for technology share with no declaration angle use patent-landscape.
 user-invocable: true
 ---
 
