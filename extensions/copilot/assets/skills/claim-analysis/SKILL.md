@@ -1,6 +1,6 @@
 ---
 name: claim-analysis
-description: Retrieve and dissect patent claims — preamble/transitional-phrase/body structure, dependency chains, element tables, and scope assessment. Use when the user asks what a patent's claims cover, wants claim structure parsed, scope or breadth assessed, or design-around candidates identified. For scoring claims against prior art use patent-examination; for comparing the user's OWN claim to existing patents use the compare_claims tool; to draft new claims use claim-drafting.
+description: Dissect a patent's claims: preamble, transitional phrase and body, dependency chains, element tables, scope. Use when the user asks what a patent's claims cover, or wants scope, breadth or design-around candidates. To score claims against prior art use patent-examination; to compare the user's own claim use the compare_claims tool; to draft new claims use claim-drafting.
 user-invocable: true
 ---
 

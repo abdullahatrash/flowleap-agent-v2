@@ -1,6 +1,6 @@
 ---
 name: patent-translation
-description: Multi-language patent search strategy for Chinese, Japanese, Korean, and other non-English jurisdictions via Google Patents/PATENTSCOPE search patterns and patent-family expansion. Use when prior art or FTO coverage must include CN/JP/KR filings, the user asks about Chinese/Japanese/Korean patents, or a key reference exists only in a non-English language and translated claims are needed.
+description: Reach CN, JP, KR and other non-English filings through Google Patents and PATENTSCOPE search patterns and family expansion. Use when prior-art or FTO coverage must include those jurisdictions, or a key reference exists only in a non-English language.
 user-invocable: true
 ---
 

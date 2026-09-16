@@ -1,6 +1,6 @@
 ---
 name: prior-art
-description: Systematic multi-jurisdiction prior art search using the USPTO broad-to-narrow methodology, with concept-synonym tables, classification mapping, and a full audit trail. Use when the user wants prior art for an invention, a patentability or novelty search, or asks "is my idea new" or "has this been done before". For a quick patent lookup use patent-search instead; for assessing retrieved passages against claim text use patent-examination.
+description: Multi-jurisdiction prior-art search on the USPTO broad-to-narrow method, with concept-synonym tables, classification mapping and a full audit trail. Use when the user wants prior art for an invention, a patentability or novelty search, or asks whether an idea is new. For a quick lookup use patent-search; to assess retrieved passages against claim text use patent-examination.
 user-invocable: true
 ---
 

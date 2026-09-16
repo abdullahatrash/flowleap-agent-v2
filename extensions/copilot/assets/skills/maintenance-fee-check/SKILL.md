@@ -1,6 +1,6 @@
 ---
 name: maintenance-fee-check
-description: Check US patent maintenance-fee status and deadlines — compute the 3.5/7.5/11.5-year windows from the grant date, read which fees were actually paid from USPTO transaction events, and report the next docketable deadline with surcharge dates. Use when the user asks whether maintenance fees are due or paid, when the next fee deadline is, whether a US patent is still in force fee-wise, or for a fee-status sweep over a portfolio. Dates and status only — for fee-reduction eligibility use fee-reduction-advisor; for term estimates use get_patent_term.
+description: US maintenance-fee status and deadlines: the 3.5, 7.5 and 11.5-year windows, which fees were actually paid, and the next docketable date with its surcharge date. Use when the user asks whether fees are due or paid, when the next deadline is, or for a portfolio sweep. Dates and status only; for reduction eligibility use fee-reduction-advisor, for term estimates use get_patent_term.
 user-invocable: true
 ---
 

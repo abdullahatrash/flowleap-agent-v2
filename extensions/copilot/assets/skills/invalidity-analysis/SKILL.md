@@ -1,6 +1,6 @@
 ---
 name: invalidity-analysis
-description: Hunt for invalidating prior art against a granted patent's claims and build an invalidity claim chart — for EPO oppositions, US IPR/PGR, or defending against an assertion. Use when the user wants to challenge or invalidate a patent, received a demand letter or infringement assertion, or asks "can we kill patent X". For clearing your own product use freedom-to-operate; for prior art on your own invention use prior-art; for asserting a patent against a product use infringement-charting.
+description: Prior art against a granted patent's claims, assembled into an invalidity chart for EPO opposition, US IPR or PGR, or a defence. Use when the user wants to challenge or invalidate a patent, or received a demand letter or infringement assertion. To clear your own product use freedom-to-operate; for art on your own invention use prior-art; to assert a patent use infringement-charting.
 user-invocable: true
 ---
 

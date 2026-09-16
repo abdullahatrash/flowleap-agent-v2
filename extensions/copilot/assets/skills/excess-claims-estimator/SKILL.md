@@ -1,6 +1,6 @@
 ---
 name: excess-claims-estimator
-description: Counts the claims in a draft, applies the EPO (over 15) and USPTO (over 20 total / 3 independent) excess-claim thresholds, and presents the per-claim surcharge as a table. Use when the user asks about claims fees, excess-claim surcharges, how much extra claims cost, whether they have too many claims, or the cost of filing N claims at the EPO or USPTO. For fee reductions use fee-reduction-advisor; for overall filing readiness use pre-filing-checklist.
+description: EPO and USPTO excess-claim surcharges, counted per claim from a draft. Use when the user asks about claims fees, excess-claim surcharges, whether they have too many claims, or the cost of filing N claims. For fee reductions use fee-reduction-advisor; for filing readiness use pre-filing-checklist.
 user-invocable: true
 ---
 

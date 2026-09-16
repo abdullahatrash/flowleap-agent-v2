@@ -1,6 +1,6 @@
 ---
 name: office-action-response
-description: Analyze an office action or examination report and build the response — parse rejected claims and grounds (102/103/101/112, EPC novelty/inventive step), test the examiner's citation mapping, and recommend argue vs amend with drafted amendments. Use when the user receives, pastes, or attaches an office action or rejection ("we got a 103 rejection", "respond to this office action", "examiner cited D1 against claim 1"). For fresh claims use claim-drafting; for raw citation data use citation-analysis.
+description: Parse an office action's rejected claims and grounds, test the examiner's citation mapping, and recommend argue or amend with drafted amendments. Use when the user receives, pastes or attaches an office action, examination report or rejection, or names the US application whose action to answer. For fresh claims use claim-drafting; for raw citation data use citation-analysis.
 user-invocable: true
 ---
 

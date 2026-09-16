@@ -1,6 +1,6 @@
 ---
 name: pre-filing-checklist
-description: Pre-flight readiness review the user runs BEFORE opening an official patent-filing portal — checks required application parts, the 12-month Paris priority and 30-month PCT national-phase windows, applicant/representative constraints, and the ST.26 sequence-listing trigger. Use when the user asks whether an application is ready to file, what is needed to file at the EPO or enter national phase, is about to submit to a filing portal, or mentions filing deadlines, priority claims, missing filing parts, divisional filings, or a pre-filing/readiness checklist. For fee reductions use fee-reduction-advisor; for claims-count surcharges use excess-claims-estimator; for choosing PCT vs direct EP use pct-vs-ep-routing.
+description: Readiness review before opening a filing portal: required application parts, the 12-month Paris and 30-month PCT windows, applicant and representative constraints, the ST.26 sequence-listing trigger. Use when the user asks whether an application is ready, what is needed to file or enter national phase, or mentions filing deadlines, priority claims or divisionals. For fee reductions use fee-reduction-advisor; for claim surcharges use excess-claims-estimator; for the route choice use pct-vs-ep-routing.
 user-invocable: true
 ---
 

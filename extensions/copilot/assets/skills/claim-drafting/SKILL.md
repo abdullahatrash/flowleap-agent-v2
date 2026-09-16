@@ -1,6 +1,6 @@
 ---
 name: claim-drafting
-description: Draft patent claims from an invention disclosure and prior art search results — independent claims aimed at the established novelty gap, dependent fallback ladders, US and EPO two-part styles, support checks, and a mandatory self-examination loop against the found prior art. Use when the user asks to draft, write, or propose claims for their invention ("draft claims", "write claim 1 for this"). For dissecting existing claims use claim-analysis; output is always a draft for patent attorney review.
+description: Draft claims from an invention disclosure and prior-art results: independent claims aimed at the novelty gap, dependent ladders, US and EPO two-part styles, support checks, self-examination against the found art. Use when the user asks to draft, write or propose claims. To dissect existing claims use claim-analysis; the output is always a draft for attorney review.
 user-invocable: true
 ---
 

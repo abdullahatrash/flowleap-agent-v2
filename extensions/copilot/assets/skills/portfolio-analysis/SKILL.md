@@ -1,6 +1,6 @@
 ---
 name: portfolio-analysis
-description: Company-centric patent portfolio analysis — size, technology mix, geographic coverage, legal status, expiration timeline, and crown-jewel identification via citation impact. Use when the user asks to analyze a company's patents, IP due diligence for M&A or investment, a competitor's IP position, or "what does company X hold". For technology-centric trends across all filers use patent-landscape; for challenging a specific patent found here use invalidity-analysis.
+description: One company's patents: size, technology mix, geography, legal status, expiry timeline, and crown jewels by citation impact. Use when the user asks what a company holds, for IP due diligence in M&A or investment, or about a competitor's IP position. For trends across all filers use patent-landscape; to challenge a patent found here use invalidity-analysis.
 user-invocable: true
 ---
 

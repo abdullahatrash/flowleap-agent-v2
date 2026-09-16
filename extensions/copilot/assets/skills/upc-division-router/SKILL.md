@@ -1,6 +1,6 @@
 ---
 name: upc-division-router
-description: Routes a Unified Patent Court dispute to the right court-of-first-instance division and identifies the languages of proceedings each allows — the local and regional divisions vs the central division seats (Paris, plus the Munich and Milan sections split by IPC technical area) and the Court of Appeal in Luxembourg — with the forum rules (infringement goes to the division of the infringement place or the defendant's domicile, standalone revocation goes to the central division, a revocation counterclaim can stay with the local division or be bifurcated) and the counter-move map for a defendant. Use when the user asks which UPC division hears an infringement or revocation action, where to file a UPC case, the language of proceedings for a particular division, how central-division tech-area allocation works, or how to counterclaim against an infringement suit. For opt-out eligibility use upc-opt-out-check; for a Rule of Procedure number use upc-rop-explainer.
+description: Route a Unified Patent Court case to the right division and language of proceedings: local and regional divisions, the central division seats in Paris, Munich and Milan, and the Court of Appeal. Use when the user asks which UPC division hears an infringement or revocation action, where to file, the language of proceedings, or how to counterclaim. For opt-out eligibility use upc-opt-out-check; for a Rule of Procedure number use upc-rop-explainer.
 user-invocable: true
 ---
 

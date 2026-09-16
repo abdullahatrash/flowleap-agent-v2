@@ -1,6 +1,6 @@
 ---
 name: upc-opt-out-actions
-description: Explains the five UPC opt-out request types the Court's case-management system models — initial opt-out, withdrawal (opting back in), correction, and removal of an unauthorized opt-out or unauthorized withdrawal — with their differing requirements (all proprietors of all national parts must join, a declaration of proprietorship, no fee) and the lock-in/lock-out rules (no opt-out once a UPC action has started, no withdrawal once a national action has started, and no second opt-out after a withdrawal). Use when the user asks how to file, withdraw, or correct a UPC opt-out, who must sign an opt-out, whether an opt-out costs a fee, whether an opt-out can be reversed, or what happens to opt-out rights once litigation starts. For whether a patent is eligible to be opted out at all use upc-opt-out-check; for the Rules of Procedure use upc-rop-explainer.
+description: The five UPC opt-out request types, opt-out, withdrawal, correction, and removal of an unauthorized opt-out or withdrawal, with their requirements and lock-in rules. Use when the user asks how to file, withdraw or correct an opt-out, who must sign one, whether it costs a fee, whether it can be reversed, or what litigation does to opt-out rights. For eligibility use upc-opt-out-check; for the Rules of Procedure use upc-rop-explainer.
 user-invocable: true
 ---
 

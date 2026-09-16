@@ -1,6 +1,6 @@
 ---
 name: infringement-charting
-description: Evidence-of-use (EoU) claim charting — map a patent's claims element-by-element onto an accused product or service to assess infringement, with cited evidence per element. Use when the user owns or asserts a patent and asks whether a specific product infringes it, wants an EoU or infringement claim chart, or is preparing licensing or enforcement. For the reverse question — clearing your OWN product against many patents — use freedom-to-operate; for attacking the patent's validity use invalidity-analysis.
+description: Element-by-element evidence-of-use chart mapping a patent's claims onto an accused product, with cited evidence per element. Use when the user asserts a patent and asks whether a product infringes, or is preparing licensing or enforcement. To clear your own product instead use freedom-to-operate; to attack validity use invalidity-analysis.
 user-invocable: true
 ---
 

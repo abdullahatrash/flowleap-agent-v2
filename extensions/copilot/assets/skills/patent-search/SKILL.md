@@ -1,6 +1,6 @@
 ---
 name: patent-search
-description: Run patent searches across EPO OPS (EP/WO) and USPTO Open Data Portal (US) — query building, execution, and refinement. Use when the user wants to find patents by topic, applicant, or classification ("search patents for X", "what has company Y filed", "find EP patents about Z"). For a documented prior-art hunt against an invention use prior-art; for filing statistics and trends use patent-landscape.
+description: Search EPO OPS for EP and WO and USPTO Open Data for US: query building, execution and refinement. Use when the user wants to find patents by topic, applicant or classification. For a documented prior-art hunt use prior-art; for filing statistics use patent-landscape.
 user-invocable: true
 ---
 
