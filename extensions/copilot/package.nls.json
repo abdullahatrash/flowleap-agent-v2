@@ -1,5 +1,6 @@
 {
   "flowleap.openPatentDocument.title": "Open Patent Document",
+	"flowleap.firstRuns.title": "Show First Runs",
 	"flowleap.promptLibrary.name": "Prompts",
 	"flowleap.promptLibrary.copy.title": "Copy Prompt",
   "flowleap.promptLibrary.copied.title": "Copied",

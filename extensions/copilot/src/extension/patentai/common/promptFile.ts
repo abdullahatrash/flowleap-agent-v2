@@ -71,10 +71,16 @@ export function parsePromptFile(text: string, fileStem: string): ParsedPromptFil
 /**
  * Display labels for the bundled prompts. A slug cannot say which of its hyphens joins a compound
  * term ("prior-art") and which separates words, so the shipped names are spelled out and everything
- * else falls back to the generic rule. The eight document-workflow prompts (PRD 0014) come first;
- * the PATSTAT analytics prompts (#352) follow, kept contiguous so the tree groups them together.
+ * else falls back to the generic rule. The three published first runs lead, because they are what a
+ * new user is told to try on the website and in the day-0 trial email, and they have to stay
+ * findable here once the first-launch tab is gone; the eight document-workflow prompts (PRD 0014)
+ * follow; the PATSTAT analytics prompts (#352) come last, kept contiguous so the tree groups them
+ * together.
  */
 const BUNDLED_PROMPT_LABELS = new Map<string, string>([
+	['flowleap-read-a-claim', 'Read a claim properly'],
+	['flowleap-search-for-prior-art', 'Search for prior art'],
+	['flowleap-read-an-office-action', 'Read an office action'],
 	['flowleap-prior-art-search', 'Prior-art search'],
 	['flowleap-claim-analysis', 'Claim analysis'],
 	['flowleap-freedom-to-operate', 'Freedom-to-operate'],
