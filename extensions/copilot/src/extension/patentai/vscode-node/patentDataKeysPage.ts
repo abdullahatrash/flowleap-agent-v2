@@ -15,7 +15,9 @@ import { PatentDataKeysStore } from './patentDataKeysStore';
 import { FlowLeapAuthenticationProvider } from './flowleapAuthProvider';
 import { NON_BYOK_VENDORS } from './patentEndpointProvider';
 import { computeAccountState } from '../common/accountSection';
+import { ACTIVATION_DATA_HANDLING_URL } from '../common/activationTelemetry';
 import { OCR_PROCESSOR, OCR_RETENTION } from '../common/ocrConsent';
+import { IActivationTelemetryService } from './activationTelemetryService';
 import { IOcrConsentService } from './ocrConsentService';
 
 /**
@@ -191,7 +193,9 @@ type PageInMessage =
 	| { readonly type: 'accountSignIn' }
 	| { readonly type: 'accountSignOut' }
 	| { readonly type: 'accountManageSubscription' }
-	| { readonly type: 'setOcrConsent'; readonly verdict: string };
+	| { readonly type: 'setOcrConsent'; readonly verdict: string }
+	| { readonly type: 'setActivationConsent'; readonly verdict: string }
+	| { readonly type: 'openDataHandling' };
 
 /** Register the `flowleap.patentDataKeys` command: reveals the FlowLeap Settings sidebar. An
  *  optional provider argument (e.g. from the Setup view or the invalid-key toast) focuses
@@ -257,6 +261,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		private readonly _authProvider: FlowLeapAuthenticationProvider,
 		private readonly _logService: ILogService,
 		private readonly _ocrConsentService: IOcrConsentService,
+		private readonly _activationTelemetryService: IActivationTelemetryService,
 	) { }
 
 	register(): vscode.Disposable {
@@ -269,6 +274,8 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 			// Keep the Privacy row live: a verdict answered at the OCR prompt must show up here
 			// without the user reopening the view.
 			this._ocrConsentService.onDidChangeVerdict(() => this._postOcrConsent()),
+			// Same for the activation counters: the one-time prompt can answer this row.
+			this._activationTelemetryService.onDidChangeVerdict(() => this._postActivationConsent()),
 		);
 		return vscode.Disposable.from(...this._disposables);
 	}
@@ -315,6 +322,11 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		this._post({ type: 'ocrConsent', verdict: this._ocrConsentService.getVerdict() ?? 'ask' });
 	}
 
+	/** Reflect the current activation-counters verdict; the service owns it, the page only shows it. */
+	private _postActivationConsent(): void {
+		this._post({ type: 'activationConsent', verdict: this._activationTelemetryService.getVerdict() ?? 'ask' });
+	}
+
 	private _postStatus(provider: Provider, kind: 'testing' | 'ok' | 'error' | 'warn' | 'info', message: string): void {
 		this._post({ type: 'status', provider, kind, message });
 	}
@@ -354,6 +366,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					this._pendingFocus = undefined;
 					this._postState(focus);
 					this._postOcrConsent();
+					this._postActivationConsent();
 					void this._postAccountState();
 					return;
 				}
@@ -361,6 +374,16 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					// 'ask' clears back to undecided; anything else must be a verdict.
 					const verdict = message.verdict === 'always' || message.verdict === 'never' ? message.verdict : undefined;
 					await this._ocrConsentService.setVerdict(verdict);
+					return;
+				}
+				case 'setActivationConsent': {
+					// 'ask' clears back to undecided; anything else must be a verdict.
+					const verdict = message.verdict === 'always' || message.verdict === 'never' ? message.verdict : undefined;
+					await this._activationTelemetryService.setVerdict(verdict);
+					return;
+				}
+				case 'openDataHandling': {
+					await vscode.env.openExternal(vscode.Uri.parse(ACTIVATION_DATA_HANDLING_URL));
 					return;
 				}
 				case 'saveEpo': {
@@ -595,13 +618,24 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<div class="card-header">
 				<div class="card-title">Privacy</div>
 			</div>
-			<p class="card-desc">FlowLeap runs on your own AI model key. One feature is the exception: extracting text from a scanned document with OCR uploads it to FlowLeap for processing. It asks the first time and remembers your answer.</p>
+			<p class="card-desc">FlowLeap runs on your own AI model key. Two things leave this machine only if you let them: extracting text from a scanned document with OCR uploads that document to FlowLeap for processing, and activation counters report that a feature was used. Each asks the first time and remembers your answer.</p>
 			<div class="consent-row">
 				<div class="consent-text">
 					<div class="consent-name">Document OCR</div>
 					<div class="consent-detail">Uploads the document you are extracting &middot; processed by ${OCR_PROCESSOR} &middot; ${OCR_RETENTION}</div>
 				</div>
 				<select class="consent-select" id="consent-ocr" aria-label="Document OCR consent">
+					<option value="ask">Ask</option>
+					<option value="always">Always</option>
+					<option value="never">Never</option>
+				</select>
+			</div>
+			<div class="consent-row">
+				<div class="consent-text">
+					<div class="consent-name">Activation counters</div>
+					<div class="consent-detail">Four counters: app launched, skill run completed (skill name only), report saved (template kind only), keys added (yes/no per office) &middot; never a file, a query, a matter, or model output &middot; <a href="#" id="data-handling">see what leaves your machine</a></div>
+				</div>
+				<select class="consent-select" id="consent-activation" aria-label="Activation counters consent">
 					<option value="ask">Ask</option>
 					<option value="always">Always</option>
 					<option value="never">Never</option>
@@ -744,6 +778,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				renderAccount(m);
 			} else if (m.type === 'ocrConsent') {
 				$('consent-ocr').value = m.verdict;
+			} else if (m.type === 'activationConsent') {
+				$('consent-activation').value = m.verdict;
 			}
 		});
 
@@ -752,6 +788,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		$('account-signout').addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'accountSignOut' }); });
 		$('add-model').addEventListener('click', () => vscode.postMessage({ type: 'openModelPicker' }));
 		$('consent-ocr').addEventListener('change', e => vscode.postMessage({ type: 'setOcrConsent', verdict: e.target.value }));
+		$('consent-activation').addEventListener('change', e => vscode.postMessage({ type: 'setActivationConsent', verdict: e.target.value }));
+		$('data-handling').addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'openDataHandling' }); });
 		$('save-epo').addEventListener('click', () => {
 			vscode.postMessage({ type: 'saveEpo', key: $('epo-key').value, secret: $('epo-secret').value });
 			$('epo-key').value = ''; $('epo-secret').value = '';
