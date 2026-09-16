@@ -44,11 +44,26 @@ interface LegalStatusEvent {
 	paymentDate?: string;
 	/** Renewal-fee year a fee-payment event covers. */
 	feeYear?: number;
+	/** EPC states an `AK` event designates (OPS `L507EP`). */
+	designatedStates?: string[];
+	/** Extension/validation states an `AX` event requests (OPS `L524EP`). */
+	extensionStates?: string[];
 }
 
+/**
+ * The `get_legal_status` `data` payload.
+ *
+ * `designatedStates`/`extensionStates` are the roll-up of the `AK`/`AX` event with the latest
+ * date. For an EP regional filing they ARE its designated-state coverage, and no other read
+ * carries them — the patent family names the offices the invention published in, never the EPC
+ * states an EP application designates. Both are add-only: a newer backend sends them, an older
+ * one sends neither, which is why they are optional here and render nothing when absent.
+ */
 interface LegalStatusData {
 	docId: string;
 	events: LegalStatusEvent[];
+	designatedStates?: string[];
+	extensionStates?: string[];
 }
 
 /** Render a gazette reference (`number (date)`) for a table cell, or `—` when absent. */
@@ -83,6 +98,15 @@ function eventLabel(event: LegalStatusEvent): string {
 	}
 	if (event.paymentDate) {
 		parts.push(`paid ${event.paymentDate}`);
+	}
+	// An AK/AX row used to read "DESIGNATED CONTRACTING STATES" with the list gone. The codes
+	// themselves would make the cell unreadable at 38 states, so the row carries the count and
+	// the block above carries the list.
+	if (event.designatedStates?.length) {
+		parts.push(`${event.designatedStates.length} designated states`);
+	}
+	if (event.extensionStates?.length) {
+		parts.push(`${event.extensionStates.length} extension states`);
 	}
 	return parts.join(' — ');
 }
@@ -130,6 +154,40 @@ function latestEventPerState(events: readonly LegalStatusEvent[]): Map<string, L
 		}
 	}
 	return latest;
+}
+
+/**
+ * Renders the designated-state block: the EPC states the filing designates and the
+ * extension/validation states it requested, as the backend rolls them up from the `AK`/`AX` event
+ * with the latest date.
+ *
+ * This answers "which countries does this cover", which no other tool can: `get_patent_family`
+ * names the offices the invention published in — one `EP` entry for a European regional filing —
+ * never the states that filing designates. Designation is not the same as being in force, so the
+ * block says to read the per-state summary below for what survives.
+ *
+ * Returns no lines when the payload carries neither list, which keeps an older backend's response
+ * byte-identical to what it rendered before.
+ */
+function renderDesignatedStates(data: LegalStatusData): string[] {
+	const designated = data.designatedStates ?? [];
+	const extension = data.extensionStates ?? [];
+	if (designated.length === 0 && extension.length === 0) {
+		return [];
+	}
+
+	const lines = ['## Designated states', ''];
+	if (designated.length > 0) {
+		lines.push(`**Designated contracting states (${designated.length}):** ${designated.join(', ')}`);
+		lines.push('');
+	}
+	if (extension.length > 0) {
+		lines.push(`**Extension/validation states (${extension.length}):** ${extension.join(', ')}`);
+		lines.push('');
+	}
+	lines.push('These are the states the filing DESIGNATES, not the states it is still in force in — subtract whatever the per-state summary below reads as lapsed. The set is rolled up from the AK/AX event with the latest date; if that event carried no readable list an older one answers, so check the AK rows in the event table when the answer must be exact.');
+	lines.push('');
+	return lines;
 }
 
 /**
@@ -256,6 +314,8 @@ export class GetLegalStatusTool implements ICopilotTool<IGetLegalStatusParams> {
 
 		lines.push(`${events.length} legal-status event(s) from EPO OPS (INPADOC), newest first.`);
 		lines.push('');
+		// Designation first, then what survives of it: a state can only lapse if it was designated.
+		lines.push(...renderDesignatedStates(data));
 		lines.push(...renderPerStateSummary(events));
 		lines.push(renderMarkdownTable(events, this.eventColumns(events)));
 		lines.push('');
