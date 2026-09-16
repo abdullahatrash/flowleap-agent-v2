@@ -114,6 +114,7 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
 	'portfolio-analysis',
 	'pre-filing-checklist',
 	'prior-art',
+	'sep-declarations',
 	'upc-division-router',
 	'upc-opt-out-actions',
 	'upc-opt-out-check',
