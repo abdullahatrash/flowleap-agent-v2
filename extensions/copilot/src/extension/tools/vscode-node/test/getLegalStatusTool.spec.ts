@@ -96,6 +96,55 @@ describe('GetLegalStatusTool', () => {
 		`);
 	});
 
+	it('names the designated states an EP filing covers, and keeps the list on the AK row', async () => {
+		// "Which countries does this cover" is a DESIGNATION question. get_patent_family answers
+		// with one "EP" entry and says nothing about the states, so this tool is the only one that
+		// can answer it — and the AK row used to render the label with the list dropped.
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				docId: 'EP3804704',
+				events: [
+					{ code: 'AK', country: 'EP', date: '2021-04-14', text: 'DESIGNATED CONTRACTING STATES', designatedStates: ['AL', 'AT', 'BE', 'DE', 'FR', 'GB'], gazette: null },
+					{ code: 'AX', country: 'EP', date: '2021-04-14', text: 'REQUEST FOR EXTENSION OF THE EUROPEAN PATENT', extensionStates: ['BA', 'ME'], gazette: null },
+				],
+				designatedStates: ['AL', 'AT', 'BE', 'DE', 'FR', 'GB'],
+				extensionStates: ['BA', 'ME'],
+			},
+		});
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const text = textOf(await tool.invoke(makeOptions({ publicationNumber: 'EP3804704' }), makeToken()));
+
+		expect(text).toContain('**Designated contracting states (6):** AL, AT, BE, DE, FR, GB');
+		expect(text).toContain('**Extension/validation states (2):** BA, ME');
+		// The event row no longer drops what the label promises.
+		expect(text).toContain('DESIGNATED CONTRACTING STATES — 6 designated states');
+		expect(text).toContain('REQUEST FOR EXTENSION OF THE EUROPEAN PATENT — 2 extension states');
+		// Designation is not the same as being in force.
+		expect(text).toContain('not the states it is still in force in');
+	});
+
+	it('renders no designated-state block for a payload that carries none', async () => {
+		// Anything non-EP designates nothing, and an older backend sends neither list. Silence is
+		// correct in both cases: a "-" would read as "coverage unknown".
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				docId: 'US10000000',
+				events: [{ code: 'PGFP', country: 'US', date: '2021-06-01', text: 'FEE PAID', gazette: null }],
+				designatedStates: [],
+				extensionStates: [],
+			},
+		});
+		const tool = new GetLegalStatusTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const text = textOf(await tool.invoke(makeOptions({ publicationNumber: 'US10000000' }), makeToken()));
+
+		expect(text).not.toContain('Designated states');
+		expect(text).not.toContain('designated');
+	});
+
 	it('summarizes the latest post-grant event per contracting state above the event list', async () => {
 		const { client } = makeBackendClient({
 			success: true,

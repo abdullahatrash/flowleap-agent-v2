@@ -119,6 +119,54 @@ describe('GetPatentSummaryTool', () => {
 		`);
 	});
 
+	it('carries the designated states into the legal-status section', async () => {
+		// The one-call overview is where "tell me about EP X" lands, so the designation has to be
+		// here too — family reports one "EP" member and cannot answer which countries it covers.
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				patentNumber: 'EP3804704',
+				bibliography: null,
+				legalStatus: {
+					docId: 'EP3804704',
+					events: [{ code: 'AK', country: 'EP', date: '2021-04-14', text: 'DESIGNATED CONTRACTING STATES' }],
+					designatedStates: ['AL', 'AT', 'BE', 'DE', 'FR', 'GB'],
+					extensionStates: ['BA', 'ME'],
+				},
+				family: null,
+				term: null,
+			},
+		});
+		const tool = new GetPatentSummaryTool(makeLogService(), client);
+
+		const text = textOf(await tool.invoke(makeOptions({ patentNumber: 'EP3804704' }), makeToken()));
+
+		expect(text).toContain('**Designated contracting states (6):** AL, AT, BE, DE, FR, GB');
+		expect(text).toContain('**Extension/validation states (2):** BA, ME');
+		expect(text).toContain('Designated, not necessarily still in force');
+	});
+
+	it('renders no designated states when the payload carries none', async () => {
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				patentNumber: 'US10000000',
+				bibliography: null,
+				legalStatus: {
+					docId: 'US10000000',
+					events: [{ code: 'PGFP', country: 'US', date: '2021-06-01', text: 'FEE PAID' }],
+					designatedStates: [],
+					extensionStates: [],
+				},
+				family: null,
+				term: null,
+			},
+		});
+		const tool = new GetPatentSummaryTool(makeLogService(), client);
+
+		expect(textOf(await tool.invoke(makeOptions({ patentNumber: 'US10000000' }), makeToken()))).not.toContain('Designated');
+	});
+
 	it('surfaces a backend error through the shared handler', async () => {
 		const { client } = makeBackendClient(undefined, new PatentBackendError(404, 'Patent not found: EP9999999'));
 		const tool = new GetPatentSummaryTool(makeLogService(), client);

@@ -34,7 +34,13 @@ interface SummaryData {
 		cpc: string[];
 		dates: { filing: string | null; publication: string | null; priority: string[] };
 	} | null;
-	legalStatus: { docId: string; events: LegalEvent[] } | null;
+	/**
+	 * `designatedStates`/`extensionStates` are the EPC states the filing designates, rolled up by the
+	 * backend from the `AK`/`AX` event with the latest date. For an EP regional filing they ARE its
+	 * designated-state coverage; `family` names only the offices it published in. Add-only: an older
+	 * backend sends neither, so both are optional and render nothing when absent.
+	 */
+	legalStatus: { docId: string; events: LegalEvent[]; designatedStates?: string[]; extensionStates?: string[] } | null;
 	family: { docId: string; familyMembers: unknown[]; totalCount: number } | null;
 	term: { patentNumber: string; filingDate: string | null; baseExpiryDate: string | null; basis: string; disclaimer: string } | null;
 }
@@ -138,18 +144,36 @@ export class GetPatentSummaryTool implements ICopilotTool<IGetPatentSummaryParam
 		return values && values.length > 0 ? values.join(', ') : 'N/A';
 	}
 
-	/** Render the most-recent legal-status events; the full history stays on the legal endpoint. */
+	/**
+	 * Render the designated states, then the most-recent legal-status events; the full history stays
+	 * on the legal endpoint. The states come first because they answer "which countries does this
+	 * cover" — the question `family` cannot answer for an EP filing — and a state can only lapse if
+	 * it was designated. An empty or absent list renders nothing: for anything non-EP there is no
+	 * designation to report, and a bare "-" would read as "unknown".
+	 */
 	private formatLegalStatus(legalStatus: SummaryData['legalStatus']): string {
 		const events = legalStatus?.events ?? [];
 		if (events.length === 0) {
 			return 'No legal-status events available.';
+		}
+		const coverage: string[] = [];
+		const designated = legalStatus?.designatedStates ?? [];
+		const extension = legalStatus?.extensionStates ?? [];
+		if (designated.length > 0) {
+			coverage.push(`**Designated contracting states (${designated.length}):** ${designated.join(', ')}`);
+		}
+		if (extension.length > 0) {
+			coverage.push(`**Extension/validation states (${extension.length}):** ${extension.join(', ')}`);
+		}
+		if (coverage.length > 0) {
+			coverage.push('Designated, not necessarily still in force — use get_legal_status for the per-state reading.', '');
 		}
 		const shown = events.slice(0, MAX_LEGAL_EVENTS);
 		const rendered = shown.map(e => `- ${e.date || 'N/A'} — ${e.code}${e.country ? ` (${e.country})` : ''}: ${e.text}`);
 		if (events.length > shown.length) {
 			rendered.push(`- …and ${events.length - shown.length} earlier event(s). Use the OPS legal endpoint for the full history.`);
 		}
-		return rendered.join('\n');
+		return [...coverage, ...rendered].join('\n');
 	}
 
 	private formatTerm(term: SummaryData['term']): string {

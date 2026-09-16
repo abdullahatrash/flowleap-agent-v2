@@ -29,7 +29,7 @@ For EACH feature, search for active patents:
    - Legal status (grant, lapse, expiry, opposition — is it still in force?): `get_legal_status` (publicationNumber)
    - EP register events (oppositions, transfers of rights, amendments): `get_register_events` (publicationNumber)
 2. **USPTO**: write the ODP Lucene query (see `patent-search`) → `patent_api_request` (POST) for US granted patents
-3. **Target-market coverage**: patent family across jurisdictions via `get_patent_family` (publicationNumber) — the INPADOC members show where the patent is (or is not) filed
+3. **Target-market reach**: read it from the right field. `get_patent_family` (publicationNumber) names the OFFICES the invention published in — for a European regional filing that is one `EP` entry and says nothing about countries. The countries are `designatedStates` on `get_legal_status` (with `extensionStates` for extension/validation states): for an EP filing those ARE its designated-state coverage. Use both — family for the offices, designated states for an EP filing's countries
 
 ### Key Filters
 - Only ACTIVE patents matter (not expired, lapsed, or abandoned)
@@ -69,6 +69,8 @@ Retrieve claims with `get_patent_details` (EP/WO). For each potentially blocking
 
 For each HIGH/MEDIUM risk patent:
 1. **Which jurisdictions are active/lapsed**: `get_patent_family` (publicationNumber) to enumerate the INPADOC members, then `get_legal_status` on each member for its grant/lapse/expiry status. For whole-family legal status in one call, raw `ops_api_guide` endpoint="family-legal" → `patent_api_request` remains the advanced path
+   - For an EP member, start from `designatedStates` on `get_legal_status` — the states the filing designates — then SUBTRACT whatever the per-state summary reads as lapsed (`PG25`) and keep what is still paying fees (`PGFP`). A patent designating DE and still paying there blocks you in Germany; one lapsed there does not. Designated is not the same as in force, and a patent that never designated your market cannot block you in it
+   - Designation is rolled up from the AK event with the latest date. If that event carried no readable list an older one answers, so the set can be a superseded, WIDER one — for a clearance call that is the dangerous direction, so check the AK rows in the event table before you clear or flag a market on it
 2. Check the expiration date with `get_patent_term` (publicationNumber) — the base 20-years-from-filing estimate plus the adjustment caveats (PTA/PTE, terminal disclaimers); treat it as an estimate, not the enforceable date
 3. Check if the patent was narrowed during prosecution
 4. Check for ongoing oppositions or IPR proceedings — `get_register_events` (publicationNumber) surfaces EP opposition and transfer events
@@ -85,7 +87,7 @@ For HIGH risk patents, suggest:
 
 Save via `write_patent_results`:
 1. **Product Description**: feature decomposition
-2. **Target Markets**: jurisdictions analyzed
+2. **Target Markets**: jurisdictions analyzed — for each EP filing say which states it designates and which of those are still in force
 3. **Blocking Patent Analysis**: table with risk ratings
 4. **High-Risk Patents**: detailed claim mapping for each
 5. **Legal Status**: active/expired/opposed for key patents
