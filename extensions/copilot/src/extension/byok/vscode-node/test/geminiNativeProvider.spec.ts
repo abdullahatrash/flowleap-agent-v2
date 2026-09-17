@@ -369,6 +369,7 @@ describe('GeminiNativeBYOKLMProvider', () => {
 			{ silent: true, configuration: { apiKey: 'bad_key' } } as Parameters<typeof provider.provideLanguageModelChatInformation>[0],
 			tokenSource.token
 		)).rejects.toThrow(/API key not valid/i);
-		expect(mockNotifyByokKeyRejected).toHaveBeenCalledWith('Gemini');
+		// The provider's own message rides along so the notifier can tell a data-region refusal from a bad key.
+		expect(mockNotifyByokKeyRejected).toHaveBeenCalledWith('Gemini', expect.stringContaining('API key not valid'));
 	});
 });

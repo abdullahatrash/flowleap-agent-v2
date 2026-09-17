@@ -70,6 +70,23 @@ export function openRouterModelCapabilities(model: OpenRouterModelData): BYOKMod
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 /**
+ * OpenRouter's in-region host. Same API, same key, different domain: the choice of domain is what
+ * decides where inference runs. A key whose workspace guardrail restricts it to Europe is rejected
+ * with 403 on any other domain, before inference, so such a key cannot work without this host.
+ */
+export const OPENROUTER_EU_BASE_URL = 'https://eu.openrouter.ai/api/v1';
+
+/** The setting that picks which OpenRouter host a user's own key is sent to. */
+export const OPENROUTER_DATA_REGION_CONFIG_KEY = 'patent.openRouter.dataRegion';
+
+export type OpenRouterDataRegion = 'global' | 'eu';
+
+/** Resolves the OpenRouter host for a region, falling back to the global host for any unknown value. */
+export function openRouterBaseUrlForRegion(region: string | undefined): string {
+	return region === 'eu' ? OPENROUTER_EU_BASE_URL : OPENROUTER_BASE_URL;
+}
+
+/**
  * The OpenRouter inference machinery (model discovery, capability resolution, and the native
  * Anthropic-Messages routing), independent of where the API key comes from. Two providers share
  * it: {@link OpenRouterLMProvider} (user-entered BYO key) and the FlowLeap Trial provider
@@ -154,6 +171,17 @@ export class OpenRouterLMProvider extends AbstractOpenRouterLMProvider {
 			instantiationService,
 			configurationService,
 			expService
+		);
+	}
+
+	/**
+	 * The user's own key, so the region is the user's choice. This is the single seam that decides
+	 * the host: it feeds both model discovery and every chat request, since the resolved URL is
+	 * carried on each model as `url`.
+	 */
+	protected override getModelsBaseUrl(): string | undefined {
+		return openRouterBaseUrlForRegion(
+			this._configurationService.getNonExtensionConfig<string>(OPENROUTER_DATA_REGION_CONFIG_KEY)
 		);
 	}
 }

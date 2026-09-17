@@ -3810,6 +3810,19 @@
             "format": "uri",
             "markdownDescription": "%patent.config.apiUrl%"
           },
+          "patent.openRouter.dataRegion": {
+            "type": "string",
+            "enum": [
+              "global",
+              "eu"
+            ],
+            "enumDescriptions": [
+              "%patent.config.openRouterDataRegion.global%",
+              "%patent.config.openRouterDataRegion.eu%"
+            ],
+            "default": "global",
+            "markdownDescription": "%patent.config.openRouterDataRegion%"
+          },
           "patent.secondRead": {
             "type": "string",
             "enum": [

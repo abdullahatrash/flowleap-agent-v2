@@ -27,7 +27,7 @@ import { EndpointEditToolName, isEndpointEditToolName } from '../common/endpoint
 import { CustomDataPartMimeTypes, modelVendorHandlesCacheBreakpoints } from '../common/endpointTypes';
 import { decodeStatefulMarker, encodeStatefulMarker, rawPartAsStatefulMarker } from '../common/statefulMarkerContainer';
 import { rawPartAsThinkingData } from '../common/thinkingDataContainer';
-import { byokKeyRejectionReason, looksLikeByokKeyRejection, notifyByokKeyRejected } from './byokKeyRejection';
+import { byokKeyRejectionReason, dataRegionRejectionReason, looksLikeByokKeyRejection, looksLikeDataRegionRejection, notifyByokKeyRejected } from './byokKeyRejection';
 import { ExtensionContributedChatTokenizer } from './extChatTokenizer';
 
 enum ChatImageMimeType {
@@ -299,7 +299,7 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 			// vendor's prose (OpenRouter says "User not found." for an unknown key, which matches
 			// nothing) and re-deriving here would drop the message we already built.
 			if (e instanceof Error && e.name === CHAT_PROVIDER_AUTH_FAILED_ERROR_NAME) {
-				notifyByokKeyRejected(this.languageModel.vendor);
+				notifyByokKeyRejected(this.languageModel.vendor, detail);
 				return {
 					type: ChatFetchResponseType.ProviderAuthFailed,
 					reason: e.message,
@@ -310,10 +310,14 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 				};
 			}
 			if (looksLikeByokKeyRejection(detail)) {
-				notifyByokKeyRejected(this.languageModel.vendor);
+				notifyByokKeyRejected(this.languageModel.vendor, detail);
+				// A data-region guardrail also answers 403, but the key is not the problem there.
+				const reason = looksLikeDataRegionRejection(detail)
+					? dataRegionRejectionReason(this.languageModel.vendor, detail)
+					: byokKeyRejectionReason(this.languageModel.vendor, detail);
 				return {
 					type: ChatFetchResponseType.Failed,
-					reason: byokKeyRejectionReason(this.languageModel.vendor, detail),
+					reason,
 					requestId: generateUuid(),
 					serverRequestId: undefined
 				};

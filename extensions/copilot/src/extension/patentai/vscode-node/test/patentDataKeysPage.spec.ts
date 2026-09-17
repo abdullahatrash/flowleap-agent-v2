@@ -183,6 +183,21 @@ describe('signup URLs (E3)', () => {
 	});
 });
 
+describe('AI Model section — OpenRouter region', () => {
+
+	it('offers both regions and states the plan the EU one needs, so the choice is not a trap', () => {
+		const html = renderPatentDataKeysPageHtml('test-nonce');
+
+		expect(html).toContain('OpenRouter region');
+		expect(html).toContain('value="global"');
+		expect(html).toContain('value="eu"');
+		// The EU host is Business/Enterprise-only: without saying so, picking it just fails for most users.
+		expect(html).toContain('European Union needs an OpenRouter Business or Enterprise plan');
+		// And it must be clear this is the user's own key, not the trial models FlowLeap pays for.
+		expect(html).toContain('not FlowLeap Trial models');
+	});
+});
+
 describe('Privacy section', () => {
 
 	it('discloses the OCR processor and retention, not just a switch', () => {

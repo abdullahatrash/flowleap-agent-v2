@@ -73,8 +73,9 @@ export abstract class AbstractLanguageModelChatProvider<C extends LanguageModelC
 			// A configured key the provider rejects must be visibly flagged: silent background
 			// listing would otherwise just leave the models out of the picker with no explanation.
 			// Rethrow regardless — core renders the error row in the Manage Models editor from it.
-			if (apiKey && looksLikeByokKeyRejection(toErrorMessage(e, false))) {
-				notifyByokKeyRejected(this._name);
+			const detail = toErrorMessage(e, false);
+			if (apiKey && looksLikeByokKeyRejection(detail)) {
+				notifyByokKeyRejected(this._name, detail);
 			}
 			throw e;
 		}
