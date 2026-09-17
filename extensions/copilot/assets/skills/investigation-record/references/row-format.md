@@ -26,7 +26,9 @@ These come from real runs. The third is the one that matters most.
 2026-09-17	dropped "US application 10374408" from the priority line	the family lookup returns it but it matches no application in the USPTO record; the number the reader can check is US7722129B2	get_family EP2110298B1 member refType=priority; get_continuity 12103744	settled
 ```
 
-The second row is what an unresolved call looks like: a real choice, made anyway, with the reason it might be wrong. The third is a number a tool returned that did not survive a second look, which is the case a provenance appendix cannot catch, because the number did come from a tool.
+The second row is what an unresolved call looks like: a real choice, made anyway, with the reason it might be wrong.
+
+The third is the row step 4 exists for, and it is the one people miss. Nothing was weighed when that number was written, so it never felt like a decision — the report simply stated what a tool had returned while the reasoning behind it had already noticed the mismatch. A provenance check cannot catch it, because the number did come from a tool. Only reading the finished report back against your own certainty does. When step 4 finds one before the save, the row reads `unresolved` and the report says so; the row above is what it looks like after the check was done and the statement was corrected instead.
 
 ## What not to log
 

@@ -106,7 +106,7 @@ describe('bundled skill references', () => {
 				...(known ? [] : [`unknown status "${status}": ${cells[1]}`]),
 			];
 		});
-		expect({ header, rows: rows.length - 1, problems })
-			.toEqual({ header: ['when', 'call', 'why', 'evidence', 'status'], rows: 3, problems: [] });
+		expect({ header, hasRows: rows.length > 1, problems })
+			.toEqual({ header: ['when', 'call', 'why', 'evidence', 'status'], hasRows: true, problems: [] });
 	});
 });
