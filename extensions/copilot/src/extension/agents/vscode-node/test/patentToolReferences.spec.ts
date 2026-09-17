@@ -71,3 +71,42 @@ describe('patent tool references', () => {
 		expect(enforcedMax).toBe(schemaMax);
 	});
 });
+
+describe('bundled skill references', () => {
+	const skillDirs = fs.readdirSync(SKILLS_DIR, { withFileTypes: true })
+		.filter(entry => entry.isDirectory() && fs.existsSync(path.join(SKILLS_DIR, entry.name, 'SKILL.md')))
+		.map(entry => entry.name);
+
+	it('resolves every reference file a skill body points at', () => {
+		// A context pointer to a file that does not exist teaches the agent to look for
+		// material it can never load, and nothing else in the build notices: skills are
+		// assets, so a dead link survives compilation and ships.
+		const dangling = skillDirs.flatMap(name => {
+			const body = fs.readFileSync(path.join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
+			return [...body.matchAll(/\]\((references\/[^)#]+)\)/g)]
+				.map(match => match[1])
+				.filter(target => !fs.existsSync(path.join(SKILLS_DIR, name, target)))
+				.map(target => `${name}: ${target}`);
+		}).sort();
+		expect({ scanned: skillDirs.length > 0, dangling }).toEqual({ scanned: true, dangling: [] });
+	});
+
+	it('keeps the decision-row example parseable as the format it teaches', () => {
+		// The investigation record's worked rows ARE the format spec: an agent copies their
+		// shape. A row with the wrong column count or an unknown status teaches that instead.
+		const reference = fs.readFileSync(path.join(SKILLS_DIR, 'investigation-record', 'references', 'row-format.md'), 'utf8');
+		const rows = reference.split('\n').filter(line => line.includes('\t'));
+		const header = rows[0]?.split('\t');
+		const problems = rows.slice(1).flatMap(row => {
+			const cells = row.split('\t');
+			const status = cells[4] ?? '';
+			const known = status === 'settled' || status === 'unresolved' || status.startsWith('superseded by ');
+			return [
+				...(cells.length === header.length ? [] : [`${cells.length} cells, expected ${header.length}: ${cells[1]}`]),
+				...(known ? [] : [`unknown status "${status}": ${cells[1]}`]),
+			];
+		});
+		expect({ header, rows: rows.length - 1, problems })
+			.toEqual({ header: ['when', 'call', 'why', 'evidence', 'status'], rows: 3, problems: [] });
+	});
+});
