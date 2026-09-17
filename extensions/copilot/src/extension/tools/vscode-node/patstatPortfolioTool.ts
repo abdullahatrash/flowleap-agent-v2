@@ -208,7 +208,7 @@ export class PatstatPortfolioTool implements ICopilotTool<IPatstatPortfolioParam
 
 		lines.push(`**Summary**: ${data.summary}`, '');
 		lines.push(
-			`Source: ${data.data_edition ?? 'PATSTAT (edition unknown)'} — the EPO worldwide patent statistics database, self-hosted analytics layer. ` +
+			`Source: ${data.data_edition ?? 'PATSTAT (edition unknown)'} — the EPO worldwide patent statistics database, twice-yearly snapshot. ` +
 			'Counting semantics: patent APPLICATIONS counted by FILING year under the harmonized (PSN) applicant name — these legitimately differ from publication-level counts (patent_analytics_viz) and from live-register data.',
 			'');
 

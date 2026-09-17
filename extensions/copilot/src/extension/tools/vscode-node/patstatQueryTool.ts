@@ -199,7 +199,7 @@ export class PatstatQueryTool implements ICopilotTool<IPatstatQueryParams> {
 			lines.push('');
 		}
 
-		lines.push(`Rows: ${data.rowCount ?? rows.length} · Source: ${data.data_edition ?? 'PATSTAT (edition unknown)'} (self-hosted EPO PATSTAT Global; twice-yearly snapshot).`, '');
+		lines.push(`Rows: ${data.rowCount ?? rows.length} · Source: ${data.data_edition ?? 'PATSTAT (edition unknown)'} (EPO PATSTAT Global; twice-yearly snapshot).`, '');
 
 		for (const warning of data.warnings ?? []) {
 			lines.push(`- Warning (${warning.code}): ${warning.message}`);
