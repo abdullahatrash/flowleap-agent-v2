@@ -79,3 +79,4 @@ The saved chart covers:
 - Always distinguish new art from art of record
 - NEVER invent references or stretch a teaching — the other side WILL read the cited passage
 - Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice."
+- Keep a decision trail as you go — the priority date you pinned, the art you dropped, the combinations you rejected: follow [investigation-record](../investigation-record/SKILL.md).

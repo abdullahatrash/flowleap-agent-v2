@@ -19,15 +19,17 @@ describe('bundled skill references', () => {
 		.filter(entry => entry.isDirectory() && fs.existsSync(path.join(SKILLS_DIR, entry.name, 'SKILL.md')))
 		.map(entry => entry.name);
 
-	it('resolves every reference file a skill body points at', () => {
+	it('resolves every file a skill body points at, in its own folder or a sibling skill', () => {
 		// A context pointer to a file that does not exist teaches the agent to look for
 		// material it can never load, and nothing else in the build notices: skills are
 		// assets, so a dead link survives compilation and ships.
 		const dangling = skillDirs.flatMap(name => {
 			const body = fs.readFileSync(path.join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
-			return [...body.matchAll(/\]\(\.?\/?(references\/[^)#]+)\)/g)]
+			// Two pointer shapes ship today: into the skill's own references/ folder, and
+			// across to a sibling skill. Both are a path that must resolve on disk.
+			return [...body.matchAll(/\]\((\.?\/?(?:references\/|\.\.\/)[^)#]+)\)/g)]
 				.map(match => match[1])
-				.filter(target => !fs.existsSync(path.join(SKILLS_DIR, name, target)))
+				.filter(target => !fs.existsSync(path.resolve(SKILLS_DIR, name, target)))
 				.map(target => `${name}: ${target}`);
 		}).sort();
 		expect({ scanned: skillDirs.length > 0, dangling }).toEqual({ scanned: true, dangling: [] });

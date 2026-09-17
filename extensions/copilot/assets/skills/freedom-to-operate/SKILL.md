@@ -94,3 +94,4 @@ Save via `write_patent_results`:
 6. **Design-Around Suggestions**: alternatives for high-risk areas
 7. **Disclaimer**: not legal advice
 8. **Audit Trail**: all searches performed (see the audit-report skill)
+- Keep a decision trail as you go — the markets in scope, the claims you read as blocking, the status you could not verify: follow [investigation-record](../investigation-record/SKILL.md).

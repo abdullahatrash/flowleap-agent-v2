@@ -120,3 +120,4 @@ Keep gaps and source-review notes honest; weakening a status is not a repair for
 - NEVER invent patent numbers — only cite what search tools returned
 - ALWAYS build the concept-synonym table before searching
 - Consider non-patent prior art (public use, on sale, demos), not just publications
+- Keep a decision trail as you go — the critical date you fixed, the jurisdictions you searched, the references you set aside and why: follow [investigation-record](../investigation-record/SKILL.md).
