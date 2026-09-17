@@ -87,6 +87,24 @@ interface GraphPublication {
 /** One application anchor: `resolve`'s `kind:'patent'` result, an ambiguity candidate, or a composite header. */
 interface GraphAnchor {
 	node?: string;
+	/**
+	 * The citable number for this application: its first grant where one exists, else its earliest
+	 * publication (e.g. "EP2110298B1"). null when the application has no publication in the loaded
+	 * edition — an unpublished filing has no number a reader can look up (backend #419).
+	 */
+	publication?: string | null;
+	/**
+	 * The application number in DOCDB's OWN format (`tls201_appln.appln_nr`, e.g. "US10374408 (A)").
+	 * For US this is a 6-digit serial plus the 2-digit filing year, NOT the USPTO application number
+	 * ("US10374408 (A)" is USPTO application 12/103,744) — never display it unlabelled; use
+	 * {@link citableNumber} (backend #419, CONTEXT.md "DOCDB application number").
+	 */
+	docdb_application?: string;
+	/**
+	 * @deprecated #419 — carries the DOCDB application number (see `docdb_application`'s doc), the
+	 * value this key has always had. Read `publication` for a citable number instead; this field is
+	 * kept only until every consumer reads the new keys.
+	 */
 	application?: string;
 	title?: string | null;
 	/** Null when PATSTAT recorded the 9999 unknown-date sentinel — never quote either as a year. */
@@ -210,6 +228,20 @@ interface ForwardCitationRow {
 }
 
 interface FamilyRow {
+	/**
+	 * The citable number for this family member: its first grant where one exists, else its earliest
+	 * publication. null when the member is unpublished in the loaded edition (backend #419).
+	 */
+	publication?: string | null;
+	/**
+	 * DOCDB's application-number format — NOT a lookup-able application number for US; see
+	 * {@link citableNumber} and `GraphAnchor.docdb_application`'s doc (backend #419).
+	 */
+	docdb_application?: string;
+	/**
+	 * @deprecated #419 — carries the DOCDB application number, the value this key has always had.
+	 * Read `publication` for a citable number instead.
+	 */
 	application?: string;
 	office?: string;
 	filing_year?: number | null;
@@ -220,6 +252,21 @@ interface FamilyRow {
 }
 
 interface PriorityRow {
+	/**
+	 * The citable number of the priority filing: its first grant where one exists, else its earliest
+	 * publication. null when the priority filing never published — common for a provisional
+	 * (backend #419).
+	 */
+	prior_publication?: string | null;
+	/**
+	 * DOCDB's application-number format — NOT a lookup-able application number for US; see
+	 * {@link citableNumber} and `GraphAnchor.docdb_application`'s doc (backend #419).
+	 */
+	prior_docdb_application?: string;
+	/**
+	 * @deprecated #419 — carries the DOCDB application number, the value this key has always had.
+	 * Read `prior_publication` for a citable number instead.
+	 */
 	prior_application?: string;
 	prior_filing_date?: string;
 	confidence?: GraphConfidence;
@@ -293,6 +340,23 @@ const MAX_RENDERED_YEAR_ROWS = 200;
 /** A field as display text. Absent, null and the empty string all render as `?`, never as `null`. */
 function textOf(value: string | number | null | undefined): string {
 	return value === undefined || value === null || value === '' ? '?' : String(value);
+}
+
+/**
+ * The number to quote for an application: the citable publication where the backend supplied one
+ * (its first grant, else its earliest publication — e.g. "EP2110298B1"), else the DOCDB application
+ * number labelled as such (backend #419). A DOCDB application number reads exactly like a real one
+ * and, for the US, is not one: DOCDB writes a 6-digit serial plus the 2-digit filing year, so
+ * "US10374408 (A)" is USPTO application 12/103,744 — never print that string unlabelled.
+ * `legacyApplication` is read only when the backend supplied neither new field, for a response that
+ * predates #419; the value is a DOCDB application number there too.
+ */
+function citableNumber(publication: string | null | undefined, docdbApplication: string | undefined, legacyApplication: string | undefined): string {
+	if (typeof publication === 'string' && publication.length > 0) {
+		return publication;
+	}
+	const docdb = docdbApplication ?? legacyApplication;
+	return docdb ? `DOCDB application number ${docdb}` : '?';
 }
 
 /** PATSTAT stores an unknown filing year as the 9999 sentinel, which the backend maps to null. */
@@ -520,7 +584,7 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 			'## PATSTAT Graph — resolved anchor',
 			'',
 			`Node: \`${textOf(anchor.node)}\` — pass THIS id to the other operations.`,
-			`Application: ${textOf(anchor.application)}`,
+			`Publication: ${citableNumber(anchor.publication, anchor.docdb_application, anchor.application)}`,
 			`Title: ${textOf(anchor.title)}`,
 			`Filed: ${filingYear(anchor.filing_year)} · Granted: ${yesNo(anchor.granted)} · DOCDB family: ${textOf(anchor.docdb_family_id)}`,
 			'',
@@ -554,7 +618,7 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 
 		lines.push(renderMarkdownTable(candidates, [
 			{ header: 'Node id', cell: candidate => textOf(candidate.node) },
-			{ header: 'Application', cell: candidate => textOf(candidate.application) },
+			{ header: 'Publication', cell: candidate => citableNumber(candidate.publication, candidate.docdb_application, candidate.application) },
 			{ header: 'Title', cell: candidate => textOf(candidate.title) },
 			{ header: 'Filed', cell: candidate => filingYear(candidate.filing_year) },
 			{ header: 'Granted', cell: candidate => yesNo(candidate.granted) },
@@ -603,7 +667,7 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 		const lines: string[] = [
 			'## PATSTAT Graph — patent view',
 			'',
-			`Anchor: \`${textOf(anchor?.node)}\` · Application: ${textOf(anchor?.application)}`,
+			`Anchor: \`${textOf(anchor?.node)}\` · Publication: ${citableNumber(anchor?.publication, anchor?.docdb_application, anchor?.application)}`,
 			`Title: ${textOf(anchor?.title)}`,
 			`Filed: ${filingYear(anchor?.filing_year)} · Granted: ${yesNo(anchor?.granted)} · DOCDB family: ${textOf(anchor?.docdb_family_id)} · Earliest publication: ${textOf(anchor?.earliest_publn_date)}`,
 			`Publications: ${(anchor?.publications ?? []).map(publication => textOf(publication.publn)).join(', ') || '?'}`,
@@ -662,7 +726,7 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 		], meta, 'forward', 'forward citations'));
 
 		lines.push(...renderSection('DOCDB Family', data.family, [
-			{ header: 'Application', cell: (row: FamilyRow) => textOf(row.application) },
+			{ header: 'Publication', cell: (row: FamilyRow) => citableNumber(row.publication, row.docdb_application, row.application) },
 			{ header: 'Office', cell: (row: FamilyRow) => textOf(row.office) },
 			{ header: 'Filed → Granted', cell: (row: FamilyRow) => `${filingYear(row.filing_year)} → ${row.first_grant_date ?? 'not yet granted'}` },
 			{ header: 'Anchor?', cell: (row: FamilyRow) => yesNo(row.is_anchor) },
@@ -671,7 +735,7 @@ export class PatstatGraphTool implements ICopilotTool<IPatstatGraphParams> {
 		], meta, 'family', 'family members'));
 
 		lines.push(...renderSection('Priority Claims', data.priorities, [
-			{ header: 'Prior Application', cell: (row: PriorityRow) => textOf(row.prior_application) },
+			{ header: 'Prior Publication', cell: (row: PriorityRow) => citableNumber(row.prior_publication, row.prior_docdb_application, row.prior_application) },
 			{ header: 'Prior Filing Date', cell: (row: PriorityRow) => textOf(row.prior_filing_date) },
 			{ header: 'Confidence', cell: (row: PriorityRow) => confidenceTag(row.confidence) },
 			{ header: 'Provenance', cell: (row: PriorityRow) => textOf(row.at) },
