@@ -70,7 +70,9 @@ const resolveAnchorFixture = {
 	kind: 'patent',
 	anchor: {
 		node: 'pat:502192934',
-		application: 'EP18000829 (A)',
+		publication: 'EP3477840B1',
+		docdb_application: 'EP18000829 (A)',
+		application: 'EP18000829 (A)', // @deprecated backend #419 — still carried in a live response
 		title: 'WELDING TRANSFORMER',
 		filing_year: 2018,
 		granted: true,
@@ -104,7 +106,7 @@ const patentViewFixture = {
 			backward_patent: { truncated: false, shown: 9, total: 9 },
 		},
 	},
-	anchor: { node: 'pat:502192934', application: 'EP18000829 (A)', title: 'WELDING TRANSFORMER', filing_year: 2018, granted: true, docdb_family_id: 64048651, publications: [{ publn: 'EP3477840B1' }] },
+	anchor: { node: 'pat:502192934', publication: 'EP3477840B1', docdb_application: 'EP18000829 (A)', application: 'EP18000829 (A)', title: 'WELDING TRANSFORMER', filing_year: 2018, granted: true, docdb_family_id: 64048651, publications: [{ publn: 'EP3477840B1' }] },
 	header: {
 		applicants: [{ name: 'UNIVERSITY OF MARIBOR', country: 'SI', confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls207:51293054/1' }],
 		inventors: [{ name: 'BREZOVNIK, ROBERT', country: 'SI', confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls207:55791767/1' }],
@@ -116,8 +118,10 @@ const patentViewFixture = {
 		backward_unresolved: [],
 		forward: [{ citing: 'EP3796345A1', title: 'WELDING TRANSFORMER', applicant: 'ROBERT BOSCH', date: '2021-03-24', origin: 'SEA', examiner_cited: true, citing_family_size: 2, confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls212:546146684/2' }],
 	},
-	family: [{ application: 'SI201700288 (A)', office: 'SI', filing_year: 2017, first_grant_date: '2019-04-30', is_anchor: false, confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls201:511961846' }],
-	priorities: [{ prior_application: 'SI201700288', prior_filing_date: '2017-10-26', confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls204:502192934/1' }],
+	// The family member has a citable grant (the preferred path); the priority filing never
+	// published — common for a provisional — so it exercises the labelled DOCDB fallback (#419).
+	family: [{ publication: 'SI25972A', docdb_application: 'SI201700288 (A)', application: 'SI201700288 (A)', office: 'SI', filing_year: 2017, first_grant_date: '2019-04-30', is_anchor: false, confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls201:511961846' }],
+	priorities: [{ prior_publication: null, prior_docdb_application: 'SI201700288 (A)', prior_application: 'SI201700288', prior_filing_date: '2017-10-26', confidence: { tag: 'EXTRACTED', score: 1 }, at: 'tls204:502192934/1' }],
 };
 
 const applicantViewFixture = {
@@ -198,8 +202,37 @@ describe('PatstatGraphTool', () => {
 		const text = textOf(await tool.invoke(makeOptions({ operation: 'resolve' as const, query: 'EP3477840' }), makeToken()));
 
 		expect(text).toContain('`pat:502192934`');
-		expect(text).toContain('EP3477840B1');
+		expect(text).toContain('Publication: EP3477840B1');
 		expect(text).toContain('EXTRACTED');
+		// The number the tool must never print unlabelled (backend #419): DOCDB's own format, which
+		// for a US application is a serial + filing year, not a real application number.
+		expect(text).not.toMatch(/Publication: EP18000829/);
+	});
+
+	it('labels an unpublished application\'s number as DOCDB, never as if it were citable', async () => {
+		const unpublished = {
+			success: true,
+			kind: 'patent',
+			anchor: {
+				node: 'pat:267837275',
+				publication: null,
+				docdb_application: 'US10374408 (A)',
+				application: 'US10374408 (A)',
+				title: null,
+				filing_year: 2008,
+				granted: false,
+				docdb_family_id: 64048651,
+				publications: [],
+				confidence: { tag: 'EXTRACTED', score: 1 },
+				at: 'tls201:267837275',
+			},
+		};
+		const { client } = makeBackendClient(unpublished);
+		const tool = new PatstatGraphTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const text = textOf(await tool.invoke(makeOptions({ operation: 'resolve' as const, query: 'US10374408' }), makeToken()));
+
+		expect(text).toContain('Publication: DOCDB application number US10374408 (A)');
 	});
 
 	it('presents entity candidates as a pick-one list with the TRUE total, never an answer', async () => {
@@ -230,6 +263,13 @@ describe('PatstatGraphTool', () => {
 			confidenceDisciplineStated: text.includes('EXTRACTED is a direct PATSTAT row'),
 			snapshotCaveat: text.includes('never present snapshot data as current'),
 			citationUniversesDistinguished: text.includes('WORLDWIDE DOCDB citation network'),
+			// Backend #419: the anchor and the family member both carry a citable publication, and the
+			// tool must quote that, never the deprecated DOCDB `application` string, unlabelled.
+			anchorShowsTheCitablePublication: text.includes('Publication: EP3477840B1'),
+			familyShowsTheCitablePublication: text.includes('SI25972A'),
+			// The priority filing never published, so the fallback is the DOCDB string — but only
+			// ever labelled as such, never presented as if it were a citable number.
+			priorityFallsBackToALabelledDocdbNumber: text.includes('DOCDB application number SI201700288 (A)'),
 		}).toEqual({
 			everySectionHeaderPresent: true,
 			emptySectionsSayNoneRecorded: true,
@@ -240,6 +280,9 @@ describe('PatstatGraphTool', () => {
 			confidenceDisciplineStated: true,
 			snapshotCaveat: true,
 			citationUniversesDistinguished: true,
+			anchorShowsTheCitablePublication: true,
+			familyShowsTheCitablePublication: true,
+			priorityFallsBackToALabelledDocdbNumber: true,
 		});
 	});
 
