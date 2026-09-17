@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it, vi } from 'vitest';
-import { ByokKeyRejectionNotifier, byokKeyRejectionReason, looksLikeByokKeyRejection } from '../byokKeyRejection';
+import { ByokKeyRejectionNotifier, byokKeyRejectionReason, dataRegionRejectionReason, looksLikeByokKeyRejection, looksLikeDataRegionRejection } from '../byokKeyRejection';
 
 describe('looksLikeByokKeyRejection', () => {
 
@@ -35,6 +35,30 @@ describe('byokKeyRejectionReason', () => {
 
 		const long = byokKeyRejectionReason('openai', 'x'.repeat(300));
 		expect(long).toContain('x'.repeat(200) + '…');
+	});
+});
+
+describe('looksLikeDataRegionRejection', () => {
+
+	it('separates a data-region guardrail from an ordinary 403', () => {
+		expect([
+			looksLikeDataRegionRejection('403 {"error":{"message":"Request blocked: allowed_data_regions does not permit this endpoint."}}'),
+			looksLikeDataRegionRejection('403 Forbidden: this key is restricted to the europe data region'),
+			looksLikeDataRegionRejection('403 Forbidden — guardrail denied the request'),
+			// an ordinary key rejection must keep reading as one
+			looksLikeDataRegionRejection('403 PERMISSION_DENIED'),
+			looksLikeDataRegionRejection('token expired or invalid: 401'),
+			// the region words alone, with no refusal, are not a refusal
+			looksLikeDataRegionRejection('Routing to the europe data region.'),
+		]).toEqual([true, true, true, false, false, false]);
+	});
+});
+
+describe('dataRegionRejectionReason', () => {
+
+	it('clears the key of blame and names the setting that fixes it', () => {
+		const reason = dataRegionRejectionReason('OpenRouter', '403 allowed_data_regions does not permit this endpoint\nstack line');
+		expect(reason).toBe('OpenRouter refused this request because the key is restricted to a data region (403 allowed_data_regions does not permit this endpoint). Your key is fine — the request went to the wrong host. Set `patent.openRouter.dataRegion` to the matching region, then retry.');
 	});
 });
 

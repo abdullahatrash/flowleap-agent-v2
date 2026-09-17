@@ -18,6 +18,7 @@ import { computeAccountState } from '../common/accountSection';
 import { ACTIVATION_DATA_HANDLING_URL } from '../common/activationTelemetry';
 import { OCR_PROCESSOR, OCR_RETENTION } from '../common/ocrConsent';
 import { IActivationTelemetryService } from './activationTelemetryService';
+import { OPENROUTER_DATA_REGION_CONFIG_KEY } from '../../byok/vscode-node/openRouterProvider';
 import { IOcrConsentService } from './ocrConsentService';
 
 /**
@@ -195,6 +196,7 @@ type PageInMessage =
 	| { readonly type: 'accountManageSubscription' }
 	| { readonly type: 'setOcrConsent'; readonly verdict: string }
 	| { readonly type: 'setActivationConsent'; readonly verdict: string }
+	| { readonly type: 'setOpenRouterRegion'; readonly region: string }
 	| { readonly type: 'openDataHandling' };
 
 /** Register the `flowleap.patentDataKeys` command: reveals the FlowLeap Settings sidebar. An
@@ -322,6 +324,12 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		this._post({ type: 'ocrConsent', verdict: this._ocrConsentService.getVerdict() ?? 'ask' });
 	}
 
+	/** Reflect the OpenRouter data region; the setting owns it, the page only shows it. */
+	private _postOpenRouterRegion(): void {
+		const region = vscode.workspace.getConfiguration().get<string>(OPENROUTER_DATA_REGION_CONFIG_KEY);
+		this._post({ type: 'openRouterRegion', region: region === 'eu' ? 'eu' : 'global' });
+	}
+
 	/** Reflect the current activation-counters verdict; the service owns it, the page only shows it. */
 	private _postActivationConsent(): void {
 		this._post({ type: 'activationConsent', verdict: this._activationTelemetryService.getVerdict() ?? 'ask' });
@@ -367,6 +375,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					this._postState(focus);
 					this._postOcrConsent();
 					this._postActivationConsent();
+					this._postOpenRouterRegion();
 					void this._postAccountState();
 					return;
 				}
@@ -380,6 +389,12 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					// 'ask' clears back to undecided; anything else must be a verdict.
 					const verdict = message.verdict === 'always' || message.verdict === 'never' ? message.verdict : undefined;
 					await this._activationTelemetryService.setVerdict(verdict);
+					return;
+				}
+				case 'setOpenRouterRegion': {
+					// The setting is the seam the OpenRouter provider reads; anything but 'eu' means the global host.
+					const region = message.region === 'eu' ? 'eu' : 'global';
+					await vscode.workspace.getConfiguration().update(OPENROUTER_DATA_REGION_CONFIG_KEY, region, vscode.ConfigurationTarget.Global);
 					return;
 				}
 				case 'openDataHandling': {
@@ -612,6 +627,16 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<div class="buttons">
 				<button id="add-model">Add AI Model</button>
 			</div>
+			<div class="consent-row">
+				<div class="consent-text">
+					<div class="consent-name">OpenRouter region</div>
+					<div class="consent-detail"><strong>European Union needs an OpenRouter Business or Enterprise plan</strong> &mdash; on any other plan it will fail, so leave this on Global &middot; in region, a model with no provider there fails rather than leaving it &middot; applies to your own key, not FlowLeap Trial models</div>
+				</div>
+				<select class="consent-select" id="openrouter-region" aria-label="OpenRouter data region">
+					<option value="global">Global</option>
+					<option value="eu">European Union</option>
+				</select>
+			</div>
 		</div>
 
 		<div class="card" id="card-privacy">
@@ -780,6 +805,8 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				$('consent-ocr').value = m.verdict;
 			} else if (m.type === 'activationConsent') {
 				$('consent-activation').value = m.verdict;
+			} else if (m.type === 'openRouterRegion') {
+				$('openrouter-region').value = m.region;
 			}
 		});
 
@@ -789,6 +816,7 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 		$('add-model').addEventListener('click', () => vscode.postMessage({ type: 'openModelPicker' }));
 		$('consent-ocr').addEventListener('change', e => vscode.postMessage({ type: 'setOcrConsent', verdict: e.target.value }));
 		$('consent-activation').addEventListener('change', e => vscode.postMessage({ type: 'setActivationConsent', verdict: e.target.value }));
+		$('openrouter-region').addEventListener('change', e => vscode.postMessage({ type: 'setOpenRouterRegion', region: e.target.value }));
 		$('data-handling').addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'openDataHandling' }); });
 		$('save-epo').addEventListener('click', () => {
 			vscode.postMessage({ type: 'saveEpo', key: $('epo-key').value, secret: $('epo-secret').value });

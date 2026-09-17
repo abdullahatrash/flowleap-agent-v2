@@ -33,6 +33,30 @@ export function looksLikeByokKeyRejection(message: string): boolean {
 	return KEY_REJECTION_RE.test(message);
 }
 
+const OPEN_SETTINGS_COMMAND = 'workbench.action.openSettings';
+const OPEN_SETTINGS_ACTION = 'Open Settings';
+const DATA_REGION_SETTING = 'patent.openRouter.dataRegion';
+
+/**
+ * A data-region guardrail refuses the request on the wrong host, before inference, and it does it
+ * with a 403 — indistinguishable from a bad key by status alone. Telling the two apart matters:
+ * the key is fine here, the host is wrong, and sending the user to re-enter a working key wastes
+ * their time. Only the provider naming a region or a guardrail is treated as that case, so an
+ * ordinary 403 still reads as a key rejection.
+ */
+const DATA_REGION_HINT_RE = /data[\s_-]?regions?|allowed[\s_-]?data[\s_-]?regions|guardrail/i;
+
+export function looksLikeDataRegionRejection(message: string): boolean {
+	return /\b403\b|forbidden/i.test(message) && DATA_REGION_HINT_RE.test(message);
+}
+
+/** The mid-turn replacement for a data-region refusal: names the setting that actually fixes it. */
+export function dataRegionRejectionReason(providerName: string, detail: string): string {
+	const firstLine = detail.split('\n', 1)[0];
+	const truncated = firstLine.length > 200 ? firstLine.substring(0, 200) + '\u2026' : firstLine;
+	return `${providerName} refused this request because the key is restricted to a data region (${truncated}). Your key is fine \u2014 the request went to the wrong host. Set \`${DATA_REGION_SETTING}\` to the matching region, then retry.`;
+}
+
 /**
  * The mid-turn replacement for a raw provider auth error. The `command:` link is clickable in
  * the chat error renderer (which trusts exactly the manage-models command) and still reads
@@ -46,7 +70,7 @@ export function byokKeyRejectionReason(providerName: string, detail: string): st
 
 export interface IByokKeyRejectionNotifierDeps {
 	showWarningMessage(message: string, ...items: string[]): Thenable<string | undefined>;
-	executeCommand(command: string): Thenable<unknown>;
+	executeCommand(command: string, ...args: readonly unknown[]): Thenable<unknown>;
 	now(): number;
 }
 
@@ -62,22 +86,33 @@ export class ByokKeyRejectionNotifier {
 
 	constructor(private readonly _deps: IByokKeyRejectionNotifierDeps) { }
 
-	/** Fire-and-forget: a failing prompt must never mask the underlying provider error. */
-	notify(providerName: string): void {
+	/**
+	 * Fire-and-forget: a failing prompt must never mask the underlying provider error.
+	 *
+	 * `detail` is the provider's own message, when the caller has it. A data-region refusal hides
+	 * inside the same 403 as a bad key, so without it the user is sent to replace a key that works.
+	 */
+	notify(providerName: string, detail?: string): void {
 		const now = this._deps.now();
 		const last = this._lastNotified.get(providerName);
 		if (last !== undefined && now - last < RENOTIFY_INTERVAL_MS) {
 			return;
 		}
 		this._lastNotified.set(providerName, now);
-		Promise.resolve(this._deps.showWarningMessage(
-			`Your ${providerName} API key was rejected by the provider. Update it in Manage Language Models.`,
-			UPDATE_KEY_ACTION
-		)).then(choice => {
-			if (choice === UPDATE_KEY_ACTION) {
-				return this._deps.executeCommand(MANAGE_MODELS_COMMAND);
+
+		const isDataRegion = detail !== undefined && looksLikeDataRegionRejection(detail);
+		const message = isDataRegion
+			? `${providerName} refused the request because the key is restricted to a data region. Your key is fine — the request went to the wrong host. Change the region in Settings.`
+			: `Your ${providerName} API key was rejected by the provider. Update it in Manage Language Models.`;
+		const action = isDataRegion ? OPEN_SETTINGS_ACTION : UPDATE_KEY_ACTION;
+
+		Promise.resolve(this._deps.showWarningMessage(message, action)).then(choice => {
+			if (choice !== action) {
+				return undefined;
 			}
-			return undefined;
+			return isDataRegion
+				? this._deps.executeCommand(OPEN_SETTINGS_COMMAND, DATA_REGION_SETTING)
+				: this._deps.executeCommand(MANAGE_MODELS_COMMAND);
 		}).then(undefined, () => undefined);
 	}
 }
@@ -85,11 +120,11 @@ export class ByokKeyRejectionNotifier {
 let defaultNotifier: ByokKeyRejectionNotifier | undefined;
 
 /** Production entry point: notify with the real VS Code window/commands (constructed lazily so importing this module has no vscode side effects). */
-export function notifyByokKeyRejected(providerName: string): void {
+export function notifyByokKeyRejected(providerName: string, detail?: string): void {
 	defaultNotifier ??= new ByokKeyRejectionNotifier({
 		showWarningMessage: (message, ...items) => vscode.window.showWarningMessage(message, ...items),
-		executeCommand: command => vscode.commands.executeCommand(command),
+		executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
 		now: () => Date.now(),
 	});
-	defaultNotifier.notify(providerName);
+	defaultNotifier.notify(providerName, detail);
 }
