@@ -101,4 +101,3 @@ the same as any other deliverable on this skill:
    section (applications-by-filing-year vs publication-level counts, plus the
    PATSTAT edition), so the dashboard is auditable on its own without the chat
    transcript.
-- Keep a decision trail as you go — the counting basis, the corpus scope, the figures you could not source: follow [investigation-record](../investigation-record/SKILL.md).

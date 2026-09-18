@@ -93,4 +93,3 @@ Save via `write_patent_results`:
 - NEVER propose an amendment without citing its support in the application as filed
 - Quote the examiner and the references verbatim where the argument turns on wording
 - Close every deliverable with: "AI-assisted analysis for review by a registered patent attorney — not legal advice. Response deadlines are statutory; confirm them independently."
-- Keep a decision trail as you go — argue or amend on each ground, the support you chose for an amendment, the reference you could not retrieve: follow [investigation-record](../investigation-record/SKILL.md).
