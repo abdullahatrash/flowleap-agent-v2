@@ -1,6 +1,6 @@
 ---
 name: investigation-record
-description: Keep a decision trail beside a patent deliverable, one row per judgment call with the evidence behind it, and a row for every statement the report is less sure of than it sounds. Use on a report someone who did not watch the work will read, or when another skill asks for a decision trail. For a record of what was searched and retrieved rather than what was decided, use audit-report.
+description: The decision trail beside a patent deliverable, and the row format every skill that writes one uses: one row per judgment call with the evidence behind it, and a row for every statement the report is less sure of than it sounds. Use when another skill asks for a decision trail, or when the user asks for one on a report someone who did not watch the work will read. For a record of what was searched and retrieved rather than what was decided, use audit-report.
 user-invocable: true
 ---
 
