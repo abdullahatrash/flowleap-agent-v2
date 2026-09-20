@@ -34,6 +34,7 @@ import { registerOnboardingBridgeCommands } from './onboardingBridge';
 import { TrialCountdownStatusBar, TrialPillTelemetry } from './trialCountdownStatusBar';
 import { SessionExpiryStatusBar } from './sessionExpiryStatusBar';
 import { PatentDocumentViewer } from './patentDocumentViewer';
+import { registerPatentLinkPresentationProvider } from './patentLinkPresentationProvider';
 
 /**
  * Activation contribution for FlowLeap authentication (ADR 0002).
@@ -157,6 +158,12 @@ export class PatentAIContribution extends Disposable implements IExtensionContri
 		});
 		this._safeStep('register auth commands', () => this._registerAuthCommands());
 		this._safeStep('register patent reader', () => this._register(new PatentDocumentViewer(this._patentBackendClient)));
+		this._safeStep('register patent link presentations', () => {
+			// Patent links in an open Markdown report render as pills carrying the title, the applicant
+			// and what the legal-status events say (#443). The lookups go through the same backend client
+			// as the tools, silently: a report opening must never raise a sign-in or subscribe prompt.
+			this._register(registerPatentLinkPresentationProvider(this._patentBackendClient, this._logService));
+		});
 		this._safeStep('register onboarding bridge commands', () => {
 			// Command seam the workbench-core onboarding wizard (issue #79) reads FlowLeap state
 			// through — subscription access, model-configured, and start-trial — so core never

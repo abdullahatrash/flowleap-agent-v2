@@ -52,6 +52,7 @@
 /// <reference path="../../../../src/vscode-dts/vscode.proposed.languageModelThinkingPart.d.ts" />
 /// <reference path="../../../../src/vscode-dts/vscode.proposed.languageModelToolResultAudience.d.ts" />
 /// <reference path="../../../../src/vscode-dts/vscode.proposed.languageModelToolSupportsModel.d.ts" />
+/// <reference path="../../../../src/vscode-dts/vscode.proposed.linkPresentation.d.ts" />
 /// <reference path="../../../../src/vscode-dts/vscode.proposed.mappedEditsProvider.d.ts" />
 /// <reference path="../../../../src/vscode-dts/vscode.proposed.mcpServerDefinitions.d.ts" />
 /// <reference path="../../../../src/vscode-dts/vscode.proposed.newSymbolNamesProvider.d.ts" />
