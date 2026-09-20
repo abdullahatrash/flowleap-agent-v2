@@ -201,6 +201,42 @@ suite('RemoteContentExclusion', () => {
 		});
 	});
 
+	describe('content exclusion rules', () => {
+		const repoRoot = '/workspace/repo-a';
+		// Deliberately absent from the mock file system: the rules must be judged on the
+		// contents the caller hands us, not on a file that does not exist yet.
+		const file = URI.file('/workspace/repo-a/src/moved.ts');
+
+		beforeEach(() => {
+			mockGitService.setRepositoryFetchUrls({
+				rootUri: URI.file(repoRoot),
+				remoteFetchUrls: ['https://github.com/org/repo-a.git']
+			});
+			// The response carries one entry per requested repository, and the non-git pseudo
+			// repository is always requested first, so the repository's own rules come second.
+			const noRules = { last_updated_at: 0, rules: [] };
+			const contentRules = {
+				last_updated_at: 0,
+				rules: [{ paths: [], ifAnyMatch: ['CONFIDENTIAL'], ifNoneMatch: ['PUBLIC'] }]
+			};
+			mockCAPIClientService.setMockResponse({
+				json: () => Promise.resolve([noRules, contentRules])
+			});
+		});
+
+		test('evaluates provided contents for a file that does not exist', async () => {
+			expect({
+				confidential: await remoteContentExclusion.isIgnored(file, CancellationToken.None, '// CONFIDENTIAL'),
+				unmarked: await remoteContentExclusion.isIgnored(file, CancellationToken.None, 'export const a = 1;'),
+				public: await remoteContentExclusion.isIgnored(file, CancellationToken.None, '// PUBLIC'),
+			}).toEqual({
+				confidential: true,
+				unmarked: true,
+				public: false,
+			});
+		});
+	});
+
 	describe('loadRepos', () => {
 		test('should populate the cache when loading repos', async () => {
 			// Setup mock responses for multiple repos

@@ -710,6 +710,8 @@ export async function applyEdit(
 }
 
 const ALWAYS_CHECKED_EDIT_PATTERNS: Readonly<Record<string, boolean>> = {
+	'**/.mcp.json': false,
+	'**/.npmrc': false,
 	'**/.vscode/*.json': false,
 };
 
