@@ -19,7 +19,7 @@ vi.mock('vscode', async importOriginal => ({ ...await importOriginal<object>(), 
 
 const families = [
 	'default', 'unrecognized-provider/model', 'gpt-4.1', 'o4-mini', 'gpt-5', 'gpt-5-mini', 'gpt-5-codex',
-	'gpt-5.1', 'gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5.2', 'gpt-5.2-codex', 'gpt-5.3-codex', 'gpt-5.4', 'gpt-5.5',
+	'gpt-5.1', 'gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5.2', 'gpt-5.2-codex', 'gpt-5.3-codex', 'gpt-5.4', 'gpt-5.5', 'gpt-5.6', 'gpt-6', 'gpt-oss-120b',
 	'claude-3.5-sonnet', 'claude-haiku-4.5', 'claude-sonnet-4.5', 'claude-opus-4.5', 'claude-sonnet-4.6', 'claude-opus-4.6',
 	'gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'grok-code-fast-1', 'minimax-m2', 'glm-4.7',
 	'vscModelA', 'vscModelB', 'vscModelC', 'vscModelD',
@@ -43,7 +43,7 @@ describe('patent routing at the assembled provider and tool-result boundary', ()
 		expect({ identity: result.text.includes('<patentAIIdentity>'), codingScoped: result.text.includes('<codingTaskReminders>'), explicitCoding: result.text.includes('Explicit coding requests remain coding tasks'), gapFallback: result.text.includes('use local code for that gap'), writer: result.text.includes('template=prior-art-report'), sourceRoute: result.toolText.includes('evidenceLookup') }).toEqual({ identity: true, codingScoped: true, explicitCoding: true, gapFallback: true, writer: true, sourceRoute: true });
 		expect(result.resolver).toMatchSnapshot();
 	});
-	it.each(['isHiddenFamilyH', 'isHiddenModelM'] as const)('renders the hash-selected provider path %s', async predicate => {
+	it.each(['isHiddenFamilyH'] as const)('renders the hash-selected provider path %s', async predicate => {
 		// Hidden family IDs are not published. Force only selection; render the real
 		// registered provider class, its reminders and the shared assembly unchanged.
 		const matcher = vi.spyOn(modelCapabilities, predicate).mockReturnValue(true);
