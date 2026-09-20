@@ -22,7 +22,7 @@ import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemet
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
+import { basename, dirname, extUriBiasedIgnorePathCase, relativePath } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatRequest, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IBuildPromptContext } from '../../prompt/common/intents';
@@ -65,6 +65,19 @@ type SecondReadMode = 'off' | 'log' | 'render';
  */
 function workingRecordPath(reportPath: string): string {
 	return reportPath.replace(/\.md$/i, '') + '.working-record.md';
+}
+
+/**
+ * Where the report sits inside the workspace, e.g. `outputs/prior-art-review.md`. The renderer links
+ * a saved drawing page relative to this, so a cited figure opens from the report wherever the
+ * project folder is; a report written outside every folder has no such path and gets none.
+ */
+function reportWorkspacePath(uri: URI, folders: readonly URI[]): string {
+	for (const folder of folders) {
+		const relative = relativePath(folder, uri);
+		if (relative && !relative.startsWith('..')) { return relative.replace(/\\/g, '/'); }
+	}
+	return '';
 }
 
 /**
@@ -186,7 +199,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant, reportWorkspacePath(uri, folders)) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of

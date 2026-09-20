@@ -11,7 +11,8 @@ import { IPromptPathRepresentationService } from '../../../platform/prompts/comm
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { decodeBase64 } from '../../../util/vs/base/common/buffer';
-import { joinPath } from '../../../util/vs/base/common/resources';
+import { joinPath, relativePath } from '../../../util/vs/base/common/resources';
+import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
@@ -202,8 +203,11 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 				if (reference) { parts.push(new LanguageModelTextPart(`Anchor: ${figureAnchor(reference.publicationNumber, fig.page)}`)); }
 			}
 			if (reference) { parts.push(new LanguageModelTextPart(`\n${FIGURE_CITATION_RULE}`)); }
+			// The pages are written before the outcome is recorded, so the record can name the file each
+			// page landed in: a report cites a drawing the reader can open, not one that lived in a chat.
+			const saved = saveDir?.trim() ? await this.savePages(saveDir.trim(), docId, withImages) : undefined;
 			const sources: PatentEvidenceSource[] = reference
-				? withImages.map(fig => ({ anchor: figureAnchor(reference.publicationNumber, fig.page), reference, figure: { page: fig.page }, retrieval: 'returned', review: 'unknown', completeness: 'unknown' }))
+				? withImages.map(fig => ({ anchor: figureAnchor(reference.publicationNumber, fig.page), reference, figure: { page: fig.page, ...(saved?.files.get(fig.page) ? { file: saved.files.get(fig.page) } : {}) }, retrieval: 'returned', review: 'unknown', completeness: 'unknown' }))
 				: [];
 			await this.recordFigures(options.chatSessionResource, 'succeeded', docId, sources);
 
@@ -215,8 +219,8 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 				));
 			}
 
-			if (saveDir?.trim()) {
-				parts.push(new LanguageModelTextPart(await this.savePages(saveDir.trim(), docId, withImages)));
+			if (saved) {
+				parts.push(new LanguageModelTextPart(saved.message));
 			}
 
 			return new LanguageModelToolResult(parts);
@@ -256,14 +260,29 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 	}
 
 	/**
-	 * Saves the fetched pages as PNG files under `saveDir` and reports the outcome as a text line.
-	 * A save failure must not discard the images already fetched, so errors are reported in the
+	 * The workspace-relative posix path of a saved page, which is what a report can link. A file
+	 * written outside every workspace folder has no such path and is reported without one rather
+	 * than as an absolute path a moved project would not find again.
+	 */
+	private workspaceRelativePath(uri: URI): string | undefined {
+		for (const folder of this.workspaceService.getWorkspaceFolders()) {
+			const relative = relativePath(folder, uri);
+			if (relative && !relative.startsWith('..')) { return relative.replace(/\\/g, '/'); }
+		}
+		return undefined;
+	}
+
+	/**
+	 * Saves the fetched pages as PNG files under `saveDir` and reports the outcome as a text line,
+	 * together with the workspace-relative path each page landed in so the record can hold it. A
+	 * save failure must not discard the images already fetched, so errors are reported in the
 	 * result text instead of failing the whole tool call.
 	 */
-	private async savePages(saveDir: string, docId: string, figures: FigureData[]): Promise<string> {
+	private async savePages(saveDir: string, docId: string, figures: FigureData[]): Promise<{ message: string; files: ReadonlyMap<number, string> }> {
+		const files = new Map<number, string>();
 		const dirUri = this.resolveSaveDir(saveDir);
 		if (!dirUri) {
-			return `\nCould not save the images: "${saveDir}" is not a valid directory path. Provide a folder inside the workspace.`;
+			return { message: `\nCould not save the images: "${saveDir}" is not a valid directory path. Provide a folder inside the workspace.`, files };
 		}
 		try {
 			const safeDocId = docId.replace(/[^A-Za-z0-9.-]/g, '') || 'patent';
@@ -280,13 +299,15 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 				// render=png means base64 is always a PNG image.
 				await this.fileSystemService.writeFile(uri, decodeBase64(fig.base64!).buffer);
 				saved.push(this.promptPathRepresentationService.getFilePath(uri));
+				const relative = this.workspaceRelativePath(uri);
+				if (relative) { files.set(fig.page, relative); }
 			}
 			this.logService.info(`[GetPatentFiguresTool] Saved ${saved.length} page(s) of ${docId} to ${saveDir}`);
-			return `\nSaved ${saved.length} PNG file(s):\n${saved.map(p => `- ${p}`).join('\n')}`;
+			return { message: `\nSaved ${saved.length} PNG file(s):\n${saved.map(p => `- ${p}`).join('\n')}`, files };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			this.logService.error(`[GetPatentFiguresTool] Failed to save pages to ${saveDir}: ${message}`);
-			return `\nCould not save the images to "${saveDir}": ${message}. The pages above are still shown inline.`;
+			return { message: `\nCould not save the images to "${saveDir}": ${message}. The pages above are still shown inline.`, files };
 		}
 	}
 }
