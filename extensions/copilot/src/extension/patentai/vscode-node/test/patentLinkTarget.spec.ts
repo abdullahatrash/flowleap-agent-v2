@@ -7,7 +7,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { describe, expect, it } from 'vitest';
 import { PATENT_LINK_URI_PATTERN, parsePublicationNumber, recognizePatentLink } from '../../common/patentLinkTarget';
-import { PATENT_LINK_PRESENTATION_PROVIDER_ID } from '../patentLinkPresentationProvider';
+import { buildLoadingPatentPill, buildPatentPill, buildUnenrichedPatentPill, PATENT_LINK_PRESENTATION_PROVIDER_ID, readPatentPillFacts } from '../patentLinkPresentationProvider';
 
 const rule = new RegExp(PATENT_LINK_URI_PATTERN, 'i');
 
@@ -99,9 +99,20 @@ describe('patent link recognizer', () => {
 			enabledApiProposals: string[];
 			contributes: { linkPresentationProviders: { id: string; kind: string; uriPattern: string }[] };
 		};
+		// Every pill this provider can publish must carry the kind the manifest declares: the service
+		// discards a presentation whose kind differs and shows "Not available" instead. Read off the
+		// manifest rather than compared to a literal, so changing either side alone fails here.
+		const declaredKind = manifest.contributes.linkPresentationProviders[0]?.kind;
+		const pillKinds = [
+			buildLoadingPatentPill('EP1602570B1').kind,
+			buildUnenrichedPatentPill('EP1602570B1').kind,
+			buildPatentPill(readPatentPillFacts('EP1602570B1', {}), 'reader').kind,
+		];
 		expect({
 			proposal: manifest.enabledApiProposals.includes('linkPresentation'),
 			providers: manifest.contributes.linkPresentationProviders,
+			// 'file' presentations are hard-disabled in the service, so this kind must never become that.
+			everyPillMatchesTheDeclaredKind: pillKinds.every(kind => kind === declaredKind && kind !== 'file'),
 			// The core rejects a pattern that is not anchored or longer than 1024 characters, and it
 			// does so silently: the rule would simply never select the provider.
 			anchored: PATENT_LINK_URI_PATTERN.startsWith('^') && PATENT_LINK_URI_PATTERN.endsWith('$'),
@@ -109,6 +120,7 @@ describe('patent link recognizer', () => {
 		}).toEqual({
 			proposal: true,
 			providers: [{ id: PATENT_LINK_PRESENTATION_PROVIDER_ID, kind: 'resource', uriPattern: PATENT_LINK_URI_PATTERN }],
+			everyPillMatchesTheDeclaredKind: true,
 			anchored: true,
 			withinLengthLimit: true,
 		});
