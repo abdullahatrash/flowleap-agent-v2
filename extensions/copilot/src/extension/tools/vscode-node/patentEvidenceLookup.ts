@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { PatentEvidenceSource, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 
 export interface PatentEvidenceLookup {
@@ -13,6 +13,18 @@ export interface PatentEvidenceLookup {
 	readonly start?: number;
 	/** Zero-based UTF-16 offset within the first returned text line; use the supplied continuation. */
 	readonly offset?: number;
+}
+
+/**
+ * What the index says a recorded source holds. A drawing page holds no passage to page through, so
+ * its entry says what it is and how a coverage element may rest on it, instead of reading as a
+ * record whose text went missing and could be recovered by retrieving the publication again.
+ */
+function indexSummary(source: PatentEvidenceSource): string {
+	if (source.figure) {
+		return `drawing page ${source.figure.page} — no text; cite it with basis: figure and a reading of what the drawing clearly shows`;
+	}
+	return source.text === undefined ? 'text unavailable in this older record' : `${source.text.split(/\r?\n/).length} lines`;
 }
 
 const pageRows = 30;
@@ -62,7 +74,7 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 		const metadata = `Recorded publication: ${recorded}. Publication date: ${details?.publicationDate ?? 'not recorded'}. Title: ${title ? title.slice(0, 500) + (title.length > 500 ? '… (shortened)' : '') : 'not recorded'}.`;
 		return [`Local evidence index: ${selected.length} sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.`,
 			metadata,
-			...page.map(source => `${source.anchor} — ${source.text === undefined ? 'text unavailable in this older record' : `${source.text.split(/\r?\n/).length} lines`} — ${patentCitationLink('Open source', source.reference)}`),
+			...page.map(source => `${source.anchor} — ${indexSummary(source)} — ${patentCitationLink('Open source', source.reference)}`),
 			start - 1 + page.length < selected.length ? continuation({ start: start + page.length }) : 'End of index.'].join('\n');
 	}
 	const rows = selected.flatMap(source => (source.text?.split(/\r?\n/) ?? []).map((text, index) => ({ source, text, line: index + 1 })));
@@ -92,5 +104,6 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 	return [`Local returned-text ${lookup.query ? 'literal matches' : 'lines'}: ${matching.length} results, starting at ${start}. Retrieval is not proof of review or completeness; no match does not establish absence from the publication.`,
 		...page,
 		position < matching.length ? continuation({ ...lookup, start: position + 1, offset: character }) : 'End of results.',
-		...selected.filter(source => source.text === undefined).map(source => `${source.anchor}: text unavailable in this older record; retrieve this publication once without evidenceLookup to recover stored text.`)].join('\n');
+		// A drawing page never held text, so it needs no recovery: the index already says how to cite it.
+		...selected.filter(source => source.text === undefined && !source.figure).map(source => `${source.anchor}: text unavailable in this older record; retrieve this publication once without evidenceLookup to recover stored text.`)].join('\n');
 }

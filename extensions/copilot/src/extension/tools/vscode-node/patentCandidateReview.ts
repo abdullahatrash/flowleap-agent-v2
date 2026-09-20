@@ -157,6 +157,10 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		// A drawing retrieval brings a document into the session exactly as a text retrieval does; what
 		// it records is pages, not passages.
 		if ((execution.kind !== 'details' && execution.kind !== 'figures') || execution.status !== 'succeeded') { continue; }
+		// A figures call that returned no drawing retrieved nothing. The record keeps the call as an
+		// audit fact, but an inventory of retrieved documents must not list it, and the count of
+		// retrieved-but-uncited documents must not hold a document no page was ever returned for.
+		if (execution.kind === 'figures' && !execution.sources?.length) { continue; }
 		for (const publication of execution.publicationIds ?? []) {
 			const document = entry(publication);
 			document.date ??= execution.publicationDate;
@@ -374,9 +378,12 @@ function figurePage(element: PatentCoverageElement, sources: Map<string, PatentE
  * What a drawing reading may not state: a number with a unit, a ratio of two numbers, or a word of
  * proportion. A drawing discloses that an element exists and how the parts are arranged, never a
  * dimension or a ratio unless it is stated to be to scale (MPEP 2125), so such a reading is rejected
- * unless the same reading says the drawing is to scale.
+ * unless the same reading says the drawing is to scale. The unit list holds no bare `in` and no bare
+ * `m`, and the approximation words hold no `about`: a reading names parts by reference numeral, so
+ * "the cam 12 in engagement with the lever" and "pivots about pin 14" are ordinary prose, not
+ * measurements, and rejecting them would cost more honest readings than the unit catches.
  */
-const FIGURE_MEASUREMENT = /\d+(?:[.,]\d+)?\s*(?:(?:mm|cm|nm|\u00b5m|um|m|inches|inch|in|degrees|deg)\b|[\u00b0%])|\d+\s*:\s*\d+|\b(?:ratio|proportion|proportional|twice|half the|times the)\b|\b(?:approximately|about|roughly)\s+\d/i;
+const FIGURE_MEASUREMENT = /\d+(?:[.,]\d+)?\s*(?:(?:mm|cm|nm|\u00b5m|um|inches|inch|degrees|deg)\b|[\u00b0%])|\d+\s*:\s*\d+|\b(?:ratio|proportion|proportional|twice|half the|times the)\b|\b(?:approximately|roughly)\s+\d/i;
 
 /** A reading that states the drawing is to scale may state what the drawing is drawn to. */
 const DRAWN_TO_SCALE = /\bto scale\b/i;
@@ -657,9 +664,11 @@ function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceS
 
 /**
  * How much of a row's disclosure rests on a drawing rather than on quoted text. A reader weighing a
- * status has to see it in the status line, not only in the element map further down.
+ * status has to see it in the status line, not only in the element map further down. An unresolved
+ * row establishes no disclosure at all, so it rests on nothing and carries no suffix.
  */
 function drawingReadingSuffix(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string {
+	if (row.status === 'unresolved') { return ''; }
 	const disclosed = (row.elements ?? []).filter(claimsDisclosure);
 	const drawings = disclosed.filter(element => figurePage(element, sources) !== undefined);
 	if (!drawings.length) { return ''; }

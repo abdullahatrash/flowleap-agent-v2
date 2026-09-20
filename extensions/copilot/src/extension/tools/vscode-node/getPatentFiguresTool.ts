@@ -123,7 +123,6 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IGetPatentFiguresParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const { publicationNumber, pages, saveDir } = options.input;
 		this.logService.info(`[GetPatentFiguresTool] Fetching figures for ${publicationNumber}${pages ? ` pages=${pages}` : ''}`);
-		const requested = normalizePublicationNumber(publicationNumber);
 
 		try {
 			// Step 1: fetch metadata (no images) to learn the page count and where the
@@ -139,7 +138,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			const totalFigures = source?.pages ?? 0;
 			const drawingStartPage = source?.drawingStartPage;
 			if (totalFigures < 1) {
-				await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: 'succeeded', publicationIds: [docId] });
+				await this.recordFigures(options.chatSessionResource, 'succeeded', docId);
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`No figure images are available for ${docId}.`)
 				]);
@@ -174,7 +173,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			const withImages = figures.filter(f => f.base64);
 
 			if (withImages.length === 0) {
-				await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: 'succeeded', publicationIds: [docId] });
+				await this.recordFigures(options.chatSessionResource, 'succeeded', docId);
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`No figure images could be retrieved for ${docId} (pages ${pagesParam}).`)
 				]);
@@ -206,7 +205,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			const sources: PatentEvidenceSource[] = reference
 				? withImages.map(fig => ({ anchor: figureAnchor(reference.publicationNumber, fig.page), reference, figure: { page: fig.page }, retrieval: 'returned', review: 'unknown', completeness: 'unknown' }))
 				: [];
-			await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: 'succeeded', publicationIds: [docId], sources });
+			await this.recordFigures(options.chatSessionResource, 'succeeded', docId, sources);
 
 			// Note any remaining pages the caller can request explicitly.
 			const lastShown = (withImages[withImages.length - 1]?.page) ?? 0;
@@ -223,9 +222,18 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			return new LanguageModelToolResult(parts);
 
 		} catch (error) {
-			await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: token.isCancellationRequested ? 'cancelled' : 'failed', publicationIds: [requested] });
+			await this.recordFigures(options.chatSessionResource, token.isCancellationRequested ? 'cancelled' : 'failed', publicationNumber);
 			return handlePatentToolError(error, this.logService, '[GetPatentFiguresTool]', err => `Error fetching figures for ${publicationNumber}: ${err.status} - ${err.message}`);
 		}
+	}
+
+	/**
+	 * Records one `get_patent_figures` outcome. Every record carries the publication in the same
+	 * normalized form the figure anchors and the evidence sources use, so the review indexes the
+	 * outcome and its drawings against one document instead of two spellings of it.
+	 */
+	private async recordFigures(session: vscode.Uri | undefined, status: 'succeeded' | 'failed' | 'cancelled', publicationNumber: string, sources?: readonly PatentEvidenceSource[]): Promise<void> {
+		await this.ledger.record(session, { kind: 'figures', status, publicationIds: [normalizePublicationNumber(publicationNumber)], ...(sources ? { sources } : {}) });
 	}
 
 	/**

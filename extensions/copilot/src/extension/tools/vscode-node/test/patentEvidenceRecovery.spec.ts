@@ -338,6 +338,20 @@ describe('prior-art evidence recovery and review contract', () => {
 		});
 	});
 
+	it('refuses an evidence entry that quotes a recorded drawing page', () => {
+		const quoted = { ...review, coverage: [{ ...figureRow, evidence: [...figureRow.evidence, { anchor: figurePage.anchor, quote: reading, scope: 'Drawing.', qualifiers: 'None.', quantityBasis: 'None.' }] }, combination] };
+		expect(validateCandidateReview(quoted, drawn)).toEqual([
+			`Evidence entry for ${figurePage.anchor} quotes a recorded drawing page, which holds no text. Remove it and cite the drawing through an element with basis: figure and a reading of what it clearly shows.`,
+		]);
+	});
+
+	it('refuses a drawing reading whose anchor is not one of the row\'s sourceAnchors', () => {
+		const unlisted = { ...review, coverage: [{ ...figureRow, sourceAnchors: ['WO9951190A1:claims:10:en'] }, combination] };
+		expect(validateCandidateReview(unlisted, drawn)).toEqual([
+			`Element "cam profile carried on the stem" of "${feature}" cites ${figurePage.anchor}, which is not one of that row's sourceAnchors. Cite one of: WO9951190A1:claims:10:en.`,
+		]);
+	});
+
 	it('passes basis and reading through materialization untouched', () => {
 		const materialized: PatentCandidateReview = materializeCandidateReview({ ...review, coverage: [figureRow, combination] }, drawn);
 		expect(materialized.coverage![0].elements).toEqual(figureRow.elements);

@@ -100,6 +100,50 @@ describe('a coverage element that rests on a recorded drawing', () => {
 		});
 	});
 
+	// The drawing element of `mixed`, re-read as the model wrote it; everything else in the row stands.
+	const withReading = (value: string): PatentCandidateReview => ({
+		...review,
+		coverage: [{ ...mixed, elements: [mixed.elements[0], { ...mixed.elements[1], reading: value }, mixed.elements[2]] }, combination],
+	});
+
+	it('reads a reference numeral as prose and still refuses a dimension, a ratio and a proportion', () => {
+		const readings = [
+			'Figure 3 shows the cam 12 in engagement with the lever 14.',
+			'The lever pivots about pin 14 as drawn.',
+			'Figure 7 shows a cam lobe 12 mm across.',
+			'Figure 7 shows the cam and the stem in a ratio 2:1.',
+			'Figure 7 shows a cam lobe approximately 3 times the width of the stem.',
+		];
+		expect(readings.map(value => [value, validateCandidateReview(withReading(value), snapshot).length === 0])).toEqual([
+			['Figure 3 shows the cam 12 in engagement with the lever 14.', true],
+			['The lever pivots about pin 14 as drawn.', true],
+			['Figure 7 shows a cam lobe 12 mm across.', false],
+			['Figure 7 shows the cam and the stem in a ratio 2:1.', false],
+			['Figure 7 shows a cam lobe approximately 3 times the width of the stem.', false],
+		]);
+	});
+
+	it('leaves a figures outcome that returned no drawing out of the retrieved inventory and its uncited count', () => {
+		const empty: PatentExecutionSnapshot = {
+			...snapshot,
+			executions: [...snapshot.executions, { id: 'no-images', recordedAt: '2026-09-20T05:00:00Z', kind: 'figures', status: 'succeeded', publicationIds: ['EP3000000A1'] }],
+		};
+		const rendered = renderCandidateReview(review, empty, 'review.working-record.md');
+		expect({
+			listed: rendered.includes('EP3000000A1'),
+			count: rendered.split('\n').find(line => line.includes('retrieved documents are not cited')),
+		}).toEqual({
+			listed: false,
+			count: '- 1 of 2 retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.',
+		});
+	});
+
+	it('leaves an unresolved row unmarked even when one of its elements rests on a drawing', () => {
+		const unresolved = { ...mixed, status: 'unresolved' as const, gap: 'Nothing in the record resolves the cam profile.' };
+		expect(renderCandidateReview({ ...review, coverage: [unresolved, combination] }, snapshot, 'record.md').split('\n').filter(line => line.startsWith('**feature')))
+			.toEqual(['**feature · essential · unresolved**']);
+	});
+
 	it('names the unjudged drawing element under the row it belongs to in the working record', () => {
 		const secondRead: SecondReadOutcome = {
 			kind: 'judged', model: 'judge-model',
