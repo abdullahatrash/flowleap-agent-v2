@@ -272,11 +272,17 @@ function getInstructionsIndexFile(buildPromptContext: IBuildPromptContext, custo
 
 }
 
-export async function assertFileNotContentExcluded(accessor: ServicesAccessor, uri: URI): Promise<void> {
+/**
+ * Throws if the file is excluded by content-exclusion rules.
+ *
+ * @param contents The contents a write is about to put at `uri`, when the check must
+ * run against the proposed content rather than what is on disk today.
+ */
+export async function assertFileNotContentExcluded(accessor: ServicesAccessor, uri: URI, contents?: string): Promise<void> {
 	const ignoreService = accessor.get(IIgnoreService);
 	const promptPathRepresentationService = accessor.get(IPromptPathRepresentationService);
 
-	if (await ignoreService.isCopilotIgnored(uri)) {
+	if (await ignoreService.isCopilotIgnored(uri, undefined, contents)) {
 		throw new Error(`File ${promptPathRepresentationService.getFilePath(uri)} is configured to be ignored by Copilot`);
 	}
 }

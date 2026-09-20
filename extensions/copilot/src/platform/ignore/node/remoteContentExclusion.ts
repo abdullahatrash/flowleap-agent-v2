@@ -84,11 +84,16 @@ export class RemoteContentExclusion implements IDisposable {
 		this._disposables.push(this._fileReadLimiter);
 	}
 
-	public async isIgnored(file: URI, token: CancellationToken = CancellationToken.None): Promise<boolean> {
+	/**
+	 * @param contents The contents a write is about to put at `file`. When given, the rules are
+	 * evaluated against that content instead of what is on disk, so cached path verdicts are skipped.
+	 */
+	public async isIgnored(file: URI, token: CancellationToken = CancellationToken.None, contents?: string): Promise<boolean> {
+		const hasProvidedContents = contents !== undefined;
 		// 1. If glob is not ignored, but there is no regex we can return false as the URI will not change
 		// 2. If glob is not ignored, but there are regex we need to read file content which will happen lower in the regex code.
 		// 3. If glob is ignored, it will return true despite regex since the most restrictive exclusion takes the cake
-		if ((this._ignoreGlobResultCache.has(file) && !this.isRegexContextExclusionsEnabled) || this._ignoreGlobResultCache.get(file)) {
+		if (!hasProvidedContents && ((this._ignoreGlobResultCache.has(file) && !this.isRegexContextExclusionsEnabled) || this._ignoreGlobResultCache.get(file))) {
 			return this._ignoreGlobResultCache.get(file) ?? false;
 		}
 		// Any pending requests that may be in flight should be awaited before returning a result
@@ -143,43 +148,53 @@ export class RemoteContentExclusion implements IDisposable {
 				}
 			}
 		}
-		let fileContents: string = '';
+		// The caller may hand us the contents a write is about to produce, in which case the file
+		// on disk is not what the rules must judge. Only the first 1KB is used, as when we read.
+		let fileContents = contents?.slice(0, 1024);
 		let fileContentHash: string = '';
 		for (const fetchUrl of repoMetadata.fetchUrls) {
 			const { ifAnyMatch, ifNoneMatch } = this._contentExclusionCache.get(fetchUrl) ?? { ifAnyMatch: [], ifNoneMatch: [] };
 			// We only want to read the file if we absolutely must as it can be expensive
 			if (ifAnyMatch.length > 0 || ifNoneMatch.length > 0) {
-				if (!fileContents) {
+				if (fileContents === undefined) {
 					try {
-						// Read the file contents and hash it so we can cache the result - Only reads up to 1KB of the file, as reading too much can be expensive and regex exclusions are normally header based
+						// Read the file contents - Only reads up to 1KB of the file, as reading too much can be expensive and regex exclusions are normally header based
 						// Note: This feature is internal only so we can adapt the implementation as needed without breaking clients.
 						const fileContentOrBuffer = await this._fileReadLimiter.queue(() => readFileFromTextBufferOrFS(this._fileSystemService, this._workspaceService, file, 1024));
 						fileContents = typeof fileContentOrBuffer === 'string' ? fileContentOrBuffer : new TextDecoder().decode(fileContentOrBuffer);
-						fileContentHash = await createSha256Hash(fileContents);
-						// Cache hit for these file contents, no need to run the regex patterns
-						if (this._ignoreRegexResultCache.has(fileContentHash)) {
-							return this._ignoreRegexResultCache.get(fileContentHash) ?? false;
-						}
 					} catch {
 						// We failed to read the file, so it should just be ignored as we have no idea what the contents are or if it exists
 						return true;
 					}
 				}
+				if (!fileContentHash) {
+					// Hash the contents so we can cache the result
+					fileContentHash = await createSha256Hash(fileContents);
+					// Cache hit for these file contents, no need to run the regex patterns
+					if (this._ignoreRegexResultCache.has(fileContentHash)) {
+						return this._ignoreRegexResultCache.get(fileContentHash) ?? false;
+					}
+				}
 			}
-			if (ifAnyMatch.length > 0 && fileContents && ifAnyMatch.some(pattern => pattern.test(fileContents))) {
+			const contentsToCheck = fileContents;
+			if (ifAnyMatch.length > 0 && contentsToCheck !== undefined && ifAnyMatch.some(pattern => pattern.test(contentsToCheck))) {
 				this._logService.debug(`File ${file.path} is ignored by content exclusion rule ifAnyMatch`);
 				this._ignoreRegexResultCache.set(fileContentHash, true);
 				return true;
 			}
-			if (ifNoneMatch.length > 0 && fileContents && !ifNoneMatch.some(pattern => pattern.test(fileContents))) {
+			if (ifNoneMatch.length > 0 && contentsToCheck !== undefined && !ifNoneMatch.some(pattern => pattern.test(contentsToCheck))) {
 				this._logService.debug(`File ${file.path} is ignored by content exclusion rule ifNoneMatch`);
 				this._ignoreRegexResultCache.set(fileContentHash, true);
 				return true;
 			}
 		}
 
-		this._ignoreGlobResultCache.set(file, false);
-		this._ignoreRegexResultCache.set(fileContentHash, false);
+		// A verdict reached on proposed contents says nothing about the file that sits at this path,
+		// so it must not be memoised against the path.
+		if (!hasProvidedContents) {
+			this._ignoreGlobResultCache.set(file, false);
+			this._ignoreRegexResultCache.set(fileContentHash, false);
+		}
 		return false;
 	}
 
