@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { PromptElement, PromptSizing } from '@vscode/prompt-tsx';
-import { isHiddenModelM } from '../../../../../platform/endpoint/common/chatModelCapabilities';
+import { isGpt56 } from '../../../../../platform/endpoint/common/chatModelCapabilities';
 import { IChatEndpoint } from '../../../../../platform/networking/common/networking';
 import { ToolName } from '../../../../tools/common/toolNames';
-import { Gpt55CopilotIdentityRule as HiddenModelMCopilotIdentityRule } from '../../base/copilotIdentity';
+import { Gpt55CopilotIdentityRule as Gpt56CopilotIdentityRule } from '../../base/copilotIdentity';
 import { InstructionMessage } from '../../base/instructionMessage';
 import { ResponseTranslationRules } from '../../base/responseTranslationRules';
 import { Gpt5SafetyRule } from '../../base/safetyRules';
@@ -17,7 +17,7 @@ import { FileLinkificationInstructionsOptimized } from '../fileLinkificationInst
 import { CopilotIdentityRulesConstructor, IAgentPrompt, PromptRegistry, ReminderInstructionsConstructor, SafetyRulesConstructor, SystemPrompt } from '../promptRegistry';
 import { CUSTOM_TOOL_SEARCH_NAME, ToolSearchToolPromptOptimized } from '../toolSearchInstructions';
 
-class HiddenModelMPrompt extends PromptElement<DefaultAgentPromptProps> {
+class Gpt56Prompt extends PromptElement<DefaultAgentPromptProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const tools = detectToolCapabilities(this.props.availableTools);
 		return <InstructionMessage>
@@ -191,24 +191,24 @@ class HiddenModelMPrompt extends PromptElement<DefaultAgentPromptProps> {
 	}
 }
 
-class HiddenModelMPromptResolver implements IAgentPrompt {
+export class Gpt56PromptResolver implements IAgentPrompt {
 
 	static async matchesModel(endpoint: IChatEndpoint): Promise<boolean> {
-		return isHiddenModelM(endpoint);
+		return isGpt56(endpoint);
 	}
 
 	static readonly familyPrefixes = [];
 
 	resolveSystemPrompt(endpoint: IChatEndpoint): SystemPrompt | undefined {
-		return HiddenModelMPrompt;
+		return Gpt56Prompt;
 	}
 
 	resolveReminderInstructions(endpoint: IChatEndpoint): ReminderInstructionsConstructor | undefined {
-		return HiddenModelMReminderInstructions;
+		return Gpt56ReminderInstructions;
 	}
 
 	resolveCopilotIdentityRules(endpoint: IChatEndpoint): CopilotIdentityRulesConstructor | undefined {
-		return HiddenModelMCopilotIdentityRule;
+		return Gpt56CopilotIdentityRule;
 	}
 
 	resolveSafetyRules(endpoint: IChatEndpoint): SafetyRulesConstructor | undefined {
@@ -216,7 +216,7 @@ class HiddenModelMPromptResolver implements IAgentPrompt {
 	}
 }
 
-export class HiddenModelMReminderInstructions extends PromptElement<ReminderInstructionsProps> {
+export class Gpt56ReminderInstructions extends PromptElement<ReminderInstructionsProps> {
 	async render(state: void, sizing: PromptSizing) {
 		const toolSearchEnabled = !!this.props.endpoint.supportsToolSearch;
 		return <>
@@ -235,4 +235,4 @@ export class HiddenModelMReminderInstructions extends PromptElement<ReminderInst
 		</>;
 	}
 }
-PromptRegistry.registerPrompt(HiddenModelMPromptResolver);
+PromptRegistry.registerPrompt(Gpt56PromptResolver);

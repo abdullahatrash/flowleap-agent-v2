@@ -2,8 +2,6 @@
 
 exports[`patent routing at the assembled provider and tool-result boundary > renders the hash-selected provider path isHiddenFamilyH 1`] = `"DefaultFamilyHAgentPrompt"`;
 
-exports[`patent routing at the assembled provider and tool-result boundary > renders the hash-selected provider path isHiddenModelM 1`] = `"HiddenModelMPrompt"`;
-
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for anthropic/claude-sonnet-4.6 1`] = `"DefaultAgentPrompt"`;
 
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for claude-3.5-sonnet 1`] = `"Claude46OpusPrompt"`;
@@ -49,6 +47,8 @@ exports[`patent routing at the assembled provider and tool-result boundary > sco
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.4 1`] = `"Gpt54Prompt"`;
 
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.5 1`] = `"Gpt55Prompt"`;
+
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5.6 1`] = `"Gpt56Prompt"`;
 
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5-codex 1`] = `"CodexStyleGpt5CodexPrompt"`;
 
