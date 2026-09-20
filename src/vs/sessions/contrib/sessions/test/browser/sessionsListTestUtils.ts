@@ -24,7 +24,7 @@ import { ISessionsProvidersService } from '../../../../services/sessions/browser
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { IChatModel } from '../../../../../workbench/contrib/chat/common/model/chatModel.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { IChat, ISession, ISessionChangesSummary, ISessionWorkspace, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { IActiveSession, ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 
 export class TestCommandService extends mock<ICommandService>() {
@@ -62,11 +62,23 @@ export interface ITestSessionOptions {
 	readonly supportsRename?: boolean;
 	readonly createdAt?: Date;
 	readonly isArchived?: boolean;
+	/**
+	 * Gives the session a workspace with this label, so the row renders its
+	 * workspace badge. Absent by default: a session with no workspace at all.
+	 */
+	readonly workspaceLabel?: string;
+	/**
+	 * The provider-supplied aggregate the diff stats are read from. Absent by
+	 * default, and then the property is left off the session entirely, matching a
+	 * provider that publishes per-file changes only.
+	 */
+	readonly changesSummary?: ISessionChangesSummary;
 }
 
 export interface ITestSession {
 	readonly session: ISession;
 	readonly title: ISettableObservable<string>;
+	readonly status: ISettableObservable<SessionStatus>;
 }
 
 /**
@@ -76,10 +88,24 @@ export interface ITestSession {
 export function createTestSession(title: string, options: ITestSessionOptions = {}): ITestSession {
 	const createdAt = options.createdAt ?? new Date();
 	const titleObservable = observableValue<string>(`title-${title}`, title);
+	const statusObservable = observableValue<SessionStatus>(`status-${title}`, SessionStatus.Completed);
 	const mainChat = new class extends mock<IChat>() {
 		override readonly resource = URI.parse(`test-chat://${title}`);
 		override readonly title: IObservable<string> = titleObservable;
 	}();
+	const workspace: ISessionWorkspace | undefined = options.workspaceLabel === undefined ? undefined : {
+		uri: URI.file(`/test/${options.workspaceLabel}`),
+		label: options.workspaceLabel,
+		icon: Codicon.folder,
+		folders: [{
+			root: URI.file(`/test/${options.workspaceLabel}`),
+			workingDirectory: URI.file(`/test/${options.workspaceLabel}`),
+			name: options.workspaceLabel,
+			description: undefined,
+		}],
+		requiresWorkspaceTrust: false,
+		isVirtualWorkspace: false,
+	};
 	const session: ISession = {
 		sessionId: title,
 		resource: URI.parse(`test-session://${title}`),
@@ -87,12 +113,13 @@ export function createTestSession(title: string, options: ITestSessionOptions = 
 		sessionType: 'test',
 		icon: Codicon.account,
 		createdAt,
-		workspace: observableValue(`workspace-${title}`, undefined),
+		workspace: observableValue<ISessionWorkspace | undefined>(`workspace-${title}`, workspace),
 		title: titleObservable,
 		updatedAt: observableValue(`updatedAt-${title}`, createdAt),
-		status: observableValue(`status-${title}`, SessionStatus.Completed),
+		status: statusObservable,
 		changesets: observableValue(`changesets-${title}`, []),
 		changes: observableValue(`changes-${title}`, []),
+		...(options.changesSummary ? { changesSummary: observableValue<ISessionChangesSummary | undefined>(`changesSummary-${title}`, options.changesSummary) } : {}),
 		modelId: observableValue(`modelId-${title}`, undefined),
 		mode: observableValue(`mode-${title}`, undefined),
 		loading: observableValue(`loading-${title}`, false),
@@ -104,7 +131,7 @@ export function createTestSession(title: string, options: ITestSessionOptions = 
 		mainChat: observableValue<IChat>(`mainChat-${title}`, mainChat),
 		capabilities: { supportsMultipleChats: false, supportsRename: options.supportsRename ?? true },
 	};
-	return { session, title: titleObservable };
+	return { session, title: titleObservable, status: statusObservable };
 }
 
 export interface IListHarness {
@@ -138,6 +165,9 @@ export function createListHarness(disposables: Pick<DisposableStore, 'add'>, ses
 		override readonly onDidChangeScreenReaderOptimized = Event.None;
 		override readonly onDidChangeReducedMotion = Event.None;
 		override isScreenReaderOptimized(): boolean { return false; }
+		// Read by SessionStatusIcon to decide between a spinner and a static glyph,
+		// so a session that is in progress or needs input reaches it.
+		override isMotionReduced(): boolean { return false; }
 	}());
 	instantiationService.stub(ISessionsService, new class extends mock<ISessionsService>() {
 		override readonly activeSession = activeSession;

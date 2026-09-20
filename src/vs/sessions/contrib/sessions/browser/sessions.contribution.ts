@@ -22,6 +22,7 @@ import { SessionsMouseNavigationContribution } from './sessionsMouseNavigation.j
 import { SessionsWindowNotifier } from './sessionsWindowNotifier.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING } from './views/sessionsList.js';
+import { USE_WORKTREE_SETTING } from '../../../common/sessionConfig.js';
 import './sessionDetailsAction.js';
 
 const agentSessionsViewIcon = registerIcon('chat-sessions-icon', Codicon.commentDiscussionSparkle, localize('agentSessionsViewIcon', 'Icon for Agent Sessions View'));
@@ -66,6 +67,12 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			type: 'boolean',
 			tags: ['preview'],
 			description: localize('sessions.list.showUnreadInCollapsedSections', "Controls whether collapsed sections in the Sessions list show needs-input or unread indicators for the unarchived sessions they contain."),
+			default: true,
+		},
+		[USE_WORKTREE_SETTING]: {
+			type: 'boolean',
+			tags: ['preview'],
+			description: localize('sessions.useWorktree', "Controls whether a new session in a git workspace runs in its own worktree by default. A choice already made for the workspace is remembered and takes precedence."),
 			default: true,
 		},
 	},

@@ -75,7 +75,7 @@ import { DraggedSessionIdentifier, SessionsDataTransfers } from '../../../../bro
 import { IDragAndDropData } from '../../../../../base/browser/dnd.js';
 import { ElementsDragAndDropData, ListViewTargetSector } from '../../../../../base/browser/ui/list/listView.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { buildSessionHoverContent } from '../sessionHoverContent.js';
+import { buildSessionHoverContent, getSessionDiffStats } from '../sessionHoverContent.js';
 import { SessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
 
 const $ = DOM.$;
@@ -164,6 +164,19 @@ function isSessionItem(item: SessionListItem): item is ISession {
 
 const SHOW_MORE_FOLDERS_LABEL = '__more_folders__';
 const FOUR_DAYS_MS = 4 * 24 * 60 * 60 * 1000;
+/**
+ * Vertical gap reserved between session rows so each row reads as its own inset
+ * card. Reserved by the delegate rather than taken from the row's own box, so the
+ * row keeps its full content height. Paired with the `.session-list-row-spacing`
+ * rules in `sessionsList.css`.
+ */
+const INSET_ROW_GAP = 2;
+
+/** Marks the rows the inset row-spacing rules apply to. */
+const SESSION_LIST_INSET_ROW_CLASS = 'session-list-inset-row';
+
+/** Shown for a session waiting on the user when its provider sent no message. */
+const INPUT_NEEDED_FALLBACK_LABEL = localize('needsInput', "Input needed");
 
 //#endregion
 
@@ -171,6 +184,13 @@ const FOUR_DAYS_MS = 4 * 24 * 60 * 60 * 1000;
 
 class SessionsTreeDelegate implements IListVirtualDelegate<SessionListItem> {
 	private static readonly ITEM_HEIGHT = 54;
+	/** Compact rows are title-only — see the `.sessions-list-control.compact` rules in `sessionsList.css`. */
+	private static readonly ITEM_HEIGHT_COMPACT = 28;
+	/**
+	 * Extra height a compact row reserves for the needs-input callout, which
+	 * stands in for the details row a compact row does not have.
+	 */
+	private static readonly INPUT_NEEDED_ROW_HEIGHT = 32;
 	/**
 	 * Phone layout uses a taller row so the inline action toolbar can
 	 * meet the 44px minimum touch target without overflowing. Sized to
@@ -185,28 +205,48 @@ class SessionsTreeDelegate implements IListVirtualDelegate<SessionListItem> {
 	constructor(
 		private readonly _approvalModel: AgentSessionApprovalModel | undefined,
 		private readonly _isPhone: () => boolean,
+		private readonly _isCompact: () => boolean = () => false,
+		private readonly _useInsetRowSpacing = false,
 	) { }
+
+	private withInsetRowSpacing(height: number): number {
+		return height + (this._useInsetRowSpacing ? INSET_ROW_GAP : 0);
+	}
 
 	getHeight(element: SessionListItem): number {
 		if (isSessionSection(element) || isSessionGroupItem(element)) {
 			return SessionsTreeDelegate.SECTION_HEIGHT;
 		}
 		if (isSessionShowMore(element)) {
-			return SessionsTreeDelegate.SHOW_MORE_HEIGHT;
+			return this.withInsetRowSpacing(SessionsTreeDelegate.SHOW_MORE_HEIGHT);
 		}
 
-		let height = this._isPhone() ? SessionsTreeDelegate.ITEM_HEIGHT_PHONE : SessionsTreeDelegate.ITEM_HEIGHT;
+		const session = element as ISession;
+		let height: number;
+		if (this._isPhone()) {
+			height = SessionsTreeDelegate.ITEM_HEIGHT_PHONE;
+		} else if (this._isCompact()) {
+			height = SessionsTreeDelegate.ITEM_HEIGHT_COMPACT;
+		} else {
+			height = SessionsTreeDelegate.ITEM_HEIGHT;
+		}
+		let approval: IAgentSessionApprovalInfo | undefined;
 		if (this._approvalModel) {
-			const approval = getFirstApprovalAcrossChats(this._approvalModel, element as ISession, undefined);
+			approval = getFirstApprovalAcrossChats(this._approvalModel, session, undefined);
 			if (approval) {
 				height += SessionItemRenderer.getApprovalRowHeight(approval.label);
 			}
 		}
-		return height;
+		// A compact row drops the details row, so a session waiting on the user
+		// would otherwise say nothing about it. A real approval already says it.
+		if (!approval && this._isCompact() && session.status.get() === SessionStatus.NeedsInput) {
+			height += SessionsTreeDelegate.INPUT_NEEDED_ROW_HEIGHT;
+		}
+		return this.withInsetRowSpacing(height);
 	}
 
 	hasDynamicHeight(element: SessionListItem): boolean {
-		return !!this._approvalModel && isSessionItem(element);
+		return isSessionItem(element) && (!!this._approvalModel || this._isCompact());
 	}
 
 	getTemplateId(element: SessionListItem): string {
@@ -346,10 +386,17 @@ interface ISessionItemTemplate {
 	readonly titleContainer: HTMLElement;
 	readonly titleInputContainer: HTMLElement;
 	readonly titleToolbar: MenuWorkbenchToolBar;
+	/**
+	 * Carries the context a compact row moves off the row and onto its hover:
+	 * revealed on hover/focus by the `.sessions-list-control.compact` rules.
+	 */
+	readonly compactHoverDescription: HTMLElement;
 	readonly detailsRow: HTMLElement;
 	readonly approvalRow: HTMLElement;
 	readonly approvalLabel: HTMLElement;
 	readonly approvalButtonContainer: HTMLElement;
+	readonly inputNeededRow: HTMLElement;
+	readonly inputNeededLabel: HTMLElement;
 	readonly contextKeyService: IContextKeyService;
 	readonly disposables: DisposableStore;
 	readonly elementDisposables: DisposableStore;
@@ -358,6 +405,7 @@ interface ISessionItemTemplate {
 class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, ISessionItemTemplate> {
 	static readonly TEMPLATE_ID = 'session-item';
 	readonly templateId = SessionItemRenderer.TEMPLATE_ID;
+	readonly rowClassName = SESSION_LIST_INSET_ROW_CLASS;
 
 	private static readonly APPROVAL_ROW_MAX_LINES = 3;
 	private static readonly _APPROVAL_ROW_LINE_HEIGHT = 18;
@@ -377,7 +425,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 	private renameState: (IInlineRenameValueState & { readonly session: ISession }) | undefined;
 
 	constructor(
-		private readonly options: { grouping: () => SessionsGrouping; sorting: () => SessionsSorting; isPinned: (session: ISession) => boolean; isRead: (session: ISession) => boolean; visibleSessions: IObservable<readonly (IActiveSession | undefined)[]>; getMultiSelectedSessions: (session: ISession) => ISession[]; inlineRename: boolean; contextViewService?: IContextViewService; onDidDoubleClickRename?: (session: ISession) => void; onDidFinishRename?: () => void },
+		private readonly options: { grouping: () => SessionsGrouping; sorting: () => SessionsSorting; isPinned: (session: ISession) => boolean; isRead: (session: ISession) => boolean; compact: () => boolean; visibleSessions: IObservable<readonly (IActiveSession | undefined)[]>; getMultiSelectedSessions: (session: ISession) => ISession[]; inlineRename: boolean; contextViewService?: IContextViewService; onDidDoubleClickRename?: (session: ISession) => void; onDidFinishRename?: () => void },
 		private readonly approvalModel: AgentSessionApprovalModel | undefined,
 		private readonly instantiationService: IInstantiationService,
 		private readonly contextKeyService: IContextKeyService,
@@ -414,6 +462,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 			disposables.add(DOM.addDisposableListener(titleInputContainer, eventType, e => e.stopPropagation()));
 		}
 		disposables.add(Gesture.ignoreTarget(titleInputContainer));
+		const compactHoverDescription = DOM.append(titleRow, $('.session-compact-hover-description'));
 		const titleToolbarContainer = DOM.append(titleRow, $('.session-title-toolbar'));
 		// The list opens a session on click and on Gesture `tap` (touch).
 		// DOM event propagation stops only cover mouse/pointer events; the
@@ -432,6 +481,13 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 		const approvalLabel = DOM.append(approvalRow, $('span.session-approval-label'));
 		const approvalButtonContainer = DOM.append(approvalRow, $('.session-approval-button'));
 
+		// Needs-input callout for compact rows, which have no details row to carry
+		// the status. Styled as an approval row without a button, and hidden from
+		// screen readers because the accessible label already names the state.
+		const inputNeededRow = DOM.append(mainCol, $('.session-input-needed-row.session-approval-row'));
+		inputNeededRow.setAttribute('aria-hidden', 'true');
+		const inputNeededLabel = DOM.append(inputNeededRow, $('span.session-input-needed-label'));
+
 		const contextKeyService = disposables.add(this.contextKeyService.createScoped(container));
 		const scopedInstantiationService = disposables.add(this.instantiationService.createChild(new ServiceCollection([IContextKeyService, contextKeyService])));
 		const actionRunner = disposables.add(new SessionItemActionRunner(this.options.getMultiSelectedSessions));
@@ -440,7 +496,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 			actionRunner,
 		}));
 
-		return { container, statusIcon, title, titleRow, titleContainer, titleInputContainer, titleToolbar, detailsRow, approvalRow, approvalLabel, approvalButtonContainer, contextKeyService, disposables, elementDisposables };
+		return { container, statusIcon, title, titleRow, titleContainer, titleInputContainer, titleToolbar, compactHoverDescription, detailsRow, approvalRow, approvalLabel, approvalButtonContainer, inputNeededRow, inputNeededLabel, contextKeyService, disposables, elementDisposables };
 	}
 
 	renderElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, template: ISessionItemTemplate): void {
@@ -494,7 +550,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 		// Rich hover on the row showing folder, branch, diff stats and provider.
 		// Shown to the right of the row, similar to the extensions list.
 		template.elementDisposables.add(this.hoverService.setupDelayedHover(template.container, () => ({
-			content: buildSessionHoverContent(element, this.sessionsProvidersService),
+			content: buildSessionHoverContent(element, this.sessionsProvidersService, this.options.compact()),
 			appearance: { showPointer: true },
 			position: { hoverPosition: HoverPosition.RIGHT, forcePosition: true },
 			persistence: { hideOnHover: false },
@@ -557,8 +613,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 		const descriptionDisposable = template.elementDisposables.add(new MutableDisposable());
 		template.elementDisposables.add(autorun(reader => {
 			const sessionStatus = element.status.read(reader);
-			const changes = element.changes.read(reader);
-			const changesSummary = element.changesSummary?.read(reader);
+			const diffStats = getSessionDiffStats(element, reader);
 			const workspace = element.workspace.read(reader);
 			const description = element.description.read(reader);
 			let timeDate: Date | undefined;
@@ -571,6 +626,31 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 			}
 			// Clear and rebuild details row
 			DOM.clearNode(template.detailsRow);
+			DOM.clearNode(template.compactHoverDescription);
+
+			// Workspace badge — shown when not grouped by workspace, or when the
+			// session is pinned/archived (their section headers don't carry the
+			// workspace name). Resolved before the compact branch because a compact
+			// row shows it on hover instead of in the details row.
+			const workspaceBadgeLabel = workspace && (
+				this.options.grouping() !== SessionsGrouping.Workspace ||
+				this.options.isPinned(element) ||
+				element.isArchived.read(reader)
+			)
+				? this.getWorkspaceBadgeLabel(workspace)
+				: undefined;
+
+			// A compact row is title-only at rest. The workspace moves to the hover
+			// slot, and the diff, status and time are carried by the row's hover.
+			if (this.options.compact()) {
+				descriptionDisposable.clear();
+				timeDisposable.clear();
+				if (workspaceBadgeLabel) {
+					DOM.append(template.compactHoverDescription, $('span.session-badge', undefined, workspaceBadgeLabel));
+				}
+				return;
+			}
+
 			const parts: HTMLElement[] = [];
 
 			if (sessionStatus !== SessionStatus.InProgress) {
@@ -583,45 +663,21 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 				parts.push(typeIconEl);
 			}
 
-			// Workspace badge — show when not grouped by workspace,
-			// or when the session is pinned/archived (their section headers
-			// don't carry the workspace name)
-			if (!hideDetails && workspace && (
-				this.options.grouping() !== SessionsGrouping.Workspace ||
-				this.options.isPinned(element) ||
-				element.isArchived.read(reader)
-			)) {
-				const badgeLabel = this.getWorkspaceBadgeLabel(workspace);
-				if (badgeLabel) {
-					const badgeEl = DOM.append(template.detailsRow, $('span.session-badge'));
-					badgeEl.textContent = badgeLabel;
-					parts.push(badgeEl);
-				}
+			if (!hideDetails && workspaceBadgeLabel) {
+				const badgeEl = DOM.append(template.detailsRow, $('span.session-badge'));
+				badgeEl.textContent = workspaceBadgeLabel;
+				parts.push(badgeEl);
 			}
 
-			// Diff stats
-			if (!hideDetails && (changesSummary || changes.length > 0)) {
-				let insertions = 0, deletions = 0;
-
-				if (changesSummary) {
-					insertions = changesSummary.additions;
-					deletions = changesSummary.deletions;
-				} else if (changes.length > 0) {
-					for (const change of changes) {
-						insertions += change.insertions;
-						deletions += change.deletions;
-					}
+			// Diff stats, from the same summary-first reader the pill and the hover use
+			if (!hideDetails && diffStats) {
+				if (parts.length > 0) {
+					DOM.append(template.detailsRow, $('span.session-separator.has-separator'));
 				}
-
-				if (insertions > 0 || deletions > 0) {
-					if (parts.length > 0) {
-						DOM.append(template.detailsRow, $('span.session-separator.has-separator'));
-					}
-					const diffEl = DOM.append(template.detailsRow, $('span.session-diff'));
-					DOM.append(diffEl, $('span.session-diff-added')).textContent = `+${insertions}`;
-					DOM.append(diffEl, $('span.session-diff-removed')).textContent = `-${deletions}`;
-					parts.push(diffEl);
-				}
+				const diffEl = DOM.append(template.detailsRow, $('span.session-diff'));
+				DOM.append(diffEl, $('span.session-diff-added')).textContent = `+${diffStats.insertions}`;
+				DOM.append(diffEl, $('span.session-diff-removed')).textContent = `-${diffStats.deletions}`;
+				parts.push(diffEl);
 			}
 
 			// Status description
@@ -646,7 +702,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 					descriptionDisposable.value = this.markdownRendererService.render(description, { sanitizerConfig: { replaceWithPlaintext: true } }, statusEl);
 				} else {
 					descriptionDisposable.clear();
-					statusEl.textContent = localize('needsInput', "Input needed");
+					statusEl.textContent = INPUT_NEEDED_FALLBACK_LABEL;
 				}
 				parts.push(statusEl);
 			} else if (sessionStatus === SessionStatus.Error) {
@@ -691,6 +747,48 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 		if (this.approvalModel) {
 			this.renderApprovalRow(element, template);
 		}
+
+		this.renderCompactInputNeededRow(element, template);
+	}
+
+	/**
+	 * Compact rows carry no details row, so a session waiting on the user would
+	 * say nothing about it. Render the provider's message (or a fallback) as a
+	 * callout, and only when no real approval is already occupying that space.
+	 */
+	private renderCompactInputNeededRow(element: ISession, template: ISessionItemTemplate): void {
+		const contentStore = template.elementDisposables.add(new DisposableStore());
+
+		const isVisible = (reader: IReader | undefined): boolean =>
+			this.options.compact()
+			&& element.status.read(reader) === SessionStatus.NeedsInput
+			&& !(this.approvalModel && getFirstApprovalAcrossChats(this.approvalModel, element, reader));
+
+		let wasVisible = isVisible(undefined);
+		template.inputNeededRow.classList.toggle('visible', wasVisible);
+
+		template.elementDisposables.add(autorun(reader => {
+			contentStore.clear();
+			const visible = isVisible(reader);
+			template.inputNeededRow.classList.toggle('visible', visible);
+			template.inputNeededLabel.textContent = '';
+
+			if (visible) {
+				const description = element.description.read(reader);
+				if (description) {
+					contentStore.add(this.markdownRendererService.render(description, { sanitizerConfig: { replaceWithPlaintext: true } }, template.inputNeededLabel));
+				} else {
+					template.inputNeededLabel.textContent = INPUT_NEEDED_FALLBACK_LABEL;
+				}
+			}
+
+			// The callout occupies its own line, so its arrival and departure change
+			// the reserved row height — mirrors the approval row's height signal.
+			if (visible !== wasVisible) {
+				wasVisible = visible;
+				this._onDidChangeItemHeight.fire(element);
+			}
+		}));
 	}
 
 	private renderApprovalRow(element: ISession, template: ISessionItemTemplate): void {
@@ -1213,6 +1311,7 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 class SessionShowMoreRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, HTMLElement> {
 	static readonly TEMPLATE_ID = 'session-show-more';
 	readonly templateId = SessionShowMoreRenderer.TEMPLATE_ID;
+	readonly rowClassName = SESSION_LIST_INSET_ROW_CLASS;
 
 	renderTemplate(container: HTMLElement): HTMLElement {
 		container.classList.add('session-show-more');
@@ -1319,8 +1418,16 @@ interface ISessionsListDndDelegate {
 	reorder(dragged: ISession[], target: ISession, position: 'before' | 'after'): void;
 	/** The id of the group the session belongs to, or `undefined`. */
 	getGroupIdOfSession(session: ISession): string | undefined;
+	/**
+	 * The id of the workspace section (`workspace:<label>`) the session would render
+	 * in, or `undefined` when the list is not sectioned by workspace or the session
+	 * belongs elsewhere (pinned, done).
+	 */
+	getWorkspaceSectionIdOfSession(session: ISession): string | undefined;
 	/** Add the given sessions to the group. */
 	addSessionsToGroup(sessions: ISession[], groupId: string, target: ISession | undefined, position: 'before' | 'after' | undefined): void;
+	/** Remove the given sessions from their group, optionally placing them before/after a target. */
+	removeSessionsFromGroup(sessions: ISession[], target: ISession | undefined, position: 'before' | 'after' | undefined): void;
 	/** Pin the given sessions, optionally placing them before/after a pinned target. */
 	pinSessions(sessions: ISession[], target: ISession | undefined, position: 'before' | 'after' | undefined): void;
 	/** Highlight only the header that will receive the dragged sessions. */
@@ -1436,6 +1543,12 @@ class SessionsListDragAndDrop extends Disposable implements ITreeDragAndDrop<Ses
 			return this.toMembershipDropReaction(addToGroupTarget);
 		}
 
+		const removeFromGroupTarget = this.resolveRemoveFromGroupTarget(data, targetElement, targetSector);
+		if (removeFromGroupTarget) {
+			this.delegate.setDropTargetHeader(removeFromGroupTarget.header);
+			return this.toMembershipDropReaction(removeFromGroupTarget);
+		}
+
 		this.delegate.setDropTargetHeader(undefined);
 		const target = this.resolveReorderTarget(data, targetElement);
 		if (!target) {
@@ -1474,6 +1587,12 @@ class SessionsListDragAndDrop extends Disposable implements ITreeDragAndDrop<Ses
 			const addToGroupTarget = this.resolveAddToGroupTarget(data, targetElement, targetSector);
 			if (addToGroupTarget) {
 				this.delegate.addSessionsToGroup(addToGroupTarget.sessions, addToGroupTarget.groupId, addToGroupTarget.target, addToGroupTarget.position);
+				return;
+			}
+
+			const removeFromGroupTarget = this.resolveRemoveFromGroupTarget(data, targetElement, targetSector);
+			if (removeFromGroupTarget) {
+				this.delegate.removeSessionsFromGroup(removeFromGroupTarget.sessions, removeFromGroupTarget.target, removeFromGroupTarget.position);
 				return;
 			}
 
@@ -1573,6 +1692,47 @@ class SessionsListDragAndDrop extends Disposable implements ITreeDragAndDrop<Ses
 	}
 
 	/**
+	 * Resolve a drop that takes grouped sessions back out of their custom group and
+	 * into the workspace section they belong to, which is what makes grouping
+	 * reversible by drag. The drop may land on the workspace section header or onto
+	 * or between the sessions already rendered in it; an unrelated workspace section
+	 * never accepts it.
+	 */
+	private resolveRemoveFromGroupTarget(data: IDragAndDropData, targetElement: SessionListItem | undefined, targetSector: ListViewTargetSector | undefined): ISessionMembershipDropTarget | undefined {
+		if (!targetElement) {
+			return undefined;
+		}
+
+		let sectionId: string | undefined;
+		let target: ISession | undefined;
+		if (isSessionSection(targetElement)) {
+			sectionId = targetElement.id.startsWith('workspace:') ? targetElement.id : undefined;
+		} else if (isSessionItem(targetElement) && this.delegate.getGroupIdOfSession(targetElement) === undefined) {
+			sectionId = this.delegate.getWorkspaceSectionIdOfSession(targetElement);
+			target = sectionId === undefined ? undefined : targetElement;
+		}
+		if (sectionId === undefined) {
+			return undefined;
+		}
+
+		// Only sessions that currently render inside a custom group can be dropped
+		// back out, and only into their own workspace section.
+		const dragged = this.draggedSessions(data);
+		const canRemove = dragged.every(session =>
+			this.delegate.getGroupIdOfSession(session) !== undefined
+			&& this.delegate.getWorkspaceSectionIdOfSession(session) === sectionId);
+		if (dragged.length === 0 || !canRemove) {
+			return undefined;
+		}
+		return {
+			sessions: dragged,
+			header: { kind: 'section', id: sectionId },
+			target,
+			position: target ? sectorToPosition(targetSector) : undefined,
+		};
+	}
+
+	/**
 	 * Resolve the session the drop should be positioned against, or `undefined`
 	 * if the current drag is not a valid in-list reorder.
 	 */
@@ -1661,6 +1821,8 @@ export interface ISessionsListControlOptions {
 	readonly overrideStyles?: IStyleOverride<IListStyles>;
 	readonly grouping: () => SessionsGrouping;
 	readonly sorting: () => SessionsSorting;
+	/** Whether the list renders its title-only compact density. */
+	readonly compact?: () => boolean;
 	readonly findWidgetContainer?: HTMLElement;
 	onSessionOpen(resource: URI, preserveFocus: boolean, sideBySide: boolean): void | Promise<void>;
 }
@@ -1711,6 +1873,8 @@ export interface ISessionsList {
 	getFocusedSessions(): readonly ISession[] | undefined;
 	setVisible(visible: boolean): void;
 	layout(height: number, width: number): void;
+	/** Re-read the compact option and re-render at the new density. */
+	setCompact(): void;
 	focus(): void;
 	update(expandAll?: boolean): void;
 	openFind(): void;
@@ -1727,6 +1891,8 @@ export interface ISessionsList {
 	isExcludeArchived(): boolean;
 	setExcludeRead(exclude: boolean): void;
 	isExcludeRead(): boolean;
+	setShowEmptyGroups(show: boolean): void;
+	isShowEmptyGroups(): boolean;
 	resetFilters(): void;
 	setWorkspaceGroupCapped(capped: boolean): void;
 	isWorkspaceGroupCapped(): boolean;
@@ -1747,6 +1913,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 	private static readonly EXCLUDED_STATUSES_KEY = 'sessionsListControl.excludedStatuses';
 	private static readonly EXCLUDE_ARCHIVED_KEY = 'sessionsListControl.excludeArchived';
 	private static readonly EXCLUDE_READ_KEY = 'sessionsListControl.excludeRead';
+	private static readonly SHOW_EMPTY_GROUPS_KEY = 'sessionsListControl.showEmptyGroups';
 	private static readonly WORKSPACE_GROUP_CAPPED_KEY = 'sessionsListControl.workspaceGroupCapped';
 	private static readonly DEFAULT_SESSION_GROUP_LIMIT = 5;
 
@@ -1764,6 +1931,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 	private readonly excludedStatuses: Set<SessionStatus>;
 	private _excludeArchived: boolean;
 	private _excludeRead: boolean;
+	private _showEmptyGroups: boolean;
 	private workspaceGroupCapped: boolean;
 
 	/**
@@ -1799,6 +1967,14 @@ export class SessionsList extends Disposable implements ISessionsList {
 
 	get element(): HTMLElement { return this.listContainer; }
 
+	/**
+	 * Compact density is a desktop affordance: a phone row is already taller than a
+	 * compact one and needs its touch targets, so the phone layout always wins.
+	 */
+	private isCompact(): boolean {
+		return (this.options.compact?.() ?? false) && !IsPhoneLayoutContext.getValue(this.contextKeyService);
+	}
+
 	constructor(
 		container: HTMLElement,
 		private readonly options: ISessionsListControlOptions,
@@ -1829,9 +2005,11 @@ export class SessionsList extends Disposable implements ISessionsList {
 		// Load archived/read filter state
 		this._excludeArchived = this.storageService.getBoolean(SessionsList.EXCLUDE_ARCHIVED_KEY, StorageScope.PROFILE, true);
 		this._excludeRead = this.storageService.getBoolean(SessionsList.EXCLUDE_READ_KEY, StorageScope.PROFILE, false);
+		this._showEmptyGroups = this.storageService.getBoolean(SessionsList.SHOW_EMPTY_GROUPS_KEY, StorageScope.PROFILE, true);
 		this.workspaceGroupCapped = this.storageService.getBoolean(SessionsList.WORKSPACE_GROUP_CAPPED_KEY, StorageScope.PROFILE, true);
 
-		this.listContainer = DOM.append(container, $('.sessions-list-control'));
+		this.listContainer = DOM.append(container, $('.sessions-list-control.session-list-row-spacing'));
+		this.listContainer.classList.toggle('compact', this.isCompact());
 		this._register(DOM.addDisposableListener(this.listContainer, DOM.EventType.POINTER_DOWN, () => {
 			this.listContainer.classList.add(SESSION_SECTION_FOCUS_FROM_POINTER_CLASS);
 		}));
@@ -1851,6 +2029,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 				sorting: this.options.sorting,
 				isPinned: s => this.isSessionPinned(s),
 				isRead: s => this.isSessionRead(s),
+				compact: () => this.isCompact(),
 				visibleSessions: this._sessionsService.visibleSessions,
 				getMultiSelectedSessions: s => this.getMultiSelectedSessions(s),
 				inlineRename: true,
@@ -1883,7 +2062,12 @@ export class SessionsList extends Disposable implements ISessionsList {
 		// observe the workbench's value rather than shadowing it with a fresh
 		// scoped default of `false`. The reactive height refresh below listens
 		// on the same scoped service for changes.
-		const delegate = new SessionsTreeDelegate(approvalModel, () => !!IsPhoneLayoutContext.getValue(contextKeyService));
+		const delegate = new SessionsTreeDelegate(
+			approvalModel,
+			() => !!IsPhoneLayoutContext.getValue(contextKeyService),
+			() => this.isCompact(),
+			true /* useInsetRowSpacing */,
+		);
 
 		this.tree = this._register(instantiationService.createInstance(
 			WorkbenchObjectTree<SessionListItem, FuzzyScore>,
@@ -1904,7 +2088,9 @@ export class SessionsList extends Disposable implements ISessionsList {
 					canDropOn: (dragged, target) => this.canReorderOnto(dragged, target),
 					reorder: (dragged, target, position) => this.reorderSessions(dragged, target, position),
 					getGroupIdOfSession: session => this._sessionGroupsService.getGroupOfSession(session.sessionId),
+					getWorkspaceSectionIdOfSession: session => this.getWorkspaceSectionIdOfSession(session),
 					addSessionsToGroup: (sessions, groupId, target, position) => this.addSessionsToGroup(sessions, groupId, target, position),
+					removeSessionsFromGroup: (sessions, target, position) => this.removeSessionsFromGroup(sessions, target, position),
 					pinSessions: (sessions, target, position) => this.pinSessions(sessions, target, position),
 					setDropTargetHeader: header => this.setDropTargetHeader(header),
 					reorderSection: (draggedId, targetId, position, isWorkspace) => this.reorderSection(draggedId, targetId, position, isWorkspace),
@@ -2019,11 +2205,9 @@ export class SessionsList extends Disposable implements ISessionsList {
 			if (!e.affectsSome(phoneKeys)) {
 				return;
 			}
-			for (const session of this.sessions) {
-				if (this.tree.hasElement(session)) {
-					this.tree.updateElementHeight(session, delegate.getHeight(session));
-				}
-			}
+			// Phone layout also decides the effective compact density, so the
+			// transition has to re-render, not just re-measure.
+			this.setCompact();
 		}));
 
 		this._register(this.tree.onContextMenu(e => this.onContextMenu(e)));
@@ -2211,13 +2395,18 @@ export class SessionsList extends Disposable implements ISessionsList {
 		// Groups are fully user-managed: their order is owned by the section-order
 		// service (defaulting to newest-first), independent of their members'
 		// recency, and is shared across both grouping modes.
+		// Built from every group, not only the ones with visible members, so a group
+		// whose last session was removed still has a row to drop sessions back into
+		// and to delete. The `showEmptyGroups` filter decides whether those rows are
+		// shown; a group being renamed stays regardless, so its editor is reachable.
 		const groupItemsById = new Map<string, ISessionGroupItem>();
-		for (const [groupId, members] of groupedMembers) {
-			const group = this._sessionGroupsService.getGroup(groupId)!;
+		for (const group of this._sessionGroupsService.getGroups()) {
+			const members = groupedMembers.get(group.id) ?? [];
 			const sortedMembers = sortSessions(members, sorting, sortKeyForGrouping);
-			groupItemsById.set(groupId, { group, sessions: sortedMembers, editing: group.id === this._editingGroupId });
+			groupItemsById.set(group.id, { group, sessions: sortedMembers, editing: group.id === this._editingGroupId });
 		}
 		const defaultGroupIds = [...groupItemsById.values()]
+			.filter(item => this._showEmptyGroups || item.sessions.length > 0 || item.editing)
 			.sort((a, b) => b.group.createdAt - a.group.createdAt)
 			.map(item => `group:${item.group.id}`);
 
@@ -2501,6 +2690,11 @@ export class SessionsList extends Disposable implements ISessionsList {
 		this.tree.layout(height, width);
 	}
 
+	setCompact(): void {
+		this.listContainer.classList.toggle('compact', this.isCompact());
+		this.update();
+	}
+
 	focus(): void {
 		this.tree.domFocus();
 
@@ -2727,6 +2921,40 @@ export class SessionsList extends Disposable implements ISessionsList {
 		if (target && position) {
 			this.reorderSessions(groupSessions, target, position);
 		}
+	}
+
+	/**
+	 * Take the given sessions out of their custom group so they render in their own
+	 * section again, optionally placing them before/after a target session of that
+	 * section. The inverse of {@link addSessionsToGroup}, so grouping by drag is
+	 * reversible by drag.
+	 */
+	private removeSessionsFromGroup(sessions: ISession[], target?: ISession, position?: 'before' | 'after'): void {
+		const groupedSessions = sessions.filter(session => this._sessionGroupsService.getGroupOfSession(session.sessionId) !== undefined);
+		if (groupedSessions.length === 0) {
+			return;
+		}
+		for (const session of groupedSessions) {
+			this._sessionGroupsService.removeFromGroup(session.sessionId);
+		}
+		if (target && position) {
+			this.reorderSessions(groupedSessions, target, position);
+		}
+	}
+
+	/**
+	 * The id of the workspace section a session would render in, or `undefined` when
+	 * the list does not section by workspace or the session belongs to another
+	 * section (Pinned or Done, which both outrank workspace placement).
+	 */
+	private getWorkspaceSectionIdOfSession(session: ISession): string | undefined {
+		if (this.options.grouping() !== SessionsGrouping.Workspace) {
+			return undefined;
+		}
+		if (session.isArchived.get() || this.isSessionPinned(session)) {
+			return undefined;
+		}
+		return `workspace:${sessionWorkspaceLabel(session)}`;
 	}
 
 	private commitGroupEdit(group: ISessionGroup, name: string): void {
@@ -3100,6 +3328,16 @@ export class SessionsList extends Disposable implements ISessionsList {
 		return this._excludeRead;
 	}
 
+	setShowEmptyGroups(show: boolean): void {
+		this._showEmptyGroups = show;
+		this.storageService.store(SessionsList.SHOW_EMPTY_GROUPS_KEY, show, StorageScope.PROFILE, StorageTarget.USER);
+		this.update();
+	}
+
+	isShowEmptyGroups(): boolean {
+		return this._showEmptyGroups;
+	}
+
 	resetFilters(): void {
 		this.excludedSessionTypes.clear();
 		this.saveExcludedSessionTypes();
@@ -3109,6 +3347,8 @@ export class SessionsList extends Disposable implements ISessionsList {
 		this.storageService.store(SessionsList.EXCLUDE_ARCHIVED_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
 		this._excludeRead = false;
 		this.storageService.store(SessionsList.EXCLUDE_READ_KEY, false, StorageScope.PROFILE, StorageTarget.USER);
+		this._showEmptyGroups = true;
+		this.storageService.store(SessionsList.SHOW_EMPTY_GROUPS_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
 		this.workspaceGroupCapped = true;
 		this.storageService.store(SessionsList.WORKSPACE_GROUP_CAPPED_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
 		this.expandedSessionGroups.clear();

@@ -14,6 +14,51 @@
 		width: calc(100% - 20px);
 	}
 
+	/* Each row reads as its own inset card. The gap is reserved by the tree
+	   delegate (see INSET_ROW_GAP), so it is padding here rather than margin, and
+	   the row's background is clipped to the content box so the gap stays clear.
+	   Outlines move onto the inner row for the same reason. */
+	&.session-list-row-spacing .monaco-list-row.session-list-inset-row {
+		padding-bottom: var(--vscode-spacing-size20);
+		background-clip: content-box;
+		outline: 0 !important;
+
+		> .monaco-tl-row {
+			border-radius: inherit;
+		}
+	}
+
+	&.session-list-row-spacing .monaco-list .monaco-list-row.session-list-inset-row {
+		&.selected > .monaco-tl-row {
+			outline: var(--vscode-strokeThickness) dotted var(--vscode-contrastActiveBorder, transparent);
+			outline-offset: calc(-1 * var(--vscode-strokeThickness));
+		}
+
+		&.focused > .monaco-tl-row {
+			outline: var(--vscode-strokeThickness) dotted var(--vscode-list-inactiveFocusOutline, transparent);
+			outline-offset: calc(-1 * var(--vscode-strokeThickness));
+		}
+
+		&.focused.selected > .monaco-tl-row {
+			outline-color: var(--vscode-contrastActiveBorder, var(--vscode-list-inactiveFocusOutline, transparent));
+		}
+
+		&:hover > .monaco-tl-row {
+			outline: var(--vscode-strokeThickness) dashed var(--vscode-contrastActiveBorder, transparent);
+			outline-offset: calc(-1 * var(--vscode-strokeThickness));
+		}
+	}
+
+	&.session-list-row-spacing .monaco-list:focus .monaco-list-row.session-list-inset-row.focused > .monaco-tl-row,
+	.context-menu-visible &.session-list-row-spacing .monaco-list.last-focused .monaco-list-row.session-list-inset-row.focused > .monaco-tl-row {
+		outline: var(--vscode-strokeThickness) solid var(--vscode-list-focusOutline);
+		outline-offset: calc(-1 * var(--vscode-strokeThickness));
+	}
+
+	&.session-list-row-spacing .monaco-list:focus .monaco-list-row.session-list-inset-row.focused.selected > .monaco-tl-row {
+		outline-color: var(--vscode-list-focusAndSelectionOutline, var(--vscode-contrastActiveBorder, var(--vscode-list-focusOutline)));
+	}
+
 	/* Suppressed while selected so the selection highlight is not overpainted. */
 	.monaco-list-row:not(.selected):not(.focused):not(:hover):has(.session-item.needs-input) {
 		animation: session-needs-input-accent-pulse 3s ease-in-out infinite;
@@ -70,7 +115,10 @@
 	}
 
 	.monaco-list-row:hover,
-	.monaco-list-row.focused:not(.selected) {
+	.monaco-list-row.focused:not(.selected),
+	/* Keep the focused row's toolbar visible while the list or one of its actions
+	   holds focus, so Tab can reach the actions without hovering first. */
+	.monaco-list:focus-within .monaco-list-row.focused {
 		/* A row hosting the inline rename editor gives the whole title row to the
 		   editor, so it must not reveal the toolbar on hover or focus. */
 		.session-item:not(.renaming) .session-title-toolbar {
@@ -105,6 +153,7 @@
 	flex-direction: row;
 	height: 100%;
 	box-sizing: border-box;
+	min-width: 0;
 	padding: 8px 6px 8px 12px;
 
 	&.archived {
@@ -342,6 +391,101 @@
 				font-size: var(--vscode-agents-fontSize-label1, 12px);
 				white-space: nowrap;
 			}
+		}
+	}
+}
+
+/* Compact density */
+
+/* A compact row is title-only at rest: the details row is hidden and the workspace
+   it names moves into `.session-compact-hover-description`, revealed on hover or
+   keyboard focus. Row height comes from the tree delegate, not from here. */
+.sessions-list-control.compact {
+	.session-item {
+		padding: var(--vscode-spacing-size60) var(--vscode-spacing-size60) var(--vscode-spacing-size60) var(--vscode-spacing-size120);
+
+		.session-main {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr);
+			align-items: center;
+		}
+
+		.session-title-row {
+			padding-bottom: 0;
+			line-height: var(--vscode-spacing-size160);
+		}
+
+		.session-details-row {
+			display: none;
+		}
+
+		.session-approval-row,
+		.session-input-needed-row {
+			grid-column: 1 / -1;
+			margin-top: var(--vscode-spacing-size60);
+			padding-top: calc(var(--vscode-spacing-size40) - var(--vscode-strokeThickness));
+			padding-bottom: calc(var(--vscode-spacing-size40) - var(--vscode-strokeThickness));
+		}
+	}
+
+	/* `:not(.renaming)` keeps the description out of the row while the inline
+	   rename editor owns the title row. */
+	.monaco-list-row:hover .session-item:not(.renaming),
+	.monaco-list:focus-within .monaco-list-row.focused .session-item:not(.renaming) {
+		.session-title-row {
+			grid-column: 1 / -1;
+
+			.session-title {
+				flex: 0 1 auto;
+			}
+
+			.session-compact-hover-description {
+				display: flex;
+			}
+
+			.session-title-toolbar {
+				margin-left: auto;
+			}
+		}
+	}
+}
+
+.session-compact-hover-description {
+	display: none;
+	align-items: center;
+	flex-shrink: 0;
+	gap: var(--vscode-spacing-size40);
+	margin-right: var(--vscode-spacing-size80);
+	max-width: 40%;
+	overflow: hidden;
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-agents-fontSize-label2, 11px);
+
+	.session-badge {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+}
+
+/* Needs-input callout on a compact row. Shares the approval row's box (both
+   classes are on the element) and adds only the single-line text treatment. */
+.session-input-needed-row {
+	line-height: 18px;
+
+	.session-input-needed-label {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&.rendered-markdown,
+		&.rendered-markdown p {
+			margin: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 	}
 }

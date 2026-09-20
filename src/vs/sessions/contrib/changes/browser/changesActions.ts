@@ -13,14 +13,16 @@ import { autorun, derivedOpts, IObservable } from '../../../../base/common/obser
 import { localize, localize2 } from '../../../../nls.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
 import { Action2, MenuItemAction, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionHeaderMetaActionViewItem } from '../../../browser/parts/sessionHeaderMetaActionViewItem.js';
-import { SessionHasChangesContext } from '../../../common/contextkeys.js';
+import { SessionHasCachedChangesContext, SessionHasChangesContext } from '../../../common/contextkeys.js';
 import { ISessionContext } from '../../../services/sessions/browser/sessionContext.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionChangesStatsCache, readSessionChangesStats } from '../../../services/sessions/common/sessionChangesStatsCache.js';
 import { IActiveSession } from '../../../services/sessions/common/sessionsManagement.js';
 import { IChangesViewService } from '../common/changesViewService.js';
 import { ChangesMultiDiffSourceResolver } from './changesMultiDiffSourceResolver.js';
@@ -39,12 +41,14 @@ class ViewAllChangesAction extends Action2 {
 			f1: false,
 			// Diff stats shown in the session header meta row
 			// (vs/sessions/browser/parts/sessionHeader.ts). Rendered with a
-			// custom action view item that shows the live +/- counts.
+			// custom action view item that shows the live +/- counts, or the
+			// counts last shown for the session while it has not reported its
+			// own changes yet.
 			menu: {
 				id: Menus.SessionHeaderMeta,
 				group: 'navigation',
 				order: 0,
-				when: SessionHasChangesContext
+				when: ContextKeyExpr.or(SessionHasChangesContext, SessionHasCachedChangesContext)
 			},
 		});
 	}
@@ -99,6 +103,10 @@ interface IDiffStats {
  * are shown even when several session views are visible at once. The counts reflect the
  * changeset the provider marks as {@link ISessionChangeset.isDefault}, falling back to the
  * session's top-level {@link IActiveSession.changes} when none is default.
+ *
+ * A session reports its changes late, so until it reports any the counts last shown for it
+ * are taken from the {@link ISessionChangesStatsCache} — the pill is then already there,
+ * with plausible counts, the moment the session opens.
  */
 export class ViewAllChangesActionViewItem extends SessionHeaderMetaActionViewItem {
 
@@ -108,21 +116,17 @@ export class ViewAllChangesActionViewItem extends SessionHeaderMetaActionViewIte
 		action: MenuItemAction,
 		options: IActionViewItemOptions,
 		@ISessionContext sessionContext: ISessionContext,
+		@ISessionChangesStatsCache changesStatsCache: ISessionChangesStatsCache,
 	) {
 		super(undefined, action, options);
 
 		this._diffStatsObs = derivedOpts<IDiffStats>({ owner: this, equalsFn: structuralEquals }, reader => {
 			const session = sessionContext.session.read(reader);
-			const defaultChangeset = session?.changesets.read(reader)?.find(c => c.isDefault.read(reader));
-			const changes = (defaultChangeset?.changes.read(reader) ?? session?.changes.read(reader)) ?? [];
-			let insertions = 0;
-			let deletions = 0;
-			for (const change of changes) {
-				insertions += change.insertions;
-				deletions += change.deletions;
-			}
+			const stats = session
+				? readSessionChangesStats(session, reader) ?? changesStatsCache.get(session.sessionId, reader)
+				: undefined;
 			const branch = session?.workspace.read(reader)?.folders[0]?.gitRepository?.branchName?.trim() || undefined;
-			return { files: changes.length, insertions, deletions, branch };
+			return { files: stats?.files ?? 0, insertions: stats?.insertions ?? 0, deletions: stats?.deletions ?? 0, branch };
 		});
 
 		this._register(autorun(reader => {
@@ -195,6 +199,37 @@ class ViewAllChangesActionViewItemContribution extends Disposable implements IWo
 	}
 }
 
+/**
+ * Remembers the changes pill shown for each visible session so it can be rendered
+ * optimistically the next time that session is opened, before the provider has
+ * reported its changes. Recording sessions as they are shown (rather than from the
+ * pill itself) also keeps the cache honest: a session that ends up without changes
+ * drops its entry instead of keeping a stale pill.
+ */
+class SessionChangesStatsCacheContribution extends Disposable implements IWorkbenchContribution {
+
+	static readonly ID = 'workbench.contrib.sessions.changesStatsCache';
+
+	constructor(
+		@ISessionsService sessionsService: ISessionsService,
+		@ISessionChangesStatsCache changesStatsCache: ISessionChangesStatsCache,
+	) {
+		super();
+
+		this._register(autorun(reader => {
+			for (const session of sessionsService.visibleSessions.read(reader)) {
+				if (!session) {
+					continue;
+				}
+				const stats = readSessionChangesStats(session, reader);
+				if (stats) {
+					changesStatsCache.set(session.sessionId, stats);
+				}
+			}
+		}));
+	}
+}
+
 // --- Multi-diff source resolver
 
 /**
@@ -225,3 +260,4 @@ class ChangesMultiDiffSourceResolverContribution extends Disposable implements I
 
 registerWorkbenchContribution2(ChangesMultiDiffSourceResolverContribution.ID, ChangesMultiDiffSourceResolverContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ViewAllChangesActionViewItemContribution.ID, ViewAllChangesActionViewItemContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(SessionChangesStatsCacheContribution.ID, SessionChangesStatsCacheContribution, WorkbenchPhase.AfterRestored);

@@ -4,32 +4,27 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Codicon } from '../../../../base/common/codicons.js';
+import { fromNow } from '../../../../base/common/date.js';
 import { IMarkdownString, MarkdownString } from '../../../../base/common/htmlContent.js';
+import { IReader } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { asCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { chatLinesAddedForeground, chatLinesRemovedForeground } from '../../../../workbench/contrib/chat/common/widget/chatColors.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISession } from '../../../services/sessions/common/session.js';
+import { readSessionChangesStats } from '../../../services/sessions/common/sessionChangesStatsCache.js';
 
 /**
- * Aggregated insertions/deletions across all of a session's changes,
- * or `undefined` when the session has no pending changes.
+ * Aggregated insertions/deletions for a session, or `undefined` when it has none.
+ *
+ * Reads through the shared summary-first reader, so a provider that publishes only
+ * an aggregate {@link ISession.changesSummary} still gets counts here. Reading the
+ * detailed changes alone, as this used to, left the hover blank for exactly those
+ * sessions.
  */
-export function getSessionDiffStats(session: ISession): { files: number; insertions: number; deletions: number } | undefined {
-	const changes = session.changes.get();
-	if (changes.length === 0) {
-		return undefined;
-	}
-	let insertions = 0;
-	let deletions = 0;
-	for (const change of changes) {
-		insertions += change.insertions;
-		deletions += change.deletions;
-	}
-	if (insertions === 0 && deletions === 0) {
-		return undefined;
-	}
-	return { files: changes.length, insertions, deletions };
+export function getSessionDiffStats(session: ISession, reader?: IReader): { files: number; insertions: number; deletions: number } | undefined {
+	const stats = readSessionChangesStats(session, reader);
+	return stats && (stats.insertions > 0 || stats.deletions > 0) ? stats : undefined;
 }
 
 /**
@@ -44,6 +39,7 @@ export function getSessionDiffStats(session: ISession): { files: number; inserti
 export function buildSessionHoverContent(
 	session: ISession,
 	sessionsProvidersService: ISessionsProvidersService,
+	includeUpdatedAt = false,
 ): IMarkdownString {
 	// Note: `isTrusted` is intentionally left undefined. The hover renders
 	// untrusted, workspace-derived values (folder paths, branch names, session
@@ -98,10 +94,17 @@ export function buildSessionHoverContent(
 		md.appendText('\n');
 	}
 
-	// Line 4: provider name
+	// Line 4: provider name, and the relative update time when the row itself does
+	// not show it (compact rows move it here).
 	const provider = sessionsProvidersService.getProvider(session.providerId);
 	if (provider) {
 		md.appendText(provider.label);
+	}
+	if (includeUpdatedAt) {
+		if (provider) {
+			md.appendMarkdown(' · ');
+		}
+		md.appendText(fromNow(session.updatedAt.get(), true));
 	}
 
 	return md;

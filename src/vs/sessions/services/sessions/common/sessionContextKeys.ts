@@ -7,6 +7,7 @@ import { IReader } from '../../../../base/common/observable.js';
 import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import {
 	SessionHasChangesContext,
+	SessionHasCachedChangesContext,
 	SessionHasWorkspaceContext,
 	SessionIsArchivedContext,
 	SessionIsCreatedContext,
@@ -23,6 +24,7 @@ import {
 	SessionHasMultipleOpenChatsContext,
 } from '../../../common/contextkeys.js';
 import { ISession, SessionStatus } from './session.js';
+import { ISessionChangesStatsCache, readSessionChangesStats } from './sessionChangesStatsCache.js';
 import { IActiveSession } from './sessionsManagement.js';
 
 /**
@@ -39,6 +41,7 @@ interface ISessionContextKeys {
 	readonly supportsDelete: IContextKey<boolean>;
 	readonly workspaceIsVirtual: IContextKey<boolean>;
 	readonly hasChanges: IContextKey<boolean>;
+	readonly hasCachedChanges: IContextKey<boolean>;
 	readonly hasWorkspace: IContextKey<boolean>;
 	readonly isCreated: IContextKey<boolean>;
 	readonly sticky: IContextKey<boolean>;
@@ -70,6 +73,7 @@ function getBoundKeys(contextKeyService: IContextKeyService): ISessionContextKey
 			supportsDelete: SessionSupportsDeleteContext.bindTo(contextKeyService),
 			workspaceIsVirtual: SessionWorkspaceIsVirtualContext.bindTo(contextKeyService),
 			hasChanges: SessionHasChangesContext.bindTo(contextKeyService),
+			hasCachedChanges: SessionHasCachedChangesContext.bindTo(contextKeyService),
 			hasWorkspace: SessionHasWorkspaceContext.bindTo(contextKeyService),
 			isCreated: SessionIsCreatedContext.bindTo(contextKeyService),
 			sticky: SessionIsStickyContext.bindTo(contextKeyService),
@@ -94,8 +98,11 @@ function getBoundKeys(contextKeyService: IContextKeyService): ISessionContextKey
  *
  * Passing `undefined` for `session` resets the keys to their defaults (e.g. for
  * the empty new-session slot).
+ *
+ * Pass the `changesStatsCache` on surfaces that render the changes pill so it can
+ * be shown optimistically while the session's own changes are still loading.
  */
-export function setSessionContextKeys(session: ISession | undefined, contextKeyService: IContextKeyService, reader: IReader | undefined): void {
+export function setSessionContextKeys(session: ISession | undefined, contextKeyService: IContextKeyService, reader: IReader | undefined, changesStatsCache?: ISessionChangesStatsCache): void {
 	const keys = getBoundKeys(contextKeyService);
 	keys.sessionId.set(session?.sessionId ?? '');
 	keys.providerId.set(session?.providerId ?? '');
@@ -107,15 +114,14 @@ export function setSessionContextKeys(session: ISession | undefined, contextKeyS
 	keys.supportsDelete.set(session?.capabilities.supportsDelete ?? false);
 	keys.workspaceIsVirtual.set(session?.workspace.read(reader)?.isVirtualWorkspace ?? true);
 
-	// Mirror the changes pill: the default changeset, falling back to the session's changes.
-	const defaultChangeset = session?.changesets.read(reader)?.find(c => c.isDefault.read(reader));
-	let insertions = 0;
-	let deletions = 0;
-	for (const change of defaultChangeset?.changes.read(reader) ?? session?.changes.read(reader) ?? []) {
-		insertions += change.insertions;
-		deletions += change.deletions;
-	}
-	keys.hasChanges.set(insertions > 0 || deletions > 0);
+	// Mirror the changes pill, through the shared summary-first reader.
+	const stats = session ? readSessionChangesStats(session, reader) : undefined;
+	keys.hasChanges.set(!!stats && (stats.insertions > 0 || stats.deletions > 0));
+
+	// A session reports its changes late, so until it does the pill it last showed
+	// stands in for the real counts and the pill is already there when it opens.
+	const cached = !stats && session ? changesStatsCache?.get(session.sessionId, reader) : undefined;
+	keys.hasCachedChanges.set(!!cached && cached.files > 0);
 
 	keys.hasWorkspace.set(!!session?.workspace.read(reader)?.label);
 }
@@ -128,8 +134,8 @@ export function setSessionContextKeys(session: ISession | undefined, contextKeyS
  *
  * See {@link setSessionContextKeys} for the `reader` and `undefined` semantics.
  */
-export function setActiveSessionContextKeys(session: IActiveSession | undefined, contextKeyService: IContextKeyService, reader: IReader | undefined): void {
-	setSessionContextKeys(session, contextKeyService, reader);
+export function setActiveSessionContextKeys(session: IActiveSession | undefined, contextKeyService: IContextKeyService, reader: IReader | undefined, changesStatsCache?: ISessionChangesStatsCache): void {
+	setSessionContextKeys(session, contextKeyService, reader, changesStatsCache);
 	const keys = getBoundKeys(contextKeyService);
 	keys.isCreated.set(session?.isCreated.read(reader) ?? false);
 	keys.sticky.set(session?.sticky.read(reader) ?? false);

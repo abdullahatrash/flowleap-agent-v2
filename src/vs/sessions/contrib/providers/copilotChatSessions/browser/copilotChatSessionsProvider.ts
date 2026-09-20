@@ -29,6 +29,7 @@ import { basename, dirname, isEqual } from '../../../../../base/common/resources
 import { IDeleteChatOptions, ISendRequestOptions, ISessionChangeEvent, ISessionModelPickerOptions, ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 import { ISessionOptionGroup } from '../../../chat/browser/newSession.js';
 import { IsolationMode } from './isolationPicker.js';
+import { USE_WORKTREE_SETTING } from '../../../../common/sessionConfig.js';
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { isBuiltinChatMode, IChatMode } from '../../../../../workbench/contrib/chat/common/chatModes.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -304,6 +305,7 @@ class CopilotCLISession extends Disposable implements ICopilotChatSession {
 		@IChatSessionsService private readonly chatSessionsService: IChatSessionsService,
 		@IGitService private readonly gitService: IGitService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		super();
 		this.sessionId = toSessionId(providerId, resource);
@@ -321,8 +323,12 @@ class CopilotCLISession extends Disposable implements ICopilotChatSession {
 		// Set ISessionData workspace observable
 		this._workspaceData.set(sessionWorkspace, undefined);
 
+		// A remembered pick wins; `sessions.useWorktree` only supplies the default for
+		// the first session in a workspace, before the user has chosen either way.
 		const storedMode = storageService.get(STORAGE_KEY_ISOLATION_MODE, StorageScope.PROFILE);
-		const initialMode: IsolationMode = storedMode === 'workspace' ? 'workspace' : 'worktree';
+		const initialMode: IsolationMode = storedMode === 'workspace' || storedMode === 'worktree'
+			? storedMode
+			: configurationService.getValue<boolean>(USE_WORKTREE_SETTING) !== false ? 'worktree' : 'workspace';
 		this._isolationMode = initialMode;
 		this._isolationModeObservable.set(initialMode, undefined);
 		this.setOption(ISOLATION_OPTION_ID, initialMode);

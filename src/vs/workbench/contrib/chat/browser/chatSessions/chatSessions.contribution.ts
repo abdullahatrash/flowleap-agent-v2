@@ -1224,7 +1224,9 @@ export class ChatSessionsService extends Disposable implements IChatSessionsServ
 				dispose: () => { }
 			};
 		} else {
+			this._logService.trace(`[ChatSessionsService] getOrCreateChatSession: resolving content from provider '${resolvedType}' for ${sessionResource.toString()}`);
 			session = await raceCancellationError(provider.provideChatSessionContent(sessionResource, token), token);
+			this._logService.trace(`[ChatSessionsService] getOrCreateChatSession: provider returned ${session.history.length} history item(s) for ${sessionResource.toString()}`);
 		}
 
 		if (session.options) {
@@ -1237,6 +1239,7 @@ export class ChatSessionsService extends Disposable implements IChatSessionsServ
 		{
 			const existingSessionData = this._sessions.get(sessionResource);
 			if (existingSessionData) {
+				this._logService.trace(`[ChatSessionsService] getOrCreateChatSession: cache hit for ${sessionResource.toString()}`);
 				return existingSessionData.session;
 			}
 		}
