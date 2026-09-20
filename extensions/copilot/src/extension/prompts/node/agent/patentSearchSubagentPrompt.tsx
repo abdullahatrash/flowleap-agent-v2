@@ -25,6 +25,7 @@ export class PatentSearchSubagentPrompt extends PromptElement<PatentSearchSubage
 
 		const currentTurn = toolCallRounds?.length ?? 0;
 		const isLastTurn = currentTurn >= this.props.maxSearchTurns - 1;
+		const remainingTurns = Math.max(this.props.maxSearchTurns - currentTurn, 1);
 
 		return (
 			<>
@@ -64,9 +65,12 @@ export class PatentSearchSubagentPrompt extends PromptElement<PatentSearchSubage
 					toolCallResults={toolCallResults}
 					toolCallMode={CopilotToolMode.FullContext}
 				/>
+				<UserMessage priority={900}>
+					You have {remainingTurns} of {this.props.maxSearchTurns} allotted iterations remaining. When one iteration remains, do not call tools; return only the &lt;patent_results&gt;.
+				</UserMessage>
 				{isLastTurn && (
 					<UserMessage priority={900}>
-						Your allotted iterations are finished. Disclose any unresolved coverage and that the iteration budget, rather than demonstrated search completeness, ended this run. Produce your patent research findings now, starting and ending with &lt;patent_results&gt;.
+						Disclose any unresolved coverage and that the iteration budget, rather than demonstrated search completeness, ended this run.
 					</UserMessage>
 				)}
 			</>

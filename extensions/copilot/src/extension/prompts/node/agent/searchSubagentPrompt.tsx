@@ -31,9 +31,9 @@ export class SearchSubagentPrompt extends PromptElement<SearchSubagentPromptProp
 		// Render the search instruction from the conversation
 		const searchInstruction = conversation?.turns[0]?.request.message;
 
-		// Check if we're at the last turn (to align with training where we coax final answer)
+		// Show the remaining budget every turn (to align with training where we coax final answer)
 		const currentTurn = toolCallRounds?.length ?? 0;
-		const isLastTurn = currentTurn >= this.props.maxSearchTurns - 1;
+		const remainingTurns = Math.max(this.props.maxSearchTurns - currentTurn, 1);
 
 		const thoroughnessGuidance = this.props.thoroughness ? THOROUGHNESS_GUIDANCE[this.props.thoroughness] : undefined;
 
@@ -61,11 +61,9 @@ export class SearchSubagentPrompt extends PromptElement<SearchSubagentPromptProp
 					toolCallResults={toolCallResults}
 					toolCallMode={CopilotToolMode.FullContext}
 				/>
-				{isLastTurn && (
-					<UserMessage priority={900}>
-						OK, your allotted iterations are finished -- you must produce a list of code references as the final answer, starting and ending with &lt;final_answer&gt;.
-					</UserMessage>
-				)}
+				<UserMessage priority={900}>
+					You have {remainingTurns} of {this.props.maxSearchTurns} allotted iterations remaining. When one iteration remains, do not call tools; return only the &lt;final_answer&gt;.
+				</UserMessage>
 			</>
 		);
 	}
