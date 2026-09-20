@@ -1222,6 +1222,7 @@ class ChatTerminalToolOutputSection extends Disposable {
 	private readonly _terminalContainer: HTMLElement;
 	private readonly _emptyElement: HTMLElement;
 	private _lastRenderedLineCount: number | undefined;
+	private readonly _outputRelayout = this._register(new MutableDisposable());
 
 	private readonly _onDidFocusEmitter = this._register(new Emitter<void>());
 	public get onDidFocus() { return this._onDidFocusEmitter.event; }
@@ -1547,7 +1548,11 @@ class ChatTerminalToolOutputSection extends Disposable {
 	}
 
 	private _scheduleOutputRelayout(): void {
-		dom.getActiveWindow().requestAnimationFrame(() => {
+		if (this._outputRelayout.value || this._store.isDisposed) {
+			return;
+		}
+		this._outputRelayout.value = dom.scheduleAtNextAnimationFrame(dom.getActiveWindow(), () => {
+			this._outputRelayout.clear();
 			this._layoutOutput();
 			this._scrollOutputToBottom();
 		});
