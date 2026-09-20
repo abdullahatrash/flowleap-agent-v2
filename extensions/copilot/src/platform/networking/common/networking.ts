@@ -320,6 +320,8 @@ export interface IChatEndpointTokenPricing {
 
 export interface IChatEndpoint extends IEndpoint {
 	readonly maxOutputTokens: number;
+	/** The declared context window, independent of the prompt and output token limits. */
+	readonly maxContextWindowTokens?: number;
 	/** The model ID- this may change and will be `copilot-utility` for the utility (fallback) model. Use `family` to switch behavior based on model type. */
 	readonly model: string;
 	readonly modelProvider: string;
