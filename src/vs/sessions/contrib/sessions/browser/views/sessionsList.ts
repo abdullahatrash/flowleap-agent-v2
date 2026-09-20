@@ -589,8 +589,8 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 		const approvalModel = this.approvalModel;
 		const initialInfo = getFirstApprovalAcrossChats(approvalModel, element, undefined);
-		let wasVisible = !!initialInfo;
-		template.approvalRow.classList.toggle('visible', wasVisible);
+		let lastApprovalHeight = approvalRowHeightFor(initialInfo);
+		template.approvalRow.classList.toggle('visible', lastApprovalHeight > 0);
 
 		const buttonStore = template.elementDisposables.add(new DisposableStore());
 
@@ -630,6 +630,10 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 				template.approvalButtonContainer.textContent = '';
 				const button = buttonStore.add(new Button(template.approvalButtonContainer, {
 					title: localize('allowActionOnce', "Allow once"),
+					// Every visible "Allow" button carries the same label and tooltip,
+					// so name the action each one approves or a screen-reader user
+					// cannot tell them apart.
+					ariaLabel: localize('allowActionAria', "Allow: {0}", info.label),
 					secondary: true,
 					...defaultButtonStyles
 				}));
@@ -637,8 +641,12 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 				buttonStore.add(button.onDidClick(() => info.confirm()));
 			}
 
-			if (wasVisible !== visible) {
-				wasVisible = visible;
+			// Fire on any height change, not just on visibility: the model can
+			// replace one pending approval with another whose label spans a
+			// different number of lines, which changes the reserved row height.
+			const height = approvalRowHeightFor(info);
+			if (height !== lastApprovalHeight) {
+				lastApprovalHeight = height;
 				this._onDidChangeItemHeight.fire(element);
 			}
 		}));
@@ -2867,6 +2875,16 @@ export class SessionsList extends Disposable implements ISessionsList {
 //#endregion
 
 //#region Approval Helpers
+
+/**
+ * The vertical space a pending approval contributes to its row, or `0` when
+ * there is none. Tracked by the renderer so a row's virtualized height is
+ * refreshed whenever it changes, including when one approval is replaced
+ * directly by another with a different line count.
+ */
+function approvalRowHeightFor(info: IAgentSessionApprovalInfo | undefined): number {
+	return info ? SessionItemRenderer.getApprovalRowHeight(info.label) : 0;
+}
 
 function getFirstApprovalAcrossChats(approvalModel: AgentSessionApprovalModel, session: ISession, reader: IReader | undefined,): IAgentSessionApprovalInfo | undefined {
 	let oldest: IAgentSessionApprovalInfo | undefined;
