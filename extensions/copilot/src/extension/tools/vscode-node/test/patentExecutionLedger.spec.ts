@@ -156,7 +156,8 @@ describe('durable patent execution audit', () => {
 	it('round-trips a figures outcome whose sources name the drawing pages that were returned', async () => {
 		const { ledger, session } = setup();
 		const reference = { publicationNumber: 'EP1234567A1', section: 'bibliography' as const };
-		const sources = [3, 4].map(page => ({ anchor: figureAnchor('EP1234567A1', page), reference, figure: { page }, retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const }));
+		// Page 4 was saved to the workspace; page 3 exists in the chat alone, so it carries no file.
+		const sources = [3, 4].map(page => ({ anchor: figureAnchor('EP1234567A1', page), reference, figure: page === 4 ? { page, file: 'references/figures/EP1234567A1-page-4.png' } : { page }, retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const }));
 		await ledger.record(session, { kind: 'figures', status: 'succeeded', publicationIds: ['EP1234567A1'], sources });
 		const snapshot = await ledger.read(session);
 		expect(snapshot.executions.map(row => ({ kind: row.kind, status: row.status, publicationIds: row.publicationIds, sources: row.sources, partial: snapshot.limitation.includes('unreadable') }))).toEqual([

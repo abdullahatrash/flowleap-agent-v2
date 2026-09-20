@@ -68,6 +68,19 @@ function workingRecordPath(reportPath: string): string {
 }
 
 /**
+ * Where the report sits inside the workspace, e.g. `outputs/prior-art-review.md`. The renderer links
+ * a saved drawing page relative to this, so a cited figure opens from the report wherever the
+ * project folder is; a report written outside every folder has no such path and gets none.
+ */
+function reportWorkspacePath(uri: URI, folders: readonly URI[]): string {
+	for (const folder of folders) {
+		const relative = extUriBiasedIgnorePathCase.relativePath(folder, uri);
+		if (relative && !relative.startsWith('..')) { return relative.replace(/\\/g, '/'); }
+	}
+	return '';
+}
+
+/**
  * Coverage rows judged by one second read. A report with more rows is judged only in part; the
  * diagnostic is a sample, not an audit, and a per-row model call is neither free nor instant.
  */
@@ -186,7 +199,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant, reportWorkspacePath(uri, folders)) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of

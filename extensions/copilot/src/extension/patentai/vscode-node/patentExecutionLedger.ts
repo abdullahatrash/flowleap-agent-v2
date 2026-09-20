@@ -21,8 +21,10 @@ export interface PatentEvidenceSource {
 	/**
 	 * Set only on a figure source: the returned drawing page this source stands for. A drawing has
 	 * no text, so such a source carries no `text` and is cited through its own {@link figureAnchor}.
+	 * `file` is the workspace-relative posix path of the saved PNG, present only when the call passed
+	 * `saveDir`; without it the page exists in the chat alone and a report can only name it.
 	 */
-	readonly figure?: { readonly page: number };
+	readonly figure?: { readonly page: number; readonly file?: string };
 	readonly retrieval: 'returned' | 'unsegmented';
 	readonly review: 'unknown';
 	readonly completeness: 'unknown';
@@ -230,11 +232,16 @@ function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
 	return { anchor, text, reference, language, figure, retrieval: source.retrieval, review: 'unknown', completeness: 'unknown' };
 }
 
-/** The drawing page a figure source stands for; anything but a positive whole page is not a page. */
-function readFigurePage(value: unknown): { readonly page: number } | undefined {
+/**
+ * The drawing page a figure source stands for; anything but a positive whole page is not a page. A
+ * saved file is recovered beside it when the record holds one, so a report written in a later
+ * session can still link the PNG the page was saved to.
+ */
+function readFigurePage(value: unknown): { readonly page: number; readonly file?: string } | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
-	const page = (value as { page?: unknown }).page;
-	return typeof page === 'number' && Number.isInteger(page) && page >= 1 ? { page } : undefined;
+	const { page, file } = value as { page?: unknown; file?: unknown };
+	if (typeof page !== 'number' || !Number.isInteger(page) || page < 1) { return undefined; }
+	return typeof file === 'string' && file.trim() ? { page, file } : { page };
 }
 
 /**

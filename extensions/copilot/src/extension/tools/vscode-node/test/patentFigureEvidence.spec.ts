@@ -5,7 +5,7 @@
 import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
-import { PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
+import { FIGURES_NOT_CONSULTED, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
 import { SecondReadOutcome } from '../../common/patentSecondRead';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
@@ -71,6 +71,19 @@ describe('a coverage element that rests on a recorded drawing', () => {
 			element: `| cam profile carried on the stem | Figure page 7 — model reading of the drawing, not quoted text: "${reading}" | [${figure}](flowleap://flowleap.patent-ai/patent?publication=EP1000000A1&section=bibliography) |`,
 			text: '| a lever | `a lever and a stem` | [EP1000000A1:claims:1:en](flowleap://flowleap.patent-ai/patent?publication=EP1000000A1&section=claims&claim=1) |',
 			limitation: 1,
+		});
+	});
+
+	it('links a drawing page saved to disk relative to the report, and keeps the document link without one', () => {
+		const file = 'references/figures/EP1000000A1-page-7.png';
+		const saved: PatentExecutionSnapshot = {
+			...snapshot,
+			executions: snapshot.executions.map(execution => execution.id === 'cited-figure' ? { ...execution, sources: execution.sources!.map(source => ({ ...source, figure: { page: 7, file } })) } : execution),
+		};
+		const elementLine = (state: PatentExecutionSnapshot): string | undefined => renderCandidateReview(review, state, 'review.working-record.md', 'prior-art', 'outputs/prior-art-review.md').split('\n').find(line => line.startsWith('| cam profile'));
+		expect({ saved: elementLine(saved), inlineOnly: elementLine(snapshot) }).toEqual({
+			saved: `| cam profile carried on the stem | Figure page 7 — model reading of the drawing, not quoted text: "${reading}" | [Figure page 7 (${file})](../references/figures/EP1000000A1-page-7.png) |`,
+			inlineOnly: `| cam profile carried on the stem | Figure page 7 — model reading of the drawing, not quoted text: "${reading}" | [${figure}](flowleap://flowleap.patent-ai/patent?publication=EP1000000A1&section=bibliography) |`,
 		});
 	});
 
@@ -162,5 +175,85 @@ describe('a coverage element that rests on a recorded drawing', () => {
 			'',
 			'',
 		]);
+	});
+});
+
+/** The same session with the drawings never fetched: one search and three text retrievals. */
+const unread: PatentExecutionSnapshot = {
+	limitation: 'Recorded outcomes only.',
+	executions: [
+		snapshot.executions[0],
+		{ id: 'first', recordedAt: '2026-09-20T02:00:00Z', kind: 'details', status: 'succeeded', publicationIds: ['EP1964767.A2'] },
+		{ id: 'second', recordedAt: '2026-09-20T02:01:00Z', kind: 'details', status: 'succeeded', publicationIds: ['EP1939082.A2'] },
+		{ id: 'third', recordedAt: '2026-09-20T02:02:00Z', kind: 'details', status: 'succeeded', publicationIds: ['WO2004041553.A1'] },
+	],
+};
+
+/** Thirteen retrievals, so the list the gate names is longer than the list it prints. */
+const crowded: PatentExecutionSnapshot = {
+	...unread,
+	executions: [snapshot.executions[0], ...Array.from({ length: 13 }, (_, index) => ({
+		id: `detail-${index}`, recordedAt: `2026-09-20T03:${String(index).padStart(2, '0')}:00Z`, kind: 'details' as const, status: 'succeeded' as const, publicationIds: [`EP${9000001 + index}A1`],
+	}))],
+};
+
+const structural = { feature: 'F4 — The cam profile includes at least three lobes', kind: 'feature' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'No retrieved publication discloses a three-lobe cam.' };
+const unresolvedReview: PatentCandidateReview = { coverage: [structural, combination], limitations: ['Bounded candidate review.'], stopReason: 'Requested interim report.' };
+
+/** The refusal, verbatim; only the retrieved candidates it names differ between sessions. */
+const refusal = (candidates: string): string => `Row "${structural.feature}" is essential and unresolved, but no drawing of any retrieved document was read this session. A drawing can disclose a structural feature the text does not (MPEP 2125). Either call get_patent_figures on the closest candidates — retrieved this session: ${candidates} — with saveDir: "references/figures" so the drawing is saved beside the report, and cite what they clearly show with basis: figure, or state in this row's gap why drawings cannot help, with the phrase "figures not consulted:" followed by the reason (for example a composition or process subject).`;
+
+/** The three retrievals of {@link unread}, in the order the refusal names them. */
+const threeRetrieved = 'EP1964767A2, EP1939082A2, WO2004041553A1';
+
+describe('an essential unresolved row before any drawing was read', () => {
+	it('refuses the row, names the retrieved candidates in recorded order and stops listing after twelve', () => {
+		expect({
+			retrieved: validateCandidateReview(unresolvedReview, unread),
+			crowded: validateCandidateReview(unresolvedReview, crowded),
+			// Nothing was retrieved, so there is no drawing to read and nothing to refuse: a row told to
+			// fetch the figures of no document could only invent a reason for not having read them.
+			none: validateCandidateReview(unresolvedReview, { ...unread, executions: [snapshot.executions[0]] }),
+		}).toEqual({
+			retrieved: [refusal(threeRetrieved)],
+			crowded: [refusal(`${Array.from({ length: 12 }, (_, index) => `EP${9000001 + index}A1`).join(', ')}, and 1 more in the working record`)],
+			none: [],
+		});
+	});
+
+	it('gates a row whose kind was left out like a feature, and gates the same way on an invalidity chart', () => {
+		const untyped = { ...structural, kind: undefined };
+		expect({
+			untyped: validateCandidateReview({ ...unresolvedReview, coverage: [untyped, combination] }, unread).filter(error => error.startsWith('Row "')),
+			invalidity: validateCandidateReview(unresolvedReview, unread, '', 'invalidity'),
+		}).toEqual({
+			untyped: [refusal(threeRetrieved)],
+			invalidity: [refusal(threeRetrieved)],
+		});
+	});
+
+	it('lifts the gate for the whole save on one recorded figures outcome, even a failed one', () => {
+		const attempted: PatentExecutionSnapshot = { ...unread, executions: [...unread.executions, { id: 'attempt', recordedAt: '2026-09-20T04:00:00Z', kind: 'figures', status: 'failed', publicationIds: ['EP1964767A2'] }] };
+		expect(validateCandidateReview(unresolvedReview, attempted)).toEqual([]);
+	});
+
+	it('accepts the row whose gap states why drawings cannot help, and refuses the phrase without a reason', () => {
+		const stated = { ...structural, gap: `${FIGURES_NOT_CONSULTED} composition subject, no structural drawing exists.` };
+		const bare = { ...structural, gap: `${FIGURES_NOT_CONSULTED} n/a` };
+		expect({
+			stated: validateCandidateReview({ ...unresolvedReview, coverage: [stated, combination] }, unread),
+			bare: validateCandidateReview({ ...unresolvedReview, coverage: [bare, combination] }, unread),
+		}).toEqual({
+			stated: [],
+			bare: [refusal(threeRetrieved)],
+		});
+	});
+
+	it('never gates the essential combination row or an optional feature left unresolved', () => {
+		const optional = { ...structural, importance: 'optional' as const };
+		expect({
+			combinationOnly: validateCandidateReview({ ...unresolvedReview, coverage: [combination] }, unread),
+			optional: validateCandidateReview({ ...unresolvedReview, coverage: [optional, combination] }, unread),
+		}).toEqual({ combinationOnly: [], optional: [] });
 	});
 });

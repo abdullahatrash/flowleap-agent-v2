@@ -8,6 +8,7 @@ import { SecondReadOutcome, secondReadLimitation, unconfirmedVerdicts } from '..
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
+import { posix } from '../../../util/vs/base/common/path';
 
 /**
  * Which structured report the coverage machinery is producing. The checks are identical; only the
@@ -445,6 +446,57 @@ function figureElementErrors(row: PatentCoverageRow, element: PatentCoverageElem
 }
 
 /**
+ * The phrase a row's gap states the reason with when no drawing can settle it. The model states the
+ * reason and the writer never infers it: a writer that decided for itself that a subject is a
+ * composition, or that drawings cannot matter here, would excuse exactly the rows the gate exists
+ * to catch.
+ */
+export const FIGURES_NOT_CONSULTED = 'figures not consulted:';
+
+/** Below this many characters after the phrase, the gap names the escape without stating a reason. */
+const FIGURES_REASON_LENGTH = 10;
+
+/** How many retrieved candidates the gate names before it stops listing them. */
+const FIGURES_CANDIDATE_CAP = 12;
+
+/** Where a saved drawing belongs in a project folder, so a cited page is on disk beside the report. */
+const FIGURES_SAVE_DIR = 'references/figures';
+
+/**
+ * The documents whose drawings could have been read: every distinct publication a succeeded detail
+ * retrieval brought into the session, in the order they were retrieved. The closest candidate is as
+ * often the last one retrieved as the first, so the list is capped rather than trimmed to a guess.
+ * With no succeeded retrieval there is no candidate to name and no gate: a model told to fetch the
+ * drawings of nothing at all could only invent a reason for not having read them.
+ */
+function figureCandidates(snapshot: PatentExecutionSnapshot): string | undefined {
+	const publications = [...new Set(snapshot.executions
+		.filter(execution => execution.kind === 'details' && execution.status === 'succeeded')
+		.flatMap(execution => execution.publicationIds?.[0] ? [publicationKey(execution.publicationIds[0])] : []))];
+	if (!publications.length) { return undefined; }
+	const listed = publications.slice(0, FIGURES_CANDIDATE_CAP).join(', ');
+	return publications.length > FIGURES_CANDIDATE_CAP ? `${listed}, and ${publications.length - FIGURES_CANDIDATE_CAP} more in the working record` : listed;
+}
+
+/**
+ * Refuse an essential unresolved feature row while no drawing of any retrieved document was read in
+ * this session. A drawing can disclose a structural feature the text never states (MPEP 2125), so
+ * "not found" is an unchecked claim until the drawings of the closest candidates were looked at. The
+ * row escapes only by stating the reason itself after {@link FIGURES_NOT_CONSULTED}, anywhere in the
+ * gap: the model states the reason, the writer never infers it. A combination row is a reading of the
+ * other rows rather than of a document, and an optional feature is not worth a retrieval, so neither
+ * is gated. A row whose `kind` was left out is gated like a feature, because only an explicit
+ * combination is exempt.
+ */
+function figuresGateError(row: PatentCoverageRow, candidates: string): string[] {
+	if (row.importance !== 'essential' || row.status !== 'unresolved' || row.kind === 'combination') { return []; }
+	const gap = row.gap ?? '';
+	const stated = gap.toLowerCase().indexOf(FIGURES_NOT_CONSULTED);
+	if (stated >= 0 && gap.slice(stated + FIGURES_NOT_CONSULTED.length).trim().length >= FIGURES_REASON_LENGTH) { return []; }
+	return [`Row "${row.feature}" is essential and unresolved, but no drawing of any retrieved document was read this session. A drawing can disclose a structural feature the text does not (MPEP 2125). Either call get_patent_figures on the closest candidates — retrieved this session: ${candidates} — with saveDir: "${FIGURES_SAVE_DIR}" so the drawing is saved beside the report, and cite what they clearly show with basis: figure, or state in this row's gap why drawings cannot help, with the phrase "${FIGURES_NOT_CONSULTED}" followed by the reason (for example a composition or process subject).`];
+}
+
+/**
  * Enforce the element map: a supported row discloses every element by cited text or by a recorded
  * drawing, a partial row discloses some and names the rest, and a supported combination rests on a
  * single publication.
@@ -508,6 +560,11 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 		if (!known) { errors.push(`Unresolved patent reader citation: ${match[0]}. Retrieve the exact section/claim or remove the unsupported citation.`); }
 	}
 	if (!review.coverage?.length) { errors.push('Supply coverage for essential features and their combination, including unresolved tracks.'); }
+	// Whether a drawing was read at all is a fact of the session, not of a row: one recorded figures
+	// outcome, whatever its status, lifts the gate for the whole save, because a failed fetch is an
+	// attempt the model can then describe in the gap. A session that retrieved nothing has no
+	// candidate to name and is not gated at all.
+	const figureCandidateList = snapshot.executions.some(execution => execution.kind === 'figures') ? undefined : figureCandidates(snapshot);
 	for (const row of review.coverage ?? []) {
 		if (!row.feature?.trim() || !['essential', 'optional'].includes(row.importance) || !['supported', 'partial', 'unresolved'].includes(row.status)) { errors.push('Every coverage row needs a feature, importance, and valid status.'); }
 		if (row.status !== 'unresolved' && !row.sourceAnchors?.length) { errors.push(`Coverage for "${row.feature}" needs known source anchors or unresolved status.`); }
@@ -534,6 +591,7 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 		if (row.evidence?.some(item => !(row.sourceAnchors ?? []).includes(item.anchor))) { errors.push(`Evidence for "${row.feature}" must use that row's sourceAnchors.`); }
 		errors.push(...elementMapErrors(row, sources));
 		if (row.status !== 'supported' && !row.gap?.trim()) { errors.push(`Describe the remaining gap for "${row.feature}".`); }
+		if (figureCandidateList !== undefined) { errors.push(...figuresGateError(row, figureCandidateList)); }
 	}
 	if (!review.coverage?.some(row => row.importance === 'essential')) { errors.push('Identify at least one essential feature or combination.'); }
 	if (!review.limitations?.some(value => value.trim())) { errors.push('Supply the search and evidence limitations.'); }
@@ -639,10 +697,23 @@ function quotation(text: string): string {
 }
 
 /**
+ * The saved drawing page, linked relative to the report's own directory, so the link resolves
+ * wherever the project folder is later opened. The label keeps the workspace-relative path the
+ * record holds, because that is the path the reader looks for on disk.
+ */
+function savedFigureLink(page: number, file: string, reportWorkspacePath: string): string {
+	const target = posix.relative(posix.dirname(reportWorkspacePath), file);
+	return `[Figure page ${page} (${cell(file)})](${target.split('/').map(encodeURIComponent).join('/')})`;
+}
+
+/**
  * The row's element map: what the feature requires beside the literal fragment that discloses it,
  * so a reader can see which constituent each cited passage actually covers.
+ *
+ * @param reportWorkspacePath the report's own workspace-relative path; without it a saved drawing
+ * page is linked to the document it belongs to, exactly as an unsaved one is.
  */
-function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string[] {
+function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>, reportWorkspacePath: string): string[] {
 	if (!row.elements?.length) { return []; }
 	return ['', '| Element | Disclosed by | Source |', '| --- | --- | --- |',
 		...row.elements.map(element => {
@@ -653,8 +724,9 @@ function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceS
 			const reading = element.reading?.trim();
 			// A drawing reading is the model's own reading of an image, so it is never rendered as a quote.
 			if (anchor && page !== undefined && reading) {
+				const file = source?.figure?.file;
 				return '| ' + [cell(element.element), `Figure page ${page} — model reading of the drawing, not quoted text: "${cell(reading)}"`,
-					source ? patentCitationLink(anchor, source.reference) : anchor].join(' | ') + ' |';
+					file && reportWorkspacePath ? savedFigureLink(page, file, reportWorkspacePath) : source ? patentCitationLink(anchor, source.reference) : anchor].join(' | ') + ' |';
 			}
 			return '| ' + [cell(element.element),
 				anchor && fragment ? '`' + cell(fragment) + '`' : 'not disclosed in cited text',
@@ -773,8 +845,11 @@ const CHECKED_MECHANICALLY = 'Anchor identity, quotation identity and required f
  *
  * @param variant `invalidity` relabels the statuses for a claim chart and adds the generated
  * reference-roles table. Rendering is byte-identical to a prior-art review when it is omitted.
+ * @param reportWorkspacePath the report's own workspace-relative path, e.g.
+ * `outputs/prior-art-review.md`. A drawing page saved to disk is linked relative to it; without it
+ * such a page is linked to its document, as an unsaved page always is.
  */
-export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art'): string {
+export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art', reportWorkspacePath = ''): string {
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);
@@ -807,7 +882,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 					...(evidence ? [quotation(evidence.quote ?? ''),
 						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 			}),
-			...elementMap(row, sources),
+			...elementMap(row, sources, reportWorkspacePath),
 			...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
