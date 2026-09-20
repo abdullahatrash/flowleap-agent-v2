@@ -17,6 +17,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { HighlightedLabel } from '../../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { createMatches, FuzzyScore, IMatch } from '../../../../../base/common/filters.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { isEqual } from '../../../../../base/common/resources.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { IObservable, IReader, ISettableObservable, autorun, derived, observableSignalFromEvent, observableValue } from '../../../../../base/common/observable.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
@@ -30,7 +31,7 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { IContextKeyService, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { MarshalledId } from '../../../../../base/common/marshallingIds.js';
 import { SessionProviderIdContext, SessionSupportsDeleteContext, SessionSupportsRenameContext, SessionTypeContext, IsPhoneLayoutContext, SessionIsArchivedContext, SessionIsReadContext } from '../../../../common/contextkeys.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -52,7 +53,7 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { ISessionsListModelService, SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionGroup, ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
-import { InputBox } from '../../../../../base/browser/ui/inputbox/inputBox.js';
+import { InputBox, MessageType } from '../../../../../base/browser/ui/inputbox/inputBox.js';
 import { IWorkbenchAssignmentService } from '../../../../../workbench/services/assignment/common/assignmentService.js';
 // =============================================================================
 // TEMPORARY (tracked by https://github.com/microsoft/vscode/issues/320480)
@@ -253,12 +254,97 @@ const SESSION_TITLE_SHIMMER_ANIMATION_NAMES = new Set(['session-title-shimmer'])
 const SESSION_TITLE_SHIMMER_PAUSED_CLASS = 'session-title-shimmer-paused';
 
 /** Renames a session. Registered in `sessionsViewActions.ts`. */
-const RENAME_SESSION_COMMAND_ID = 'sessionsViewPane.renameSession';
+export const RENAME_SESSION_COMMAND_ID = 'sessionsViewPane.renameSession';
+
+/**
+ * The in-progress value of an inline rename, kept outside the row template so a
+ * draft survives the tree re-rendering (or recycling) the row underneath it.
+ */
+interface IInlineRenameValueState {
+	readonly initialValue: string;
+	value: string;
+}
+
+/**
+ * Renders a row-local title editor into `container` and drives its commit/cancel
+ * lifecycle. `onFinish` receives the new title (or `undefined` when nothing
+ * should change) and whether the caller should move focus back to the list —
+ * `false` when the editor lost focus to somewhere else and stealing it back
+ * would fight the user.
+ */
+function renderInlineRenameInput(
+	container: HTMLElement,
+	contextViewService: IContextViewService,
+	state: IInlineRenameValueState,
+	ariaLabel: string,
+	disposables: DisposableStore,
+	onFinish: (title: string | undefined, restoreListFocus: boolean) => void,
+): InputBox {
+	DOM.clearNode(container);
+	const input = new InputBox(container, contextViewService, {
+		inputBoxStyles: defaultInputBoxStyles,
+		ariaLabel,
+		validationOptions: {
+			validation: value => value.trim()
+				? null
+				: { content: localize('inlineRename.empty', "Title cannot be empty"), type: MessageType.ERROR },
+		},
+	});
+	disposables.add(toDisposable(() => {
+		input.hideMessage();
+		input.dispose();
+	}));
+	input.value = state.value;
+	input.focus();
+	input.select();
+
+	let done = false;
+	const finish = (commit: boolean, restoreListFocus: boolean) => {
+		if (done) {
+			return;
+		}
+		const title = input.value.trim();
+		if (commit && !title) {
+			if (restoreListFocus) {
+				// Deliberate Enter on an empty title: keep the editor open and let
+				// the input box show and announce the validation message.
+				input.validate();
+				input.focus();
+				return;
+			}
+			// Blurred while empty — treat it as a cancel rather than nag.
+			commit = false;
+		}
+
+		done = true;
+		input.hideMessage();
+		onFinish(commit && title !== state.initialValue.trim() ? title : undefined, restoreListFocus);
+	};
+
+	disposables.add(DOM.addDisposableListener(input.inputElement, DOM.EventType.INPUT, () => state.value = input.value));
+	disposables.add(DOM.addStandardDisposableListener(input.inputElement, DOM.EventType.KEY_DOWN, event => {
+		if (event.equals(KeyCode.Enter)) {
+			event.preventDefault();
+			event.stopPropagation();
+			finish(true, true);
+		} else if (event.equals(KeyCode.Escape)) {
+			event.preventDefault();
+			event.stopPropagation();
+			finish(false, true);
+		}
+	}));
+	disposables.add(DOM.addDisposableListener(input.inputElement, DOM.EventType.BLUR, () => finish(true, false)));
+	disposables.add(toDisposable(() => DOM.clearNode(container)));
+	return input;
+}
 
 interface ISessionItemTemplate {
 	readonly container: HTMLElement;
 	readonly statusIcon: SessionStatusIcon;
 	readonly title: HighlightedLabel;
+	readonly titleRow: HTMLElement;
+	readonly titleContainer: HTMLElement;
+	readonly titleInputContainer: HTMLElement;
 	readonly titleToolbar: MenuWorkbenchToolBar;
 	readonly detailsRow: HTMLElement;
 	readonly approvalRow: HTMLElement;
@@ -285,8 +371,13 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 	private readonly _onDidChangeItemHeight = new Emitter<ISession>();
 	readonly onDidChangeItemHeight: Event<ISession> = this._onDidChangeItemHeight.event;
 
+	/** The session whose row currently hosts the inline rename editor, if any. */
+	private readonly editingSession = observableValue<ISession | undefined>(this, undefined);
+	private activeRenameInput: { readonly session: ISession; readonly input: InputBox } | undefined;
+	private renameState: (IInlineRenameValueState & { readonly session: ISession }) | undefined;
+
 	constructor(
-		private readonly options: { grouping: () => SessionsGrouping; sorting: () => SessionsSorting; isPinned: (session: ISession) => boolean; isRead: (session: ISession) => boolean; visibleSessions: IObservable<readonly (IActiveSession | undefined)[]>; getMultiSelectedSessions: (session: ISession) => ISession[]; onDidRequestRename?: (session: ISession) => void },
+		private readonly options: { grouping: () => SessionsGrouping; sorting: () => SessionsSorting; isPinned: (session: ISession) => boolean; isRead: (session: ISession) => boolean; visibleSessions: IObservable<readonly (IActiveSession | undefined)[]>; getMultiSelectedSessions: (session: ISession) => ISession[]; inlineRename: boolean; contextViewService?: IContextViewService; onDidDoubleClickRename?: (session: ISession) => void; onDidFinishRename?: () => void },
 		private readonly approvalModel: AgentSessionApprovalModel | undefined,
 		private readonly instantiationService: IInstantiationService,
 		private readonly contextKeyService: IContextKeyService,
@@ -295,6 +386,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 		private readonly sessionsProvidersService: ISessionsProvidersService,
 		// TEMPORARY — see the note on the `IAgentSessionsService` import above (#320480).
 		private readonly agentSessionsService: IAgentSessionsService,
+		private readonly sessionsManagementService: ISessionsManagementService,
 	) {
 	}
 
@@ -314,6 +406,14 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 			pausedClass: SESSION_TITLE_SHIMMER_PAUSED_CLASS,
 			animationNames: SESSION_TITLE_SHIMMER_ANIMATION_NAMES,
 		}));
+		// Host for the inline rename editor. It lives beside the static title and
+		// swaps in via the `renaming` class on the row (see sessionsList.css), so
+		// the row keeps its height and the title's place in the layout.
+		const titleInputContainer = DOM.append(titleRow, $('.session-title-input.session-inline-rename-input'));
+		for (const eventType of ['pointerdown', 'pointerup', 'click', 'dblclick'] as const) {
+			disposables.add(DOM.addDisposableListener(titleInputContainer, eventType, e => e.stopPropagation()));
+		}
+		disposables.add(Gesture.ignoreTarget(titleInputContainer));
 		const titleToolbarContainer = DOM.append(titleRow, $('.session-title-toolbar'));
 		// The list opens a session on click and on Gesture `tap` (touch).
 		// DOM event propagation stops only cover mouse/pointer events; the
@@ -340,7 +440,7 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 			actionRunner,
 		}));
 
-		return { container, statusIcon, title, titleToolbar, detailsRow, approvalRow, approvalLabel, approvalButtonContainer, contextKeyService, disposables, elementDisposables };
+		return { container, statusIcon, title, titleRow, titleContainer, titleInputContainer, titleToolbar, detailsRow, approvalRow, approvalLabel, approvalButtonContainer, contextKeyService, disposables, elementDisposables };
 	}
 
 	renderElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, template: ISessionItemTemplate): void {
@@ -353,9 +453,10 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 	private renderSession(element: ISession, template: ISessionItemTemplate, matches?: IMatch[]): void {
 		template.elementDisposables.clear();
+		template.elementDisposables.add(toDisposable(() => template.container.classList.remove('renaming')));
 
-		if (this.options.onDidRequestRename) {
-			template.elementDisposables.add(DOM.addDisposableListener(template.title.element, DOM.EventType.DBLCLICK, (event: MouseEvent) => {
+		if (this.options.inlineRename) {
+			template.elementDisposables.add(DOM.addDisposableListener(template.titleRow, DOM.EventType.DBLCLICK, (event: MouseEvent) => {
 				if (
 					event.button !== 0 ||
 					event.altKey ||
@@ -369,7 +470,17 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 				event.preventDefault();
 				event.stopPropagation();
-				this.options.onDidRequestRename?.(element);
+				if (this.beginRename(element)) {
+					this.options.onDidDoubleClickRename?.(element);
+				}
+			}));
+			template.elementDisposables.add(autorun(reader => {
+				const editingSession = this.editingSession.read(reader);
+				const editing = !!editingSession && isEqual(editingSession.resource, element.resource);
+				template.container.classList.toggle('renaming', editing);
+				if (editing) {
+					this.renderRenameInput(element, template, reader.store);
+				}
 			}));
 		}
 
@@ -665,9 +776,80 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 		return workspace.label;
 	}
 
+	/**
+	 * Opens the inline rename editor on `session`'s row. Returns `false` when the
+	 * session cannot be renamed, so callers can fall back to another affordance.
+	 */
+	beginRename(session: ISession): boolean {
+		const target = this.resolveRenameTarget(session);
+		if (!target) {
+			return false;
+		}
+		// Already editing this row: a second F2 or double-click just re-focuses the
+		// editor rather than discarding what the user has typed so far.
+		if (this.activeRenameInput && isEqual(this.activeRenameInput.session.resource, target.resource)) {
+			this.activeRenameInput.input.focus();
+			this.activeRenameInput.input.select();
+			return true;
+		}
+		if (!this.renameState || !isEqual(this.renameState.session.resource, target.resource)) {
+			const initialValue = target.title.get();
+			this.renameState = { session: target, initialValue, value: initialValue };
+		}
+		this.editingSession.set(target, undefined);
+		return true;
+	}
 
+	private renderRenameInput(session: ISession, template: ISessionItemTemplate, disposables: DisposableStore): void {
+		const renameState = this.renameState;
+		if (!renameState || !isEqual(renameState.session.resource, session.resource)) {
+			return;
+		}
+		if (!this.options.contextViewService) {
+			throw new Error('Inline rename requires a context view service');
+		}
+		const input = renderInlineRenameInput(
+			template.titleInputContainer,
+			this.options.contextViewService,
+			renameState,
+			localize('renameSession.inputAriaLabel', "Rename session. Press Enter to confirm or Escape to cancel."),
+			disposables,
+			(title, restoreListFocus) => {
+				this.editingSession.set(undefined, undefined);
+				this.renameState = undefined;
+				if (restoreListFocus) {
+					this.options.onDidFinishRename?.();
+				}
+				// Re-resolve: the session may have gone away while the editor was open.
+				const target = this.resolveRenameTarget(session);
+				if (title && target) {
+					this.sessionsManagementService.renameSession(target, title).catch(onUnexpectedError);
+				}
+			},
+		);
+		this.activeRenameInput = { session, input };
+		disposables.add(toDisposable(() => {
+			if (this.activeRenameInput?.input === input) {
+				this.activeRenameInput = undefined;
+			}
+		}));
+	}
+
+	private resolveRenameTarget(session: ISession): ISession | undefined {
+		if (!this.options.inlineRename) {
+			return undefined;
+		}
+		const target = this.sessionsManagementService.getSessions().find(candidate => isEqual(candidate.resource, session.resource));
+		return target?.capabilities.supportsRename ? target : undefined;
+	}
 
 	disposeElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, template: ISessionItemTemplate): void {
+		// Drop a rename draft whose session has disappeared, so the editor does not
+		// reappear on whichever row the tree recycles this template for.
+		if (isSessionItem(node.element) && this.renameState && isEqual(this.renameState.session.resource, node.element.resource) && !this.resolveRenameTarget(node.element)) {
+			this.editingSession.set(undefined, undefined);
+			this.renameState = undefined;
+		}
 		template.elementDisposables.clear();
 	}
 
@@ -1480,13 +1662,34 @@ export interface ISessionsListControlOptions {
 	readonly grouping: () => SessionsGrouping;
 	readonly sorting: () => SessionsSorting;
 	readonly findWidgetContainer?: HTMLElement;
-	onSessionOpen(resource: URI, preserveFocus: boolean, sideBySide: boolean): void;
+	onSessionOpen(resource: URI, preserveFocus: boolean, sideBySide: boolean): void | Promise<void>;
 }
 
 /**
  * @deprecated Use {@link ISessionsListControlOptions} instead.
  */
 export type ISessionsListOptions = ISessionsListControlOptions;
+
+/**
+ * A session open the list has started and may still re-invoke, so that a
+ * double-click landing on the row can turn it into a focus-preserving open.
+ */
+interface IListOpenRequest {
+	readonly session: ISession;
+	readonly sideBySide: boolean;
+	preserveFocus: boolean;
+	invocation: number;
+}
+
+/**
+ * Whether opening `session` should also mark it read. Re-opening the session you
+ * are already viewing must not clobber an explicit "Mark as Unread" on it: the
+ * mark is only meaningful while the session stays active, so leave it alone
+ * until the user leaves and comes back.
+ */
+export function shouldMarkReadOnOpen(session: ISession, activeSession: { readonly sessionId: string } | undefined): boolean {
+	return activeSession?.sessionId !== session.sessionId;
+}
 
 export interface ISessionsList {
 	readonly element: HTMLElement;
@@ -1501,6 +1704,11 @@ export interface ISessionsList {
 	getVisibleSessions(): readonly ISession[];
 	clearFocus(): void;
 	hasFocusOrSelection(): boolean;
+	/**
+	 * The focused selection while this list owns DOM focus, or `undefined` when it
+	 * does not, so a command can tell "not my target" from "no session focused".
+	 */
+	getFocusedSessions(): readonly ISession[] | undefined;
 	setVisible(visible: boolean): void;
 	layout(height: number, width: number): void;
 	focus(): void;
@@ -1526,6 +1734,8 @@ export interface ISessionsList {
 	collapseAllSections(): void;
 	createGroupFromSessions(sessions: ISession[]): void;
 	beginRenameGroup(groupId: string): void;
+	/** Opens the inline rename editor on `session`'s row. Returns `false` when it cannot be opened. */
+	beginRenameSession(session: ISession): boolean;
 	addSessionsToGroup(sessions: ISession[], groupId: string, target?: ISession, position?: 'before' | 'after'): void;
 	getGroupsInDisplayOrder(): ISessionGroup[];
 }
@@ -1570,6 +1780,8 @@ export class SessionsList extends Disposable implements ISessionsList {
 	private _editingGroupId: string | undefined;
 	private _groupRenderer!: SessionGroupRenderer;
 	private _sectionRenderer!: SessionSectionRenderer;
+	private _sessionRenderer!: SessionItemRenderer;
+	private pendingOpenRequest: IListOpenRequest | undefined;
 	private _dropTargetHeader: ISessionDropTargetHeader | undefined;
 
 	/**
@@ -1599,6 +1811,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IMenuService private readonly menuService: IMenuService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@ICommandService private readonly commandService: ICommandService,
@@ -1640,9 +1853,10 @@ export class SessionsList extends Disposable implements ISessionsList {
 				isRead: s => this.isSessionRead(s),
 				visibleSessions: this._sessionsService.visibleSessions,
 				getMultiSelectedSessions: s => this.getMultiSelectedSessions(s),
-				onDidRequestRename: session => {
-					this.commandService.executeCommand(RENAME_SESSION_COMMAND_ID, session).catch(onUnexpectedError);
-				},
+				inlineRename: true,
+				contextViewService: this.contextViewService,
+				onDidDoubleClickRename: session => this.preservePendingOpenFocus(session),
+				onDidFinishRename: () => this.tree.domFocus(),
 			},
 			approvalModel,
 			instantiationService,
@@ -1651,7 +1865,9 @@ export class SessionsList extends Disposable implements ISessionsList {
 			hoverService,
 			sessionsProvidersService,
 			agentSessionsService,
+			this._sessionsManagementService,
 		);
+		this._sessionRenderer = sessionRenderer;
 
 		const showMoreRenderer = new SessionShowMoreRenderer();
 		const showUnreadInCollapsedSections = observableConfigValue(SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING, true, this.configurationService);
@@ -1773,13 +1989,6 @@ export class SessionsList extends Disposable implements ISessionsList {
 				return;
 			}
 			if (!isSessionSection(element) && !isSessionGroupItem(element)) {
-				// Re-opening the session you are already viewing must not clobber an
-				// explicit "Mark as Unread" on it: the mark is only meaningful while
-				// the session stays active, so leave it alone until the user leaves
-				// and comes back.
-				if (this._sessionsService.activeSession.get()?.sessionId !== element.sessionId) {
-					this.markRead(element);
-				}
 				// A deliberate left mouse click on a session should move keyboard
 				// focus into the chat input so the user can start typing right
 				// away. A single click always reports `preserveFocus: true`, so
@@ -1788,7 +1997,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 				// focus from it.
 				const isLeftClick = DOM.isMouseEvent(e.browserEvent) && e.browserEvent.button === 0;
 				const preserveFocus = isLeftClick ? false : (e.editorOptions.preserveFocus ?? false);
-				this.options.onSessionOpen(element.resource, preserveFocus, e.sideBySide);
+				this.beginOpenRequest(element, preserveFocus, e.sideBySide);
 			}
 		}));
 
@@ -2263,6 +2472,21 @@ export class SessionsList extends Disposable implements ISessionsList {
 		return this.tree.getFocus().length > 0 || this.tree.getSelection().length > 0;
 	}
 
+	/**
+	 * Returns the focused selection while this list owns DOM focus, or `undefined`
+	 * otherwise. `undefined` and `[]` mean different things to a command: the
+	 * former says "the list is not what is being acted on", so it may fall through
+	 * to another target; the latter says the list is focused but on no session.
+	 */
+	getFocusedSessions(): readonly ISession[] | undefined {
+		if (!DOM.isAncestorOfActiveElement(this.listContainer)) {
+			return undefined;
+		}
+
+		const focusedSession = this.tree.getFocus().find((item): item is ISession => !!item && isSessionItem(item));
+		return focusedSession ? this.getMultiSelectedSessions(focusedSession) : [];
+	}
+
 	setVisible(visible: boolean): void {
 		if (this.visible === visible) {
 			return;
@@ -2407,6 +2631,94 @@ export class SessionsList extends Disposable implements ISessionsList {
 		this.update();
 	}
 
+	/**
+	 * Starts opening `session`, remembering the attempt so a double-click that
+	 * lands right after can convert it into a focus-preserving open. The first
+	 * click of a double-click already fires `onDidOpen` with `preserveFocus:
+	 * false`, which would pull focus into the chat input and destroy the rename
+	 * editor the second click is about to create.
+	 */
+	private beginOpenRequest(session: ISession, preserveFocus: boolean, sideBySide: boolean): void {
+		const request: IListOpenRequest = { session, preserveFocus, sideBySide, invocation: 0 };
+		this.pendingOpenRequest = request;
+		if (shouldMarkReadOnOpen(session, this._sessionsService.activeSession.get())) {
+			this.markRead(session);
+		}
+		this.invokeOpenRequest(request);
+	}
+
+	private invokeOpenRequest(request: IListOpenRequest): void {
+		const invocation = ++request.invocation;
+		const finish = () => {
+			// Only the newest invocation of the newest request may clear the slot,
+			// so a re-invocation does not drop a still-pending later one.
+			if (this.pendingOpenRequest === request && request.invocation === invocation) {
+				this.pendingOpenRequest = undefined;
+			}
+		};
+
+		let open: void | Promise<void>;
+		try {
+			open = this.options.onSessionOpen(request.session.resource, request.preserveFocus, request.sideBySide);
+		} catch (error) {
+			finish();
+			throw error;
+		}
+
+		if (!open) {
+			finish();
+			return;
+		}
+		open.then(finish, error => {
+			finish();
+			onUnexpectedError(error);
+		});
+	}
+
+	/**
+	 * Re-runs an in-flight open for `session` with `preserveFocus`, so the rename
+	 * editor a double-click just opened keeps keyboard focus.
+	 */
+	private preservePendingOpenFocus(session: ISession): void {
+		const request = this.pendingOpenRequest;
+		if (!request || !isEqual(request.session.resource, session.resource)) {
+			return;
+		}
+		request.preserveFocus = true;
+		this.invokeOpenRequest(request);
+	}
+
+	beginRenameSession(session: ISession): boolean {
+		// Resolve against the tree's own elements: the caller may hold a stale
+		// `ISession` from before a refresh, and the renderer keys its editor off
+		// the instance the tree actually rendered.
+		const target = this.findTreeElement((element): element is ISession => isSessionItem(element) && isEqual(element.resource, session.resource));
+		if (!target) {
+			return false;
+		}
+		// F2 can target a row scrolled out of view; the editor has to be on screen.
+		if (this.tree.getRelativeTop(target) === null) {
+			this.tree.reveal(target, 0.5);
+		}
+		return this._sessionRenderer.beginRename(target);
+	}
+
+	private findTreeElement<T extends SessionListItem>(predicate: (element: SessionListItem) => element is T): T | undefined {
+		const visit = (nodes: readonly ITreeNode<SessionListItem | null, FuzzyScore>[]): T | undefined => {
+			for (const node of nodes) {
+				if (node.element && predicate(node.element)) {
+					return node.element;
+				}
+				const match = visit(node.children);
+				if (match) {
+					return match;
+				}
+			}
+			return undefined;
+		};
+		return visit(this.tree.getNode().children);
+	}
+
 	addSessionsToGroup(sessions: ISession[], groupId: string, target?: ISession, position?: 'before' | 'after'): void {
 		const groupSessions = sessions.filter(session => !session.isArchived.get());
 		for (const session of groupSessions) {
@@ -2537,7 +2849,20 @@ export class SessionsList extends Disposable implements ISessionsList {
 			session: { resource: element.resource },
 			sessions: selectedSessions.map(s => ({ resource: s.resource })),
 		};
-		const wrapForExtensions = (action: IAction): IAction => {
+		const wrapAction = (action: IAction): IAction => {
+			// "Rename..." from the row's own context menu edits in place rather than
+			// opening the prompt; the command keeps its prompt for every other caller.
+			if (action.id === RENAME_SESSION_COMMAND_ID) {
+				return toAction({
+					id: action.id,
+					label: action.label,
+					class: action.class,
+					enabled: action.enabled,
+					tooltip: action.tooltip,
+					checked: action.checked,
+					run: () => this.beginRenameSession(element),
+				});
+			}
 			if (!(action instanceof MenuItemAction) || !action.item.source) {
 				return action;
 			}
@@ -2552,7 +2877,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 			});
 		};
 
-		const baseActions = Separator.join(...menu.getActions({ arg: selectedSessions, shouldForwardArgs: true }).map(([, actions]) => actions.map(wrapForExtensions)));
+		const baseActions = Separator.join(...menu.getActions({ arg: selectedSessions, shouldForwardArgs: true }).map(([, actions]) => actions.map(wrapAction)));
 		const groupActions = this.getGroupSessionActions(selectedSessions);
 		const actions = groupActions.length > 0 ? [...baseActions, new Separator(), ...groupActions] : baseActions;
 		if (actions.length === 0) {

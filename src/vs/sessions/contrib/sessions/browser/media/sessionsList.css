@@ -71,7 +71,9 @@
 
 	.monaco-list-row:hover,
 	.monaco-list-row.focused:not(.selected) {
-		.session-title-toolbar {
+		/* A row hosting the inline rename editor gives the whole title row to the
+		   editor, so it must not reveal the toolbar on hover or focus. */
+		.session-item:not(.renaming) .session-title-toolbar {
 			display: block;
 		}
 
@@ -82,7 +84,7 @@
 
 	/* Pinned but not hovered/focused: show only the unpin action */
 	.monaco-list-row:not(:hover):not(.focused):has(.session-item.pinned) {
-		.session-title-toolbar {
+		.session-item:not(.renaming) .session-title-toolbar {
 			display: block;
 
 			.action-item:not(:last-child) {
@@ -169,6 +171,26 @@
 		padding-bottom: 4px;
 	}
 
+	/* Host for the inline rename editor. Hidden until the row carries
+	   `.renaming`, so the row keeps its height and the title keeps its place. */
+	.session-inline-rename-input {
+		display: none;
+		flex: 1;
+		min-width: 0;
+
+		.monaco-inputbox {
+			width: 100%;
+			height: 22px;
+			box-sizing: border-box;
+			line-height: normal;
+		}
+
+		.monaco-inputbox > .ibwrapper > .input {
+			height: 20px;
+			padding: 0;
+		}
+	}
+
 	.session-details-row {
 		gap: 4px;
 		font-size: var(--vscode-agents-fontSize-label2, 11px);
@@ -227,6 +249,18 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+
+	/* The inline rename editor replaces the static title in place. The toolbar is
+	   kept out by the `:not(.renaming)` guards on its reveal rules above. */
+	&.renaming {
+		.session-title {
+			display: none;
+		}
+
+		.session-title-input {
+			display: block;
+		}
 	}
 
 	.session-description p {

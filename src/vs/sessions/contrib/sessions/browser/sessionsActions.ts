@@ -14,6 +14,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuRegistry, MenuId, registerAction2, MenuItemAction } from '../../../../platform/actions/common/actions.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -24,8 +25,9 @@ import { EditorAreaFocusContext, IsAuxiliaryWindowContext, IsSessionsWindowConte
 import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { getQuickNavigateHandler } from '../../../../workbench/browser/quickaccess.js';
 import { Menus } from '../../../browser/menus.js';
+import { RENAME_SESSION_COMMAND_ID } from './views/sessionsList.js';
 import { SessionsCategories } from '../../../common/categories.js';
-import { CanGoBackContext, CanGoForwardContext, SessionProviderIdContext, MultipleSessionsVisibleContext, SessionIsArchivedContext, SessionIsCreatedContext, SessionIsMaximizedContext, SessionIsStickyContext, SessionsFocusContext, SessionSupportsMultipleChatsContext, SessionsWelcomeVisibleContext, SessionIdContext, SessionHasMultipleCommittedChatsContext, SessionHasMultipleOpenChatsContext, SessionsPickerVisibleContext, SessionsEditorScopeContext, SessionsHasClosedItemContext } from '../../../common/contextkeys.js';
+import { CanGoBackContext, CanGoForwardContext, SessionProviderIdContext, MultipleSessionsVisibleContext, SessionIsArchivedContext, SessionIsCreatedContext, SessionSupportsRenameContext, SessionIsMaximizedContext, SessionIsStickyContext, SessionsFocusContext, SessionSupportsMultipleChatsContext, SessionsWelcomeVisibleContext, SessionIdContext, SessionHasMultipleCommittedChatsContext, SessionHasMultipleOpenChatsContext, SessionsPickerVisibleContext, SessionsEditorScopeContext, SessionsHasClosedItemContext } from '../../../common/contextkeys.js';
 import { ANY_AGENT_HOST_PROVIDER_RE } from '../../../common/agentHostSessionsProvider.js';
 import { IActiveSession } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -613,20 +615,32 @@ registerAction2(class RenameSessionHeaderAction extends Action2 {
 		super({
 			id: 'sessions.sessionHeader.rename',
 			title: localize2('renameSessionHeader', "Rename..."),
+			icon: Codicon.edit,
 			menu: [{
 				id: Menus.SessionHeaderContext,
 				group: '2_edit',
 				order: 1,
 				when: ContextKeyExpr.regex(SessionProviderIdContext.key, ANY_AGENT_HOST_PROVIDER_RE),
+			}, {
+				id: Menus.SessionBarToolbar,
+				group: 'secondary/1_session',
+				order: 20,
+				when: ContextKeyExpr.and(SessionIsCreatedContext, SessionSupportsRenameContext, SessionIsArchivedContext.negate()),
 			}],
 		});
 	}
 
-	override run(accessor: ServicesAccessor, session: IActiveSession | undefined): void {
+	override async run(accessor: ServicesAccessor, session: IActiveSession | undefined): Promise<void> {
 		if (!session) {
 			return;
 		}
-		accessor.get(ISessionsPartService).getSessionView(session.sessionId)?.startTitleEditing();
+		// Renaming in the header title is the lightest-weight affordance, but it is
+		// only available while the header shows the title; prompt for the new title
+		// when it cannot be used.
+		if (accessor.get(ISessionsPartService).getSessionView(session.sessionId)?.startTitleEditing()) {
+			return;
+		}
+		await accessor.get(ICommandService).executeCommand(RENAME_SESSION_COMMAND_ID, session);
 	}
 });
 

@@ -18,10 +18,12 @@ import { ISessionsPartService } from '../../../../services/sessions/browser/sess
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { IActiveSession, ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { SessionsChatAccessibilityHelp } from '../../../chat/browser/sessionsChatAccessibilityHelp.js';
+import { ISessionsList, RENAME_SESSION_COMMAND_ID, SessionsGrouping, SessionsList, SessionsSorting, shouldMarkReadOnOpen } from '../../browser/views/sessionsList.js';
+import { SessionsViewId } from '../../browser/views/sessionsView.js';
+import { createListHarness, createTestSession } from './sessionsListTestUtils.js';
 import '../../browser/views/sessionsViewActions.js';
-
-const RENAME_SESSION_COMMAND_ID = 'sessionsViewPane.renameSession';
 
 class TestSessionsManagementService extends mock<ISessionsManagementService>() {
 	readonly renamed: { readonly session: ISession; readonly title: string }[] = [];
@@ -144,6 +146,248 @@ suite('Sessions rename', () => {
 			}, {
 				success: [{ session: success.session, title: 'New title' }],
 				failure: [{ session: failure.session, title: 'Fails' }],
+			});
+		});
+	});
+
+
+	suite('inline rename in the list', () => {
+
+		function createList(sessions: ReturnType<typeof createTestSession>[]) {
+			const harness = createListHarness(disposables, sessions.map(s => s.session));
+			const container = harness.createContainer();
+			const opened: { readonly resource: URI; readonly preserveFocus: boolean }[] = [];
+			const list = harness.store.add(harness.instantiationService.createInstance(SessionsList, container, {
+				grouping: () => SessionsGrouping.Date,
+				sorting: () => SessionsSorting.Created,
+				onSessionOpen: (resource, preserveFocus) => { opened.push({ resource, preserveFocus }); },
+			}));
+			list.layout(300, 400);
+			return { harness, container, list, opened };
+		}
+
+		function renameInput(container: HTMLElement): HTMLInputElement | null {
+			return container.querySelector<HTMLInputElement>('.session-title-input input');
+		}
+
+		function press(input: HTMLInputElement, key: 'Enter' | 'Escape'): void {
+			input.dispatchEvent(new KeyboardEvent('keydown', {
+				key,
+				keyCode: key === 'Enter' ? 13 : 27,
+				bubbles: true,
+				cancelable: true,
+			}));
+		}
+
+		test('a double-click on the title row opens the editor and Enter commits the trimmed title', () => {
+			const first = createTestSession('First');
+			const { harness, container, list } = createList([first]);
+
+			const titleRow = container.querySelector<HTMLElement>('.session-item .session-title-row');
+			assert.ok(titleRow);
+			titleRow.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0, detail: 2 }));
+
+			const input = renameInput(container);
+			assert.ok(input);
+			const opened = {
+				initialValue: input.value,
+				focused: mainWindow.document.activeElement === input,
+				rowRenaming: !!container.querySelector('.session-item.renaming'),
+			};
+
+			input.value = '  Renamed  ';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			press(input, 'Enter');
+
+			assert.deepStrictEqual({
+				opened,
+				renamed: harness.managementService.renamed.map(r => ({ id: r.session.sessionId, title: r.title })),
+				stillRenaming: !!container.querySelector('.session-item.renaming'),
+			}, {
+				opened: { initialValue: 'First', focused: true, rowRenaming: true },
+				renamed: [{ id: 'First', title: 'Renamed' }],
+				stillRenaming: false,
+			});
+			assert.ok(list);
+		});
+
+		test('Escape cancels without renaming and an unchanged title commits nothing', () => {
+			const first = createTestSession('First');
+			const { harness, container, list } = createList([first]);
+
+			assert.strictEqual(list.beginRenameSession(first.session), true);
+			const cancelled = renameInput(container);
+			assert.ok(cancelled);
+			cancelled.value = 'Discarded';
+			cancelled.dispatchEvent(new Event('input', { bubbles: true }));
+			press(cancelled, 'Escape');
+			const afterEscape = { renamed: [...harness.managementService.renamed], renaming: !!container.querySelector('.session-item.renaming') };
+
+			assert.strictEqual(list.beginRenameSession(first.session), true);
+			const unchanged = renameInput(container);
+			assert.ok(unchanged);
+			unchanged.value = '  First  ';
+			unchanged.dispatchEvent(new Event('input', { bubbles: true }));
+			press(unchanged, 'Enter');
+
+			assert.deepStrictEqual({
+				afterEscape: { renamedCount: afterEscape.renamed.length, renaming: afterEscape.renaming },
+				afterUnchanged: harness.managementService.renamed,
+			}, {
+				afterEscape: { renamedCount: 0, renaming: false },
+				afterUnchanged: [],
+			});
+		});
+
+		test('Enter on a blank title keeps the editor open and renames nothing', () => {
+			const first = createTestSession('First');
+			const { harness, container, list } = createList([first]);
+
+			assert.strictEqual(list.beginRenameSession(first.session), true);
+			const input = renameInput(container);
+			assert.ok(input);
+			input.value = '   ';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			press(input, 'Enter');
+
+			assert.deepStrictEqual({
+				stillOpen: !!renameInput(container),
+				stillRenaming: !!container.querySelector('.session-item.renaming'),
+				renamed: harness.managementService.renamed,
+			}, {
+				stillOpen: true,
+				stillRenaming: true,
+				renamed: [],
+			});
+		});
+
+		test('a session that cannot be renamed never opens the editor', () => {
+			const locked = createTestSession('Locked', { supportsRename: false });
+			const { container, list } = createList([locked]);
+
+			const titleRow = container.querySelector<HTMLElement>('.session-item .session-title-row');
+			assert.ok(titleRow);
+			titleRow.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0, detail: 2 }));
+
+			assert.deepStrictEqual({
+				fromDoubleClick: !!renameInput(container),
+				fromApi: list.beginRenameSession(locked.session),
+			}, {
+				fromDoubleClick: false,
+				fromApi: false,
+			});
+		});
+
+		test('the rename draft survives a re-render of the row', () => {
+			const first = createTestSession('First');
+			const { container, list } = createList([first]);
+
+			assert.strictEqual(list.beginRenameSession(first.session), true);
+			const input = renameInput(container);
+			assert.ok(input);
+			input.value = 'Half typed';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+
+			list.refresh();
+
+			const reRendered = renameInput(container);
+			assert.deepStrictEqual({
+				open: !!reRendered,
+				value: reRendered?.value,
+			}, {
+				open: true,
+				value: 'Half typed',
+			});
+		});
+	});
+
+	suite('mark read on open', () => {
+
+		test('opening marks read unless the session is already the active one', () => {
+			const { session } = createTestSession('First');
+			const other = createTestSession('Second').session;
+
+			assert.deepStrictEqual({
+				noActiveSession: shouldMarkReadOnOpen(session, undefined),
+				differentActiveSession: shouldMarkReadOnOpen(session, other as unknown as IActiveSession),
+				sameActiveSession: shouldMarkReadOnOpen(session, session as unknown as IActiveSession),
+			}, {
+				noActiveSession: true,
+				differentActiveSession: true,
+				sameActiveSession: false,
+			});
+		});
+	});
+
+	suite('command routing', () => {
+
+		function createRoutingHarness(focused: readonly ISession[] | undefined, beginRenameResult = true) {
+			const instantiationService = disposables.add(new TestInstantiationService());
+			const quickInputService = new TestQuickInputService();
+			const managementService = new TestSessionsManagementService();
+			const session = createSession('Existing', true);
+			const beginRenameCalls: ISession[] = [];
+			instantiationService.stub(IQuickInputService, quickInputService);
+			instantiationService.stub(ISessionsManagementService, managementService);
+			instantiationService.stub(ISessionsService, new class extends mock<ISessionsService>() {
+				override readonly activeSession = constObservable<IActiveSession | undefined>(undefined);
+			}());
+			const sessionsControl = new class extends mock<ISessionsList>() {
+				override getFocusedSessions(): readonly ISession[] | undefined { return focused; }
+				override beginRenameSession(target: ISession): boolean {
+					beginRenameCalls.push(target);
+					return beginRenameResult;
+				}
+			}();
+			instantiationService.stub(IViewsService, new class extends mock<IViewsService>() {
+				override getViewWithId<T>(id: string): T | null {
+					return id === SessionsViewId ? ({ sessionsControl } as unknown as T) : null;
+				}
+			}() as unknown as IViewsService);
+			const handler = CommandsRegistry.getCommand(RENAME_SESSION_COMMAND_ID)?.handler;
+			assert.ok(handler);
+			return { handler, instantiationService, quickInputService, managementService, session, beginRenameCalls };
+		}
+
+		test('a row the list has focused renames in place, and every other caller gets the prompt', async () => {
+			// The command resolves its own target from the list, so the session the
+			// stub reports as focused is the one it should edit in place.
+			const fromList = createRoutingHarness([createSession('Existing', true)]);
+			await fromList.handler(fromList.instantiationService);
+
+			const withExplicitArgument = createRoutingHarness([createSession('Existing', true)]);
+			withExplicitArgument.quickInputService.result = undefined;
+			await withExplicitArgument.handler(withExplicitArgument.instantiationService, withExplicitArgument.session);
+
+			const listNotFocused = createRoutingHarness(undefined);
+			listNotFocused.quickInputService.result = undefined;
+			await listNotFocused.handler(listNotFocused.instantiationService);
+
+			assert.deepStrictEqual({
+				fromList: { inlineCalls: fromList.beginRenameCalls.length, promptCalls: fromList.quickInputService.calls },
+				withExplicitArgument: { inlineCalls: withExplicitArgument.beginRenameCalls.length, promptCalls: withExplicitArgument.quickInputService.calls },
+				listNotFocused: { inlineCalls: listNotFocused.beginRenameCalls.length, promptCalls: listNotFocused.quickInputService.calls },
+			}, {
+				fromList: { inlineCalls: 1, promptCalls: 0 },
+				withExplicitArgument: { inlineCalls: 0, promptCalls: 1 },
+				listNotFocused: { inlineCalls: 0, promptCalls: 0 },
+			});
+		});
+
+		test('the prompt is used when the list declines to open an inline editor', async () => {
+			const harness = createRoutingHarness([createSession('Existing', true)], false);
+			harness.quickInputService.result = 'From prompt';
+
+			await harness.handler(harness.instantiationService);
+
+			assert.deepStrictEqual({
+				inlineCalls: harness.beginRenameCalls.length,
+				promptCalls: harness.quickInputService.calls,
+				renamed: harness.managementService.renamed.map(r => r.title),
+			}, {
+				inlineCalls: 1,
+				promptCalls: 1,
+				renamed: ['From prompt'],
 			});
 		});
 	});

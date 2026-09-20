@@ -16,12 +16,13 @@ import { ServicesAccessor } from '../../../../../platform/instantiation/common/i
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { WorkbenchListFocusContextKey } from '../../../../../platform/list/browser/listService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { CLOSE_MOBILE_SIDEBAR_DRAWER_COMMAND_ID } from '../../../../browser/workbench.js';
-import { EditorsVisibleContext, EditorAreaFocusContext, IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
+import { EditorsVisibleContext, EditorAreaFocusContext, FocusedViewContext, IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
 import { SessionsCategories } from '../../../../common/categories.js';
 import { SessionSupportsDeleteContext, SessionSupportsRenameContext, IsNewChatSessionContext, SessionIsArchivedContext, SessionIsCreatedContext, SessionIsReadContext } from '../../../../common/contextkeys.js';
-import { SessionItemToolbarMenuId, SessionItemContextMenuId, SessionSectionToolbarMenuId, SessionGroupToolbarMenuId, SessionSectionTypeContext, IsSessionPinnedContext, SessionsGrouping, SessionsSorting, ISessionSection, ISessionGroupItem } from './sessionsList.js';
+import { SessionItemToolbarMenuId, SessionItemContextMenuId, SessionSectionToolbarMenuId, SessionGroupToolbarMenuId, SessionSectionTypeContext, IsSessionPinnedContext, SessionsGrouping, SessionsSorting, ISessionSection, ISessionGroupItem, RENAME_SESSION_COMMAND_ID } from './sessionsList.js';
 import { ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { IsWorkspaceGroupCappedContext, SessionsViewFilterOptionsSubMenu, SessionsViewFilterSubMenu, SessionsViewGroupingContext, SessionsViewId, SessionsView, SessionsViewSortingContext, openSessionToTheSide } from './sessionsView.js';
@@ -776,11 +777,47 @@ registerAction2(class UnarchiveSessionAction extends Action2 {
 	}
 });
 
+/**
+ * Resolves which sessions a session command should act on: an explicit argument
+ * wins, then the sessions list's own focus while it owns DOM focus, and finally
+ * the active session so the command still works from a chat surface.
+ */
+function getSessionActionTargets(accessor: ServicesAccessor, context?: ISession | ISession[]): readonly ISession[] {
+	if (context) {
+		return Array.isArray(context) ? context : [context];
+	}
+
+	const focusedSessions = getFocusedSessionListTargets(accessor);
+	if (focusedSessions) {
+		return focusedSessions;
+	}
+
+	const activeSession = accessor.get(ISessionsService).activeSession.get();
+	return activeSession ? [activeSession] : [];
+}
+
+function getFocusedSessionListTargets(accessor: ServicesAccessor): readonly ISession[] | undefined {
+	return accessor.get(IViewsService).getViewWithId<SessionsView>(SessionsViewId)?.sessionsControl?.getFocusedSessions();
+}
+
 registerAction2(class RenameSessionAction extends Action2 {
 	constructor() {
 		super({
-			id: 'sessionsViewPane.renameSession',
+			id: RENAME_SESSION_COMMAND_ID,
 			title: localize2('renameSession', "Rename..."),
+			keybinding: {
+				primary: KeyCode.F2,
+				weight: KeybindingWeight.SessionsContrib,
+				when: ContextKeyExpr.and(
+					IsSessionsWindowContext,
+					ContextKeyExpr.or(
+						// A focused row in the sessions list renames that row in place.
+						ContextKeyExpr.and(FocusedViewContext.isEqualTo(SessionsViewId), WorkbenchListFocusContextKey),
+						// From a chat surface, rename the session the chat belongs to.
+						ContextKeyExpr.and(ChatContextKeys.inChatSession, SessionSupportsRenameContext),
+					),
+				),
+			},
 			menu: [{
 				id: SessionItemContextMenuId,
 				group: '1_edit',
@@ -790,9 +827,19 @@ registerAction2(class RenameSessionAction extends Action2 {
 		});
 	}
 	async run(accessor: ServicesAccessor, context?: ISession | ISession[]): Promise<void> {
-		const session = Array.isArray(context) ? context[0] : context;
+		const focusedSessions = context ? undefined : getFocusedSessionListTargets(accessor);
+		const session = getSessionActionTargets(accessor, context)[0];
 		if (!session || !session.capabilities.supportsRename) {
 			return;
+		}
+		// Invoked on a row the list itself has focused (F2): edit the title in place.
+		// Every other caller — a chat surface, an extension, the command palette —
+		// has no row to edit, so it gets the prompt.
+		if (focusedSessions?.includes(session)) {
+			const view = accessor.get(IViewsService).getViewWithId<SessionsView>(SessionsViewId);
+			if (view?.sessionsControl?.beginRenameSession(session)) {
+				return;
+			}
 		}
 		const quickInputService = accessor.get(IQuickInputService);
 		const sessionsManagementService = accessor.get(ISessionsManagementService);
