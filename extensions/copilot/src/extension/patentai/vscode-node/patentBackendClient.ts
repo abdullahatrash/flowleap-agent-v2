@@ -241,6 +241,17 @@ export interface IPatentBackendRequestOptions {
 	 * like a fresh one.
 	 */
 	readonly bypassReadCache?: boolean;
+	/**
+	 * Run this request without the seam's actionable recovery notifications — the sign-in,
+	 * subscribe, add-keys and trial-budget prompts.
+	 *
+	 * For background work the user never asked for, such as the patent link pills a report renders
+	 * as it opens: a prompt raised behind a document interrupts whatever the user was doing and
+	 * names no action they can connect to it. The typed errors still throw exactly as they do for
+	 * a tool call, so a silent caller stays responsible for the outcome — the link pills degrade to
+	 * the plain publication number. Defaults to false: every tool call keeps its prompts.
+	 */
+	readonly silent?: boolean;
 }
 
 /**
@@ -510,12 +521,14 @@ export class PatentBackendClient implements IPatentBackendClient {
 			responseBytes = byteLength(text);
 
 			if (!response.ok) {
-				this._throwForErrorResponse(response, text, accessToken);
+				this._throwForErrorResponse(response, text, accessToken, options?.silent);
 			}
 
 			const value = text ? JSON.parse(text) as T : undefined as T;
 			backendCached = backendCachedFlag(value);
-			this._noteTrialBudgetLowWarning(value);
+			if (!options?.silent) {
+				this._noteTrialBudgetLowWarning(value);
+			}
 			if (cacheable) {
 				this._cacheSet(cacheKey, value);
 			}
@@ -665,11 +678,22 @@ export class PatentBackendClient implements IPatentBackendClient {
 	}
 
 	/**
+	 * Fire one of the seam's actionable recovery notifications, unless the request asked to stay
+	 * silent ({@link IPatentBackendRequestOptions.silent}). One place decides, so a background
+	 * request can never surprise the user with a prompt they cannot connect to anything they did.
+	 */
+	private _notify(silent: boolean | undefined, fire: () => void): void {
+		if (!silent) {
+			fire();
+		}
+	}
+
+	/**
 	 * Apply the centralized error gating for a non-2xx response — `402` subscription, `400` data-key,
 	 * `401` auth, and `429` rate-limit — always throwing. Preserves the exact typed errors and
 	 * notification UX every tool already depends on; only the `429` branch is new (#89).
 	 */
-	private _throwForErrorResponse(response: Response, text: string, accessToken: string | undefined): never {
+	private _throwForErrorResponse(response: Response, text: string, accessToken: string | undefined, silent: boolean | undefined): never {
 		// Centralized subscription gate: gated patent routes answer
 		// `402 { error: { code: 'subscription_required', upgradeUrl } }` when the user has no
 		// active/trialing subscription. Detect it once here so every tool surfaces a clean
@@ -677,7 +701,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 		if (response.status === 402) {
 			const info = parseSubscriptionRequired(text);
 			if (info) {
-				this._fireSubscriptionRequiredUx(info);
+				this._notify(silent, () => this._fireSubscriptionRequiredUx(info));
 				throw new SubscriptionRequiredError(info.message, info.upgradeUrl);
 			}
 		}
@@ -688,14 +712,14 @@ export class PatentBackendClient implements IPatentBackendClient {
 		if (response.status === 400) {
 			const info = parseDataKeyInvalid(text);
 			if (info) {
-				this._fireDataKeyInvalidUx(info);
+				this._notify(silent, () => this._fireDataKeyInvalidUx(info));
 				throw new DataKeyInvalidError(info.message, info.provider);
 			}
 			// Post-trial: patent data now runs on the user's own keys and none was forwarded
 			// (`data_keys_required`, ADR 0008). Prompt the keys UI once per provider per session.
 			const required = parseDataKeysRequired(text);
 			if (required) {
-				this._fireDataKeysRequiredUx(required);
+				this._notify(silent, () => this._fireDataKeysRequiredUx(required));
 				throw new DataKeysRequiredError(required.message, required.provider);
 			}
 		}
@@ -708,7 +732,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 			const info: AuthRequiredInfo = accessToken
 				? parseAuthRequired(text)
 				: { message: SIGNED_OUT_MESSAGE, signedOut: true };
-			this._fireAuthRequiredUx(info);
+			this._notify(silent, () => this._fireAuthRequiredUx(info));
 			throw new AuthRequiredError(info.message);
 		}
 
@@ -730,7 +754,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 		if (response.status === 429) {
 			const budget = parseTrialDataBudgetExhausted(text);
 			if (budget) {
-				this._fireTrialBudgetExhaustedUx(budget);
+				this._notify(silent, () => this._fireTrialBudgetExhaustedUx(budget));
 				const retryAfterMs = parseRetryAfterMs(response);
 				throw new TrialDataBudgetExhaustedError(
 					budget.message,
@@ -757,7 +781,7 @@ export class PatentBackendClient implements IPatentBackendClient {
 		if (response.status === 503) {
 			const odpKeyMissing = parseOdpKeyMissing(text);
 			if (odpKeyMissing) {
-				this._fireDataKeysRequiredUx(odpKeyMissing);
+				this._notify(silent, () => this._fireDataKeysRequiredUx(odpKeyMissing));
 				throw new DataKeysRequiredError(odpKeyMissing.message, 'uspto', 503);
 			}
 		}

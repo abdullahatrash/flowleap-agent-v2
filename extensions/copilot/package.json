@@ -148,9 +148,17 @@
     "environmentPower",
     "terminalTitle",
     "toolInvocationApproveCombination",
-    "chatSessionCustomizationProvider"
+    "chatSessionCustomizationProvider",
+    "linkPresentation"
   ],
   "contributes": {
+    "linkPresentationProviders": [
+      {
+        "id": "flowleap.patentLinkPresentations",
+        "kind": "resource",
+        "uriPattern": "^(?:[a-z][a-z0-9+.-]*://flowleap\\.patent-ai/patent\\?(?:[^#]*&)?publication=[A-Za-z]{2}[0-9]{4,16}[A-Za-z]?[0-9]?(?:[&#].*)?|https?://patents\\.google\\.com/patent/[A-Za-z]{2}[0-9]{4,16}[A-Za-z]?[0-9]?(?:/[^?#]*)?(?:[?#].*)?|https?://(?:[a-z0-9-]+\\.)*espacenet\\.com/patent/search/family/[0-9]+/publication/[A-Za-z]{2}[0-9]{4,16}[A-Za-z]?[0-9]?(?:[?#].*)?|https?://(?:[a-z0-9-]+\\.)*espacenet\\.com/publicationDetails/[a-zA-Z]+\\?(?:[^#]*&)?CC=[A-Za-z]{2}&(?:[^#]*&)?NR=[0-9]{4,16}[A-Za-z]?[0-9]?(?:[&#].*)?|https?://(?:image-)?ppubs\\.uspto\\.gov/dirsearch-public/print/downloadPdf/[0-9]{4,16}(?:[?#].*)?)$"
+      }
+    ],
     "authentication": [
       {
         "id": "flowleap",
