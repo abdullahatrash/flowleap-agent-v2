@@ -45,7 +45,13 @@ interface SecondReadStub {
 	readonly failure?: string;
 }
 
-function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRead: SecondReadStub = {}) {
+/**
+ * @param rejectInvokeFunctionCall When set, the eligibility check made by this ordinal call to
+ * `invokeFunction` within one save (1 = the report path, 2 = the evidence path, 3 = the working
+ * record path) throws, so a test can simulate that one path being ineligible without stubbing the
+ * real `assertFileOkForTool` machinery.
+ */
+function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRead: SecondReadStub = {}, rejectInvokeFunctionCall?: number) {
 	const files = new MockFileSystemService();
 	const reportsSaved: string[] = [];
 	const log = new class extends mock<ILogService>() { override trace() { } override info() { } override warn() { } override error() { } }();
@@ -53,7 +59,13 @@ function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRe
 	const paths = new PromptPathRepresentationService(workspace);
 	const checked: string[] = [];
 	// The workspace confinement helper is tested independently; this seam records that validation is requested.
-	const instantiation = new class extends mock<IInstantiationService>() { override invokeFunction<R>(): R { checked.push('checked'); return undefined as R; } }();
+	const instantiation = new class extends mock<IInstantiationService>() {
+		override invokeFunction<R>(): R {
+			checked.push('checked');
+			if (checked.length === rejectInvokeFunctionCall) { throw new Error(`File is outside of the workspace, and not open in an editor, and can't be read`); }
+			return undefined as R;
+		}
+	}();
 	const configuration = new class extends mock<IConfigurationService>() {
 		override getNonExtensionConfig<T>(key: string): T | undefined {
 			return (key === 'patent.secondRead.model' ? secondRead.judgeModel : secondRead.setting ?? 'off') as T | undefined;
@@ -115,7 +127,8 @@ describe('candidate report save path', () => {
 		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
 		expect((result.content[0] as LanguageModelTextPart).value).toContain('Successfully wrote');
 		const report = new TextDecoder().decode(await files.readFile(URI.file(input.filePath)));
-		expect({ text: report.includes(claim), exactClaim: report.includes(`publication=${publication}&section=claims&claim=2`), audit: report.includes('1 recorded search outcomes; 1 recorded detail outcomes'), semanticLimit: report.includes('not automatically verified') }).toEqual({ text: true, exactClaim: true, audit: true, semanticLimit: true });
+		const record = new TextDecoder().decode(await files.readFile(URI.file('/workspace/review.working-record.md')));
+		expect({ text: report.includes(claim), exactClaim: report.includes(`publication=${publication}&section=claims&claim=2`), audit: report.includes('1 recorded search outcomes; 1 recorded detail outcomes'), recordAudit: record.includes('1 recorded search outcomes; 1 recorded detail outcomes'), semanticLimit: report.includes('not automatically verified'), recordSemanticLimit: record.includes('not automatically verified') }).toEqual({ text: true, exactClaim: true, audit: false, recordAudit: true, semanticLimit: false, recordSemanticLimit: true });
 		const turn: ReportCompletionTurn = { message: 'Search for prior art and save /workspace/review.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(input) }] }], results: { write: result } };
 		expect(await checkPriorArtReportCompletion([], turn, files)).toBeUndefined();
 	});
@@ -177,8 +190,11 @@ describe('candidate report save path', () => {
 		await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
 		const revised = await tool.invoke({ input: { ...input, stopReason: 'Corrected stopping rationale' }, toolInvocationToken: undefined }, CancellationToken.None);
 		const report = new TextDecoder().decode(await files.readFile(URI.file(input.filePath)));
-		const companions = (await files.readDirectory(URI.file('/workspace'))).filter(([name]) => name.endsWith('.evidence.json')).map(([name]) => name);
-		expect({ wrappers: report.match(/# Prior Art Candidate Review/g)?.length, corrected: report.includes('Corrected stopping rationale'), stale: report.includes('First candidate draft'), companions: companions.length, named: (revised.content[0] as LanguageModelTextPart).value.includes(companions[0]), checks: checked.length }).toEqual({ wrappers: 1, corrected: true, stale: false, companions: 1, named: true, checks: 4 });
+		const names = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name);
+		const companions = names.filter(name => name.endsWith('.evidence.json'));
+		const record = new TextDecoder().decode(await files.readFile(URI.file('/workspace/report.working-record.md')));
+		// The record carries no companion id, so a refinement replaces the one the run before it left.
+		expect({ wrappers: report.match(/# Prior Art Candidate Review/g)?.length, corrected: report.includes('Corrected stopping rationale'), stale: report.includes('First candidate draft'), companions: companions.length, named: (revised.content[0] as LanguageModelTextPart).value.includes(companions[0]), checks: checked.length, records: names.filter(name => name.endsWith('.working-record.md')), recordNamesReport: record.includes('Companion to [report.md](report.md)') }).toEqual({ wrappers: 1, corrected: true, stale: false, companions: 1, named: true, checks: 6, records: ['report.working-record.md'], recordNamesReport: true });
 	});
 	it('states the chat summary contract above a receipt the completion check still parses', async () => {
 		const { tool, files } = setup();
@@ -194,6 +210,50 @@ describe('candidate report save path', () => {
 		}).toEqual({ contract: true, certainty: true, receipts: 1, completion: undefined });
 	});
 
+	it('writes the working record beside the report and names it in both the report and the result', async () => {
+		const { tool, files } = setup();
+		const input = { filePath: 'outputs/prior-art-review.md', template: 'prior-art-report' as const, content: '', subject: 'Quick release skewers', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Interim review.'], stopReason: 'Bounded interim result.' };
+		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+		const report = new TextDecoder().decode(await files.readFile(URI.file('/workspace/outputs/prior-art-review.md')));
+		const record = new TextDecoder().decode(await files.readFile(URI.file('/workspace/outputs/prior-art-review.working-record.md')));
+		expect({
+			resultLine: (result.content[0] as LanguageModelTextPart).value.split('\n').find(line => line.startsWith('Working record: ')),
+			pointer: report.split('\n').find(line => line.startsWith('Working record: ')),
+			title: record.split('\n')[0],
+			sections: record.split('\n').filter(line => line.startsWith('## ')),
+		}).toEqual({
+			resultLine: 'Working record: outputs/prior-art-review.working-record.md',
+			pointer: 'Working record: [prior-art-review.working-record.md](prior-art-review.working-record.md) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.',
+			title: '# Working record — Quick release skewers',
+			sections: ['## Search log', '## Retrieved but not read', '## Second read', '## Wording review', '## Provenance'],
+		});
+	});
+
+	it('still saves the report and evidence when the working record path is ineligible, and states no working record', async () => {
+		// The third eligibility check of a structured save is the working record's own path; making it
+		// throw must not cost the deliverable, which the report and evidence checks (1st and 2nd) already
+		// passed and whose files are written before the working record is attempted.
+		const { tool, files } = setup(unrecordedPatentLedger, {}, 3);
+		const input = { filePath: 'outputs/prior-art-review.md', template: 'prior-art-report' as const, content: '', subject: 'Quick release skewers', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Interim review.'], stopReason: 'Bounded interim result.' };
+		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+		const message = (result.content[0] as LanguageModelTextPart).value;
+		const report = new TextDecoder().decode(await files.readFile(URI.file('/workspace/outputs/prior-art-review.md')));
+		const names = (await files.readDirectory(URI.file('/workspace/outputs'))).map(([name]) => name);
+		expect({
+			saved: message.startsWith('Successfully wrote patent results to outputs/prior-art-review.md'),
+			resultLine: message.split('\n').find(line => line.startsWith('Working record: ')),
+			pointer: report.split('\n').find(line => line.startsWith('Working record: ')),
+			evidenceWritten: names.some(name => name.endsWith('.evidence.json')),
+			recordWritten: names.some(name => name.endsWith('.working-record.md')),
+		}).toEqual({
+			saved: true,
+			resultLine: undefined,
+			pointer: 'Working record: [prior-art-review.working-record.md](prior-art-review.working-record.md) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.',
+			evidenceWritten: true,
+			recordWritten: false,
+		});
+	});
+
 	it('reports flagged wording above the summary contract and leaves the receipt line alone', async () => {
 		const { tool } = setup();
 		const input = { filePath: '/workspace/review.md', template: 'prior-art-report' as const, content: '', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Claim 1 is novel over the retrieved art.'], stopReason: 'The reference teaches away from the combination.' };
@@ -204,7 +264,7 @@ describe('candidate report save path', () => {
 			contract: lines[2].startsWith('Chat summary contract: '),
 			receipts: lines.filter(line => line.startsWith('Prior-art artifact receipt: ')).length,
 		}).toEqual({
-			wording: 'Wording review: 2 phrase(s) flagged in the report\'s generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.',
+			wording: 'Wording review: 2 phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.',
 			contract: true,
 			receipts: 1,
 		});
@@ -237,16 +297,22 @@ describe('candidate report save path', () => {
 			return report.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, 'COMPANION');
 		}
 
-		async function save(secondRead: SecondReadStub): Promise<{ files: MockFileSystemService; report: string; lines: string[]; turn: ReportCompletionTurn }> {
+		async function save(secondRead: SecondReadStub): Promise<{ files: MockFileSystemService; report: string; record: string; lines: string[]; turn: ReportCompletionTurn }> {
 			const { tool, files } = setup(judgedLedger, secondRead);
 			await withRequest(tool);
 			const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
 			const turn: ReportCompletionTurn = { message: 'Search for prior art and save /workspace/review.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(input) }] }], results: { write: result } };
-			return { files, report: new TextDecoder().decode(await files.readFile(URI.file(input.filePath))), lines: (result.content[0] as LanguageModelTextPart).value.split('\n'), turn };
+			return {
+				files,
+				report: new TextDecoder().decode(await files.readFile(URI.file(input.filePath))),
+				record: new TextDecoder().decode(await files.readFile(URI.file('/workspace/review.working-record.md'))),
+				lines: (result.content[0] as LanguageModelTextPart).value.split('\n'),
+				turn,
+			};
 		}
 
 		it('judges each element of a saved row and records the verdicts beside the evidence companion', async () => {
-			const { files, report, lines } = await save({ setting: 'log', reply: [combinationVerdicts, headVerdicts] });
+			const { files, report, record, lines } = await save({ setting: 'log', reply: [combinationVerdicts, headVerdicts] });
 			const names = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name);
 			const verdictName = names.find(name => name.endsWith('.second-read.json'))!;
 			const evidenceName = names.find(name => name.endsWith('.evidence.json'))!;
@@ -260,6 +326,7 @@ describe('candidate report save path', () => {
 				firstRowVerdicts: recorded.rows[0].verdicts,
 				summary: recorded.summary,
 				inReport: report.includes('Second read'),
+				inRecord: record.includes('Second read by judge-model: 4 elements judged, 1 not confirmed, 0 unclear, 0 unparsed.'),
 			}).toEqual({
 				line: `Second read (diagnostic): 4 elements judged, 1 disagree, 0 unclear, 0 unparsed; verdicts in ${verdictName}.`,
 				contract: true,
@@ -269,6 +336,7 @@ describe('candidate report save path', () => {
 				firstRowVerdicts: [{ element: 'a skewer rod', verdict: 'agree', reason: 'The claim recites a skewer rod.' }, { element: 'a cam profile carried on the handle stem', verdict: 'disagree', reason: 'The quoted claim puts the cam surface in the head portion.' }],
 				summary: { elements: 4, agree: 3, disagree: 1, unclear: 0, unparsed: 0 },
 				inReport: false,
+				inRecord: true,
 			});
 		});
 
@@ -280,18 +348,18 @@ describe('candidate report save path', () => {
 			expect({ identical: withoutCompanionId(logged.report) === withoutCompanionId(disabled.report), line: disabled.lines[1].startsWith('Chat summary contract: ') }).toEqual({ identical: true, line: true });
 		});
 
-		it('states what was not confirmed under the affected row only, once in the limitations, and receipts the final bytes', async () => {
-			const { files, report, lines, turn } = await save({ setting: 'render', reply: [combinationVerdicts, headVerdicts] });
-			const [, combination, heads] = report.split('### ');
+		it('states what was not confirmed in the working record, keeps it out of the report, and receipts the final bytes', async () => {
+			const { files, report, record, lines, turn } = await save({ setting: 'render', reply: [combinationVerdicts, headVerdicts] });
+			const [, combination] = record.split('### ');
 			const receipt = JSON.parse(lines.find(line => line.startsWith('Prior-art artifact receipt: '))!.slice('Prior-art artifact receipt: '.length));
 			const written = await files.readFile(URI.file(input.filePath));
 			expect({
 				heading: combination.split('\n')[0],
 				block: combination.includes("Second read (generated, judge-model): the following elements were not confirmed by an independent read of the cited text; the row's status is the author's judgment."),
 				verdict: combination.includes('- a cam profile carried on the handle stem: disagree — The quoted claim puts the cam surface in the head portion.'),
-				beforeGap: combination.indexOf('Second read (generated') < combination.indexOf('Remaining gap (model judgment)'),
-				confirmedRow: heads.includes('Second read (generated'),
-				limitation: report.split('\n').filter(line => line.startsWith('Second read by ')),
+				inReport: report.includes('Second read'),
+				confirmedRow: record.includes('### Skewer heads'),
+				limitation: record.split('\n').filter(line => line.startsWith('Second read by ')),
 				line: lines[1],
 				guidance: lines[2],
 				receiptDigest: receipt.reportDigest === createHash('sha256').update(written).digest('hex'),
@@ -300,7 +368,7 @@ describe('candidate report save path', () => {
 				heading: 'Quick release combination',
 				block: true,
 				verdict: true,
-				beforeGap: true,
+				inReport: false,
 				confirmedRow: false,
 				limitation: ['Second read by judge-model: 4 elements judged, 1 not confirmed, 0 unclear, 0 unparsed.'],
 				line: 'Second read (judge-model): 4 elements judged, 1 not confirmed. Not confirmed: Quick release combination / a cam profile carried on the handle stem — The quoted claim puts the cam surface in the head portion.',
@@ -323,7 +391,7 @@ describe('candidate report save path', () => {
 		});
 
 		it('saves the report and reports a skip when the judge request fails', async () => {
-			const { files, lines } = await save({ setting: 'render', failure: 'judge unavailable' });
+			const { files, record, lines } = await save({ setting: 'render', failure: 'judge unavailable' });
 			const names = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name);
 			expect({
 				saved: lines[0],
@@ -331,7 +399,7 @@ describe('candidate report save path', () => {
 				contract: lines[2].startsWith('Chat summary contract: '),
 				receipts: lines.filter(line => line.startsWith('Prior-art artifact receipt: ')).length,
 				verdictFiles: names.filter(name => name.endsWith('.second-read.json')).length,
-				limitation: new TextDecoder().decode(await files.readFile(URI.file(input.filePath))).includes('Second read: skipped (judge unavailable).'),
+				limitation: record.includes('Second read: skipped (judge unavailable).'),
 			}).toEqual({
 				saved: 'Successfully wrote patent results to /workspace/review.md',
 				line: 'Second read (diagnostic): skipped (judge unavailable).',

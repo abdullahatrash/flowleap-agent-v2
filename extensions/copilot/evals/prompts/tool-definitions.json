@@ -917,7 +917,7 @@
     "type": "function",
     "function": {
       "name": "write_patent_results",
-      "description": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, coverage, limitations and stopReason. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. Free-form saves (no template) retain their existing behavior.",
+      "description": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. Free-form saves (no template) retain their existing behavior.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -958,6 +958,57 @@
           "searchStrategy": {
             "type": "string",
             "description": "Confirmed search scope and cutoff basis, sources and strategy. Actual query/count history is generated from recorded executions for prior-art-report; identify unavailable or unsearched sources in limitations."
+          },
+          "concepts": {
+            "type": "array",
+            "description": "prior-art-report: the concept-synonym table the search was built from — every core concept with the synonyms, technical equivalents and related terms actually used in queries. The report renders it as its \"Concepts searched\" section; an attorney judging whether a search was competent reads it first.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "concept": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "One core concept of the invention, in the words the search used."
+                },
+                "synonyms": {
+                  "type": "array",
+                  "description": "The synonyms, technical equivalents and related terms actually used in queries for that concept.",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "concept",
+                "synonyms"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "classifications": {
+            "type": "array",
+            "description": "prior-art-report: the CPC/IPC codes the search covered, each with its meaning in plain words. The report renders them as its \"Classifications searched\" section.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The CPC or IPC code, e.g. \"A61K 6/00\"."
+                },
+                "meaning": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "What that code covers, in plain words."
+                }
+              },
+              "required": [
+                "code",
+                "meaning"
+              ],
+              "additionalProperties": false
+            }
           },
           "challengedPublication": {
             "type": "string",

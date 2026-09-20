@@ -8,7 +8,7 @@ import { MockFileSystemService } from '../../../../platform/filesystem/node/test
 import { mock } from '../../../../util/common/test/simpleMock';
 import { URI } from '../../../../util/vs/base/common/uri';
 import { evidenceAnchor, PatentExecutionLedger } from '../../../patentai/vscode-node/patentExecutionLedger';
-import { renderCandidateReview, validateCandidateReview, PatentCandidateReview } from '../patentCandidateReview';
+import { renderWorkingRecord, validateCandidateReview, PatentCandidateReview } from '../patentCandidateReview';
 
 class LedgerFiles extends MockFileSystemService {
 	readonly committed: URI[] = [];
@@ -36,7 +36,7 @@ describe('durable patent execution audit', () => {
 		await Promise.all(Array.from({ length: 9 }, (_, i) => ledger.record(session, { kind: 'search', status: i === 8 ? 'failed' : 'succeeded', query: `sanitized query ${i + 1}`, ...(i === 7 ? { total: 0, returned: 0, publicationIds: [] } : {}) })));
 		const snapshot = await new PatentExecutionLedger(context, files).read(session);
 		expect({ outcomes: snapshot.executions.length, failed: snapshot.executions.filter(row => row.status === 'failed').length, zero: snapshot.executions.filter(row => row.total === 0).length }).toEqual({ outcomes: 9, failed: 1, zero: 1 });
-		expect(renderCandidateReview(review, snapshot, 'evidence.json')).toContain('9 recorded search outcomes');
+		expect(renderWorkingRecord(review, snapshot, 'review.md', 'evidence.json', undefined)).toContain('9 recorded search outcomes');
 		expect((await ledger.read(URI.parse('vscode-chat-session://two'))).executions).toEqual([]);
 	});
 

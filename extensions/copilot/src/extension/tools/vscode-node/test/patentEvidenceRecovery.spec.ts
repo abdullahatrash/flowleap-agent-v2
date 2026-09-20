@@ -7,7 +7,7 @@ import MarkdownIt from 'markdown-it';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { lookupPatentEvidence } from '../patentEvidenceLookup';
-import { materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from '../patentCandidateReview';
+import { materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
@@ -49,19 +49,19 @@ const scoped: PatentExecutionSnapshot = { limitation: 'Recorded outcomes only.',
 describe('prior-art evidence recovery and review contract', () => {
 	it('renders source claim numbers literally without continuing a Markdown list', () => {
 		const row = { ...combination, sourceAnchors: snapshot.executions[0].sources!.slice(0, 2).map(source => source.anchor), evidence: snapshot.executions[0].sources!.slice(0, 2).map(source => ({ anchor: source.anchor, quote: source.text!, scope: 'Quoted claim only.', qualifiers: 'Unresolved.', quantityBasis: 'Original units.' })) };
-		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'evidence.json'));
+		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'review.working-record.md'));
 		expect({ orderedList: html.includes('<ol'), literalClaim10: html.includes('10. A dental'), literalClaim8: html.includes('8. A composition'), reviewOutsideQuote: /<\/blockquote>\s*<p>Source review/.test(html) }).toEqual({ orderedList: false, literalClaim10: true, literalClaim8: true, reviewOutsideQuote: true });
 	});
 	it('discloses missing formula images and treats source markup as literal text', () => {
 		const source = snapshot.executions[0].sources![0];
 		const row = { ...combination, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: '10. A sensor with <img class="EMIRef" id="formula" /> and <script>text</script>, **optional** feedback.', scope: 'Claim.', qualifiers: 'Missing formula.', quantityBasis: 'None.' }] };
-		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'evidence.json'));
+		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'review.working-record.md'));
 		expect({ image: html.includes('<img'), script: html.includes('<script>'), notice: html.includes('Formula/image unavailable'), literal: html.includes('**optional**'), original: html.includes('Consult the original document') }).toEqual({ image: false, script: false, notice: true, literal: true, original: true });
 	});
 	it('preserves indented subparagraphs without displaying Markdown escapes', () => {
 		const source = snapshot.executions[0].sources![0];
 		const row = { ...combination, sourceAnchors: [source.anchor], evidence: [{ anchor: source.anchor, quote: '    7. A-B < 5\n\n\t(a) **optional** feedback.', scope: 'Claim.', qualifiers: 'Optional.', quantityBasis: 'Original.' }] };
-		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'evidence.json'));
+		const html = new MarkdownIt({ html: true }).render(renderCandidateReview({ ...review, coverage: [row] }, snapshot, 'review.working-record.md'));
 		expect({ escapedNumber: html.includes('7\\.'), literal: html.includes('7. A-B &lt; 5'), code: html.includes('<code>'), optional: html.includes('**optional**') }).toEqual({ escapedNumber: false, literal: true, code: false, optional: true });
 	});
 	it('copies a missing numbered-claim quote from its source but never substitutes a whole description', () => {
@@ -87,7 +87,7 @@ describe('prior-art evidence recovery and review contract', () => {
 		const complete = { ...review, coverage: [row, combination] };
 		const incomplete = { ...review, coverage: [{ ...row, evidence: [{ ...evidence, quote: fragment }] }, combination] };
 		const expanded = materializeCandidateReview(incomplete, snapshot);
-		expect({ rejected: (expanded.coverage![0] as typeof row).evidence![0].quote === quote && validateCandidateReview(expanded, snapshot).length === 0, errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'evidence.json')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
+		expect({ rejected: (expanded.coverage![0] as typeof row).evidence![0].quote === quote && validateCandidateReview(expanded, snapshot).length === 0, errors: validateCandidateReview(complete, snapshot), retains: new MarkdownIt({ html: true }).render(renderCandidateReview(complete, snapshot, 'review.working-record.md')).includes(quote) }).toEqual({ rejected: true, errors: [], retains: true });
 	});
 	it.each([
 		['a sentence-final period', 'Scope checked against [claim 10](URL).'],
@@ -108,7 +108,7 @@ describe('prior-art evidence recovery and review contract', () => {
 		const row: PatentCandidateReview['coverage'] = [{ feature: 'Essential combination', kind: 'combination', importance: 'essential', status: 'unresolved', gap: 'No source recorded.' }];
 		const draft = { ...review, coverage: row };
 		expect(validateCandidateReview(draft, snapshot)).toEqual([]);
-		expect(renderCandidateReview(draft, snapshot, 'evidence.json')).toContain('No supported conclusion is established');
+		expect(renderCandidateReview(draft, snapshot, 'review.working-record.md')).toContain('No supported conclusion is established');
 	});
 
 	it('rejects bibliography-only feature support even when its quotation matches', () => {
@@ -124,14 +124,14 @@ describe('prior-art evidence recovery and review contract', () => {
 	});
 
 	it('discloses the uncited Japanese document, the claims-only basis, the unreviewed tail and the missing classification query', () => {
-		const rendered = renderCandidateReview(claimsOnly, retrieval, 'evidence.json');
+		const rendered = renderCandidateReview(claimsOnly, retrieval, 'review.working-record.md');
 		expect({
 			table: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en |'),
 			uncited: rendered.includes('| JP2001010910A | 2001-01-16 | Japanese filler | claims | ja (not in English; any reading of it in this report is the model\'s own translation) |'),
 			count: rendered.includes('- 1 of 2 retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.'),
 			language: rendered.includes('- Retrieved text is not in English for JP2001010910A (ja); any quotation or reading of those documents in this report is the model\'s own translation'),
 			claimsOnly: rendered.includes('- No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: WO9951190A1.'),
-			tail: rendered.includes('- Query 1 returned 10 of 33 matches; the remaining 23 were not retrieved.'),
+			tail: rendered.includes('- Search set 1 returned 10 of 33 matches; the remaining 23 were not retrieved.'),
 			classification: rendered.includes('- No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.'),
 		}).toEqual({ table: true, uncited: true, count: true, language: true, claimsOnly: true, tail: true, classification: true });
 	});
@@ -139,7 +139,7 @@ describe('prior-art evidence recovery and review contract', () => {
 	it('stays silent when every document is cited, a description is quoted, the tail is exhausted and a class was searched', () => {
 		const searched = { ...retrieval.executions[0], query: 'ta=dental AND ic=A61K', total: 10, returned: 10 };
 		const cited = { ...combination, sourceAnchors: ['WO9951190A1:claims:10:en', 'WO9951190A1:description:en', 'JP2001010910A:claims:1:ja'] };
-		const rendered = renderCandidateReview({ ...review, coverage: [cited] }, { ...retrieval, executions: [searched, ...retrieval.executions.slice(1)] }, 'evidence.json');
+		const rendered = renderCandidateReview({ ...review, coverage: [cited] }, { ...retrieval, executions: [searched, ...retrieval.executions.slice(1)] }, 'review.working-record.md');
 		expect({
 			cited: rendered.includes('Every retrieved document is cited in at least one coverage row.'),
 			count: rendered.includes('retrieved documents are not cited'),
@@ -152,7 +152,7 @@ describe('prior-art evidence recovery and review contract', () => {
 
 	it('merges the backend dotted id and the source publication number into one inventory row', () => {
 		const dotted = { ...retrieval, executions: [retrieval.executions[0], { ...retrieval.executions[1], publicationIds: ['WO9951190.A1'] }, ...retrieval.executions.slice(2)] };
-		const rendered = renderCandidateReview(claimsOnly, dotted, 'evidence.json');
+		const rendered = renderCandidateReview(claimsOnly, dotted, 'review.working-record.md');
 		expect({
 			rows: (rendered.match(/^\| WO9951190/gm) ?? []).length,
 			merged: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en |'),
@@ -164,7 +164,7 @@ describe('prior-art evidence recovery and review contract', () => {
 		const row = { ...combination, status: 'partial' as const, sourceAnchors: ['US5356951A:claims:1:en'], gap: 'Reached through a cited reference only.',
 			evidence: [{ anchor: 'US5356951A:claims:1:en', quote: usClaim, scope: 'Independent claim 1.', qualifiers: 'Apparatus claim only.', quantityBasis: 'No quantity recited.' }],
 			elements: [{ element: 'composite filler reservoir', anchor: 'US5356951A:claims:1:en', disclosedBy: 'composite filler reservoir' }, { element: 'photocurable monomer' }] };
-		const rendered = renderCandidateReview({ ...review, coverage: [row] }, scoped, 'evidence.json');
+		const rendered = renderCandidateReview({ ...review, coverage: [row] }, scoped, 'review.working-record.md');
 		expect({
 			header: rendered.includes('| Publication | Publication date | Title | Text language | Scope |'),
 			outside: rendered.includes('| US5356951A | 1994-10-18 | Examiner X reference | en | outside searched jurisdictions (US) |'),
@@ -176,7 +176,7 @@ describe('prior-art evidence recovery and review contract', () => {
 	});
 
 	it('discloses no scope at all when no recorded search applied a jurisdiction filter', () => {
-		const rendered = renderCandidateReview(claimsOnly, retrieval, 'evidence.json');
+		const rendered = renderCandidateReview(claimsOnly, retrieval, 'review.working-record.md');
 		expect({
 			column: rendered.includes('| Text language | Scope |'),
 			limitation: rendered.includes('Outside the searched jurisdictions'),
@@ -186,14 +186,16 @@ describe('prior-art evidence recovery and review contract', () => {
 
 	it('renders the framing and obviousness phrases as a wording review instead of failing the save', () => {
 		const framed = { ...review, objective: 'Prior-art search and patentability evaluation.', stopReason: 'No single reference or obvious combination discloses it.' };
-		const rendered = renderCandidateReview(framed, snapshot, 'evidence.json');
+		const rendered = renderWorkingRecord(framed, snapshot, 'review.md', 'evidence.json', undefined);
 		expect({
 			errors: validateCandidateReview(framed, snapshot),
-			heading: rendered.includes('## Wording review (generated)'),
+			heading: rendered.includes('## Wording review'),
+			inReport: renderCandidateReview(framed, snapshot, 'review.working-record.md').includes('Wording review'),
 			phrases: rendered.split('\n').filter(line => line.startsWith('- "')),
 		}).toEqual({
 			errors: [],
 			heading: true,
+			inReport: false,
 			phrases: ['- "patentability evaluation" in objective', '- "obvious combination" in stopReason'],
 		});
 	});
@@ -203,12 +205,12 @@ describe('prior-art evidence recovery and review contract', () => {
 		const disclaimer = { ...review, limitations: ['Retrieval does not establish that any claim is novel.', 'This review does not assess patentability, anticipation or obviousness.', 'No novelty determination is made here.', 'Patentability is a legal question for counsel; this review does not constitute a patentability opinion.', 'This report is prior-art research support, not a legal patentability or freedom-to-operate opinion; conclusions on novelty or inventive step should be confirmed by qualified patent counsel.'] };
 		expect({
 			errors: validateCandidateReview(conclusions, snapshot),
-			flagged: renderCandidateReview(conclusions, snapshot, 'evidence.json').split('\n').filter(line => line.startsWith('- "')),
-			exempt: renderCandidateReview(disclaimer, snapshot, 'evidence.json').includes('## Wording review (generated)'),
+			flagged: renderWorkingRecord(conclusions, snapshot, 'review.md', 'evidence.json', undefined).split('\n').filter(line => line.startsWith('- "')),
+			exempt: renderWorkingRecord(disclaimer, snapshot, 'review.md', 'evidence.json', undefined).includes('No phrases flagged.'),
 		}).toEqual({
 			errors: [],
 			flagged: ['- "is novel" in limitations[0]', '- "teaches away" in stopReason'],
-			exempt: false,
+			exempt: true,
 		});
 	});
 
@@ -272,7 +274,7 @@ describe('prior-art evidence recovery and review contract', () => {
 
 	it('renders the element map with the literal fragment and marks an undisclosed element', () => {
 		const row = { ...supported, status: 'partial' as const, gap: 'The initiator is not recited as photocurable.', elements: [supported.elements[1], { element: 'photocurable / light-curing initiator' }] };
-		const rendered = renderCandidateReview({ ...review, coverage: [row, combination] }, snapshot, 'evidence.json');
+		const rendered = renderCandidateReview({ ...review, coverage: [row, combination] }, snapshot, 'review.working-record.md');
 		expect({
 			header: rendered.includes('| Element | Disclosed by | Source |'),
 			disclosed: rendered.includes('| polymerization initiator | `parts by weight initiator` | [WO9951190A1:claims:10:en](flowleap://flowleap.patent-ai/patent?publication=WO9951190A1&section=claims&claim=10) |'),
