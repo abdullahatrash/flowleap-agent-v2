@@ -38,6 +38,12 @@ import { ExtensionContributedChatTokenizer } from './extChatTokenizer';
  */
 export interface ExtensionLanguageModelRequestOptions extends OTelModelOptions {
 	readonly _conversationId?: string;
+	/**
+	 * Opts this request into encrypted reasoning. `vscode.lm` exposes the typed
+	 * `includeEncryptedThinking` option only to core, so an extension consumer has to ask for it
+	 * through this bag instead.
+	 */
+	readonly _includeEncryptedThinking?: boolean;
 }
 
 enum ChatImageMimeType {
@@ -214,6 +220,12 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 				_otelTraceContext: activeTraceCtx ?? null,
 				...(telemetryTurn !== undefined ? { _telemetryTurn: telemetryTurn } : {}),
 				...(conversationId !== undefined ? { _conversationId: conversationId } : {}),
+				// Always ask for encrypted reasoning. This is a statement about us, not about the
+				// provider: we round-trip whatever we are given through the thinking envelope, which
+				// records the producing API so only the API that issued a payload is ever replayed it.
+				// Which protocol is in use is decided on the far side of this boundary, so gating here
+				// would have to guess, and guessing wrong drops reasoning the model already paid for.
+				_includeEncryptedThinking: true,
 			} satisfies ExtensionLanguageModelRequestOptions
 		};
 
