@@ -3954,10 +3954,10 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		return key ? this._chatToolConfirmationCarousels.get(key) : undefined;
 	}
 
-	renderToolConfirmationCarousel(tool: IChatToolInvocation, factory: ToolInvocationPartFactory, subAgentInvocationId?: string, agentName?: string, scrollToSubagent?: ScrollToSubagentCallback, toolPart?: ChatToolInvocationPart): ChatToolConfirmationCarouselPart {
+	renderToolConfirmationCarousel(tool: IChatToolInvocation, factory: ToolInvocationPartFactory, subAgentInvocationId?: string, subagentTitle?: string, scrollToSubagent?: ScrollToSubagentCallback, toolPart?: ChatToolInvocationPart): ChatToolConfirmationCarouselPart {
 		const existing = this._currentToolConfirmationCarousel;
 		if (existing) {
-			existing.addToolInvocation(tool, subAgentInvocationId, agentName, scrollToSubagent, toolPart);
+			existing.addToolInvocation(tool, subAgentInvocationId, subagentTitle, scrollToSubagent, toolPart);
 			this.updateToolConfirmationCarouselMaxHeight();
 			return existing;
 		}
@@ -3967,8 +3967,8 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 			throw new Error('Cannot render tool confirmation carousel without an active session');
 		}
 
-		const part = new ChatToolConfirmationCarouselPart(factory, [], scrollToSubagent, subAgentInvocationId, agentName);
-		part.addToolInvocation(tool, subAgentInvocationId, agentName, scrollToSubagent, toolPart);
+		const part = new ChatToolConfirmationCarouselPart(factory, [], scrollToSubagent, subAgentInvocationId, subagentTitle);
+		part.addToolInvocation(tool, subAgentInvocationId, subagentTitle, scrollToSubagent, toolPart);
 		this._chatToolConfirmationCarousels.set(key, part);
 		dom.append(this.chatToolConfirmationCarouselContainer, part.domNode);
 		dom.show(this.chatToolConfirmationCarouselContainer);
@@ -3986,13 +3986,13 @@ export class ChatInputPart extends Disposable implements IHistoryNavigationWidge
 		return part;
 	}
 
-	addToolToConfirmationCarousel(tool: IChatToolInvocation, factory: ToolInvocationPartFactory, subAgentInvocationId?: string, agentName?: string, scrollToSubagent?: ScrollToSubagentCallback, toolPart?: ChatToolInvocationPart): void {
+	addToolToConfirmationCarousel(tool: IChatToolInvocation, factory: ToolInvocationPartFactory, subAgentInvocationId?: string, subagentTitle?: string, scrollToSubagent?: ScrollToSubagentCallback, toolPart?: ChatToolInvocationPart): void {
 		const existing = this._currentToolConfirmationCarousel;
 		if (existing) {
-			existing.addToolInvocation(tool, subAgentInvocationId, agentName, scrollToSubagent, toolPart);
+			existing.addToolInvocation(tool, subAgentInvocationId, subagentTitle, scrollToSubagent, toolPart);
 			this.updateToolConfirmationCarouselMaxHeight();
 		} else {
-			this.renderToolConfirmationCarousel(tool, factory, subAgentInvocationId, agentName, scrollToSubagent, toolPart);
+			this.renderToolConfirmationCarousel(tool, factory, subAgentInvocationId, subagentTitle, scrollToSubagent, toolPart);
 		}
 	}
 

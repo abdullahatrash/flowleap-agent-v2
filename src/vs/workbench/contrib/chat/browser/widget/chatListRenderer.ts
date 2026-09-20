@@ -2825,7 +2825,7 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
 			return lastSubagent;
 		}
 
-		// Create a new subagent part - it will extract description/agentName/prompt and watch for completion
+		// Create a new subagent part - it will extract description/agent metadata/prompt and watch for completion
 		const subagentPart = this.instantiationService.createInstance(
 			ChatSubagentContentPart,
 			subagentId,
@@ -2876,7 +2876,7 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
 		}
 
 		const subAgentInvocationId = subagentPart.subAgentInvocationId;
-		const agentName = subagentPart.getAgentLabel();
+		const subagentTitle = subagentPart.getSubagentTitle();
 
 		const scrollToSubagent = (targetSubAgentId: string) => {
 			const currentTemplateData = this.getTemplateDataForRequestId(context.element.id);
@@ -2897,7 +2897,7 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
 		);
 
 		const addToolToCarousel = (tool: IChatToolInvocation) => {
-			widget.inputPart.addToolToConfirmationCarousel(tool, factory, subAgentInvocationId, agentName, scrollToSubagent);
+			widget.inputPart.addToolToConfirmationCarousel(tool, factory, subAgentInvocationId, subagentTitle, scrollToSubagent);
 			const listener = this.createUpdateWorkingProgressOnConfirmationEnd(tool, templateData);
 			if (listener) {
 				templateData.elementDisposables.add(listener);

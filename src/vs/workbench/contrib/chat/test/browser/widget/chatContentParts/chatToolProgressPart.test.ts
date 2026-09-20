@@ -19,6 +19,8 @@ import { TestConfigurationService } from '../../../../../../../platform/configur
 import { workbenchInstantiationService } from '../../../../../../test/browser/workbenchTestServices.js';
 import { IChatMarkdownAnchorService } from '../../../../browser/widget/chatContentParts/chatMarkdownAnchorService.js';
 import { IChatContentPartRenderContext, InlineTextModelCollection } from '../../../../browser/widget/chatContentParts/chatContentParts.js';
+import { ChatToolConfirmationCarouselPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolConfirmationCarouselPart.js';
+import { ChatToolInvocationPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
 import { ChatToolProgressSubPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolProgressPart.js';
 import { ChatToolStreamingSubPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolStreamingSubPart.js';
 import { isMcpToolInvocation } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
@@ -172,6 +174,47 @@ suite('ChatToolProgressSubPart', () => {
 
 	teardown(() => {
 		disposables.dispose();
+	});
+
+	test('confirmation carousel reports the active subagent title and reveals its subagent', () => {
+		const createPendingInvocation = (toolCallId: string): IChatToolInvocation => ({
+			...createToolInvocation(),
+			toolCallId,
+			state: observableValue<IChatToolInvocation.State>(`state-${toolCallId}`, {
+				type: IChatToolInvocation.StateKind.WaitingForConfirmation,
+				parameters: undefined,
+				confirmationMessages: { title: 'Run command?', message: 'Run command?' },
+				confirm: () => { },
+			}),
+		});
+		const createExternalPart = () => {
+			const domNode = mainWindow.document.createElement('div');
+			domNode.className = 'chat-tool-invocation-part';
+			return {
+				domNode,
+				addDisposable: (disposable: { dispose(): void }) => disposables.add(disposable),
+			} as unknown as ChatToolInvocationPart;
+		};
+		const revealed: string[] = [];
+		const carousel = disposables.add(new ChatToolConfirmationCarouselPart(() => {
+			throw new Error('External tool parts should be reused');
+		}, []));
+		carousel.addToolInvocation(createPendingInvocation('first'), 'subagent-one', 'Inspect auth flow', id => revealed.push(id), createExternalPart());
+		carousel.addToolInvocation(createPendingInvocation('second'), 'subagent-two', 'Review current branch', id => revealed.push(id), createExternalPart());
+
+		carousel.activateFirstToolForSubagent('subagent-two');
+		const agentLabel = carousel.domNode.querySelector<HTMLButtonElement>('.chat-tool-carousel-agent-label');
+		agentLabel?.click();
+
+		assert.deepStrictEqual({
+			revealed,
+			text: agentLabel?.textContent,
+			label: agentLabel?.title,
+		}, {
+			revealed: ['subagent-two'],
+			text: '\u2014 Review current branch',
+			label: 'Scroll to Review current branch',
+		});
 	});
 
 	test('detects MCP tool invocations for live and serialized rows', () => {
