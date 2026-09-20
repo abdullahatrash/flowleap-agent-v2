@@ -63,6 +63,8 @@ Retrieve claims with `get_patent_details` (EP/WO). For each potentially blocking
 - **LOW**: significant differences in key elements
 - **NONE**: clear non-infringement
 
+For a structural claim, read the patent's figures (`get_patent_figures`, per the `figure-analysis` skill) before rating an element ❌ absent on text alone — a figure shows how the parts are arranged, not their dimensions.
+
 **Doctrine of equivalents caveat**: escaping LITERAL infringement is not the end — an element performing substantially the same function, in substantially the same way, for substantially the same result can still infringe under the doctrine of equivalents. When a rating rests on ONE differing element, say whether the difference is substantive or merely verbal, and keep the patent at MEDIUM rather than LOW/NONE if it is arguably equivalent.
 
 ## Phase 4: Legal Status Verification
