@@ -364,12 +364,17 @@ export class CopilotLanguageModelWrapper extends Disposable {
 		// may be replayed, rather than having to guess from the payload's id.
 		const originApi = asThinkingOriginApi(endpoint.apiType);
 		const originMetadata = originApi ? thinkingOriginToMetadata(originApi) : undefined;
+		// Restore the opt-in if it came through the internal `modelOptions` bag. Only a core caller
+		// can set the typed option, so an extension consumer reaching a contributed model asks for
+		// encrypted reasoning the same way it passes the conversation id.
+		const includeEncryptedThinking = options.includeEncryptedThinking
+			|| (options as { modelOptions?: ExtensionLanguageModelRequestOptions }).modelOptions?._includeEncryptedThinking === true;
 		const finishCallback: FinishedCallback = async (_text, index, delta): Promise<undefined> => {
 			if (delta.thinking) {
 				if (isEncryptedThinkingDelta(delta.thinking)) {
 					// Encrypted reasoning is opaque protocol state that only helps a consumer able to
 					// replay it, so it crosses the boundary only for a request that asked for it.
-					if (options.includeEncryptedThinking) {
+					if (includeEncryptedThinking) {
 						progress.report(new vscode.LanguageModelThinkingPart(
 							delta.thinking.text ?? '',
 							delta.thinking.id,
