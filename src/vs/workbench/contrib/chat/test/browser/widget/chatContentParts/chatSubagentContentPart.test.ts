@@ -400,6 +400,27 @@ suite('ChatSubagentContentPart', () => {
 			});
 		});
 
+		test('should title a subagent from the extension host by its type', () => {
+			// A Claude session's Task tool arrives through the extension host: its tool id is
+			// the external tool name, and the subagent type rides along as the display name
+			// next to the internal type.
+			const part = createPart(createMockSerializedToolInvocation({
+				toolId: 'Task',
+				toolSpecificData: {
+					kind: 'subagent',
+					description: 'Searching for prior art',
+					agentDisplayName: 'Patent Search',
+					agentName: 'patent-search',
+					prompt: 'Find prior art for the claim',
+				}
+			}), createMockRenderContext(false));
+
+			const button = getCollapseButton(part);
+			assert.ok(button, 'Should have collapse button');
+			const labelElement = getCollapseButtonLabel(button);
+			assert.strictEqual(labelElement?.textContent ?? button.textContent ?? '', 'Patent Search: Searching for prior art');
+		});
+
 		test('should use default prefix when no agent name is provided', () => {
 			const toolInvocation = createMockToolInvocation({
 				toolSpecificData: {

@@ -221,6 +221,27 @@ describe('createFormattedToolInvocation', () => {
 			expect(result).toBeDefined();
 		});
 
+		it('reads the subagent type as a display name for the header', () => {
+			const specialized = createFormattedToolInvocation(createToolUseBlock(ClaudeToolNames.Task, {
+				description: 'Search for prior art',
+				subagent_type: 'patent-search',
+				prompt: 'Find prior art for the claim'
+			}));
+			const untyped = createFormattedToolInvocation(createToolUseBlock(ClaudeToolNames.Task, {
+				description: 'Search for prior art'
+			}));
+
+			expect({
+				specialized: (specialized!.toolSpecificData as ChatSubagentToolInvocationData).agentDisplayName,
+				specializedAgentName: (specialized!.toolSpecificData as ChatSubagentToolInvocationData).agentName,
+				untyped: (untyped!.toolSpecificData as ChatSubagentToolInvocationData).agentDisplayName,
+			}).toEqual({
+				specialized: 'Patent Search',
+				specializedAgentName: 'patent-search',
+				untyped: undefined,
+			});
+		});
+
 		it('formats Agent tool name (renamed from Task in Claude Code v2.1.63)', () => {
 			const toolUse = createToolUseBlock(ClaudeToolNames.Agent, {
 				description: 'Search for files',
