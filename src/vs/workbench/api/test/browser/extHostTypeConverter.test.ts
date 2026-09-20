@@ -6,7 +6,7 @@
 
 import assert from 'assert';
 import * as extHostTypes from '../../common/extHostTypes.js';
-import { ChatAgentResult, LanguageModelChatMessage2, MarkdownString, NotebookCellOutputItem, NotebookData, LanguageSelector, WorkspaceEdit } from '../../common/extHostTypeConverters.js';
+import { ChatAgentResult, ChatToolInvocationPart, LanguageModelChatMessage2, MarkdownString, NotebookCellOutputItem, NotebookData, LanguageSelector, WorkspaceEdit } from '../../common/extHostTypeConverters.js';
 import { isEmptyObject } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IWorkspaceTextEditDto } from '../../common/extHost.protocol.js';
@@ -175,6 +175,27 @@ suite('ExtHostTypeConverter', function () {
 		const dto2 = WorkspaceEdit.from(ws2);
 		const first2 = <IWorkspaceTextEditDto>dto2.edits[0];
 		assert.strictEqual(first2.textEdit.insertAsSnippet, true);
+	});
+
+	test('ChatToolInvocationPart carries the subagent display name to the chat UI', function () {
+
+		// The subagent header titles a specialized subagent by this display name, so it has to
+		// survive the extension host boundary next to the internal agent name.
+		const part = new extHostTypes.ChatToolInvocationPart('Task', 'call-1');
+		const subagentData = new extHostTypes.ChatSubagentToolInvocationData('Searching for prior art', 'patent-search', 'Find prior art for the claim');
+		subagentData.agentDisplayName = 'Patent Search';
+		part.toolSpecificData = subagentData;
+
+		const dto = ChatToolInvocationPart.from(part);
+
+		assert.deepStrictEqual(dto.toolSpecificData, {
+			kind: 'subagent',
+			description: 'Searching for prior art',
+			agentDisplayName: 'Patent Search',
+			agentName: 'patent-search',
+			prompt: 'Find prior art for the claim',
+			result: undefined,
+		});
 	});
 });
 

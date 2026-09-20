@@ -278,15 +278,32 @@ function formatExitPlanModeInvocation(invocation: ChatToolInvocationPart, toolUs
 	invocation.invocationMessage = l10n.t("Here is Claude's plan:\n\n{0}", (toolUse.input as ExitPlanModeInput)?.plan ?? '');
 }
 
+/**
+ * A human-readable label for a subagent type. Claude names a subagent type with an
+ * identifier such as `patent-search`, and the subagent header reads better as
+ * `Patent Search`. Words already capitalized keep their capitals.
+ */
+function subagentDisplayName(subagentType: string | undefined): string | undefined {
+	const words = subagentType?.trim().split(/[-_\s]+/).filter(word => word.length > 0);
+	if (!words?.length) {
+		return undefined;
+	}
+	return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
 function formatTaskInvocation(invocation: ChatToolInvocationPart, toolUse: Anthropic.Beta.Messages.BetaToolUseBlock): void {
 	const description = (toolUse.input as AgentInput)?.description ?? '';
 	invocation.invocationMessage = new MarkdownString(l10n.t("Completed Task: \"{0}\"", description));
 
 	const input = toolUse.input as AgentInput;
-	invocation.toolSpecificData = new ChatSubagentToolInvocationData(
+	const subagentData = new ChatSubagentToolInvocationData(
 		input.description,
 		input.subagent_type,
 		input.prompt);
+	// The header titles the subagent by its type, so give it a readable form of the
+	// internal type name.
+	subagentData.agentDisplayName = subagentDisplayName(input.subagent_type);
+	invocation.toolSpecificData = subagentData;
 }
 
 function formatGenericInvocation(invocation: ChatToolInvocationPart, toolUse: Anthropic.Beta.Messages.BetaToolUseBlock): void {

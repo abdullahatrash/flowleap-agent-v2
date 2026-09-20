@@ -616,6 +616,7 @@ export class ChatToolInvocationPart {
 
 export class ChatSubagentToolInvocationData {
 	description?: string;
+	agentDisplayName?: string;
 	agentName?: string;
 	prompt?: string;
 	result?: string;

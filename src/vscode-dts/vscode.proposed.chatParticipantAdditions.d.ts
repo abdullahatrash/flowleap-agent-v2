@@ -317,6 +317,12 @@ declare module 'vscode' {
 		description?: string;
 
 		/**
+		 * A human-readable name for the subagent type, shown in the subagent's header.
+		 * When it is missing, the header falls back to {@link agentName}.
+		 */
+		agentDisplayName?: string;
+
+		/**
 		 * The name of the subagent being invoked.
 		 */
 		agentName?: string;

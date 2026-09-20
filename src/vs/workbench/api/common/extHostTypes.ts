@@ -3190,6 +3190,8 @@ export class McpToolInvocationContentData {
 
 export class ChatSubagentToolInvocationData {
 	description?: string;
+	/** Human-readable name of the subagent type, shown in the subagent's header. */
+	agentDisplayName?: string;
 	agentName?: string;
 	prompt?: string;
 	result?: string;
@@ -3525,7 +3527,7 @@ export class ChatToolInvocationPart {
 	pastTenseMessage?: string | vscode.MarkdownString;
 	isConfirmed?: boolean;
 	isComplete?: boolean;
-	toolSpecificData?: ChatTerminalToolInvocationData2;
+	toolSpecificData?: ChatTerminalToolInvocationData2 | ChatSubagentToolInvocationData;
 	subAgentInvocationId?: string;
 	subAgentName?: string;
 	presentation?: 'hidden' | 'hiddenAfterComplete' | undefined;

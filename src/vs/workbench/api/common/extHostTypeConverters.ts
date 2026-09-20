@@ -3055,6 +3055,7 @@ export namespace ChatToolInvocationPart {
 			return {
 				kind: 'subagent',
 				description: data.description,
+				agentDisplayName: data.agentDisplayName,
 				agentName: data.agentName,
 				prompt: data.prompt,
 				result: data.result,
