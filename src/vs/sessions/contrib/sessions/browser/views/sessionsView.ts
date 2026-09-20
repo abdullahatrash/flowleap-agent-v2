@@ -218,15 +218,16 @@ export class SessionsView extends ViewPane {
 						this.layoutService.setPartHidden(true, Parts.SIDEBAR_PART);
 					}
 				};
+				// Return the promise so the list knows when the open settled and can
+				// re-issue it with `preserveFocus` when a double-click starts a rename.
 				if (sideBySide) {
 					// Alt-click: open the session to the right of the last visible session in the grid.
 					const session = this.sessionsManagementService.getSession(resource);
 					if (session) {
-						openSessionToTheSide(this.sessionsService, session, { preserveFocus }).then(onOpened).catch(onUnexpectedError);
-						return;
+						return openSessionToTheSide(this.sessionsService, session, { preserveFocus }).then(onOpened).catch(onUnexpectedError);
 					}
 				}
-				this.sessionsService.openSession(resource, { preserveFocus }).then(onOpened).catch(onUnexpectedError);
+				return this.sessionsService.openSession(resource, { preserveFocus }).then(onOpened).catch(onUnexpectedError);
 			},
 		}));
 		this._register(this.onDidChangeBodyVisibility(visible => sessionsControl.setVisible(visible)));

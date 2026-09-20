@@ -226,8 +226,13 @@ export class SessionView extends Disposable implements ISerializableView {
 		this._currentView.value?.focus();
 	}
 
-	startTitleEditing(): void {
-		this._header.startTitleEditing();
+	/**
+	 * Starts an inline rename of the session title in the header. Returns `false`
+	 * when the header cannot host it, so callers can fall back to another rename
+	 * affordance.
+	 */
+	startTitleEditing(): boolean {
+		return this._header.startTitleEditing();
 	}
 
 	selectWorkspace(folderUri: URI, providerId?: string): void {
