@@ -20,7 +20,7 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IActivationTelemetryService } from '../../patentai/vscode-node/activationTelemetryService';
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
-import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, validateCandidateReview } from './patentCandidateReview';
+import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -50,11 +50,22 @@ interface IWritePatentResultsParams extends PatentCandidateReview {
 }
 
 /**
- * How much of the second read the user sees. `off` disables it, `log` records the verdicts in a
- * file beside the evidence companion, and `render` also states in the report what an independent
- * read did not confirm.
+ * How much of the second read the user sees. `off` disables it; `log` and `render` both record the
+ * verdicts in a file beside the evidence companion and state them in the working record, and
+ * `render` additionally names in the tool result what an independent read did not confirm, so the
+ * model has to decide whether to revise a row or defend it.
  */
 type SecondReadMode = 'off' | 'log' | 'render';
+
+/**
+ * The working record beside a report: a stable name, with no companion id, because a later session
+ * on the same matter looks for it by name and a refinement save must replace it rather than leave a
+ * second copy. It is not a `<report>.<uuid>.…` companion, so the superseded-companion sweep never
+ * matches it.
+ */
+function workingRecordPath(reportPath: string): string {
+	return reportPath.replace(/\.md$/i, '') + '.working-record.md';
+}
 
 /**
  * Coverage rows judged by one second read. A report with more rows is judged only in part; the
@@ -154,7 +165,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const snapshot = structuredBody ? await this.ledger.read(options.chatSessionResource) : undefined;
 			const input = snapshot ? materializeCandidateReview(options.input, snapshot) : options.input;
 			if (snapshot) {
-				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
+				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -163,7 +174,11 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// second-read verdicts next to it.
 			const companionId = generateUuid();
 			const evidenceUri = uri.with({ path: uri.path + '.' + companionId + '.evidence.json' });
-			if (snapshot) { await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, evidenceUri)); }
+			const recordUri = uri.with({ path: workingRecordPath(uri.path) });
+			if (snapshot) {
+				await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, evidenceUri));
+				await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, recordUri));
+			}
 			// The report is written once, with the second read already in it, so the receipt covers the
 			// final bytes. A judge failure is caught below and never reaches the save.
 			const mode = this.secondReadMode();
@@ -172,7 +187,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), mode === 'render' ? secondRead : undefined, variant) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), basename(recordUri), variant) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of
@@ -215,6 +230,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				await this.removeSupersededCompanions(uri, evidenceUri);
 			}
 			const verdictFileName = secondRead ? await this.writeSecondReadFile(uri, companionId, secondRead) : undefined;
+			// The record links the verdict file, so it is written after it; losing it must not cost the
+			// report that is already on disk, so a failure is a warning and an unnamed record.
+			const recordWritten = snapshot ? await this.writeWorkingRecord(recordUri, renderWorkingRecord(input, snapshot, basename(uri), basename(evidenceUri), verdictFileName, secondRead)) : false;
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
 
@@ -230,7 +248,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// artifact, so it states what was traced instead of that nothing was.
 			const provenanceResult = !provenance ? '' : template === 'landscape-report' ? this.landscapeResult(content, provenance) : ftoProvenanceResult(content, provenance);
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the report's generated section; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
@@ -334,9 +352,24 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 	}
 
 	/**
+	 * Write the working record beside the report, under its stable name, so a refinement save
+	 * replaces the record of the run it refines. A failure is reported as an unwritten record rather
+	 * than as a failed save: the deliverable it accompanies is already on disk.
+	 */
+	private async writeWorkingRecord(record: URI, document: string): Promise<boolean> {
+		try {
+			await this.fileSystemService.writeFile(record, new TextEncoder().encode(document));
+			return true;
+		} catch (error) {
+			this.logService.warn(`[WritePatentResultsTool] Working record was not written: ${error instanceof Error ? error.message : String(error)}`);
+			return false;
+		}
+	}
+
+	/**
 	 * What the model is told about the second read. `log` reports counts and the file; `render`
-	 * names what was not confirmed, because in that mode the report states it too and the model has
-	 * to decide whether to revise a row or defend it.
+	 * names what was not confirmed, so the model has to decide whether to revise a row or defend it.
+	 * Either way the verdicts themselves are stated in the working record, never in the report.
 	 */
 	private secondReadResult(mode: SecondReadMode, outcome: SecondReadOutcome | undefined, verdictFileName: string | undefined): string {
 		if (!outcome) { return ''; }
@@ -349,7 +382,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		const shown = unconfirmed.slice(0, SECOND_READ_RESULT_LIMIT);
 		// Each reason is its own sentence; the list punctuates itself, so a trailing stop is dropped.
 		const listed = shown.map(item => `${item.feature} / ${item.element} — ${item.reason.trim().replace(/\.$/, '')}`).join('; ')
-			+ (unconfirmed.length > shown.length ? `; and ${unconfirmed.length - shown.length} more in the report` : '');
+			+ (unconfirmed.length > shown.length ? `; and ${unconfirmed.length - shown.length} more in the working record` : '');
 		return `\nSecond read (${outcome.model}): ${elements} elements judged, ${disagree} not confirmed${unclear ? `, ${unclear} unclear` : ''}.`
 			+ (unconfirmed.length ? ` Not confirmed: ${listed}.\nIf a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap.` : '');
 	}

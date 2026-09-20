@@ -72,10 +72,14 @@ const STATUS_PICK_ICONS: Record<DisplayStatus, string> = {
 	'archived': '$(archive)'
 };
 
-/** H2 sections seeded into `notes.md` for each project type. */
+/**
+ * H2 sections seeded into `notes.md` for each project type. A prior-art search keeps only the
+ * headings the notes own: the queries, the relevant references and the gaps of a saved search live
+ * in the generated working record beside its report, and a second copy would only go stale.
+ */
 const NOTES_SECTIONS: Record<ProjectType, string[]> = {
 	'patent-analysis': ['Patent Under Analysis', 'Claim Map', 'Prior Art of Record', 'Findings', 'Open Questions'],
-	'prior-art-search': ['Search Scope', 'Search Queries', 'Relevant References', 'Gaps', 'References'],
+	'prior-art-search': ['Search Scope', 'Notes', 'References'],
 	'freedom-to-operate': ['Product / Feature', 'Blocking Patents', 'Claim Charts', 'Design-Arounds', 'Conclusion'],
 	'patent-landscape': ['Technology Scope', 'Key Players', 'Trends', 'Notable Patents', 'References'],
 	'claim-analysis': ['Claims', 'Element Breakdown', 'Support in Specification', 'Findings', 'Open Questions'],

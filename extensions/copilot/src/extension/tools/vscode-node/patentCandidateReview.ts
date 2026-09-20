@@ -6,7 +6,7 @@
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { SecondReadOutcome, secondReadLimitation, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
-import { PatentEvidenceSource, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 
 /**
@@ -42,6 +42,15 @@ export interface PatentCandidateReview {
 	/** Report prose the template renders outside the appendix; checked like every other model-written field. */
 	readonly objective?: string;
 	readonly searchStrategy?: string;
+	/** The technology the report is about; the working record names it so a later session recognizes the matter. */
+	readonly subject?: string;
+	/**
+	 * The concept-synonym table the queries were built from. An attorney judging whether a search was
+	 * competent reads it first, so the client report shows it instead of leaving it in the session.
+	 */
+	readonly concepts?: readonly { readonly concept: string; readonly synonyms: readonly string[] }[];
+	/** The classification codes the search covered, each with its meaning in plain words. */
+	readonly classifications?: readonly { readonly code: string; readonly meaning: string }[];
 }
 
 /**
@@ -180,11 +189,15 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 		const retrieved = documents.filter(document => document.sectionsWithText.includes('description')).map(document => document.publication);
 		lines.push(`No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: ${retrieved.join(', ') || 'none'}.`);
 	}
-	const searches = snapshot.executions.filter(execution => execution.kind === 'search');
+	const searches = searchExecutions(snapshot);
 	const tails = searches.flatMap((execution, index) => execution.status === 'succeeded' && execution.total !== undefined && execution.returned !== undefined && execution.total > execution.returned
 		? [`Query ${index + 1} returned ${execution.returned} of ${execution.total} matches; the remaining ${execution.total - execution.returned} were not retrieved.`]
 		: []);
 	if (tails.length) { lines.push(tails.join(' ')); }
+	const unrun = unretriedQueries(snapshot);
+	if (unrun.length) {
+		lines.push(`${unrun.length} search(es) could not be run and were not retried: ${unrun.join('; ')}. Coverage those queries would have tested is missing from this report.`);
+	}
 	if (searches.length && !searches.some(execution => CLASSIFICATION_QUERY.test(execution.effectiveQuery ?? execution.query ?? ''))) {
 		lines.push('No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.');
 	}
@@ -195,6 +208,26 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 		lines.push(`Element fragments under ${WEAK_FRAGMENT_LENGTH} characters: ${weak.join(', ')}; short fragments prove little.`);
 	}
 	return lines;
+}
+
+/** The recorded searches, in the order they were run; the client report shows only the succeeded ones. */
+function searchExecutions(snapshot: PatentExecutionSnapshot): readonly PatentExecution[] {
+	return snapshot.executions.filter(execution => execution.kind === 'search');
+}
+
+/** The query text a failed record is named by, so a search that never ran can still be reported. */
+function requestedQuery(execution: PatentExecution): string {
+	return execution.query?.trim() || 'query not recorded';
+}
+
+/**
+ * The distinct queries that failed or were cancelled and never ran successfully afterwards. A query
+ * whose identical text later succeeded was retried, so it costs no coverage and is not reported.
+ */
+function unretriedQueries(snapshot: PatentExecutionSnapshot): readonly string[] {
+	const searches = searchExecutions(snapshot);
+	const succeeded = new Set(searches.filter(execution => execution.status === 'succeeded').map(requestedQuery));
+	return [...new Set(searches.filter(execution => execution.status !== 'succeeded').map(requestedQuery))].filter(query => !succeeded.has(query));
 }
 
 /** Anchor to recorded source, the single index every pass over a snapshot shares. */
@@ -395,6 +428,11 @@ export function candidateWordingReview(review: PatentCandidateReview): string[] 
 	return legalConclusions([
 		['objective', review.objective],
 		['searchStrategy', review.searchStrategy],
+		...(review.concepts ?? []).flatMap(entry => [
+			[`concept "${entry.concept}"`, entry.concept] as const,
+			[`synonyms for "${entry.concept}"`, entry.synonyms.join(', ')] as const,
+		]),
+		...(review.classifications ?? []).map(entry => [`classification ${entry.code}`, entry.meaning] as const),
 		...(review.coverage ?? []).flatMap(row => [
 			[`coverage feature for "${row.feature}"`, row.feature] as const,
 			[`coverage gap for "${row.feature}"`, row.gap] as const,
@@ -510,22 +548,90 @@ function secondReadNotes(row: PatentCoverageRow, secondRead: SecondReadOutcome |
 		...unconfirmed.map(item => `- ${inline(item.element)}: ${item.verdict} — ${inline(item.reason)}`), ''];
 }
 
+/** The recorded language of a document, with the translation notice a non-English text needs. */
+function textLanguage(document: RetrievedDocument): string {
+	return document.language + (untranslated(document) ? ' (not in English; any reading of it in this report is the model\'s own translation)' : '');
+}
+
 /**
- * Compact report appendix; detailed tool outcomes live in the linked JSON evidence companion.
+ * The documents no coverage row cites: the same table under the client report's
+ * "Retrieved but not cited in coverage" and the working record's "Retrieved but not read".
+ */
+function uncitedDocumentTable(uncited: readonly RetrievedDocument[]): string[] {
+	if (!uncited.length) { return ['Every retrieved document is cited in at least one coverage row.']; }
+	return [
+		'| Publication | Publication date | Title | Sections with text | Text language |',
+		'| --- | --- | --- | --- | --- |',
+		...uncited.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, document.sectionsWithText.join(', ') || 'none recorded', textLanguage(document)].map(cell).join(' | ') + ' |'),
+	];
+}
+
+/**
+ * The tool identity the search sets are attributed to. The ledger records no provider, and
+ * `search_patents` is the only tool that records a search outcome, so the column names what was
+ * recorded rather than a database the record cannot confirm.
+ */
+const SEARCH_SOURCE = 'search_patents';
+
+/**
+ * The client-facing strategy table: one row per search that actually ran. A query that could not be
+ * run is a missing-coverage sentence in Limitations, not a row of `unknown` in a table of evidence.
+ */
+function searchSets(snapshot: PatentExecutionSnapshot, documents: readonly RetrievedDocument[]): string[] {
+	const searches = searchExecutions(snapshot).filter(execution => execution.status === 'succeeded');
+	return ['## Search sets',
+		...(searches.length ? [
+			'| Source | Query | Scope | Hits |',
+			'| --- | --- | --- | --- |',
+			...searches.map(execution => '| ' + [SEARCH_SOURCE, execution.effectiveQuery ?? execution.query ?? 'unknown', execution.countryFilter?.length ? execution.countryFilter.join(', ') : 'not filtered', String(execution.total ?? 'unknown')].map(cell).join(' | ') + ' |'),
+			'',
+		] : []),
+		`${searches.length} search sets run; ${documents.length} documents retrieved.`,
+		''];
+}
+
+/** The concept-synonym table, rendered only when the writer was given one. */
+function conceptTable(review: PatentCandidateReview): string[] {
+	if (!review.concepts?.length) { return []; }
+	return ['## Concepts searched',
+		'| Concept | Synonyms and variations |',
+		'| --- | --- |',
+		...review.concepts.map(entry => '| ' + [entry.concept, entry.synonyms.join(', ')].map(cell).join(' | ') + ' |'),
+		''];
+}
+
+/** The classification map, rendered only when the writer was given one. */
+function classificationTable(review: PatentCandidateReview): string[] {
+	if (!review.classifications?.length) { return []; }
+	return ['## Classifications searched',
+		'| Code | Meaning |',
+		'| --- | --- |',
+		...review.classifications.map(entry => '| ' + [entry.code, entry.meaning].map(cell).join(' | ') + ' |'),
+		''];
+}
+
+/** The sentence the generated wording list is introduced by, in the working record. */
+const WORDING_REVIEW_INTRO = 'The following phrases read as legal conclusions; a candidate review states what each passage discloses and leaves novelty, anticipation, obviousness and teaching-away to counsel. Reword or confirm:';
+
+/** What the mechanical checks did and did not cover; stated once, in the working record. */
+const CHECKED_MECHANICALLY = 'Anchor identity, quotation identity and required fields were checked mechanically. Source review notes are model judgments, not verified facts. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.';
+
+/**
+ * The client deliverable: the concepts and classifications the search was built from, the sets that
+ * ran, the retrieved documents, the coverage analysis, the stopping rationale and the limitations.
+ * The quality machinery — the full search log, the wording review, the second read and the
+ * provenance boilerplate — lives in the working record this report's last line names.
  *
- * @param secondRead when present, the report states what an independent read of the cited passages
- * did not confirm, under each affected row and once in Limitations. Rendering is byte-identical to a
- * report written without one when it is omitted.
+ * Detailed tool outcomes live in the linked JSON evidence companion.
+ *
  * @param variant `invalidity` relabels the statuses for a claim chart and adds the generated
  * reference-roles table. Rendering is byte-identical to a prior-art review when it is omitted.
  */
-export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string, secondRead?: SecondReadOutcome, variant: CandidateReviewVariant = 'prior-art'): string {
+export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art'): string {
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);
-	const language = (document: RetrievedDocument) => document.language + (untranslated(document) ? ' (not in English; any reading of it in this report is the model\'s own translation)' : '');
 	const automatic = automaticLimitations(review, snapshot, documents);
-	const wording = candidateWordingReview(review);
 	// The scope column only exists once a search actually applied a jurisdiction filter; without one
 	// there is no confirmed scope to place a document inside or outside of.
 	const jurisdictions = searchedJurisdictions(snapshot);
@@ -533,11 +639,14 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		? [outsideScope(document.publication, jurisdictions) ? `outside searched jurisdictions (${publicationCountry(document.publication)})` : 'in scope']
 		: [];
 	return [
+		...conceptTable(review),
+		...classificationTable(review),
+		...searchSets(snapshot, documents),
 		'## Retrieved documents',
 		'Retrieval does not establish eligibility as prior art. This inventory may include post-cutoff background documents. Check each publication date and jurisdiction against the requested scope; unknown dates remain unresolved.',
 		'| Publication | Publication date | Title | Text language |' + (jurisdictions.length ? ' Scope |' : ''),
 		'| --- | --- | --- | --- |' + (jurisdictions.length ? ' --- |' : ''),
-		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, language(document), ...scope(document)].map(cell).join(' | ') + ' |'),
+		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, textLanguage(document), ...scope(document)].map(cell).join(' | ') + ' |'),
 		'',
 		'## Coverage and remaining search tracks',
 		...(review.coverage ?? []).flatMap(row => [
@@ -552,32 +661,67 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 			}),
 			...elementMap(row, sources),
-			...secondReadNotes(row, secondRead),
 			...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
 			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 		]),
 		...(variant === 'invalidity' ? referenceRoleTable(review, sources) : []),
 		'', '## Retrieved but not cited in coverage',
 		'Retrieved text that no coverage row cites was not reviewed for this report; its content is unknown, not absent.',
-		...(uncited.length ? [
-			'| Publication | Publication date | Title | Sections with text | Text language |',
-			'| --- | --- | --- | --- | --- |',
-			...uncited.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, document.sectionsWithText.join(', ') || 'none recorded', language(document)].map(cell).join(' | ') + ' |'),
-		] : ['Every retrieved document is cited in at least one coverage row.']),
+		...uncitedDocumentTable(uncited),
 		'', '## Search stopping rationale', review.stopReason ?? '',
 		'', '## Limitations', ...(review.limitations ?? []).map(value => '- ' + value),
-		...(automatic.length ? ['', 'Generated from the execution record, not supplied by the model:', ...automatic.map(value => '- ' + value), ''] : []),
-		...(secondRead ? ['', secondReadLimitation(secondRead), ''] : []),
-		snapshot.limitation,
-		'Anchor identity, quotation identity and required fields were checked mechanically. Source review notes are model judgments, not verified facts. Semantic entailment, completeness of invention features, and correctness of conclusions were not automatically verified.',
-		...(wording.length ? ['', '## Wording review (generated)',
-			'The following phrases read as legal conclusions; a candidate review states what each passage discloses and leaves novelty, anticipation, obviousness and teaching-away to counsel. Reword or confirm:',
-			...wording.map(value => '- ' + value)] : []),
-		'', `## Execution audit`,
-		`${snapshot.executions.filter(execution => execution.kind === 'search').length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes. These are tool invocations, not counts of documents reviewed.`,
+		...(automatic.length ? ['', 'Generated from the execution record, not supplied by the model:', ...automatic.map(value => '- ' + value)] : []),
+		'', `Working record: [${workingRecordFileName}](${encodeURIComponent(workingRecordFileName)}) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.`,
+	].join('\n');
+}
+
+/** What the working record says about a second read, whichever way it ended. */
+function secondReadSection(review: PatentCandidateReview, secondRead: SecondReadOutcome | undefined, secondReadFileName: string | undefined): string[] {
+	if (!secondRead) { return ['## Second read', 'Second read: not run.']; }
+	const rows = (review.coverage ?? []).flatMap(row => {
+		const notes = secondReadNotes(row, secondRead);
+		return notes.length ? [`### ${cell(row.feature)}`, ...notes] : [];
+	});
+	return ['## Second read', secondReadLimitation(secondRead),
+		...(rows.length ? ['', ...rows] : []),
+		...(secondReadFileName ? [`[Second-read verdicts](${encodeURIComponent(secondReadFileName)})`] : [])];
+}
+
+/**
+ * The working record: the internal companion of a client report, written beside it in the workspace.
+ * It carries what the deliverable deliberately leaves out — every recorded search including the ones
+ * that could not run, the retrieved text nobody read, the wording review, the second read and the
+ * provenance of the mechanical checks — so a later session picking up the same matter can see what
+ * was already searched and what was deliberately left.
+ */
+export function renderWorkingRecord(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, reportFileName: string, evidenceFileName: string, secondReadFileName: string | undefined, secondRead?: SecondReadOutcome): string {
+	const documents = retrievedDocuments(review, snapshot);
+	const wording = candidateWordingReview(review);
+	return [
+		`# Working record — ${review.subject?.trim() || reportFileName}`,
+		'',
+		`Companion to [${reportFileName}](${encodeURIComponent(reportFileName)}) — internal search log for a later session picking up the same matter. Not part of the client deliverable.`,
+		'',
+		'## Search log',
+		`${searchExecutions(snapshot).length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes. These are tool invocations, not counts of documents reviewed.`,
 		'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range |',
 		'| --- | --- | --- | --- | --- | --- |',
-		...snapshot.executions.filter(execution => execution.kind === 'search').map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown'].map(cell).join(' | ') + ' |'),
+		...searchExecutions(snapshot).map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown'].map(cell).join(' | ') + ' |'),
+		'',
+		'## Retrieved but not read',
+		...uncitedDocumentTable(documents.filter(document => !document.cited)),
+		'',
+		...secondReadSection(review, secondRead, secondReadFileName),
+		'',
+		'## Wording review',
+		...(wording.length ? [WORDING_REVIEW_INTRO, ...wording.map(value => '- ' + value)] : ['No phrases flagged.']),
+		'',
+		'## Provenance',
+		snapshot.limitation,
+		'',
+		CHECKED_MECHANICALLY,
+		'',
 		`[Detailed execution and source metadata](${encodeURIComponent(evidenceFileName)})`,
+		'',
 	].join('\n');
 }
