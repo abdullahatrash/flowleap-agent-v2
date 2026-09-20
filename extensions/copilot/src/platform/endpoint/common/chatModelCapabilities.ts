@@ -8,12 +8,6 @@ import { getCachedSha256Hash } from '../../../util/common/crypto';
 import { ConfigKey, IConfigurationService } from '../../configuration/common/configurationService';
 import type { IChatEndpoint } from '../../networking/common/networking';
 
-const HIDDEN_MODEL_A_HASHES = [
-	'a99dd17dfee04155d863268596b7f6dd36d0a6531cd326348dbe7416142a21a3',
-	'6b0f165d0590bf8d508540a796b4fda77bf6a0a4ed4e8524d5451b1913100a95'
-];
-
-
 const HIDDEN_MODEL_B_HASHES = [
 	'1f48b3271e760c69ab2b17dcae5f5c661fa5b644c5976a8a99b23e05ae3cb6d6',
 	'ffc50c70661c227edf8daae6f8dbed2dd0645386c12d43bc7fc44da166e043bd',
@@ -47,10 +41,6 @@ const VSC_MODEL_HASHES_EDIT_TOOL_SET = [
 	'1cdd4febbc7ee6b1abe0fbdd42217744c5912c79366db4befd91698b46c40a3c',
 	'0425aeda24d2fd93e2a879c4d813e4f3997aa444f1f4a633241236f9f773df73',
 	'e82ff0e2d4e4bae1f012dc599d520f8d61becfc4762f3717577b270be199db92',
-];
-
-const HIDDEN_MODEL_E_HASHES: string[] = [
-	'6013de0381f648b7f21518885c02b40b7583adfb33c6d9b64d3aed52c3934798'
 ];
 
 const HIDDEN_MODEL_F_HASHES: string[] = [
@@ -106,22 +96,6 @@ export function getModelCapabilityOverride(
 
 export function getModelId(model: LanguageModelChat | IChatEndpoint): string {
 	return 'id' in model ? model.id : model.model;
-}
-
-export function isHiddenModelA(model: LanguageModelChat | IChatEndpoint) {
-	const h = getCachedSha256Hash(model.family);
-	return HIDDEN_MODEL_A_HASHES.includes(h);
-}
-
-export function isHiddenModelB(model: LanguageModelChat | IChatEndpoint | string) {
-	const h = getCachedSha256Hash(typeof model === 'string' ? model : model.family);
-	return HIDDEN_MODEL_B_HASHES.includes(h);
-}
-
-
-export function isHiddenModelE(model: LanguageModelChat | IChatEndpoint) {
-	const h = getCachedSha256Hash(model.family);
-	return HIDDEN_MODEL_E_HASHES.includes(h);
 }
 
 export function isHiddenModelF(model: LanguageModelChat | IChatEndpoint) {
@@ -247,7 +221,7 @@ export function modelSupportsApplyPatch(model: LanguageModelChat | IChatEndpoint
 		|| isVSCModelB(model)
 		|| isGpt52Family(model.family)
 		|| isGpt54(model)
-		|| isHiddenModelB(model)
+		|| isGpt55(model)
 		|| isGpt56(model)
 		|| isGpt6Family(model);
 }
@@ -262,7 +236,7 @@ export function modelPrefersJsonNotebookRepresentation(model: LanguageModelChat 
 		|| isGpt53Codex(model.family)
 		|| isGpt52Family(model.family)
 		|| isGpt54(model)
-		|| isHiddenModelB(model)
+		|| isGpt55(model)
 		|| isGpt56(model)
 		|| isGpt6Family(model);
 }
@@ -278,7 +252,7 @@ export function modelSupportsReplaceString(model: LanguageModelChat | IChatEndpo
  * Model supports multi_replace_string_in_file as an edit tool.
  */
 export function modelSupportsMultiReplaceString(model: LanguageModelChat | IChatEndpoint): boolean {
-	return isAnthropicFamily(model) || isHiddenModelE(model) || isVSCModelReplaceStringSet(model) || isMinimaxFamily(model) || isHiddenFamilyH(model);
+	return isAnthropicFamily(model) || isVSCModelReplaceStringSet(model) || isMinimaxFamily(model) || isHiddenFamilyH(model);
 }
 
 /**
@@ -286,7 +260,7 @@ export function modelSupportsMultiReplaceString(model: LanguageModelChat | IChat
  * without needing insert_edit_into_file.
  */
 export function modelCanUseReplaceStringExclusively(model: LanguageModelChat | IChatEndpoint): boolean {
-	return isAnthropicFamily(model) || model.family.includes('grok-code') || isHiddenModelE(model) || model.family.toLowerCase().includes('gemini-3') || isVSCModelReplaceStringSet(model) || isHiddenModelF(model) || isMinimaxFamily(model) || isHiddenFamilyH(model);
+	return isAnthropicFamily(model) || model.family.includes('grok-code') || model.family.toLowerCase().includes('gemini-3') || isVSCModelReplaceStringSet(model) || isHiddenModelF(model) || isMinimaxFamily(model) || isHiddenFamilyH(model);
 }
 
 /**
@@ -301,7 +275,7 @@ export function modelShouldUseReplaceStringHealing(model: LanguageModelChat | IC
  * The model can accept image urls as the `image_url` parameter in mcp tool results.
  */
 export function modelCanUseMcpResultImageURL(model: LanguageModelChat | IChatEndpoint): boolean {
-	return !isAnthropicFamily(model) && !isHiddenModelE(model);
+	return !isAnthropicFamily(model);
 }
 
 /**
