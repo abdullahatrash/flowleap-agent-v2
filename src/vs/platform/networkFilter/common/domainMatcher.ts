@@ -110,6 +110,23 @@ function normalizeUriAuthority(authority: string | undefined): string | undefine
 	return normalizeDomain(hostname, true);
 }
 
+function normalizeEmbeddedIpv4(value: string): string | undefined {
+	const mappedMatch = /^\[::ffff:(?<high>[0-9a-f]{1,4}):(?<low>[0-9a-f]{1,4})\]$/.exec(value);
+	const compatibleMatch = mappedMatch ? undefined : /^\[::(?:(?<high>[0-9a-f]{1,4}):)?(?<low>[0-9a-f]{1,4})\]$/.exec(value);
+	const groups = (mappedMatch ?? compatibleMatch)?.groups;
+	if (!groups) {
+		return undefined;
+	}
+
+	const high = Number.parseInt(groups.high ?? '0', 16);
+	const low = Number.parseInt(groups.low, 16);
+	if (compatibleMatch && high === 0 && low <= 1) {
+		return undefined;
+	}
+
+	return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
+}
+
 /**
  * Extracts the domain portion from a pattern string.
  * If the pattern contains `://`, it is parsed as a URI and the authority is returned.
@@ -148,10 +165,12 @@ export function matchesDomainPattern(domain: string, pattern: string): boolean {
 		return true;
 	}
 	if (normalizedPattern.startsWith('*.')) {
-		const suffix = normalizedPattern.slice(2);
-		return domain === suffix || domain.endsWith(`.${suffix}`);
+		const patternSuffix = normalizedPattern.slice(2);
+		const suffix = normalizeUriAuthority(patternSuffix) ?? patternSuffix;
+		const normalizedDomain = normalizeEmbeddedIpv4(domain) ?? domain;
+		return normalizedDomain === suffix || normalizedDomain.endsWith(`.${suffix}`);
 	}
-	return domain === normalizedPattern;
+	return (normalizeEmbeddedIpv4(domain) ?? domain) === (normalizeEmbeddedIpv4(normalizedPattern) ?? normalizedPattern);
 }
 
 /**

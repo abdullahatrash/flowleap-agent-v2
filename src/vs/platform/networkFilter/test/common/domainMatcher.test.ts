@@ -134,6 +134,30 @@ suite('domainMatcher', () => {
 		test('returns false for invalid pattern', () => {
 			assert.strictEqual(matchesDomainPattern('example.com', ''), false);
 		});
+
+		test('matches IPv4-mapped IPv6 literals against IPv4 patterns', () => {
+			assert.deepStrictEqual([
+				matchesDomainPattern('[::ffff:7f00:1]', '127.0.0.1'),
+				matchesDomainPattern('[::ffff:a9fe:a9fe]', '169.254.169.254'),
+			], [
+				true,
+				true,
+			]);
+		});
+
+		test('matches IPv4 literals and embedded IPv4 patterns symmetrically', () => {
+			assert.deepStrictEqual([
+				matchesDomainPattern('127.0.0.1', '[::ffff:127.0.0.1]'),
+				matchesDomainPattern('[::7f00:1]', '127.0.0.1'),
+				matchesDomainPattern('127.0.0.1', '[::127.0.0.1]'),
+				matchesDomainPattern('[::1]', '0.0.0.1'),
+			], [
+				true,
+				true,
+				true,
+				false,
+			]);
+		});
 	});
 
 	suite('extractDomainFromUri', () => {
