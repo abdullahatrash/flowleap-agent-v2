@@ -51,51 +51,65 @@ describe('BYOK conversation id bridge', () => {
 	it('reaches a Responses prompt_cache_key through the extension-endpoint path', async () => {
 		await accessor.get(IConfigurationService).setConfig(ConfigKey.ResponsesApiPromptCacheKeyEnabled, true);
 
-		const promptCacheKey = async (conversationId: string | undefined) => {
-			const bodies: IEndpointBody[] = [];
-			// The far side of the IPC boundary: the real Responses body builder, fed by whatever the
-			// wrapper decided to forward.
-			const responsesEndpoint = createResponsesEndpoint(instaService, body => bodies.push(body));
-			const wrapper = disposables.add(instaService.createInstance(CopilotLanguageModelWrapper));
-			const languageModel = createContributedModel(async (messages, options, token) => {
-				await wrapper.provideLanguageModelResponse(responsesEndpoint, [...messages], {
-					requestInitiator: 'core',
-					tools: options.tools ?? [],
-					toolMode: options.toolMode ?? vscode.LanguageModelChatToolMode.Auto,
-					modelOptions: options.modelOptions,
-				}, 'core', { report: () => { } }, token);
-			});
-			const extensionEndpoint = new ExtensionContributedChatEndpoint(
-				languageModel,
-				instaService,
-				new NoopOTelService(resolveOTelConfig({ env: {}, extensionVersion: '1.0.0', sessionId: 'test' })),
-			);
-
-			await extensionEndpoint.makeChatRequest2({
-				debugName: 'test',
-				messages: [{
-					role: Raw.ChatRole.User,
-					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' }],
-				}],
-				conversationId,
-				finishedCb: undefined,
-				location: ChatLocation.Agent,
-				requestOptions: {},
-			}, new vscode.CancellationTokenSource().token);
-
-			expect(bodies).toHaveLength(1);
-			return bodies[0].prompt_cache_key;
-		};
-
 		expect({
-			withConversationId: await promptCacheKey('conversation-332031'),
-			withoutConversationId: await promptCacheKey(undefined),
+			withConversationId: await promptCacheKey(instaService, disposables, 'conversation-332031'),
+			withoutConversationId: await promptCacheKey(instaService, disposables, undefined),
 		}).toEqual({
 			withConversationId: `conversation-332031:${MODEL_FAMILY}`,
 			withoutConversationId: undefined,
 		});
 	});
+
+	/**
+	 * `ResponsesApiPromptCacheKeyEnabled` is `ConfigType.ExperimentBased`, but no experiment service
+	 * ever flips it under BYOK (#416), so the bridge above must already be live on the setting's
+	 * built-in default with no `setConfig` call. Guards against the default silently reverting to
+	 * `false`, which would put every BYOK Responses turn back on a cold prompt cache.
+	 */
+	it('reaches a Responses prompt_cache_key with the default configuration, no settings change', async () => {
+		expect(await promptCacheKey(instaService, disposables, 'conversation-332031')).toBe(`conversation-332031:${MODEL_FAMILY}`);
+	});
 });
+
+/**
+ * Drives a request through the same extension-endpoint / wrapper / Responses-body-builder bridge
+ * as production, and returns the `prompt_cache_key` the real body builder produced for it.
+ */
+async function promptCacheKey(instaService: IInstantiationService, disposables: DisposableStore, conversationId: string | undefined) {
+	const bodies: IEndpointBody[] = [];
+	// The far side of the IPC boundary: the real Responses body builder, fed by whatever the
+	// wrapper decided to forward.
+	const responsesEndpoint = createResponsesEndpoint(instaService, body => bodies.push(body));
+	const wrapper = disposables.add(instaService.createInstance(CopilotLanguageModelWrapper));
+	const languageModel = createContributedModel(async (messages, options, token) => {
+		await wrapper.provideLanguageModelResponse(responsesEndpoint, [...messages], {
+			requestInitiator: 'core',
+			tools: options.tools ?? [],
+			toolMode: options.toolMode ?? vscode.LanguageModelChatToolMode.Auto,
+			modelOptions: options.modelOptions,
+		}, 'core', { report: () => { } }, token);
+	});
+	const extensionEndpoint = new ExtensionContributedChatEndpoint(
+		languageModel,
+		instaService,
+		new NoopOTelService(resolveOTelConfig({ env: {}, extensionVersion: '1.0.0', sessionId: 'test' })),
+	);
+
+	await extensionEndpoint.makeChatRequest2({
+		debugName: 'test',
+		messages: [{
+			role: Raw.ChatRole.User,
+			content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' }],
+		}],
+		conversationId,
+		finishedCb: undefined,
+		location: ChatLocation.Agent,
+		requestOptions: {},
+	}, new vscode.CancellationTokenSource().token);
+
+	expect(bodies).toHaveLength(1);
+	return bodies[0].prompt_cache_key;
+}
 
 /**
  * A Responses endpoint that records the body the real builder produces for every request the
