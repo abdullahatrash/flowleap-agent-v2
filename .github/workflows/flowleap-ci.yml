@@ -54,6 +54,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The Markdown editor's command, keybinding and menu contributions are
+      # generated from @vscode/markdown-editor/commands, so a stale manifest is
+      # invisible until someone rebuilds. This is the guard.
+      - name: Check Markdown editor manifests
+        run: npm run markdown-editor-package-json-check
+
       # Compile gate: two lightweight tsgo type-check passes instead of the
       # full `npm run compile` (which esbuild-bundles the client and the
       # copilot extension — much heavier and not needed just to catch type
