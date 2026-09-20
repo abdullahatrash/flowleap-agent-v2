@@ -54,6 +54,8 @@ exports[`patent routing at the assembled provider and tool-result boundary > sco
 
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-5-mini 1`] = `"DefaultGpt5AgentPrompt"`;
 
+exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for gpt-oss-120b 1`] = `"Gpt56Prompt"`;
+
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for grok-code-fast-1 1`] = `"DefaultGrokCodeFastAgentPrompt"`;
 
 exports[`patent routing at the assembled provider and tool-result boundary > scopes provider capabilities and preserves native evidence navigation for minimax/minimax-m2 1`] = `"DefaultMinimaxAgentPrompt"`;
