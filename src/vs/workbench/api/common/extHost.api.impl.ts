@@ -88,6 +88,7 @@ import { ExtHostNotebookRenderers } from './extHostNotebookRenderers.js';
 import { IExtHostOutputService } from './extHostOutput.js';
 import { ExtHostProfileContentHandlers } from './extHostProfileContentHandler.js';
 import { IExtHostProgress } from './extHostProgress.js';
+import { ExtHostAgentEditorComments } from './extHostAgentEditorComments.js';
 import { ExtHostQuickDiff } from './extHostQuickDiff.js';
 import { createExtHostQuickOpen } from './extHostQuickOpen.js';
 import { IExtHostRpcService } from './extHostRpcService.js';
@@ -229,6 +230,8 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 	const extHostQuickOpen = rpcProtocol.set(ExtHostContext.ExtHostQuickOpen, createExtHostQuickOpen(rpcProtocol, extHostWorkspace, extHostCommands));
 	const extHostSCM = rpcProtocol.set(ExtHostContext.ExtHostSCM, new ExtHostSCM(rpcProtocol, extHostCommands, extHostDocuments, extHostLogService));
 	const extHostQuickDiff = rpcProtocol.set(ExtHostContext.ExtHostQuickDiff, new ExtHostQuickDiff(rpcProtocol, uriTransformer));
+	// Null object: there is no main-thread counterpart, so nothing is registered on the RPC protocol.
+	const extHostAgentEditorComments = new ExtHostAgentEditorComments();
 	const extHostShare = rpcProtocol.set(ExtHostContext.ExtHostShare, new ExtHostShare(rpcProtocol, uriTransformer));
 	const extHostComment = rpcProtocol.set(ExtHostContext.ExtHostComments, createExtHostComments(rpcProtocol, extHostCommands, extHostDocuments));
 	const extHostLabelService = rpcProtocol.set(ExtHostContext.ExtHostLabelService, new ExtHostLabelService(rpcProtocol));
@@ -1068,6 +1071,10 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			registerLinkPresentationProvider(id: string, provider: vscode.LinkPresentationProvider): vscode.Disposable {
 				checkProposedApiEnabled(extension, 'linkPresentation');
 				return extHostDataChannels.registerLinkPresentationProvider(extension, id, provider);
+			},
+			createAgentEditorComments(uri: vscode.Uri): vscode.AgentEditorCommentsProvider {
+				checkProposedApiEnabled(extension, 'agentEditorComments');
+				return extHostAgentEditorComments.createAgentEditorComments(uri);
 			},
 			get tabGroups(): vscode.TabGroups {
 				return extHostEditorTabs.tabGroups;
