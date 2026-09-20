@@ -14,9 +14,10 @@ import { Menus } from './menus.js';
 import { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
 import { registerIcon } from '../../platform/theme/common/iconRegistry.js';
+import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../platform/accessibility/common/accessibility.js';
 import { AuxiliaryBarVisibleContext, IsAuxiliaryWindowContext, IsSessionsWindowContext, IsTopRightEditorGroupContext, IsWindowAlwaysOnTopContext, SideBarVisibleContext } from '../../workbench/common/contextkeys.js';
 import { IWorkbenchLayoutService, Parts } from '../../workbench/services/layout/browser/layoutService.js';
-import { SessionsWelcomeVisibleContext } from '../common/contextkeys.js';
+import { IsPhoneLayoutContext, SessionsWelcomeVisibleContext } from '../common/contextkeys.js';
 
 // Register Icons
 const panelCloseIcon = registerIcon('agent-panel-close', Codicon.close, localize('agentPanelCloseIcon', "Icon to close the panel."));
@@ -71,6 +72,17 @@ class ToggleSidebarVisibilityAction extends Action2 {
 }
 
 registerAction2(ToggleSidebarVisibilityAction);
+
+MenuRegistry.appendMenuItem(Menus.TitleBarAccessibility, {
+	command: {
+		id: 'editor.action.toggleScreenReaderAccessibilityMode',
+		title: localize('screenReaderOptimizedBadge', "Screen Reader Optimized"),
+		tooltip: localize('disableScreenReaderOptimizedMode', "Disable Screen Reader Optimized Mode"),
+	},
+	group: 'navigation',
+	order: 0,
+	when: ContextKeyExpr.and(CONTEXT_ACCESSIBILITY_MODE_ENABLED, IsPhoneLayoutContext.negate())
+});
 
 // The editor-title secondary side bar toggle reuses the core `workbench.action.toggleAuxiliaryBar`
 // command (registered by the workbench auxiliary bar part, which is also loaded in the agents
