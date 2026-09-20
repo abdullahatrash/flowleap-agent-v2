@@ -25,6 +25,7 @@ import { Parts, IWorkbenchLayoutService } from '../../../workbench/services/layo
 import { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchButtonBar } from '../../../platform/actions/browser/buttonbar.js';
 import { IEditorGroupsContainer } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { CodeWindow, mainWindow } from '../../../base/browser/window.js';
 import { safeIntl } from '../../../base/common/date.js';
@@ -257,6 +258,18 @@ export class TitlebarPart extends Part implements ITitlebarPart {
 			telemetrySource: 'titlePart.sessionActions',
 			toolbarOptions: { primaryGroup: () => true },
 		}));
+
+		// Screen reader badge (driven by Menus.TitleBarAccessibility)
+		const screenReaderToolBarElement = prepend(this.rightContent, $('div.titlebar-actions-container.titlebar-screen-reader-container'));
+		const screenReaderButtonBar = this._register(this.instantiationService.createInstance(MenuWorkbenchButtonBar, screenReaderToolBarElement, Menus.TitleBarAccessibility, {
+			telemetrySource: 'titlePart.accessibility',
+			buttonConfigProvider: () => ({ showIcon: false, showLabel: true, isSecondary: false }),
+		}));
+		const updateScreenReaderButtonBar = () => {
+			screenReaderToolBarElement.classList.toggle('has-no-actions', screenReaderButtonBar.buttons.length === 0);
+		};
+		this._register(screenReaderButtonBar.onDidChange(updateScreenReaderButtonBar));
+		updateScreenReaderButtonBar();
 
 		// Context menu on the titlebar
 		this._register(addDisposableListener(this.rootContainer, EventType.CONTEXT_MENU, e => {
