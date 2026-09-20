@@ -21,7 +21,7 @@ import { SpyingTelemetryService } from '../../../telemetry/node/spyingTelemetryS
 import { createFakeStreamResponse } from '../../../test/node/fetcher';
 import { createPlatformServices } from '../../../test/node/services';
 import type { ThinkingData, ThinkingOriginApi } from '../../../thinking/common/thinking';
-import { CustomDataPartMimeTypes } from '../../common/endpointTypes';
+import { CacheType, CustomDataPartMimeTypes } from '../../common/endpointTypes';
 import { createResponsesRequestBody, getResponsesApiCompactionThresholdFromBody, processResponseFromChatEndpoint, responseApiInputToRawMessagesForLogging } from '../responsesApi';
 
 const testEndpoint: IChatEndpoint = {
@@ -1045,6 +1045,239 @@ describe('createResponsesRequestBody', () => {
 
 		accessor.dispose();
 		services.dispose();
+	});
+});
+
+describe('createResponsesRequestBody prompt_cache_breakpoint markers', () => {
+	const expectedPromptCacheBreakpoint = { mode: 'explicit' };
+	const cacheBreakpointEndpoint: IChatEndpoint = { ...testEndpoint, model: 'gpt-5.6', family: 'gpt-5.6' };
+
+	const cacheBreakpoint = (): Raw.ChatCompletionContentPart => ({
+		type: Raw.ChatCompletionContentPartKind.CacheBreakpoint,
+		cacheType: CacheType,
+	});
+
+	const buildBody = (messages: Raw.ChatMessage[], endpoint = cacheBreakpointEndpoint) => {
+		const services = createPlatformServices();
+		const accessor = services.createTestingAccessor();
+		const instantiationService = accessor.get(IInstantiationService);
+		const body = instantiationService.invokeFunction(servicesAccessor => createResponsesRequestBody(servicesAccessor, createRequestOptions(messages, false), endpoint.model, endpoint));
+		accessor.dispose();
+		services.dispose();
+		return body;
+	};
+
+	it('attaches prompt_cache_breakpoint to the last content block of a user message', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'first' },
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'second' },
+				cacheBreakpoint(),
+			],
+		}];
+
+		const body = buildBody(messages);
+
+		expect(body.input?.[0]).toMatchObject({
+			role: 'user',
+			content: [
+				{ type: 'input_text', text: 'first' },
+				{ type: 'input_text', text: 'second', prompt_cache_breakpoint: expectedPromptCacheBreakpoint },
+			],
+		});
+		expect((body.input?.[0] as { content: unknown[] }).content[0]).not.toHaveProperty('prompt_cache_breakpoint');
+	});
+
+	it('attaches prompt_cache_breakpoint to the last content block of a system message', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.System,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'be concise' },
+				cacheBreakpoint(),
+			],
+		}];
+
+		const body = buildBody(messages);
+
+		expect(body.input?.[0]).toMatchObject({
+			role: 'system',
+			content: [{ type: 'input_text', text: 'be concise', prompt_cache_breakpoint: expectedPromptCacheBreakpoint }],
+		});
+	});
+
+	it('attaches prompt_cache_breakpoint to the last output_text of a terminal assistant message', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.Assistant,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'final answer' },
+				cacheBreakpoint(),
+			],
+		}];
+
+		const body = buildBody(messages);
+
+		expect(body.input?.[0]).toMatchObject({
+			role: 'assistant',
+			type: 'message',
+			content: [{ type: 'output_text', text: 'final answer', prompt_cache_breakpoint: expectedPromptCacheBreakpoint }],
+		});
+	});
+
+	it('attaches prompt_cache_breakpoint at item level to a tool result (function_call_output)', () => {
+		const messages: Raw.ChatMessage[] = [
+			{
+				role: Raw.ChatRole.Assistant,
+				content: [],
+				toolCalls: [{ id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{}' } }],
+			},
+			{
+				role: Raw.ChatRole.Tool,
+				toolCallId: 'call_1',
+				content: [
+					{ type: Raw.ChatCompletionContentPartKind.Text, text: 'result' },
+					cacheBreakpoint(),
+				],
+			},
+		];
+
+		const body = buildBody(messages);
+
+		expect(body.input?.[1]).toMatchObject({
+			type: 'function_call_output',
+			call_id: 'call_1',
+			output: 'result',
+			prompt_cache_breakpoint: expectedPromptCacheBreakpoint,
+		});
+	});
+
+	it('attaches prompt_cache_breakpoint at item level to the last function_call when the assistant has tool calls', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.Assistant,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'calling' },
+				cacheBreakpoint(),
+			],
+			toolCalls: [
+				{ id: 'call_a', type: 'function', function: { name: 'tool_a', arguments: '{}' } },
+				{ id: 'call_b', type: 'function', function: { name: 'tool_b', arguments: '{}' } },
+			],
+		}];
+
+		const body = buildBody(messages);
+		const input = body.input as OpenAI.Responses.ResponseInputItem[];
+
+		const lastCall = input.find(item => isFunctionCallInputItem(item, 'tool_b'));
+		expect(lastCall).toMatchObject({ prompt_cache_breakpoint: expectedPromptCacheBreakpoint });
+
+		const firstCall = input.find(item => isFunctionCallInputItem(item, 'tool_a'));
+		expect(firstCall).not.toHaveProperty('prompt_cache_breakpoint');
+
+		const messageItem = input.find(item => (item as { type?: string }).type === 'message');
+		expect((messageItem as { content: unknown[] }).content[0]).not.toHaveProperty('prompt_cache_breakpoint');
+	});
+
+	it('attaches prompt_cache_breakpoint to the trailing image item of a tool result with images', () => {
+		const messages: Raw.ChatMessage[] = [
+			{
+				role: Raw.ChatRole.Assistant,
+				content: [],
+				toolCalls: [{ id: 'call_img', type: 'function', function: { name: 'screenshot', arguments: '{}' } }],
+			},
+			{
+				role: Raw.ChatRole.Tool,
+				toolCallId: 'call_img',
+				content: [
+					{ type: Raw.ChatCompletionContentPartKind.Text, text: 'see image' },
+					{ type: Raw.ChatCompletionContentPartKind.Image, imageUrl: { url: 'data:image/png;base64,abc', detail: 'auto' } },
+					cacheBreakpoint(),
+				],
+			},
+		];
+
+		const body = buildBody(messages);
+
+		expect(body.input?.at(-1)).toMatchObject({
+			role: 'user',
+			content: [
+				{ type: 'input_text', text: 'Image associated with the above tool call:' },
+				{ type: 'input_image', prompt_cache_breakpoint: expectedPromptCacheBreakpoint },
+			],
+		});
+		expect(body.input?.[1]).not.toHaveProperty('prompt_cache_breakpoint');
+	});
+
+	it('does not synthesize a whitespace text block when the marked message has no other content', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [cacheBreakpoint()],
+		}];
+
+		const body = buildBody(messages);
+
+		expect(body.input?.[0]).toMatchObject({
+			role: 'user',
+			content: [],
+		});
+	});
+
+	it('does not attach prompt_cache_breakpoint when the message has no breakpoint', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' }],
+		}];
+
+		const body = buildBody(messages);
+
+		expect((body.input?.[0] as { content: unknown[] }).content[0]).not.toHaveProperty('prompt_cache_breakpoint');
+	});
+
+	it('does not attach prompt_cache_breakpoint when the model does not support cache breakpoints', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' },
+				cacheBreakpoint(),
+			],
+		}];
+
+		const body = buildBody(messages, testEndpoint);
+
+		expect((body.input?.[0] as { content: unknown[] }).content[0]).not.toHaveProperty('prompt_cache_breakpoint');
+	});
+
+	it('gates the marker on the GPT families that support it', () => {
+		const messages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'hello' },
+				cacheBreakpoint(),
+			],
+		}];
+
+		const markerFor = (family: string) => {
+			const body = buildBody(messages, { ...testEndpoint, model: family, family });
+			return (body.input?.[0] as { content: { prompt_cache_breakpoint?: unknown }[] }).content.at(-1)?.prompt_cache_breakpoint;
+		};
+
+		expect({
+			'gpt-5.6': markerFor('gpt-5.6'),
+			'gpt-5.6-mini': markerFor('gpt-5.6-mini'),
+			'gpt-6': markerFor('gpt-6'),
+			'gpt-6-mini': markerFor('gpt-6-mini'),
+			'gpt-5.5': markerFor('gpt-5.5'),
+			'gpt-5-mini': markerFor('gpt-5-mini'),
+			'claude-sonnet-4.5': markerFor('claude-sonnet-4.5'),
+		}).toEqual({
+			'gpt-5.6': expectedPromptCacheBreakpoint,
+			'gpt-5.6-mini': expectedPromptCacheBreakpoint,
+			'gpt-6': expectedPromptCacheBreakpoint,
+			'gpt-6-mini': expectedPromptCacheBreakpoint,
+			// Upstream scopes the Responses cache breakpoint to gpt-5.6 and gpt-6 only.
+			'gpt-5.5': undefined,
+			'gpt-5-mini': undefined,
+			'claude-sonnet-4.5': undefined,
+		});
 	});
 });
 
