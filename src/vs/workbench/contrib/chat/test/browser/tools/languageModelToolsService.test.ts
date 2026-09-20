@@ -14,7 +14,7 @@ import { IAccessibilityService } from '../../../../../../platform/accessibility/
 import { TestAccessibilityService } from '../../../../../../platform/accessibility/test/common/testAccessibilityService.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { ConfigurationTarget, IConfigurationChangeEvent } from '../../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationChangeEvent, IConfigurationOverrides, IConfigurationValue } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyEqualsExpr, ContextKeyExpr, IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
@@ -156,6 +156,15 @@ async function waitForPublishedInvocation(capture: { invocation?: any }, tries =
 	return capture.invocation;
 }
 
+class AutoApprovePolicyTestConfigurationService extends TestConfigurationService {
+	override inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<T> {
+		const result = super.inspect<T>(key, overrides);
+		return key === ChatConfiguration.GlobalAutoApprove
+			? { ...result, policyValue: false as T }
+			: result;
+	}
+}
+
 interface TestToolsServiceSetup {
 	configurationService: TestConfigurationService;
 	chatService: MockChatService;
@@ -169,6 +178,7 @@ interface TestToolsServiceOptions {
 	accessibilitySignalService?: Partial<IAccessibilitySignalService>;
 	telemetryService?: Partial<ITelemetryService>;
 	commandService?: Partial<ICommandService>;
+	configurationService?: TestConfigurationService;
 	/** Called after configurationService is created but before the service is instantiated */
 	configureServices?: (config: TestConfigurationService) => void;
 }
@@ -178,7 +188,7 @@ interface TestToolsServiceOptions {
  * Reduces boilerplate when tests need custom service configurations.
  */
 function createTestToolsService(store: ReturnType<typeof ensureNoDisposablesAreLeakedInTestSuite>, options?: TestToolsServiceOptions): TestToolsServiceSetup {
-	const configurationService = new TestConfigurationService();
+	const configurationService = options?.configurationService ?? new TestConfigurationService();
 	configurationService.setUserConfiguration(ChatConfiguration.ExtensionToolsEnabled, true);
 
 	// Allow tests to configure before service creation
@@ -2348,6 +2358,34 @@ suite('LanguageModelToolsService', () => {
 			CancellationToken.None
 		);
 		assert.strictEqual(unspecifiedResult.content[0].value, 'unspecified defaults to eligible');
+	});
+
+	test('auto-approve policy restriction disables reusable actions while allowing approval once', async () => {
+		const configurationService = new AutoApprovePolicyTestConfigurationService();
+		const { service: testService, chatService: testChatService } = createTestToolsService(store, { configurationService });
+		const tool = registerToolForTest(testService, store, 'policyRestrictedTool', {
+			prepareToolInvocation: async () => ({
+				confirmationMessages: {
+					title: 'Confirm this action?',
+					message: 'This tool requires confirmation',
+					allowAutoConfirm: true,
+				},
+			}),
+			invoke: async () => ({ content: [{ kind: 'text', value: 'approved once' }] }),
+		});
+		const capture: { invocation?: any } = {};
+		stubGetSession(testChatService, 'policy-restricted-session', { capture });
+
+		const invocation = testService.invokeTool(
+			tool.makeDto({}, { sessionId: 'policy-restricted-session' }),
+			async () => 0,
+			CancellationToken.None,
+		);
+		const published = await waitForPublishedInvocation(capture);
+		assert.strictEqual(published.confirmationMessages?.allowAutoConfirm, false);
+
+		IChatToolInvocation.confirmWith(published, { type: ToolConfirmKind.UserAction });
+		assert.deepStrictEqual(await invocation, { content: [{ kind: 'text', value: 'approved once' }] });
 	});
 
 	test('tool content formatting with alwaysDisplayInputOutput', async () => {

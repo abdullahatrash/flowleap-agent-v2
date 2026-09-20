@@ -29,7 +29,7 @@ import { ChatAgentLocation, ChatModeKind } from '../common/constants.js';
 import { ChatAttachmentModel } from './attachments/chatAttachmentModel.js';
 import { IChatEditorOptions } from './widgetHosts/editor/chatEditor.js';
 import { ChatInputPart } from './widget/input/chatInputPart.js';
-import { ChatWidget, IChatWidgetContrib } from './widget/chatWidget.js';
+import { IChatWidgetContrib } from './widget/chatWidget.js';
 import { ICodeBlockActionContext } from './widget/chatContentParts/codeBlockPart.js';
 import { AgentSessionTarget } from './agentSessions/agentSessions.js';
 
@@ -208,7 +208,7 @@ export interface IChatAccessibilityService {
 	readonly _serviceBrand: undefined;
 	acceptRequest(uri: URI, skipRequestSignal?: boolean): void;
 	disposeRequest(requestId: URI): void;
-	acceptResponse(widget: ChatWidget, container: HTMLElement, response: IChatResponseViewModel | string | undefined, requestId: URI | undefined, isVoiceInput?: boolean): void;
+	acceptResponse(response: IChatResponseViewModel | string | undefined, requestId: URI | undefined, isVoiceInput?: boolean): void;
 	acceptElicitation(message: IChatElicitationRequest): void;
 }
 
@@ -367,6 +367,7 @@ export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
 
 export interface IChatWidget {
 	readonly domNode: HTMLElement;
+	readonly visible: boolean;
 	readonly onDidChangeViewModel: Event<IChatWidgetViewModelChangeEvent>;
 	readonly onDidAcceptInput: Event<void>;
 	readonly onDidHide: Event<void>;

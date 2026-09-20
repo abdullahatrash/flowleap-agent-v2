@@ -42,6 +42,7 @@ import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { ChatRequestToolReferenceEntry, toToolSetVariableEntry, toToolVariableEntry } from '../../common/attachments/chatVariableEntries.js';
 import { IVariableReference } from '../../common/chatModes.js';
 import { ConfirmedReason, IChatService, IChatToolInvocation, ToolConfirmKind } from '../../common/chatService/chatService.js';
+import { isAutoApprovePolicyRestricted } from '../../common/agentHostConfigPolicy.js';
 import { ChatConfiguration, isAutoApproveLevel, isAutopilotLevel } from '../../common/constants.js';
 import { localChatSessionType } from '../../common/chatSessionsService.js';
 import { ILanguageModelChatMetadata } from '../../common/languageModels.js';
@@ -1074,7 +1075,9 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 		}
 
 		if (prepared?.confirmationMessages?.title) {
-			if (prepared.toolSpecificData?.kind !== 'terminal' && prepared.confirmationMessages.allowAutoConfirm !== false) {
+			if (this._isAutoApprovePolicyRestricted()) {
+				prepared.confirmationMessages.allowAutoConfirm = false;
+			} else if (prepared.toolSpecificData?.kind !== 'terminal' && prepared.confirmationMessages.allowAutoConfirm !== false) {
 				prepared.confirmationMessages.allowAutoConfirm = isEligibleForAutoApproval;
 			}
 
@@ -1273,8 +1276,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 	 * When this is the case, Bypass Approvals and Autopilot permission levels should not auto-approve tools.
 	 */
 	private _isAutoApprovePolicyRestricted(): boolean {
-		const inspected = this._configurationService.inspect<boolean>(ChatConfiguration.GlobalAutoApprove);
-		return inspected.policyValue === false;
+		return isAutoApprovePolicyRestricted(this._configurationService);
 	}
 
 	/**
