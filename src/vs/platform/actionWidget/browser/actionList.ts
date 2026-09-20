@@ -659,6 +659,7 @@ export class ActionListWidget<T> extends Disposable {
 	private _headerContainer: HTMLElement | undefined;
 	private readonly _filterCts = this._register(new MutableDisposable<CancellationTokenSource>());
 	private readonly _groupTitleByIndex = new Map<number, string>();
+	private _visibleMenuItems: readonly IActionListItem<T>[];
 
 	private readonly _onDidRequestLayout = this._register(new Emitter<void>());
 
@@ -680,6 +681,7 @@ export class ActionListWidget<T> extends Disposable {
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 	) {
 		super();
+		this._visibleMenuItems = items;
 		this.domNode = document.createElement('div');
 		this.domNode.classList.add('actionList');
 		if (this._options?.inlineDescription) {
@@ -779,6 +781,11 @@ export class ActionListWidget<T> extends Disposable {
 					return null;
 				},
 				getWidgetAriaLabel: () => localize({ key: 'customQuickFixWidget', comment: [`An action widget option`] }, "Action Widget"),
+				getSetSize: () => this._visibleMenuItems.filter(item => item.kind === ActionListItemKind.Action).length,
+				getPosInSet: (_element, index) => Math.max(
+					this._visibleMenuItems.slice(0, index + 1).filter(item => item.kind === ActionListItemKind.Action).length,
+					1
+				),
 				getRole: (e) => {
 					switch (e.kind) {
 						case ActionListItemKind.Action:
@@ -1100,6 +1107,7 @@ export class ActionListWidget<T> extends Disposable {
 		// which may cause DOM changes that shift focus.
 		const filterInputHasFocus = this._filterInput && dom.isActiveElement(this._filterInput);
 
+		this._visibleMenuItems = visible;
 		this._list.splice(0, this._list.length, visible);
 
 		// Notify the parent that a re-layout is needed
@@ -1606,9 +1614,9 @@ export class ActionListWidget<T> extends Disposable {
 		if (actionCount === 0) {
 			return 0;
 		}
-		// Each toolbar action button is ~22px (16px icon + padding) plus 6px row gap
+		// Each toolbar action button is ~22px (16px icon + padding), plus a 6px row gap and 10px trailing margin.
 		const actionButtonWidth = 22;
-		return actionCount * actionButtonWidth + 6;
+		return actionCount * actionButtonWidth + 6 + 10;
 	}
 
 	private _getRowElement(index: number): HTMLElement | null {
