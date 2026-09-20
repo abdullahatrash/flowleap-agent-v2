@@ -150,6 +150,20 @@ describe('prior-art evidence recovery and review contract', () => {
 		}).toEqual({ cited: true, count: false, claimsOnly: false, tail: false, classification: false, language: true });
 	});
 
+	it('still reports a missing classification query when the only class search failed', () => {
+		// A classification query that never ran covered nothing; suppressing the warning would tell the
+		// reader a class was searched on the strength of an attempt.
+		const failedClassSearch: PatentExecutionSnapshot = { ...retrieval, executions: [
+			{ id: 'class', recordedAt: '2026-09-10T00:30:00Z', kind: 'search', status: 'failed', query: 'ta=dental AND ic=A61K' },
+			...retrieval.executions,
+		] };
+		const rendered = renderCandidateReview(claimsOnly, failedClassSearch, 'review.working-record.md');
+		expect({
+			classification: rendered.includes('- No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.'),
+			unrun: rendered.includes('- 1 search(es) could not be run and were not retried: ta=dental AND ic=A61K.'),
+		}).toEqual({ classification: true, unrun: true });
+	});
+
 	it('merges the backend dotted id and the source publication number into one inventory row', () => {
 		const dotted = { ...retrieval, executions: [retrieval.executions[0], { ...retrieval.executions[1], publicationIds: ['WO9951190.A1'] }, ...retrieval.executions.slice(2)] };
 		const rendered = renderCandidateReview(claimsOnly, dotted, 'review.working-record.md');

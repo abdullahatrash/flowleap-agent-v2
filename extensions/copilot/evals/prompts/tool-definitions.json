@@ -75,6 +75,10 @@
               "US,EP,WO",
               "all"
             ]
+          },
+          "purpose": {
+            "type": "string",
+            "description": "The unresolved feature, combination or coverage gap this query tests, in a few words (e.g. 'F4 sub-10 µm fine-fraction cap'). Recorded in the working record's search log; if the query cannot run, the report names this instead of the raw query."
           }
         },
         "required": [

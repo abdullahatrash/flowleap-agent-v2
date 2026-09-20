@@ -22,6 +22,8 @@ interface ISearchPatentsParams {
 	query: string;
 	range?: string;
 	countries?: string;
+	/** The unresolved feature or coverage gap this query tests; recorded so the report can name it. */
+	purpose?: string;
 }
 
 interface PatentDoc {
@@ -101,7 +103,9 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<ISearchPatentsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[SearchPatentsTool] Invoking patent search');
 
-		const { query, range = '1-25', countries } = options.input;
+		const { query, range = '1-25', countries, purpose } = options.input;
+		// A blank purpose is no purpose: an empty column reads as a feature nobody named.
+		const testedFeature = purpose?.trim() || undefined;
 
 		const { codes, invalid } = parseCountries(countries);
 		if (invalid.length > 0) {
@@ -123,7 +127,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 			const data = await callFacadeTool<PatentSearchData>(this.patentBackendClient, 'search_patents', input, token);
 
 			const audit = await this.ledger.record(options.chatSessionResource, {
-				kind: 'search', status: 'succeeded', query, requestedRange: range, requestedCountries: countries,
+				kind: 'search', status: 'succeeded', query, requestedRange: range, requestedCountries: countries, purpose: testedFeature,
 				effectiveQuery: data.effectiveQuery, countryFilter: data.countryFilter, total: data.total,
 				returned: data.returned ?? data.docs?.length, range: data.range, publicationIds: data.docs?.map(doc => doc.docId),
 			});
@@ -138,7 +142,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 			]);
 
 		} catch (error) {
-			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'search', status: token.isCancellationRequested ? 'cancelled' : 'failed', query, requestedRange: range, requestedCountries: countries });
+			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'search', status: token.isCancellationRequested ? 'cancelled' : 'failed', query, requestedRange: range, requestedCountries: countries, purpose: testedFeature });
 			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`);
 			return new LanguageModelToolResult([...result.content, new LanguageModelTextPart(audit)]);
 		}

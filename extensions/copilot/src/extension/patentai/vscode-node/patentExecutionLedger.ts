@@ -49,6 +49,12 @@ export const ANALYTICS_REQUEST_CAP = 2_000;
  */
 export const ANALYTICS_RESULT_CAP = 120_000;
 
+/**
+ * Cap for the feature a search says it tests. It is a label for a report column, not a passage, so
+ * a few words is the whole of it and anything longer is a pasted paragraph.
+ */
+export const SEARCH_PURPOSE_CAP = 200;
+
 export interface PatentExecution {
 	readonly id: string;
 	readonly recordedAt: string;
@@ -57,6 +63,8 @@ export interface PatentExecution {
 	readonly query?: string;
 	readonly requestedRange?: string;
 	readonly requestedCountries?: string;
+	/** `search` only — the unresolved feature or coverage gap the model said the query tests. */
+	readonly purpose?: string;
 	readonly effectiveQuery?: string;
 	readonly countryFilter?: readonly string[];
 	readonly total?: number;
@@ -122,7 +130,7 @@ export class PatentExecutionLedger implements IPatentExecutionLedger {
 		try {
 			await this.fileSystem.createDirectory(directory);
 			const temporary = URI.joinPath(directory, id + '.pending');
-			await this.fileSystem.writeFile(temporary, new TextEncoder().encode(JSON.stringify({ ...capAnalyticsText(execution), id, recordedAt: new Date().toISOString() })));
+			await this.fileSystem.writeFile(temporary, new TextEncoder().encode(JSON.stringify({ ...capRecordedText(execution), id, recordedAt: new Date().toISOString() })));
 			await this.fileSystem.rename(temporary, URI.joinPath(directory, id + '.json'));
 			return `Execution audit recorded: ${id}. Retrieval does not establish passage review.`;
 		} catch {
@@ -161,19 +169,20 @@ export class PatentExecutionLedger implements IPatentExecutionLedger {
 }
 
 /**
- * Bound the two free-text analytics fields before they reach storage, so one oversized SQL or
- * result cannot make a session's audit unreadable. A cut is announced in the stored text: a figure
+ * Bound the free-text fields before they reach storage, so one oversized SQL, result or stated
+ * purpose cannot make a session's audit unreadable. A cut is announced in the stored text: a figure
  * check that finds no number must be able to tell "not produced" from "beyond the recorded cut".
  */
-function capAnalyticsText(execution: Omit<PatentExecution, 'id' | 'recordedAt'>): Omit<PatentExecution, 'id' | 'recordedAt'> {
+function capRecordedText(execution: Omit<PatentExecution, 'id' | 'recordedAt'>): Omit<PatentExecution, 'id' | 'recordedAt'> {
 	const cap = (value: string | undefined, limit: number): string | undefined =>
 		value !== undefined && value.length > limit ? value.substring(0, limit) + '\n… [truncated for the audit record]' : value;
 	const request = cap(execution.request, ANALYTICS_REQUEST_CAP);
 	const resultText = cap(execution.resultText, ANALYTICS_RESULT_CAP);
-	if (request === execution.request && resultText === execution.resultText) {
+	const purpose = cap(execution.purpose, SEARCH_PURPOSE_CAP);
+	if (request === execution.request && resultText === execution.resultText && purpose === execution.purpose) {
 		return execution;
 	}
-	return { ...execution, request, resultText };
+	return { ...execution, request, resultText, purpose };
 }
 
 /** Stable section/claim identity; never infer a claim or paragraph number from prose. */
@@ -264,6 +273,7 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		query: text(record.query),
 		requestedRange: text(record.requestedRange),
 		requestedCountries: text(record.requestedCountries),
+		purpose: text(record.purpose),
 		effectiveQuery: text(record.effectiveQuery),
 		countryFilter: list(record.countryFilter),
 		total: count(record.total),
