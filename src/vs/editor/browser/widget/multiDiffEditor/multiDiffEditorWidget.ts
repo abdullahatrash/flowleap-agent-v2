@@ -12,6 +12,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { Range } from '../../../common/core/range.js';
+import { DiffEditorViewMode, IDiffEditorOptions } from '../../../common/config/editorOptions.js';
 import { IDiffEditor } from '../../../common/editorCommon.js';
 import { ICodeEditor } from '../../editorBrowser.js';
 import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
@@ -25,6 +26,7 @@ import { IWorkbenchUIElementFactory } from './workbenchUIElementFactory.js';
 export class MultiDiffEditorWidget extends Disposable {
 	private readonly _dimension = observableValue<Dimension | undefined>(this, undefined);
 	private readonly _viewModel = observableValue<MultiDiffEditorViewModel | undefined>(this, undefined);
+	private readonly _diffLayoutOptions = observableValue<IDiffEditorOptions | undefined>(this, undefined);
 
 	private readonly _widgetImpl = derived(this, (reader) => {
 		readHotReloadableExport(DiffEditorItemTemplate, reader);
@@ -34,6 +36,7 @@ export class MultiDiffEditorWidget extends Disposable {
 			this._dimension,
 			this._viewModel,
 			this._workbenchUIElementFactory,
+			this._diffLayoutOptions,
 		));
 	});
 
@@ -74,6 +77,31 @@ export class MultiDiffEditorWidget extends Disposable {
 
 	public layout(dimension: Dimension): void {
 		this._dimension.set(dimension, undefined);
+	}
+
+	/**
+	 * Overrides how the embedded diffs are laid out as editor-local state, independent
+	 * of the `diffEditor.renderSideBySide` and `diffEditor.diffWordWrap` settings.
+	 */
+	public setDiffLayoutOptions(mode: DiffEditorViewMode, diffWordWrap?: 'off' | 'on' | 'inherit'): void {
+		this._updateDiffLayoutOptions({
+			renderSideBySide: mode !== 'inline',
+			useInlineViewWhenSpaceIsLimited: mode === 'automatic',
+			...(diffWordWrap ? { diffWordWrap } : {}),
+		});
+	}
+
+	private _updateDiffLayoutOptions(options: IDiffEditorOptions): void {
+		const currentOptions = this._diffLayoutOptions.get();
+		const updatedOptions = { ...currentOptions, ...options };
+		if (
+			currentOptions?.renderSideBySide === updatedOptions.renderSideBySide
+			&& currentOptions?.useInlineViewWhenSpaceIsLimited === updatedOptions.useInlineViewWhenSpaceIsLimited
+			&& currentOptions?.diffWordWrap === updatedOptions.diffWordWrap
+		) {
+			return;
+		}
+		this._diffLayoutOptions.set(updatedOptions, undefined);
 	}
 
 	private readonly _activeControl = derived(this, (reader) => this._widgetImpl.read(reader).activeControl.read(reader));
