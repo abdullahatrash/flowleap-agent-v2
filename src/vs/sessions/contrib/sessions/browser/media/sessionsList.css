@@ -370,6 +370,19 @@
 	color: var(--vscode-descriptionForeground);
 	padding: 0 10px;
 
+	/* Leading slot: carries the collapsed-section indicator (see
+		`renderSessionHeaderIcon` in sessionsList.ts). Hidden when empty. */
+	.session-section-icon {
+		flex-shrink: 0;
+		margin-right: 6px;
+		width: 12px;
+		height: 12px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: var(--vscode-codiconFontSize-compact, 12px);
+	}
+
 	.session-section-label {
 		flex: 1 1 auto;
 		min-width: 0;

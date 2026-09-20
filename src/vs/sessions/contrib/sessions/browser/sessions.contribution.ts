@@ -20,6 +20,8 @@ import './views/sessionsViewActions.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { SessionsMouseNavigationContribution } from './sessionsMouseNavigation.js';
 import { SessionsWindowNotifier } from './sessionsWindowNotifier.js';
+import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING } from './views/sessionsList.js';
 import './sessionDetailsAction.js';
 
 const agentSessionsViewIcon = registerIcon('chat-sessions-icon', Codicon.commentDiscussionSparkle, localize('agentSessionsViewIcon', 'Icon for Agent Sessions View'));
@@ -56,6 +58,18 @@ const sessionsViewPaneDescriptor: IViewDescriptor = {
 };
 
 Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews([sessionsViewPaneDescriptor], agentSessionsViewContainer);
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	id: 'sessions',
+	properties: {
+		[SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING]: {
+			type: 'boolean',
+			tags: ['preview'],
+			description: localize('sessions.list.showUnreadInCollapsedSections', "Controls whether collapsed sections in the Sessions list show needs-input or unread indicators for the unarchived sessions they contain."),
+			default: true,
+		},
+	},
+});
 
 registerWorkbenchContribution2(SessionsTitleBarContribution.ID, SessionsTitleBarContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(NewSessionActionViewItemContribution.ID, NewSessionActionViewItemContribution, WorkbenchPhase.BlockRestore);
