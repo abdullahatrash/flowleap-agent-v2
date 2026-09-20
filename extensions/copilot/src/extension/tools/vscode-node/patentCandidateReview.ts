@@ -48,9 +48,21 @@ export interface PatentCandidateReview {
 	 * The concept-synonym table the queries were built from. An attorney judging whether a search was
 	 * competent reads it first, so the client report shows it instead of leaving it in the session.
 	 */
-	readonly concepts?: readonly { readonly concept: string; readonly synonyms: readonly string[] }[];
+	readonly concepts?: readonly PatentSearchConcept[];
 	/** The classification codes the search covered, each with its meaning in plain words. */
-	readonly classifications?: readonly { readonly code: string; readonly meaning: string }[];
+	readonly classifications?: readonly PatentClassificationEntry[];
+}
+
+/** One concept the queries were built from, and the synonyms and variations searched for it. */
+interface PatentSearchConcept {
+	readonly concept: string;
+	readonly synonyms: readonly string[];
+}
+
+/** One classification code the search covered, with its meaning in plain words. */
+interface PatentClassificationEntry {
+	readonly code: string;
+	readonly meaning: string;
 }
 
 /**
@@ -190,8 +202,11 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 		lines.push(`No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: ${retrieved.join(', ') || 'none'}.`);
 	}
 	const searches = searchExecutions(snapshot);
-	const tails = searches.flatMap((execution, index) => execution.status === 'succeeded' && execution.total !== undefined && execution.returned !== undefined && execution.total > execution.returned
-		? [`Query ${index + 1} returned ${execution.returned} of ${execution.total} matches; the remaining ${execution.total - execution.returned} were not retrieved.`]
+	// Numbered over the succeeded searches only, in searchSets()'s own order, so "Search set N" names
+	// row N of the client report's table; a failed or cancelled execution earns no number there.
+	const succeededSearches = searches.filter(execution => execution.status === 'succeeded');
+	const tails = succeededSearches.flatMap((execution, index) => execution.total !== undefined && execution.returned !== undefined && execution.total > execution.returned
+		? [`Search set ${index + 1} returned ${execution.returned} of ${execution.total} matches; the remaining ${execution.total - execution.returned} were not retrieved.`]
 		: []);
 	if (tails.length) { lines.push(tails.join(' ')); }
 	const unrun = unretriedQueries(snapshot);
@@ -620,14 +635,13 @@ const CHECKED_MECHANICALLY = 'Anchor identity, quotation identity and required f
  * The client deliverable: the concepts and classifications the search was built from, the sets that
  * ran, the retrieved documents, the coverage analysis, the stopping rationale and the limitations.
  * The quality machinery — the full search log, the wording review, the second read and the
- * provenance boilerplate — lives in the working record this report's last line names.
- *
- * Detailed tool outcomes live in the linked JSON evidence companion.
+ * provenance boilerplate — lives in the working record this report's last line names, which also
+ * links the detailed tool-outcome and source-metadata evidence.
  *
  * @param variant `invalidity` relabels the statuses for a claim chart and adds the generated
  * reference-roles table. Rendering is byte-identical to a prior-art review when it is omitted.
  */
-export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, evidenceFileName: string, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art'): string {
+export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art'): string {
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);

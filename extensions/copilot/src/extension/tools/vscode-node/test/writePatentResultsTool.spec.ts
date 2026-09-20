@@ -45,7 +45,13 @@ interface SecondReadStub {
 	readonly failure?: string;
 }
 
-function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRead: SecondReadStub = {}) {
+/**
+ * @param rejectInvokeFunctionCall When set, the eligibility check made by this ordinal call to
+ * `invokeFunction` within one save (1 = the report path, 2 = the evidence path, 3 = the working
+ * record path) throws, so a test can simulate that one path being ineligible without stubbing the
+ * real `assertFileOkForTool` machinery.
+ */
+function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRead: SecondReadStub = {}, rejectInvokeFunctionCall?: number) {
 	const files = new MockFileSystemService();
 	const reportsSaved: string[] = [];
 	const log = new class extends mock<ILogService>() { override trace() { } override info() { } override warn() { } override error() { } }();
@@ -53,7 +59,13 @@ function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRe
 	const paths = new PromptPathRepresentationService(workspace);
 	const checked: string[] = [];
 	// The workspace confinement helper is tested independently; this seam records that validation is requested.
-	const instantiation = new class extends mock<IInstantiationService>() { override invokeFunction<R>(): R { checked.push('checked'); return undefined as R; } }();
+	const instantiation = new class extends mock<IInstantiationService>() {
+		override invokeFunction<R>(): R {
+			checked.push('checked');
+			if (checked.length === rejectInvokeFunctionCall) { throw new Error(`File is outside of the workspace, and not open in an editor, and can't be read`); }
+			return undefined as R;
+		}
+	}();
 	const configuration = new class extends mock<IConfigurationService>() {
 		override getNonExtensionConfig<T>(key: string): T | undefined {
 			return (key === 'patent.secondRead.model' ? secondRead.judgeModel : secondRead.setting ?? 'off') as T | undefined;
@@ -214,6 +226,31 @@ describe('candidate report save path', () => {
 			pointer: 'Working record: [prior-art-review.working-record.md](prior-art-review.working-record.md) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.',
 			title: '# Working record — Quick release skewers',
 			sections: ['## Search log', '## Retrieved but not read', '## Second read', '## Wording review', '## Provenance'],
+		});
+	});
+
+	it('still saves the report and evidence when the working record path is ineligible, and states no working record', async () => {
+		// The third eligibility check of a structured save is the working record's own path; making it
+		// throw must not cost the deliverable, which the report and evidence checks (1st and 2nd) already
+		// passed and whose files are written before the working record is attempted.
+		const { tool, files } = setup(unrecordedPatentLedger, {}, 3);
+		const input = { filePath: 'outputs/prior-art-review.md', template: 'prior-art-report' as const, content: '', subject: 'Quick release skewers', coverage: [{ feature: 'Combination', kind: 'combination' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'Sources unavailable.' }], limitations: ['Interim review.'], stopReason: 'Bounded interim result.' };
+		const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+		const message = (result.content[0] as LanguageModelTextPart).value;
+		const report = new TextDecoder().decode(await files.readFile(URI.file('/workspace/outputs/prior-art-review.md')));
+		const names = (await files.readDirectory(URI.file('/workspace/outputs'))).map(([name]) => name);
+		expect({
+			saved: message.startsWith('Successfully wrote patent results to outputs/prior-art-review.md'),
+			resultLine: message.split('\n').find(line => line.startsWith('Working record: ')),
+			pointer: report.split('\n').find(line => line.startsWith('Working record: ')),
+			evidenceWritten: names.some(name => name.endsWith('.evidence.json')),
+			recordWritten: names.some(name => name.endsWith('.working-record.md')),
+		}).toEqual({
+			saved: true,
+			resultLine: undefined,
+			pointer: 'Working record: [prior-art-review.working-record.md](prior-art-review.working-record.md) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.',
+			evidenceWritten: true,
+			recordWritten: false,
 		});
 	});
 

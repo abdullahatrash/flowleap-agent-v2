@@ -13,12 +13,15 @@ vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vsco
 const claim = '1. A dental composition comprising 100 parts monomer and 40 parts composite filler.';
 const anchor = 'WO9951190A1:claims:1:en';
 
-/** Two searches that ran, one that failed and was retried under the same query, one that never ran. */
+/**
+ * Two searches that succeeded, one that failed and was retried under the same query (and then
+ * succeeded), and one that was cancelled and never retried — covering both non-succeeded statuses.
+ */
 const snapshot: PatentExecutionSnapshot = {
 	limitation: 'Recorded outcomes only.',
 	executions: [
 		{ id: 'one', recordedAt: '2026-09-18T01:00:00Z', kind: 'search', status: 'succeeded', query: 'ta=dental', effectiveQuery: 'ta=dental', countryFilter: ['EP', 'WO'], total: 33, returned: 10, range: { begin: 1, end: 10 } },
-		{ id: 'two', recordedAt: '2026-09-18T01:10:00Z', kind: 'search', status: 'failed', query: 'ic=A61K6 and ab="classifying"', requestedRange: '1-25' },
+		{ id: 'two', recordedAt: '2026-09-18T01:10:00Z', kind: 'search', status: 'cancelled', query: 'ic=A61K6 and ab="classifying"', requestedRange: '1-25' },
 		{ id: 'three', recordedAt: '2026-09-18T01:20:00Z', kind: 'search', status: 'failed', query: 'ta=filler', requestedRange: '1-25' },
 		{ id: 'four', recordedAt: '2026-09-18T01:30:00Z', kind: 'search', status: 'succeeded', query: 'ta=filler', effectiveQuery: 'ta=filler', total: 4, returned: 4, range: { begin: 1, end: 4 } },
 		{
@@ -66,7 +69,7 @@ function sections(rendered: string): Record<string, string[]> {
 
 describe('the client report and its working record', () => {
 	it('presents only the searches that ran, and names the queries that never ran in limitations', () => {
-		const rendered = sections(renderCandidateReview(review, snapshot, 'review.md.evidence.json', 'review.working-record.md'));
+		const rendered = sections(renderCandidateReview(review, snapshot, 'review.working-record.md'));
 		expect({ searchSets: rendered['Search sets'], limitations: rendered['Limitations'] }).toEqual({
 			searchSets: [
 				'| Source | Query | Scope | Hits |',
@@ -83,7 +86,7 @@ describe('the client report and its working record', () => {
 				'Generated from the execution record, not supplied by the model:',
 				'- 1 of 2 retrieved documents are not cited in any coverage row; their text was available locally and was not reviewed for this report.',
 				'- No description passage is cited; every finding rests on claim text only. Descriptions were retrieved for: none.',
-				'- Query 1 returned 10 of 33 matches; the remaining 23 were not retrieved.',
+				'- Search set 1 returned 10 of 33 matches; the remaining 23 were not retrieved.',
 				'- 1 search(es) could not be run and were not retried: ic=A61K6 and ab="classifying". Coverage those queries would have tested is missing from this report.',
 				'',
 				'Working record: [review.working-record.md](review.working-record.md) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.',
@@ -91,13 +94,31 @@ describe('the client report and its working record', () => {
 		});
 	});
 
+	it('numbers the tail sentence over the search-sets table, not over every recorded attempt', () => {
+		// A failed search precedes the one succeeded search with a tail. The table lists only the
+		// succeeded search, as its sole row; the sentence must name that row "Search set 1", not
+		// "Search set 2" from counting the failed attempt that never reaches the table.
+		const failedThenTail: PatentExecutionSnapshot = {
+			limitation: 'Recorded outcomes only.',
+			executions: [
+				{ id: 'failed', recordedAt: '2026-09-19T01:00:00Z', kind: 'search', status: 'failed', query: 'ta=dental' },
+				{ id: 'succeeded', recordedAt: '2026-09-19T01:10:00Z', kind: 'search', status: 'succeeded', query: 'ta=filler', effectiveQuery: 'ta=filler', total: 12, returned: 5 },
+			],
+		};
+		const rendered = sections(renderCandidateReview(review, failedThenTail, 'review.working-record.md'));
+		expect({ searchSets: rendered['Search sets'], tail: rendered['Limitations']?.find(line => line.includes('returned')) }).toEqual({
+			searchSets: ['| Source | Query | Scope | Hits |', '| --- | --- | --- | --- |', '| search_patents | ta=filler | not filtered | 12 |', '', '1 search sets run; 0 documents retrieved.', ''],
+			tail: '- Search set 1 returned 5 of 12 matches; the remaining 7 were not retrieved.',
+		});
+	});
+
 	it('renders the concept and classification tables only when they are supplied', () => {
 		const supplied = { ...review, concepts: [{ concept: 'dental filler', synonyms: ['composite filler', 'inorganic filler'] }], classifications: [{ code: 'A61K 6/00', meaning: 'Dental preparations' }] };
-		const rendered = sections(renderCandidateReview(supplied, snapshot, 'evidence.json', 'review.working-record.md'));
+		const rendered = sections(renderCandidateReview(supplied, snapshot, 'review.working-record.md'));
 		expect({
 			concepts: rendered['Concepts searched'],
 			classifications: rendered['Classifications searched'],
-			withoutThem: Object.keys(sections(renderCandidateReview(review, snapshot, 'evidence.json', 'review.working-record.md'))).slice(0, 2),
+			withoutThem: Object.keys(sections(renderCandidateReview(review, snapshot, 'review.working-record.md'))).slice(0, 2),
 		}).toEqual({
 			concepts: ['| Concept | Synonyms and variations |', '| --- | --- |', '| dental filler | composite filler, inorganic filler |', ''],
 			classifications: ['| Code | Meaning |', '| --- | --- |', '| A61K 6/00 | Dental preparations |', ''],
@@ -106,7 +127,7 @@ describe('the client report and its working record', () => {
 	});
 
 	it('keeps every internal section out of the client report', () => {
-		const rendered = renderCandidateReview(review, snapshot, 'evidence.json', 'review.working-record.md');
+		const rendered = renderCandidateReview(review, snapshot, 'review.working-record.md');
 		expect({
 			headings: rendered.split('\n').filter(line => line.startsWith('## ')),
 			secondRead: rendered.includes('Second read'),
@@ -133,7 +154,7 @@ describe('the client report and its working record', () => {
 			'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range |',
 			'| --- | --- | --- | --- | --- | --- |',
 			'| succeeded | ta=dental | EP, WO | 33 | 10 | 1-10 |',
-			'| failed | ic=A61K6 and ab="classifying" (effective query unknown) | unknown | unknown | unknown | 1-25 (requested) |',
+			'| cancelled | ic=A61K6 and ab="classifying" (effective query unknown) | unknown | unknown | unknown | 1-25 (requested) |',
 			'| failed | ta=filler (effective query unknown) | unknown | unknown | unknown | 1-25 (requested) |',
 			'| succeeded | ta=filler | unknown | 4 | 4 | 1-4 |',
 			'',

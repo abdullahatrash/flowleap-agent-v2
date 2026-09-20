@@ -177,7 +177,6 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const recordUri = uri.with({ path: workingRecordPath(uri.path) });
 			if (snapshot) {
 				await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, evidenceUri));
-				await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, recordUri));
 			}
 			// The report is written once, with the second read already in it, so the receipt covers the
 			// final bytes. A judge failure is caught below and never reaches the save.
@@ -187,7 +186,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(evidenceUri), basename(recordUri), variant) : content;
+			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant) : content;
 			const wording = snapshot ? candidateWordingReview(input) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of
@@ -353,11 +352,13 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 	/**
 	 * Write the working record beside the report, under its stable name, so a refinement save
-	 * replaces the record of the run it refines. A failure is reported as an unwritten record rather
-	 * than as a failed save: the deliverable it accompanies is already on disk.
+	 * replaces the record of the run it refines. The eligibility check runs here, not beside the
+	 * report's own, so an ineligible record path is a warning and an unnamed record, never a reason to
+	 * abort a save whose deliverable is already on disk.
 	 */
 	private async writeWorkingRecord(record: URI, document: string): Promise<boolean> {
 		try {
+			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, record));
 			await this.fileSystemService.writeFile(record, new TextEncoder().encode(document));
 			return true;
 		} catch (error) {
