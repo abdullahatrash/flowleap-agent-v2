@@ -31,7 +31,7 @@ import { getVerbosityForModelSync, isGpt54, isGpt55, isGpt56 } from '../common/c
 import { rawPartAsCompactionData } from '../common/compactionDataContainer';
 import { rawPartAsPhaseData } from '../common/phaseDataContainer';
 import { getIndexOfStatefulMarker, getStatefulMarkerAndIndex } from '../common/statefulMarkerContainer';
-import { rawPartAsThinkingData } from '../common/thinkingDataContainer';
+import { rawPartAsThinkingEnvelope } from '../common/thinkingDataContainer';
 import { createResponsesStreamDumper } from './responsesApiDebugDump';
 
 export function getResponsesApiCompactionThreshold(configService: IConfigurationService, expService: IExperimentationService, endpoint: IChatEndpoint): number | undefined {
@@ -570,32 +570,20 @@ function rawContentToResponsesAssistantContent(part: Raw.ChatCompletionContentPa
 	}
 }
 
-/**
- * The Responses API rejects the entire request with
- * `400 invalid_request_body: Invalid 'input[N].id': '...'. Expected an ID that begins with 'rs'.`
- * when a reasoning item is round-tripped with an id it did not issue. Reasoning items
- * produced by the Responses API always carry an id beginning with `rs`. Thinking blocks
- * that originated from a different API (e.g. the Anthropic Messages API, whose accumulator
- * generates `thinking_<index>` ids) can leak into a Responses request — most notably via the
- * `vscode.lm` access path, which has no model gate — and their `encrypted_content` is not a
- * valid Responses reasoning blob anyway. Such foreign reasoning items must be dropped, not sent.
- */
-function isResponsesReasoningId(id: string | undefined): boolean {
-	return typeof id === 'string' && id.startsWith('rs');
-}
-
 function extractThinkingData(content: Raw.ChatCompletionContentPart[]): OpenAI.Responses.ResponseReasoningItem[] {
 	return coalesce(content.map(part => {
 		if (part.type === Raw.ChatCompletionContentPartKind.Opaque) {
-			const thinkingData = rawPartAsThinkingData(part);
-			// Only round-trip genuine Responses API reasoning items. A foreign id (or a thinking
-			// block with no encrypted payload) would otherwise 400 the whole request.
-			if (thinkingData && thinkingData.encrypted && isResponsesReasoningId(thinkingData.id)) {
+			const envelope = rawPartAsThinkingEnvelope(part);
+			// Preserve legacy replay behavior for history and extensions that do not supply an API type.
+			const isResponsesReasoning = envelope?.originApi === undefined
+				? typeof envelope?.thinking.id === 'string' && envelope.thinking.id.startsWith('rs')
+				: envelope.originApi === 'responses';
+			if (isResponsesReasoning && envelope?.thinking.encrypted) {
 				return {
 					type: 'reasoning',
-					id: thinkingData.id,
+					id: envelope.thinking.id,
 					summary: [],
-					encrypted_content: thinkingData.encrypted,
+					encrypted_content: envelope.thinking.encrypted,
 				} satisfies OpenAI.Responses.ResponseReasoningItem;
 			}
 		}
