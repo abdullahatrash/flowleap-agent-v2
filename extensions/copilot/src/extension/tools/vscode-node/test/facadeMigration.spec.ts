@@ -223,7 +223,7 @@ describe('get_patent_figures', () => {
 
 	function makeFiguresTool(scripted: IPatentBackendClient) {
 		const services = makeFiguresSaveServices();
-		const tool = new GetPatentFiguresTool(makeLogService(), scripted, services.fileSystemService, services.promptPathRepresentationService, services.workspaceService, services.instantiationService);
+		const tool = new GetPatentFiguresTool(makeLogService(), scripted, services.fileSystemService, services.promptPathRepresentationService, services.workspaceService, services.instantiationService, unrecordedPatentLedger);
 		return { tool, writes: services.writes };
 	}
 

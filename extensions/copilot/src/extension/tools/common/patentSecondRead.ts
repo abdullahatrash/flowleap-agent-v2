@@ -18,6 +18,10 @@ export interface SecondReadElement {
 	readonly element: string;
 	readonly anchor?: string;
 	readonly disclosedBy?: string;
+	/** `figure` marks an element that rests on a drawing; the judge reads text, so it is not judged. */
+	readonly basis?: 'text' | 'figure';
+	/** The model's reading of the drawing. Carried for completeness; the judge is never shown it. */
+	readonly reading?: string;
 }
 
 /** A coverage row as far as the second read is concerned. */
@@ -76,6 +80,8 @@ export interface SecondReadSummary {
 	readonly disagree: number;
 	readonly unclear: number;
 	readonly unparsed: number;
+	/** Elements left out of the judge request because they rest on a drawing; absent when there are none. */
+	readonly notJudged?: number;
 }
 
 /**
@@ -121,6 +127,21 @@ function passageWindow(text: string, fragment: string | undefined): string {
 	return text.slice(start, start + PASSAGE_WINDOW);
 }
 
+/** An element the judge cannot check: a drawing has no text for an independent read to weigh. */
+function restsOnDrawing(element: SecondReadElement): boolean {
+	return element.basis === 'figure';
+}
+
+/**
+ * The elements a second read leaves to the report because they rest on a drawing. They are counted
+ * so the diagnostic states what it did not judge instead of quietly judging fewer elements.
+ */
+export function notJudgedFigureElements(review: SecondReadReview): number {
+	return (review.coverage ?? [])
+		.filter(row => JUDGED_STATUSES.includes(row.status))
+		.reduce((total, row) => total + (row.elements ?? []).filter(restsOnDrawing).length, 0);
+}
+
 /** One request per coverage row that claims disclosure and lists the elements to check. */
 export function buildSecondReadRequests(review: SecondReadReview, snapshot: SecondReadSnapshot): SecondReadRequest[] {
 	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
@@ -129,7 +150,7 @@ export function buildSecondReadRequests(review: SecondReadReview, snapshot: Seco
 		.map(row => ({
 			feature: row.feature,
 			status: row.status,
-			elements: (row.elements ?? []).map(element => {
+			elements: (row.elements ?? []).filter(element => !restsOnDrawing(element)).map(element => {
 				const anchor = element.anchor?.trim();
 				const fragment = element.disclosedBy?.trim();
 				const text = anchor ? sources.get(anchor)?.text : undefined;
@@ -140,7 +161,9 @@ export function buildSecondReadRequests(review: SecondReadReview, snapshot: Seco
 					...(text ? { passage: passageWindow(text, fragment) } : {}),
 				};
 			}),
-		}));
+		}))
+		// A row whose every element rests on a drawing has nothing for the judge to read.
+		.filter(request => request.elements.length > 0);
 }
 
 /**
@@ -210,8 +233,11 @@ export function parseSecondReadVerdicts(text: string): SecondReadVerdict[] | und
 	return verdicts.map(({ element, verdict, reason }) => ({ element, verdict, reason }));
 }
 
-/** Counts for the one-line diagnostic: elements judged, and how the judge split over them. */
-export function summarizeSecondRead(results: readonly SecondReadResult[]): SecondReadSummary {
+/**
+ * Counts for the one-line diagnostic: elements judged, how the judge split over them, and the
+ * elements that were never sent because they rest on a drawing.
+ */
+export function summarizeSecondRead(results: readonly SecondReadResult[], notJudged = 0): SecondReadSummary {
 	const verdicts = results.flatMap(result => result.verdicts ?? []);
 	return {
 		elements: verdicts.length,
@@ -219,6 +245,7 @@ export function summarizeSecondRead(results: readonly SecondReadResult[]): Secon
 		disagree: verdicts.filter(verdict => verdict.verdict === 'disagree').length,
 		unclear: verdicts.filter(verdict => verdict.verdict === 'unclear').length,
 		unparsed: results.filter(result => result.unparsed !== undefined).length,
+		...(notJudged ? { notJudged } : {}),
 	};
 }
 
@@ -246,6 +273,6 @@ export function unconfirmedVerdicts(results: readonly SecondReadResult[]): Secon
  */
 export function secondReadLimitation(outcome: SecondReadOutcome): string {
 	if (outcome.kind === 'skipped') { return `Second read: skipped (${outcome.reason}).`; }
-	const { elements, disagree, unclear, unparsed } = outcome.summary;
-	return `Second read by ${outcome.model}: ${elements} elements judged, ${disagree} not confirmed, ${unclear} unclear, ${unparsed} unparsed.`;
+	const { elements, disagree, unclear, unparsed, notJudged } = outcome.summary;
+	return `Second read by ${outcome.model}: ${elements} elements judged, ${disagree} not confirmed, ${unclear} unclear, ${unparsed} unparsed${notJudged ? `, ${notJudged} not judged (figure)` : ''}.`;
 }

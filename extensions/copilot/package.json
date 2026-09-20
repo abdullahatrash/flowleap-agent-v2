@@ -2182,7 +2182,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. Free-form saves (no template) retain their existing behavior.",
+        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. An element may instead rest on a recorded drawing: give it the PUB:figure:N anchor printed by get_patent_figures, basis \"figure\" and a reading of what the figure clearly shows (never a dimension or ratio unless the drawing is stated to be to scale); the report marks that row as resting on a drawing reading and the second read does not judge it. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. Free-form saves (no template) retain their existing behavior.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -2330,7 +2330,7 @@
                   },
                   "elements": {
                     "type": "array",
-                    "description": "Required for supported/partial rows (feature and combination alike): one entry per constituent the feature requires. A supported row discloses every element by cited text; a partial row discloses some and leaves at least one undisclosed; a supported combination row must rest on a single publication.",
+                    "description": "Required for supported/partial rows (feature and combination alike): one entry per constituent the feature requires. A supported row discloses every element by cited text or by a recorded drawing; a partial row discloses some and leaves at least one undisclosed; a supported combination row must rest on a single publication. A text element gives anchor plus disclosedBy, a literal fragment of that anchor’s recorded text. A figure element gives anchor = a PUB:figure:N anchor printed by get_patent_figures, basis = \"figure\", and reading = what the drawing clearly shows (that an element exists, how parts connect or are arranged) — never a dimension, proportion or ratio unless the drawing is stated to be to scale.",
                     "items": {
                       "type": "object",
                       "properties": {
@@ -2342,12 +2342,25 @@
                         "anchor": {
                           "type": "string",
                           "minLength": 1,
-                          "description": "The one of this row’s sourceAnchors whose passage discloses this element. Omit together with disclosedBy when no cited text discloses it."
+                          "description": "The one of this row’s sourceAnchors whose passage — or, with basis \"figure\", whose recorded drawing page — discloses this element. Omit together with disclosedBy when nothing cited discloses it."
                         },
                         "disclosedBy": {
                           "type": "string",
                           "minLength": 1,
-                          "description": "A literal fragment copied from that anchor’s recorded text that discloses the element; matching ignores case and whitespace. Fragments under 12 characters are disclosed as weak in the report. Omit together with anchor when no cited text discloses the element."
+                          "description": "A literal fragment copied from that anchor’s recorded text that discloses the element; matching ignores case and whitespace. Fragments under 12 characters are disclosed as weak in the report. Omit together with anchor when no cited text discloses the element, and always for a figure element — a drawing has no quotable text."
+                        },
+                        "basis": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "figure"
+                          ],
+                          "description": "What discloses this element: \"text\" (the default) for a passage cited by anchor plus disclosedBy, \"figure\" for a recorded drawing page cited by a PUB:figure:N anchor and stated in reading."
+                        },
+                        "reading": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "basis \"figure\" only: what the drawing clearly shows — that an element exists, how the parts connect or are arranged. It replaces disclosedBy. A reading that states a dimension, a proportion or a ratio is rejected unless the same reading says the drawing is to scale (MPEP 2125)."
                         }
                       },
                       "required": [

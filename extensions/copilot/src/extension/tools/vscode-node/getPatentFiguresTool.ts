@@ -14,7 +14,9 @@ import { decodeBase64 } from '../../../util/vs/base/common/buffer';
 import { joinPath } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendClient';
+import { figureAnchor, IPatentExecutionLedger, PatentEvidenceSource } from '../../patentai/vscode-node/patentExecutionLedger';
 import { callFacadeTool } from './patentFacade';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
@@ -62,6 +64,21 @@ const MAX_REQUESTED_PAGES = 20;
 const FIGURE_RENDER_TIMEOUT_MS = 60_000;
 
 /**
+ * What a returned drawing page may be cited for. A figure discloses that an element exists and how
+ * the parts are arranged; a dimension or a ratio read off an unscaled drawing is invented evidence
+ * (MPEP 2125), so the rule travels with the anchors rather than living only in a skill.
+ */
+const FIGURE_CITATION_RULE = 'To cite a drawing in a coverage row, give the element this anchor and a short reading of what the figure clearly shows; never a dimension or ratio unless the drawing is stated to be to scale.';
+
+/**
+ * OPS echoes ids as `EP1234567.A1` and callers type `EP-1234567-A1`; both name one document, and
+ * the recorded reference needs the separator-free form the rest of the audit is keyed on.
+ */
+function normalizePublicationNumber(publicationNumber: string): string {
+	return publicationNumber.replace(/[-.\s/]/g, '').toUpperCase();
+}
+
+/**
  * Tool for retrieving patent figure/drawing images through the FlowLeap backend's `get_patent_image`
  * facade tool (EPO OPS images).
  *
@@ -84,6 +101,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 		@IPromptPathRepresentationService private readonly promptPathRepresentationService: IPromptPathRepresentationService,
 		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentFiguresParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -105,6 +123,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IGetPatentFiguresParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const { publicationNumber, pages, saveDir } = options.input;
 		this.logService.info(`[GetPatentFiguresTool] Fetching figures for ${publicationNumber}${pages ? ` pages=${pages}` : ''}`);
+		const requested = normalizePublicationNumber(publicationNumber);
 
 		try {
 			// Step 1: fetch metadata (no images) to learn the page count and where the
@@ -120,6 +139,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			const totalFigures = source?.pages ?? 0;
 			const drawingStartPage = source?.drawingStartPage;
 			if (totalFigures < 1) {
+				await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: 'succeeded', publicationIds: [docId] });
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`No figure images are available for ${docId}.`)
 				]);
@@ -154,6 +174,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			const withImages = figures.filter(f => f.base64);
 
 			if (withImages.length === 0) {
+				await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: 'succeeded', publicationIds: [docId] });
 				return new LanguageModelToolResult([
 					new LanguageModelTextPart(`No figure images could be retrieved for ${docId} (pages ${pagesParam}).`)
 				]);
@@ -172,11 +193,20 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			}
 			parts.push(new LanguageModelTextPart(header));
 
+			// A drawing becomes citable evidence only once it is recorded: the model is shown the very
+			// anchor the writer will check a figure-based coverage element against.
+			const reference = parsePatentDocumentReference({ publicationNumber: normalizePublicationNumber(docId), section: 'bibliography' });
 			for (const fig of withImages) {
 				parts.push(new LanguageModelTextPart(`\nPage ${fig.page}:`));
 				// render=png means base64 is always a PNG image.
 				parts.push(LanguageModelDataPart.image(decodeBase64(fig.base64!).buffer, 'image/png'));
+				if (reference) { parts.push(new LanguageModelTextPart(`Anchor: ${figureAnchor(reference.publicationNumber, fig.page)}`)); }
 			}
+			if (reference) { parts.push(new LanguageModelTextPart(`\n${FIGURE_CITATION_RULE}`)); }
+			const sources: PatentEvidenceSource[] = reference
+				? withImages.map(fig => ({ anchor: figureAnchor(reference.publicationNumber, fig.page), reference, figure: { page: fig.page }, retrieval: 'returned', review: 'unknown', completeness: 'unknown' }))
+				: [];
+			await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: 'succeeded', publicationIds: [docId], sources });
 
 			// Note any remaining pages the caller can request explicitly.
 			const lastShown = (withImages[withImages.length - 1]?.page) ?? 0;
@@ -193,6 +223,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 			return new LanguageModelToolResult(parts);
 
 		} catch (error) {
+			await this.ledger.record(options.chatSessionResource, { kind: 'figures', status: token.isCancellationRequested ? 'cancelled' : 'failed', publicationIds: [requested] });
 			return handlePatentToolError(error, this.logService, '[GetPatentFiguresTool]', err => `Error fetching figures for ${publicationNumber}: ${err.status} - ${err.message}`);
 		}
 	}

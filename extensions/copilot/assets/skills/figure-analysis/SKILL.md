@@ -15,5 +15,5 @@ Drawings are part of the legal disclosure and can be prior art for what they cle
 - Figures are language-independent — analyze CN/JP/KR/DE drawings without translation.
 - Never describe a figure you haven't retrieved; don't over-read ambiguous depictions.
 - A figure discloses what it clearly shows — that an element exists, how parts connect or are arranged; it does not disclose dimensions, proportions or ratios unless the drawing is stated to be to scale (MPEP 2125; *Hockerson-Halberstadt v. Avia*; *In re Wright*), so a ratio read off an unscaled figure is invented evidence.
-- Save non-trivial analyses via `write_patent_results` — the reference-numeral map, figure citations, and comparison table.
+- Save non-trivial analyses via `write_patent_results` — the reference-numeral map, figure citations, and comparison table; in a coverage row cite a drawing on the element it discloses, with the `PUB:figure:N` anchor printed by `get_patent_figures`, `basis: "figure"` and a `reading` of what the figure clearly shows instead of `disclosedBy`.
 - The analysis is complete only when every figure referenced in the answer has been retrieved via `get_patent_figures` and every claim-mapping statement cites a specific figure and reference numeral.

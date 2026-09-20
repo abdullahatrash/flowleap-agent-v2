@@ -18,6 +18,11 @@ export interface PatentEvidenceSource {
 	readonly text?: string;
 	readonly reference: PatentDocumentReference;
 	readonly language?: string;
+	/**
+	 * Set only on a figure source: the returned drawing page this source stands for. A drawing has
+	 * no text, so such a source carries no `text` and is cited through its own {@link figureAnchor}.
+	 */
+	readonly figure?: { readonly page: number };
 	readonly retrieval: 'returned' | 'unsegmented';
 	readonly review: 'unknown';
 	readonly completeness: 'unknown';
@@ -58,7 +63,7 @@ export const SEARCH_PURPOSE_CAP = 200;
 export interface PatentExecution {
 	readonly id: string;
 	readonly recordedAt: string;
-	readonly kind: 'search' | 'details' | 'analytics' | 'status';
+	readonly kind: 'search' | 'details' | 'figures' | 'analytics' | 'status';
 	readonly status: 'succeeded' | 'failed' | 'cancelled';
 	readonly query?: string;
 	readonly requestedRange?: string;
@@ -103,7 +108,7 @@ export interface IPatentExecutionLedger {
 	read(session: vscode.Uri | undefined): Promise<PatentExecutionSnapshot>;
 }
 
-const LIMITATION = 'Audit covers recorded search_patents, get_patent_details, analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request, fetch_webpage, run_in_terminal) and legal-status (get_legal_status, get_patent_family, get_patent_term, get_register_events) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
+const LIMITATION = 'Audit covers recorded search_patents, get_patent_details, get_patent_figures, analytics (patstat_query, patstat_portfolio, patent_analytics_viz, patstat_graph, patent_api_request, fetch_webpage, run_in_terminal) and legal-status (get_legal_status, get_patent_family, get_patent_term, get_register_events) outcomes in this session only. Earlier versions, other tools, uninvoked or skipped plans, and interrupted calls may be absent. Retrieval is not evidence that passages were read; review status is unknown. Missing totals and source metadata remain unknown.';
 
 /** Durable, append-only outcome records owned by the patent workflow. Separate files avoid lost concurrent writes. */
 export class PatentExecutionLedger implements IPatentExecutionLedger {
@@ -191,6 +196,14 @@ export function evidenceAnchor(reference: PatentDocumentReference, language?: st
 }
 
 /**
+ * Stable identity of one returned drawing page. A figure carries no text and no language, so it
+ * gets its own anchor shape rather than a section anchor that would promise a quotable passage.
+ */
+export function figureAnchor(publicationNumber: string, page: number): string {
+	return `${publicationNumber}:figure:${page}`;
+}
+
+/**
  * A recovered record together with whether any stored field was unusable, so the reader can
  * disclose partial recovery without discarding the outcome.
  */
@@ -205,14 +218,23 @@ interface RecoveredExecution {
  */
 function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
-	const source = value as { anchor?: unknown; text?: unknown; reference?: unknown; language?: unknown; retrieval?: unknown; review?: unknown; completeness?: unknown };
+	const source = value as { anchor?: unknown; text?: unknown; reference?: unknown; language?: unknown; figure?: unknown; retrieval?: unknown; review?: unknown; completeness?: unknown };
 	const reference = parsePatentDocumentReference(source.reference);
 	const text = typeof source.text === 'string' ? source.text : undefined;
 	const language = typeof source.language === 'string' ? source.language : undefined;
-	if (!reference || (source.text !== undefined && text === undefined) || (source.language !== undefined && language === undefined)) { return undefined; }
-	if (source.anchor !== evidenceAnchor(reference, language) || source.review !== 'unknown' || source.completeness !== 'unknown') { return undefined; }
+	const figure = readFigurePage(source.figure);
+	if (!reference || (source.text !== undefined && text === undefined) || (source.language !== undefined && language === undefined) || (source.figure !== undefined && source.figure !== null && !figure)) { return undefined; }
+	const anchor = figure ? figureAnchor(reference.publicationNumber, figure.page) : evidenceAnchor(reference, language);
+	if (source.anchor !== anchor || source.review !== 'unknown' || source.completeness !== 'unknown') { return undefined; }
 	if (source.retrieval !== 'returned' && source.retrieval !== 'unsegmented') { return undefined; }
-	return { anchor: evidenceAnchor(reference, language), text, reference, language, retrieval: source.retrieval, review: 'unknown', completeness: 'unknown' };
+	return { anchor, text, reference, language, figure, retrieval: source.retrieval, review: 'unknown', completeness: 'unknown' };
+}
+
+/** The drawing page a figure source stands for; anything but a positive whole page is not a page. */
+function readFigurePage(value: unknown): { readonly page: number } | undefined {
+	if (!value || typeof value !== 'object') { return undefined; }
+	const page = (value as { page?: unknown }).page;
+	return typeof page === 'number' && Number.isInteger(page) && page >= 1 ? { page } : undefined;
 }
 
 /**
@@ -224,7 +246,7 @@ function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
 function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
 	const record = value as Record<string, unknown>;
-	if (typeof record.kind !== 'string' || !['search', 'details', 'analytics', 'status'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
+	if (typeof record.kind !== 'string' || !['search', 'details', 'figures', 'analytics', 'status'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
 	let dropped = false;
 	// `null` is an absent value from JSON, not a corrupt one, so it never counts as a dropped field.
 	const absent = (raw: unknown) => raw === undefined || raw === null;
@@ -268,7 +290,7 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 	const execution: PatentExecution = {
 		id: text(record.id) ?? '',
 		recordedAt: text(record.recordedAt) ?? '',
-		kind: record.kind === 'details' ? 'details' : record.kind === 'analytics' ? 'analytics' : record.kind === 'status' ? 'status' : 'search',
+		kind: record.kind === 'details' ? 'details' : record.kind === 'figures' ? 'figures' : record.kind === 'analytics' ? 'analytics' : record.kind === 'status' ? 'status' : 'search',
 		status: record.status === 'failed' ? 'failed' : record.status === 'cancelled' ? 'cancelled' : 'succeeded',
 		query: text(record.query),
 		requestedRange: text(record.requestedRange),
