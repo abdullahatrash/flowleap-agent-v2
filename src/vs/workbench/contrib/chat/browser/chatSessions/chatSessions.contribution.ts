@@ -427,10 +427,18 @@ export class ChatSessionsService extends Disposable implements IChatSessionsServ
 	}
 
 	private async updateInProgressStatus(chatSessionType: string): Promise<void> {
+		const controller = this._itemControllers.get(chatSessionType)?.controller;
+		if (!controller) {
+			return;
+		}
+
 		try {
 			const items: IChatSessionItem[] = [];
 			for await (const result of this.getChatSessionItems([chatSessionType], CancellationToken.None)) {
 				items.push(...result.items);
+			}
+			if (this._itemControllers.get(chatSessionType)?.controller !== controller) {
+				return;
 			}
 			const inProgress = items.filter(item => !item.archived && item.status && isSessionInProgressStatus(item.status));
 			this.reportInProgress(chatSessionType, inProgress.length);
@@ -1059,6 +1067,9 @@ export class ChatSessionsService extends Disposable implements IChatSessionsServ
 		this._onDidChangeItemsProviders.fire({ chatSessionType });
 
 		disposables.add(controller.onDidChangeChatSessionItems(e => {
+			for (const sessionResource of e.removed ?? []) {
+				this._disposeSession(sessionResource);
+			}
 			this._onDidChangeSessionItems.fire(e);
 			this.updateInProgressStatus(chatSessionType);
 		}));
@@ -1068,14 +1079,16 @@ export class ChatSessionsService extends Disposable implements IChatSessionsServ
 				initialRefreshCts.cancel();
 				disposables.dispose();
 
-				const controller = this._itemControllers.get(chatSessionType);
-				if (controller) {
+				const registeredController = this._itemControllers.get(chatSessionType)?.controller;
+				if (registeredController === controller) {
 					this._itemControllers.delete(chatSessionType);
 					this._onDidChangeItemsProviders.fire({ chatSessionType });
-				}
 
-				// Remove any in-progress tracking for this provider since it's no longer available
-				this.updateInProgressStatus(chatSessionType);
+					// Remove any in-progress tracking for this provider since it's no longer available
+					if (this.inProgressMap.delete(chatSessionType)) {
+						this._onDidChangeInProgress.fire();
+					}
+				}
 			}
 		};
 	}
@@ -1149,7 +1162,21 @@ export class ChatSessionsService extends Disposable implements IChatSessionsServ
 		}
 
 		await controllerData.initialRefresh;
-		return controllerData.controller.deleteChatSessionItem(sessionResource, token);
+		await controllerData.controller.deleteChatSessionItem(sessionResource, token);
+		this._disposeSession(sessionResource);
+	}
+
+	/**
+	 * Drop the content retained for a session that is gone: either deleted through its
+	 * controller, or no longer provided by it.
+	 */
+	private _disposeSession(sessionResource: URI): void {
+		const sessionData = this._sessions.get(sessionResource) ?? this._sessions.get(this._resolveResource(sessionResource));
+		if (sessionData) {
+			this._sessions.delete(sessionData.resource);
+			sessionData.dispose();
+			sessionData.session.dispose();
+		}
 	}
 
 	public async getOrCreateChatSession(sessionResource: URI, token: CancellationToken): Promise<IChatSession> {
