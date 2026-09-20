@@ -213,7 +213,9 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 	if (unrun.length) {
 		lines.push(`${unrun.length} search(es) could not be run and were not retried: ${unrun.join('; ')}. Coverage those queries would have tested is missing from this report.`);
 	}
-	if (searches.length && !searches.some(execution => CLASSIFICATION_QUERY.test(execution.effectiveQuery ?? execution.query ?? ''))) {
+	// Only a search that ran covered a class; an attempt that failed covered nothing, so it cannot
+	// suppress the warning that the recorded coverage rests on keywords alone.
+	if (succeededSearches.length && !succeededSearches.some(execution => CLASSIFICATION_QUERY.test(execution.effectiveQuery ?? execution.query ?? ''))) {
 		lines.push('No classification-code (CPC/IPC) query was recorded; the search relied on keywords only.');
 	}
 	const weak = (review.coverage ?? []).filter(row => row.status !== 'unresolved').flatMap(row => (row.elements ?? [])
@@ -235,14 +237,29 @@ function requestedQuery(execution: PatentExecution): string {
 	return execution.query?.trim() || 'query not recorded';
 }
 
+/** The feature a search said it tests, once trimmed; absent when the model named none. */
+function searchPurpose(execution: PatentExecution): string | undefined {
+	return execution.purpose?.trim() || undefined;
+}
+
 /**
- * The distinct queries that failed or were cancelled and never ran successfully afterwards. A query
- * whose identical text later succeeded was retried, so it costs no coverage and is not reported.
+ * The distinct queries that failed or were cancelled and never ran successfully afterwards, each
+ * named by the feature it was meant to test when the model stated one. A query whose identical text
+ * later succeeded was retried, so it costs no coverage and is not reported.
  */
 function unretriedQueries(snapshot: PatentExecutionSnapshot): readonly string[] {
 	const searches = searchExecutions(snapshot);
 	const succeeded = new Set(searches.filter(execution => execution.status === 'succeeded').map(requestedQuery));
-	return [...new Set(searches.filter(execution => execution.status !== 'succeeded').map(requestedQuery))].filter(query => !succeeded.has(query));
+	// Keyed on the query text, so one query attempted twice is one missing coverage entry; the first
+	// stated purpose wins, and a later attempt that names one fills a gap the first attempt left.
+	const unretried = new Map<string, string | undefined>();
+	for (const execution of searches) {
+		const query = requestedQuery(execution);
+		if (execution.status === 'succeeded' || succeeded.has(query)) { continue; }
+		const purpose = searchPurpose(execution);
+		if (!unretried.has(query) || (purpose && !unretried.get(query))) { unretried.set(query, purpose); }
+	}
+	return [...unretried].map(([query, purpose]) => purpose ? `${purpose} (${query})` : query);
 }
 
 /** Anchor to recorded source, the single index every pass over a snapshot shares. */
@@ -596,9 +613,9 @@ function searchSets(snapshot: PatentExecutionSnapshot, documents: readonly Retri
 	const searches = searchExecutions(snapshot).filter(execution => execution.status === 'succeeded');
 	return ['## Search sets',
 		...(searches.length ? [
-			'| Source | Query | Scope | Hits |',
-			'| --- | --- | --- | --- |',
-			...searches.map(execution => '| ' + [SEARCH_SOURCE, execution.effectiveQuery ?? execution.query ?? 'unknown', execution.countryFilter?.length ? execution.countryFilter.join(', ') : 'not filtered', String(execution.total ?? 'unknown')].map(cell).join(' | ') + ' |'),
+			'| Source | Query | Scope | Hits | Tests |',
+			'| --- | --- | --- | --- | --- |',
+			...searches.map(execution => '| ' + [SEARCH_SOURCE, execution.effectiveQuery ?? execution.query ?? 'unknown', execution.countryFilter?.length ? execution.countryFilter.join(', ') : 'not filtered', String(execution.total ?? 'unknown'), searchPurpose(execution) ?? '—'].map(cell).join(' | ') + ' |'),
 			'',
 		] : []),
 		`${searches.length} search sets run; ${documents.length} documents retrieved.`,
@@ -718,9 +735,9 @@ export function renderWorkingRecord(review: PatentCandidateReview, snapshot: Pat
 		'',
 		'## Search log',
 		`${searchExecutions(snapshot).length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes. These are tool invocations, not counts of documents reviewed.`,
-		'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range |',
-		'| --- | --- | --- | --- | --- | --- |',
-		...searchExecutions(snapshot).map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown'].map(cell).join(' | ') + ' |'),
+		'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range | Purpose |',
+		'| --- | --- | --- | --- | --- | --- | --- |',
+		...searchExecutions(snapshot).map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown', searchPurpose(execution) ?? '—'].map(cell).join(' | ') + ' |'),
 		'',
 		'## Retrieved but not read',
 		...uncitedDocumentTable(documents.filter(document => !document.cited)),

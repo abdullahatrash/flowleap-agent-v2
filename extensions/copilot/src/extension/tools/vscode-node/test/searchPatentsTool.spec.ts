@@ -185,12 +185,20 @@ describe('SearchPatentsTool', () => {
 
 		expect(textOf(result).split('\n')[0]).toBe('Found 38 patents matching query: "ti=helmet and ti=brake" worldwide; 1 of the 1-5 on this page are in the country filter [EP,WO]. The worldwide total is not a count of [EP,WO] hits.');
 	});
-	it('records actual effective query and returned IDs without inferring total or reviewed counts', async () => {
+	it('records actual effective query, returned IDs and the feature the query tests, without inferring total or reviewed counts', async () => {
 		const executions: Omit<PatentExecution, 'id' | 'recordedAt'>[] = [];
 		const ledger = { ...unrecordedPatentLedger, record: async (_session: vscode.Uri | undefined, execution: Omit<PatentExecution, 'id' | 'recordedAt'>) => { executions.push(execution); return 'Recorded.'; } };
 		const { client } = makeBackendClient(facadeEnvelope({ effectiveQuery: 'ti=brake and pn=EP', countryFilter: ['EP'], docs: [{ docId: 'EP1234567A1', title: 'Brake', applicants: [] }] }));
-		await new SearchPatentsTool(makeLogService(), client, ledger).invoke(makeOptions({ query: 'ti=brake', countries: 'EP' }), makeToken());
-		expect(executions).toEqual([{ kind: 'search', status: 'succeeded', query: 'ti=brake', requestedRange: '1-25', requestedCountries: 'EP', effectiveQuery: 'ti=brake and pn=EP', countryFilter: ['EP'], total: undefined, returned: 1, range: undefined, publicationIds: ['EP1234567A1'] }]);
+		await new SearchPatentsTool(makeLogService(), client, ledger).invoke(makeOptions({ query: 'ti=brake', countries: 'EP', purpose: '  F4 helmet brake-light coupling  ' }), makeToken());
+		expect(executions).toEqual([{ kind: 'search', status: 'succeeded', query: 'ti=brake', requestedRange: '1-25', requestedCountries: 'EP', purpose: 'F4 helmet brake-light coupling', effectiveQuery: 'ti=brake and pn=EP', countryFilter: ['EP'], total: undefined, returned: 1, range: undefined, publicationIds: ['EP1234567A1'] }]);
+	});
+
+	it('records the feature a failed search tested, so the report can name it instead of the raw query', async () => {
+		const executions: Omit<PatentExecution, 'id' | 'recordedAt'>[] = [];
+		const ledger = { ...unrecordedPatentLedger, record: async (_session: vscode.Uri | undefined, execution: Omit<PatentExecution, 'id' | 'recordedAt'>) => { executions.push(execution); return 'Recorded.'; } };
+		const { client } = makeBackendClient({ success: false, tool: 'search_patents', error: { message: 'OPS is overloaded.' } });
+		await new SearchPatentsTool(makeLogService(), client, ledger).invoke(makeOptions({ query: 'ic=A61K6 and ab="fine fraction"', purpose: 'F4 sub-10 µm fine-fraction cap' }), makeToken());
+		expect(executions).toEqual([{ kind: 'search', status: 'failed', query: 'ic=A61K6 and ab="fine fraction"', requestedRange: '1-25', requestedCountries: undefined, purpose: 'F4 sub-10 µm fine-fraction cap' }]);
 	});
 
 });

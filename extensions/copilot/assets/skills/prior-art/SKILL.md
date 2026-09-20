@@ -58,7 +58,7 @@ Use this planning table, then replace planned sets with the actual execution log
 For EP/WO scope, pass `countries="EP,WO"` to `search_patents` or explicitly constrain publication authority in CQL. Record the effective query the backend echoes; the database name alone does not establish an authority filter.
 1. Write the CQL from the concept-synonym table — see `patent-search` for the field reference
 2. `search_patents` with the CQL → record result count
-3. Test different synonym combinations and classification refinements. For each next query, name the unresolved feature or coverage gap it tests. When variants repeat reviewed documents without useful new evidence, update coverage and synthesize; continue only for a distinct unresolved essential feature or combination. Record `stopReason` and outstanding tracks. Use neither a universal query cap nor a required number of searches. Update the todo phase when switching to document analysis or writing.
+3. Test different synonym combinations and classification refinements. For each next query, name the unresolved feature or coverage gap it tests, and pass it as `purpose` so the record and the report can name it. When variants repeat reviewed documents without useful new evidence, update coverage and synthesize; continue only for a distinct unresolved essential feature or combination. Record `stopReason` and outstanding tracks. Use neither a universal query cap nor a required number of searches. Update the todo phase when switching to document analysis or writing.
 4. For top 3-5 results: `get_patent_details` → full claims and description
 
 ### 2c. USPTO (US)
