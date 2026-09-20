@@ -1765,7 +1765,13 @@ export class SessionsList extends Disposable implements ISessionsList {
 				return;
 			}
 			if (!isSessionSection(element) && !isSessionGroupItem(element)) {
-				this.markRead(element);
+				// Re-opening the session you are already viewing must not clobber an
+				// explicit "Mark as Unread" on it: the mark is only meaningful while
+				// the session stays active, so leave it alone until the user leaves
+				// and comes back.
+				if (this._sessionsService.activeSession.get()?.sessionId !== element.sessionId) {
+					this.markRead(element);
+				}
 				// A deliberate left mouse click on a session should move keyboard
 				// focus into the chat input so the user can start typing right
 				// away. A single click always reports `preserveFocus: true`, so
