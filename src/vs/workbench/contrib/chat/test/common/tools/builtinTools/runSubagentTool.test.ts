@@ -96,8 +96,59 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'Test task',
+				agentDisplayName: 'CustomAgent',
 				agentName: 'CustomAgent',
 				prompt: 'Test prompt',
+				modelName: undefined,
+			});
+		});
+
+		test('reads a custom agent name as a readable display name', async () => {
+			const mockToolsService = testDisposables.add(new MockLanguageModelToolsService());
+			const promptsService = new MockPromptsService();
+			promptsService.setCustomModes([{
+				id: 'file:///test/patent-search.md',
+				uri: URI.parse('file:///test/patent-search.md'),
+				name: 'patent-search',
+				description: 'Finds prior art',
+				agentInstructions: { content: 'Patent search body', toolReferences: [] },
+				source: { storage: PromptsStorage.local },
+				target: Target.Undefined,
+				visibility: { userInvocable: true, agentInvocable: true },
+				enabled: true
+			}]);
+
+			const tool = testDisposables.add(new RunSubagentTool(
+				{} as IChatAgentService,
+				{} as IChatService,
+				mockToolsService,
+				{} as ILanguageModelsService,
+				new NullLogService(),
+				new TestConfigurationService(),
+				promptsService,
+				{} as IInstantiationService,
+				{} as IProductService,
+			));
+
+			const result = await tool.prepareToolInvocation(
+				{
+					parameters: {
+						prompt: 'Find prior art',
+						description: 'Search for prior art',
+						agentName: 'patent-search',
+					},
+					toolCallId: 'test-call-display-name',
+					chatSessionResource: URI.parse('test://session'),
+				},
+				CancellationToken.None
+			);
+
+			assert.deepStrictEqual(result?.toolSpecificData, {
+				kind: 'subagent',
+				description: 'Search for prior art',
+				agentDisplayName: 'Patent Search',
+				agentName: 'patent-search',
+				prompt: 'Find prior art',
 				modelName: undefined,
 			});
 		});
@@ -143,6 +194,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'Test task',
+				agentDisplayName: undefined,
 				agentName: GeneralPurposeAgentName,
 				prompt: 'Test prompt',
 				modelName: undefined,
@@ -165,6 +217,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'Test task',
+				agentDisplayName: undefined,
 				agentName: GeneralPurposeAgentName,
 				prompt: 'Test prompt',
 				modelName: undefined,
@@ -187,6 +240,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'Test task',
+				agentDisplayName: undefined,
 				agentName: GeneralPurposeAgentName,
 				prompt: 'Test prompt',
 				modelName: undefined,
@@ -209,6 +263,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'Test task',
+				agentDisplayName: undefined,
 				agentName: 'NonExistentAgent',
 				prompt: 'Test prompt',
 				modelName: undefined,
@@ -469,6 +524,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'SameCostAgent',
 				agentName: 'SameCostAgent',
 				prompt: 'test',
 				modelName: 'Claude Sonnet',
@@ -500,6 +556,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'CheapAgent',
 				agentName: 'CheapAgent',
 				prompt: 'test',
 				modelName: 'GPT-4o Mini',
@@ -532,6 +589,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'SubAgent',
 				agentName: 'SubAgent',
 				prompt: 'test',
 				modelName: 'O3 Pro',
@@ -564,6 +622,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'CustomAgent',
 				agentName: 'CustomAgent',
 				prompt: 'test',
 				modelName: 'Custom Model',
@@ -587,6 +646,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: undefined,
 				agentName: undefined,
 				prompt: 'test',
 				modelName: 'GPT-4o',
@@ -611,6 +671,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'NoModelAgent',
 				agentName: 'NoModelAgent',
 				prompt: 'test',
 				modelName: 'GPT-4o',
@@ -643,6 +704,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'ExploreAgent',
 				agentName: 'ExploreAgent',
 				prompt: 'test',
 				modelName: 'Claude Sonnet BYOK',
@@ -678,6 +740,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'ExploreAgent',
 				agentName: 'ExploreAgent',
 				prompt: 'test',
 				modelName: 'Ollama Llama',
@@ -709,6 +772,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'ExploreAgent',
 				agentName: 'ExploreAgent',
 				prompt: 'test',
 				modelName: 'Copilot Haiku',
@@ -738,6 +802,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'ExploreAgent',
 				agentName: 'ExploreAgent',
 				prompt: 'test',
 				modelName: 'Copilot Haiku',
@@ -770,6 +835,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'MyAgent',
 				agentName: 'MyAgent',
 				prompt: 'test',
 				modelName: 'Copilot Sonnet',
@@ -888,6 +954,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: undefined,
 				agentName: undefined,
 				prompt: 'test',
 				modelName: 'Claude Sonnet',
@@ -922,6 +989,7 @@ suite('RunSubagentTool', () => {
 			assert.deepStrictEqual(result.toolSpecificData, {
 				kind: 'subagent',
 				description: 'test task',
+				agentDisplayName: 'MyAgent',
 				agentName: 'MyAgent',
 				prompt: 'test',
 				modelName: 'Claude Sonnet',

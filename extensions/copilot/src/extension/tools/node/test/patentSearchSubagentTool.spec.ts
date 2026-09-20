@@ -9,22 +9,21 @@ import { ChatFetchResponseType } from '../../../../platform/chat/common/commonTy
 import { ChatResponseStreamImpl } from '../../../../util/common/chatResponseStreamImpl';
 import { ChatSubagentToolInvocationData, ChatToolInvocationPart, LanguageModelTextPart } from '../../../../vscodeTypes';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
-import { toolCategories, ToolCategory, ToolName } from '../../common/toolNames';
+import { ToolName } from '../../common/toolNames';
 import { CopilotToolMode, ToolRegistry } from '../../common/toolsRegistry';
 
 // Ensure side-effect registration
-import '../executionSubagentTool';
+import '../patentSearchSubagentTool';
 
 function createTool() {
-	const toolCtor = ToolRegistry.getTools().find(t => t.toolName === ToolName.ExecutionSubagent)!;
+	const toolCtor = ToolRegistry.getTools().find(t => t.toolName === ToolName.PatentSearchSubagent)!;
 	let loopOptions: { subAgentInvocationId?: string } | undefined;
 	const loop = {
-		backgroundCommands: [],
-		getModelName: async () => 'Execution Model',
+		getModelName: async () => 'Patent Model',
 		run: async () => ({
 			response: { type: ChatFetchResponseType.Success },
 			toolCallRounds: [],
-			round: { response: '<final_answer>Tests passed</final_answer>' },
+			round: { response: '<patent_results>EP1234567 A1</patent_results>' },
 		}),
 	};
 	const instantiationService = {
@@ -33,24 +32,14 @@ function createTool() {
 			return loop;
 		},
 	};
-	const requestLogger = {
-		captureInvocation: async (_token: unknown, callback: () => Promise<unknown>) => callback(),
-	};
-	const configurationService = { getExperimentBasedConfig: () => 10 };
-	const tool = new (toolCtor as any)(instantiationService, requestLogger, configurationService, {});
+	const tool = new (toolCtor as any)(instantiationService);
 	return { tool, getLoopOptions: () => loopOptions };
 }
 
-suite('ExecutionSubagentTool', () => {
-	test('is registered and categorized as Core', () => {
-		const isRegistered = ToolRegistry.getTools().some(t => t.toolName === ToolName.ExecutionSubagent);
-		expect(isRegistered).toBe(true);
-		expect(toolCategories[ToolName.ExecutionSubagent]).toBe(ToolCategory.Core);
-	});
-
+suite('PatentSearchSubagentTool', () => {
 	test('groups nested tools and metadata updates under the parent tool call', async () => {
 		const { tool, getLoopOptions } = createTool();
-		const input = { query: 'npm test', description: 'Run tests' };
+		const input = { query: 'solid state battery separator', description: 'Search for prior art', details: 'Search EPO and USPTO' };
 		const pushedParts: ChatToolInvocationPart[] = [];
 		const stream = new ChatResponseStreamImpl(part => {
 			if (part instanceof ChatToolInvocationPart) {
@@ -59,7 +48,6 @@ suite('ExecutionSubagentTool', () => {
 		}, () => { });
 		await tool.resolveInput(input, {
 			request: { id: 'request-id', sessionId: 'session-id', location: 1 },
-			conversation: { sessionId: 'conversation-id' },
 			stream,
 			requestId: 'top-level-turn-id',
 		} as unknown as IBuildPromptContext, CopilotToolMode.FullContext);
@@ -71,12 +59,26 @@ suite('ExecutionSubagentTool', () => {
 		const responseText = result.content.find((part: unknown): part is LanguageModelTextPart => part instanceof LanguageModelTextPart)?.value;
 		const updates = pushedParts.map(part => part.toolSpecificData as ChatSubagentToolInvocationData);
 
-		expect(getLoopOptions()?.subAgentInvocationId).toBe('parent-tool-call-id');
-		expect(pushedParts.map(part => part.toolCallId)).toEqual(['parent-tool-call-id', 'parent-tool-call-id']);
-		expect(pushedParts.every(part => part.enablePartialUpdate && part.isComplete === false)).toBe(true);
-		expect(updates.map(data => data.modelName)).toEqual(['Execution Model', 'Execution Model']);
-		expect(updates.map(data => data.result)).toEqual([undefined, 'Tests passed']);
-		expect((result.toolMetadata as { modelName?: string }).modelName).toBe('Execution Model');
-		expect(responseText).toBe('Tests passed');
+		expect({
+			loopSubAgentInvocationId: getLoopOptions()?.subAgentInvocationId,
+			updateToolCallIds: pushedParts.map(part => part.toolCallId),
+			partialUpdates: pushedParts.every(part => part.enablePartialUpdate && part.isComplete === false),
+			agentNames: updates.map(data => data.agentName),
+			displayNames: updates.map(data => data.agentDisplayName),
+			modelNames: updates.map(data => data.modelName),
+			results: updates.map(data => data.result),
+			metadataSubAgentInvocationId: (result.toolMetadata as { subAgentInvocationId?: string }).subAgentInvocationId,
+			responseText,
+		}).toEqual({
+			loopSubAgentInvocationId: 'parent-tool-call-id',
+			updateToolCallIds: ['parent-tool-call-id', 'parent-tool-call-id'],
+			partialUpdates: true,
+			agentNames: ['patent-search', 'patent-search'],
+			displayNames: ['Patent Search', 'Patent Search'],
+			modelNames: ['Patent Model', 'Patent Model'],
+			results: [undefined, 'EP1234567 A1'],
+			metadataSubAgentInvocationId: 'parent-tool-call-id',
+			responseText: 'EP1234567 A1',
+		});
 	});
 });
