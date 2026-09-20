@@ -34,7 +34,7 @@ interface ICarouselToolItem {
 	readonly toolCallId: string;
 	readonly disposables: DisposableStore;
 	readonly subAgentInvocationId?: string;
-	readonly agentName?: string;
+	readonly subagentTitle?: string;
 	readonly scrollToSubagent?: ScrollToSubagentCallback;
 	ownsToolPart: boolean;
 	toolPart?: ChatToolInvocationPart;
@@ -71,7 +71,7 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 		initialTools: IChatToolInvocation[],
 		private readonly scrollToSubagent?: ScrollToSubagentCallback,
 		private readonly initialSubAgentInvocationId?: string,
-		private readonly initialAgentName?: string,
+		private readonly initialSubagentTitle?: string,
 	) {
 		super();
 
@@ -153,7 +153,7 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 		this._register(dom.addDisposableListener(this.domNode, 'keydown', e => this.onKeydown(e)));
 
 		for (const tool of initialTools) {
-			this.addToolInvocation(tool, this.initialSubAgentInvocationId, this.initialAgentName, this.scrollToSubagent);
+			this.addToolInvocation(tool, this.initialSubAgentInvocationId, this.initialSubagentTitle, this.scrollToSubagent);
 		}
 	}
 
@@ -170,7 +170,7 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 		return this.toolCallIds.has(toolCallId);
 	}
 
-	addToolInvocation(tool: IChatToolInvocation, subAgentInvocationId?: string, agentName?: string, scrollToSubagent?: ScrollToSubagentCallback, toolPart?: ChatToolInvocationPart): void {
+	addToolInvocation(tool: IChatToolInvocation, subAgentInvocationId?: string, subagentTitle?: string, scrollToSubagent?: ScrollToSubagentCallback, toolPart?: ChatToolInvocationPart): void {
 		if (this.toolCallIds.has(tool.toolCallId)) {
 			const existing = this.items.find(item => item.toolCallId === tool.toolCallId);
 			if (existing && toolPart && !existing.toolPart) {
@@ -188,7 +188,7 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 			toolCallId: tool.toolCallId,
 			disposables,
 			subAgentInvocationId,
-			agentName,
+			subagentTitle,
 			scrollToSubagent,
 			ownsToolPart: !toolPart,
 			toolPart,
@@ -364,10 +364,10 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 		this.collapsedTitle.textContent = this.getToolTitle(item) ?? '';
 		dom.setVisibility(!!this.collapsedTitle.textContent, this.collapsedTitle);
 
-		if (item?.agentName) {
-			this.agentLabel.textContent = `\u2014 ${item.agentName}`;
+		if (item?.subagentTitle) {
+			this.agentLabel.textContent = `\u2014 ${item.subagentTitle}`;
 			this.agentLabel.disabled = !item.subAgentInvocationId || !item.scrollToSubagent;
-			this.agentLabel.title = localize('scrollToSubagent', "Scroll to {0}", item.agentName);
+			this.agentLabel.title = localize('scrollToSubagent', "Scroll to {0}", item.subagentTitle);
 			this.agentLabel.setAttribute('aria-label', this.agentLabel.title);
 			dom.show(this.agentLabel);
 		} else {

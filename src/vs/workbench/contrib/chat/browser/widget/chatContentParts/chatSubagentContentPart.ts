@@ -33,6 +33,7 @@ import { ChatToolInvocationPart } from './toolInvocationParts/chatToolInvocation
 import './media/chatSubagentContent.css';
 
 const MAX_TITLE_LENGTH = 100;
+const GENERIC_SUBAGENT_TYPES: ReadonlySet<string> = new Set(['default', 'general-purpose', 'task']);
 
 const subagentWorkingMessages = [
 	localize('chat.subagent.working.1', 'Processing'),
@@ -91,7 +92,9 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 	private lastItemWrapper: HTMLElement | undefined;
 	private readonly layoutScheduler: AnimationFrameScheduler;
 	private description: string;
+	private agentDisplayName: string | undefined;
 	private agentName: string | undefined;
+	private readonly subagentToolId: string;
 	private prompt: string | undefined;
 
 	// Lazy rendering support
@@ -147,14 +150,14 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 	}
 
 	/**
-	 * Extracts subagent info (description, agentName, prompt) from a tool invocation.
+	 * Extracts subagent metadata from a tool invocation.
 	 */
-	private static extractSubagentInfo(toolInvocation: IChatToolInvocation | IChatToolInvocationSerialized): { description: string; isDefaultDescription: boolean; agentName: string | undefined; prompt: string | undefined; modelName: string | undefined; credits: number | undefined } {
+	private static extractSubagentInfo(toolInvocation: IChatToolInvocation | IChatToolInvocationSerialized): { description: string; isDefaultDescription: boolean; agentDisplayName: string | undefined; agentName: string | undefined; prompt: string | undefined; modelName: string | undefined; credits: number | undefined } {
 		const defaultDescription = localize('chat.subagent.defaultDescription', 'Running subagent');
 
 		// Only parent subagent tools contain the full subagent info
 		if (!ChatSubagentContentPart.isParentSubagentTool(toolInvocation)) {
-			return { description: defaultDescription, isDefaultDescription: true, agentName: undefined, prompt: undefined, modelName: undefined, credits: undefined };
+			return { description: defaultDescription, isDefaultDescription: true, agentDisplayName: undefined, agentName: undefined, prompt: undefined, modelName: undefined, credits: undefined };
 		}
 
 		// Check toolSpecificData first (works for both live and serialized)
@@ -163,6 +166,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 			return {
 				description: toolInvocation.toolSpecificData.description ?? defaultDescription,
 				isDefaultDescription: !hasDescription,
+				agentDisplayName: toolInvocation.toolSpecificData.agentDisplayName,
 				agentName: toolInvocation.toolSpecificData.agentName,
 				prompt: toolInvocation.toolSpecificData.prompt,
 				modelName: toolInvocation.toolSpecificData.modelName,
@@ -180,6 +184,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 			return {
 				description: params?.description ?? defaultDescription,
 				isDefaultDescription: !hasDescription,
+				agentDisplayName: undefined,
 				agentName: params?.agentName,
 				prompt: params?.prompt,
 				modelName: undefined,
@@ -187,7 +192,34 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 			};
 		}
 
-		return { description: defaultDescription, isDefaultDescription: true, agentName: undefined, prompt: undefined, modelName: undefined, credits: undefined };
+		return { description: defaultDescription, isDefaultDescription: true, agentDisplayName: undefined, agentName: undefined, prompt: undefined, modelName: undefined, credits: undefined };
+	}
+
+	/**
+	 * The subagent type to show next to the task description: the provider-supplied
+	 * display name, but only for a specialized subagent. A generic type, or one that
+	 * merely repeats the spawning tool, adds nothing to the title.
+	 */
+	private static getAgentTypeLabel(agentDisplayName: string | undefined, agentName: string | undefined, toolId: string): string | undefined {
+		const trimmedAgentName = agentName?.trim();
+		if (!trimmedAgentName) {
+			return undefined;
+		}
+		const normalizedAgentName = trimmedAgentName.toLowerCase();
+		if (GENERIC_SUBAGENT_TYPES.has(normalizedAgentName) || normalizedAgentName === toolId.toLowerCase()) {
+			return undefined;
+		}
+		return agentDisplayName?.trim();
+	}
+
+	private getAgentTypeLabel(): string | undefined {
+		return ChatSubagentContentPart.getAgentTypeLabel(this.agentDisplayName, this.agentName, this.subagentToolId);
+	}
+
+	/** The title prefix: the subagent type when there is a specialized one, else the agent name. */
+	private getTitlePrefix(): string {
+		const rawPrefix = this.getAgentTypeLabel() ?? this.agentName ?? localize('chat.subagent.prefix', 'Subagent');
+		return rawPrefix.charAt(0).toUpperCase() + rawPrefix.slice(1);
 	}
 
 	constructor(
@@ -204,17 +236,19 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 		@IHoverService hoverService: IHoverService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
-		// Extract description, agentName, and prompt from toolInvocation
-		const { description, isDefaultDescription, agentName, prompt, modelName, credits } = ChatSubagentContentPart.extractSubagentInfo(toolInvocation);
+		// Extract subagent metadata from the tool invocation
+		const { description, isDefaultDescription, agentDisplayName, agentName, prompt, modelName, credits } = ChatSubagentContentPart.extractSubagentInfo(toolInvocation);
 
-		// Build title: "AgentName: description" or "Subagent: description"
-		const rawPrefix = agentName || localize('chat.subagent.prefix', 'Subagent');
+		// Build title: "SubagentType: description", "AgentName: description" or "Subagent: description"
+		const rawPrefix = ChatSubagentContentPart.getAgentTypeLabel(agentDisplayName, agentName, toolInvocation.toolId) ?? agentName ?? localize('chat.subagent.prefix', 'Subagent');
 		const prefix = rawPrefix.charAt(0).toUpperCase() + rawPrefix.slice(1);
 		const initialTitle = `${prefix}: ${description}`;
 		super(initialTitle, context, undefined, hoverService, configurationService);
 
 		this.description = rcut(description, MAX_TITLE_LENGTH);
 		this._isDefaultDescription = isDefaultDescription;
+		this.agentDisplayName = agentDisplayName;
+		this.subagentToolId = toolInvocation.toolId;
 		this.agentName = agentName;
 		this.prompt = prompt;
 		this.modelName = modelName;
@@ -448,14 +482,8 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 		this._shouldUseCarouselForTool = shouldUseCarouselForTool;
 	}
 
-	public getAgentLabel(): string {
-		if (this.agentName) {
-			return this.agentName;
-		}
-		if (!this._isDefaultDescription && this.description) {
-			return this.description;
-		}
-		return localize('chat.subagent.prefix', 'Subagent');
+	public getSubagentTitle(): string {
+		return this.description;
 	}
 
 	public markAsInactive(): void {
@@ -485,8 +513,7 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 	}
 
 	private updateTitle(): void {
-		const rawName = this.agentName || localize('chat.subagent.prefix', 'Subagent');
-		const prefix = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+		const prefix = this.getTitlePrefix();
 		const shimmerText = `${prefix}: ${this.description}`;
 		const toolCallText = this.currentRunningToolMessage && this.isActive ? ` \u2014 ${this.currentRunningToolMessage}` : ``;
 
@@ -790,6 +817,9 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 							this.description = toolInvocation.toolSpecificData.description;
 							this._isDefaultDescription = false;
 						}
+						if (toolInvocation.toolSpecificData.agentDisplayName) {
+							this.agentDisplayName = toolInvocation.toolSpecificData.agentDisplayName;
+						}
 						if (toolInvocation.toolSpecificData.modelName) {
 							this.modelName = toolInvocation.toolSpecificData.modelName;
 							this.updateHover();
@@ -804,9 +834,10 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 				} else if (wasStreaming && state.type !== IChatToolInvocation.StateKind.Streaming) {
 					wasStreaming = false;
 					// Update things that change when tool is done streaming
-					const { description, isDefaultDescription, agentName, prompt, modelName } = ChatSubagentContentPart.extractSubagentInfo(toolInvocation);
+					const { description, isDefaultDescription, agentDisplayName, agentName, prompt, modelName } = ChatSubagentContentPart.extractSubagentInfo(toolInvocation);
 					this.description = description;
 					this._isDefaultDescription = isDefaultDescription;
+					this.agentDisplayName = agentDisplayName;
 					this.agentName = agentName;
 					this.prompt = prompt;
 					if (modelName) {
@@ -822,13 +853,17 @@ export class ChatSubagentContentPart extends ChatCollapsibleContentPart implemen
 					// after the part was first constructed in PendingConfirmation).
 					// Re-read metadata and update the title if real values are
 					// now available that we didn't have before.
-					const { description, isDefaultDescription, agentName } = ChatSubagentContentPart.extractSubagentInfo(toolInvocation);
+					const { description, isDefaultDescription, agentDisplayName, agentName } = ChatSubagentContentPart.extractSubagentInfo(toolInvocation);
 					const descriptionChanged = this._isDefaultDescription && !isDefaultDescription;
+					const agentDisplayNameChanged = !!agentDisplayName && agentDisplayName !== this.agentDisplayName;
 					const agentNameChanged = !!agentName && agentName !== this.agentName;
-					if (descriptionChanged || agentNameChanged) {
+					if (descriptionChanged || agentDisplayNameChanged || agentNameChanged) {
 						if (descriptionChanged) {
 							this.description = description;
 							this._isDefaultDescription = isDefaultDescription;
+						}
+						if (agentDisplayNameChanged) {
+							this.agentDisplayName = agentDisplayName;
 						}
 						if (agentNameChanged) {
 							this.agentName = agentName;

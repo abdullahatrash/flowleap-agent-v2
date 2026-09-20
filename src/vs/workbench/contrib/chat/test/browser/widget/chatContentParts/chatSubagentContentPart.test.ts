@@ -366,6 +366,40 @@ suite('ChatSubagentContentPart', () => {
 			assert.ok(buttonText.includes('Searching the codebase'), 'Title should include description');
 		});
 
+		test('should title a specialized subagent with its type and fall back for a generic one', () => {
+			function titleTextOf(part: ChatSubagentContentPart): string {
+				const button = getCollapseButton(part);
+				assert.ok(button, 'Should have collapse button');
+				const labelElement = getCollapseButtonLabel(button);
+				return labelElement?.textContent ?? button.textContent ?? '';
+			}
+
+			const specialized = createPart(createMockToolInvocation({
+				toolSpecificData: {
+					kind: 'subagent',
+					description: 'Searching for prior art',
+					agentDisplayName: 'Patent Search',
+					agentName: 'patent-search',
+				}
+			}), createMockRenderContext(false));
+			const generic = createPart(createMockToolInvocation({
+				toolSpecificData: {
+					kind: 'subagent',
+					description: 'Installing dependencies',
+					agentDisplayName: 'General Purpose',
+					agentName: 'general-purpose',
+				}
+			}), createMockRenderContext(false), 'generic-subagent');
+
+			assert.deepStrictEqual({
+				specialized: titleTextOf(specialized),
+				generic: titleTextOf(generic),
+			}, {
+				specialized: 'Patent Search: Searching for prior art',
+				generic: 'General-purpose: Installing dependencies',
+			});
+		});
+
 		test('should use default prefix when no agent name is provided', () => {
 			const toolInvocation = createMockToolInvocation({
 				toolSpecificData: {
@@ -457,6 +491,33 @@ suite('ChatSubagentContentPart', () => {
 			getSettableState(toolInvocation).set(createState(IChatToolInvocation.StateKind.Executing), undefined);
 
 			assert.ok(getTitleText(part).includes('CodeSearchAgent'), 'Title should reflect the new agent name');
+		});
+
+		test('provider display name arrives later → title shows the subagent type', () => {
+			const toolInvocation = createMockToolInvocation({
+				stateType: IChatToolInvocation.StateKind.WaitingForConfirmation,
+				toolSpecificData: { kind: 'subagent', description: 'Searching for prior art', agentName: 'patent-search' }
+			});
+			const part = createPart(toolInvocation, createMockRenderContext(false));
+			const before = getTitleText(part);
+
+			// Late metadata: the provider's display name for the subagent type
+			// arrives via ChatToolCallContentChanged after the first render.
+			setToolSpecificData(toolInvocation, {
+				kind: 'subagent',
+				description: 'Searching for prior art',
+				agentDisplayName: 'Patent Search',
+				agentName: 'patent-search',
+			});
+			getSettableState(toolInvocation).set(createState(IChatToolInvocation.StateKind.Executing), undefined);
+
+			assert.deepStrictEqual({
+				before,
+				after: getTitleText(part),
+			}, {
+				before: 'Patent-search: Searching for prior art',
+				after: 'Patent Search: Searching for prior art',
+			});
 		});
 
 		test('agentName already set → empty agentName arrives → title NOT cleared', () => {

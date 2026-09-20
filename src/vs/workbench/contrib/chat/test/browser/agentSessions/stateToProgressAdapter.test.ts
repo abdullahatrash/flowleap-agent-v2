@@ -446,6 +446,7 @@ suite('stateToProgressAdapter', () => {
 			assert.strictEqual(serialized.toolSpecificData.kind, 'subagent');
 			assert.strictEqual(serialized.resultDetails, undefined);
 			if (serialized.toolSpecificData.kind === 'subagent') {
+				assert.strictEqual(serialized.toolSpecificData.agentDisplayName, 'Explore');
 				assert.strictEqual(serialized.toolSpecificData.agentName, 'explore');
 				// description is the TASK description from _meta, not the agent description
 				assert.strictEqual(serialized.toolSpecificData.description, 'Find related files');
@@ -1146,6 +1147,7 @@ suite('stateToProgressAdapter', () => {
 
 			assert.strictEqual(invocation.toolSpecificData?.kind, 'subagent');
 			if (invocation.toolSpecificData?.kind === 'subagent') {
+				assert.strictEqual(invocation.toolSpecificData.agentDisplayName, 'Explore');
 				assert.strictEqual(invocation.toolSpecificData.credits, 2.5, 'credits should survive finalization');
 			}
 		});
@@ -1451,6 +1453,7 @@ suite('stateToProgressAdapter', () => {
 			assert.notStrictEqual(invocation.toolSpecificData, before, 'toolSpecificData should be replaced');
 			assert.strictEqual(invocation.toolSpecificData?.kind, 'subagent');
 			if (invocation.toolSpecificData?.kind === 'subagent') {
+				assert.strictEqual(invocation.toolSpecificData.agentDisplayName, 'Explore');
 				assert.strictEqual(invocation.toolSpecificData.agentName, 'explore');
 				// description is the TASK description from _meta, not the agent description
 				assert.strictEqual(invocation.toolSpecificData.description, 'Find related files');
