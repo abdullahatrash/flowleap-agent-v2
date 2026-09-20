@@ -348,6 +348,155 @@ suite('EditorResolverService', () => {
 		diffAssociationRegisteredEditor.dispose();
 	});
 
+	test('Editor Resolve - editorAssociations only select an `explicit` editor in the associated mode', async () => {
+		const DEFAULT_DIFF_INPUT_ID = 'testDefaultDiffInput';
+		const EXPLICIT_DIFF_INPUT_ID = 'testExplicitDiffInput';
+		const instantiationService = workbenchInstantiationService({
+			configurationService: () => new TestConfigurationService({
+				[editorsAssociationsSettingId]: {
+					'*.test-explicit-diff': 'EXPLICIT_DIFF_EDITOR'
+				}
+			})
+		}, disposables);
+		const [part, service, accessor] = await createEditorResolverService(instantiationService);
+		let defaultDiffCounter = 0;
+		let explicitDiffCounter = 0;
+
+		const defaultRegisteredEditor = service.registerEditor('*',
+			{
+				id: 'default',
+				label: 'Default Editor',
+				detail: 'Default',
+				priority: RegisteredEditorPriority.builtin
+			},
+			{},
+			{
+				createEditorInput: ({ resource }) => ({ editor: constructDisposableFileEditorInput(resource, TEST_EDITOR_INPUT_ID, disposables) }),
+				createDiffEditorInput: ({ modified, original }) => {
+					defaultDiffCounter++;
+					return { editor: constructDisposableDiffEditorInput(accessor, original, modified, DEFAULT_DIFF_INPUT_ID) };
+				}
+			}
+		);
+
+		const explicitDiffRegisteredEditor = service.registerEditor('*.test-explicit-diff',
+			{
+				id: 'EXPLICIT_DIFF_EDITOR',
+				label: 'Explicit Diff Editor Label',
+				detail: 'Explicit Diff Editor Details',
+				priority: {
+					editor: RegisteredEditorPriority.explicit,
+					diff: RegisteredEditorPriority.explicit
+				}
+			},
+			{},
+			{
+				createEditorInput: ({ resource }) => ({ editor: constructDisposableFileEditorInput(resource, EXPLICIT_DIFF_INPUT_ID, disposables) }),
+				createDiffEditorInput: ({ modified, original }) => {
+					explicitDiffCounter++;
+					return { editor: constructDisposableDiffEditorInput(accessor, original, modified, EXPLICIT_DIFF_INPUT_ID) };
+				}
+			}
+		);
+
+		// The text-mode association does not opt the editor into diff mode.
+		const diffResolution = await service.resolveEditor({
+			original: { resource: URI.file('resource-basics.test-explicit-diff') },
+			modified: { resource: URI.file('resource-basics.test-explicit-diff') }
+		}, part.activeGroup);
+		assert.ok(diffResolution);
+		assert.notStrictEqual(typeof diffResolution, 'number');
+		if (diffResolution !== ResolvedStatus.ABORT && diffResolution !== ResolvedStatus.NONE) {
+			assert.strictEqual(explicitDiffCounter, 0);
+			assert.strictEqual(defaultDiffCounter, 1);
+			diffResolution.editor.dispose();
+		} else {
+			assert.fail();
+		}
+
+		const editorResolution = await service.resolveEditor({ resource: URI.file('resource-basics.test-explicit-diff') }, part.activeGroup);
+		assert.ok(editorResolution);
+		assert.notStrictEqual(typeof editorResolution, 'number');
+		if (editorResolution !== ResolvedStatus.ABORT && editorResolution !== ResolvedStatus.NONE) {
+			assert.strictEqual(editorResolution.editor.typeId, EXPLICIT_DIFF_INPUT_ID);
+			editorResolution.editor.dispose();
+		} else {
+			assert.fail();
+		}
+
+		defaultRegisteredEditor.dispose();
+		explicitDiffRegisteredEditor.dispose();
+	});
+
+	test('Diff editor Resolve - diffEditorAssociations select an `explicit` diff editor', async () => {
+		const DEFAULT_DIFF_INPUT_ID = 'testDefaultDiffInput';
+		const EXPLICIT_DIFF_INPUT_ID = 'testExplicitDiffInput';
+		const instantiationService = workbenchInstantiationService({
+			configurationService: () => new TestConfigurationService({
+				[diffEditorsAssociationsSettingId]: {
+					'*.test-explicit-diff': 'EXPLICIT_DIFF_EDITOR'
+				}
+			})
+		}, disposables);
+		const [part, service, accessor] = await createEditorResolverService(instantiationService);
+		let defaultDiffCounter = 0;
+		let explicitDiffCounter = 0;
+
+		const defaultRegisteredEditor = service.registerEditor('*',
+			{
+				id: 'default',
+				label: 'Default Editor',
+				detail: 'Default',
+				priority: RegisteredEditorPriority.builtin
+			},
+			{},
+			{
+				createEditorInput: ({ resource }) => ({ editor: constructDisposableFileEditorInput(resource, TEST_EDITOR_INPUT_ID, disposables) }),
+				createDiffEditorInput: ({ modified, original }) => {
+					defaultDiffCounter++;
+					return { editor: constructDisposableDiffEditorInput(accessor, original, modified, DEFAULT_DIFF_INPUT_ID) };
+				}
+			}
+		);
+
+		const explicitDiffRegisteredEditor = service.registerEditor('*.test-explicit-diff',
+			{
+				id: 'EXPLICIT_DIFF_EDITOR',
+				label: 'Explicit Diff Editor Label',
+				detail: 'Explicit Diff Editor Details',
+				priority: {
+					editor: RegisteredEditorPriority.option,
+					diff: RegisteredEditorPriority.explicit
+				}
+			},
+			{},
+			{
+				createEditorInput: ({ resource }) => ({ editor: constructDisposableFileEditorInput(resource, EXPLICIT_DIFF_INPUT_ID, disposables) }),
+				createDiffEditorInput: ({ modified, original }) => {
+					explicitDiffCounter++;
+					return { editor: constructDisposableDiffEditorInput(accessor, original, modified, EXPLICIT_DIFF_INPUT_ID) };
+				}
+			}
+		);
+
+		const diffResolution = await service.resolveEditor({
+			original: { resource: URI.file('resource-basics.test-explicit-diff') },
+			modified: { resource: URI.file('resource-basics.test-explicit-diff') }
+		}, part.activeGroup);
+		assert.ok(diffResolution);
+		assert.notStrictEqual(typeof diffResolution, 'number');
+		if (diffResolution !== ResolvedStatus.ABORT && diffResolution !== ResolvedStatus.NONE) {
+			assert.strictEqual(defaultDiffCounter, 0);
+			assert.strictEqual(explicitDiffCounter, 1);
+			diffResolution.editor.dispose();
+		} else {
+			assert.fail();
+		}
+
+		defaultRegisteredEditor.dispose();
+		explicitDiffRegisteredEditor.dispose();
+	});
+
 	test('Diff editor Resolve - Different Types', async () => {
 		const [part, service, accessor] = await createEditorResolverService();
 		let diffOneCounter = 0;

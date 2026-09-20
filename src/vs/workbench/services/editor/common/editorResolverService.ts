@@ -84,7 +84,12 @@ export enum RegisteredEditorPriority {
 	builtin = 'builtin',
 	option = 'option',
 	exclusive = 'exclusive',
-	default = 'default'
+	default = 'default',
+	/**
+	 * The editor is not automatically used for this kind of input or opted into by an association
+	 * from another input kind. It requires an association for this input kind or an explicit open.
+	 */
+	explicit = 'explicit'
 }
 
 /**
@@ -125,13 +130,21 @@ export type RegisteredEditorInfo = {
 	readonly priority: RegisteredEditorPriorityInfo;
 };
 
-export type RegisteredEditorRegistrationInfo = Omit<RegisteredEditorInfo, 'priority'> & {
-	readonly priority: RegisteredEditorPriority | RegisteredEditorPriorityInfo;
+export type RegisteredEditorPriorityConfiguration = Omit<RegisteredEditorPriorityInfo, 'merge'> & {
+	readonly merge?: RegisteredEditorPriority;
 };
 
-export function toRegisteredEditorPriorityInfo(priority: RegisteredEditorPriority | RegisteredEditorPriorityInfo): RegisteredEditorPriorityInfo {
+export type RegisteredEditorRegistrationInfo = Omit<RegisteredEditorInfo, 'priority'> & {
+	readonly priority: RegisteredEditorPriority | RegisteredEditorPriorityConfiguration;
+};
+
+export function toRegisteredEditorPriorityInfo(priority: RegisteredEditorPriority | RegisteredEditorPriorityConfiguration): RegisteredEditorPriorityInfo {
 	if (typeof priority !== 'string') {
-		return priority;
+		return {
+			editor: priority.editor,
+			diff: priority.diff,
+			merge: priority.merge ?? priority.editor,
+		};
 	}
 	return {
 		editor: priority,
@@ -242,6 +255,9 @@ export function priorityToRank(priority: RegisteredEditorPriority): number {
 			return 3;
 		// Text editor is priority 2
 		case RegisteredEditorPriority.option:
+			return 1;
+		case RegisteredEditorPriority.explicit:
+			return 0;
 		default:
 			return 1;
 	}
