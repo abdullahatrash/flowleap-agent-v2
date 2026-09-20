@@ -69,6 +69,16 @@ describe('bounded local patent evidence inspection', () => {
 		expect({ publication: index.includes(`Recorded publication: ${publication}`), date: index.includes('Publication date: 2000-03-08'), title: index.includes('Dental restorative composition') }).toEqual({ publication: true, date: true, title: true });
 	});
 
+	it('says what a recorded drawing page is and how to cite it, rather than calling its text unavailable', () => {
+		const drawing: PatentEvidenceSource = {
+			anchor: `${publication}:figure:4`, reference: { publicationNumber: publication, section: 'bibliography' },
+			figure: { page: 4 }, retrieval: 'returned', review: 'unknown', completeness: 'unknown',
+		};
+		const index = lookupPatentEvidence(snapshot([drawing]), publication, {});
+		expect(index.split('\n').find(line => line.startsWith(drawing.anchor)))
+			.toEqual(`${publication}:figure:4 — drawing page 4 — no text; cite it with basis: figure and a reading of what the drawing clearly shows — [Open source](flowleap://flowleap.patent-ai/patent?publication=${publication}&section=bibliography)`);
+	});
+
 	it('pages a large claims index without repeating the first page', () => {
 		const sources = Array.from({ length: 75 }, (_, i) => ({ ...source, anchor: `${publication}:claims:${i + 1}:de`, text: `${i + 1}. Eine Batterie.`, reference: { publicationNumber: publication, section: 'claims' as const, claimNumber: String(i + 1) } }));
 		const state = snapshot(sources);

@@ -7,7 +7,7 @@ import type * as vscode from 'vscode';
 import { MockFileSystemService } from '../../../../platform/filesystem/node/test/mockFileSystemService';
 import { mock } from '../../../../util/common/test/simpleMock';
 import { URI } from '../../../../util/vs/base/common/uri';
-import { evidenceAnchor, PatentExecutionLedger } from '../../../patentai/vscode-node/patentExecutionLedger';
+import { evidenceAnchor, figureAnchor, PatentExecutionLedger } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { renderWorkingRecord, validateCandidateReview, PatentCandidateReview } from '../patentCandidateReview';
 
 class LedgerFiles extends MockFileSystemService {
@@ -150,6 +150,17 @@ describe('durable patent execution audit', () => {
 		expect(snapshot.executions.map(row => ({ kind: row.kind, tool: row.tool, request: row.request, rowCount: row.rowCount, publicationIds: row.publicationIds, resultText: row.resultText }))).toEqual([
 			{ kind: 'status', tool: 'get_legal_status', request: 'EP1000000A1', rowCount: 2, publicationIds: ['EP1000000A1'], resultText: '| 2024-01-10 | FR | MM4A | LAPSE |' },
 			{ kind: 'status', tool: undefined, request: 'EP2000000', rowCount: 1, publicationIds: undefined, resultText: 'Base expiry 2028-04-16' },
+		]);
+	});
+
+	it('round-trips a figures outcome whose sources name the drawing pages that were returned', async () => {
+		const { ledger, session } = setup();
+		const reference = { publicationNumber: 'EP1234567A1', section: 'bibliography' as const };
+		const sources = [3, 4].map(page => ({ anchor: figureAnchor('EP1234567A1', page), reference, figure: { page }, retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const }));
+		await ledger.record(session, { kind: 'figures', status: 'succeeded', publicationIds: ['EP1234567A1'], sources });
+		const snapshot = await ledger.read(session);
+		expect(snapshot.executions.map(row => ({ kind: row.kind, status: row.status, publicationIds: row.publicationIds, sources: row.sources, partial: snapshot.limitation.includes('unreadable') }))).toEqual([
+			{ kind: 'figures', status: 'succeeded', publicationIds: ['EP1234567A1'], sources, partial: false },
 		]);
 	});
 });

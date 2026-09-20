@@ -27,7 +27,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { ChatRequest, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
-import { buildSecondReadRequests, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
+import { buildSecondReadRequests, notJudgedFigureElements, parseSecondReadVerdicts, SecondReadOutcome, SecondReadResult, secondReadPrompt, summarizeSecondRead, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, contentRequirementError, PatentReportTemplate } from '../common/patentReportTemplates';
 import { extractFigures, figureProvenance, figureSentence, ftoProvenanceResult, renderFtoAppendix, renderLandscapeAppendix } from '../common/patentReportProvenance';
@@ -325,7 +325,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				const verdicts = parseSecondReadVerdicts(response.value);
 				results.push({ feature: secondReadRequest.feature, status: secondReadRequest.status, ...(verdicts ? { verdicts } : { unparsed: response.value }) });
 			}
-			return { kind: 'judged', model: endpoint.model, rows: results, summary: summarizeSecondRead(results) };
+			return { kind: 'judged', model: endpoint.model, rows: results, summary: summarizeSecondRead(results, notJudgedFigureElements(review)) };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			this.logService.warn(`[WritePatentResultsTool] Second read did not complete: ${message}`);

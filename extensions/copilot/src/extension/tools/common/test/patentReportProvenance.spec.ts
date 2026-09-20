@@ -292,17 +292,19 @@ describe('fto appendix', () => {
 });
 
 describe('fto data provenance', () => {
-	it('lists a term lookup that recorded no row count, with the document it asked about', () => {
+	it('lists a term lookup and a drawing retrieval that recorded no row count, with the document each asked about', () => {
 		const snapshot: ProvenanceSnapshot = {
 			executions: [
 				{ kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'EP2110298B1', resultText: 'expiry' },
 				{ kind: 'status', status: 'succeeded', tool: 'get_patent_term', request: 'US7000000B2', resultText: 'expiry' },
+				{ kind: 'figures', status: 'succeeded', publicationIds: ['EP2110298B1'] },
 				{ kind: 'search', status: 'succeeded', query: 'ta=skewer', total: 54, returned: 25 },
 			],
 		};
 		expect(renderFtoAppendix('Nothing to check in this body.', snapshot).split('\n').filter(line => line.startsWith('- '))).toEqual([
 			'- get_patent_term — EP2110298B1 — count not recorded — succeeded',
 			'- get_patent_term — US7000000B2 — count not recorded — succeeded',
+			'- get_patent_figures — EP2110298B1 — count not recorded — succeeded',
 			'- search_patents — ta=skewer — 54 total, 25 returned — succeeded',
 		]);
 	});

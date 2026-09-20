@@ -29,10 +29,19 @@ export interface PatentCandidateReview {
 		readonly gap: string;
 		readonly evidence?: readonly { readonly anchor: string; readonly quote?: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
 		/**
-		 * The constituents the feature requires, each with the cited passage that discloses it. A
-		 * status is otherwise a one-bit judgment: the element map is what makes it checkable.
+		 * The constituents the feature requires, each with the cited passage — or the recorded drawing
+		 * page — that discloses it. A status is otherwise a one-bit judgment: the element map is what
+		 * makes it checkable.
 		 */
-		readonly elements?: readonly { readonly element: string; readonly anchor?: string; readonly disclosedBy?: string }[];
+		readonly elements?: readonly {
+			readonly element: string;
+			readonly anchor?: string;
+			readonly disclosedBy?: string;
+			/** `figure` marks an element disclosed by a recorded drawing page; absent means text. */
+			readonly basis?: 'text' | 'figure';
+			/** What the model says the drawing clearly shows; stands in place of `disclosedBy` for a figure. */
+			readonly reading?: string;
+		}[];
 	}[];
 	readonly content?: string;
 	readonly limitations?: readonly string[];
@@ -114,7 +123,10 @@ interface RetrievedDocument {
 	readonly publication: string;
 	readonly publicationDate: string;
 	readonly publicationTitle: string;
-	/** Sections whose text was actually recorded, so an empty retrieval is not reported as available. */
+	/**
+	 * Sections whose text was actually recorded, so an empty retrieval is not reported as available,
+	 * followed by the recorded drawing pages: a figure is not text and is listed as what it is.
+	 */
 	readonly sectionsWithText: readonly string[];
 	/** Claims language, else description language, else `unrecorded`; never inferred from the text. */
 	readonly language: string;
@@ -126,10 +138,10 @@ function citedAnchors(review: PatentCandidateReview): Set<string> {
 	return new Set((review.coverage ?? []).flatMap(row => [...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor)]));
 }
 
-/** Inventory of documents a succeeded detail retrieval brought into the session. */
+/** Inventory of documents a succeeded detail or figure retrieval brought into the session. */
 function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly RetrievedDocument[] {
 	const cited = citedAnchors(review);
-	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; languages: Map<string, string>; cited: boolean }
+	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; figurePages: Set<number>; languages: Map<string, string>; cited: boolean }
 	// The backend echoes ids as `EP0983762.A1` while source references carry `EP0983762A1`; both
 	// name one document, so records are keyed on the separator-free form and shown that way.
 	const documents = new Map<string, DocumentRecord>();
@@ -137,12 +149,18 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		const key = publicationKey(publication);
 		const existing = documents.get(key);
 		if (existing) { return existing; }
-		const created: DocumentRecord = { sections: new Set<string>(), languages: new Map<string, string>(), cited: false };
+		const created: DocumentRecord = { sections: new Set<string>(), figurePages: new Set<number>(), languages: new Map<string, string>(), cited: false };
 		documents.set(key, created);
 		return created;
 	};
 	for (const execution of snapshot.executions) {
-		if (execution.kind !== 'details' || execution.status !== 'succeeded') { continue; }
+		// A drawing retrieval brings a document into the session exactly as a text retrieval does; what
+		// it records is pages, not passages.
+		if ((execution.kind !== 'details' && execution.kind !== 'figures') || execution.status !== 'succeeded') { continue; }
+		// A figures call that returned no drawing retrieved nothing. The record keeps the call as an
+		// audit fact, but an inventory of retrieved documents must not list it, and the count of
+		// retrieved-but-uncited documents must not hold a document no page was ever returned for.
+		if (execution.kind === 'figures' && !execution.sources?.length) { continue; }
 		for (const publication of execution.publicationIds ?? []) {
 			const document = entry(publication);
 			document.date ??= execution.publicationDate;
@@ -150,7 +168,8 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		}
 		for (const source of execution.sources ?? []) {
 			const document = entry(source.reference.publicationNumber);
-			if (source.text?.trim()) { document.sections.add(source.reference.section); }
+			if (source.figure) { document.figurePages.add(source.figure.page); }
+			else if (source.text?.trim()) { document.sections.add(source.reference.section); }
 			if (source.language && !document.languages.has(source.reference.section)) { document.languages.set(source.reference.section, source.language); }
 			if (cited.has(source.anchor)) { document.cited = true; }
 		}
@@ -159,10 +178,23 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		publication,
 		publicationDate: document.date ?? 'Unknown',
 		publicationTitle: document.title ?? 'Unknown',
-		sectionsWithText: [...document.sections],
+		sectionsWithText: [...document.sections, ...(document.figurePages.size ? [`figures (${document.figurePages.size === 1 ? 'page' : 'pages'} ${pageRuns([...document.figurePages])})`] : [])],
 		language: document.languages.get('claims') ?? document.languages.get('description') ?? 'unrecorded',
 		cited: document.cited,
 	}));
+}
+
+/** Recorded drawing pages as contiguous runs, so eight pages read as `3-10` rather than as a list. */
+function pageRuns(pages: readonly number[]): string {
+	const sorted = [...new Set(pages)].sort((first, second) => first - second);
+	const runs: string[] = [];
+	for (let index = 0; index < sorted.length;) {
+		let end = index;
+		while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1) { end++; }
+		runs.push(sorted[index] === sorted[end] ? `${sorted[index]}` : `${sorted[index]}-${sorted[end]}`);
+		index = end + 1;
+	}
+	return runs.join(', ');
 }
 
 /** A recorded language that is neither English nor absent; only such text needs a translation notice. */
@@ -223,6 +255,9 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 		.map(element => `${row.feature} / ${element.element}`));
 	if (weak.length) {
 		lines.push(`Element fragments under ${WEAK_FRAGMENT_LENGTH} characters: ${weak.join(', ')}; short fragments prove little.`);
+	}
+	if ((review.coverage ?? []).some(row => (row.elements ?? []).some(element => figurePage(element, sources) !== undefined))) {
+		lines.push('Findings marked "rests on a drawing reading" rest on the model\'s reading of a retrieved figure, not on quoted text; a drawing discloses arrangement, never dimensions unless stated to scale.');
 	}
 	return lines;
 }
@@ -328,8 +363,30 @@ type PatentCoverageElement = NonNullable<PatentCoverageRow['elements']>[number];
 
 /** An element claims disclosure once either locator is present; a bare topic match claims neither. */
 function claimsDisclosure(element: PatentCoverageElement): boolean {
-	return Boolean(element.anchor?.trim() || element.disclosedBy?.trim());
+	return Boolean(element.anchor?.trim() || element.disclosedBy?.trim() || element.reading?.trim());
 }
+
+/**
+ * The recorded drawing page an element rests on: it must say it rests on one and the page must be a
+ * recorded figure source, so the report never promises a drawing the audit does not hold.
+ */
+function figurePage(element: PatentCoverageElement, sources: Map<string, PatentEvidenceSource>): number | undefined {
+	return element.basis === 'figure' && element.anchor ? sources.get(element.anchor)?.figure?.page : undefined;
+}
+
+/**
+ * What a drawing reading may not state: a number with a unit, a ratio of two numbers, or a word of
+ * proportion. A drawing discloses that an element exists and how the parts are arranged, never a
+ * dimension or a ratio unless it is stated to be to scale (MPEP 2125), so such a reading is rejected
+ * unless the same reading says the drawing is to scale. The unit list holds no bare `in` and no bare
+ * `m`, and the approximation words hold no `about`: a reading names parts by reference numeral, so
+ * "the cam 12 in engagement with the lever" and "pivots about pin 14" are ordinary prose, not
+ * measurements, and rejecting them would cost more honest readings than the unit catches.
+ */
+const FIGURE_MEASUREMENT = /\d+(?:[.,]\d+)?\s*(?:(?:mm|cm|nm|\u00b5m|um|inches|inch|degrees|deg)\b|[\u00b0%])|\d+\s*:\s*\d+|\b(?:ratio|proportion|proportional|twice|half the|times the)\b|\b(?:approximately|roughly)\s+\d/i;
+
+/** A reading that states the drawing is to scale may state what the drawing is drawn to. */
+const DRAWN_TO_SCALE = /\bto scale\b/i;
 
 /**
  * Check one element's locators against the recorded text, so "supported" rests on a fragment that
@@ -339,6 +396,9 @@ function elementDisclosureErrors(row: PatentCoverageRow, element: PatentCoverage
 	const errors: string[] = [];
 	const anchor = element.anchor?.trim();
 	const fragment = element.disclosedBy?.trim();
+	if (anchor && sources.get(anchor)?.figure) {
+		return [`Element "${element.element}" of "${row.feature}" cites ${anchor}, a recorded drawing page, as text. A drawing has no quotable text: cite it with basis: figure and a reading of what the figure clearly shows, and no disclosedBy.`];
+	}
 	if (!anchor || !fragment) {
 		errors.push(`Element "${element.element}" of "${row.feature}" cites ${anchor ? 'no literal fragment' : 'no source anchor'}. Give both the anchor and a literal fragment of its recorded text, or omit both and name the element in the gap.`);
 		return errors;
@@ -359,8 +419,35 @@ function elementDisclosureErrors(row: PatentCoverageRow, element: PatentCoverage
 }
 
 /**
- * Enforce the element map: a supported row discloses every element by cited text, a partial row
- * discloses some and names the rest, and a supported combination rests on a single publication.
+ * Check one element that rests on a drawing. The anchor must be a recorded figure page of this row,
+ * the reading must say what the drawing shows, and it must not state a dimension or a proportion the
+ * drawing does not disclose.
+ */
+function figureElementErrors(row: PatentCoverageRow, element: PatentCoverageElement, sources: Map<string, PatentEvidenceSource>): string[] {
+	const anchor = element.anchor?.trim();
+	const reading = element.reading?.trim();
+	if (!anchor || !reading) {
+		return [`Element "${element.element}" of "${row.feature}" rests on a drawing but ${anchor ? 'states no reading' : 'cites no figure anchor'}. Give the PUB:figure:N anchor printed by get_patent_figures and a reading of what the drawing clearly shows, or drop basis: figure and cite a literal fragment of recorded text.`];
+	}
+	if (element.disclosedBy?.trim()) {
+		return [`Element "${element.element}" of "${row.feature}" rests on a drawing, so it carries no disclosedBy: a figure has no quotable text. Keep the reading and remove disclosedBy.`];
+	}
+	if (!(row.sourceAnchors ?? []).includes(anchor)) {
+		return [`Element "${element.element}" of "${row.feature}" cites ${anchor}, which is not one of that row's sourceAnchors. Cite one of: ${(row.sourceAnchors ?? []).join(', ') || 'none listed'}.`];
+	}
+	if (!sources.get(anchor)?.figure) {
+		return [`Element "${element.element}" of "${row.feature}" cites ${anchor}, which is not a recorded drawing page. Retrieve the drawing once with get_patent_figures(publicationNumber) and cite the PUB:figure:N anchor it prints.`];
+	}
+	if (FIGURE_MEASUREMENT.test(reading) && !DRAWN_TO_SCALE.test(reading)) {
+		return [`Reading "${reading}" for element "${element.element}" states a measurement or proportion. A drawing does not disclose dimensions, proportions or ratios unless it is stated to be to scale (MPEP 2125); state only what the figure clearly shows.`];
+	}
+	return [];
+}
+
+/**
+ * Enforce the element map: a supported row discloses every element by cited text or by a recorded
+ * drawing, a partial row discloses some and names the rest, and a supported combination rests on a
+ * single publication.
  */
 function elementMapErrors(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string[] {
 	if (row.status === 'unresolved') { return []; }
@@ -375,7 +462,7 @@ function elementMapErrors(row: PatentCoverageRow, sources: Map<string, PatentEvi
 			errors.push(`Element "${element.element}" of "${row.feature}" is not disclosed by any cited text, so the row cannot be supported. Either cite the passage that discloses it (anchor + literal fragment) or mark the row partial and name the missing element in the gap.`);
 			continue;
 		}
-		if (row.status === 'supported' || claimsDisclosure(element)) { errors.push(...elementDisclosureErrors(row, element, sources)); }
+		if (row.status === 'supported' || claimsDisclosure(element)) { errors.push(...(element.basis === 'figure' ? figureElementErrors(row, element, sources) : elementDisclosureErrors(row, element, sources))); }
 	}
 	if (row.status === 'partial') {
 		const disclosed = elements.filter(claimsDisclosure).length;
@@ -429,6 +516,11 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 		for (const anchor of row.sourceAnchors ?? []) {
 			const source = sources.get(anchor);
 			const evidence = row.evidence?.find(item => item.anchor === anchor);
+			if (source?.figure) {
+				// A recorded drawing page holds no text to quote; it is cited through an element instead.
+				if (evidence) { errors.push(`Evidence entry for ${anchor} quotes a recorded drawing page, which holds no text. Remove it and cite the drawing through an element with basis: figure and a reading of what it clearly shows.`); }
+				continue;
+			}
 			if (row.status !== 'unresolved' && source && !['claims', 'description'].includes(source.reference.section)) { errors.push(`Feature support for ${anchor} requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.`); }
 			if (row.status !== 'unresolved' && !evidence) { errors.push(`Row "${row.feature}" lists ${anchor} in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for ${anchor} with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.`); }
 			if (evidence) {
@@ -468,6 +560,7 @@ export function candidateWordingReview(review: PatentCandidateReview): string[] 
 		...(review.coverage ?? []).flatMap(row => [
 			[`coverage feature for "${row.feature}"`, row.feature] as const,
 			[`coverage gap for "${row.feature}"`, row.gap] as const,
+			...(row.elements ?? []).flatMap(element => element.reading?.trim() ? [[`element reading for "${element.element}"`, element.reading] as const] : []),
 			...(row.evidence ?? []).flatMap(evidence => [
 				[`evidence scope for ${evidence.anchor}`, evidence.scope] as const,
 				[`evidence qualifiers for ${evidence.anchor}`, evidence.qualifiers] as const,
@@ -556,10 +649,30 @@ function elementMap(row: PatentCoverageRow, sources: Map<string, PatentEvidenceS
 			const anchor = element.anchor;
 			const fragment = element.disclosedBy?.trim();
 			const source = anchor ? sources.get(anchor) : undefined;
+			const page = figurePage(element, sources);
+			const reading = element.reading?.trim();
+			// A drawing reading is the model's own reading of an image, so it is never rendered as a quote.
+			if (anchor && page !== undefined && reading) {
+				return '| ' + [cell(element.element), `Figure page ${page} — model reading of the drawing, not quoted text: "${cell(reading)}"`,
+					source ? patentCitationLink(anchor, source.reference) : anchor].join(' | ') + ' |';
+			}
 			return '| ' + [cell(element.element),
 				anchor && fragment ? '`' + cell(fragment) + '`' : 'not disclosed in cited text',
 				anchor && fragment ? (source ? patentCitationLink(anchor, source.reference) : anchor) : '—'].join(' | ') + ' |';
 		}), ''];
+}
+
+/**
+ * How much of a row's disclosure rests on a drawing rather than on quoted text. A reader weighing a
+ * status has to see it in the status line, not only in the element map further down. An unresolved
+ * row establishes no disclosure at all, so it rests on nothing and carries no suffix.
+ */
+function drawingReadingSuffix(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string {
+	if (row.status === 'unresolved') { return ''; }
+	const disclosed = (row.elements ?? []).filter(claimsDisclosure);
+	const drawings = disclosed.filter(element => figurePage(element, sources) !== undefined);
+	if (!drawings.length) { return ''; }
+	return drawings.length === disclosed.length ? ' · rests on a drawing reading' : ' · rests in part on a drawing reading';
 }
 
 /** Collapse a model-written phrase onto one line so it cannot break the list it is rendered into. */
@@ -575,9 +688,12 @@ function inline(value: string): string {
 function secondReadNotes(row: PatentCoverageRow, secondRead: SecondReadOutcome | undefined): string[] {
 	if (secondRead?.kind !== 'judged') { return []; }
 	const unconfirmed = unconfirmedVerdicts(secondRead.rows.filter(result => result.feature === row.feature));
-	if (!unconfirmed.length) { return []; }
+	// An element that rests on a drawing was never sent to the judge; saying so keeps the counts honest.
+	const drawings = (row.elements ?? []).filter(element => element.basis === 'figure');
+	if (!unconfirmed.length && !drawings.length) { return []; }
 	return ['', `Second read (generated, ${secondRead.model}): the following elements were not confirmed by an independent read of the cited text; the row's status is the author's judgment.`,
-		...unconfirmed.map(item => `- ${inline(item.element)}: ${item.verdict} — ${inline(item.reason)}`), ''];
+		...unconfirmed.map(item => `- ${inline(item.element)}: ${item.verdict} — ${inline(item.reason)}`),
+		...drawings.map(element => `- ${inline(element.element)}: not judged — rests on a drawing reading`), ''];
 }
 
 /** The recorded language of a document, with the translation notice a non-English text needs. */
@@ -682,7 +798,7 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		'## Coverage and remaining search tracks',
 		...(review.coverage ?? []).flatMap(row => [
 			`### ${cell(row.feature)}`,
-			`**${row.kind} · ${row.importance} · ${variant === 'invalidity' ? INVALIDITY_STATUS[row.status] : row.status}**`,
+			`**${row.kind} · ${row.importance} · ${variant === 'invalidity' ? INVALIDITY_STATUS[row.status] : row.status}${drawingReadingSuffix(row, sources)}**`,
 			row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
 			...(row.sourceAnchors ?? []).flatMap(anchor => {
 				const source = sources.get(anchor);
@@ -728,13 +844,14 @@ function secondReadSection(review: PatentCandidateReview, secondRead: SecondRead
 export function renderWorkingRecord(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, reportFileName: string, evidenceFileName: string, secondReadFileName: string | undefined, secondRead?: SecondReadOutcome): string {
 	const documents = retrievedDocuments(review, snapshot);
 	const wording = candidateWordingReview(review);
+	const figures = snapshot.executions.filter(execution => execution.kind === 'figures').length;
 	return [
 		`# Working record — ${review.subject?.trim() || reportFileName}`,
 		'',
 		`Companion to [${reportFileName}](${encodeURIComponent(reportFileName)}) — internal search log for a later session picking up the same matter. Not part of the client deliverable.`,
 		'',
 		'## Search log',
-		`${searchExecutions(snapshot).length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes. These are tool invocations, not counts of documents reviewed.`,
+		`${searchExecutions(snapshot).length} recorded search outcomes; ${snapshot.executions.filter(execution => execution.kind === 'details').length} recorded detail outcomes${figures ? `; ${figures} recorded figure outcomes` : ''}. These are tool invocations, not counts of documents reviewed.`,
 		'| Outcome | Query actually sent (requested if unknown) | Countries | Total | Returned | Range | Purpose |',
 		'| --- | --- | --- | --- | --- | --- | --- |',
 		...searchExecutions(snapshot).map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown', searchPurpose(execution) ?? '—'].map(cell).join(' | ') + ' |'),

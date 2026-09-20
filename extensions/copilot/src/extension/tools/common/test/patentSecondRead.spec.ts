@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { buildSecondReadRequests, parseSecondReadVerdicts, PASSAGE_WINDOW, SecondReadReview, SecondReadSnapshot, summarizeSecondRead } from '../patentSecondRead';
+import { buildSecondReadRequests, notJudgedFigureElements, parseSecondReadVerdicts, PASSAGE_WINDOW, secondReadLimitation, SecondReadReview, SecondReadSnapshot, summarizeSecondRead } from '../patentSecondRead';
 
 const snapshot: SecondReadSnapshot = {
 	executions: [{
@@ -41,6 +41,21 @@ describe('second read requests', () => {
 				elements: [{ element: 'an older anchor', anchor: 'EP9:claims:1:en', disclosedBy: 'text never recorded' }],
 			},
 		]);
+	});
+
+	it('leaves an element that rests on a drawing to the report, and counts it as not judged', () => {
+		const drawn: SecondReadReview = { coverage: [{ feature: 'Cam pair', status: 'partial', elements: [
+			{ element: 'a rotary cam', anchor: 'EP1:claims:1:en', disclosedBy: 'a rotary cam and a lever' },
+			{ element: 'cam formed in the head', anchor: 'EP1:figure:3', basis: 'figure', reading: 'Figure 3 shows the cam formed in the head.' },
+		] }] };
+		const summary = summarizeSecondRead([{ feature: 'Cam pair', status: 'partial', verdicts: [{ element: 'a rotary cam', verdict: 'agree', reason: 'The passage recites a rotary cam.' }] }], notJudgedFigureElements(drawn));
+		expect({
+			judged: buildSecondReadRequests(drawn, snapshot).flatMap(request => request.elements.map(element => element.element)),
+			limitation: secondReadLimitation({ kind: 'judged', model: 'judge-model', rows: [], summary }),
+		}).toEqual({
+			judged: ['a rotary cam'],
+			limitation: 'Second read by judge-model: 1 elements judged, 0 not confirmed, 0 unclear, 0 unparsed, 1 not judged (figure).',
+		});
 	});
 
 	it('keeps the cited fragment inside the window when the recorded text is longer than the cap', () => {

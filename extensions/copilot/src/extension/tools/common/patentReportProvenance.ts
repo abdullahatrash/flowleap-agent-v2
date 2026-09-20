@@ -705,7 +705,7 @@ export function quotationSentence(provenance: QuotationProvenance): string {
 
 /** The tool identity a record carries, or the one its kind implies. */
 function executionLabel(execution: ProvenanceExecution): string {
-	return execution.tool ?? (execution.kind === 'search' ? 'search_patents' : execution.kind === 'details' ? 'get_patent_details' : 'unknown tool');
+	return execution.tool ?? (execution.kind === 'search' ? 'search_patents' : execution.kind === 'details' ? 'get_patent_details' : execution.kind === 'figures' ? 'get_patent_figures' : 'unknown tool');
 }
 
 /** What the call asked for: its request, its query, or the document it is about. */
@@ -726,13 +726,14 @@ function executionCounts(execution: ProvenanceExecution): string {
 
 /**
  * Every recorded call behind the report, as one line each. A call whose record holds no count is
- * listed with its request all the same: a term or register lookup returns a date, not rows, and
- * dropping it would hide the very call an expiry date was read from.
+ * listed with its request all the same: a term or register lookup returns a date, not rows, a
+ * drawing retrieval returns pages, and dropping either would hide the very call a figure or an
+ * expiry date was read from.
  */
 function dataProvenanceLines(snapshot: ProvenanceSnapshot): readonly string[] {
-	const recorded = snapshot.executions.filter(execution => ['search', 'details', 'analytics', 'status'].includes(execution.kind));
+	const recorded = snapshot.executions.filter(execution => ['search', 'details', 'analytics', 'status', 'figures'].includes(execution.kind));
 	if (!recorded.length) {
-		return ['No search, document, analytics or legal-status outcome was recorded for this session, so nothing in this report rests on a recorded retrieval.'];
+		return ['No search, document, drawing, analytics or legal-status outcome was recorded for this session, so nothing in this report rests on a recorded retrieval.'];
 	}
 	const lines = recorded.slice(0, LISTED_RECORDS).map(execution => `- ${executionLabel(execution)} — ${executionRequest(execution)} — ${executionCounts(execution)} — ${execution.status}`);
 	return recorded.length > LISTED_RECORDS ? [...lines, `- and ${recorded.length - LISTED_RECORDS} more recorded calls.`] : lines;

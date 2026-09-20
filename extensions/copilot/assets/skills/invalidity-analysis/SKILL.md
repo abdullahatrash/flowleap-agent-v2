@@ -43,7 +43,7 @@ Prior art rarely sits in one office — before concluding the art isn't there, w
 2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER report a gap in the art from an errored call.
 3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
 
-Record an element as un-anticipated (the patent's real strength) only after all three — and, on a structural target, only after reading the figures of the closest reference (`get_patent_figures`, per the `figure-analysis` skill), stating any figure reading in the row's `gap` as not recorded as evidence — and name what you tried.
+Record an element as un-anticipated (the patent's real strength) only after all three — and, on a structural target, only after reading the figures of the closest reference (`get_patent_figures`, per the `figure-analysis` skill), recording any figure reading on the element it discloses with the `PUB:figure:N` anchor, `basis: "figure"` and a `reading` — and name what you tried.
 
 ## Phase 4: Invalidity Chart
 

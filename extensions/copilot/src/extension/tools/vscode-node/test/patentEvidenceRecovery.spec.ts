@@ -297,4 +297,63 @@ describe('prior-art evidence recovery and review contract', () => {
 			weak: rendered.includes('Element fragments under 12 characters'),
 		}).toEqual({ header: true, disclosed: true, undisclosed: true, beforeGap: true, weak: false });
 	});
+
+	// One retrieved drawing page beside the recorded claim text, so a coverage element can rest on it.
+	const figurePage = { anchor: 'WO9951190A1:figure:3', reference: { publicationNumber: 'WO9951190A1', section: 'bibliography' as const }, figure: { page: 3 }, retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const };
+	const drawn: PatentExecutionSnapshot = { ...snapshot, executions: [...snapshot.executions, { id: 'figures', recordedAt: '2026-09-20', kind: 'figures', status: 'succeeded', publicationIds: ['WO9951190A1'], sources: [figurePage] }] };
+	const reading = 'Figure 3 shows a lobed cam carried on the stem and bearing on the lever.';
+	const figureRow = {
+		...supported, status: 'partial' as const, gap: 'The claim recites no cam profile.',
+		sourceAnchors: ['WO9951190A1:claims:10:en', figurePage.anchor],
+		elements: [
+			supported.elements[0],
+			{ element: 'cam profile carried on the stem', anchor: figurePage.anchor, basis: 'figure' as const, reading },
+			{ element: 'stated hardness of the cam' },
+		],
+	};
+	const withReading = (value: string) => ({ ...review, coverage: [{ ...figureRow, elements: [figureRow.elements[0], { ...figureRow.elements[1], reading: value }, figureRow.elements[2]] }, combination] });
+
+	it('accepts an element that rests on a recorded drawing, and refuses one that states no reading', () => {
+		const silent = { ...review, coverage: [{ ...figureRow, elements: [figureRow.elements[0], { element: 'cam profile carried on the stem', anchor: figurePage.anchor, basis: 'figure' as const }, figureRow.elements[2]] }, combination] };
+		expect({ accepted: validateCandidateReview({ ...review, coverage: [figureRow, combination] }, drawn), silent: validateCandidateReview(silent, drawn) }).toEqual({
+			accepted: [],
+			silent: ['Element "cam profile carried on the stem" of "' + feature + '" rests on a drawing but states no reading. Give the PUB:figure:N anchor printed by get_patent_figures and a reading of what the drawing clearly shows, or drop basis: figure and cite a literal fragment of recorded text.'],
+		});
+	});
+
+	it('refuses a drawing reading that states a proportion unless the drawing is stated to be to scale', () => {
+		const measured = 'Figure 3 shows the cam lobe and the stem in a ratio 2:1.';
+		expect({ measured: validateCandidateReview(withReading(measured), drawn), toScale: validateCandidateReview(withReading(measured + ' The drawing is stated to be to scale.'), drawn) }).toEqual({
+			measured: [`Reading "${measured}" for element "cam profile carried on the stem" states a measurement or proportion. A drawing does not disclose dimensions, proportions or ratios unless it is stated to be to scale (MPEP 2125); state only what the figure clearly shows.`],
+			toScale: [],
+		});
+	});
+
+	it('refuses a recorded drawing page cited as quoted text, and a drawing reading carrying a text fragment', () => {
+		const asText = { ...review, coverage: [{ ...figureRow, elements: [figureRow.elements[0], { element: 'cam profile carried on the stem', anchor: figurePage.anchor, disclosedBy: 'a lobed cam' }, figureRow.elements[2]] }, combination] };
+		const both = { ...review, coverage: [{ ...figureRow, elements: [figureRow.elements[0], { ...figureRow.elements[1], disclosedBy: 'a lobed cam' }, figureRow.elements[2]] }, combination] };
+		expect({ asText: validateCandidateReview(asText, drawn), both: validateCandidateReview(both, drawn) }).toEqual({
+			asText: [`Element "cam profile carried on the stem" of "${feature}" cites WO9951190A1:figure:3, a recorded drawing page, as text. A drawing has no quotable text: cite it with basis: figure and a reading of what the figure clearly shows, and no disclosedBy.`],
+			both: [`Element "cam profile carried on the stem" of "${feature}" rests on a drawing, so it carries no disclosedBy: a figure has no quotable text. Keep the reading and remove disclosedBy.`],
+		});
+	});
+
+	it('refuses an evidence entry that quotes a recorded drawing page', () => {
+		const quoted = { ...review, coverage: [{ ...figureRow, evidence: [...figureRow.evidence, { anchor: figurePage.anchor, quote: reading, scope: 'Drawing.', qualifiers: 'None.', quantityBasis: 'None.' }] }, combination] };
+		expect(validateCandidateReview(quoted, drawn)).toEqual([
+			`Evidence entry for ${figurePage.anchor} quotes a recorded drawing page, which holds no text. Remove it and cite the drawing through an element with basis: figure and a reading of what it clearly shows.`,
+		]);
+	});
+
+	it('refuses a drawing reading whose anchor is not one of the row\'s sourceAnchors', () => {
+		const unlisted = { ...review, coverage: [{ ...figureRow, sourceAnchors: ['WO9951190A1:claims:10:en'] }, combination] };
+		expect(validateCandidateReview(unlisted, drawn)).toEqual([
+			`Element "cam profile carried on the stem" of "${feature}" cites ${figurePage.anchor}, which is not one of that row's sourceAnchors. Cite one of: WO9951190A1:claims:10:en.`,
+		]);
+	});
+
+	it('passes basis and reading through materialization untouched', () => {
+		const materialized: PatentCandidateReview = materializeCandidateReview({ ...review, coverage: [figureRow, combination] }, drawn);
+		expect(materialized.coverage![0].elements).toEqual(figureRow.elements);
+	});
 });
