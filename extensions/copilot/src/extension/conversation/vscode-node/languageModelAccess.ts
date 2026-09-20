@@ -14,6 +14,7 @@ import { getTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { EmbeddingType, getWellKnownEmbeddingTypeInfo, IEmbeddingsComputer } from '../../../platform/embeddings/common/embeddingsComputer';
 import { CustomDataPartMimeTypes } from '../../../platform/endpoint/common/endpointTypes';
 import { encodeStatefulMarker } from '../../../platform/endpoint/common/statefulMarkerContainer';
+import { type ExtensionLanguageModelRequestOptions } from '../../../platform/endpoint/vscode-node/extChatEndpoint';
 import { IEnvService, isScenarioAutomation } from '../../../platform/env/common/envService';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { IOctoKitService } from '../../../platform/github/common/githubService';
@@ -277,6 +278,10 @@ export class CopilotLanguageModelWrapper extends Disposable {
 		// This links the wrapper's chat span back to the original invoke_agent trace.
 		const parentTraceContext = (_options as { modelOptions?: OTelModelOptions }).modelOptions?._otelTraceContext ?? undefined;
 
+		// Restore the conversation id if passed through modelOptions, so a Responses endpoint reached
+		// this way can still build its prompt_cache_key instead of running with a cold prompt cache.
+		const internalModelOptions = (_options as { modelOptions?: ExtensionLanguageModelRequestOptions }).modelOptions;
+
 		const makeRequest = () => endpoint.makeChatRequest2({
 			debugName: 'copilotLanguageModelWrapper',
 			messages,
@@ -285,6 +290,7 @@ export class CopilotLanguageModelWrapper extends Disposable {
 			source: { extensionId },
 			requestOptions: options,
 			userInitiatedRequest: !!extensionId,
+			conversationId: internalModelOptions?._conversationId,
 			telemetryProperties,
 			modelCapabilities: {
 				reasoningEffort: typeof _options.modelConfiguration?.reasoningEffort === 'string' ? _options.modelConfiguration.reasoningEffort : undefined,
