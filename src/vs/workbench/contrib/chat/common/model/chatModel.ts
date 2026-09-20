@@ -782,6 +782,7 @@ class ResponseView extends AbstractResponse {
 
 export class Response extends AbstractResponse implements IDisposable {
 	private readonly _store = new DisposableStore();
+	private readonly _toolInvocationDisposables = this._store.add(new DisposableStore());
 	private _onDidChangeValue = this._store.add(new Emitter<void>());
 	private _activeReasoning: { part: IChatThinkingPart; startedAt: number } | undefined;
 	public get onDidChangeValue() {
@@ -806,6 +807,7 @@ export class Response extends AbstractResponse implements IDisposable {
 
 	clear(): void {
 		this.finalizeReasoningDuration();
+		this._toolInvocationDisposables.clear();
 		this._responseParts = [];
 		this._contentChanged(true);
 	}
@@ -939,7 +941,7 @@ export class Response extends AbstractResponse implements IDisposable {
 			});
 
 		} else if (progress.kind === 'toolInvocation') {
-			registerAutorunSelfDisposable(this._store, reader => {
+			registerAutorunSelfDisposable(this._toolInvocationDisposables, reader => {
 				progress.state.read(reader); // update repr when state changes
 				this._contentChanged(false);
 
