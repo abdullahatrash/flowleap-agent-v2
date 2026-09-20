@@ -423,6 +423,19 @@ describe('auth gate (401)', () => {
 		expect(err.message).not.toContain('"error"');
 	});
 
+	it('stays silent for a background request: the typed error still throws, no prompt fires', async () => {
+		const { client, notification } = makeClient(async () => makeResponse(401, BODY));
+
+		const thrown = await captureThrow(() => client.post('/tools/get_patent_summary', { patent_number: 'EP1602570B1' }, makeToken(), { silent: true }));
+		await flush();
+
+		expect({
+			typed: thrown instanceof AuthRequiredError,
+			information: notification.showInformationMessage.mock.calls.length,
+			warning: notification.showWarningMessage.mock.calls.length,
+		}).toEqual({ typed: true, information: 0, warning: 0 });
+	});
+
 	it('never-signed-in (no local token): shows a sign-in invitation (info, no "expired" language) and starts sign-in when accepted', async () => {
 		const { client, notification } = makeClient(async () => makeResponse(401, BODY));
 		notification.showInformationMessage.mockResolvedValueOnce(SIGN_IN_ACTION as never);
