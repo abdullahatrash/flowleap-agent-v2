@@ -13,6 +13,7 @@ import { assertNever } from '../../../../base/common/assert.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { groupBy } from '../../../../base/common/collections.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Event } from '../../../../base/common/event.js';
 import { createMarkdownCommandLink, MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -32,6 +33,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { mcpAutoStartConfig, McpAutoStartValue } from '../../../../platform/mcp/common/mcpManagement.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
@@ -939,8 +941,15 @@ export class AddConfigurationAction extends Action2 {
 	async run(accessor: ServicesAccessor, configUri?: string): Promise<void> {
 		const instantiationService = accessor.get(IInstantiationService);
 		const workspaceService = accessor.get(IWorkspaceContextService);
-		const target = configUri ? workspaceService.getWorkspaceFolder(URI.parse(configUri)) : undefined;
-		return instantiationService.createInstance(McpAddConfigurationCommand, target ?? undefined).run();
+		const notificationService = accessor.get(INotificationService);
+		try {
+			const target = configUri ? workspaceService.getWorkspaceFolder(URI.parse(configUri)) : undefined;
+			await instantiationService.createInstance(McpAddConfigurationCommand, target ?? undefined).run();
+		} catch (error) {
+			if (!isCancellationError(error)) {
+				notificationService.error(error);
+			}
+		}
 	}
 }
 
