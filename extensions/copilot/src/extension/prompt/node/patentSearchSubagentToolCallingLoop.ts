@@ -34,6 +34,8 @@ export interface IPatentSearchSubagentToolCallingLoopOptions extends IToolCallin
 	location: ChatLocation;
 	promptText: string;
 	maxSearchTurns: number;
+	/** Optional pre-generated subagent invocation ID. If not provided, a new UUID will be generated. */
+	subAgentInvocationId?: string;
 }
 
 /**
@@ -43,6 +45,8 @@ export interface IPatentSearchSubagentToolCallingLoopOptions extends IToolCallin
 export class PatentSearchSubagentToolCallingLoop extends ToolCallingLoop<IPatentSearchSubagentToolCallingLoopOptions> {
 
 	public static readonly ID = 'patentSearchSubagentTool';
+
+	private _endpoint: Promise<IChatEndpoint> | undefined;
 
 	constructor(
 		options: IPatentSearchSubagentToolCallingLoopOptions,
@@ -74,7 +78,16 @@ export class PatentSearchSubagentToolCallingLoop extends ToolCallingLoop<IPatent
 	 * backend (410), and `getChatEndpoint` never throws on an unknown id, so the old
 	 * try/catch fallback was dead code.
 	 */
-	private async getEndpoint(): Promise<IChatEndpoint> {
+	private getEndpoint(): Promise<IChatEndpoint> {
+		return this._endpoint ??= this.resolveEndpoint();
+	}
+
+	/** Returns the display name of the endpoint used for this patent search. */
+	public async getModelName(): Promise<string> {
+		return (await this.getEndpoint()).name;
+	}
+
+	private async resolveEndpoint(): Promise<IChatEndpoint> {
 		const configuredModel = this._configurationService.getNonExtensionConfig<string>('patent.searchSubagent.model');
 		if (configuredModel) {
 			// `ChatModelFamily` accepts an arbitrary model id, so no cast is needed.
@@ -89,7 +102,7 @@ export class PatentSearchSubagentToolCallingLoop extends ToolCallingLoop<IPatent
 			context.tools = {
 				...context.tools,
 				toolReferences: [],
-				subAgentInvocationId: randomUUID(),
+				subAgentInvocationId: this.options.subAgentInvocationId ?? randomUUID(),
 				subAgentName: 'patent-search',
 			};
 		}

@@ -36,7 +36,7 @@ import { LanguageModelDataPart, LanguageModelDataPart2, LanguageModelPartAudienc
 import { isImageDataPart } from '../../../conversation/common/languageModelChatMessageHelpers';
 import { parsePatentDocumentReference } from '../../../patentai/common/patentDocumentReference';
 import { IResultMetadata } from '../../../prompt/common/conversation';
-import { IBuildPromptContext, IToolCall, IToolCallRound } from '../../../prompt/common/intents';
+import { getSubAgentInvocationId, IBuildPromptContext, IToolCall, IToolCallRound } from '../../../prompt/common/intents';
 import { toJsonSchema } from '../../../tools/common/toJsonSchema';
 import { ToolName } from '../../../tools/common/toolNames';
 import { CopilotToolMode } from '../../../tools/common/toolsRegistry';
@@ -294,7 +294,7 @@ function buildToolResultElement(accessor: ServicesAccessor, props: ToolResultOpt
 						inputObj = hookResult.updatedInput;
 					}
 
-					const subAgentInvocationId = promptContext.request?.subAgentInvocationId;
+					const subAgentInvocationId = getSubAgentInvocationId(promptContext);
 					// Capture the active trace context (from the invoke_agent span) so that
 					// the execute_tool span is properly parented even when async context
 					// propagation doesn't carry the active span.

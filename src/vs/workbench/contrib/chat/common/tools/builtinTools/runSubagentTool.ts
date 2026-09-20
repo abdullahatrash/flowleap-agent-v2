@@ -564,10 +564,24 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
 			toolSpecificData: {
 				kind: 'subagent',
 				description: args.description,
+				agentDisplayName: subagentDisplayName(subagent?.name),
 				agentName: isGeneralPurpose ? GeneralPurposeAgentName : (subagent?.name ?? args.agentName),
 				prompt: args.prompt,
 				modelName: resolved.resolvedModelName,
 			},
 		};
 	}
+}
+
+/**
+ * A human-readable label for a subagent type: a custom agent named `patent-search` titles
+ * the subagent header `Patent Search`. The extension host keeps its own copy of this,
+ * because core and the extension host cannot share code.
+ */
+function subagentDisplayName(agentName: string | undefined): string | undefined {
+	const words = agentName?.trim().split(/[-_\s]+/).filter(word => word.length > 0);
+	if (!words?.length) {
+		return undefined;
+	}
+	return words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }

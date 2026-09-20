@@ -465,6 +465,22 @@ describe('SearchSubagentToolCallingLoop.getEndpoint (agentic proxy)', () => {
 		expect(endpoint.model).toBe('search-model-b');
 	});
 
+	it('resolves the endpoint once and reports its display name', async () => {
+		await configurationService.setConfig(ConfigKey.Advanced.SearchSubagentUseAgenticProxy, true);
+		await configurationService.setConfig(ConfigKey.Advanced.SearchSubagentModel, 'search-model-a');
+		const mainEndpoint = { model: 'main-agent' } as IChatEndpoint;
+		const loop = createLoop([
+			createChatEndpoint('search-model-a', SEARCH_AGENT_FAMILY),
+		], mainEndpoint);
+
+		// The subagent tool asks for the model name before the loop runs, so the endpoint has
+		// to be memoized rather than resolved twice.
+		const endpoint = await (loop as any).getEndpoint();
+
+		expect(await (loop as any).getEndpoint()).toBe(endpoint);
+		expect(await loop.getModelName()).toBe(endpoint.name);
+	});
+
 	it('falls back to the first search-agent endpoint when the configured model is missing', async () => {
 		await configurationService.setConfig(ConfigKey.Advanced.SearchSubagentUseAgenticProxy, true);
 		await configurationService.setConfig(ConfigKey.Advanced.SearchSubagentModel, 'does-not-exist');

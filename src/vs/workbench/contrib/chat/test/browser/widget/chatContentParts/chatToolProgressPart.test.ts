@@ -21,13 +21,15 @@ import { IChatMarkdownAnchorService } from '../../../../browser/widget/chatConte
 import { IChatContentPartRenderContext, InlineTextModelCollection } from '../../../../browser/widget/chatContentParts/chatContentParts.js';
 import { ChatToolConfirmationCarouselPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolConfirmationCarouselPart.js';
 import { ChatToolInvocationPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
+import { IChatTodoListService } from '../../../../common/tools/chatTodoListService.js';
+import { CollapsibleListPool } from '../../../../browser/widget/chatContentParts/chatReferencesContentPart.js';
 import { ChatToolProgressSubPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolProgressPart.js';
 import { ChatToolStreamingSubPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolStreamingSubPart.js';
 import { isMcpToolInvocation } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { DiffEditorPool, EditorPool } from '../../../../browser/widget/chatContentParts/chatContentCodePools.js';
 import { IChatToolInvocation, IChatToolInvocationSerialized, ToolConfirmKind } from '../../../../common/chatService/chatService.js';
 import { IChatResponseViewModel } from '../../../../common/model/chatViewModel.js';
-import { ToolDataSource, type ToolDataSource as ToolDataSourceType } from '../../../../common/tools/languageModelToolsService.js';
+import { ToolDataSource, ToolInvocationPresentation, type ToolDataSource as ToolDataSourceType } from '../../../../common/tools/languageModelToolsService.js';
 
 suite('ChatToolProgressSubPart', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -214,6 +216,35 @@ suite('ChatToolProgressSubPart', () => {
 			revealed: ['subagent-two'],
 			text: '\u2014 Review current branch',
 			label: 'Scroll to Review current branch',
+		});
+	});
+
+	test('does not retain an ordinary tool part when it becomes a parent subagent', () => {
+		// A hidden presentation keeps the part from rendering, which leaves `hasSameContent`
+		// as the only behavior under test.
+		const invocation = { ...createToolInvocation(), presentation: ToolInvocationPresentation.Hidden };
+		instantiationService.stub(IChatTodoListService, {} as IChatTodoListService);
+		const part = disposables.add(instantiationService.createInstance(
+			ChatToolInvocationPart,
+			invocation,
+			createRenderContext(false),
+			mockMarkdownRenderer,
+			{} as CollapsibleListPool,
+			mockEditorPool,
+			() => 500,
+			new Set<string>(),
+			0
+		));
+
+		const sameBefore = part.hasSameContent(invocation, [], {} as never);
+		(invocation as { toolSpecificData: IChatToolInvocation['toolSpecificData'] }).toolSpecificData = { kind: 'subagent' };
+
+		assert.deepStrictEqual({
+			sameBefore,
+			sameAfterSubagentData: part.hasSameContent(invocation, [], {} as never),
+		}, {
+			sameBefore: true,
+			sameAfterSubagentData: false,
 		});
 	});
 

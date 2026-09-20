@@ -7,8 +7,8 @@ import assert from 'assert';
 import { URI, UriComponents } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { IconPathDto } from '../../common/extHost.protocol.js';
-import { ChatRequestModeInstructions, IconPath } from '../../common/extHostTypeConverters.js';
-import { ThemeColor, ThemeIcon } from '../../common/extHostTypes.js';
+import { ChatRequestModeInstructions, ChatToolInvocationPart, IconPath } from '../../common/extHostTypeConverters.js';
+import { ChatSubagentToolInvocationData, ChatToolInvocationPart as ExtHostChatToolInvocationPart, ThemeColor, ThemeIcon } from '../../common/extHostTypes.js';
 import { IChatRequestModeInstructions } from '../../../contrib/chat/common/model/chatModel.js';
 import { Dto } from '../../../services/extensions/common/proxyIdentifier.js';
 
@@ -245,6 +245,26 @@ suite('extHostTypeConverters', function () {
 			assert.strictEqual(backToApi.toolReferences?.[0].range, undefined);
 			assert.strictEqual(backToApi.toolReferences?.[1].name, 'tool2');
 			assert.deepStrictEqual(backToApi.toolReferences?.[1].range, [10, 20]);
+		});
+	});
+
+	suite('ChatToolInvocationPart', function () {
+		test('converts subagent data with its display name and model name', function () {
+			const data = new ChatSubagentToolInvocationData('Search for prior art', 'patent-search', 'Find prior art', 'EP1234567 A1');
+			data.agentDisplayName = 'Patent Search';
+			data.modelName = 'Patent Model';
+			const part = new ExtHostChatToolInvocationPart('patent_search_subagent', 'tool-call-id');
+			part.toolSpecificData = data;
+
+			assert.deepStrictEqual(ChatToolInvocationPart.from(part as unknown as Parameters<typeof ChatToolInvocationPart.from>[0]).toolSpecificData, {
+				kind: 'subagent',
+				description: 'Search for prior art',
+				agentDisplayName: 'Patent Search',
+				agentName: 'patent-search',
+				prompt: 'Find prior art',
+				result: 'EP1234567 A1',
+				modelName: 'Patent Model',
+			});
 		});
 	});
 });

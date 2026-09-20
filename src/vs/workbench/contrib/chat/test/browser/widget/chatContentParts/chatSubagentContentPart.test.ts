@@ -949,6 +949,51 @@ suite('ChatSubagentContentPart', () => {
 		});
 	});
 
+	suite('Extension-host subagent nesting', () => {
+		test('a patent search subagent renders one header with its child tools nested', () => {
+			// The extension-host tool pushes subagent data onto its own tool call, and its nested
+			// tools carry that same id, so the whole subagent is one header with child rows.
+			const parentToolCallId = 'patent-parent-call';
+			const parent = createMockToolInvocation({
+				toolId: 'patent_search_subagent',
+				toolCallId: parentToolCallId,
+				toolSpecificData: {
+					kind: 'subagent',
+					description: 'Search for prior art',
+					agentDisplayName: 'Patent Search',
+					agentName: 'patent-search',
+				}
+			});
+			const part = createPart(parent, createMockRenderContext(false), parentToolCallId);
+
+			const button = getCollapseButton(part);
+			assert.ok(button, 'Should have collapse button');
+			button.click();
+
+			for (const invocationMessage of ['Searching EPO', 'Searching USPTO']) {
+				part.appendToolInvocation(createMockToolInvocation({
+					toolId: 'patent_search',
+					subAgentInvocationId: parentToolCallId,
+					stateType: IChatToolInvocation.StateKind.Executing,
+					invocationMessage,
+				}), 0);
+			}
+
+			const labelElement = getCollapseButtonLabel(button);
+			assert.deepStrictEqual({
+				isHeader: part.domNode.classList.contains('chat-subagent-part'),
+				nestedHeaders: part.domNode.querySelectorAll('.chat-subagent-part').length,
+				childRows: part.domNode.querySelectorAll('.chat-thinking-tool-wrapper').length,
+				title: labelElement?.textContent ?? button.textContent ?? '',
+			}, {
+				isHeader: true,
+				nestedHeaders: 0,
+				childRows: 2,
+				title: 'Patent Search: Search for prior art \u2014 Searching USPTO',
+			});
+		});
+	});
+
 	suite('Current running tool in title', () => {
 		test('should update title with current running tool invocation message', () => {
 			const toolInvocation = createMockToolInvocation({
