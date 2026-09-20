@@ -9,7 +9,7 @@ import { derived, observableValue } from '../../../../../base/common/observable.
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
-import { computeReorderSortChanges, getSessionHeaderStatus, groupByWorkspace, groupSessionsForList, limitSessionsForList, SessionHeaderStatus, sortSessions, SessionsGrouping, SessionsSorting } from '../../browser/views/sessionsList.js';
+import { computeReorderSortChanges, getSessionHeaderStatus, groupByDate, groupByWorkspace, groupSessionsForList, limitSessionsForList, SessionHeaderStatus, sortSessions, SessionsGrouping, SessionsSorting } from '../../browser/views/sessionsList.js';
 
 function createSession(id: string, opts: {
 	workspaceLabel?: string;
@@ -426,6 +426,47 @@ suite('Sessions - SessionsList Helpers', () => {
 			(session.isRead as ReturnType<typeof observableValue<boolean>>).set(true, undefined);
 
 			assert.deepStrictEqual([before, status.get()], [SessionHeaderStatus.Unread, undefined]);
+		});
+	});
+
+	suite('groupByDate', () => {
+
+		const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+		const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000);
+
+		function bucketsOf(sessions: ISession[], sorting: SessionsSorting) {
+			return groupByDate(sessions, sorting).map(section => ({ id: section.id, sessions: section.sessions.map(s => s.sessionId) }));
+		}
+
+		test('sessions updated within the last 24 hours stay in "Today" when sorting by creation time', () => {
+			assert.deepStrictEqual(bucketsOf([
+				createSession('created-today', { createdAt: minutesAgo(30) }),
+				createSession('updated-today', { createdAt: daysAgo(10), updatedAt: minutesAgo(30) }),
+				createSession('stale', { createdAt: daysAgo(11), updatedAt: daysAgo(2) }),
+			], SessionsSorting.Created), [
+				{ id: 'today', sessions: ['created-today', 'updated-today'] },
+				{ id: 'older', sessions: ['stale'] },
+			]);
+		});
+
+		test('a stale session stays in its creation-date bucket', () => {
+			assert.deepStrictEqual(bucketsOf([
+				createSession('three-days', { createdAt: daysAgo(3), updatedAt: daysAgo(3) }),
+				createSession('twenty-days', { createdAt: daysAgo(20), updatedAt: daysAgo(20) }),
+			], SessionsSorting.Created), [
+				{ id: 'thisWeek', sessions: ['three-days'] },
+				{ id: 'older', sessions: ['twenty-days'] },
+			]);
+		});
+
+		test('sorting by update time buckets on the update timestamp alone', () => {
+			assert.deepStrictEqual(bucketsOf([
+				createSession('updated-today', { createdAt: daysAgo(10), updatedAt: minutesAgo(30) }),
+				createSession('updated-long-ago', { createdAt: daysAgo(10), updatedAt: daysAgo(20) }),
+			], SessionsSorting.Updated), [
+				{ id: 'today', sessions: ['updated-today'] },
+				{ id: 'older', sessions: ['updated-long-ago'] },
+			]);
 		});
 	});
 });

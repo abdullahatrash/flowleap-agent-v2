@@ -3092,12 +3092,20 @@ export function groupByWorkspace(sessions: ISession[]): ISessionSection[] {
 	return result;
 }
 
+/**
+ * How recently a session must have been updated to stay in "Today" even though
+ * it was created earlier. Only applies when sorting by creation date, where the
+ * bucket would otherwise be decided by a timestamp that never moves.
+ */
+const RECENTLY_UPDATED_SESSION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
 export function groupByDate(sessions: ISession[], sorting: SessionsSorting, getSortKey?: (session: ISession, sorting: SessionsSorting) => number): ISessionSection[] {
 	const key = getSortKey ?? defaultSortKey;
 	const now = new Date();
 	const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 	const startOfYesterday = startOfToday - 86_400_000;
 	const startOfWeek = startOfToday - 7 * 86_400_000;
+	const recentlyUpdatedThreshold = now.getTime() - RECENTLY_UPDATED_SESSION_THRESHOLD_MS;
 
 	const today: ISession[] = [];
 	const yesterday: ISession[] = [];
@@ -3106,8 +3114,11 @@ export function groupByDate(sessions: ISession[], sorting: SessionsSorting, getS
 
 	for (const session of sessions) {
 		const time = key(session, sorting);
+		// A long-running session that just produced output must not sit in
+		// "Older" because it was created two weeks ago.
+		const wasRecentlyUpdated = sorting === SessionsSorting.Created && session.updatedAt.get().getTime() >= recentlyUpdatedThreshold;
 
-		if (time >= startOfToday) {
+		if (time >= startOfToday || wasRecentlyUpdated) {
 			today.push(session);
 		} else if (time >= startOfYesterday) {
 			yesterday.push(session);
