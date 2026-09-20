@@ -226,6 +226,9 @@ import './contrib/chat/electron-browser/chat.contribution.js';
 // FlowLeap CLI
 import './contrib/flowleapCli/browser/flowleapCliNudge.contribution.js';
 
+// Sessions (desktop only)
+import './contrib/sessions/electron-browser/sessions.contribution.js';
+
 //#endregion
 
 export { main } from './electron-browser/sessions.main.js';
