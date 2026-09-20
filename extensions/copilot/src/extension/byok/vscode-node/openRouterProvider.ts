@@ -60,6 +60,10 @@ export function openRouterModelCapabilities(model: OpenRouterModelData): BYOKMod
 		name: model.name,
 		toolCalling: supportedParameters.includes('tools'),
 		vision: model.architecture?.input_modalities?.includes('image') ?? false,
+		// The catalog's `context_length` IS the model's window, so declare it rather than letting it
+		// be re-derived as input + output: an Anthropic model's 200K window is 200K, not 200K + 64K.
+		// The context gauge reads this number.
+		contextWindow: model.top_provider.context_length,
 		maxInputTokens: model.top_provider.context_length - maxOutputTokens,
 		maxOutputTokens,
 		supportsReasoningEffort
