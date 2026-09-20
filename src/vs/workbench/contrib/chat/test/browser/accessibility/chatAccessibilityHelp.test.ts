@@ -24,4 +24,18 @@ suite('Chat Accessibility Help', () => {
 			unsupported: false,
 		});
 	});
+
+	test('describes long pasted text attachments regardless of line count', () => {
+		const keybindingService = {
+			lookupKeybindings: () => [],
+		} as unknown as IKeybindingService;
+
+		assert.deepStrictEqual({
+			agentView: getAccessibilityHelpText('agentView', keybindingService, true).includes('Long pasted text, including single-line text'),
+			inlineChat: getAccessibilityHelpText('inlineChat', keybindingService, true).includes('Long pasted text, including single-line text'),
+		}, {
+			agentView: true,
+			inlineChat: true,
+		});
+	});
 });
