@@ -311,6 +311,10 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 		return this._contentIndex;
 	}
 
+	public get terminalToolSessionId(): string | undefined {
+		return this._terminalData.terminalToolSessionId;
+	}
+
 	constructor(
 		toolInvocation: IChatToolInvocation | IChatToolInvocationSerialized,
 		terminalData: IChatTerminalToolInvocationData | ILegacyChatTerminalToolInvocationData,
@@ -415,17 +419,6 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 			initializeTerminalActionsOnce();
 		});
 
-		// Listen for continue in background — updates toolbar to auto-hide the action
-		const terminalToolSessionId = this._terminalData.terminalToolSessionId;
-		if (terminalToolSessionId) {
-			this._register(this._terminalChatService.onDidContinueInBackground(sessionId => {
-				if (sessionId === terminalToolSessionId) {
-					this._terminalData.didContinueInBackground = true;
-					this._toolbarCanContinueInBackground = false;
-					this._updateToolbarActions();
-				}
-			}));
-		}
 		let pastTenseMessage: string | undefined;
 		if (toolInvocation.pastTenseMessage) {
 			pastTenseMessage = `${typeof toolInvocation.pastTenseMessage === 'string' ? toolInvocation.pastTenseMessage : toolInvocation.pastTenseMessage.value}`;
@@ -1109,6 +1102,12 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 		if (sessionId) {
 			this._terminalChatService.continueInBackground(sessionId);
 		}
+	}
+
+	public markContinuedInBackground(): void {
+		this._terminalData.didContinueInBackground = true;
+		this._toolbarCanContinueInBackground = false;
+		this._updateToolbarActions();
 	}
 
 	public async toggleOutputFromAction(): Promise<void> {
