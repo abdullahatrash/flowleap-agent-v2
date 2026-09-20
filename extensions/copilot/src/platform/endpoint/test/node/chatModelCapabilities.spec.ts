@@ -8,7 +8,7 @@ import { ConfigKey, IConfigurationService } from '../../../configuration/common/
 import { DefaultsOnlyConfigurationService } from '../../../configuration/common/defaultsOnlyConfigurationService';
 import { InMemoryConfigurationService } from '../../../configuration/test/common/inMemoryConfigurationService';
 import type { IChatEndpoint } from '../../../networking/common/networking';
-import { getModelCapabilityOverride, isGpt51Family, isGpt53Codex, isGpt54, isGpt55, isGpt56, isGpt6Family, isOpenAIModel, modelCanUseApplyPatchExclusively, modelCanUseReplaceStringExclusively, modelPrefersJsonNotebookRepresentation, modelSupportsApplyPatch, modelSupportsContextEditing, modelSupportsMultiReplaceString, modelSupportsPDFDocuments, modelSupportsReplaceString, modelSupportsSimplifiedApplyPatchInstructions, modelSupportsToolSearch } from '../../common/chatModelCapabilities';
+import { getModelCapabilityOverride, isGpt51Family, isGpt53Codex, isGpt54, isGpt55, isGpt56, isGpt6Family, isOpenAIModel, modelCanUseApplyPatchExclusively, modelCanUseReplaceStringExclusively, modelPrefersJsonNotebookRepresentation, modelSupportCacheBreakPoints, modelSupportsApplyPatch, modelSupportsContextEditing, modelSupportsMultiReplaceString, modelSupportsPDFDocuments, modelSupportsReplaceString, modelSupportsSimplifiedApplyPatchInstructions, modelSupportsToolSearch } from '../../common/chatModelCapabilities';
 
 function fakeModel(family: string, model: string = family) {
 	return { family, model } as unknown as IChatEndpoint;
@@ -64,6 +64,7 @@ describe('GPT-6 family capabilities', () => {
 			simplifiedApplyPatchInstructions: modelSupportsSimplifiedApplyPatchInstructions(model),
 			jsonNotebook: modelPrefersJsonNotebookRepresentation(model),
 			pdf: modelSupportsPDFDocuments(model),
+			cacheBreakpoints: modelSupportCacheBreakPoints(model),
 			toolSearch: modelSupportsToolSearch(model),
 			toolSearchByFamily: modelSupportsToolSearch(family),
 			replaceString: modelSupportsReplaceString(model),
@@ -79,6 +80,7 @@ describe('GPT-6 family capabilities', () => {
 			simplifiedApplyPatchInstructions: true,
 			jsonNotebook: true,
 			pdf: true,
+			cacheBreakpoints: true,
 			toolSearch: true,
 			toolSearchByFamily: true,
 			replaceString: false,
