@@ -1,10 +1,16 @@
 # The decision row
 
-Tab-separated, one row per judgment call, append only. Header:
+Tab-separated, one row per judgment call, append only. This header, these five
+columns, this order — it is the only shape, and every skill that writes the file
+writes this one:
 
 ```
 when	call	why	evidence	status
 ```
+
+Do not invent a column set. A trail written as `date node status value evidence`
+has been seen in the wild; it drops `why`, which is the column a reviewer reads
+first, and it leaves two files in one workspace that cannot be read together.
 
 | Column | What goes in it |
 | --- | --- |
@@ -33,3 +39,12 @@ The third is the row step 4 exists for, and it is the one people miss. Nothing w
 ## What not to log
 
 Retrievals that found what they were looking for. Tool calls that succeeded. Formatting choices. The order sections were written in. A row that no reader would ever act on is noise, and noise is what makes a trail go unread.
+
+## The one exception: the opening scope
+
+The scope a deliverable runs on — its subject, cutoff, jurisdictions, depth, output — is
+set once before any search, and every later finding depends on it. Those rows belong at the
+top of the trail even though each was chosen rather than weighed, because a reader checking
+a conclusion starts by checking what it was scoped to. The investigation-brief skill writes them: a value the user or their documents confirmed is `settled`, a value
+nobody confirmed is `unresolved`. Everything after those rows is a judgment call in the
+ordinary sense, and the rest of this file governs it.
