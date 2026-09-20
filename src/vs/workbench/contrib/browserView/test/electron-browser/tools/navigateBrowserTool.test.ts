@@ -32,6 +32,42 @@ function createRemoteExplorerService(localUri: string): IRemoteExplorerService {
 suite('NavigateBrowserTool', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('blocks reported parser-differential authorities before navigating a browser page', async () => {
+		const configService = new TestConfigurationService();
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.NetworkFilter, true);
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains, []);
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains, []);
+		const networkFilterService = disposables.add(new AgentNetworkFilterService(configService));
+		const tool = new NavigateBrowserTool(
+			upcastPartial<IPlaywrightService>({}),
+			networkFilterService,
+			upcastPartial<IBrowserViewWorkbenchService>({}),
+			upcastPartial<IRemoteExplorerService>({}),
+		);
+		const urls = [
+			'http://a@b@127.0.0.1:3000/private',
+			'http://a%40b@127.0.0.1:3000/private',
+			'http://[::1]:3000/private',
+			'http://[::ffff:127.0.0.1]:3000/private',
+			'https://evil.com%2fx/',
+			'https://evil.com%5c/',
+		];
+		const blocked = await Promise.all(urls.map(async url => {
+			try {
+				await tool.prepareToolInvocation({
+					parameters: { pageId: 'test-page', type: 'url', url },
+					toolCallId: 'test-tool-call',
+					chatSessionResource: undefined,
+				}, CancellationToken.None);
+				return false;
+			} catch {
+				return true;
+			}
+		}));
+
+		assert.deepStrictEqual(blocked, urls.map(() => true));
+	});
+
 	test('normalizes reported parser-differential URLs before filtering and navigating', async () => {
 		const configService = new TestConfigurationService();
 		configService.setUserConfiguration(AgentNetworkDomainSettingId.NetworkFilter, true);

@@ -98,7 +98,11 @@ function normalizeUriAuthority(authority: string | undefined): string | undefine
 
 	let hostname: string;
 	try {
-		hostname = new URL(`http://${authority}`).hostname.toLowerCase();
+		const url = new URL(`http://${authority}`);
+		if (hasHostLikeCredentials(url)) {
+			return undefined;
+		}
+		hostname = url.hostname.toLowerCase();
 	} catch {
 		return undefined;
 	}
@@ -108,6 +112,59 @@ function normalizeUriAuthority(authority: string | undefined): string | undefine
 	}
 
 	return normalizeDomain(hostname, true);
+}
+
+function hasHostLikeCredentials(url: URL): boolean {
+	return [url.username, url.password].some(value => {
+		if (!value) {
+			return false;
+		}
+
+		let decoded: string;
+		try {
+			decoded = decodeURIComponent(value).toLowerCase();
+		} catch {
+			return true;
+		}
+
+		if (decoded.includes('@')) {
+			return false;
+		}
+
+		return (decoded.includes('.') && normalizeDomain(decoded, true) !== undefined)
+			|| normalizeBareIpv6(decoded) !== undefined;
+	});
+}
+
+function normalizeBareIpv6(value: string): string | undefined {
+	if (!value.includes(':') || /[/?#\\@\[\]]/.test(value)) {
+		return undefined;
+	}
+	return normalizeUriAuthority(`[${value}]`);
+}
+
+/**
+ * Normalizes an administrator allow/deny pattern to the canonical host form used for matching.
+ */
+export function normalizeDomainPattern(pattern: string): string | undefined {
+	const extractedPattern = extractDomainPattern(pattern);
+
+	if (extractedPattern === '*') {
+		return extractedPattern;
+	}
+
+	if (extractedPattern.startsWith('*.')) {
+		const normalizedPattern = normalizeDomain(extractedPattern, true);
+		if (!normalizedPattern) {
+			return undefined;
+		}
+		const suffix = normalizedPattern.slice(2);
+		return `*.${normalizeUriAuthority(suffix) ?? suffix}`;
+	}
+
+	return normalizeBareIpv6(extractedPattern)
+		?? normalizeUriAuthority(extractedPattern)
+		?? normalizeDomain(extractedPattern, true);
 }
 
 function normalizeEmbeddedIpv4(value: string): string | undefined {
@@ -156,8 +213,7 @@ export function extractDomainPattern(pattern: string): string {
  * @returns `true` if the domain matches the pattern.
  */
 export function matchesDomainPattern(domain: string, pattern: string): boolean {
-	const extractedPattern = extractDomainPattern(pattern);
-	const normalizedPattern = normalizeDomain(extractedPattern, pattern.includes('://')) ?? normalizeUriAuthority(extractedPattern);
+	const normalizedPattern = normalizeDomainPattern(pattern);
 	if (!normalizedPattern) {
 		return false;
 	}
@@ -165,8 +221,7 @@ export function matchesDomainPattern(domain: string, pattern: string): boolean {
 		return true;
 	}
 	if (normalizedPattern.startsWith('*.')) {
-		const patternSuffix = normalizedPattern.slice(2);
-		const suffix = normalizeUriAuthority(patternSuffix) ?? patternSuffix;
+		const suffix = normalizedPattern.slice(2);
 		const normalizedDomain = normalizeEmbeddedIpv4(domain) ?? domain;
 		return normalizedDomain === suffix || normalizedDomain.endsWith(`.${suffix}`);
 	}

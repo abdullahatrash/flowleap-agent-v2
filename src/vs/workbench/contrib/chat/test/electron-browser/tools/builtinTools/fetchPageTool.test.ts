@@ -151,10 +151,15 @@ suite('FetchWebPageTool', () => {
 		assert.strictEqual(Array.isArray(result.toolResultDetails) ? result.toolResultDetails.length : 0, 4, 'Should have 4 valid URLs in toolResultDetails');
 	});
 
-	test('blocks denied mapped IPv6 before web content extraction', async () => {
+	test('blocks reported parser-differential authorities before web content extraction', async () => {
 		const urls = [
+			'http://127.0.0.1/private',
+			'http://a@b@127.0.0.1/private',
+			'http://a%40b@127.0.0.1/private',
+			'http://[::1]/private',
 			'http://[::ffff:127.0.0.1]/private',
-			'http://[::127.0.0.1]/private',
+			'https://evil.com%2fx/',
+			'https://evil.com%5c/',
 		];
 		const webContentExtractorService = new TestWebContentExtractorService(new ResourceMap<string>(
 			urls.map(url => [URI.parse(url), 'Blocked private content'] as const)
@@ -162,7 +167,7 @@ suite('FetchWebPageTool', () => {
 		const configService = new TestConfigurationService();
 		configService.setUserConfiguration(AgentNetworkDomainSettingId.NetworkFilter, true);
 		configService.setUserConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains, []);
-		configService.setUserConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains, ['127.0.0.1']);
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains, []);
 		const networkFilterService = new AgentNetworkFilterService(configService);
 
 		try {
@@ -176,7 +181,50 @@ suite('FetchWebPageTool', () => {
 			);
 
 			const result = await tool.invoke(
-				{ callId: 'test-call-mapped-ipv4', toolId: 'fetch-page', parameters: { urls }, context: undefined },
+				{ callId: 'test-call-ipv6', toolId: 'fetch-page', parameters: { urls }, context: undefined },
+				() => Promise.resolve(0),
+				{ report: () => { } },
+				CancellationToken.None
+			);
+
+			assert.deepStrictEqual({
+				content: result.content.map(part => part.value),
+				requestedUris: webContentExtractorService.requestedUris.map(uri => uri.toString()),
+			}, {
+				content: urls.map(url => networkFilterService.formatError(URI.parse(url))),
+				requestedUris: [],
+			});
+		} finally {
+			networkFilterService.dispose();
+		}
+	});
+
+	test('blocks wildcard-denied mapped IPv6 before web content extraction', async () => {
+		const urls = [
+			'http://[::ffff:127.0.0.1]/private',
+			'http://[::127.0.0.1]/private',
+		];
+		const webContentExtractorService = new TestWebContentExtractorService(new ResourceMap<string>(
+			urls.map(url => [URI.parse(url), 'Blocked private content'] as const)
+		));
+		const configService = new TestConfigurationService();
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.NetworkFilter, true);
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains, []);
+		configService.setUserConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains, ['*.127.1']);
+		const networkFilterService = new AgentNetworkFilterService(configService);
+
+		try {
+			const tool = new FetchWebPageTool(
+				webContentExtractorService,
+				new ExtendedTestFileService(new ResourceMap<string | VSBuffer>()),
+				new MockTrustedDomainService(),
+				new MockChatService(),
+				new TestContextService(),
+				networkFilterService,
+			);
+
+			const result = await tool.invoke(
+				{ callId: 'test-call-wildcard-ipv4', toolId: 'fetch-page', parameters: { urls }, context: undefined },
 				() => Promise.resolve(0),
 				{ report: () => { } },
 				CancellationToken.None
