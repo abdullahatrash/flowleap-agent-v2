@@ -18,7 +18,7 @@ import { HighlightedLabel } from '../../../../../base/browser/ui/highlightedlabe
 import { createMatches, FuzzyScore, IMatch } from '../../../../../base/common/filters.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
-import { IObservable, IReader, autorun, observableSignalFromEvent, observableValue } from '../../../../../base/common/observable.js';
+import { IObservable, IReader, ISettableObservable, autorun, derived, observableSignalFromEvent, observableValue } from '../../../../../base/common/observable.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { fromNow } from '../../../../../base/common/date.js';
@@ -37,6 +37,8 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
 import { IStyleOverride, defaultButtonStyles, defaultFindWidgetStyles, defaultInputBoxStyles, defaultToggleStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { observableConfigValue } from '../../../../../platform/observable/common/platformObservableUtils.js';
 import { GITHUB_REMOTE_FILE_SCHEME, ISession, ISessionWorkspace, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { AgentSessionApprovalModel, IAgentSessionApprovalInfo } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionApprovalModel.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -89,6 +91,12 @@ export const SessionItemHasBranchNameContext = new RawContextKey<boolean>('sessi
 /** Whether the focused session item currently belongs to a user group. */
 export const SessionItemInGroupContext = new RawContextKey<boolean>('sessionItem.inGroup', false);
 export const SessionSectionTypeContext = new RawContextKey<string>('sessionSection.type', '');
+
+/**
+ * Controls whether a collapsed section or group header shows an indicator for
+ * the sessions hidden inside it. Registered in `sessions.contribution.ts`.
+ */
+export const SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING = 'sessions.list.showUnreadInCollapsedSections';
 
 //#region Types
 
@@ -581,8 +589,8 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 		const approvalModel = this.approvalModel;
 		const initialInfo = getFirstApprovalAcrossChats(approvalModel, element, undefined);
-		let wasVisible = !!initialInfo;
-		template.approvalRow.classList.toggle('visible', wasVisible);
+		let lastApprovalHeight = approvalRowHeightFor(initialInfo);
+		template.approvalRow.classList.toggle('visible', lastApprovalHeight > 0);
 
 		const buttonStore = template.elementDisposables.add(new DisposableStore());
 
@@ -622,6 +630,10 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 				template.approvalButtonContainer.textContent = '';
 				const button = buttonStore.add(new Button(template.approvalButtonContainer, {
 					title: localize('allowActionOnce', "Allow once"),
+					// Every visible "Allow" button carries the same label and tooltip,
+					// so name the action each one approves or a screen-reader user
+					// cannot tell them apart.
+					ariaLabel: localize('allowActionAria', "Allow: {0}", info.label),
 					secondary: true,
 					...defaultButtonStyles
 				}));
@@ -629,8 +641,12 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 				buttonStore.add(button.onDidClick(() => info.confirm()));
 			}
 
-			if (wasVisible !== visible) {
-				wasVisible = visible;
+			// Fire on any height change, not just on visibility: the model can
+			// replace one pending approval with another whose label spans a
+			// different number of lines, which changes the reserved row height.
+			const height = approvalRowHeightFor(info);
+			if (height !== lastApprovalHeight) {
+				lastApprovalHeight = height;
 				this._onDidChangeItemHeight.fire(element);
 			}
 		}));
@@ -664,7 +680,69 @@ class SessionItemRenderer implements ITreeRenderer<SessionListItem, FuzzyScore, 
 
 //#region Section Header Renderer
 
-interface ISessionSectionTemplate {
+/**
+ * The parts every header row (section and group) shares so the collapsed-state
+ * indicator can be rendered by one helper for both.
+ */
+interface ISessionHeaderTemplate {
+	/** Leading slot that carries the collapsed-state indicator. */
+	readonly icon: HTMLElement;
+	/** Whether the header is currently collapsible *and* collapsed. */
+	readonly collapsed: ISettableObservable<boolean>;
+	readonly elementDisposables: DisposableStore;
+}
+
+/**
+ * What a collapsed header should signal about the sessions it hides. Ordered by
+ * priority: a session waiting on the user outranks merely unread output.
+ */
+export const enum SessionHeaderStatus {
+	NeedsInput,
+	Unread,
+}
+
+export function getSessionHeaderStatus(sessions: readonly ISession[], reader: IReader): SessionHeaderStatus | undefined {
+	let hasUnread = false;
+	for (const session of sessions) {
+		if (session.isArchived.read(reader)) {
+			continue;
+		}
+		if (session.status.read(reader) === SessionStatus.NeedsInput) {
+			return SessionHeaderStatus.NeedsInput;
+		}
+		hasUnread ||= !session.isRead.read(reader);
+	}
+	return hasUnread ? SessionHeaderStatus.Unread : undefined;
+}
+
+/**
+ * Renders a header's leading icon: the collapsed-state indicator when the
+ * header is collapsed and something inside it wants attention, otherwise the
+ * header's own static icon (if it has one), otherwise nothing.
+ */
+function renderSessionHeaderIcon(template: ISessionHeaderTemplate, sessions: readonly ISession[], icon: ThemeIcon | undefined, showUnreadInCollapsedSections: IObservable<boolean>, instantiationService: IInstantiationService): void {
+	const headerStatus = derived(reader => template.collapsed.read(reader) && showUnreadInCollapsedSections.read(reader)
+		? getSessionHeaderStatus(sessions, reader)
+		: undefined);
+	template.elementDisposables.add(autorun(reader => {
+		const status = headerStatus.read(reader);
+		DOM.clearNode(template.icon);
+		template.icon.className = 'session-section-icon';
+		template.icon.style.display = status !== undefined || icon ? '' : 'none';
+		if (status !== undefined) {
+			const statusIcon = reader.store.add(instantiationService.createInstance(SessionStatusIcon, template.icon));
+			statusIcon.setStatus(
+				status === SessionHeaderStatus.NeedsInput ? SessionStatus.NeedsInput : SessionStatus.Completed,
+				status !== SessionHeaderStatus.Unread,
+				false,
+			);
+		} else if (icon) {
+			template.icon.classList.add(...ThemeIcon.asClassNameArray(icon));
+		}
+	}));
+}
+
+interface ISessionSectionTemplate extends ISessionHeaderTemplate {
 	readonly container: HTMLElement;
 	readonly label: HTMLElement;
 	readonly count: HTMLElement;
@@ -683,6 +761,7 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 
 	constructor(
 		private readonly hideSectionCount: boolean,
+		private readonly showUnreadInCollapsedSections: IObservable<boolean>,
 		private readonly instantiationService: IInstantiationService,
 		private readonly contextKeyService: IContextKeyService,
 	) { }
@@ -691,6 +770,9 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 		const disposables = new DisposableStore();
 
 		container.classList.add('session-section');
+		const icon = DOM.append(container, $('span.session-section-icon'));
+		icon.setAttribute('aria-hidden', 'true');
+		icon.style.display = 'none';
 		const label = DOM.append(container, $('span.session-section-label'));
 		const count = DOM.append(container, $('span.session-section-count'));
 		const toolbarContainer = DOM.append(container, $('.session-section-toolbar'));
@@ -703,7 +785,7 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 			menuOptions: { shouldForwardArgs: true },
 		}));
 
-		return { container, label, count, toolbar, chevron, contextKeyService, disposables };
+		return { container, icon, collapsed: observableValue(this, false), label, count, toolbar, chevron, contextKeyService, disposables, elementDisposables: disposables.add(new DisposableStore()) };
 	}
 
 	renderElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, template: ISessionSectionTemplate): void {
@@ -711,6 +793,7 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 		if (!isSessionSection(element)) {
 			return;
 		}
+		template.elementDisposables.clear();
 		this.templatesByElement.set(element, template);
 		this.templatesById.set(element.id, template);
 		template.container.classList.remove(SESSION_HEADER_DROP_TARGET_CLASS);
@@ -723,7 +806,10 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 			template.count.style.display = '';
 		}
 
+		// Establishes `template.collapsed`, which the header icon reads, so it has
+		// to run before `renderSessionHeaderIcon`.
 		this.updateChevron(template, node.collapsible, node.collapsed);
+		renderSessionHeaderIcon(template, element.sessions, undefined, this.showUnreadInCollapsedSections, this.instantiationService);
 
 		// Set context key for section type so toolbar actions can use when clauses
 		const sectionType = element.id.startsWith('workspace:') ? 'workspace' : element.id;
@@ -732,9 +818,10 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 	}
 
 	/**
-	 * Updates the expand/collapse chevron for an already-rendered section. The
-	 * tree only re-invokes `renderTwistie` (not `renderElement`) when a section's
-	 * collapse state toggles, so the owning list forwards collapse changes here.
+	 * Updates the leading indicator and the expand/collapse chevron for an
+	 * already-rendered section. The tree only re-invokes `renderTwistie` (not
+	 * `renderElement`) when a section's collapse state toggles, so the owning
+	 * list forwards collapse changes here.
 	 */
 	updateCollapseState(element: ISessionSection, collapsed: boolean): void {
 		const template = this.templatesByElement.get(element);
@@ -749,6 +836,7 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 	}
 
 	private updateChevron(template: ISessionSectionTemplate, collapsible: boolean, collapsed: boolean): void {
+		template.collapsed.set(collapsible && collapsed, undefined);
 		template.chevron.className = 'session-section-chevron';
 		if (collapsible) {
 			template.chevron.classList.add('collapsible');
@@ -757,11 +845,12 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 		}
 	}
 
-	disposeElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, _template: ISessionSectionTemplate): void {
+	disposeElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, template: ISessionSectionTemplate): void {
 		if (isSessionSection(node.element)) {
 			this.templatesByElement.delete(node.element);
 			this.templatesById.delete(node.element.id);
 		}
+		template.elementDisposables.clear();
 	}
 
 	disposeTemplate(template: ISessionSectionTemplate): void {
@@ -773,7 +862,7 @@ class SessionSectionRenderer implements ITreeRenderer<SessionListItem, FuzzyScor
 
 //#region Session Group Renderer
 
-interface ISessionGroupTemplate {
+interface ISessionGroupTemplate extends ISessionHeaderTemplate {
 	readonly container: HTMLElement;
 	readonly label: HTMLElement;
 	readonly inputContainer: HTMLElement;
@@ -781,7 +870,6 @@ interface ISessionGroupTemplate {
 	readonly chevron: HTMLElement;
 	readonly contextKeyService: IContextKeyService;
 	readonly disposables: DisposableStore;
-	readonly elementDisposables: DisposableStore;
 }
 
 /**
@@ -801,6 +889,7 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 
 	constructor(
 		private readonly delegate: ISessionGroupRendererDelegate,
+		private readonly showUnreadInCollapsedSections: IObservable<boolean>,
 		private readonly instantiationService: IInstantiationService,
 		private readonly contextKeyService: IContextKeyService,
 	) { }
@@ -809,6 +898,9 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 		const disposables = new DisposableStore();
 
 		container.classList.add('session-section', 'session-group');
+		const icon = DOM.append(container, $('span.session-section-icon'));
+		icon.setAttribute('aria-hidden', 'true');
+		icon.style.display = 'none';
 		const label = DOM.append(container, $('span.session-section-label'));
 		const inputContainer = DOM.append(container, $('.session-group-input'));
 		const toolbarContainer = DOM.append(container, $('.session-section-toolbar'));
@@ -821,7 +913,7 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 			menuOptions: { shouldForwardArgs: true },
 		}));
 
-		return { container, label, inputContainer, toolbar, chevron, contextKeyService, disposables, elementDisposables: disposables.add(new DisposableStore()) };
+		return { container, icon, collapsed: observableValue(this, false), label, inputContainer, toolbar, chevron, contextKeyService, disposables, elementDisposables: disposables.add(new DisposableStore()) };
 	}
 
 	renderElement(node: ITreeNode<SessionListItem, FuzzyScore>, _index: number, template: ISessionGroupTemplate): void {
@@ -835,7 +927,10 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 		template.container.classList.remove(SESSION_HEADER_DROP_TARGET_CLASS);
 
 		template.label.textContent = element.group.name;
+		// Establishes `template.collapsed`, which the header icon reads, so it has
+		// to run before `renderSessionHeaderIcon`.
 		this.updateChevron(template, node.collapsible, node.collapsed);
+		renderSessionHeaderIcon(template, element.sessions, undefined, this.showUnreadInCollapsedSections, this.instantiationService);
 		template.toolbar.context = element;
 
 		template.container.classList.toggle('session-group-editing', element.editing);
@@ -890,7 +985,10 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 		template.elementDisposables.add(DOM.addDisposableListener(input.inputElement, DOM.EventType.BLUR, () => commit()));
 	}
 
-	/** Forwarded from the owning list when the group's collapse state toggles. */
+	/**
+	 * Forwarded from the owning list when the group's collapse state toggles, so
+	 * the leading indicator and the chevron both follow it.
+	 */
 	updateCollapseState(element: ISessionGroupItem, collapsed: boolean): void {
 		const template = this.templatesByElement.get(element);
 		if (template) {
@@ -904,6 +1002,7 @@ class SessionGroupRenderer implements ITreeRenderer<SessionListItem, FuzzyScore,
 	}
 
 	private updateChevron(template: ISessionGroupTemplate, collapsible: boolean, collapsed: boolean): void {
+		template.collapsed.set(collapsible && collapsed, undefined);
 		template.chevron.className = 'session-section-chevron';
 		if (collapsible) {
 			template.chevron.classList.add('collapsible');
@@ -963,17 +1062,24 @@ class SessionShowMoreRenderer implements ITreeRenderer<SessionListItem, FuzzySco
 
 //#region Accessibility
 
+interface ISessionsAccessibilityProviderOptions {
+	readonly showUnreadInCollapsedSections: IObservable<boolean>;
+}
+
 class SessionsAccessibilityProvider {
+
+	constructor(private readonly options: ISessionsAccessibilityProviderOptions) { }
+
 	getWidgetAriaLabel(): string {
 		return localize('sessionsList', "Sessions");
 	}
 
-	getAriaLabel(element: SessionListItem): string | null {
+	getAriaLabel(element: SessionListItem): string | IObservable<string> | null {
 		if (isSessionGroupItem(element)) {
-			return `${element.group.name}, ${element.sessions.length}`;
+			return this.getSectionAriaLabel(element.group.name, element.sessions);
 		}
 		if (isSessionSection(element)) {
-			return `${element.label}, ${element.sessions.length}`;
+			return this.getSectionAriaLabel(element.label, element.sessions);
 		}
 		if (isSessionShowMore(element)) {
 			if (element.mode === 'less') {
@@ -990,6 +1096,24 @@ class SessionsAccessibilityProvider {
 		const title = element.title.get();
 		const created = fromNow(element.createdAt, true);
 		return localize('sessionItemAria', "{0}, created {1}", title, created);
+	}
+
+	/**
+	 * A header announces what a collapsed section hides, so a screen-reader user
+	 * gets the same signal the leading indicator gives a sighted user.
+	 */
+	private getSectionAriaLabel(label: string, sessions: readonly ISession[]): IObservable<string> {
+		return derived(this, reader => {
+			const status = this.options.showUnreadInCollapsedSections.read(reader) ? getSessionHeaderStatus(sessions, reader) : undefined;
+			switch (status) {
+				case SessionHeaderStatus.NeedsInput:
+					return localize('sessionSectionNeedsInputAria', "{0}, {1}, session needs input", label, sessions.length);
+				case SessionHeaderStatus.Unread:
+					return localize('sessionSectionUnreadAria', "{0}, {1}, contains unread sessions", label, sessions.length);
+				default:
+					return localize('sessionSectionAria', "{0}, {1}", label, sessions.length);
+			}
+		});
 	}
 }
 
@@ -1479,6 +1603,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IWorkbenchAssignmentService private readonly assignmentService: IWorkbenchAssignmentService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 
@@ -1529,12 +1654,13 @@ export class SessionsList extends Disposable implements ISessionsList {
 		);
 
 		const showMoreRenderer = new SessionShowMoreRenderer();
-		const sectionRenderer = new SessionSectionRenderer(true /* hideSectionCount */, instantiationService, contextKeyService);
+		const showUnreadInCollapsedSections = observableConfigValue(SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING, true, this.configurationService);
+		const sectionRenderer = new SessionSectionRenderer(true /* hideSectionCount */, showUnreadInCollapsedSections, instantiationService, contextKeyService);
 		this._sectionRenderer = sectionRenderer;
 		const groupRenderer = new SessionGroupRenderer({
 			commitEdit: (group, name) => this.commitGroupEdit(group, name),
 			cancelEdit: group => this.cancelGroupEdit(group),
-		}, instantiationService, contextKeyService);
+		}, showUnreadInCollapsedSections, instantiationService, contextKeyService);
 		this._groupRenderer = groupRenderer;
 
 		// Read (don't bind) `IsPhoneLayoutContext` from the parent context so we
@@ -1555,7 +1681,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 				showMoreRenderer,
 			],
 			{
-				accessibilityProvider: new SessionsAccessibilityProvider(),
+				accessibilityProvider: new SessionsAccessibilityProvider({ showUnreadInCollapsedSections }),
 				dnd: this._register(new SessionsListDragAndDrop({
 					isReorderable: session => this.isReorderable(session),
 					isSessionPinned: session => this.isSessionPinned(session),
@@ -1647,7 +1773,13 @@ export class SessionsList extends Disposable implements ISessionsList {
 				return;
 			}
 			if (!isSessionSection(element) && !isSessionGroupItem(element)) {
-				this.markRead(element);
+				// Re-opening the session you are already viewing must not clobber an
+				// explicit "Mark as Unread" on it: the mark is only meaningful while
+				// the session stays active, so leave it alone until the user leaves
+				// and comes back.
+				if (this._sessionsService.activeSession.get()?.sessionId !== element.sessionId) {
+					this.markRead(element);
+				}
 				// A deliberate left mouse click on a session should move keyboard
 				// focus into the chat input so the user can start typing right
 				// away. A single click always reports `preserveFocus: true`, so
@@ -2744,6 +2876,16 @@ export class SessionsList extends Disposable implements ISessionsList {
 
 //#region Approval Helpers
 
+/**
+ * The vertical space a pending approval contributes to its row, or `0` when
+ * there is none. Tracked by the renderer so a row's virtualized height is
+ * refreshed whenever it changes, including when one approval is replaced
+ * directly by another with a different line count.
+ */
+function approvalRowHeightFor(info: IAgentSessionApprovalInfo | undefined): number {
+	return info ? SessionItemRenderer.getApprovalRowHeight(info.label) : 0;
+}
+
 function getFirstApprovalAcrossChats(approvalModel: AgentSessionApprovalModel, session: ISession, reader: IReader | undefined,): IAgentSessionApprovalInfo | undefined {
 	let oldest: IAgentSessionApprovalInfo | undefined;
 	for (const chat of session.chats.read(reader)) {
@@ -2968,12 +3110,20 @@ export function groupByWorkspace(sessions: ISession[]): ISessionSection[] {
 	return result;
 }
 
+/**
+ * How recently a session must have been updated to stay in "Today" even though
+ * it was created earlier. Only applies when sorting by creation date, where the
+ * bucket would otherwise be decided by a timestamp that never moves.
+ */
+const RECENTLY_UPDATED_SESSION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
 export function groupByDate(sessions: ISession[], sorting: SessionsSorting, getSortKey?: (session: ISession, sorting: SessionsSorting) => number): ISessionSection[] {
 	const key = getSortKey ?? defaultSortKey;
 	const now = new Date();
 	const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 	const startOfYesterday = startOfToday - 86_400_000;
 	const startOfWeek = startOfToday - 7 * 86_400_000;
+	const recentlyUpdatedThreshold = now.getTime() - RECENTLY_UPDATED_SESSION_THRESHOLD_MS;
 
 	const today: ISession[] = [];
 	const yesterday: ISession[] = [];
@@ -2982,8 +3132,11 @@ export function groupByDate(sessions: ISession[], sorting: SessionsSorting, getS
 
 	for (const session of sessions) {
 		const time = key(session, sorting);
+		// A long-running session that just produced output must not sit in
+		// "Older" because it was created two weeks ago.
+		const wasRecentlyUpdated = sorting === SessionsSorting.Created && session.updatedAt.get().getTime() >= recentlyUpdatedThreshold;
 
-		if (time >= startOfToday) {
+		if (time >= startOfToday || wasRecentlyUpdated) {
 			today.push(session);
 		} else if (time >= startOfYesterday) {
 			yesterday.push(session);

@@ -5,17 +5,19 @@
 
 import assert from 'assert';
 import { Codicon } from '../../../../../base/common/codicons.js';
-import { observableValue } from '../../../../../base/common/observable.js';
+import { derived, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
-import { computeReorderSortChanges, groupByWorkspace, groupSessionsForList, limitSessionsForList, sortSessions, SessionsGrouping, SessionsSorting } from '../../browser/views/sessionsList.js';
+import { computeReorderSortChanges, getSessionHeaderStatus, groupByDate, groupByWorkspace, groupSessionsForList, limitSessionsForList, SessionHeaderStatus, sortSessions, SessionsGrouping, SessionsSorting } from '../../browser/views/sessionsList.js';
 
 function createSession(id: string, opts: {
 	workspaceLabel?: string;
 	createdAt?: Date;
 	updatedAt?: Date;
 	isArchived?: boolean;
+	isRead?: boolean;
+	status?: SessionStatus;
 }): ISession {
 	const createdAt = opts.createdAt ?? new Date();
 	const updatedAt = opts.updatedAt ?? createdAt;
@@ -36,14 +38,14 @@ function createSession(id: string, opts: {
 		} : undefined),
 		title: observableValue(`title-${id}`, id),
 		updatedAt: observableValue(`updatedAt-${id}`, updatedAt),
-		status: observableValue(`status-${id}`, SessionStatus.Completed),
+		status: observableValue(`status-${id}`, opts.status ?? SessionStatus.Completed),
 		changesets: observableValue(`changesets-${id}`, []),
 		changes: observableValue(`changes-${id}`, []),
 		modelId: observableValue(`modelId-${id}`, undefined),
 		mode: observableValue(`mode-${id}`, undefined),
 		loading: observableValue(`loading-${id}`, false),
 		isArchived: observableValue(`isArchived-${id}`, opts.isArchived ?? false),
-		isRead: observableValue(`isRead-${id}`, true),
+		isRead: observableValue(`isRead-${id}`, opts.isRead ?? true),
 		description: observableValue(`description-${id}`, undefined),
 		lastTurnEnd: observableValue(`lastTurnEnd-${id}`, undefined),
 		chats: observableValue<readonly IChat[]>(`chats-${id}`, []),
@@ -379,6 +381,92 @@ suite('Sessions - SessionsList Helpers', () => {
 			assert.deepStrictEqual(clear, []);
 			assert.strictEqual(set.size, 2);
 			assert.ok(set.get('a')! > set.get('b')!);
+		});
+	});
+
+	suite('getSessionHeaderStatus', () => {
+
+		function headerStatus(sessions: ISession[]): SessionHeaderStatus | undefined {
+			return derived(reader => getSessionHeaderStatus(sessions, reader)).get();
+		}
+
+		test('reports nothing when every session is read and none needs input', () => {
+			assert.strictEqual(headerStatus([
+				createSession('1', {}),
+				createSession('2', {}),
+			]), undefined);
+		});
+
+		test('reports unread when any session is unread', () => {
+			assert.strictEqual(headerStatus([
+				createSession('1', {}),
+				createSession('2', { isRead: false }),
+			]), SessionHeaderStatus.Unread);
+		});
+
+		test('needs input outranks unread', () => {
+			assert.strictEqual(headerStatus([
+				createSession('1', { isRead: false }),
+				createSession('2', { status: SessionStatus.NeedsInput }),
+			]), SessionHeaderStatus.NeedsInput);
+		});
+
+		test('archived sessions never contribute', () => {
+			assert.strictEqual(headerStatus([
+				createSession('1', { isRead: false, isArchived: true }),
+				createSession('2', { status: SessionStatus.NeedsInput, isArchived: true }),
+			]), undefined);
+		});
+
+		test('reacts to a session becoming read', () => {
+			const session = createSession('1', { isRead: false });
+			const status = derived(reader => getSessionHeaderStatus([session], reader));
+
+			const before = status.get();
+			(session.isRead as ReturnType<typeof observableValue<boolean>>).set(true, undefined);
+
+			assert.deepStrictEqual([before, status.get()], [SessionHeaderStatus.Unread, undefined]);
+		});
+	});
+
+	suite('groupByDate', () => {
+
+		const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+		const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000);
+
+		function bucketsOf(sessions: ISession[], sorting: SessionsSorting) {
+			return groupByDate(sessions, sorting).map(section => ({ id: section.id, sessions: section.sessions.map(s => s.sessionId) }));
+		}
+
+		test('sessions updated within the last 24 hours stay in "Today" when sorting by creation time', () => {
+			assert.deepStrictEqual(bucketsOf([
+				createSession('created-today', { createdAt: minutesAgo(30) }),
+				createSession('updated-today', { createdAt: daysAgo(10), updatedAt: minutesAgo(30) }),
+				createSession('stale', { createdAt: daysAgo(11), updatedAt: daysAgo(2) }),
+			], SessionsSorting.Created), [
+				{ id: 'today', sessions: ['created-today', 'updated-today'] },
+				{ id: 'older', sessions: ['stale'] },
+			]);
+		});
+
+		test('a stale session stays in its creation-date bucket', () => {
+			assert.deepStrictEqual(bucketsOf([
+				createSession('three-days', { createdAt: daysAgo(3), updatedAt: daysAgo(3) }),
+				createSession('twenty-days', { createdAt: daysAgo(20), updatedAt: daysAgo(20) }),
+			], SessionsSorting.Created), [
+				{ id: 'thisWeek', sessions: ['three-days'] },
+				{ id: 'older', sessions: ['twenty-days'] },
+			]);
+		});
+
+		test('sorting by update time buckets on the update timestamp alone', () => {
+			assert.deepStrictEqual(bucketsOf([
+				createSession('updated-today', { createdAt: daysAgo(10), updatedAt: minutesAgo(30) }),
+				createSession('updated-long-ago', { createdAt: daysAgo(10), updatedAt: daysAgo(20) }),
+			], SessionsSorting.Updated), [
+				{ id: 'today', sessions: ['updated-today'] },
+				{ id: 'older', sessions: ['updated-long-ago'] },
+			]);
 		});
 	});
 });
