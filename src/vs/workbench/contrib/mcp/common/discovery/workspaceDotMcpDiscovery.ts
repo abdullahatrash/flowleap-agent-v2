@@ -6,7 +6,7 @@
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import { joinPath } from '../../../../../base/common/resources.js';
+import { isEqual, joinPath } from '../../../../../base/common/resources.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { StorageScope } from '../../../../../platform/storage/common/storage.js';
@@ -37,11 +37,17 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 
 	start(): void {
 		this._register(this._workspaceContextService.onDidChangeWorkspaceFolders(e => {
-			for (const removed of e.removed) {
+			for (const removed of [...e.removed, ...e.changed]) {
 				this._collections.deleteAndDispose(removed.uri.toString());
 			}
 			for (const added of e.added) {
 				this._watchFolder(added);
+			}
+			for (const changed of e.changed) {
+				const current = this._workspaceContextService.getWorkspace().folders.find(folder => isEqual(folder.uri, changed.uri));
+				if (current) {
+					this._watchFolder(current);
+				}
 			}
 		}));
 
@@ -71,6 +77,7 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 
 		const store = new DisposableStore();
 		const collectionRegistration = store.add(new MutableDisposable());
+		let isLazyCollection = true;
 
 		const updateFile = async () => {
 			let definitions: McpServerDefinition[] = [];
@@ -91,7 +98,8 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 				collectionRegistration.clear();
 			} else {
 				serverDefinitions.set(definitions, undefined);
-				if (!collectionRegistration.value) {
+				if (isLazyCollection || !collectionRegistration.value) {
+					isLazyCollection = false;
 					collectionRegistration.value = this._mcpRegistry.registerCollection(collection);
 				}
 			}
@@ -100,7 +108,16 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 		const throttler = store.add(new RunOnceScheduler(updateFile, 500));
 		const watcher = store.add(this._fileService.createWatcher(configFile, { recursive: false, excludes: [] }));
 		store.add(watcher.onDidChange(() => throttler.schedule()));
-		updateFile();
+		let initialUpdate: Promise<void> | undefined;
+		const loadInitial = () => initialUpdate ??= updateFile();
+		collectionRegistration.value = this._mcpRegistry.registerCollection({
+			...collection,
+			lazy: {
+				isCached: false,
+				load: loadInitial,
+			},
+		});
+		void loadInitial();
 
 		this._collections.set(folder.uri.toString(), store);
 	}
