@@ -100,6 +100,54 @@ suite('AgentNetworkFilterService', () => {
 			assert.strictEqual(service.isUriAllowed(URI.from({ scheme: 'untitled', path: 'Untitled-1' })), true);
 		});
 
+		test('fails closed for reported HTTP(S) parser-differential URLs with empty authorities', async () => {
+			configService.setUserConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains, ['*']);
+			const service = await createService();
+			const urls = [
+				String.raw`http:\\\\evil.example/x`,
+				String.raw`http:/\\/\\evil.example/x`,
+				String.raw`http:\\/evil.example/x`,
+				String.raw`http:\\evil.example/x`,
+				String.raw`https:\\evil.example/x`,
+			];
+
+			assert.deepStrictEqual(urls.map(url => {
+				const uri = URI.parse(url);
+				return {
+					scheme: uri.scheme,
+					authority: uri.authority,
+					allowed: service.isUriAllowed(uri),
+				};
+			}), [
+				{ scheme: 'http', authority: '', allowed: false },
+				{ scheme: 'http', authority: '', allowed: false },
+				{ scheme: 'http', authority: '', allowed: false },
+				{ scheme: 'http', authority: '', allowed: false },
+				{ scheme: 'https', authority: '', allowed: false },
+			]);
+		});
+
+		test('fails closed for WebSocket parser-differential URLs with empty authorities', async () => {
+			configService.setUserConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains, ['*']);
+			const service = await createService();
+			const urls = [
+				String.raw`ws:\\evil.example/socket`,
+				String.raw`wss:\evil.example/socket`,
+			];
+
+			assert.deepStrictEqual(urls.map(url => {
+				const uri = URI.parse(url);
+				return {
+					scheme: uri.scheme,
+					authority: uri.authority,
+					allowed: service.isUriAllowed(uri),
+				};
+			}), [
+				{ scheme: 'ws', authority: '', allowed: false },
+				{ scheme: 'wss', authority: '', allowed: false },
+			]);
+		});
+
 		test('checks domain for http/https URIs', async () => {
 			configService.setUserConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains, ['example.com']);
 			const service = await createService();
@@ -135,6 +183,25 @@ suite('AgentNetworkFilterService', () => {
 				service.isUriAllowed(URI.parse('http://[::ffff:127.0.0.1]')),
 			], [
 				true,
+				false,
+				false,
+			]);
+		});
+
+		test('blocks IPv4-mapped IPv6 literals in a deny-only configuration', async () => {
+			configService.setUserConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains, [
+				'127.0.0.1',
+				'169.254.169.254',
+			]);
+			const service = await createService();
+			assert.deepStrictEqual([
+				service.isUriAllowed(URI.parse('http://[::ffff:127.0.0.1]/private')),
+				service.isUriAllowed(URI.parse('http://[::ffff:7f00:1]/private')),
+				service.isUriAllowed(URI.parse('http://[::ffff:169.254.169.254]/private')),
+				service.isUriAllowed(URI.parse('http://[::ffff:a9fe:a9fe]/private')),
+			], [
+				false,
+				false,
 				false,
 				false,
 			]);
