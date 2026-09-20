@@ -13,6 +13,7 @@ import { Disposable, IDisposable } from '../../../../base/common/lifecycle.js';
 import { equals as objectsEqual } from '../../../../base/common/objects.js';
 import { IObservable, ObservableMap } from '../../../../base/common/observable.js';
 import { IIterativePager } from '../../../../base/common/paging.js';
+import { isEqual } from '../../../../base/common/resources.js';
 import Severity from '../../../../base/common/severity.js';
 import { URI, UriComponents } from '../../../../base/common/uri.js';
 import { Location } from '../../../../editor/common/languages.js';
@@ -164,6 +165,53 @@ export interface McpServerStaticMetadata {
 	serverInfo?: MCP.Implementation;
 }
 
+/**
+ * Structural equality that compares URI values by their normalized identity
+ * instead of their enumerable lazy-cache fields.
+ */
+function objectsEqualWithUris(one: unknown, other: unknown): boolean {
+	if (one === other) {
+		return true;
+	}
+	if (URI.isUri(one) || URI.isUri(other)) {
+		return URI.isUri(one) && URI.isUri(other) && isEqual(one, other);
+	}
+	if (one === null || one === undefined || other === null || other === undefined) {
+		return false;
+	}
+	if (typeof one !== typeof other || typeof one !== 'object') {
+		return false;
+	}
+	if (Array.isArray(one) !== Array.isArray(other)) {
+		return false;
+	}
+	if (Array.isArray(one) && Array.isArray(other)) {
+		return arraysEqual(one, other, objectsEqualWithUris);
+	}
+
+	const oneKeys: string[] = [];
+	for (const key in one) {
+		oneKeys.push(key);
+	}
+	oneKeys.sort();
+
+	const otherKeys: string[] = [];
+	for (const key in other) {
+		otherKeys.push(key);
+	}
+	otherKeys.sort();
+
+	if (!arraysEqual(oneKeys, otherKeys)) {
+		return false;
+	}
+	for (const key of oneKeys) {
+		if (!objectsEqualWithUris(Reflect.get(one, key), Reflect.get(other, key))) {
+			return false;
+		}
+	}
+	return true;
+}
+
 export namespace McpServerDefinition {
 	export interface Serialized {
 		readonly id: string;
@@ -196,9 +244,9 @@ export namespace McpServerDefinition {
 			&& a.label === b.label
 			&& a.cacheNonce === b.cacheNonce
 			&& arraysEqual(a.roots, b.roots, (a, b) => a.toString() === b.toString())
-			&& objectsEqual(a.launch, b.launch)
-			&& objectsEqual(a.presentation, b.presentation)
-			&& objectsEqual(a.variableReplacement, b.variableReplacement)
+			&& objectsEqualWithUris(a.launch, b.launch)
+			&& objectsEqualWithUris(a.presentation, b.presentation)
+			&& objectsEqualWithUris(a.variableReplacement, b.variableReplacement)
 			&& objectsEqual(a.devMode, b.devMode)
 			&& a.sandboxEnabled === b.sandboxEnabled;
 
