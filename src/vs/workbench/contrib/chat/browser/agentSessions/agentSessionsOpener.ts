@@ -57,11 +57,14 @@ export async function openSession(accessor: ServicesAccessor, session: IAgentSes
 	const instantiationService = accessor.get(IInstantiationService);
 	const logService = accessor.get(ILogService);
 
+	logService.trace(`[AgentSessions] openSession start: ${session.resource.toString()}`);
+
 	// First, give registered participants a chance to handle the session
 	for (const participant of sessionOpenerRegistry.getParticipants()) {
 		try {
 			const handled = await instantiationService.invokeFunction(accessor => participant.handleOpenSession(accessor, session, openOptions));
 			if (handled) {
+				logService.trace(`[AgentSessions] openSession handled by participant: ${session.resource.toString()}`);
 				return undefined; // Participant handled the session, skip default opening
 			}
 		} catch (error) {
@@ -77,6 +80,7 @@ async function openSessionDefault(accessor: ServicesAccessor, session: IAgentSes
 	const chatSessionsService = accessor.get(IChatSessionsService);
 	const chatWidgetService = accessor.get(IChatWidgetService);
 	const notificationService = accessor.get(INotificationService);
+	const logService = accessor.get(ILogService);
 
 	try {
 		session.setRead(true); // mark as read when opened
@@ -95,6 +99,7 @@ async function openSessionDefault(accessor: ServicesAccessor, session: IAgentSes
 		};
 
 		await chatSessionsService.activateChatSessionItemProvider(session.providerType); // ensure provider is activated before trying to open
+		logService.trace(`[AgentSessions] openSession: provider '${session.providerType}' activated for ${session.resource.toString()}`);
 
 		let target: typeof SIDE_GROUP | typeof ACTIVE_GROUP | typeof ChatViewPaneTarget | undefined;
 		if (openOptions?.sideBySide) {

@@ -671,6 +671,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	async openSession(sessionResource: URI, options?: { preserveFocus?: boolean }): Promise<void> {
+		this.logService.trace(`[SessionsView] openSession requested uri=${sessionResource.toString()}`);
 		this._cancelRestore();
 		const token = this._startOpenSession();
 		await this._doOpenSession(sessionResource, token, options);
