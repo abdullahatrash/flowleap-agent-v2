@@ -43,6 +43,51 @@ describe('byokKnownModelToAPIInfo', () => {
 
 		expect(info.capabilities.editTools).toBeUndefined();
 	});
+
+	it('derives maxInputTokens from contextWindow when maxInputTokens is omitted', () => {
+		// The value surfaced here becomes `model.maxInputTokens`, which the custom
+		// endpoint/OAI/azure providers read when building the endpoint.
+		const info = byokKnownModelToAPIInfo('TestProvider', 'm1', {
+			name: 'BigContextModel',
+			contextWindow: 1000000,
+			maxOutputTokens: 384000,
+			toolCalling: true,
+			vision: false,
+		});
+
+		expect(info.maxInputTokens).toBe(1000000 - 384000);
+		expect(info.maxOutputTokens).toBe(384000);
+		expect(info.maxContextWindowTokens).toBe(1000000);
+	});
+
+	it('publishes the declared window rather than the sum of the input and output budgets', () => {
+		// The Anthropic case the context gauge gets wrong today: a 200K window with a 64K
+		// output budget is a 200K window, not 264K.
+		const info = byokKnownModelToAPIInfo('TestProvider', 'anthropic/claude', {
+			name: 'Claude',
+			contextWindow: 200000,
+			maxInputTokens: 136000,
+			maxOutputTokens: 64000,
+			toolCalling: true,
+			vision: false,
+		});
+
+		expect({
+			maxContextWindowTokens: info.maxContextWindowTokens,
+			maxInputTokens: info.maxInputTokens,
+			maxOutputTokens: info.maxOutputTokens,
+		}).toEqual({
+			maxContextWindowTokens: 200000,
+			maxInputTokens: 136000,
+			maxOutputTokens: 64000,
+		});
+	});
+
+	it('falls back to the summed budgets when no window is declared', () => {
+		const info = byokKnownModelToAPIInfo('TestProvider', 'm1', baseCapabilities);
+
+		expect(info.maxContextWindowTokens).toBe(1000 + 100);
+	});
 });
 
 describe('resolveModelInfo', () => {
@@ -70,6 +115,51 @@ describe('resolveModelInfo', () => {
 
 		expect(info.capabilities.supports.reasoning_effort).toBeUndefined();
 		expect(info.reasoningEffortFormat).toBeUndefined();
+	});
+
+	it('honors an explicit contextWindow as the source of truth for the context window', () => {
+		// A model documented as: Context Length 1M, Max Output 384K. The user can now
+		// declare the real capability directly instead of back-computing maxInputTokens.
+		const info = resolveModelInfo('m1', 'TestProvider', undefined, {
+			...baseCapabilities,
+			contextWindow: 1000000,
+			maxOutputTokens: 384000,
+			maxInputTokens: undefined,
+		});
+
+		expect(info.capabilities.limits?.max_context_window_tokens).toBe(1000000);
+		// The prompt budget is derived as contextWindow - maxOutputTokens.
+		expect(info.capabilities.limits?.max_prompt_tokens).toBe(1000000 - 384000);
+		expect(info.capabilities.limits?.max_output_tokens).toBe(384000);
+	});
+
+	it('derives the context window as maxInputTokens + maxOutputTokens when contextWindow is absent', () => {
+		const info = resolveModelInfo('m1', 'TestProvider', undefined, {
+			...baseCapabilities,
+			maxInputTokens: 616000,
+			maxOutputTokens: 384000,
+		});
+
+		expect(info.capabilities.limits?.max_context_window_tokens).toBe(616000 + 384000);
+		expect(info.capabilities.limits?.max_prompt_tokens).toBe(616000);
+	});
+
+	it('clamps an input budget that would overflow a smaller declared window', () => {
+		const info = resolveModelInfo('m1', 'TestProvider', undefined, {
+			...baseCapabilities,
+			contextWindow: 200000,
+			maxInputTokens: 200000,
+			maxOutputTokens: 64000,
+		});
+
+		expect(info.capabilities.limits?.max_context_window_tokens).toBe(200000);
+		expect(info.capabilities.limits?.max_prompt_tokens).toBe(200000 - 64000);
+	});
+
+	it('falls back to a 128000 context window when no capabilities are known', () => {
+		const info = resolveModelInfo('m1', 'TestProvider', undefined, undefined);
+
+		expect(info.capabilities.limits?.max_context_window_tokens).toBe(128000);
 	});
 });
 

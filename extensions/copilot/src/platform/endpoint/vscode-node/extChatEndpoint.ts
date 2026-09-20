@@ -70,6 +70,14 @@ export class ExtensionContributedChatEndpoint implements IChatEndpoint {
 		return 8192;
 	}
 
+	get maxContextWindowTokens(): number | undefined {
+		// `vscode.LanguageModelChat` exposes only `maxInputTokens`, so a contributed model's
+		// declared window cannot be read back here. The window still reaches the context gauge:
+		// the provider publishes it on `LanguageModelChatInformation.maxContextWindowTokens`,
+		// which core reads from the model metadata rather than from this endpoint.
+		return undefined;
+	}
+
 	get urlOrRequestMetadata(): string {
 		// Not used for extension contributed endpoints
 		return '';

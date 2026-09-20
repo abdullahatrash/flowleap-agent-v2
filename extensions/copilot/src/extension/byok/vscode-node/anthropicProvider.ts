@@ -74,8 +74,12 @@ export class AnthropicLMProvider extends AbstractLanguageModelChatProvider {
 				if (this._knownModels && this._knownModels[model.id]) {
 					modelList[model.id] = this._knownModels[model.id];
 				} else {
-					// Mix in generic capabilities for models we don't know
+					// Mix in generic capabilities for models we don't know. Every Claude model the
+					// Anthropic API serves has a 200K context window (the 1M tier needs a beta header
+					// we do not send), so declare the window even though the prompt budget stays
+					// conservative — otherwise the context gauge reads 116K for a 200K model.
 					modelList[model.id] = {
+						contextWindow: 200000,
 						maxInputTokens: 100000,
 						maxOutputTokens: 16000,
 						name: model.display_name,

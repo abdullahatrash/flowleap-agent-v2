@@ -11,7 +11,7 @@ import { mock } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SubmenuAction } from '../../../../../base/common/actions.js';
 import { NullLogService } from '../../../../../platform/log/common/log.js';
-import { ChatMessageRole, LanguageModelsService, IChatMessage, IChatResponsePart, ILanguageModelChatMetadata, createModelConfigurationActions, ILanguageModelConfigurationSchema } from '../../common/languageModels.js';
+import { ChatMessageRole, LanguageModelsService, IChatMessage, IChatResponsePart, ILanguageModelChatMetadata, createModelConfigurationActions, getModelContextWindowTotal, ILanguageModelConfigurationSchema } from '../../common/languageModels.js';
 import { IExtensionService, nullExtensionDescription } from '../../../../services/extensions/common/extensions.js';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 import { TestStorageService } from '../../../../test/common/workbenchTestServices.js';
@@ -1704,3 +1704,43 @@ suite('createModelConfigurationActions', function () {
 	});
 });
 
+suite('getModelContextWindowTotal', function () {
+
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	function metadata(partial: Partial<ILanguageModelChatMetadata>): ILanguageModelChatMetadata {
+		return partial as ILanguageModelChatMetadata;
+	}
+
+	test('uses the declared context window rather than summing the input and output budgets', () => {
+		// The Anthropic case: a 200K window with a 64K output budget is a 200K window, not 264K.
+		const declared = metadata({ maxInputTokens: 200_000, maxOutputTokens: 64_000, maxContextWindowTokens: 200_000 });
+		const legacy = metadata({ maxInputTokens: 200_000, maxOutputTokens: 64_000 });
+
+		assert.deepStrictEqual(
+			[getModelContextWindowTotal(declared), getModelContextWindowTotal(legacy)],
+			[200_000, 264_000],
+		);
+	});
+
+	test('clamps a configured input limit to the declared window and reports it verbatim without one', () => {
+		const declared = metadata({ maxInputTokens: 100_000, maxOutputTokens: 20_000, maxContextWindowTokens: 100_000 });
+		const legacy = metadata({ maxInputTokens: 100_000, maxOutputTokens: 8_000 });
+
+		assert.deepStrictEqual(
+			[
+				getModelContextWindowTotal(declared),
+				getModelContextWindowTotal(declared, 40_000),
+				getModelContextWindowTotal(declared, 100_000),
+				getModelContextWindowTotal(declared, 150_000),
+				getModelContextWindowTotal(legacy, 40_000),
+			],
+			[100_000, 60_000, 100_000, 100_000, 48_000],
+		);
+	});
+
+	test('treats missing budgets as zero so a meta-model reports no window', () => {
+		assert.strictEqual(getModelContextWindowTotal(metadata({ maxInputTokens: 0, maxOutputTokens: 0 })), 0);
+		assert.strictEqual(getModelContextWindowTotal(metadata({})), 0);
+	});
+});

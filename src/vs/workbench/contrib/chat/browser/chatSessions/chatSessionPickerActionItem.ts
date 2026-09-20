@@ -183,6 +183,7 @@ export class ChatSessionPickerActionItem extends ActionWidgetDropdownActionViewI
 					priceCategory: optionItem.modelMetadata.priceCategory,
 					maxInputTokens: optionItem.modelMetadata.maxInputTokens ?? 0,
 					maxOutputTokens: optionItem.modelMetadata.maxOutputTokens ?? 0,
+					maxContextWindowTokens: optionItem.modelMetadata.maxContextWindowTokens,
 					capabilities: optionItem.modelMetadata.capabilities ? {
 						vision: optionItem.modelMetadata.capabilities.vision,
 						toolCalling: optionItem.modelMetadata.capabilities.toolCalling,

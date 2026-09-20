@@ -20,7 +20,7 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { ChatConfiguration } from '../../../common/constants.js';
 import { IChatRequestModel, IChatResponseModel } from '../../../common/model/chatModel.js';
-import { ILanguageModelConfigurationSchema, ILanguageModelsService } from '../../../common/languageModels.js';
+import { getModelContextWindowTotal, ILanguageModelConfigurationSchema, ILanguageModelsService } from '../../../common/languageModels.js';
 import { ChatContextUsageDetails, IChatContextUsageData } from './chatContextUsageDetails.js';
 import type { IChatWidget } from '../../chat.js';
 import { StandardKeyboardEvent } from '../../../../../../base/browser/keyboardEvent.js';
@@ -29,25 +29,25 @@ import { KeyCode } from '../../../../../../base/common/keyCodes.js';
 const $ = dom.$;
 
 /**
- * Resolves the input-token denominator used by the context-usage gauge.
- *
- * Resolution order, mirroring the request path's `applyContextSizeOverride`:
+ * Resolves the configured input-token limit used by the context-usage gauge, mirroring the request
+ * path's `applyContextSizeOverride`:
  *   1. An explicit `contextSize` in the resolved model configuration.
  *   2. The schema's default `contextSize` tier (e.g. 200K). Used when the
  *      resolved configuration is missing `contextSize` (e.g. the schema default
  *      has not loaded yet) so the gauge denominator agrees with the size the
  *      request actually uses instead of jumping to the model's full native
  *      window. See issue #320393.
- *   3. The model's full native window (`maxInputTokens`). Models without a
- *      context-size picker have no such schema property and land here, where
- *      default and max are the same value.
+ *   3. The optional input budget, when the caller passes one.
+ *
+ * `undefined` means "no configured limit", which leaves the model's declared context window as the
+ * denominator (see `getModelContextWindowTotal`).
  *
  * @internal - exported for testing
  */
 export function resolveContextWindowInputTokens(
 	modelConfiguration: IStringDictionary<unknown> | undefined,
 	configurationSchema: ILanguageModelConfigurationSchema | undefined,
-	maxInputTokens: number | undefined,
+	maxInputTokens?: number,
 ): number | undefined {
 	const configuredContextSize = typeof modelConfiguration?.contextSize === 'number' ? modelConfiguration.contextSize : undefined;
 	const schemaDefaultContextSize = configurationSchema?.properties?.contextSize?.default;
@@ -367,20 +367,19 @@ export class ChatContextUsageWidget extends Disposable {
 			return undefined;
 		}
 		const modelMetadata = this.languageModelsService.lookupLanguageModel(modelId);
-		// Computing the total context window needs the model's metadata, notably its output-token budget
-		// (`maxOutputTokens`), which — unlike the input window — has no configuration fallback. Right after a reload the
-		// model provider may not have registered the selected model yet while a persisted `contextSize` is already
-		// resolvable, so the window would be computed input-only (e.g. 272K instead of 272K + 128K for GPT-5). Bail out
-		// until metadata is available rather than render a misleading partial value; the widget re-renders on model
-		// registration (`onDidChangeLanguageModels`) and on model selection.
+		// A persisted context size alone cannot determine the model's context window or output budget. Right after a
+		// reload the model provider may not have registered the selected model yet while a persisted `contextSize` is
+		// already resolvable, so the window would be computed input-only. Bail out until metadata is available rather
+		// than render a misleading partial value; the widget re-renders on model registration
+		// (`onDidChangeLanguageModels`) and on model selection.
 		if (!modelMetadata) {
 			return undefined;
 		}
 		const modelConfiguration = this._modelConfigurationResolver?.(modelId) ?? this.languageModelsService.getModelConfiguration(modelId);
 		// Prefer the schema default context-size tier when config is missing (keeps denominator aligned with the request path).
-		const maxInputTokens = resolveContextWindowInputTokens(modelConfiguration, modelMetadata.configurationSchema, modelMetadata.maxInputTokens);
+		const inputTokenLimit = resolveContextWindowInputTokens(modelConfiguration, modelMetadata.configurationSchema);
 		const maxOutputTokens = modelMetadata.maxOutputTokens;
-		const totalContextWindow = (maxInputTokens ?? 0) + (maxOutputTokens ?? 0);
+		const totalContextWindow = getModelContextWindowTotal(modelMetadata, inputTokenLimit);
 		if (totalContextWindow <= 0) {
 			return undefined;
 		}

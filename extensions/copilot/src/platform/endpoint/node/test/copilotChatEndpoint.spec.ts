@@ -239,6 +239,55 @@ describe('CopilotChatEndpoint - Reasoning Properties', () => {
 	});
 });
 
+describe('ChatEndpoint - declared context window', () => {
+	let mockServices: ReturnType<typeof createMockServices>;
+
+	beforeEach(() => {
+		mockServices = createMockServices();
+	});
+
+	const createEndpoint = (metadata: IChatModelInformation) =>
+		new ChatEndpoint(
+			metadata,
+			mockServices.domainService,
+			mockServices.chatMLFetcher,
+			mockServices.tokenizerProvider,
+			mockServices.instantiationService,
+			mockServices.configurationService,
+			mockServices.expService,
+			mockServices.chatWebSocketService,
+			mockServices.logService
+		);
+
+	it('publishes the declared window separately from the prompt and output budgets', () => {
+		const metadata = createNonAnthropicModelMetadata('gpt-5');
+		const endpoint = createEndpoint(metadata);
+
+		expect({
+			maxContextWindowTokens: endpoint.maxContextWindowTokens,
+			modelMaxPromptTokens: endpoint.modelMaxPromptTokens,
+			maxOutputTokens: endpoint.maxOutputTokens,
+		}).toEqual({
+			maxContextWindowTokens: 12288,
+			modelMaxPromptTokens: 8192,
+			maxOutputTokens: 4096,
+		});
+	});
+
+	it('leaves the window undefined when the model metadata declares none', () => {
+		const base = createNonAnthropicModelMetadata('gpt-5');
+		const endpoint = createEndpoint({
+			...base,
+			capabilities: {
+				...base.capabilities,
+				limits: { max_prompt_tokens: 8192, max_output_tokens: 4096 },
+			},
+		});
+
+		expect(endpoint.maxContextWindowTokens).toBeUndefined();
+	});
+});
+
 describe('ChatEndpoint - Image Count Validation', () => {
 	let mockServices: ReturnType<typeof createMockServices>;
 
