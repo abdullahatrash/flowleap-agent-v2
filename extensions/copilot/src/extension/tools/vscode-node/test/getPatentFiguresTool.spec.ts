@@ -52,7 +52,7 @@ function savingTool(client: IPatentBackendClient, ledger: ReturnType<typeof reco
 	}();
 	const paths = new class extends mock<IPromptPathRepresentationService>() {
 		// The tool documents a relative saveDir, which this service resolves for absolute paths only.
-		override resolveFilePath(): URI | undefined { return undefined; }
+		override resolveFilePath(filePath: string): URI | undefined { return filePath.startsWith('/') ? URI.file(filePath) : undefined; }
 		override getFilePath(uri: URI): string { return uri.path; }
 	}();
 	const workspace = new class extends mock<IWorkspaceService>() {
@@ -115,6 +115,21 @@ describe('GetPatentFiguresTool evidence record', () => {
 		expect({ message: text, executions }).toEqual({
 			message: 'Error: Backend refused the image render.',
 			executions: [{ kind: 'figures', status: 'failed', publicationIds: ['EP1234567A1'] }],
+		});
+	});
+});
+
+describe('GetPatentFiguresTool save confirmation', () => {
+	it('asks before a save outside every workspace folder and not before one inside the project', async () => {
+		const { ledger } = recordingPatentLedger();
+		const tool = savingTool(backend({ docId: 'EP1964767A2' }), ledger, []);
+		const confirmation = async (saveDir: string): Promise<string | undefined> => {
+			const prepared = await tool.prepareInvocation({ input: { publicationNumber: 'EP1964767A2', saveDir } } as vscode.LanguageModelToolInvocationPrepareOptions<{ publicationNumber: string; saveDir: string }>, CancellationToken.None);
+			return prepared?.confirmationMessages?.message as string | undefined;
+		};
+		expect({ inside: await confirmation('references/figures'), outside: await confirmation('/tmp/x') }).toEqual({
+			inside: undefined,
+			outside: 'Allow Patent AI to save the figure images of EP1964767A2 into /tmp/x?',
 		});
 	});
 });

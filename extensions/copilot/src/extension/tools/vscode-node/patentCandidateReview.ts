@@ -466,12 +466,14 @@ const FIGURES_SAVE_DIR = 'references/figures';
  * The documents whose drawings could have been read: every distinct publication a succeeded detail
  * retrieval brought into the session, in the order they were retrieved. The closest candidate is as
  * often the last one retrieved as the first, so the list is capped rather than trimmed to a guess.
+ * With no succeeded retrieval there is no candidate to name and no gate: a model told to fetch the
+ * drawings of nothing at all could only invent a reason for not having read them.
  */
-function figureCandidates(snapshot: PatentExecutionSnapshot): string {
+function figureCandidates(snapshot: PatentExecutionSnapshot): string | undefined {
 	const publications = [...new Set(snapshot.executions
 		.filter(execution => execution.kind === 'details' && execution.status === 'succeeded')
 		.flatMap(execution => execution.publicationIds?.[0] ? [publicationKey(execution.publicationIds[0])] : []))];
-	if (!publications.length) { return 'none retrieved'; }
+	if (!publications.length) { return undefined; }
 	const listed = publications.slice(0, FIGURES_CANDIDATE_CAP).join(', ');
 	return publications.length > FIGURES_CANDIDATE_CAP ? `${listed}, and ${publications.length - FIGURES_CANDIDATE_CAP} more in the working record` : listed;
 }
@@ -480,16 +482,18 @@ function figureCandidates(snapshot: PatentExecutionSnapshot): string {
  * Refuse an essential unresolved feature row while no drawing of any retrieved document was read in
  * this session. A drawing can disclose a structural feature the text never states (MPEP 2125), so
  * "not found" is an unchecked claim until the drawings of the closest candidates were looked at. The
- * row escapes only by stating the reason itself after {@link FIGURES_NOT_CONSULTED}: the model
- * states the reason, the writer never infers it. A combination row is a reading of the other rows
- * rather than of a document, and an optional feature is not worth a retrieval, so neither is gated.
+ * row escapes only by stating the reason itself after {@link FIGURES_NOT_CONSULTED}, anywhere in the
+ * gap: the model states the reason, the writer never infers it. A combination row is a reading of the
+ * other rows rather than of a document, and an optional feature is not worth a retrieval, so neither
+ * is gated. A row whose `kind` was left out is gated like a feature, because only an explicit
+ * combination is exempt.
  */
 function figuresGateError(row: PatentCoverageRow, candidates: string): string[] {
 	if (row.importance !== 'essential' || row.status !== 'unresolved' || row.kind === 'combination') { return []; }
 	const gap = row.gap ?? '';
 	const stated = gap.toLowerCase().indexOf(FIGURES_NOT_CONSULTED);
 	if (stated >= 0 && gap.slice(stated + FIGURES_NOT_CONSULTED.length).trim().length >= FIGURES_REASON_LENGTH) { return []; }
-	return [`Row "${row.feature}" is essential and unresolved, but no drawing of any retrieved document was read this session. A drawing can disclose a structural feature the text does not (MPEP 2125). Either call get_patent_figures on the closest candidates — retrieved this session: ${candidates} — with saveDir: "${FIGURES_SAVE_DIR}" so the drawing is saved beside the report, and cite what they clearly show with basis: figure, or state in this row's gap why drawings cannot help, beginning "${FIGURES_NOT_CONSULTED}" (for example a composition or process subject).`];
+	return [`Row "${row.feature}" is essential and unresolved, but no drawing of any retrieved document was read this session. A drawing can disclose a structural feature the text does not (MPEP 2125). Either call get_patent_figures on the closest candidates — retrieved this session: ${candidates} — with saveDir: "${FIGURES_SAVE_DIR}" so the drawing is saved beside the report, and cite what they clearly show with basis: figure, or state in this row's gap why drawings cannot help, with the phrase "${FIGURES_NOT_CONSULTED}" followed by the reason (for example a composition or process subject).`];
 }
 
 /**
@@ -558,7 +562,8 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
 	if (!review.coverage?.length) { errors.push('Supply coverage for essential features and their combination, including unresolved tracks.'); }
 	// Whether a drawing was read at all is a fact of the session, not of a row: one recorded figures
 	// outcome, whatever its status, lifts the gate for the whole save, because a failed fetch is an
-	// attempt the model can then describe in the gap.
+	// attempt the model can then describe in the gap. A session that retrieved nothing has no
+	// candidate to name and is not gated at all.
 	const figureCandidateList = snapshot.executions.some(execution => execution.kind === 'figures') ? undefined : figureCandidates(snapshot);
 	for (const row of review.coverage ?? []) {
 		if (!row.feature?.trim() || !['essential', 'optional'].includes(row.importance) || !['supported', 'partial', 'unresolved'].includes(row.status)) { errors.push('Every coverage row needs a feature, importance, and valid status.'); }

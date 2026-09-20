@@ -22,7 +22,7 @@ import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemet
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { basename, dirname, extUriBiasedIgnorePathCase, relativePath } from '../../../util/vs/base/common/resources';
+import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatRequest, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { IBuildPromptContext } from '../../prompt/common/intents';
@@ -74,7 +74,7 @@ function workingRecordPath(reportPath: string): string {
  */
 function reportWorkspacePath(uri: URI, folders: readonly URI[]): string {
 	for (const folder of folders) {
-		const relative = relativePath(folder, uri);
+		const relative = extUriBiasedIgnorePathCase.relativePath(folder, uri);
 		if (relative && !relative.startsWith('..')) { return relative.replace(/\\/g, '/'); }
 	}
 	return '';

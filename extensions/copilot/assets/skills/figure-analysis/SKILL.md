@@ -8,7 +8,7 @@ user-invocable: true
 
 Drawings are part of the legal disclosure and can be prior art for what they clearly show.
 
-- Use `get_patent_figures` (pub number) to fetch drawings as inline images — it returns the actual drawing pages by default; pass `pages` for specific ones.
+- Use `get_patent_figures` (pub number) to fetch drawings as inline images — it returns the actual drawing pages by default; pass `pages` for specific ones, and during a prior-art search or an invalidity chart pass `saveDir: "references/figures"` so the page a coverage row cites is on disk beside the report.
 - Pull figures when the user asks to see them, for structural/mechanical/design inventions, flowcharts, or to verify a reference visually.
 - Map reference numerals (e.g. "housing 12") to the claims/description via `get_patent_details`.
 - For prior art, compare element-by-element against what the figure actually shows for §102/§103, using the ✅/⚠️/❌ disclosure notation defined in the patent-examination skill.

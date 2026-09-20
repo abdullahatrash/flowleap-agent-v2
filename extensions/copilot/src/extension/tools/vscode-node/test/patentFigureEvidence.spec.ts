@@ -201,18 +201,34 @@ const structural = { feature: 'F4 — The cam profile includes at least three lo
 const unresolvedReview: PatentCandidateReview = { coverage: [structural, combination], limitations: ['Bounded candidate review.'], stopReason: 'Requested interim report.' };
 
 /** The refusal, verbatim; only the retrieved candidates it names differ between sessions. */
-const refusal = (candidates: string): string => `Row "${structural.feature}" is essential and unresolved, but no drawing of any retrieved document was read this session. A drawing can disclose a structural feature the text does not (MPEP 2125). Either call get_patent_figures on the closest candidates — retrieved this session: ${candidates} — with saveDir: "references/figures" so the drawing is saved beside the report, and cite what they clearly show with basis: figure, or state in this row's gap why drawings cannot help, beginning "figures not consulted:" (for example a composition or process subject).`;
+const refusal = (candidates: string): string => `Row "${structural.feature}" is essential and unresolved, but no drawing of any retrieved document was read this session. A drawing can disclose a structural feature the text does not (MPEP 2125). Either call get_patent_figures on the closest candidates — retrieved this session: ${candidates} — with saveDir: "references/figures" so the drawing is saved beside the report, and cite what they clearly show with basis: figure, or state in this row's gap why drawings cannot help, with the phrase "figures not consulted:" followed by the reason (for example a composition or process subject).`;
+
+/** The three retrievals of {@link unread}, in the order the refusal names them. */
+const threeRetrieved = 'EP1964767A2, EP1939082A2, WO2004041553A1';
 
 describe('an essential unresolved row before any drawing was read', () => {
 	it('refuses the row, names the retrieved candidates in recorded order and stops listing after twelve', () => {
 		expect({
 			retrieved: validateCandidateReview(unresolvedReview, unread),
 			crowded: validateCandidateReview(unresolvedReview, crowded),
+			// Nothing was retrieved, so there is no drawing to read and nothing to refuse: a row told to
+			// fetch the figures of no document could only invent a reason for not having read them.
 			none: validateCandidateReview(unresolvedReview, { ...unread, executions: [snapshot.executions[0]] }),
 		}).toEqual({
-			retrieved: [refusal('EP1964767A2, EP1939082A2, WO2004041553A1')],
+			retrieved: [refusal(threeRetrieved)],
 			crowded: [refusal(`${Array.from({ length: 12 }, (_, index) => `EP${9000001 + index}A1`).join(', ')}, and 1 more in the working record`)],
-			none: [refusal('none retrieved')],
+			none: [],
+		});
+	});
+
+	it('gates a row whose kind was left out like a feature, and gates the same way on an invalidity chart', () => {
+		const untyped = { ...structural, kind: undefined };
+		expect({
+			untyped: validateCandidateReview({ ...unresolvedReview, coverage: [untyped, combination] }, unread).filter(error => error.startsWith('Row "')),
+			invalidity: validateCandidateReview(unresolvedReview, unread, '', 'invalidity'),
+		}).toEqual({
+			untyped: [refusal(threeRetrieved)],
+			invalidity: [refusal(threeRetrieved)],
 		});
 	});
 
@@ -229,7 +245,7 @@ describe('an essential unresolved row before any drawing was read', () => {
 			bare: validateCandidateReview({ ...unresolvedReview, coverage: [bare, combination] }, unread),
 		}).toEqual({
 			stated: [],
-			bare: [refusal('EP1964767A2, EP1939082A2, WO2004041553A1')],
+			bare: [refusal(threeRetrieved)],
 		});
 	});
 

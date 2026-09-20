@@ -11,7 +11,7 @@ import { IPromptPathRepresentationService } from '../../../platform/prompts/comm
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { decodeBase64 } from '../../../util/vs/base/common/buffer';
-import { joinPath, relativePath } from '../../../util/vs/base/common/resources';
+import { extUriBiasedIgnorePathCase, joinPath } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
@@ -105,19 +105,29 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 		@IPatentExecutionLedger private readonly ledger: IPatentExecutionLedger,
 	) { }
 
+	/**
+	 * A save inside an open workspace folder needs no confirmation: a search is told to fetch its
+	 * drawings with `saveDir: "references/figures"`, so a prompt on every page would interrupt the
+	 * run, and `write_patent_results` writes its report into the same project with none.
+	 * {@link assertFileOkForTool} confines the write in either case. Only a directory that resolves
+	 * nowhere, or outside every folder, is worth asking about.
+	 */
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IGetPatentFiguresParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const { publicationNumber, saveDir } = options.input;
-		if (saveDir?.trim()) {
-			return {
-				invocationMessage: l10n.t`Fetching patent figures for ${publicationNumber}...`,
-				confirmationMessages: {
-					title: l10n.t`Save Patent Figures`,
-					message: l10n.t`Allow Patent AI to save the figure images of ${publicationNumber} into ${saveDir}?`
-				}
-			};
+		const invocationMessage = l10n.t`Fetching patent figures for ${publicationNumber}...`;
+		if (!saveDir?.trim()) {
+			return { invocationMessage };
+		}
+		const target = this.resolveSaveDir(saveDir);
+		if (target && this.workspaceService.getWorkspaceFolders().some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(target, folder))) {
+			return { invocationMessage };
 		}
 		return {
-			invocationMessage: l10n.t`Fetching patent figures for ${publicationNumber}...`,
+			invocationMessage,
+			confirmationMessages: {
+				title: l10n.t`Save Patent Figures`,
+				message: l10n.t`Allow Patent AI to save the figure images of ${publicationNumber} into ${saveDir}?`
+			}
 		};
 	}
 
@@ -266,7 +276,7 @@ export class GetPatentFiguresTool implements ICopilotTool<IGetPatentFiguresParam
 	 */
 	private workspaceRelativePath(uri: URI): string | undefined {
 		for (const folder of this.workspaceService.getWorkspaceFolders()) {
-			const relative = relativePath(folder, uri);
+			const relative = extUriBiasedIgnorePathCase.relativePath(folder, uri);
 			if (relative && !relative.startsWith('..')) { return relative.replace(/\\/g, '/'); }
 		}
 		return undefined;
