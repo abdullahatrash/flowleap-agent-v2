@@ -675,6 +675,8 @@ export namespace ConfigKey {
 		export const SearchSubagentToolCallLimit = defineSetting<number>('chat.searchSubagent.toolCallLimit', ConfigType.ExperimentBased, 4);
 		/** Enable the thoroughness parameter on the search subagent tool, which adjusts turn limits based on requested thoroughness */
 		export const SearchSubagentThoroughnessEnabled = defineSetting<boolean>('chat.searchSubagent.thoroughnessEnabled', ConfigType.ExperimentBased, false);
+		/** Enable semantic search for the search subagent. Off by default: this fork does not ship workspace embeddings. */
+		export const SubagentSemanticSearchEnabled = defineSetting<boolean>('chat.searchSubagent.subagentSemanticSearchEnabled', ConfigType.ExperimentBased, false);
 
 		export const ExecutionSubagentToolEnabled = defineSetting<boolean>('chat.executionSubagent.enabled', ConfigType.ExperimentBased, false);
 		export const SkillToolEnabled = defineSetting<boolean>('chat.skillTool.enabled', ConfigType.ExperimentBased, false);
