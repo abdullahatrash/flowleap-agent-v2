@@ -17,6 +17,7 @@ import { ContextKeyValue, IContextKeyService } from '../../../../platform/contex
 import { ITextEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
+import { IDiffEditorOptions } from '../../../common/config/editorOptions.js';
 import { OffsetRange } from '../../../common/core/ranges/offsetRange.js';
 import { IRange } from '../../../common/core/range.js';
 import { ISelection, Selection } from '../../../common/core/selection.js';
@@ -60,6 +61,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly _contextKeyService;
 	private readonly _instantiationService;
 
+	/** Widget-level diff editor options that win over each item's own options. */
+	private readonly _optionsOverride: IObservable<IDiffEditorOptions>;
+
 	/**
 	 * When `true`, the automatic "select the first change" initialization that
 	 * runs once the view model finishes loading does not move keyboard focus
@@ -74,10 +78,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		private readonly _dimension: IObservable<Dimension | undefined>,
 		private readonly _viewModel: IObservable<MultiDiffEditorViewModel | undefined>,
 		private readonly _workbenchUIElementFactory: IWorkbenchUIElementFactory,
+		private readonly _diffLayoutOptions: IObservable<IDiffEditorOptions | undefined>,
 		@IContextKeyService private readonly _parentContextKeyService: IContextKeyService,
 		@IInstantiationService private readonly _parentInstantiationService: IInstantiationService,
 	) {
 		super();
+		this._optionsOverride = derived(this, reader => ({ ...this._diffLayoutOptions.read(reader) }));
 		this._scrollableElements = h('div.scrollContent', [
 			h('div@content', {
 				style: {
@@ -107,7 +113,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				DiffEditorItemTemplate,
 				this._scrollableElements.content,
 				this._scrollableElements.overflowWidgetsDomNode,
-				this._workbenchUIElementFactory
+				this._workbenchUIElementFactory,
+				this._optionsOverride
 			);
 			template.setData(data);
 			return template;

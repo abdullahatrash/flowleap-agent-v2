@@ -39,5 +39,6 @@ export const Menus = {
 	SessionBarToolbar: new MenuId('SessionsSessionBarToolbar'),
 	SessionConversations: new MenuId('SessionsSessionConversations'),
 	SessionHeaderMeta: new MenuId('SessionsSessionHeaderMeta'),
+	SessionsDiffEditorView: new MenuId('SessionsDiffEditorView'),
 	SessionHeaderContext: MenuId.SessionHeaderContext,
 } as const;
