@@ -29,6 +29,7 @@
 	"languageModelToolSets",
 	"languageModelTools",
 	"languages",
+	"linkPresentationProviders",
 	"localizations",
 	"mcpServerDefinitionProviders",
 	"menus",
