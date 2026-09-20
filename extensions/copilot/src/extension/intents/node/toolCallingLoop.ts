@@ -29,6 +29,7 @@ import { getCurrentCapturingToken } from '../../../platform/requestLogger/node/r
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { computePromptTokenDetails } from '../../../platform/tokenizer/node/promptTokenDetails';
+import { asThinkingOriginApi } from '../../../platform/thinking/common/thinking';
 import { tryFinalizeResponseStream } from '../../../util/common/chatResponseStreamImpl';
 import { ChatExtPerfMark, markChatExt } from '../../../util/common/performance';
 import { DeferredPromise, timeout } from '../../../util/vs/base/common/async';
@@ -1790,6 +1791,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 					thinking: thinkingItem,
 					phase,
 					modelId: endpoint.model,
+					originApi: asThinkingOriginApi(endpoint.apiType),
 					compaction,
 				}),
 				chatResult,
