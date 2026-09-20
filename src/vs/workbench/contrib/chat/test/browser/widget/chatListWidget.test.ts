@@ -12,6 +12,8 @@ import { Range } from '../../../../../../editor/common/core/range.js';
 import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
+import { WorkbenchListSupportsFind } from '../../../../../../platform/list/browser/listService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { workbenchInstantiationService } from '../../../../../test/browser/workbenchTestServices.js';
 import { IChatAccessibilityService } from '../../../browser/chat.js';
@@ -66,8 +68,16 @@ suite('ChatListWidget', () => {
 		}));
 		widget.setViewModel(viewModel);
 		widget.setVisible(true);
-		return { disposables, model, viewModel, container, widget };
+		return { disposables, model, viewModel, container, widget, contextKeyService: instantiationService.get(IContextKeyService) };
 	}
+
+	test('disables the generic tree Find widget', () => {
+		const { disposables, contextKeyService } = createWidget();
+
+		assert.strictEqual(contextKeyService.getContextKeyValue(WorkbenchListSupportsFind.key), false);
+
+		disposables.dispose();
+	});
 
 	test('keeps user toggle suppression active until resizing settles', () => {
 		const state = new UserToggleResizeState(2);

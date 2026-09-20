@@ -16,10 +16,11 @@ import { DocumentPasteTriggerKind, ICustomEdit } from '../../../../../../../../e
 import { ITextModel } from '../../../../../../../../editor/common/model.js';
 import { IModelService } from '../../../../../../../../editor/common/services/model.js';
 import { TestInstantiationService } from '../../../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { IConfigurationService } from '../../../../../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../../../../../platform/log/common/log.js';
 import { IChatPasteTarget, IChatPasteTargetService } from '../../../../../browser/chat.js';
 import { IChatSessionsService } from '../../../../../common/chatSessionsService.js';
-import { CHAT_ATTACHMENT_MIME_TYPE, createPastedTextArtifact, PasteTextProvider } from '../../../../../browser/widget/input/editor/chatPasteProviders.js';
+import { CHAT_ATTACHMENT_MIME_TYPE, createPastedTextArtifact, pastedTextArtifactDefaultMinLength, PasteTextProvider } from '../../../../../browser/widget/input/editor/chatPasteProviders.js';
 import { ChatPasteAttachmentMetadata, IChatRequestVariableEntry } from '../../../../../common/attachments/chatVariableEntries.js';
 import { isSupportedChatFileScheme } from '../../../../../common/constants.js';
 import { ChatResponseResource } from '../../../../../common/model/chatModel.js';
@@ -41,14 +42,15 @@ suite('Chat Paste Providers', () => {
 	});
 
 	test('creates sequential artifacts only for long pasted text', () => {
-		const longText = 'x'.repeat(1000);
+		const longText = `${'x'.repeat(10000)}\n`.repeat(10);
 		const first = createPastedTextArtifact(longText, []);
 		assert.ok(first);
 		const second = createPastedTextArtifact(`${longText}\nsecond line`, [first.attachment]);
 		assert.ok(second);
 
 		assert.deepStrictEqual({
-			belowThreshold: createPastedTextArtifact('x'.repeat(999), []),
+			belowLengthThreshold: createPastedTextArtifact(`${'x'.repeat(100)}\n`.repeat(10), []),
+			respectsConfiguredThreshold: !!createPastedTextArtifact(`${'x'.repeat(10)}\n`.repeat(10), [], { minLength: 100 }),
 			first: {
 				name: first.attachment.name,
 				referenceText: first.referenceText,
@@ -65,26 +67,58 @@ suite('Chat Paste Providers', () => {
 				pastedLines: second.attachment.pastedLines,
 			},
 		}, {
-			belowThreshold: undefined,
+			belowLengthThreshold: undefined,
+			respectsConfiguredThreshold: true,
 			first: {
 				name: 'Pasted text #1',
 				referenceText: '#attachment:Pasted text #1',
 				codeIsPreserved: true,
 				language: 'plaintext',
 				fileName: 'Pasted text #1',
-				pastedLines: '1 line',
+				pastedLines: '11 lines',
 				metadataKind: 'paste',
 				isTextArtifact: true,
 			},
 			second: {
 				name: 'Pasted text #2',
 				referenceText: '#attachment:Pasted text #2',
-				pastedLines: '2 lines',
+				pastedLines: '12 lines',
 			},
 		});
 	});
 
-	test('replaces a long plain-text paste with an inline attachment reference', async () => {
+	test('creates pasted text artifacts based on character count regardless of line count', () => {
+		const threshold = pastedTextArtifactDefaultMinLength;
+		const twoLines = `${'x'.repeat(threshold)}\nsecond line`;
+
+		assert.deepStrictEqual({
+			belowThreshold: createPastedTextArtifact('x'.repeat(threshold - 1), []),
+			atThreshold: createPastedTextArtifact('x'.repeat(threshold), [])?.attachment.pastedLines,
+			aboveThreshold: createPastedTextArtifact('x'.repeat(threshold + 1), [])?.attachment.pastedLines,
+			twoLines: createPastedTextArtifact(twoLines, [])?.attachment.pastedLines,
+			customThreshold: createPastedTextArtifact('abc', [], { minLength: 2 })?.attachment.pastedLines,
+			belowCustomThreshold: createPastedTextArtifact('a', [], { minLength: 2 }),
+			highThreshold: createPastedTextArtifact(twoLines, [], { minLength: Number.MAX_SAFE_INTEGER }),
+			zeroThreshold: createPastedTextArtifact('x', [], { minLength: 0 })?.attachment.pastedLines,
+			empty: createPastedTextArtifact('', [], { minLength: 0 }),
+			whitespaceOnly: createPastedTextArtifact(' \t\r\n', [], { minLength: 0 }),
+			trimmedLength: createPastedTextArtifact(' x ', [], { minLength: 2 }),
+		}, {
+			belowThreshold: undefined,
+			atThreshold: '1 line',
+			aboveThreshold: '1 line',
+			twoLines: '2 lines',
+			customThreshold: '1 line',
+			belowCustomThreshold: undefined,
+			highThreshold: undefined,
+			zeroThreshold: '1 line',
+			empty: undefined,
+			whitespaceOnly: undefined,
+			trimmedLength: undefined,
+		});
+	});
+
+	test('replaces a long single-line plain-text paste with an inline attachment reference', async () => {
 		const attachments: IChatRequestVariableEntry[] = [];
 		const inlineAttachments: { entry: IChatRequestVariableEntry; text: string; range: IRange }[] = [];
 		let isTerminalCommandPaste = false;
@@ -118,12 +152,15 @@ suite('Chat Paste Providers', () => {
 			pasteTargetService,
 			new class extends mock<IModelService>() { },
 			new class extends mock<ILogService>() { },
+			new class extends mock<IConfigurationService>() {
+				override getValue<T>(): T { return pastedTextArtifactDefaultMinLength as T; }
+			},
 		);
 		const model = upcastPartial<ITextModel>({
 			uri: modelUri,
 			getOffsetAt: position => position.column - 1,
 		});
-		const longText = 'x'.repeat(1000);
+		const longText = 'x'.repeat(pastedTextArtifactDefaultMinLength + 1);
 		const transferOf = (entries: Record<string, string>) => {
 			const transfer = new VSDataTransfer();
 			for (const [mime, value] of Object.entries(entries)) {
