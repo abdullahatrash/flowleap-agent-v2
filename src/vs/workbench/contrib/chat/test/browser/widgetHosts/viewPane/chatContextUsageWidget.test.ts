@@ -88,6 +88,8 @@ suite('ChatContextUsageWidget', () => {
 
 	const AUTO_MODEL = 'vendor:auto';
 	const CONCRETE_MODEL = 'vendor:gpt';
+	const DECLARED_WINDOW_MODEL = 'vendor:declared-window';
+	const TIERED_WINDOW_MODEL = 'vendor:tiered-window';
 
 	// Mirrors the Agent Host scenario where the synthetic "auto" model advertises
 	// a zero-sized context window (it routes to a concrete model) while the
@@ -95,6 +97,13 @@ suite('ChatContextUsageWidget', () => {
 	const models: Record<string, Partial<ILanguageModelChatMetadata>> = {
 		[AUTO_MODEL]: { maxInputTokens: 0, maxOutputTokens: 0 },
 		[CONCRETE_MODEL]: { maxInputTokens: 100_000, maxOutputTokens: 8_000 },
+		[DECLARED_WINDOW_MODEL]: { maxInputTokens: 100_000, maxOutputTokens: 20_000, maxContextWindowTokens: 100_000 },
+		[TIERED_WINDOW_MODEL]: {
+			maxInputTokens: 100_000,
+			maxOutputTokens: 20_000,
+			maxContextWindowTokens: 100_000,
+			configurationSchema: { properties: { contextSize: { type: 'number', default: 40_000 } } },
+		},
 	};
 
 	function createLanguageModelsService(): ILanguageModelsService {
@@ -149,6 +158,26 @@ suite('ChatContextUsageWidget', () => {
 		widget.update(createRequest(AUTO_MODEL, usage(undefined)));
 
 		assert.strictEqual(widget.isVisible.get(), false);
+	});
+
+	test('uses a declared context window instead of summing the input and output budgets', () => {
+		const widget = createWidget();
+		widget.setSelectedModel(DECLARED_WINDOW_MODEL);
+		widget.update(createRequest(DECLARED_WINDOW_MODEL, usage(undefined)));
+
+		// 54,000 used against the declared 100,000 window is 54%; summing input and output
+		// (100,000 + 20,000) would read 45% and understate how full the window is.
+		assert.strictEqual(widget.domNode.querySelector('.percentage-label')?.textContent, '54%');
+	});
+
+	test('reduces a declared window to the schema default input tier', () => {
+		const widget = createWidget();
+		widget.setSelectedModel(TIERED_WINDOW_MODEL);
+		widget.update(createRequest(TIERED_WINDOW_MODEL, usage(undefined)));
+
+		// The 40,000 default tier plus the 20,000 output budget is 60,000, below the declared
+		// 100,000 window, so the configured tier wins: 54,000 / 60,000 is 90%.
+		assert.strictEqual(widget.domNode.querySelector('.percentage-label')?.textContent, '90%');
 	});
 
 	test('uses the selected concrete model window directly', () => {
