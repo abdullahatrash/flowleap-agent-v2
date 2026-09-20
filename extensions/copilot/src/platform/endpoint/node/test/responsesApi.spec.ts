@@ -369,12 +369,12 @@ describe('responseApiInputToRawMessagesForLogging', () => {
 });
 
 describe('createResponsesRequestBody', () => {
-	it('enables persistent CoT on initial requests for hidden model M when the experiment is enabled', () => {
+	it('enables persistent CoT on initial requests for gpt-5.6 when the experiment is enabled', () => {
 		const services = createPlatformServices();
 		const accessor = services.createTestingAccessor();
 		const instantiationService = accessor.get(IInstantiationService);
 		accessor.get(IConfigurationService).setConfig(ConfigKey.ResponsesApiPersistentCoTEnabled, true);
-		const endpoint = { ...testEndpoint, family: 'ember-alpha', supportsReasoningEffort: ['low', 'medium', 'high'] };
+		const endpoint = { ...testEndpoint, family: 'gpt-5.6', supportsReasoningEffort: ['low', 'medium', 'high'] };
 
 		const body = instantiationService.invokeFunction(servicesAccessor => createResponsesRequestBody(servicesAccessor, createRequestOptions([], false), endpoint.model, endpoint));
 
@@ -388,10 +388,10 @@ describe('createResponsesRequestBody', () => {
 		const services = createPlatformServices();
 		const accessor = services.createTestingAccessor();
 		const instantiationService = accessor.get(IInstantiationService);
-		const emberEndpoint = { ...testEndpoint, family: 'ember-alpha' };
-		const unsupportedEndpoint = { ...testEndpoint, model: 'ember-alpha', family: 'other-family' };
+		const supportedEndpoint = { ...testEndpoint, family: 'gpt-5.6' };
+		const unsupportedEndpoint = { ...testEndpoint, model: 'gpt-5.6', family: 'other-family' };
 
-		const disabledBody = instantiationService.invokeFunction(servicesAccessor => createResponsesRequestBody(servicesAccessor, createRequestOptions([], false), emberEndpoint.model, emberEndpoint));
+		const disabledBody = instantiationService.invokeFunction(servicesAccessor => createResponsesRequestBody(servicesAccessor, createRequestOptions([], false), supportedEndpoint.model, supportedEndpoint));
 		accessor.get(IConfigurationService).setConfig(ConfigKey.ResponsesApiPersistentCoTEnabled, true);
 		const unsupportedBody = instantiationService.invokeFunction(servicesAccessor => createResponsesRequestBody(servicesAccessor, createRequestOptions([], false), unsupportedEndpoint.model, unsupportedEndpoint));
 
@@ -407,7 +407,7 @@ describe('createResponsesRequestBody', () => {
 		const accessor = services.createTestingAccessor();
 		const instantiationService = accessor.get(IInstantiationService);
 		accessor.get(IConfigurationService).setConfig(ConfigKey.ResponsesApiPersistentCoTEnabled, true);
-		const endpoint = { ...testEndpoint, family: 'ember-alpha' };
+		const endpoint = { ...testEndpoint, family: 'gpt-5.6' };
 		const messages: Raw.ChatMessage[] = [
 			createStatefulMarkerMessage(endpoint.model, 'resp-prev'),
 			{ role: Raw.ChatRole.User, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'continue' }] },
