@@ -5886,6 +5886,16 @@
               "onExp"
             ]
           },
+          "github.copilot.chat.searchSubagent.subagentSemanticSearchEnabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%github.copilot.config.searchSubagent.subagentSemanticSearchEnabled%",
+            "tags": [
+              "advanced",
+              "experimental",
+              "onExp"
+            ]
+          },
           "github.copilot.chat.agentDebugLog.enabled": {
             "type": "boolean",
             "default": false,
