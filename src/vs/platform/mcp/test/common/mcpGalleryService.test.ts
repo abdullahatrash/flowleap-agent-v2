@@ -22,11 +22,14 @@ import { McpGalleryService } from '../../common/mcpGalleryService.js';
 
 class TestRequestService extends AbstractRequestService {
 
+	readonly requests: IRequestOptions[] = [];
+
 	constructor(private readonly handler: (options: IRequestOptions) => IRequestContext) {
 		super(new NullLogService());
 	}
 
 	async request(options: IRequestOptions): Promise<IRequestContext> {
+		this.requests.push(options);
 		return this.handler(options);
 	}
 
@@ -154,6 +157,101 @@ suite('McpGalleryService', () => {
 				environmentVariables: []
 			}
 		]);
+	});
+
+	// Our live marketplace answers `https://www.flowleap.co/api/mcp/v0.1/...`, so this is the
+	// exact document shape `getMcpServer` has to accept after the gallery source validation.
+	const FIXTURE_SERVER_DOCUMENT = JSON.stringify({
+		server: {
+			name: 'co.flowleap/flowleap',
+			description: 'FlowLeap Patent AI over MCP.',
+			version: '0.3.8',
+			websiteUrl: 'https://www.flowleap.co',
+			repository: { url: 'https://github.com/flowleap-ai/flowleap-cli', source: 'github' },
+			packages: [{
+				identifier: 'flowleap',
+				registryType: 'npm',
+				version: '0.3.8',
+				transport: { type: 'stdio' },
+				runtimeHint: 'npx',
+				packageArguments: [{ description: 'Runs the FlowLeap CLI as a stdio MCP server.', value: 'mcp', type: 'positional', valueHint: 'subcommand' }],
+				environmentVariables: [{ name: 'FLOWLEAP_API_KEY', description: 'FlowLeap personal API token.', isRequired: false, isSecret: true }]
+			}]
+		},
+		_meta: {
+			'io.modelcontextprotocol.registry/official': {
+				status: 'active',
+				isLatest: true,
+				publishedAt: '2026-07-11T00:00:00.000Z',
+				updatedAt: '2026-07-23T16:06:48.000Z'
+			}
+		}
+	});
+
+	function galleryFixture(handler: (options: IRequestOptions) => IRequestContext) {
+		const fileService = store.add(new FileService(new NullLogService()));
+		store.add(fileService.registerProvider(Schemas.file, store.add(new InMemoryFileSystemProvider())));
+		const productService = productWithMcpGallery({
+			serviceUrl: 'https://registry.test/api/mcp',
+			itemWebUrl: ITEM_WEB_URL,
+			publisherUrl: 'https://www.flowleap.co/en/marketplace',
+			supportUrl: 'https://www.flowleap.co/en/contact',
+			privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
+			termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
+			reportUrl: 'https://www.flowleap.co/en/contact'
+		});
+		const requestService = store.add(new TestRequestService(handler));
+		const manifestService = store.add(new McpGalleryManifestService(productService, requestService, new NullLogService()));
+		const galleryService = store.add(new McpGalleryService(requestService, fileService, new NullLogService(), manifestService));
+		return { galleryService, manifestService, requestService };
+	}
+
+	test('resolves an install from our marketplace shape through the validated gallery URL', async () => {
+		const { galleryService, requestService } = galleryFixture(options => {
+			if (options.url === 'https://registry.test/api/mcp/v0.1/servers?limit=1') {
+				return response(200, JSON.stringify({ metadata: { count: 0 }, servers: [] }));
+			}
+			if (options.url === 'https://registry.test/api/mcp/v0.1/servers/co.flowleap%2Fflowleap/versions/latest') {
+				return response(200, FIXTURE_SERVER_DOCUMENT);
+			}
+			return response(404);
+		});
+
+		const servers = await galleryService.getMcpServersFromGallery([{ name: 'co.flowleap/flowleap' }]);
+
+		assert.deepStrictEqual(servers.map(server => ({
+			name: server.name,
+			version: server.version,
+			registryType: server.configuration.packages?.[0].registryType,
+			packageId: server.configuration.packages?.[0].identifier,
+			environmentVariables: (server.configuration.packages?.[0].environmentVariables ?? []).map(v => v.name),
+			followedRedirects: requestService.requests.some(r => r.url?.includes('/versions/latest') && r.followRedirects !== 0)
+		})), [{
+			name: 'co.flowleap/flowleap',
+			version: '0.3.8',
+			registryType: 'npm',
+			packageId: 'flowleap',
+			environmentVariables: ['FLOWLEAP_API_KEY'],
+			followedRedirects: false
+		}]);
+	});
+
+	test('refuses a server document outside the configured gallery without issuing a request', async () => {
+		const { galleryService, manifestService, requestService } = galleryFixture(options =>
+			response(options.url === 'https://registry.test/api/mcp/v0.1/servers?limit=1' ? 200 : 404));
+		const manifest = await manifestService.getMcpGalleryManifest();
+		const requestsAfterManifest = requestService.requests.length;
+
+		await assert.rejects(() => galleryService.getMcpServer('https://evil.test/api/mcp/v0.1/servers/co.flowleap%2Fflowleap', manifest));
+		assert.strictEqual(requestService.requests.length, requestsAfterManifest);
+	});
+
+	test('treats a redirected server document as a failure, not a missing server', async () => {
+		const { galleryService, manifestService } = galleryFixture(options =>
+			response(options.url === 'https://registry.test/api/mcp/v0.1/servers?limit=1' ? 200 : 302));
+		const manifest = await manifestService.getMcpGalleryManifest();
+
+		await assert.rejects(() => galleryService.getMcpServer('https://registry.test/api/mcp/v0.1/servers/co.flowleap%2Fflowleap/versions/latest', manifest));
 	});
 
 	test('negotiates the API version the endpoint serves (v0), not the newest one it does not', async () => {
