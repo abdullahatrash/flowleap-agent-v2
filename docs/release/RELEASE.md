@@ -10,6 +10,7 @@ git tag vX.Y.Z && git push --tags
         |
         +-- builds macOS DMGs, signs + notarizes + staples them
         +-- builds Windows artifacts (zip + two installers), UNSIGNED
+        +-- builds Linux x64 + arm64 (.deb, .rpm, .tar.gz), UNSIGNED
         +-- computes SHASUMS256.txt
         +-- attaches everything to a DRAFT GitHub release
         |
@@ -34,6 +35,11 @@ build/flowleap/publish-public-release.sh vX.Y.Z [--clean-old]
         |   reads ONLY that public repo
         +-- --clean-old then deletes every other public release + tag
 ```
+
+Linux is never signed: apt and dnf verify packages through repository
+signatures, not per-file ones, and FlowLeap is distributed as direct downloads
+rather than through a repository. The .deb and .rpm therefore ship as CI built
+them, and `SHASUMS256.txt` is what a user checks them against.
 
 CI never touches Windows code-signing: the Certum SimplySign certificate lives in
 a cloud HSM behind an interactive SimplySign Desktop session, so it can only be
@@ -147,6 +153,12 @@ gh secret list
          (the sign script already does this, but re-check manually if in doubt).
    - [ ] Windows: run the signed installer on a clean VM/user profile — no
          "Unknown publisher" SmartScreen warning, app launches.
+   - [ ] Linux: `dpkg -I FlowLeap-vX.Y.Z-linux-x64.deb` reports
+         `Package: flowleap`, the right `Architecture`, and a FlowLeap
+         `Maintainer`/`Homepage` (never Microsoft's). The release job asserts
+         all of this, so a green build already covers it.
+   - [ ] Linux: install the .deb on a clean Ubuntu 22.04 and launch the GUI —
+         CI only proves `flowleap --version` runs headless.
    - [ ] `SHASUMS256.txt` on the release matches the hashes of the actual
          uploaded files (`sha256sum -c` locally after downloading).
 
@@ -170,6 +182,78 @@ gh secret list
 
    The draft on this (source) repo can stay a draft — it serves as the internal
    build record; publishing it is optional and has no user-facing effect.
+
+## Linux specifics
+
+Six artifacts per release: `.deb`, `.rpm` and `.tar.gz` for `x64` and `arm64`.
+
+| Property | Value |
+| --- | --- |
+| Runners | `ubuntu-22.04` (x64), `ubuntu-22.04-arm` (arm64) |
+| glibc baseline | 2.35 |
+| Signing | none (see above) |
+| Native updater | not armed — the Notify-Only Checker is the only update surface |
+
+**The glibc baseline is set by the runner, not by a choice.** Building natively
+on Ubuntu 22.04 links against its glibc 2.35, so the packages install on Ubuntu
+22.04+, Debian 12+, Fedora 36+ and equivalents, and **not** on Ubuntu 20.04 or
+RHEL 8. Upstream VS Code reaches glibc 2.28 by cross-compiling inside a
+downloaded sysroot; we build natively per architecture instead, which is much
+simpler and covers the distributions FlowLeap targets. Lowering the baseline
+later means adopting upstream's sysroot cross-build, not changing a flag.
+
+**The arm64 runner is free only because this repository is public.**
+`ubuntu-22.04-arm` is a GitHub-hosted arm64 runner available at no cost to
+public repositories and **unavailable in private ones** — a private repo fails
+to schedule the job at all. If `abdullahatrash/flowleap-agent-v2` ever goes
+private, the arm64 leg has to move to a cross-build (or a self-hosted arm64
+runner) before the next release.
+
+**Linux is deliberately not a Stamped Build.** ADR 0008 scopes native Silent
+Update to macOS. The Linux job runs no `stamp-update-config.mjs` step, so the
+built `product.json` carries no `updateUrl`, the native update service
+self-disables with `MissingConfiguration`, and the Notify-Only Checker keeps
+informing the user about new releases. The website Update Feed *does* already
+map `linux-x64` and `linux-arm64` (to the `.tar.gz`, then the `.deb`), so
+arming Linux later is a stamping change on this side only.
+
+**The deb maintainer scripts drop upstream's apt-repository plumbing.**
+Upstream's `postinst` registers `packages.microsoft.com/repos/code` as an apt
+source and installs Microsoft's signing key into `/usr/share/keyrings`, and its
+`postrm` deletes both again — which would have broken apt for anyone who also
+has real VS Code installed. FlowLeap is distributed as direct downloads, so both
+blocks are gone along with the debconf question that gated them. The release job
+asserts the absence after installing, so an upstream port cannot quietly restore
+it.
+
+**Package versions come from Code OSS, not from the release tag.** The `.deb`
+and `.rpm` internal `Version` is the root `package.json` version plus a build
+timestamp (`1.105.0-1758…`), while the file *name* carries the FlowLeap version.
+Upgrades still order correctly because the timestamp always increases, but
+`dpkg -l flowleap` does not show the FlowLeap version. Read it from the app's
+About dialog instead.
+
+### Testing a pipeline change without minting a release
+
+`workflow_dispatch` takes two extra inputs for exactly this:
+
+```bash
+gh workflow run flowleap-release.yml --ref <branch> \
+  -f version=0.0.0-linux-test -f platforms=linux -f dry_run=true
+```
+
+`platforms` narrows the build to one OS (`all`, `macos`, `windows`, `linux`) and
+`dry_run=true` skips the `create-release` job, so nothing is tagged or drafted —
+the artifacts land on the workflow run only. Both inputs are empty on a tag
+push, so the real release path is unaffected.
+
+### Installing
+
+```bash
+sudo apt install ./FlowLeap-vX.Y.Z-linux-x64.deb     # Debian / Ubuntu
+sudo dnf install ./FlowLeap-vX.Y.Z-linux-x64.rpm     # Fedora / RHEL
+tar -xzf FlowLeap-vX.Y.Z-linux-x64.tar.gz && ./FlowLeap-linux-x64/flowleap
+```
 
 ## Troubleshooting
 
@@ -200,6 +284,20 @@ gh secret list
   GitHub API/CDN throttle on the `@vscode/ripgrep` postinstall download.
   Re-run the failed workflow job; if it persists, check
   https://www.githubstatus.com/ before assuming it's repo-specific.
+
+- **Linux: "The dependencies list has changed"** — `prepare-deb` or
+  `prepare-rpm` failed the build on purpose. `build/linux/dependencies-generator.ts`
+  recomputes the package `Depends`/`Requires` from the built binaries and
+  compares them, exactly, against the reference lists in
+  `build/linux/debian/dep-lists.ts` and `build/linux/rpm/dep-lists.ts`. Any
+  change to a native module, to Electron, or to the runner image can shift them.
+  The error prints both lists — verify the new dependencies are ones we are
+  willing to require, then paste them into the matching arch entry of the
+  reference list. Do not silence the guard: it is the only thing that notices a
+  package quietly growing a new system requirement.
+
+- **Linux: the arm64 job never starts** — `ubuntu-22.04-arm` does not exist for
+  private repositories. Check the repo is still public; see "Linux specifics".
 
 - **Re-running the sign script on an already-signed release** — safe.
   `signtool sign` re-signing an already-signed file is a normal operation,

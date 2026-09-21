@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
 import path from 'path';
 import { getChromiumSysroot, getVSCodeSysroot } from './debian/install-sysroot.ts';
 import { generatePackageDeps as generatePackageDepsDebian } from './debian/calculate-deps.ts';
@@ -55,14 +56,31 @@ export async function getDependencies(packageType: 'deb' | 'rpm', buildDir: stri
 
 	const appPath = path.join(buildDir, applicationName);
 	// Add the native modules
-	const files = findResult.stdout.toString().trimEnd().split('\n');
+	const candidates = findResult.stdout.toString().trimEnd().split('\n');
 	// Add the tunnel binary.
-	files.push(path.join(buildDir, 'bin', product.tunnelApplicationName));
+	candidates.push(path.join(buildDir, 'bin', product.tunnelApplicationName));
 	// Add the main executable.
-	files.push(appPath);
+	candidates.push(appPath);
 	// Add chrome sandbox and crashpad handler.
-	files.push(path.join(buildDir, 'chrome-sandbox'));
-	files.push(path.join(buildDir, 'chrome_crashpad_handler'));
+	candidates.push(path.join(buildDir, 'chrome-sandbox'));
+	candidates.push(path.join(buildDir, 'chrome_crashpad_handler'));
+
+	// FORK CHANGE: analyze only the binaries this build actually produced.
+	// Upstream can push these paths unconditionally because its pipeline always
+	// ships every one of them; this fork does not build the Rust CLI, so
+	// `bin/<tunnelApplicationName>` is absent and `dpkg-shlibdeps` fails the whole
+	// task with "cannot read ...: No such file or directory". Skipping a missing
+	// binary is safe: it contributes no dependencies precisely because it is not
+	// in the package. Each skip is logged, and the reference-list comparison
+	// below still fails the build if the resulting dependency set drifts, so a
+	// binary that goes missing by accident cannot pass unnoticed.
+	const files = candidates.filter(file => {
+		if (existsSync(file)) {
+			return true;
+		}
+		console.warn(`Skipping dependency calculation for ${file}: not present in this build.`);
+		return false;
+	});
 
 	// Generate the dependencies.
 	let dependencies: Set<string>[];

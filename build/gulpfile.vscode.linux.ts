@@ -109,11 +109,12 @@ function prepareDebPackage(arch: string) {
 			.pipe(replace('@@ARCHITECTURE@@', debArch))
 			.pipe(rename('DEBIAN/postinst'));
 
-		const templates = gulp.src('resources/linux/debian/templates.template', { base: '.' })
-			.pipe(replace('@@NAME@@', product.applicationName))
-			.pipe(rename('DEBIAN/templates'));
-
-		const all = es.merge(control, templates, postinst, postrm, prerm, desktops, appdata, workspaceMime, icon, bash_completion, zsh_completion, code);
+		// No DEBIAN/templates: upstream ships one debconf question, asking whether
+		// to add Microsoft's apt repository. The maintainer scripts no longer
+		// register that repository (see postinst.template), so the question — and
+		// the debconf state it leaves behind on the user's machine — has nothing
+		// left to control.
+		const all = es.merge(control, postinst, postrm, prerm, desktops, appdata, workspaceMime, icon, bash_completion, zsh_completion, code);
 
 		return all.pipe(vfs.dest(destination));
 	};

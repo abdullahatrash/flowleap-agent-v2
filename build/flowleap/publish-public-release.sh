@@ -11,7 +11,9 @@
 #
 #   1. Downloads every asset from the source draft release.
 #   2. Sanity-checks the expected artifact set (DMGs + darwin Squirrel zips +
-#      signed installers).
+#      signed installers). Linux assets (.deb / .rpm / .tar.gz per arch) are
+#      carried when present but are NOT required — a macOS/Windows-only
+#      release is still publishable.
 #   3. Generates update-metadata.json — the release identity the website
 #      Update Feed reads (ADR 0008): {"commit": "<source sha>", "version":
 #      "<x.y.z>"}. The sha is resolved from the tag on the SOURCE repo, never
@@ -78,6 +80,30 @@ done
 if [ "$missing" -ne 0 ]; then
 	echo "Aborting: incomplete artifact set. Did the release build finish (it must upload the darwin Squirrel zips), and did sign-windows-release.ps1 run?" >&2
 	exit 1
+fi
+
+# Linux is reported, not required. Its six artifacts (.deb / .rpm / .tar.gz for
+# x64 and arm64) are published like any other asset — the glob below picks up
+# everything that was downloaded — but a release without them is still valid,
+# so a missing Linux build only prints a warning. The website Update Feed maps
+# linux-x64/linux-arm64 to the .tar.gz then the .deb by name, which is why the
+# names must keep the `linux-<arch>.<ext>` suffix.
+linux_found=0
+linux_missing=""
+for pattern in "*linux-x64.deb" "*linux-x64.rpm" "*linux-x64.tar.gz" "*linux-arm64.deb" "*linux-arm64.rpm" "*linux-arm64.tar.gz"; do
+	if compgen -G "$pattern" > /dev/null; then
+		linux_found=$((linux_found + 1))
+	else
+		linux_missing="$linux_missing $pattern"
+	fi
+done
+if [ "$linux_found" -eq 0 ]; then
+	echo "NOTE: no Linux assets in this release (optional)."
+elif [ -n "$linux_missing" ]; then
+	echo "WARNING: Linux assets are incomplete — missing:$linux_missing"
+	echo "         Expected all six: .deb/.rpm/.tar.gz for linux-x64 and linux-arm64."
+else
+	echo "OK: all six Linux assets present (.deb/.rpm/.tar.gz for x64 and arm64)."
 fi
 
 # Reminder rather than a hard gate: unsigned installers are indistinguishable
