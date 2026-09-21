@@ -425,6 +425,19 @@ export function getVerbosityForModelSync(model: IChatEndpoint): 'low' | 'medium'
 }
 
 /**
+ * Normalizes a model id or family for the prefix tests below: lower-cases it,
+ * folds `.` to `-` so `claude-opus-4.6` and `claude-opus-4-6` compare equal,
+ * and drops a leading `<vendor>/` segment.
+ *
+ * Aggregators namespace their ids by vendor — an OpenRouter Claude model is
+ * `anthropic/claude-sonnet-5` — while first-party ids are bare. Without the
+ * strip, every `claude-...` prefix test reads an aggregator id as unsupported.
+ */
+function normalizeModelName(name: string): string {
+	return name.toLowerCase().replace(/\./g, '-').replace(/^[^/]+\//, '');
+}
+
+/**
  * Tool search is supported by:
  * - Current-generation Claude models (4.5 and newer), so new and future Claude
  *   models are picked up automatically. Haiku (no tool search support) and the
@@ -435,14 +448,16 @@ export function getVerbosityForModelSync(model: IChatEndpoint): 'low' | 'medium'
  * Accepts either an id string, a {@link LanguageModelChat}, or an
  * {@link IChatEndpoint} — when given an endpoint/chat the model **family**
  * is also checked, so a per-model family override (see
- * {@link IModelCapabilityOverride}) lights this up automatically.
+ * {@link IModelCapabilityOverride}) lights this up automatically. Vendor-
+ * prefixed aggregator ids such as `anthropic/claude-sonnet-5` match too, see
+ * {@link normalizeModelName}.
  */
 export function modelSupportsToolSearch(model: LanguageModelChat | IChatEndpoint | string): boolean {
 	const id = typeof model === 'string' ? model : getModelId(model);
 	const family = typeof model === 'string' ? model : model.family;
 	const isGpt56OrGpt6 = isGpt56(model) || isGpt6Family(model);
 	const matches = (s: string) => {
-		const n = s.toLowerCase().replace(/\./g, '-');
+		const n = normalizeModelName(s);
 		// OpenAI models with client-side tool search.
 		if (n === 'gpt-5-4' || n === 'gpt-5-5' || isGpt56OrGpt6) {
 			return true;
@@ -483,14 +498,14 @@ export function modelSupportsToolSearch(model: LanguageModelChat | IChatEndpoint
  * {@link IModelCapabilityOverride}) lights this up automatically.
  *
  * Provider-agnostic: add additional model prefixes here as other providers
- * adopt context editing.
+ * adopt context editing. Vendor-prefixed aggregator ids such as
+ * `anthropic/claude-sonnet-4-5` match too, see {@link normalizeModelName}.
  */
 export function modelSupportsContextEditing(model: LanguageModelChat | IChatEndpoint | string): boolean {
 	const id = typeof model === 'string' ? model : getModelId(model);
 	const family = typeof model === 'string' ? model : model.family;
-	const normalize = (s: string) => s.toLowerCase().replace(/\./g, '-');
-	const normalizedId = normalize(id);
-	const normalizedFamily = normalize(family);
+	const normalizedId = normalizeModelName(id);
+	const normalizedFamily = normalizeModelName(family);
 	// The 1M context variant doesn't need context editing. Check id and family
 	// up-front so an override or normalization can't accidentally re-enable it.
 	if (normalizedId.includes('1m') || normalizedFamily.includes('1m')) {
