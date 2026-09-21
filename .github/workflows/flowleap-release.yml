@@ -18,9 +18,9 @@
 #   - Linux ships .deb, .rpm and .tar.gz per arch, built natively on
 #     ubuntu-22.04 / ubuntu-22.04-arm (glibc 2.35 baseline). Unsigned, and
 #     deliberately not a Stamped Build — see the build-linux job comment.
-#   - A workflow_dispatch can narrow the build to one platform and skip the
-#     release draft entirely (the `platforms` and `dry_run` inputs), so a
-#     pipeline change can be exercised without minting a release.
+#   - A workflow_dispatch can skip the release draft and the macOS notarization
+#     spend (the `dry_run` and `skip_macos` inputs), so a pipeline change can be
+#     exercised without minting a release.
 name: FlowLeap Release Build
 
 on:
@@ -33,21 +33,20 @@ on:
         description: 'Version to release (e.g., 1.0.0)'
         required: true
         type: string
-      # These two inputs exist so one platform can be exercised without minting
-      # a release. On a tag push neither is set, so every expression below falls
+      # These two inputs exist so the pipeline can be exercised without minting
+      # a release. On a tag push neither is set, so both expressions below fall
       # back to "build everything and draft the release" — the real behaviour.
-      platforms:
-        description: 'Which platforms to build'
-        required: false
-        default: all
-        type: choice
-        options:
-          - all
-          - macos
-          - windows
-          - linux
       dry_run:
         description: 'Dry run: build and upload artifacts only, do NOT draft a GitHub release'
+        required: false
+        default: false
+        type: boolean
+      # Not a time saver — build-macos takes about 15 minutes per arch, and
+      # Windows is the slower job. It exists to keep dry runs off Apple's notary
+      # service: every macOS build submits to notarytool, and a dry run has no
+      # business spending notarization on an artifact nobody will install.
+      skip_macos:
+        description: 'Skip the macOS build (avoids spending Apple notarization on a dry run)'
         required: false
         default: false
         type: boolean
@@ -65,8 +64,9 @@ env:
 jobs:
   # Build for macOS (both architectures)
   build-macos:
-    # Empty on a tag push (no dispatch inputs) — which means "build it".
-    if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'macos' }}
+    # Null on a tag push (no dispatch inputs), so `!null` is true and macOS
+    # builds as normal. Only an explicit skip_macos=true turns it off.
+    if: ${{ !inputs.skip_macos }}
     runs-on: macos-14
     # Larger than the old 90m budget: notarytool --wait can add up to 45m to the job.
     timeout-minutes: 120
@@ -347,7 +347,6 @@ jobs:
 
   # Build for Windows (unsigned in CI; signed locally afterwards — see below)
   build-windows:
-    if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     # Pinned: windows-latest now resolves to a VS 2026 image, but build/npm/preinstall.ts
     # only recognizes VS 2022/2019 install paths. windows-2025 still ships VS 2022.
     runs-on: windows-2025
@@ -485,7 +484,6 @@ jobs:
   # macOS. An unstamped build keeps the Notify-Only Checker as its single
   # update surface.
   build-linux:
-    if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:

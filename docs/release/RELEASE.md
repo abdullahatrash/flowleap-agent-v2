@@ -239,13 +239,17 @@ About dialog instead.
 
 ```bash
 gh workflow run flowleap-release.yml --ref <branch> \
-  -f version=0.0.0-linux-test -f platforms=linux -f dry_run=true
+  -f version=0.0.0-linux-test -f dry_run=true -f skip_macos=true
 ```
 
-`platforms` narrows the build to one OS (`all`, `macos`, `windows`, `linux`) and
-`dry_run=true` skips the `create-release` job, so nothing is tagged or drafted —
-the artifacts land on the workflow run only. Both inputs are empty on a tag
-push, so the real release path is unaffected.
+`dry_run=true` skips the `create-release` job, so nothing is tagged or drafted
+and the artifacts land on the workflow run only. `skip_macos=true` skips
+`build-macos` — not to save time, since that job is about 15 minutes per arch
+and Windows is slower, but because every macOS build submits to Apple's notary
+service and a dry run has no business spending notarization on an artifact
+nobody will install.
+
+Both inputs are unset on a tag push, so the real release path is unaffected.
 
 ### Installing
 
