@@ -11,7 +11,7 @@
 #
 #   1. Downloads every asset from the source draft release.
 #   2. Sanity-checks the expected artifact set (DMGs + darwin Squirrel zips +
-#      signed installers). Linux assets (.deb / .rpm / .tar.gz per arch) are
+#      the four signed Windows installers, x64 and arm64). Linux assets (.deb / .rpm / .tar.gz per arch) are
 #      carried when present but are NOT required — a macOS/Windows-only
 #      release is still publishable.
 #   3. Generates update-metadata.json — the release identity the website
@@ -69,16 +69,28 @@ ls -la
 
 # The set a complete release must carry. The darwin zips are the Squirrel.Mac
 # update archives (ADR 0008) — without them a published release is not
-# updatable. The plain win32 zip is optional.
+# updatable.
+#
+# Every pattern is architecture-qualified on purpose. An unqualified
+# "FlowLeap-Setup-*.exe" is satisfied by the x64 installer alone, so an arm64
+# build that failed in CI would slip through this gate and ship a release that
+# silently offers Windows-on-ARM users nothing. Signing costs nothing extra per
+# architecture (sign-windows-release.ps1 globs *.exe), so requiring all four only
+# blocks publishing a release whose arm64 build actually broke — which is the
+# point of a required set.
+#
+# The plain win32 zip and every Linux package stay optional.
 missing=0
-for pattern in "*darwin-arm64.dmg" "*darwin-x64.dmg" "*darwin-arm64.zip" "*darwin-x64.zip" "FlowLeap-Setup-*.exe" "FlowLeap-UserSetup-*.exe"; do
+for pattern in "*darwin-arm64.dmg" "*darwin-x64.dmg" "*darwin-arm64.zip" "*darwin-x64.zip" \
+	"FlowLeap-Setup-*-x64.exe" "FlowLeap-UserSetup-*-x64.exe" \
+	"FlowLeap-Setup-*-arm64.exe" "FlowLeap-UserSetup-*-arm64.exe"; do
 	if ! compgen -G "$pattern" > /dev/null; then
 		echo "error: expected asset matching '$pattern' not found" >&2
 		missing=1
 	fi
 done
 if [ "$missing" -ne 0 ]; then
-	echo "Aborting: incomplete artifact set. Did the release build finish (it must upload the darwin Squirrel zips), and did sign-windows-release.ps1 run?" >&2
+	echo "Aborting: incomplete artifact set. Did the release build finish (it must upload the darwin Squirrel zips and both Windows architectures), and did sign-windows-release.ps1 run?" >&2
 	exit 1
 fi
 

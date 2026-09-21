@@ -12,6 +12,8 @@
     job on Windows:
 
       1. Downloads the .exe assets and SHASUMS256.txt from the draft release.
+         A complete release carries four: system and user setup, for x64 and
+         arm64. A missing one is warned about, not fatal — see below.
       2. Signs each .exe with the Certum SimplySign cloud certificate via signtool.
       3. Verifies each signature.
       4. Recomputes the sha256 of the signed files and patches SHASUMS256.txt.
@@ -20,6 +22,10 @@
     Run this on a Windows machine with SimplySign Desktop installed, running, and
     logged in (the cloud certificate is presented to signtool through the
     SimplySign CSP/minidriver, there is no local .pfx file).
+
+    An x64 machine signs the arm64 installers perfectly well: Authenticode signs
+    the file, it does not execute it. The arm64 installers cannot be SMOKE-TESTED
+    without a Windows-on-ARM machine, which is a separate step from signing.
 
 .PARAMETER Tag
     The release tag to sign, e.g. v1.2.3. If omitted, the script auto-detects the
@@ -46,6 +52,19 @@ Set-StrictMode -Version Latest
 # writing. If the workflow's naming changes, update these patterns.
 $script:ExeAssetPattern = '*.exe'
 $script:ShasumsAssetName = 'SHASUMS256.txt'
+# The four installers a complete Windows release carries: system and user setup
+# for each architecture. Signing is driven by the '*.exe' glob above, so a new
+# architecture is signed whether or not it is listed here; this list exists only
+# so a MISSING one is reported to the operator before they sign and publish.
+# Deliberately a warning and not a hard stop — the script's job is to sign what
+# the release has, and publish-public-release.sh is the gate that refuses to
+# publish an incomplete set.
+$script:ExpectedExePatterns = @(
+	'FlowLeap-Setup-*-x64.exe',
+	'FlowLeap-UserSetup-*-x64.exe',
+	'FlowLeap-Setup-*-arm64.exe',
+	'FlowLeap-UserSetup-*-arm64.exe'
+)
 $script:TimestampUrl = 'http://time.certum.pl'
 
 function Write-Section {
@@ -175,6 +194,17 @@ function Invoke-DownloadAssets {
 	$exeFiles = @(Get-ChildItem -Path $WorkDir -Filter '*.exe' -File)
 	if ($exeFiles.Count -eq 0) {
 		Exit-WithError "No .exe files were downloaded for release '$Tag'. Nothing to sign."
+	}
+
+	foreach ($pattern in $script:ExpectedExePatterns) {
+		if (-not ($exeFiles | Where-Object { $_.Name -like $pattern })) {
+			Write-WarningMessage (
+				"No asset matching '$pattern' on release '$Tag' — that architecture's " +
+				"installer is missing, so its build step probably failed. Signing continues " +
+				"for the files that ARE here, but publish-public-release.sh will refuse " +
+				"an incomplete set."
+			)
+		}
 	}
 
 	$shasumsPath = Join-Path $WorkDir $script:ShasumsAssetName
@@ -308,5 +338,7 @@ Write-Host "Working directory (kept for inspection): $workDir"
 Write-Host ''
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  1. Download and run at least one signed installer to smoke-test it."
+Write-Host "     The arm64 installers need a Windows-on-ARM machine; if you have none,"
+Write-Host "     say the arm64 build is untested rather than implying it was checked."
 Write-Host "  2. Confirm Windows does not show an 'Unknown publisher' warning."
 Write-Host "  3. Publish the draft release: gh release edit $Tag --draft=false"

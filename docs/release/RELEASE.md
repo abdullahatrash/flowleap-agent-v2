@@ -9,7 +9,7 @@ git tag vX.Y.Z && git push --tags
 .github/workflows/flowleap-release.yml (GitHub Actions)
         |
         +-- builds macOS DMGs, signs + notarizes + staples them
-        +-- builds Windows artifacts (zip + two installers), UNSIGNED
+        +-- builds Windows x64 + arm64 (zip + two installers per arch), UNSIGNED
         +-- builds Linux x64 + arm64 (.deb, .rpm, .tar.gz), UNSIGNED
         +-- computes SHASUMS256.txt
         +-- attaches everything to a DRAFT GitHub release
@@ -133,8 +133,9 @@ gh secret list
 
 3. Watch the run in the **Actions** tab for `flowleap-release.yml`. Confirm:
    - macOS build+sign+notarize+staple jobs succeed.
-   - Windows build job succeeds and uploads the unsigned zip + two `.exe`
-     installers + `SHASUMS256.txt`.
+   - Both Windows build jobs (x64 and arm64) succeed, each uploading its
+     unsigned zip + two `.exe` installers — four `.exe` in total — plus
+     `SHASUMS256.txt`.
    - A **draft** GitHub release was created for the tag.
 
 4. On a Windows machine with SimplySign Desktop running and logged in:
@@ -149,10 +150,16 @@ gh secret list
    - [ ] macOS: `spctl -a -vvv -t install /path/to/FlowLeap.app` reports
          `accepted` and `source=Notarized Developer ID`.
    - [ ] macOS: `xcrun stapler validate /path/to/FlowLeap.app` succeeds.
-   - [ ] Windows: `signtool verify /pa FlowLeap-Setup-vX.Y.Z-x64.exe` succeeds
-         (the sign script already does this, but re-check manually if in doubt).
-   - [ ] Windows: run the signed installer on a clean VM/user profile — no
+   - [ ] Windows: `signtool verify /pa` succeeds on all four installers —
+         `FlowLeap-Setup-` and `FlowLeap-UserSetup-` for both `-x64.exe` and
+         `-arm64.exe` (the sign script already does this, but re-check manually
+         if in doubt).
+   - [ ] Windows x64: run the signed installer on a clean VM/user profile — no
          "Unknown publisher" SmartScreen warning, app launches.
+   - [ ] Windows arm64: the same, on a Windows-on-ARM machine or VM. There is
+         no way to smoke-test an arm64 installer on an x64 box. If you have no
+         arm64 hardware, leave this unchecked and say the arm64 build is
+         untested rather than implying it was verified.
    - [ ] Linux: `dpkg -I FlowLeap-vX.Y.Z-linux-x64.deb` reports
          `Package: flowleap`, the right `Architecture`, and a FlowLeap
          `Maintainer`/`Homepage` (never Microsoft's). The release job asserts
@@ -174,7 +181,8 @@ gh secret list
    ```
 
    The script downloads the draft's assets, checks the artifact set is complete
-   (both DMGs + both signed installers), regenerates `SHASUMS256.txt` with flat
+   (both DMGs + all four signed installers, x64 and arm64), regenerates
+   `SHASUMS256.txt` with flat
    paths and post-signing hashes, creates a **published** release on the public
    repo with the draft's notes, and verifies `releases/latest` now reports the
    new tag. `--clean-old` removes the older public releases only AFTER the new
@@ -182,6 +190,57 @@ gh secret list
 
    The draft on this (source) repo can stay a draft — it serves as the internal
    build record; publishing it is optional and has no user-facing effect.
+
+## Windows specifics
+
+Six artifacts per release: a `.zip`, a system-setup `.exe` and a user-setup
+`.exe` for `x64` and `arm64`.
+
+| Property | Value |
+| --- | --- |
+| Runner | `windows-2025` for both architectures (arm64 is cross-built) |
+| Signing | Certum SimplySign, manual, local — never in CI |
+| Native updater | not armed — the Notify-Only Checker is the only update surface |
+
+**arm64 is cross-built on the x64 runner, and that is the normal way to do it.**
+Upstream VS Code builds `win32-arm64` the same way: `build/azure-pipelines/product-build.yml`
+instantiates one win32 template twice against the same x64 agent pool. Three
+things make it work, and the release job reproduces all three. `npm_config_arch`
+selects the target's native node modules at `npm ci` time; `VSCODE_ARCH` and the
+architecture in the gulp task name select the target Electron and packaging
+layout; and Inno Setup merely writes `ArchitecturesAllowed=arm64` into the
+installer header, so `ISCC.exe` itself runs happily as an x64 process. GitHub
+offers no Windows arm64 runner, so there is no native alternative to weigh.
+
+The release job proves the cross-build really crossed: it reads the PE machine
+field of the packaged executable and fails unless it is `0xAA64` on the arm64
+leg and `0x8664` on x64. Silently shipping x64 binaries inside an arm64
+installer is the failure this guards against.
+
+**The arm64 build ships the x64 in-place updater.** `build/gulpfile.vscode.win32.ts`
+copies the same prebuilt `build/win32/inno_updater.exe` for both architectures,
+exactly as upstream does, so on Windows-on-ARM it runs under x64 emulation.
+
+**All four `.exe` files must be signed before publishing.** An x64 machine signs
+the arm64 installers perfectly well, because Authenticode signs a file rather
+than running it, and `sign-windows-release.ps1` picks up every `.exe` on the
+release. `publish-public-release.sh` requires all four by architecture-qualified
+name, so a release whose arm64 build failed cannot be published by accident.
+Smoke-testing the arm64 installers is the part that genuinely needs
+Windows-on-ARM hardware.
+
+**Windows is deliberately not a Stamped Build**, for either architecture. ADR
+0008 scopes native Silent Update to macOS. The website Update Feed maps
+`win32-x64` and `win32-arm64`, but `updateService.win32.ts` actually polls
+`win32-<arch>-user` for a user setup and `win32-<arch>-archive` for the zip, and
+neither of those is mapped. Stamping Windows today would therefore silence the
+Notify-Only Checker while the native updater got a `400` — losing every update
+surface at once. Adding arm64 changes nothing here: it inherits the x64
+situation exactly. Arming Windows needs the feed to learn the `-user` and
+`-archive` platform strings first.
+
+See "Testing a pipeline change without minting a release" below for how to
+exercise the Windows jobs on a branch without drafting a release.
 
 ## Linux specifics
 
@@ -233,20 +292,6 @@ Upgrades still order correctly because the timestamp always increases, but
 `dpkg -l flowleap` does not show the FlowLeap version. Read it from the app's
 About dialog instead.
 
-### Testing a pipeline change without minting a release
-
-`workflow_dispatch` takes two extra inputs for exactly this:
-
-```bash
-gh workflow run flowleap-release.yml --ref <branch> \
-  -f version=0.0.0-linux-test -f platforms=linux -f dry_run=true
-```
-
-`platforms` narrows the build to one OS (`all`, `macos`, `windows`, `linux`) and
-`dry_run=true` skips the `create-release` job, so nothing is tagged or drafted —
-the artifacts land on the workflow run only. Both inputs are empty on a tag
-push, so the real release path is unaffected.
-
 ### Installing
 
 ```bash
@@ -254,6 +299,21 @@ sudo apt install ./FlowLeap-vX.Y.Z-linux-x64.deb     # Debian / Ubuntu
 sudo dnf install ./FlowLeap-vX.Y.Z-linux-x64.rpm     # Fedora / RHEL
 tar -xzf FlowLeap-vX.Y.Z-linux-x64.tar.gz && ./FlowLeap-linux-x64/flowleap
 ```
+
+## Testing a pipeline change without minting a release
+
+`workflow_dispatch` takes two extra inputs for exactly this:
+
+```bash
+gh workflow run flowleap-release.yml --ref <branch> \
+  -f version=0.0.0-test -f platforms=windows -f dry_run=true
+```
+
+Swap `platforms` for whichever OS you are changing: it narrows the build to one
+of `all`, `macos`, `windows` or `linux`. `dry_run=true` skips the
+`create-release` job, so nothing is tagged or drafted and the artifacts land on
+the workflow run only. Both inputs are empty on a tag push, so the real release
+path is unaffected.
 
 ## Troubleshooting
 
