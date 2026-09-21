@@ -652,6 +652,18 @@ jobs:
           sudo apt-get install -y "./dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.deb"
           echo "=== installed files ==="
           dpkg -L flowleap | grep -E 'bin/flowleap|applications/'
+
+          # Regression guard. Upstream's postinst registers Microsoft's apt
+          # repository and installs their signing key as a trust anchor; ours
+          # deliberately does not, and a careless upstream port would silently
+          # restore it. Assert the install touched neither.
+          echo "=== no third-party apt source or trust anchor was added ==="
+          test ! -e /etc/apt/sources.list.d/vscode.sources
+          test ! -e /etc/apt/sources.list.d/vscode.list
+          test ! -e /usr/share/keyrings/microsoft.gpg
+          ! dpkg -L flowleap | grep -q 'DEBIAN/templates'
+          echo "OK: no apt source, no keyring, no debconf question"
+
           echo "=== flowleap --version ==="
           flowleap --version
           sudo apt-get remove -y flowleap

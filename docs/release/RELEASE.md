@@ -217,6 +217,15 @@ informing the user about new releases. The website Update Feed *does* already
 map `linux-x64` and `linux-arm64` (to the `.tar.gz`, then the `.deb`), so
 arming Linux later is a stamping change on this side only.
 
+**The deb maintainer scripts drop upstream's apt-repository plumbing.**
+Upstream's `postinst` registers `packages.microsoft.com/repos/code` as an apt
+source and installs Microsoft's signing key into `/usr/share/keyrings`, and its
+`postrm` deletes both again — which would have broken apt for anyone who also
+has real VS Code installed. FlowLeap is distributed as direct downloads, so both
+blocks are gone along with the debconf question that gated them. The release job
+asserts the absence after installing, so an upstream port cannot quietly restore
+it.
+
 **Package versions come from Code OSS, not from the release tag.** The `.deb`
 and `.rpm` internal `Version` is the root `package.json` version plus a build
 timestamp (`1.105.0-1758…`), while the file *name* carries the FlowLeap version.
