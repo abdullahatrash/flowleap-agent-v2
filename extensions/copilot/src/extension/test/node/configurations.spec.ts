@@ -127,6 +127,19 @@ describe('Configurations', () => {
 		expect(Object.keys(advancedSection.properties)).toContain(promptOverrideStringKey.fullyQualifiedId);
 	});
 
+	it('no configuration key is a dot-prefix of another', () => {
+		// VS Code's configuration model treats dotted keys as a nested object tree. A key that is a
+		// prefix of another key (e.g. 'patent.secondRead' and 'patent.secondRead.model') is illegal:
+		// once the shorter key resolves to a non-object leaf, the configuration layer silently drops
+		// the longer key instead of nesting it. Guard every section, including patent-ai, since that
+		// section is excluded from the code/package.json cross-check above.
+		const allKeys = packageJson.contributes.configuration.flatMap(section => Object.keys(section.properties));
+
+		const prefixCollisions = allKeys.filter(key => allKeys.some(other => other !== key && other.startsWith(`${key}.`)));
+
+		expect(prefixCollisions, 'no configuration key may be a dot-prefix of another configuration key').toEqual([]);
+	});
+
 	it('all localization strings in package.json are present in package.nls.json', async () => {
 		// Get all keys from package.nls.json
 		const packageJsonPath = path.join(__dirname, '../../../../package.json');
