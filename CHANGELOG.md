@@ -14,7 +14,16 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
-<!-- Nothing yet. Add entries under a `### Heading` as changes land. -->
+### Added
+
+- **FlowLeap now runs on Linux.** Every release ships a `.deb`, a `.rpm` and a
+  `.tar.gz` for both Intel/AMD (x64) and ARM (arm64) machines. Install with
+  `sudo apt install ./FlowLeap-*.deb` or `sudo dnf install ./FlowLeap-*.rpm`, or
+  extract the `.tar.gz` and run `flowleap` from it. The packages are built
+  against glibc 2.35, so they need Ubuntu 22.04 or later, Debian 12 or later,
+  Fedora 36 or later, or an equivalent distribution. Linux has no background
+  updater yet: FlowLeap tells you when a new version is out and you install it
+  the same way.
 
 ## [0.3.1] - 2026-09-03
 
