@@ -181,6 +181,24 @@ export interface IEmbeddingsCache {
 }
 
 /**
+ * An embeddings cache that never reads or writes anywhere. Use this in place of
+ * {@link RemoteEmbeddingsCache} for embedding types whose remote CDN fetch has
+ * been severed, so callers still get a well-formed (empty) cache instead of a
+ * dead network request and an error log on every session.
+ */
+export class NullEmbeddingsCache implements IEmbeddingsCache {
+	constructor(public readonly embeddingType: EmbeddingType) { }
+
+	public async getCache<T = EmbeddingCacheEntries>(): Promise<T | undefined> {
+		return undefined;
+	}
+
+	public async clearCache(): Promise<void> {
+		// Nothing is ever cached, so there is nothing to clear.
+	}
+}
+
+/**
  * A local cache which caches information on disk.
  */
 export class LocalEmbeddingsCache implements IEmbeddingsCache {
