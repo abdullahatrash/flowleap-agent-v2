@@ -21,6 +21,18 @@ export const recommendedDeps = [
 	'socat', // agent command sandboxing
 ];
 
+// The dependency set `dependencies-generator.ts` must compute, exactly, or it
+// fails the build. FORK NOTE: the x86_64 and aarch64 entries were regenerated
+// from this fork's own release job (issue #450). They differ from upstream's
+// mainly because we build natively on ubuntu-22.04 rather than cross-compiling
+// in a glibc-2.28 sysroot, so the symbol versions the binaries require are
+// higher — GLIBC_2.32/2.33/2.34 and GLIBCXX_3.4.29/3.4.30 appear here. That is
+// the same glibc 2.35 baseline documented in docs/release/RELEASE.md, expressed
+// as rpm Requires. `libcups.so.2` is a genuine new dependency on both arches.
+// armv7hl is untouched because this fork does not build it.
+//
+// To update after a legitimate change: read the "New:" list the failure prints
+// and paste it here verbatim. See docs/release/RELEASE.md, "Troubleshooting".
 export const referenceGeneratedDepsByArch = {
 	'x86_64': [
 		'ca-certificates',
@@ -50,18 +62,20 @@ export const referenceGeneratedDepsByArch = {
 		'libc.so.6(GLIBC_2.18)(64bit)',
 		'libc.so.6(GLIBC_2.2.5)(64bit)',
 		'libc.so.6(GLIBC_2.25)(64bit)',
-		'libc.so.6(GLIBC_2.27)(64bit)',
 		'libc.so.6(GLIBC_2.28)(64bit)',
 		'libc.so.6(GLIBC_2.3)(64bit)',
 		'libc.so.6(GLIBC_2.3.2)(64bit)',
 		'libc.so.6(GLIBC_2.3.4)(64bit)',
+		'libc.so.6(GLIBC_2.32)(64bit)',
+		'libc.so.6(GLIBC_2.33)(64bit)',
+		'libc.so.6(GLIBC_2.34)(64bit)',
 		'libc.so.6(GLIBC_2.4)(64bit)',
-		'libc.so.6(GLIBC_2.5)(64bit)',
 		'libc.so.6(GLIBC_2.6)(64bit)',
 		'libc.so.6(GLIBC_2.7)(64bit)',
 		'libc.so.6(GLIBC_2.8)(64bit)',
 		'libc.so.6(GLIBC_2.9)(64bit)',
 		'libcairo.so.2()(64bit)',
+		'libcups.so.2()(64bit)',
 		'libcurl.so.4()(64bit)',
 		'libdbus-1.so.3()(64bit)',
 		'libdbus-1.so.3(LIBDBUS_1_3)(64bit)',
@@ -81,6 +95,7 @@ export const referenceGeneratedDepsByArch = {
 		'libm.so.6()(64bit)',
 		'libm.so.6(GLIBC_2.2.5)(64bit)',
 		'libm.so.6(GLIBC_2.27)(64bit)',
+		'libm.so.6(GLIBC_2.29)(64bit)',
 		'libnspr4.so()(64bit)',
 		'libnss3.so()(64bit)',
 		'libnss3.so(NSS_3.11)(64bit)',
@@ -109,10 +124,27 @@ export const referenceGeneratedDepsByArch = {
 		'libsmime3.so(NSS_3.10)(64bit)',
 		'libsmime3.so(NSS_3.2)(64bit)',
 		'libssl3.so(NSS_3.28)(64bit)',
+		'libstdc++.so.6()(64bit)',
+		'libstdc++.so.6(CXXABI_1.3)(64bit)',
+		'libstdc++.so.6(CXXABI_1.3.5)(64bit)',
+		'libstdc++.so.6(CXXABI_1.3.8)(64bit)',
+		'libstdc++.so.6(CXXABI_1.3.9)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.11)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.14)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.15)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.18)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.19)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.20)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.21)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.22)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.26)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.29)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.30)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.5)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.9)(64bit)',
 		'libudev.so.1()(64bit)',
 		'libudev.so.1(LIBUDEV_183)(64bit)',
-		'libutil.so.1()(64bit)',
-		'libutil.so.1(GLIBC_2.2.5)(64bit)',
 		'libxcb.so.1()(64bit)',
 		'libxkbcommon.so.0()(64bit)',
 		'libxkbcommon.so.0(V_0.5.0)(64bit)',
@@ -251,9 +283,12 @@ export const referenceGeneratedDepsByArch = {
 		'libc.so.6(GLIBC_2.17)(64bit)',
 		'libc.so.6(GLIBC_2.18)(64bit)',
 		'libc.so.6(GLIBC_2.25)(64bit)',
-		'libc.so.6(GLIBC_2.27)(64bit)',
 		'libc.so.6(GLIBC_2.28)(64bit)',
+		'libc.so.6(GLIBC_2.32)(64bit)',
+		'libc.so.6(GLIBC_2.33)(64bit)',
+		'libc.so.6(GLIBC_2.34)(64bit)',
 		'libcairo.so.2()(64bit)',
+		'libcups.so.2()(64bit)',
 		'libcurl.so.4()(64bit)',
 		'libdbus-1.so.3()(64bit)',
 		'libdbus-1.so.3(LIBDBUS_1_3)(64bit)',
@@ -274,6 +309,7 @@ export const referenceGeneratedDepsByArch = {
 		'libm.so.6()(64bit)',
 		'libm.so.6(GLIBC_2.17)(64bit)',
 		'libm.so.6(GLIBC_2.27)(64bit)',
+		'libm.so.6(GLIBC_2.29)(64bit)',
 		'libnspr4.so()(64bit)',
 		'libnss3.so()(64bit)',
 		'libnss3.so(NSS_3.11)(64bit)',
@@ -311,12 +347,12 @@ export const referenceGeneratedDepsByArch = {
 		'libstdc++.so.6(GLIBCXX_3.4.21)(64bit)',
 		'libstdc++.so.6(GLIBCXX_3.4.22)(64bit)',
 		'libstdc++.so.6(GLIBCXX_3.4.26)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.29)(64bit)',
+		'libstdc++.so.6(GLIBCXX_3.4.30)(64bit)',
 		'libstdc++.so.6(GLIBCXX_3.4.5)(64bit)',
 		'libstdc++.so.6(GLIBCXX_3.4.9)(64bit)',
 		'libudev.so.1()(64bit)',
 		'libudev.so.1(LIBUDEV_183)(64bit)',
-		'libutil.so.1()(64bit)',
-		'libutil.so.1(GLIBC_2.17)(64bit)',
 		'libxcb.so.1()(64bit)',
 		'libxkbcommon.so.0()(64bit)',
 		'libxkbcommon.so.0(V_0.5.0)(64bit)',
