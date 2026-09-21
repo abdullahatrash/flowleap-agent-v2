@@ -1,12 +1,12 @@
 [Desktop Entry]
 Name=@@NAME_LONG@@ - URL Handler
-Comment=Code Editing. Redefined.
-GenericName=Text Editor
+Comment=AI patent agent for prior art, freedom to operate and drafting
+GenericName=Patent Research IDE
 Exec=@@EXEC@@ --open-url %U
 Icon=@@ICON@@
 Type=Application
 NoDisplay=true
 StartupNotify=true
-Categories=Utility;TextEditor;Development;IDE;
+Categories=Utility;Development;IDE;TextEditor;
 MimeType=x-scheme-handler/@@URLPROTOCOL@@;
-Keywords=vscode;
+Keywords=flowleap;patent;patents;prior art;intellectual property;IDE;

@@ -1,8 +1,8 @@
 # FlowLeap Release Workflow
 #
 # Ported and modernized from the old fork's release-flowleap.yml (issue #81).
-# Builds "Flow Leap, AI patent agent" for macOS (x64 + arm64) and Windows (x64),
-# then drafts a GitHub release with checksums.
+# Builds "Flow Leap, AI patent agent" for macOS (x64 + arm64), Windows (x64) and
+# Linux (x64 + arm64), then drafts a GitHub release with checksums.
 #
 # Modernizations vs. the old workflow:
 #   - macOS DMGs are notarized SYNCHRONOUSLY (notarytool --wait), the job FAILS on
@@ -15,6 +15,12 @@
 #   - Per-extension build steps trimmed to only what this fork actually needs
 #     (see the "Compile FlowLeap legacy extensions" step comment).
 #   - Windows stays unsigned in CI; signing is a documented local step.
+#   - Linux ships .deb, .rpm and .tar.gz per arch, built natively on
+#     ubuntu-22.04 / ubuntu-22.04-arm (glibc 2.35 baseline). Unsigned, and
+#     deliberately not a Stamped Build — see the build-linux job comment.
+#   - A workflow_dispatch can narrow the build to one platform and skip the
+#     release draft entirely (the `platforms` and `dry_run` inputs), so a
+#     pipeline change can be exercised without minting a release.
 name: FlowLeap Release Build
 
 on:
@@ -27,6 +33,24 @@ on:
         description: 'Version to release (e.g., 1.0.0)'
         required: true
         type: string
+      # These two inputs exist so one platform can be exercised without minting
+      # a release. On a tag push neither is set, so every expression below falls
+      # back to "build everything and draft the release" — the real behaviour.
+      platforms:
+        description: 'Which platforms to build'
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - macos
+          - windows
+          - linux
+      dry_run:
+        description: 'Dry run: build and upload artifacts only, do NOT draft a GitHub release'
+        required: false
+        default: false
+        type: boolean
 
 # Only one release build per ref at a time; a newer push supersedes an in-flight run.
 concurrency:
@@ -41,6 +65,8 @@ env:
 jobs:
   # Build for macOS (both architectures)
   build-macos:
+    # Empty on a tag push (no dispatch inputs) — which means "build it".
+    if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'macos' }}
     runs-on: macos-14
     # Larger than the old 90m budget: notarytool --wait can add up to 45m to the job.
     timeout-minutes: 120
@@ -321,6 +347,7 @@ jobs:
 
   # Build for Windows (unsigned in CI; signed locally afterwards — see below)
   build-windows:
+    if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     # Pinned: windows-latest now resolves to a VS 2026 image, but build/npm/preinstall.ts
     # only recognizes VS 2022/2019 install paths. windows-2025 still ships VS 2022.
     runs-on: windows-2025
@@ -443,15 +470,212 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-  # Linux build disabled for now - TODO: fix AppImage binary name
-  # build-linux:
-  #   runs-on: ubuntu-22.04
-  #   ... (disabled)
+  # Build for Linux (x64 + arm64) — .deb, .rpm and .tar.gz per arch.
+  #
+  # Runners: ubuntu-22.04 sets the glibc baseline at 2.35, so the packages
+  # install on Ubuntu 22.04 and anything newer, but NOT on Ubuntu 20.04 or
+  # RHEL 8. Upstream reaches glibc 2.28 by cross-compiling in a sysroot; we
+  # build natively per arch instead, which is far simpler and enough for the
+  # distributions we support. `ubuntu-22.04-arm` is a GitHub-hosted arm64
+  # runner that is free for PUBLIC repositories only — if this repo ever goes
+  # private the arm64 leg fails to schedule and has to move to a cross-build.
+  #
+  # NOTE: deliberately NO "Stamp update configuration" step, for the same
+  # reason as the Windows job — ADR 0008 scopes the native Silent Update to
+  # macOS. An unstamped build keeps the Notify-Only Checker as its single
+  # update surface.
+  build-linux:
+    if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'linux' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            deb_arch: amd64
+            rpm_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            deb_arch: arm64
+            rpm_arch: aarch64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+
+      # Three toolchains the packaging tasks shell out to:
+      #   pkg-config + libkrb5-dev + libxkbfile-dev — headers for the native
+      #     modules npm ci builds (kerberos, native-keymap).
+      #   fakeroot — `fakeroot dpkg-deb` in the build-deb task (dpkg-deb itself
+      #     is preinstalled).
+      #   rpm — rpmbuild for build-rpm, and /usr/lib/rpm/find-requires, which
+      #     build/linux/rpm/calculate-deps.ts calls to compute Requires.
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev fakeroot rpm
+
+      # The packaging stream keeps three near-copies of the ~500 MB app tree
+      # (VSCode-linux-*, the deb staging dir and the rpm buildroot). Reclaiming
+      # the preinstalled toolchains the build never touches keeps that clear of
+      # the disk limit. Paths absent on the arm64 image are simply skipped.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc "$AGENT_TOOLSDIRECTORY/CodeQL" || true
+          df -h /
+
+      # As on macOS, root `npm ci` installs the per-extension node_modules via
+      # build/npm/dirs.ts, so no separate extension `npm install` steps are needed.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_arch: ${{ matrix.arch }}
+
+      - name: Stamp FlowLeap version
+        run: node build/flowleap/stamp-flowleap-version.mjs
+        env:
+          FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
+
+      # See the macOS job's equivalent step for the full rationale: only the
+      # legacy TS FlowLeap extensions need pre-compilation before packaging.
+      - name: Compile FlowLeap legacy extensions
+        run: |
+          npm run gulp compile-extension:pdf-preview
+          npm run gulp compile-extension:flowleap
+          npm run gulp compile-extension:docx-viewer
+
+      # `-min` is the minified variant, which is what a shipped Linux build
+      # wants. It produces ../VSCode-linux-<arch>, the input to every packaging
+      # task below.
+      - name: Build Linux ${{ matrix.arch }}
+        run: npm run gulp vscode-linux-${{ matrix.arch }}-min
+        env:
+          VSCODE_ARCH: ${{ matrix.arch }}
+
+      # Tar first: the deb and rpm prepare tasks read ../VSCode-linux-<arch> in
+      # place, so --transform renames only the archive's top-level directory and
+      # leaves the tree alone. --owner/--group=0 so extraction does not carry the
+      # runner's uid.
+      - name: Create tarball
+        run: |
+          set -e
+          mkdir -p dist
+          VERSION="${{ inputs.version || github.ref_name }}"
+          tar --owner=0 --group=0 \
+            --transform="s,^VSCode-linux-${{ matrix.arch }},FlowLeap-linux-${{ matrix.arch }}," \
+            -czf "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.tar.gz" \
+            -C .. "VSCode-linux-${{ matrix.arch }}"
+          ls -la dist/
+
+      # GITHUB_TOKEN is required: build/linux/debian/install-sysroot.ts resolves
+      # the Chromium and VS Code sysroots through the GitHub API, and anonymous
+      # requests are rate-limited. The sysroots are what dpkg-shlibdeps reads to
+      # compute Depends.
+      - name: Prepare deb package
+        run: npm run gulp vscode-linux-${{ matrix.arch }}-prepare-deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build deb package
+        run: |
+          set -e
+          npm run gulp vscode-linux-${{ matrix.arch }}-build-deb
+          VERSION="${{ inputs.version || github.ref_name }}"
+          built=$(ls .build/linux/deb/${{ matrix.deb_arch }}/deb/*.deb)
+          echo "gulp produced: $built"
+          cp "$built" "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.deb"
+
+      - name: Prepare rpm package
+        run: npm run gulp vscode-linux-${{ matrix.arch }}-prepare-rpm
+        env:
+          VSCODE_ARCH: ${{ matrix.arch }}
+
+      - name: Build rpm package
+        run: |
+          set -e
+          npm run gulp vscode-linux-${{ matrix.arch }}-build-rpm
+          VERSION="${{ inputs.version || github.ref_name }}"
+          built=$(ls .build/linux/rpm/${{ matrix.rpm_arch }}/*.rpm)
+          echo "gulp produced: $built"
+          cp "$built" "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.rpm"
+
+      # Assert the branding actually landed rather than eyeballing the log: a
+      # package named anything but `flowleap`, built for the wrong arch, or
+      # missing flowleap.desktop is a broken release, not a warning.
+      - name: Verify packages
+        run: |
+          set -e
+          VERSION="${{ inputs.version || github.ref_name }}"
+          DEB="dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.deb"
+          RPM="dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.rpm"
+
+          echo "=== dpkg -I $DEB ==="
+          dpkg -I "$DEB"
+          dpkg -I "$DEB" | grep -qE '^ Package: flowleap$'
+          dpkg -I "$DEB" | grep -qE '^ Architecture: ${{ matrix.deb_arch }}$'
+
+          echo "=== dpkg -c (desktop + icon + bin) ==="
+          dpkg -c "$DEB" | grep -E 'usr/share/applications/|usr/share/pixmaps/|usr/share/appdata/|usr/share/flowleap/bin/'
+          dpkg -c "$DEB" | grep -q 'usr/share/applications/flowleap\.desktop$'
+          dpkg -c "$DEB" | grep -q 'usr/share/applications/flowleap-url-handler\.desktop$'
+          dpkg -c "$DEB" | grep -q 'usr/share/appdata/flowleap\.appdata\.xml$'
+          dpkg -c "$DEB" | grep -q 'usr/share/pixmaps/flowleap\.png$'
+
+          echo "=== rpm -qpi $RPM ==="
+          rpm -qpi "$RPM"
+          test "$(rpm -qp --queryformat '%{NAME}' "$RPM")" = flowleap
+          test "$(rpm -qp --queryformat '%{ARCH}' "$RPM")" = '${{ matrix.rpm_arch }}'
+          rpm -qpl "$RPM" | grep -q '/usr/share/applications/flowleap\.desktop$'
+
+          echo "=== tarball top-level ==="
+          tar -tzf "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.tar.gz" | head -3
+
+      # The install test is the only step that proves the computed Depends are
+      # satisfiable. `apt-get install ./file.deb` resolves them; a plain
+      # `dpkg -i` would leave the package unconfigured instead of failing
+      # loudly. `flowleap --version` runs the CLI through ELECTRON_RUN_AS_NODE,
+      # so it needs no display.
+      - name: Install and smoke-test the deb
+        run: |
+          set -e
+          VERSION="${{ inputs.version || github.ref_name }}"
+          sudo apt-get install -y "./dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.deb"
+          echo "=== installed files ==="
+          dpkg -L flowleap | grep -E 'bin/flowleap|applications/'
+          echo "=== flowleap --version ==="
+          flowleap --version
+          sudo apt-get remove -y flowleap
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
 
   # Create GitHub Release
   create-release:
-    needs: [build-macos, build-windows]
-    if: always() && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success')
+    needs: [build-macos, build-windows, build-linux]
+    # `dry_run` is empty on a tag push, so `!inputs.dry_run` is true there and
+    # the release is drafted as before. A dispatch with dry_run=true stops here,
+    # leaving only the uploaded workflow artifacts.
+    if: >-
+      always()
+      && !inputs.dry_run
+      && (needs.build-macos.result == 'success'
+        || needs.build-windows.result == 'success'
+        || needs.build-linux.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -515,6 +739,10 @@ jobs:
           ### Installation
           - **macOS**: Download .dmg, open and drag to Applications
           - **Windows**: Download .zip and extract, or use installer .exe
+          - **Linux**: Install the .deb (`sudo apt install ./FlowLeap-*.deb`) or the
+            .rpm (`sudo dnf install ./FlowLeap-*.rpm`), or extract the .tar.gz and
+            run `./FlowLeap-linux-<arch>/flowleap`. Built against glibc 2.35, so
+            Ubuntu 22.04+, Debian 12+, Fedora 36+ or equivalent.
 
           ---
           See full changelog at https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
@@ -550,6 +778,7 @@ jobs:
           echo "Release draft created for ${{ inputs.version || github.ref_name }}"
           echo "  - macOS:   ${{ needs.build-macos.result }} (signed + notarized + stapled)"
           echo "  - Windows: ${{ needs.build-windows.result }} (UNSIGNED)"
+          echo "  - Linux:   ${{ needs.build-linux.result }} (unsigned; deb/rpm/tar.gz, glibc 2.35 baseline)"
           echo ""
           echo "Next steps:"
           echo "  1. Sign the Windows .exe files locally with build/flowleap/sign-windows-release.ps1"
