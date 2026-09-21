@@ -29,7 +29,7 @@ import { compileBuildWithoutManglingTask, compileBuildWithManglingTask } from '.
 import { compileNonNativeExtensionsBuildTask, compileNativeExtensionsBuildTask, compileAllExtensionsBuildTask, compileExtensionMediaBuildTask, cleanExtensionsBuildTask, compileCopilotExtensionBuildTask } from './gulpfile.extensions.ts';
 import { copyCodiconsTask } from './lib/compilation.ts';
 import { ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getCopilotTgrepExcludeFilter, getRipgrepExcludeFilter, prepareBuiltInCopilotRipgrepShim } from './lib/copilot.ts';
-import { ensureSharpPlatformPackage } from './lib/sharp.ts';
+import { prepareSharpPlatformPackages } from './lib/sharp.ts';
 import { readAgentSdkResults } from './agent-sdk/common.ts';
 import { useEsbuildTranspile } from './buildConfig.ts';
 import { promisify } from 'util';
@@ -343,11 +343,6 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			.pipe(util.cleanNodeModules(path.join(import.meta.dirname, '.moduleignore')))
 			.pipe(util.cleanNodeModules(path.join(import.meta.dirname, `.moduleignore.${process.platform}`)));
 		ensureCopilotPlatformPackage(platform, arch);
-		// Same cross-build gap, different package: npm installed the HOST's
-		// `@img/sharp-*` into the copilot extension, so an arm64 Windows build
-		// shipped an x64 sharp binary (#461). Materialize the target's package
-		// on disk before the extension stream reads the tree.
-		ensureSharpPlatformPackage(platform, arch);
 		const copilotRuntimePrebuilds = gulp.src(getCopilotRuntimePrebuildFiles(platform, arch), { base: '.', dot: true, allowEmpty: true });
 		const deps = es.merge(cleanedDeps, copilotRuntimePrebuilds)
 			.pipe(filter(getCopilotExcludeFilter(platform, arch)))
@@ -665,6 +660,15 @@ BUILD_TARGETS.forEach(buildTarget => {
 		const vscodeTaskCI = task.define(`vscode${dashed(platform)}${dashed(arch)}${dashed(minified)}-ci`, task.series(...packageTasks));
 		task.task(vscodeTaskCI);
 
+		// npm installs only the HOST's `@img/sharp-*`, so a cross-built leg
+		// packaged the runner's binary — the Windows arm64 artifact shipped an
+		// x64 sharp (#461). This has to come BEFORE
+		// `compileCopilotExtensionBuildTask`, which is what copies the copilot
+		// extension's node_modules into `.build` and thence into the product.
+		const prepareSharpTask = task.define(`prepare-sharp${dashed(platform)}${dashed(arch)}${dashed(minified)}`, async () => {
+			prepareSharpPlatformPackages(platform, arch);
+		});
+
 		let vscodeTask: task.Task;
 		if (useEsbuildTranspile) {
 			const esbuildBundleTask = task.define(
@@ -681,6 +685,7 @@ BUILD_TARGETS.forEach(buildTarget => {
 				copyCodiconsTask,
 				cleanExtensionsBuildTask,
 				compileNonNativeExtensionsBuildTask,
+				prepareSharpTask,
 				compileCopilotExtensionBuildTask,
 				compileExtensionMediaBuildTask,
 				writeISODate('out-build'),
@@ -692,6 +697,7 @@ BUILD_TARGETS.forEach(buildTarget => {
 				minified ? compileBuildWithManglingTask : compileBuildWithoutManglingTask,
 				cleanExtensionsBuildTask,
 				compileNonNativeExtensionsBuildTask,
+				prepareSharpTask,
 				compileCopilotExtensionBuildTask,
 				compileExtensionMediaBuildTask,
 				minified ? minifyVSCodeTask : bundleVSCodeTask,

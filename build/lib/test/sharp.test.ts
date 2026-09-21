@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { suite, test } from 'node:test';
 import { create } from 'tar';
-import { ensureSharpPlatformPackage, toSharpPlatformArch } from '../sharp.ts';
+import { prepareSharpPlatformPackages, sharpPackagesFor, toSharpPlatformArch } from '../sharp.ts';
 
 /**
  * A `node_modules` root holding the agent SDK that declares the sharp packages,
@@ -25,11 +25,11 @@ function createFixture(sharpPackage: string, options: { withSdk?: boolean } = {}
 		fs.mkdirSync(nodeModules, { recursive: true });
 	}
 
-	fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({
-		packages: {
-			[`node_modules/${sharpPackage}`]: { version: '0.34.5' }
-		}
-	}));
+	const packages: Record<string, { version: string }> = {};
+	for (const name of [sharpPackage, sharpPackage.replace('@img/sharp-', '@img/sharp-libvips-')]) {
+		packages[`node_modules/${name}`] = { version: '0.34.5' };
+	}
+	fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ packages }));
 
 	return root;
 }
@@ -77,37 +77,63 @@ suite('sharp', () => {
 		// What a cross-build on an x64 runner actually produced.
 		fs.mkdirSync(path.join(nodeModules, '@img', 'sharp-win32-x64'), { recursive: true });
 
-		ensureSharpPlatformPackage('win32', 'arm64', nodeModules, { packPackage: packFixture });
+		prepareSharpPlatformPackages('win32', 'arm64', nodeModules, { packPackage: packFixture });
 
 		assert.strictEqual(fs.existsSync(path.join(nodeModules, '@img', 'sharp-win32-arm64', 'lib', 'sharp.node')), true);
+		// win32 bundles libvips, so there must be no second package.
+		assert.strictEqual(fs.existsSync(path.join(nodeModules, '@img', 'sharp-libvips-win32-arm64')), false);
 	});
 
 	test('does nothing when the agent SDK that declares sharp is absent', () => {
 		const root = createFixture('@img/sharp-win32-arm64', { withSdk: false });
 		const nodeModules = path.join(root, 'node_modules');
 
-		ensureSharpPlatformPackage('win32', 'arm64', nodeModules, {
+		prepareSharpPlatformPackages('win32', 'arm64', nodeModules, {
 			packPackage: () => assert.fail('must not fetch anything when the SDK is not installed')
 		});
 
 		assert.strictEqual(fs.existsSync(path.join(nodeModules, '@img', 'sharp-win32-arm64')), false);
 	});
 
-	test('does nothing when the target package is already installed', () => {
+	test('does nothing when the target packages are already installed', () => {
 		const root = createFixture('@img/sharp-darwin-arm64');
 		const nodeModules = path.join(root, 'node_modules');
 		fs.mkdirSync(path.join(nodeModules, '@img', 'sharp-darwin-arm64'), { recursive: true });
+		fs.mkdirSync(path.join(nodeModules, '@img', 'sharp-libvips-darwin-arm64'), { recursive: true });
 
-		ensureSharpPlatformPackage('darwin', 'arm64', nodeModules, {
+		prepareSharpPlatformPackages('darwin', 'arm64', nodeModules, {
 			packPackage: () => assert.fail('must not re-fetch an installed package')
 		});
+	});
+
+	test('names the library package on darwin and linux, but not on win32', () => {
+		assert.deepStrictEqual([
+			sharpPackagesFor('win32-arm64'),
+			sharpPackagesFor('darwin-x64'),
+			sharpPackagesFor('linuxmusl-arm64')
+		], [
+			['@img/sharp-win32-arm64'],
+			['@img/sharp-darwin-x64', '@img/sharp-libvips-darwin-x64'],
+			['@img/sharp-linuxmusl-arm64', '@img/sharp-libvips-linuxmusl-arm64']
+		]);
+	});
+
+	test('removes the host package so only the target architecture ships', () => {
+		const root = createFixture('@img/sharp-win32-arm64');
+		const nodeModules = path.join(root, 'node_modules');
+		// What the x64 runner installed, and what used to ship inside the arm64 build.
+		fs.mkdirSync(path.join(nodeModules, '@img', 'sharp-win32-x64', 'lib'), { recursive: true });
+
+		prepareSharpPlatformPackages('win32', 'arm64', nodeModules, { packPackage: packFixture });
+
+		assert.deepStrictEqual(fs.readdirSync(path.join(nodeModules, '@img')).sort(), ['sharp-win32-arm64']);
 	});
 
 	test('does nothing for a target sharp does not publish', () => {
 		const root = createFixture('@img/sharp-linux-ppc64le');
 		const nodeModules = path.join(root, 'node_modules');
 
-		ensureSharpPlatformPackage('linux', 'ppc64le', nodeModules, {
+		prepareSharpPlatformPackages('linux', 'ppc64le', nodeModules, {
 			packPackage: () => assert.fail('must not fetch a package that does not exist')
 		});
 	});

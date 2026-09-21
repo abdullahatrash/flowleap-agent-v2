@@ -13,11 +13,11 @@ import type { IEnsurePlatformPackageOptions } from './platformPackage.ts';
 // installs only the one matching the HOST, so a cross-built leg shipped the
 // host's binary: the Windows arm64 artifact carried an x64 `sharp.node` (#461).
 //
-// sharp resolves its binary at runtime by `process.platform`/`process.arch`, so
-// the fix is simply to make sure the TARGET's package is on disk before
-// packaging reads the extension tree.
+// This has to run BEFORE the copilot extension is copied into `.build`, because
+// that copy is what ends up in the product. Materializing afterwards would
+// leave the artifact untouched.
 
-const CONTEXT = 'ensureSharpPlatformPackage';
+const CONTEXT = 'prepareSharpPlatformPackages';
 
 /**
  * The targets `@img` publishes a sharp package for.
@@ -52,20 +52,35 @@ export function toSharpPlatformArch(platform: string, arch: string): string | un
 }
 
 /**
- * Ensures the target's `@img/sharp-*` package is present in the copilot
- * extension's `node_modules` before it is packaged.
+ * The `@img` packages the target needs.
  *
- * A no-op on a native build, where npm already installed the right one, and a
- * no-op when the agent SDK that pulls sharp in is not installed at all, so this
- * cannot fail a build that never needed sharp.
- *
- * Note: the host's package is NOT removed. It stays in the artifact as dead
- * weight of about a megabyte, which is harmless because sharp loads the package
- * named for the runtime's own platform and arch. Stripping it as well would
- * mean threading a filter through the built-in extension stream, which is a
- * larger change than the defect warrants.
+ * On darwin and linux the library lives in a second package that the platform
+ * package declares as its own optional dependency, so a cross-build needs both
+ * or sharp cannot load at all. win32 bundles the library inside the platform
+ * package and has no second one.
  */
-export function ensureSharpPlatformPackage(platform: string, arch: string, nodeModulesRoot = path.join('extensions', 'copilot', 'node_modules'), options: IEnsurePlatformPackageOptions = {}): void {
+export function sharpPackagesFor(sharpPlatformArch: string): string[] {
+	const packages = [`@img/sharp-${sharpPlatformArch}`];
+	if (!sharpPlatformArch.startsWith('win32-')) {
+		packages.push(`@img/sharp-libvips-${sharpPlatformArch}`);
+	}
+	return packages;
+}
+
+/**
+ * Prepares the copilot extension's `node_modules` so packaging picks up the
+ * TARGET's sharp rather than the host's.
+ *
+ * Materializes what the target needs and removes every other `@img/sharp*`
+ * package, so the artifact carries exactly one architecture. Removing from the
+ * working tree is safe and self-healing: a later build for another target
+ * materializes what it needs from the lockfile, much as
+ * `build/npm/postinstall.ts` already deletes the `@parcel/watcher` prebuilds.
+ *
+ * A no-op when the agent SDK that pulls sharp in is not installed, so this
+ * cannot fail a build that never needed sharp.
+ */
+export function prepareSharpPlatformPackages(platform: string, arch: string, nodeModulesRoot = path.join('extensions', 'copilot', 'node_modules'), options: IEnsurePlatformPackageOptions = {}): void {
 	const sharpPlatformArch = toSharpPlatformArch(platform, arch);
 	if (!sharpPlatformArch) {
 		return;
@@ -76,5 +91,33 @@ export function ensureSharpPlatformPackage(platform: string, arch: string, nodeM
 		return;
 	}
 
-	ensurePlatformPackage(`@img/sharp-${sharpPlatformArch}`, nodeModulesRoot, CONTEXT, options);
+	const wanted = sharpPackagesFor(sharpPlatformArch);
+	for (const packageName of wanted) {
+		ensurePlatformPackage(packageName, nodeModulesRoot, CONTEXT, options);
+	}
+
+	removeForeignSharpPackages(nodeModulesRoot, wanted);
+}
+
+/**
+ * Deletes every `@img/sharp*` package that is not in `keep`.
+ *
+ * Without this the host's package ships alongside the target's: harmless at
+ * runtime, since sharp loads the one named for the running platform and arch,
+ * but it puts a megabyte of another architecture's binary in the artifact.
+ */
+function removeForeignSharpPackages(nodeModulesRoot: string, keep: string[]): void {
+	const imgDir = path.join(nodeModulesRoot, '@img');
+	if (!fs.existsSync(imgDir)) {
+		return;
+	}
+
+	const keepNames = new Set(keep.map(name => name.slice('@img/'.length)));
+	for (const entry of fs.readdirSync(imgDir)) {
+		if (!entry.startsWith('sharp') || keepNames.has(entry)) {
+			continue;
+		}
+		fs.rmSync(path.join(imgDir, entry), { recursive: true, force: true });
+		console.log(`[${CONTEXT}] Removed non-target @img/${entry}`);
+	}
 }
