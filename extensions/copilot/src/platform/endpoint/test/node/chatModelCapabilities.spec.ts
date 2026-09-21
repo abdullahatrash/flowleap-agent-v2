@@ -199,6 +199,29 @@ describe('modelSupportsToolSearch', () => {
 		expect(modelSupportsToolSearch('o4-mini')).toBe(false);
 	});
 
+	test('matches vendor-prefixed aggregator ids (OpenRouter)', () => {
+		// OpenRouter namespaces its ids by vendor; the bare id must decide the same way.
+		expect({
+			'anthropic/claude-sonnet-5': modelSupportsToolSearch('anthropic/claude-sonnet-5'),
+			'anthropic/claude-opus-4.6': modelSupportsToolSearch('anthropic/claude-opus-4.6'),
+			'anthropic/claude-haiku-4.5': modelSupportsToolSearch('anthropic/claude-haiku-4.5'),
+			'claude-sonnet-5': modelSupportsToolSearch('claude-sonnet-5'),
+			'anthropic/claude-opus-4.1': modelSupportsToolSearch('anthropic/claude-opus-4.1'),
+			'anthropic/claude-3.5-sonnet': modelSupportsToolSearch('anthropic/claude-3.5-sonnet'),
+			'openai/gpt-5': modelSupportsToolSearch('openai/gpt-5'),
+			'openrouter-endpoint': modelSupportsToolSearch(fakeModel('anthropic/claude-sonnet-5', 'anthropic/claude-sonnet-5')),
+		}).toEqual({
+			'anthropic/claude-sonnet-5': true,
+			'anthropic/claude-opus-4.6': true,
+			'anthropic/claude-haiku-4.5': false,
+			'claude-sonnet-5': true,
+			'anthropic/claude-opus-4.1': false,
+			'anthropic/claude-3.5-sonnet': false,
+			'openai/gpt-5': false,
+			'openrouter-endpoint': true,
+		});
+	});
+
 	test('matches via endpoint.family when the model id is unknown', () => {
 		// An unknown preview id whose family has been aliased to a supported production family.
 		expect({
@@ -237,6 +260,22 @@ describe('modelSupportsContextEditing', () => {
 			'claude-haiku-4-5': true,
 			'claude-opus-4.6-1m': false, // 1M variant excluded
 			'gpt-5': false,
+		});
+	});
+
+	test('matches vendor-prefixed aggregator ids (OpenRouter)', () => {
+		expect({
+			'anthropic/claude-opus-4.6': modelSupportsContextEditing('anthropic/claude-opus-4.6'),
+			'anthropic/claude-haiku-4.5': modelSupportsContextEditing('anthropic/claude-haiku-4.5'),
+			'anthropic/claude-sonnet-4.5': modelSupportsContextEditing('anthropic/claude-sonnet-4.5'),
+			'anthropic/claude-opus-4.6-1m': modelSupportsContextEditing('anthropic/claude-opus-4.6-1m'),
+			'openai/gpt-5': modelSupportsContextEditing('openai/gpt-5'),
+		}).toEqual({
+			'anthropic/claude-opus-4.6': true,
+			'anthropic/claude-haiku-4.5': true,
+			'anthropic/claude-sonnet-4.5': true,
+			'anthropic/claude-opus-4.6-1m': false, // 1M variant still excluded
+			'openai/gpt-5': false,
 		});
 	});
 

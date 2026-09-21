@@ -77,17 +77,38 @@ describe('OpenRouterEndpoint', () => {
 		 * third-party host to accept. OpenRouter may serve this model from Amazon Bedrock, which
 		 * answers `400 invalid beta flag` for anything it does not implement (#453).
 		 *
-		 * The list is one flag, not four: the capability gates for tool search and context editing
-		 * match on a leading `claude`, and an OpenRouter id carries the `anthropic/` vendor prefix,
-		 * so they read as unsupported here. Interleaved thinking has no such gate and is the flag
-		 * Bedrock rejected live.
+		 * Tool search is on the list because the capability gate now strips the `anthropic/`
+		 * vendor prefix (#457). Sending it is safe: `createRequestBody` asks for Anthropic's own
+		 * service first, and `retryWithoutAnthropicBetas` covers a fallback host that refuses the
+		 * flags. Context management is absent because its setting defaults to `off`.
 		 */
-		it('sends exactly these beta flags for anthropic/claude-sonnet-5', () => {
+		it('sends exactly these beta flags for anthropic/claude-sonnet-5, tool search included', () => {
 			anthropicMetadata.id = 'anthropic/claude-sonnet-5';
 			anthropicMetadata.name = 'Claude Sonnet 5';
 			anthropicMetadata.capabilities.family = anthropicMetadata.id;
 			const endpoint = instaService.createInstance(OpenRouterEndpoint, anthropicMetadata, 'test-api-key', 'https://openrouter.ai/api/v1/messages');
-			expect(endpoint.getExtraHeaders()['anthropic-beta']).toBe('interleaved-thinking-2025-05-14');
+			expect({
+				supportsToolSearch: endpoint.supportsToolSearch,
+				betas: endpoint.getExtraHeaders()['anthropic-beta'],
+			}).toEqual({
+				supportsToolSearch: true,
+				betas: 'interleaved-thinking-2025-05-14,advanced-tool-use-2025-11-20',
+			});
+		});
+
+		/** Haiku has no tool search support, so the vendor-prefix fix must not light it up. */
+		it('leaves tool search off for anthropic/claude-haiku-4.5', () => {
+			anthropicMetadata.id = 'anthropic/claude-haiku-4.5';
+			anthropicMetadata.name = 'Claude Haiku 4.5';
+			anthropicMetadata.capabilities.family = anthropicMetadata.id;
+			const endpoint = instaService.createInstance(OpenRouterEndpoint, anthropicMetadata, 'test-api-key', 'https://openrouter.ai/api/v1/messages');
+			expect({
+				supportsToolSearch: endpoint.supportsToolSearch,
+				betas: endpoint.getExtraHeaders()['anthropic-beta'],
+			}).toEqual({
+				supportsToolSearch: false,
+				betas: 'interleaved-thinking-2025-05-14',
+			});
 		});
 
 		it('asks OpenRouter for the Anthropic provider first while keeping fallbacks open', () => {
