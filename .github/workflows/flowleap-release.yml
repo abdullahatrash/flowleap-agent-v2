@@ -1,8 +1,8 @@
 # FlowLeap Release Workflow
 #
 # Ported and modernized from the old fork's release-flowleap.yml (issue #81).
-# Builds "Flow Leap, AI patent agent" for macOS (x64 + arm64), Windows (x64) and
-# Linux (x64 + arm64), then drafts a GitHub release with checksums.
+# Builds "Flow Leap, AI patent agent" for macOS (x64 + arm64), Windows (x64 + arm64)
+# and Linux (x64 + arm64), then drafts a GitHub release with checksums.
 #
 # Modernizations vs. the old workflow:
 #   - macOS DMGs are notarized SYNCHRONOUSLY (notarytool --wait), the job FAILS on
@@ -14,7 +14,9 @@
 #     (updateUrl + quality land in the built product.json).
 #   - Per-extension build steps trimmed to only what this fork actually needs
 #     (see the "Compile FlowLeap legacy extensions" step comment).
-#   - Windows stays unsigned in CI; signing is a documented local step.
+#   - Windows stays unsigned in CI; signing is a documented local step. arm64 is
+#     cross-built on the x64 runner, which is how upstream does it too — see the
+#     build-windows job comment.
 #   - Linux ships .deb, .rpm and .tar.gz per arch, built natively on
 #     ubuntu-22.04 / ubuntu-22.04-arm (glibc 2.35 baseline). Unsigned, and
 #     deliberately not a Stamped Build — see the build-linux job comment.
@@ -345,13 +347,31 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-  # Build for Windows (unsigned in CI; signed locally afterwards — see below)
+  # Build for Windows (x64 + arm64), unsigned in CI; signing is a local step. arm64 is CROSS-BUILT on the x64 runner, which
+  # is how upstream builds it too: build/azure-pipelines/product-build.yml
+  # instantiates the same win32 template twice against the same x64 agent pool.
+  # Three things make that work and all three are reproduced below.
+  #   - `npm_config_arch` selects the TARGET's native node modules at npm ci time.
+  #   - `VSCODE_ARCH` and the arch in the gulp task name select the target Electron
+  #     and packaging layout.
+  #   - Inno Setup only writes `ArchitecturesAllowed=arm64` into the installer
+  #     header, so ISCC.exe itself runs fine as an x64 process.
+  # No arm64 runner is needed, and none is offered for Windows anyway.
+  #
+  # One compromise inherited from upstream: the arm64 build ships the same prebuilt
+  # build/win32/inno_updater.exe as x64 (build/gulpfile.vscode.win32.ts copies one
+  # binary for both arches), so the in-place updater runs under Windows-on-ARM's
+  # x64 emulation.
   build-windows:
     if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     # Pinned: windows-latest now resolves to a VS 2026 image, but build/npm/preinstall.ts
     # only recognizes VS 2022/2019 install paths. windows-2025 still ships VS 2022.
     runs-on: windows-2025
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -383,17 +403,24 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Picks the TARGET architecture's native modules, so an arm64 build on
+          # this x64 runner links arm64 binaries. On the x64 leg this is what the
+          # runner would have resolved anyway.
+          npm_config_arch: ${{ matrix.arch }}
 
       - name: Stamp FlowLeap version
         run: node build/flowleap/stamp-flowleap-version.mjs
         env:
           FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
 
-      # NOTE: deliberately NO "Stamp update configuration" step here. ADR 0008
-      # scopes Silent Update rollout to macOS first: the website feed does not
-      # map the win32 keys the native updater polls (win32-x64-user, ...), so a
+      # NOTE: deliberately NO "Stamp update configuration" step here, for either
+      # arch. ADR 0008 scopes Silent Update rollout to macOS first. The website
+      # feed maps `win32-x64` and `win32-arm64`, but updateService.win32.ts
+      # actually polls `win32-<arch>-user` for a user setup and
+      # `win32-<arch>-archive` for the zip, and NEITHER of those is mapped — so a
       # stamped Windows build would suppress the Notify-Only Checker while its
-      # native updater 400s — losing ALL update surfaces. Windows stamping
+      # native updater 400s, losing ALL update surfaces. Adding arm64 does not
+      # change that: it inherits exactly the x64 situation. Windows stamping
       # arrives with the Windows follow-up.
 
       # See the macOS job's equivalent step for the full rationale: only the legacy
@@ -415,10 +442,10 @@ jobs:
           Write-Host "Using signtool at: $($st.FullName)"
           $st.DirectoryName >> $env:GITHUB_PATH
 
-      - name: Build Windows x64
-        run: npm run gulp vscode-win32-x64
+      - name: Build Windows ${{ matrix.arch }}
+        run: npm run gulp vscode-win32-${{ matrix.arch }}
         env:
-          VSCODE_ARCH: x64
+          VSCODE_ARCH: ${{ matrix.arch }}
 
       - name: Package Windows Build
         shell: pwsh
@@ -426,9 +453,9 @@ jobs:
           $version = "${{ inputs.version || github.ref_name }}"
 
           # Create a zip of the build output
-          $buildPath = "..\VSCode-win32-x64"
+          $buildPath = "..\VSCode-win32-${{ matrix.arch }}"
           if (Test-Path $buildPath) {
-            Compress-Archive -Path "$buildPath\*" -DestinationPath "FlowLeap-$version-win32-x64.zip" -Force
+            Compress-Archive -Path "$buildPath\*" -DestinationPath "FlowLeap-$version-win32-${{ matrix.arch }}.zip" -Force
           }
 
       # Build Windows Installer (.exe)
@@ -436,13 +463,13 @@ jobs:
         run: choco install innosetup -y
 
       - name: Copy Inno Updater Files
-        run: npm run gulp vscode-win32-x64-inno-updater
+        run: npm run gulp vscode-win32-${{ matrix.arch }}-inno-updater
 
       - name: Build Installers
         continue-on-error: true
         run: |
-          npm run gulp vscode-win32-x64-system-setup
-          npm run gulp vscode-win32-x64-user-setup
+          npm run gulp vscode-win32-${{ matrix.arch }}-system-setup
+          npm run gulp vscode-win32-${{ matrix.arch }}-user-setup
 
       # Windows artifacts ship UNSIGNED from CI. Signing uses Certum SimplySign, which
       # requires a local desktop app, so it is done after the fact:
@@ -453,17 +480,70 @@ jobs:
         continue-on-error: true
         run: |
           $version = "${{ inputs.version || github.ref_name }}"
-          if (Test-Path ".build\win32-x64\system-setup\*.exe") {
-            Move-Item ".build\win32-x64\system-setup\*.exe" "FlowLeap-Setup-$version-x64.exe" -Force
+          $arch = "${{ matrix.arch }}"
+          if (Test-Path ".build\win32-$arch\system-setup\*.exe") {
+            Move-Item ".build\win32-$arch\system-setup\*.exe" "FlowLeap-Setup-$version-$arch.exe" -Force
           }
-          if (Test-Path ".build\win32-x64\user-setup\*.exe") {
-            Move-Item ".build\win32-x64\user-setup\*.exe" "FlowLeap-UserSetup-$version-x64.exe" -Force
+          if (Test-Path ".build\win32-$arch\user-setup\*.exe") {
+            Move-Item ".build\win32-$arch\user-setup\*.exe" "FlowLeap-UserSetup-$version-$arch.exe" -Force
           }
+
+      # The two installer steps above are continue-on-error, so without this the
+      # job would go green having produced nothing but the zip. It also proves the
+      # cross-build really is a cross-build: the packaged executable's PE machine
+      # field is the one thing that would silently stay x64 if npm_config_arch or
+      # VSCODE_ARCH stopped taking effect, and a whole arm64 release of x64 binaries
+      # is the failure worth catching in CI rather than on a user's machine.
+      - name: Verify Windows Artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = "${{ inputs.version || github.ref_name }}"
+          $arch = "${{ matrix.arch }}"
+
+          $expected = @(
+            "FlowLeap-$version-win32-$arch.zip",
+            "FlowLeap-Setup-$version-$arch.exe",
+            "FlowLeap-UserSetup-$version-$arch.exe"
+          )
+          $missing = $expected | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Host "::error::Missing expected $arch artifact(s): $($missing -join ', ')"
+            Write-Host "Present in the workspace:"
+            Get-ChildItem -Path "FlowLeap-*" | ForEach-Object { Write-Host "  $($_.Name)" }
+            exit 1
+          }
+          Get-ChildItem -Path $expected | Select-Object Name, Length | Format-Table -AutoSize
+
+          # PE COFF machine field: 0x8664 = x64, 0xAA64 = ARM64. The offset of the
+          # COFF header is the 4-byte little-endian value at 0x3C ('e_lfanew'),
+          # then the 4-byte PE signature follows and Machine is the 2 bytes after it.
+          $expectedMachine = @{ 'x64' = 0x8664; 'arm64' = 0xAA64 }[$arch]
+          # The packaged executable is named after product.nameShort (it is
+          # "Flow Leap.exe", with a space) — read it rather than hardcoding it,
+          # the same way build/gulpfile.vscode.ts derives it.
+          $nameShort = (Get-Content -Raw product.json | ConvertFrom-Json).nameShort
+          $exePath = "..\VSCode-win32-$arch\$nameShort.exe"
+          if (-not (Test-Path -LiteralPath $exePath)) {
+            Write-Host "::error::Packaged executable not found at $exePath"
+            Write-Host "Top-level contents of ..\VSCode-win32-$arch :"
+            Get-ChildItem -Path "..\VSCode-win32-$arch" | ForEach-Object { Write-Host "  $($_.Name)" }
+            exit 1
+          }
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exePath))
+          $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          Write-Host ("$nameShort.exe PE machine: 0x{0:X4} (expected 0x{1:X4} for {2})" -f $machine, $expectedMachine, $arch)
+          if ($machine -ne $expectedMachine) {
+            Write-Host "::error::$arch build packaged a 0x$('{0:X4}' -f $machine) executable — the cross-build did not take effect."
+            exit 1
+          }
+          Write-Host "OK: $arch artifacts present and the packaged executable is $arch."
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x64
+          name: windows-${{ matrix.arch }}
           path: |
             FlowLeap-*.exe
             FlowLeap-*.zip
