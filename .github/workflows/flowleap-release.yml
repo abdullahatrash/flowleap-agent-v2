@@ -562,6 +562,19 @@ jobs:
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
 
+      # The packaging tasks read specific paths out of this tree (the launcher,
+      # chrome-sandbox, chrome_crashpad_handler, bin/, and every native .node),
+      # and a missing one surfaces as an opaque dpkg-shlibdeps or find-requires
+      # error several steps later. Listing it here makes that diagnosable from
+      # the log alone.
+      - name: Inspect build output
+        run: |
+          ls -la "../VSCode-linux-${{ matrix.arch }}" | head -40
+          echo "--- bin/ ---"
+          ls -la "../VSCode-linux-${{ matrix.arch }}/bin" || true
+          echo "--- du ---"
+          du -sh "../VSCode-linux-${{ matrix.arch }}"
+
       # Tar first: the deb and rpm prepare tasks read ../VSCode-linux-<arch> in
       # place, so --transform renames only the archive's top-level directory and
       # leaves the tree alone. --owner/--group=0 so extraction does not carry the
