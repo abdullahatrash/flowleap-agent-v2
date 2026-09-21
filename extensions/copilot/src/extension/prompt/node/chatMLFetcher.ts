@@ -16,6 +16,7 @@ import { getTextPart, toTextParts } from '../../../platform/chat/common/globalSt
 import { IInteractionService } from '../../../platform/chat/common/interactionService';
 import { ConfigKey, HARD_TOOL_LIMIT, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ICAPIClientService } from '../../../platform/endpoint/common/capiClient';
+import { retryWithoutAnthropicBetas } from '../../../platform/endpoint/node/anthropicBetaFallback';
 import { isAutoModel } from '../../../platform/endpoint/node/autoChatEndpoint';
 import { getResponsesApiCompactionThresholdFromBody, OpenAIResponsesProcessor, responseApiInputToRawMessagesForLogging, sendCompletionOutputTelemetry } from '../../../platform/endpoint/node/responsesApi';
 import { getImageTelemetryMeasurementsFromMessages, type ImageTelemetryMeasurements } from '../../../platform/image/common/imageTelemetry';
@@ -1351,7 +1352,7 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 		// Generate unique ID to link input and output messages
 		const modelCallId = generateUuid();
 
-		const response = await this._fetchWithInstrumentation(
+		let response = await this._fetchWithInstrumentation(
 			chatEndpointInfo,
 			ourRequestId,
 			request,
@@ -1379,6 +1380,33 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 				fetcher: response.fetcher,
 				bytesReceived: response.bytesReceived
 			};
+		}
+
+		// A user-configured provider (OpenRouter, a custom endpoint) may route a Claude request to a
+		// host that rejects the Anthropic beta flags we asked for. Losing a beta costs a feature;
+		// failing here costs the whole turn, so try once more without them.
+		const withoutBetas = await retryWithoutAnthropicBetas({
+			endpoint: chatEndpointInfo,
+			response,
+			location,
+			interactionTypeOverride,
+			refetch: endpoint => this._fetchWithInstrumentation(
+				endpoint,
+				ourRequestId,
+				request,
+				secretKey,
+				location,
+				cancellationToken,
+				userInitiatedRequest,
+				{ ...telemetryProperties, modelCallId },
+				useFetcher,
+				canRetryOnce,
+				interactionTypeOverride,
+			),
+			warn: message => this._logService.warn(message),
+		});
+		if (withoutBetas) {
+			response = withoutBetas;
 		}
 
 		if (response.status === 200 && this._authenticationService.copilotToken?.isFreeUser && this._authenticationService.copilotToken?.isChatQuotaExceeded) {

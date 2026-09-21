@@ -191,6 +191,13 @@ export class OpenRouterLMProvider extends AbstractOpenRouterLMProvider {
 }
 
 /**
+ * OpenRouter's slug for Anthropic's own first-party service, as opposed to `amazon-bedrock` or
+ * `google-vertex` serving the same model.
+ * See https://openrouter.ai/docs/features/provider-routing
+ */
+const anthropicProviderSlug = 'anthropic';
+
+/**
  * Checks whether an OpenRouter model ID refers to an Anthropic model.
  * OpenRouter model IDs follow the format `provider/model-name`, e.g.
  * `anthropic/claude-sonnet-4` or `anthropic/claude-opus-4`.
@@ -235,7 +242,16 @@ export class OpenRouterEndpoint extends OpenAIEndpoint {
 
 	override createRequestBody(options: ICreateEndpointBodyOptions): IEndpointBody {
 		if (this.useMessagesApi || this.useResponsesApi) {
-			return super.createRequestBody(options);
+			const body = super.createRequestBody(options);
+			if (this.useMessagesApi && isAnthropicModelId(this.model)) {
+				// We send Anthropic beta flags with this request, and only Anthropic's own service
+				// accepts all of them: Bedrock answers `400 invalid beta flag`. Asking for Anthropic
+				// first makes the flags land where they are understood. Fallbacks stay open so a
+				// busy Anthropic does not cost availability, and the beta-free retry in
+				// `retryWithoutAnthropicBetas` covers the request that a fallback provider refuses.
+				body.provider = { order: [anthropicProviderSlug], allow_fallbacks: true };
+			}
+			return body;
 		}
 		// prompt-tsx's OpenAI conversion discards Document parts. OpenRouter accepts
 		// native PDFs as file inputs; opaque parts preserve that provider-specific shape.
