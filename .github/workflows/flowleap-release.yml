@@ -632,26 +632,42 @@ jobs:
           DEB="dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.deb"
           RPM="dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.rpm"
 
+          # Each listing is taken ONCE into a file and then grepped. Piping a
+          # 230 MB `dpkg -c` straight into `grep -q` makes grep exit on the
+          # first match, which SIGPIPEs dpkg-deb and prints "tar subprocess
+          # returned error exit status 2" into an otherwise passing step.
+          control=$(mktemp)
+          contents=$(mktemp)
+          rpmlist=$(mktemp)
+          dpkg -I "$DEB" > "$control"
+          dpkg -c "$DEB" > "$contents"
+          rpm -qpl "$RPM" > "$rpmlist"
+
           echo "=== dpkg -I $DEB ==="
-          dpkg -I "$DEB"
-          dpkg -I "$DEB" | grep -qE '^ Package: flowleap$'
-          dpkg -I "$DEB" | grep -qE '^ Architecture: ${{ matrix.deb_arch }}$'
+          cat "$control"
+          grep -qE '^ Package: flowleap$' "$control"
+          grep -qE '^ Architecture: ${{ matrix.deb_arch }}$' "$control"
 
           echo "=== dpkg -c (desktop + icon + bin) ==="
-          dpkg -c "$DEB" | grep -E 'usr/share/applications/|usr/share/pixmaps/|usr/share/appdata/|usr/share/flowleap/bin/'
-          dpkg -c "$DEB" | grep -q 'usr/share/applications/flowleap\.desktop$'
-          dpkg -c "$DEB" | grep -q 'usr/share/applications/flowleap-url-handler\.desktop$'
-          dpkg -c "$DEB" | grep -q 'usr/share/appdata/flowleap\.appdata\.xml$'
-          dpkg -c "$DEB" | grep -q 'usr/share/pixmaps/flowleap\.png$'
+          grep -E 'usr/share/applications/|usr/share/pixmaps/|usr/share/appdata/|usr/share/flowleap/bin/' "$contents"
+          grep -q 'usr/share/applications/flowleap\.desktop$' "$contents"
+          grep -q 'usr/share/applications/flowleap-url-handler\.desktop$' "$contents"
+          grep -q 'usr/share/appdata/flowleap\.appdata\.xml$' "$contents"
+          grep -q 'usr/share/pixmaps/flowleap\.png$' "$contents"
 
           echo "=== rpm -qpi $RPM ==="
           rpm -qpi "$RPM"
           test "$(rpm -qp --queryformat '%{NAME}' "$RPM")" = flowleap
           test "$(rpm -qp --queryformat '%{ARCH}' "$RPM")" = '${{ matrix.rpm_arch }}'
-          rpm -qpl "$RPM" | grep -q '/usr/share/applications/flowleap\.desktop$'
+          grep -q '/usr/share/applications/flowleap\.desktop$' "$rpmlist"
 
           echo "=== tarball top-level ==="
-          tar -tzf "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.tar.gz" | head -3
+          tar -tzf "dist/FlowLeap-$VERSION-linux-${{ matrix.arch }}.tar.gz" > "$contents"
+          head -3 "$contents"
+          grep -q '^FlowLeap-linux-${{ matrix.arch }}/$' "$contents"
+
+          echo "=== artifacts ==="
+          ls -la dist/
 
       # The install test is the only step that proves the computed Depends are
       # satisfiable. `apt-get install ./file.deb` resolves them; a plain
