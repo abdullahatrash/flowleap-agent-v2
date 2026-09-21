@@ -125,6 +125,18 @@ export interface IEndpointBody {
 
 	/** ChatCompletions API for Anthropic models */
 	thinking_budget?: number;
+
+	/**
+	 * OpenRouter provider-routing preference. OpenRouter-specific and ignored by every other host,
+	 * including the Anthropic API itself.
+	 * See https://openrouter.ai/docs/features/provider-routing
+	 */
+	provider?: {
+		/** Provider slugs to try in order, e.g. `['anthropic']`. */
+		order?: string[];
+		/** When true (the default), other providers still serve the request if the ordered ones cannot. */
+		allow_fallbacks?: boolean;
+	};
 }
 
 export interface IEndpointFetchOptions {
