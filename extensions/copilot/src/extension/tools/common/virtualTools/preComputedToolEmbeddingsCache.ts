@@ -4,11 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Embedding, EmbeddingType } from '../../../../platform/embeddings/common/embeddingsComputer';
-import { EmbeddingCacheType, IEmbeddingsCache, RemoteCacheType, RemoteEmbeddingsCache } from '../../../../platform/embeddings/common/embeddingsIndex';
-import { IEnvService } from '../../../../platform/env/common/envService';
+import { IEmbeddingsCache, NullEmbeddingsCache } from '../../../../platform/embeddings/common/embeddingsIndex';
 import { ILogService } from '../../../../platform/log/common/logService';
-import { sanitizeVSCodeVersion } from '../../../../util/common/vscodeVersion';
-import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { IToolEmbeddingsCache } from './toolEmbeddingsComputer';
 
 export const EMBEDDING_TYPE_FOR_TOOL_GROUPING = EmbeddingType.text3small_512;
@@ -18,12 +15,12 @@ export class PreComputedToolEmbeddingsCache implements IToolEmbeddingsCache {
 	private embeddingsMap: Map<string, Embedding> | undefined;
 
 	constructor(
-		@ILogService private readonly _logService: ILogService,
-		@IInstantiationService instantiationService: IInstantiationService,
-		@IEnvService envService: IEnvService
+		@ILogService private readonly _logService: ILogService
 	) {
-		const cacheVersion = sanitizeVSCodeVersion(envService.getEditorInfo().version);
-		this.cache = instantiationService.createInstance(RemoteEmbeddingsCache, EmbeddingCacheType.GLOBAL, 'toolEmbeddings', cacheVersion, EMBEDDING_TYPE_FOR_TOOL_GROUPING, RemoteCacheType.Tools);
+		// Pre-computed tool embeddings are published to a Microsoft-owned CDN
+		// (embeddings.vscode-cdn.net). That fetch is severed in this build, so
+		// this always resolves to an empty cache instead of hitting the network.
+		this.cache = new NullEmbeddingsCache(EMBEDDING_TYPE_FOR_TOOL_GROUPING);
 	}
 
 	public get embeddingType(): EmbeddingType {
