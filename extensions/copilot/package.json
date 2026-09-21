@@ -3909,7 +3909,7 @@
             "default": "render",
             "markdownDescription": "%patent.config.secondRead%"
           },
-          "patent.secondRead.model": {
+          "patent.secondReadModel": {
             "type": "string",
             "default": "anthropic/claude-sonnet-5",
             "markdownDescription": "%patent.config.secondReadModel%"

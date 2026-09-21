@@ -36,7 +36,7 @@ vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vsco
 /** How the second-read judge behaves for one test; it is off unless a test asks for it. */
 interface SecondReadStub {
 	readonly setting?: 'off' | 'log' | 'render';
-	/** The value of `patent.secondRead.model`; unset means the request's own model is used. */
+	/** The value of `patent.secondReadModel`; unset means the request's own model is used. */
 	readonly judgeModel?: string;
 	/** What the provider actually resolves `judgeModel` to; a different id means it is unavailable. */
 	readonly resolvedModel?: string;
@@ -68,7 +68,7 @@ function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRe
 	}();
 	const configuration = new class extends mock<IConfigurationService>() {
 		override getNonExtensionConfig<T>(key: string): T | undefined {
-			return (key === 'patent.secondRead.model' ? secondRead.judgeModel : secondRead.setting ?? 'off') as T | undefined;
+			return (key === 'patent.secondReadModel' ? secondRead.judgeModel : secondRead.setting ?? 'off') as T | undefined;
 		}
 	}();
 	let judged = 0;
@@ -388,6 +388,13 @@ describe('candidate report save path', () => {
 				recordedModel({ setting: 'log', judgeModel: 'anthropic/claude-sonnet-5', reply: headVerdicts }),
 				recordedModel({ setting: 'log', judgeModel: 'anthropic/claude-sonnet-5', resolvedModel: 'some-other-model', reply: headVerdicts }),
 			])).toEqual(['anthropic/claude-sonnet-5', 'judge-model']);
+		});
+
+		it('reads the judge model from the patent.secondReadModel setting', async () => {
+			const { files } = await save({ setting: 'log', judgeModel: 'anthropic/claude-sonnet-5', reply: headVerdicts });
+			const name = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name).find(name => name.endsWith('.second-read.json'))!;
+			const recorded = JSON.parse(new TextDecoder().decode(await files.readFile(URI.file('/workspace/' + name))));
+			expect(recorded.model).toBe('anthropic/claude-sonnet-5');
 		});
 
 		it('saves the report and reports a skip when the judge request fails', async () => {

@@ -295,7 +295,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 	 * when it does not match. The model actually used is the one recorded and rendered.
 	 */
 	private async judgeEndpoint(request: ChatRequest): Promise<IChatEndpoint> {
-		const configured = this.configurationService.getNonExtensionConfig<string>('patent.secondRead.model')?.trim();
+		const configured = this.configurationService.getNonExtensionConfig<string>('patent.secondReadModel')?.trim();
 		if (configured) {
 			try {
 				const endpoint = await this.endpointProvider.getChatEndpoint(configured);
