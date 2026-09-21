@@ -98,6 +98,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_arch: ${{ matrix.arch }}
 
+      # npm never fails an install over an optional dependency, so a skipped
+      # per-platform native package is silent. Catch it before packaging rather
+      # than shipping a binary-less artifact (see build/npm/checkNativeOptionalDeps.ts).
+      - name: Verify native optional dependencies
+        run: node build/npm/checkNativeOptionalDeps.ts
+
       # Stamp BEFORE packaging so the version lands in the bundled extension's
       # package.json (the `vscode-darwin-*` task copies it in via vsce.listFiles).
       - name: Stamp FlowLeap version
@@ -133,6 +139,62 @@ jobs:
           npm run gulp vscode-darwin-${{ matrix.arch }}
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
+
+      # macos-14 runners are arm64, so the x64 leg is a cross-build and hits the
+      # same trap the Windows arm64 leg did (#461): npm installs the HOST's
+      # @img/sharp platform package, which packaging then has to correct. Check
+      # it here, before signing, so a wrong-architecture binary never gets
+      # signed and notarized. `lipo -archs` reports x86_64 for an x64 slice.
+      - name: Verify macOS Artifacts
+        run: |
+          set -e
+          ARCH="${{ matrix.arch }}"
+          case "$ARCH" in
+            x64) EXPECTED=x86_64 ;;
+            arm64) EXPECTED=arm64 ;;
+            *) echo "::error::Unknown arch $ARCH"; exit 1 ;;
+          esac
+
+          # Derive the bundle and its executable rather than hardcoding names:
+          # the .app is named after product.nameLong and the binary inside after
+          # nameShort, and both have been renamed before now.
+          APP=$(ls -d "../VSCode-darwin-$ARCH/"*.app 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::No .app bundle found in ../VSCode-darwin-$ARCH"
+            ls -la "../VSCode-darwin-$ARCH" || true
+            exit 1
+          fi
+          echo "App bundle: $APP"
+          RES="$APP/Contents/Resources/app"
+
+          MAIN=$(ls "$APP/Contents/MacOS/"* 2>/dev/null | head -1)
+          if [ -z "$MAIN" ]; then
+            echo "::error::No executable found in $APP/Contents/MacOS"
+            exit 1
+          fi
+          echo "=== main executable ($MAIN) ==="
+          lipo -archs "$MAIN"
+          if ! lipo -archs "$MAIN" | tr ' ' '\n' | grep -qx "$EXPECTED"; then
+            echo "::error::$MAIN is not $EXPECTED — the cross-build did not take effect."
+            exit 1
+          fi
+
+          SHARP="$RES/extensions/copilot/node_modules/@img/sharp-darwin-$ARCH/lib/sharp-darwin-$ARCH.node"
+          echo "=== shipped sharp binary ==="
+          if [ ! -f "$SHARP" ]; then
+            echo "::error::Target sharp binary not found at $SHARP."
+            echo "Either ensureSharpPlatformPackage did not run, or the macOS build"
+            echo "does not ship @img/sharp at all — check which before assuming a bug:"
+            ls -1 "$RES/extensions/copilot/node_modules/@img" 2>/dev/null || echo "(no @img directory at all)"
+            exit 1
+          fi
+          lipo -archs "$SHARP"
+          if ! lipo -archs "$SHARP" | tr ' ' '\n' | grep -qx "$EXPECTED"; then
+            echo "::error::The shipped sharp binary is not $EXPECTED."
+            exit 1
+          fi
+
+          echo "OK: the $ARCH app and its shipped sharp binary are both $EXPECTED."
 
       # Code Signing — uses the user's standard electron-builder secret names:
       #   CSC_LINK          base64-encoded .p12 "Developer ID Application" certificate
@@ -408,6 +470,12 @@ jobs:
           # runner would have resolved anyway.
           npm_config_arch: ${{ matrix.arch }}
 
+      # npm never fails an install over an optional dependency, so a skipped
+      # per-platform native package is silent. Catch it before packaging rather
+      # than shipping a binary-less artifact (see build/npm/checkNativeOptionalDeps.ts).
+      - name: Verify native optional dependencies
+        run: node build/npm/checkNativeOptionalDeps.ts
+
       - name: Stamp FlowLeap version
         run: node build/flowleap/stamp-flowleap-version.mjs
         env:
@@ -538,7 +606,31 @@ jobs:
             Write-Host "::error::$arch build packaged a 0x$('{0:X4}' -f $machine) executable — the cross-build did not take effect."
             exit 1
           }
-          Write-Host "OK: $arch artifacts present and the packaged executable is $arch."
+          # The shipped @img/sharp binary is the one #461 was about: npm installs
+          # the HOST's platform package, so before the packaging-time fix this
+          # read 0x8664 inside the arm64 build. Checking the executable alone
+          # would not have caught it.
+          $sharpDir = "..\VSCode-win32-$arch\resources\app\extensions\copilot\node_modules\@img\sharp-win32-$arch"
+          $sharpNode = Join-Path $sharpDir "lib\sharp-win32-$arch.node"
+          if (-not (Test-Path -LiteralPath $sharpNode)) {
+            Write-Host "::error::Target sharp binary not found at $sharpNode — ensureSharpPlatformPackage did not run or packaging dropped it."
+            $imgDir = "..\VSCode-win32-$arch\resources\app\extensions\copilot\node_modules\@img"
+            if (Test-Path -LiteralPath $imgDir) {
+              Write-Host "What is in @img:"
+              Get-ChildItem -Path $imgDir | ForEach-Object { Write-Host "  $($_.Name)" }
+            }
+            exit 1
+          }
+          $sharpBytes = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $sharpNode))
+          $sharpPeOffset = [System.BitConverter]::ToInt32($sharpBytes, 0x3C)
+          $sharpMachine = [System.BitConverter]::ToUInt16($sharpBytes, $sharpPeOffset + 4)
+          Write-Host ("sharp-win32-$arch.node PE machine: 0x{0:X4} (expected 0x{1:X4})" -f $sharpMachine, $expectedMachine)
+          if ($sharpMachine -ne $expectedMachine) {
+            Write-Host "::error::The shipped sharp binary is not $arch."
+            exit 1
+          }
+
+          Write-Host "OK: $arch artifacts present, and both the executable and the shipped sharp binary are $arch."
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -620,6 +712,12 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_arch: ${{ matrix.arch }}
+
+      # npm never fails an install over an optional dependency, so a skipped
+      # per-platform native package is silent. Catch it before packaging rather
+      # than shipping a binary-less artifact (see build/npm/checkNativeOptionalDeps.ts).
+      - name: Verify native optional dependencies
+        run: node build/npm/checkNativeOptionalDeps.ts
 
       - name: Stamp FlowLeap version
         run: node build/flowleap/stamp-flowleap-version.mjs

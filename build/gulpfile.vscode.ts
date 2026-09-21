@@ -29,6 +29,7 @@ import { compileBuildWithoutManglingTask, compileBuildWithManglingTask } from '.
 import { compileNonNativeExtensionsBuildTask, compileNativeExtensionsBuildTask, compileAllExtensionsBuildTask, compileExtensionMediaBuildTask, cleanExtensionsBuildTask, compileCopilotExtensionBuildTask } from './gulpfile.extensions.ts';
 import { copyCodiconsTask } from './lib/compilation.ts';
 import { ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getCopilotTgrepExcludeFilter, getRipgrepExcludeFilter, prepareBuiltInCopilotRipgrepShim } from './lib/copilot.ts';
+import { ensureSharpPlatformPackage } from './lib/sharp.ts';
 import { readAgentSdkResults } from './agent-sdk/common.ts';
 import { useEsbuildTranspile } from './buildConfig.ts';
 import { promisify } from 'util';
@@ -342,6 +343,11 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			.pipe(util.cleanNodeModules(path.join(import.meta.dirname, '.moduleignore')))
 			.pipe(util.cleanNodeModules(path.join(import.meta.dirname, `.moduleignore.${process.platform}`)));
 		ensureCopilotPlatformPackage(platform, arch);
+		// Same cross-build gap, different package: npm installed the HOST's
+		// `@img/sharp-*` into the copilot extension, so an arm64 Windows build
+		// shipped an x64 sharp binary (#461). Materialize the target's package
+		// on disk before the extension stream reads the tree.
+		ensureSharpPlatformPackage(platform, arch);
 		const copilotRuntimePrebuilds = gulp.src(getCopilotRuntimePrebuildFiles(platform, arch), { base: '.', dot: true, allowEmpty: true });
 		const deps = es.merge(cleanedDeps, copilotRuntimePrebuilds)
 			.pipe(filter(getCopilotExcludeFilter(platform, arch)))
