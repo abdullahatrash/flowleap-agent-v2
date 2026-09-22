@@ -57,7 +57,7 @@ Refinement). A query you never probed is a guess, and in a prior-art search a qu
 returning thousands of hits instead of tens means the closest art is never seen.
 
 **Step 4 — read a ranked page, not a dated one.** When the user has an invention text or a
-claim, run the accepted query with `rank_against` set to that text verbatim and `range`
+claim, run the accepted query with rank_against set to that text verbatim and `range`
 `1-100`. The backend scores every hit on the page against the text and returns the page
 ordered by `relevance` (0–1); read the top 10, and go further down only while the
 relevance values stay close to the top ones. A query of a few hundred hits is a GOOD query
@@ -103,7 +103,7 @@ syntax, not in strategy:
 ## Search Refinement
 - Too many results (>1,000): add the next discriminating term from your Step 1 list; then a date filter or a narrower classification
 - Few results (<10): review them first; test synonyms or a parent CPC class if a feature remains unresolved. Preserve user-confirmed country/date constraints.
-- Ranked page with nothing close in the top 10 (top `relevance` values all low): the query is off-topic, not too narrow — change the discriminating term before adding a date filter or a narrower class. A ranked page whose top 10 are all close and whose total is above 100: page `101-200` with the same `rank_against` before narrowing.
+- Ranked page with nothing close in the top 10 (top `relevance` values all low): the query is off-topic, not too narrow — change the discriminating term before adding a date filter or a narrower class. A ranked page whose top 10 are all close and whose total is above 100: page `101-200` with the same rank_against before narrowing.
 - Off-topic results: the discriminating term is too broad — replace the category word with the specific subject matter
 - Try subsidiary companies: Google → also Alphabet, DeepMind, Waymo
 - Try keyword variations: "machine learning" → "neural network", "deep learning"
