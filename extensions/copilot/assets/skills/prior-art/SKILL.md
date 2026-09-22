@@ -57,9 +57,9 @@ Use this planning table, then replace planned sets with the actual execution log
 ### 2b. EPO OPS (worldwide bibliographic index)
 For EP/WO scope, pass `countries="EP,WO"` to `search_patents` or explicitly constrain publication authority in CQL. Record the effective query the backend echoes; the database name alone does not establish an authority filter.
 1. Write the CQL from the concept-synonym table — see `patent-search` for the field reference
-2. `search_patents` with the CQL → record result count
+2. `search_patents` with the CQL, `rank_against` set to the invention statement from Phase 1 verbatim, and `range` `1-100` → record the result count and the top `relevance` values. The page comes back ordered by prior-art relevance to that text; read its top 10 first. A set of a few hundred hits is reviewable this way — for a set above 100, page `101-200` with the same text before narrowing. The ranking only orders the page it is given, so keep the query to a CPC group plus one or two discriminating terms; a bare CPC group of thousands never gets its distant hits scored.
 3. Test different synonym combinations and classification refinements. For each next query, name the unresolved feature or coverage gap it tests, and pass it as `purpose` so the record and the report can name it. When variants repeat reviewed documents without useful new evidence, update coverage and synthesize; continue only for a distinct unresolved essential feature or combination. Record `stopReason` and outstanding tracks. Use neither a universal query cap nor a required number of searches. Update the todo phase when switching to document analysis or writing.
-4. For top 3-5 results: `get_patent_details` → full claims and description
+4. `get_patent_details` → full claims and description for EVERY document on a ranked page whose `relevance` is 0.30 or higher, and at least the top three. Chart each of them against the features — do not chart only the first and leave the rest in "retrieved but not cited": on 2026-09-22 the examiner's own X reference sat unread in that list. On an unranked page (no `rank_against`, or `ranked.status` not `ranked`), read the top 3-5 as before.
 
 ### 2c. USPTO (US)
 1. Write the ODP Lucene query from the concept-synonym table — see `patent-search`; `uspto_api_guide` gives the body shape
