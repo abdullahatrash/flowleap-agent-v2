@@ -24,8 +24,6 @@ interface ISearchPatentsParams {
 	countries?: string;
 	/** The unresolved feature or coverage gap this query tests; recorded so the report can name it. */
 	purpose?: string;
-	/** Invention text the backend ranks the page against (search_patents `rank_against`). */
-	rank_against?: string;
 }
 
 interface PatentDoc {
@@ -35,20 +33,6 @@ interface PatentDoc {
 	abstract: string | null;
 	applicants: string[];
 	publicationDate: string | null;
-	/** Prior-art relevance to `rank_against`, 0–1; present only on a ranked page. */
-	relevance?: number;
-	/** The hit's 1-based position in the provider's own order; present only on a ranked page. */
-	rawRank?: number;
-}
-
-/** What the backend did with `rank_against` (additive `ranked` block). */
-interface RankBlock {
-	status: 'ranked' | 'unavailable' | 'skipped';
-	model?: string | null;
-	scored?: number;
-	unscored?: number;
-	ms?: number;
-	reason?: string;
 }
 
 /** `data` payload of the `search_patents` facade tool with `provider: 'epo_ops'`. */
@@ -66,8 +50,6 @@ interface PatentSearchData {
 		end: number;
 	};
 	docs?: PatentDoc[];
-	/** Present only when `rank_against` was sent. */
-	ranked?: RankBlock;
 }
 
 /**
@@ -121,11 +103,9 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<ISearchPatentsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[SearchPatentsTool] Invoking patent search');
 
-		const { query, range = '1-25', countries, purpose, rank_against } = options.input;
+		const { query, range = '1-25', countries, purpose } = options.input;
 		// A blank purpose is no purpose: an empty column reads as a feature nobody named.
 		const testedFeature = purpose?.trim() || undefined;
-		// The backend rejects rank_against under 20 characters; a blank one is simply not sent.
-		const rankAgainst = rank_against?.trim() || undefined;
 
 		const { codes, invalid } = parseCountries(countries);
 		if (invalid.length > 0) {
@@ -135,16 +115,13 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 		try {
 			// The facade takes snake_case params and a countries ARRAY (the legacy route took a
 			// comma-separated string); this tool keeps its own string input and splits it here.
-			const input: { query: string; provider: 'epo_ops'; range: string; countries?: string[]; rank_against?: string } = {
+			const input: { query: string; provider: 'epo_ops'; range: string; countries?: string[] } = {
 				query,
 				provider: 'epo_ops',
 				range,
 			};
 			if (codes.length > 0) {
 				input.countries = codes;
-			}
-			if (rankAgainst) {
-				input.rank_against = rankAgainst;
 			}
 
 			const data = await callFacadeTool<PatentSearchData>(this.patentBackendClient, 'search_patents', input, token);
@@ -214,28 +191,12 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 			''
 		];
 
-		// A ranked page says so, and says when the ranking did NOT run — silence would read as
-		// "provider order is relevance order", which it never is.
-		const ranked = result.ranked;
-		if (ranked?.status === 'ranked') {
-			lines.push(`Ordered by prior-art relevance to the invention text (decision model ${ranked.model ?? 'unknown'}, ${ranked.scored} scored${ranked.unscored ? `, ${ranked.unscored} unscored` : ''}). \`Relevance\` is the model's probability that an examiner would cite the hit against the invention; \`Raw #\` is its position in the provider's order.`);
-			lines.push('');
-		} else if (ranked) {
-			lines.push(`Ranking by relevance did NOT run (${ranked.status}${ranked.reason ? `: ${ranked.reason}` : ''}); the page is in provider order, which is not relevance order.`);
-			lines.push('');
-		}
-
-		const columns = [
-			{ header: 'Publication', cell: (doc: PatentDoc) => patentCitationLink(doc.docId, doc.documentReference) },
-			{ header: 'Title', cell: (doc: PatentDoc) => doc.title ?? '—' },
-			{ header: 'Assignee', cell: (doc: PatentDoc) => doc.applicants.length > 0 ? doc.applicants.join(', ') : '—' },
-			{ header: 'Published', cell: (doc: PatentDoc) => doc.publicationDate ?? '—' },
-		];
-		if (ranked?.status === 'ranked') {
-			columns.unshift({ header: 'Relevance', cell: (doc: PatentDoc) => doc.relevance === undefined ? '—' : doc.relevance.toFixed(2) });
-			columns.push({ header: 'Raw #', cell: (doc: PatentDoc) => doc.rawRank === undefined ? '—' : String(doc.rawRank) });
-		}
-		lines.push(renderMarkdownTable(docs, columns));
+		lines.push(renderMarkdownTable(docs, [
+			{ header: 'Publication', cell: doc => patentCitationLink(doc.docId, doc.documentReference) },
+			{ header: 'Title', cell: doc => doc.title ?? '—' },
+			{ header: 'Assignee', cell: doc => doc.applicants.length > 0 ? doc.applicants.join(', ') : '—' },
+			{ header: 'Published', cell: doc => doc.publicationDate ?? '—' },
+		]));
 
 		// Abstracts are too long for a table cell; render them as per-row snippets below the table.
 		const withAbstract = docs.filter(doc => doc.abstract);

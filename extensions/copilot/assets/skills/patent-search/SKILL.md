@@ -56,18 +56,6 @@ next discriminating term from your Step 1 list and probe again.** Under 10: insp
 Refinement). A query you never probed is a guess, and in a prior-art search a query
 returning thousands of hits instead of tens means the closest art is never seen.
 
-**Step 4 — read a ranked page, not a dated one.** When the user has an invention text or a
-claim, run the accepted query with rank_against set to that text verbatim and `range`
-`1-100`. The backend scores every hit on the page against the text and returns the page
-ordered by `relevance` (0–1); read the top 10, and go further down only while the
-relevance values stay close to the top ones. A query of a few hundred hits is a GOOD query
-now — the page holds 100 of them, ranked — so stop adding terms at ~300, not at 25. The
-ranking only orders the page it is given: a document at position 400 of a 2,000-hit query
-is never scored, so wide means a CPC group plus one or two discriminating terms, never a
-bare CPC group. For a set above 100 hits, page `101-200` with the same text before
-narrowing. Without an invention text there is nothing to rank against; the page is in
-provider order, which is not relevance order, and the old read-25 habit applies.
-
 **Stopping — probing is not sweeping.** Use the requested scope and unresolved evidence to decide whether another query is useful. A prior-art review may need multiple tracks for essential features and their interactions. When variants repeat reviewed documents without useful new evidence, synthesize with explicit remaining gaps. A distinct unresolved track can justify further searching; there is no universal query-count target. Never spend a call on what you already know:
 - A single neighbourhood term alone (`ta=pipeline`, `ta=sensor`) is always huge — never
   execute it; probe only queries you would actually accept.
@@ -103,7 +91,6 @@ syntax, not in strategy:
 ## Search Refinement
 - Too many results (>1,000): add the next discriminating term from your Step 1 list; then a date filter or a narrower classification
 - Few results (<10): review them first; test synonyms or a parent CPC class if a feature remains unresolved. Preserve user-confirmed country/date constraints.
-- Ranked page with nothing close in the top 10 (top `relevance` values all low): the query is off-topic, not too narrow — change the discriminating term before adding a date filter or a narrower class. A ranked page whose top 10 are all close and whose total is above 100: page `101-200` with the same rank_against before narrowing.
 - Off-topic results: the discriminating term is too broad — replace the category word with the specific subject matter
 - Try subsidiary companies: Google → also Alphabet, DeepMind, Waymo
 - Try keyword variations: "machine learning" → "neural network", "deep learning"
