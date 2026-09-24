@@ -14,8 +14,13 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-24
+
 ### Added
 
+- **FlowLeap now runs on Windows on ARM.** Every release ships a system
+  installer, a per-user installer and a `.zip` for arm64 machines, next to the
+  x64 ones. Pick the installer that matches your processor on the download page.
 - **FlowLeap now runs on Linux.** Every release ships a `.deb`, a `.rpm` and a
   `.tar.gz` for both Intel/AMD (x64) and ARM (arm64) machines. Install with
   `sudo apt install ./FlowLeap-*.deb` or `sudo dnf install ./FlowLeap-*.rpm`, or
@@ -24,6 +29,51 @@ test-only work, CI) belong in the commit message, not here.
   Fedora 36 or later, or an equivalent distribution. Linux has no background
   updater yet: FlowLeap tells you when a new version is out and you install it
   the same way.
+- **Patent links in a Markdown report render as pills.** A publication number or
+  a patent URL in an open report shows the title, the applicant and the latest
+  legal-status events in place, without leaving the editor.
+- **EP designated contracting states.** Legal-status answers for European
+  patents now list the designated and extension states, and the per-event state
+  lists are no longer dropped from the tables.
+- **OpenRouter from the EU.** A new setting, `patent.openRouter.dataRegion`,
+  sends your own OpenRouter key to `eu.openrouter.ai`. Keys whose workspace
+  guardrail is limited to Europe now work.
+- **A decision trail beside a patent deliverable.** Every graded deliverable
+  now writes an investigation record that names the cutoff, the jurisdictions,
+  the references dropped and why.
+- **Prior-art reviews save two documents.** The client report and a working
+  record now come from the same review, so the search strategy and the
+  concepts and classifications searched reach the reader.
+- **First launch opens on the three first runs.** A new First Runs tab shows
+  the same three starting tasks as the welcome page and the trial email.
+- **Opt-in activation counters.** FlowLeap asks once whether it may send four
+  content-free counters (app launched, skill run completed, report saved, keys
+  added). Never a file, a query, a matter or model output.
+
+### Changed
+
+- **Markdown editor updated to the VS Code 1.139 baseline**, together with
+  the agent sessions window: compact session list, inline rename with F2,
+  per-row progress and a Diff View submenu in the editor overflow.
+- **Skills read the drawings first.** A structural feature is no longer marked
+  unresolved before the figures have been read, and a search names the feature
+  it tests.
+
+### Security
+
+- Ten upstream fixes from VS Code 1.136.2 to 1.139 applied, including wildcard
+  IP patterns in the network filter (CVE-2026-81379), terminal auto-approval
+  holes, MCP workspace trust, and apply-patch move-destination validation.
+
+### Fixed
+
+- **BYOK through OpenRouter** now retries without Anthropic beta headers when a
+  provider rejects them, and recognises vendor-prefixed Claude ids in the tool
+  search and context-editing gates.
+- **The `patent.secondReadModel` setting is now read.** Its old dotted name,
+  `patent.secondRead.model`, was dropped by the configuration layer.
+- **The family tool reads the family it promises**, and the graph tool surfaces
+  citable publication numbers.
 
 ## [0.3.1] - 2026-09-03
 
