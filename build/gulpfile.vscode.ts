@@ -137,6 +137,7 @@ const vscodeResources = [
 
 const bootstrapEntryPoints = [
 	'out-build/main.js',
+	'out-build/mainImpl.js',
 	'out-build/cli.js',
 	'out-build/bootstrap-fork.js'
 ];
