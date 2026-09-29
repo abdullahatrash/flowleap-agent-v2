@@ -35,6 +35,11 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 					description: localize('sessions.applicationBadge.unread', "Count unread sessions that are no longer in progress."),
 					default: SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT.unread,
 				},
+				ciFailing: {
+					type: 'boolean',
+					description: localize('sessions.applicationBadge.ciFailing', "Count sessions with failing CI checks on an open, non-draft pull request that are no longer in progress and are not being handled by Agent Merge."),
+					default: SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT.ciFailing,
+				},
 			},
 			default: SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT,
 		},

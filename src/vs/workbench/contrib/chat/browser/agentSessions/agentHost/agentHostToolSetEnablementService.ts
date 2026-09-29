@@ -5,6 +5,7 @@
 
 import { Disposable, DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { derived, IObservable, IReader, ISettableObservable, observableValue } from '../../../../../../base/common/observable.js';
+import { parseRemoteAgentHostHarness } from '../../../../../../platform/agentHost/common/agentHostSessionType.js';
 import { InstantiationType, registerSingleton } from '../../../../../../platform/instantiation/common/extensions.js';
 import { createDecorator } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
@@ -16,6 +17,13 @@ export const IAgentHostToolSetEnablementService = createDecorator<IAgentHostTool
  * only target for the Chat Customizations → Tools section today.
  */
 export const AGENT_HOST_COPILOT_CLI_SESSION_TYPE = 'agent-host-copilotcli';
+
+/**
+ * Whether a session type runs the Copilot CLI harness, locally or on a remote agent host.
+ */
+export function isCopilotCliSessionType(sessionType: string): boolean {
+	return sessionType === AGENT_HOST_COPILOT_CLI_SESSION_TYPE || parseRemoteAgentHostHarness(sessionType) === 'copilotcli';
+}
 
 /**
  * Tool / tool-set enablement state. Both maps are keyed by id and store only deviations from the
@@ -55,17 +63,17 @@ export function getToolSetTriState(state: IToolEnablementState, toolSetId: strin
 /** The subset of a tool set needed to count its enabled tools. {@link IToolSet} satisfies this shape. */
 export interface ICountableToolSet {
 	readonly id: string;
+	readonly deprecated?: boolean;
 	getTools(reader?: IReader): Iterable<{ readonly id: string }>;
 }
 
-/**
- * Counts the distinct enabled tools across the given tool sets. The caller decides which sets belong
- * in the section — pass `getCustomizationToolSets(...)` so this count matches what the section
- * renders (the "Count Consistency" rule in `vs/sessions/AI_CUSTOMIZATIONS.md`).
- */
+/** Counts the enabled tools across the non-deprecated tool sets surfaced in Chat Customizations → Tools. */
 export function countEnabledCustomizationTools(toolSets: Iterable<ICountableToolSet>, state: IToolEnablementState, reader?: IReader): number {
 	const enabled = new Set<string>();
 	for (const ts of toolSets) {
+		if (ts.deprecated) {
+			continue;
+		}
 		for (const tool of ts.getTools(reader)) {
 			if (isToolEnabledInSet(state, ts.id, tool.id)) {
 				enabled.add(tool.id);

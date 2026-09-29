@@ -1254,10 +1254,11 @@ export class MainThreadDocumentSemanticTokensProvider implements languages.Docum
 		if (!encodedDto) {
 			return null;
 		}
+		const dto = decodeSemanticTokensDto(encodedDto);
 		if (token.isCancellationRequested) {
+			this._proxy.$releaseDocumentSemanticTokens(this._handle, dto.id);
 			return null;
 		}
-		const dto = decodeSemanticTokensDto(encodedDto);
 		if (dto.type === 'full') {
 			return {
 				resultId: String(dto.id),
@@ -1516,6 +1517,7 @@ class ExtensionBackedInlineCompletionsProvider extends Disposable implements lan
 			editKind: lifetimeSummary.editKind,
 			longDistanceHintVisible: lifetimeSummary.longDistanceHintVisible,
 			longDistanceHintDistance: lifetimeSummary.longDistanceHintDistance,
+			isForAnotherDocument: lifetimeSummary.isForAnotherDocument,
 			...forwardToChannelIf(isCopilotLikeExtension(this.providerId.extensionId!)),
 		};
 

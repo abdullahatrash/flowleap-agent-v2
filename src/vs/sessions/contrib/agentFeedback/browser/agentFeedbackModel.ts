@@ -5,16 +5,8 @@
 
 import type { URI } from '../../../../base/common/uri.js';
 import type { IRange } from '../../../../editor/common/core/range.js';
-
-export interface ICodeReviewSuggestion {
-	readonly edits: readonly ICodeReviewSuggestionChange[];
-}
-
-export interface ICodeReviewSuggestionChange {
-	readonly range: IRange;
-	readonly newText: string;
-	readonly oldText: string;
-}
+import type { AgentFeedbackAuthorValue, IFeedbackPullRequest } from '../../../../platform/agentHost/common/meta/agentFeedbackAnnotations.js';
+import type { ICodeReviewSuggestion } from '../../codeReview/browser/codeReviewService.js';
 
 /**
  * Core agent-feedback model types.
@@ -39,6 +31,8 @@ export const enum AgentFeedbackKind {
 	UserReview = 'user',
 	/** Converted from an in-product (agent) code review comment. */
 	AgentReview = 'codeReview',
+	/** Converted from a pull request review comment. */
+	PRReview = 'prReview',
 }
 
 /**
@@ -70,6 +64,12 @@ export const enum AgentFeedbackState {
 	Resolved = 'resolved',
 }
 
+/** A single message within a feedback thread, and who wrote it. */
+export interface IAgentFeedbackReply {
+	readonly text: string;
+	readonly author: AgentFeedbackAuthorValue;
+}
+
 export interface IAgentFeedback {
 	readonly id: string;
 	readonly text: string;
@@ -79,14 +79,18 @@ export interface IAgentFeedback {
 	readonly suggestion?: ICodeReviewSuggestion;
 	readonly codeSelection?: string;
 	readonly diffHunks?: string;
-	/** Origin of this feedback item (user-authored, converted from an agent code review). */
+	/** Origin of this feedback item (user-authored, converted from code/PR review). */
 	readonly kind: AgentFeedbackKind;
+	/** When this feedback was converted from a PR review comment, the original thread ID. */
+	readonly sourcePRReviewCommentId?: string;
+	/** Pull request that originated this PR review comment. */
+	readonly sourcePullRequest?: IFeedbackPullRequest;
 	/**
 	 * Additional comment messages that belong to the same thread as this feedback,
 	 * talking about the same code region. The first {@link text} is the initial
 	 * comment; replies are subsequent messages added to it.
 	 */
-	readonly replies?: readonly string[];
+	readonly replies?: readonly IAgentFeedbackReply[];
 	/** Lifecycle state of this feedback item. */
 	readonly state: AgentFeedbackState;
 
@@ -94,7 +98,7 @@ export interface IAgentFeedback {
 	 * Transient marker set when the user reveals this comment to the agent via
 	 * the `viewUnreviewedComments` tool. The agent-host server tool returns the
 	 * comments carrying this flag and then clears it. Only meaningful for
-	 * reviewable (agent code review) comments.
+	 * reviewable (PR / code review) comments.
 	 */
 	readonly pendingAgentReveal?: boolean;
 }

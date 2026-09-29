@@ -13,11 +13,13 @@ import { BufferReader, BufferWriter, deserialize, serialize } from '../../../../
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IConfigurationChangeEvent } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
+import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { IApplicationBadge, INativeHostService } from '../../../../../platform/native/common/native.js';
 import product from '../../../../../platform/product/common/product.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ISessionsChangeEvent, ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { BlockedSessions } from '../../../blockedSessions/browser/blockedSessions.js';
 import { SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT, SESSIONS_APPLICATION_BADGE_OPTIONS_SETTING, SESSIONS_APPLICATION_BADGE_SETTING, SessionsApplicationBadge } from '../../electron-browser/sessionsApplicationBadge.js';
 
 class TestSessionsManagementService extends mock<ISessionsManagementService>() {
@@ -49,6 +51,18 @@ class TestNativeHostService extends mock<INativeHostService>() {
 	}
 }
 
+class TestBlockedSessions extends mock<BlockedSessions>() {
+
+	private readonly _failingCISessions = observableValue<readonly ISession[]>('failingCISessions', []);
+	override readonly failingCISessions = this._failingCISessions;
+
+	setFailingCISessions(sessions: readonly ISession[]): void {
+		this._failingCISessions.set(sessions, undefined);
+	}
+
+	override dispose(): void { }
+}
+
 function createSession(id: string, state: { status?: SessionStatus; isRead?: boolean; isArchived?: boolean }) {
 	const status = observableValue<SessionStatus>(`status-${id}`, state.status ?? SessionStatus.Completed);
 	const isRead = observableValue(`isRead-${id}`, state.isRead ?? true);
@@ -73,10 +87,13 @@ suite('SessionsApplicationBadge', () => {
 		management.sessions.push(...sessions);
 
 		const nativeHost = new TestNativeHostService();
+		const blockedSessions = new TestBlockedSessions();
+		const instantiationService = store.add(new TestInstantiationService());
+		instantiationService.stubInstance(BlockedSessions, blockedSessions);
 
-		store.add(new SessionsApplicationBadge(management, nativeHost, configuration, new TestThemeService()));
+		store.add(new SessionsApplicationBadge(management, nativeHost, configuration, new TestThemeService(), instantiationService));
 
-		return { management, nativeHost, configuration };
+		return { management, nativeHost, configuration, blockedSessions };
 	}
 
 	function createBadge(sessions: ISession[], enabled = true, options: Partial<typeof SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT> = {}) {
@@ -91,39 +108,59 @@ suite('SessionsApplicationBadge', () => {
 	}
 
 	test('defaults to counting only sessions that need input', () => {
-		const { nativeHost } = createBadgeWithConfiguration(
-			[
-				createSession('needs-input', { status: SessionStatus.NeedsInput }).session,
-				createSession('unread', { isRead: false }).session,
-			],
+		const needsInput = createSession('needs-input', { status: SessionStatus.NeedsInput });
+		const unread = createSession('unread', { isRead: false });
+		const failingCI = createSession('failing-ci', {});
+		const { nativeHost, blockedSessions } = createBadgeWithConfiguration(
+			[needsInput.session, unread.session, failingCI.session],
 			new TestConfigurationService({ [SESSIONS_APPLICATION_BADGE_SETTING]: true }),
 		);
+
+		blockedSessions.setFailingCISessions([failingCI.session]);
 
 		assert.deepStrictEqual({
 			defaults: SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT,
 			counts: badgeCounts(nativeHost),
 		}, {
-			defaults: { inputNeeded: true, unread: false },
+			defaults: { inputNeeded: true, unread: false, ciFailing: false },
 			counts: [1],
 		});
 	});
 
 	for (const { options, expectedCount } of [
-		{ options: { inputNeeded: false, unread: false }, expectedCount: 0 },
-		{ options: { inputNeeded: true, unread: false }, expectedCount: 2 },
-		{ options: { inputNeeded: false, unread: true }, expectedCount: 2 },
-		{ options: { inputNeeded: true, unread: true }, expectedCount: 3 },
+		{ options: { inputNeeded: false, unread: false, ciFailing: false }, expectedCount: 0 },
+		{ options: { inputNeeded: true, unread: false, ciFailing: false }, expectedCount: 4 },
+		{ options: { inputNeeded: false, unread: true, ciFailing: false }, expectedCount: 4 },
+		{ options: { inputNeeded: false, unread: false, ciFailing: true }, expectedCount: 4 },
+		{ options: { inputNeeded: true, unread: true, ciFailing: false }, expectedCount: 6 },
+		{ options: { inputNeeded: true, unread: false, ciFailing: true }, expectedCount: 6 },
+		{ options: { inputNeeded: false, unread: true, ciFailing: true }, expectedCount: 6 },
+		{ options: { inputNeeded: true, unread: true, ciFailing: true }, expectedCount: 7 },
 	]) {
 		test(`counts each matching session once with ${JSON.stringify(options)}`, () => {
-			const { nativeHost } = createBadge([
-				createSession('needs-input', { status: SessionStatus.NeedsInput }).session,
-				createSession('unread-needs-input', { status: SessionStatus.NeedsInput, isRead: false }).session,
+			const needsInput = createSession('needs-input', { status: SessionStatus.NeedsInput });
+			const unreadNeedsInput = createSession('unread-needs-input', { status: SessionStatus.NeedsInput, isRead: false });
+			const failingCI = createSession('failing-ci', {});
+			const unreadFailingCI = createSession('unread-failing-ci', { isRead: false });
+			const needsInputFailingCI = createSession('needs-input-failing-ci', { status: SessionStatus.NeedsInput });
+			const unreadNeedsInputFailingCI = createSession('unread-needs-input-failing-ci', { status: SessionStatus.NeedsInput, isRead: false });
+			const archivedFailingCI = createSession('archived-failing-ci', { isArchived: true });
+			const { nativeHost, blockedSessions } = createBadge([
+				needsInput.session,
+				unreadNeedsInput.session,
+				failingCI.session,
+				unreadFailingCI.session,
+				needsInputFailingCI.session,
+				unreadNeedsInputFailingCI.session,
+				archivedFailingCI.session,
 				createSession('unread', { isRead: false }).session,
 				createSession('archived-input', { status: SessionStatus.NeedsInput, isRead: false, isArchived: true }).session,
 				createSession('archived-unread', { isRead: false, isArchived: true }).session,
 				createSession('in-progress-unread', { status: SessionStatus.InProgress, isRead: false }).session,
 				createSession('idle', {}).session,
 			], true, options);
+
+			blockedSessions.setFailingCISessions([failingCI.session, unreadFailingCI.session, needsInputFailingCI.session, unreadNeedsInputFailingCI.session, archivedFailingCI.session]);
 
 			assert.strictEqual(nativeHost.badges.at(-1)?.count ?? 0, expectedCount);
 		});
@@ -134,9 +171,9 @@ suite('SessionsApplicationBadge', () => {
 			createSession('unread', { isRead: false }).session,
 			createSession('needs-input', { status: SessionStatus.NeedsInput }).session,
 			createSession('unread-and-needs-input', { isRead: false, status: SessionStatus.NeedsInput }).session,
+			createSession('in-progress-unread', { isRead: false, status: SessionStatus.InProgress }).session,
 			createSession('archived-unread', { isRead: false, isArchived: true }).session,
 			createSession('archived-needs-input', { status: SessionStatus.NeedsInput, isArchived: true }).session,
-			createSession('in-progress-unread', { status: SessionStatus.InProgress, isRead: false }).session,
 			createSession('idle', {}).session,
 		], true, { unread: true });
 
@@ -150,6 +187,17 @@ suite('SessionsApplicationBadge', () => {
 		]);
 	});
 
+	test('counts a read session with failing CI', () => {
+		const failingCI = createSession('failing-ci', {});
+		const { nativeHost, blockedSessions } = createBadge([failingCI.session], true, { ciFailing: true });
+
+		blockedSessions.setFailingCISessions([failingCI.session]);
+
+		assert.deepStrictEqual(nativeHost.badges.map(badge => ({ count: badge?.count, description: badge?.description })), [
+			{ count: 1, description: '1 session needs your attention' }
+		]);
+	});
+
 	test('uses the product-quality default when the setting value is unavailable', () => {
 		const { nativeHost } = createBadgeWithConfiguration(
 			[createSession('needs-input', { status: SessionStatus.NeedsInput }).session],
@@ -160,16 +208,20 @@ suite('SessionsApplicationBadge', () => {
 	});
 
 	test('updates immediately when badge options change and restores defaults when reset', async () => {
-		const { nativeHost, configuration } = createBadge([
+		const failingCI = [0, 1, 2].map(index => createSession(`ci-${index}`, {}).session);
+		const { nativeHost, configuration, blockedSessions } = createBadge([
 			createSession('needs-input', { status: SessionStatus.NeedsInput }).session,
 			createSession('unread-1', { isRead: false }).session,
 			createSession('unread-2', { isRead: false }).session,
+			...failingCI,
 		]);
+		blockedSessions.setFailingCISessions(failingCI);
 
 		for (const options of [
-			{ inputNeeded: false, unread: true },
-			{ inputNeeded: true, unread: true },
-			{ inputNeeded: false, unread: false },
+			{ inputNeeded: false, unread: true, ciFailing: false },
+			{ inputNeeded: false, unread: false, ciFailing: true },
+			{ inputNeeded: true, unread: true, ciFailing: true },
+			{ inputNeeded: false, unread: false, ciFailing: false },
 			undefined,
 		]) {
 			await configuration.setUserConfiguration(SESSIONS_APPLICATION_BADGE_OPTIONS_SETTING, options);
@@ -178,7 +230,7 @@ suite('SessionsApplicationBadge', () => {
 			});
 		}
 
-		assert.deepStrictEqual(badgeCounts(nativeHost), [1, 2, 3, undefined, 1]);
+		assert.deepStrictEqual(badgeCounts(nativeHost), [1, 2, 3, 6, undefined, 1]);
 	});
 
 	test('is off until enabled and clears when disabled', async () => {

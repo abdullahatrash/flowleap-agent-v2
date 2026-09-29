@@ -9,8 +9,6 @@ import { IDebugService, State, IDebugConfiguration } from '../common/debug.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IStatusbarEntry, IStatusbarService, StatusbarAlignment, IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
-import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export class DebugStatusContribution implements IWorkbenchContribution {
 
@@ -21,15 +19,8 @@ export class DebugStatusContribution implements IWorkbenchContribution {
 	constructor(
 		@IStatusbarService private readonly statusBarService: IStatusbarService,
 		@IDebugService private readonly debugService: IDebugService,
-		@IConfigurationService configurationService: IConfigurationService,
-		@IContextKeyService contextKeyService: IContextKeyService
+		@IConfigurationService configurationService: IConfigurationService
 	) {
-		// FlowLeap Patent IDE: Don't show debug status bar in Patent IDE mode
-		// Default to true (Patent IDE mode) if context key is not yet initialized
-		const isPatentIdeMode = PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false;
-		if (isPatentIdeMode) {
-			return;
-		}
 
 		const addStatusBarEntry = () => {
 			this.entryAccessor = this.statusBarService.addEntry(this.entry, 'status.debug', StatusbarAlignment.LEFT, 30 /* Low Priority */);

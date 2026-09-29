@@ -8,42 +8,14 @@ import { Codicon } from '../../../../../base/common/codicons.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IChat, ISession, ISessionWorkspace, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { ISession, ISessionWorkspace } from '../../../../services/sessions/common/session.js';
 import { formatSessionDetails } from '../../browser/sessionDetailsAction.js';
-
-function createTestSession(title: string, options: { resourceId?: string; isArchived?: boolean; workspace?: ISessionWorkspace } = {}): ISession {
-	const resourceId = options.resourceId ?? title;
-	const now = new Date();
-	return {
-		sessionId: resourceId,
-		resource: URI.parse(`test-session://${resourceId}`),
-		providerId: 'test',
-		sessionType: 'test',
-		icon: Codicon.account,
-		createdAt: now,
-		workspace: constObservable(options.workspace),
-		title: constObservable(title),
-		updatedAt: constObservable(now),
-		status: constObservable(SessionStatus.Completed),
-		changesets: constObservable([]),
-		changes: constObservable([]),
-		modelId: constObservable(undefined),
-		mode: constObservable(undefined),
-		loading: constObservable(false),
-		isArchived: constObservable(options.isArchived ?? false),
-		isRead: constObservable(true),
-		description: constObservable(undefined),
-		lastTurnEnd: constObservable(undefined),
-		chats: constObservable<readonly IChat[]>([]),
-		mainChat: constObservable<IChat>(undefined!),
-		capabilities: { supportsMultipleChats: false },
-	};
-}
+import { createTestSession } from './sessionsListTestUtils.js';
 
 suite('Session Details', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('lists exact working directories for non-archived sessions', () => {
+	test('lists exact working directories for non-archived user sessions', () => {
 		const localWorkingDirectory = URI.file('/repo.worktrees/feature');
 		const workspace: ISessionWorkspace = {
 			uri: URI.file('/repo'),
@@ -66,11 +38,18 @@ suite('Session Details', () => {
 			requiresWorkspaceTrust: false,
 			isVirtualWorkspace: false,
 		};
-		const working = createTestSession('Working', { resourceId: 'working', workspace });
-		const noWorkspace = createTestSession('No Workspace', { resourceId: 'no-workspace' });
-		const archived = createTestSession('Archived', { resourceId: 'archived', isArchived: true });
+		const working: ISession = {
+			...createTestSession('Working', { resourceId: 'working' }).session,
+			workspace: constObservable(workspace),
+		};
+		const quickChat = createTestSession('Quick Chat', { resourceId: 'quick-chat', isQuickChat: true }).session;
+		const archived = createTestSession('Archived', { isArchived: true }).session;
+		const automation: ISession = {
+			...createTestSession('Automation').session,
+			isAutomation: constObservable(true),
+		};
 
-		assert.strictEqual(formatSessionDetails([working, archived, noWorkspace]), [
+		assert.strictEqual(formatSessionDetails([working, archived, automation, quickChat]), [
 			'Session Details',
 			'',
 			'Session: Working',
@@ -78,17 +57,21 @@ suite('Session Details', () => {
 			'Working directory: vscode-agent-host://host/home/user/repo',
 			'Resource: test-session://working',
 			'',
-			'Session: No Workspace',
+			'Session: Quick Chat',
 			'Working directory: (none)',
-			'Resource: test-session://no-workspace',
+			'Resource: test-session://quick-chat',
 			'',
 		].join('\n'));
 	});
 
-	test('reports when there are no non-archived sessions', () => {
-		const archived = createTestSession('Archived', { isArchived: true });
+	test('reports when there are no non-archived user sessions', () => {
+		const archived = createTestSession('Archived', { isArchived: true }).session;
+		const automation: ISession = {
+			...createTestSession('Automation').session,
+			isAutomation: constObservable(true),
+		};
 
-		assert.strictEqual(formatSessionDetails([archived]), [
+		assert.strictEqual(formatSessionDetails([archived, automation]), [
 			'Session Details',
 			'',
 			'No non-archived user sessions.',

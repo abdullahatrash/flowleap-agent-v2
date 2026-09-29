@@ -4,21 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { localize } from '../../../../nls.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
 import { IProductOnboardingTheme } from '../../../../base/common/product.js';
 
 /**
  * Step identifiers for the onboarding walkthrough.
  */
 export const enum OnboardingStepId {
-	Role = 'onboarding.role',
 	SignIn = 'onboarding.signIn',
 	Personalize = 'onboarding.personalize',
 	AiPreference = 'onboarding.aiPreference',
-	AgentSessions = 'onboarding.agentSessions',
-	Trial = 'onboarding.trial',
-	Model = 'onboarding.model',
-	Finale = 'onboarding.finale',
 }
 
 /**
@@ -26,22 +20,12 @@ export const enum OnboardingStepId {
  */
 export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
 	switch (stepId) {
-		case OnboardingStepId.Role:
-			return localize('onboarding.step.role', "What brings you to FlowLeap?");
 		case OnboardingStepId.SignIn:
 			return localize('onboarding.step.signIn', "Sign In");
 		case OnboardingStepId.Personalize:
 			return localize('onboarding.step.personalize', "Make It Yours");
 		case OnboardingStepId.AiPreference:
 			return localize('onboarding.step.aiPreference', "Your AI Style");
-		case OnboardingStepId.AgentSessions:
-			return localize('onboarding.step.agentSessions', "Build with AI Agents");
-		case OnboardingStepId.Trial:
-			return localize('onboarding.step.trial', "Subscribe to Continue");
-		case OnboardingStepId.Model:
-			return localize('onboarding.step.model', "Connect Your AI Model");
-		case OnboardingStepId.Finale:
-			return localize('onboarding.step.finale', "Run Your First Investigation");
 	}
 }
 
@@ -50,164 +34,22 @@ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
  */
 export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
 	switch (stepId) {
-		case OnboardingStepId.Role:
-			return localize('onboarding.step.role.subtitle', "This tailors your first investigation and the examples we show you.");
 		case OnboardingStepId.SignIn:
 			return localize('onboarding.step.signIn.subtitle', "Sync settings, unlock AI features, and connect to GitHub");
 		case OnboardingStepId.Personalize:
 			return localize('onboarding.step.personalize.subtitle', "Choose your theme and keyboard mapping");
 		case OnboardingStepId.AiPreference:
 			return localize('onboarding.step.aiPreference.subtitle', "Choose how much AI collaboration fits your workflow");
-		case OnboardingStepId.AgentSessions:
-			return localize('onboarding.step.agentSessions.subtitle', "Open Chat anytime with {0}", isMacintosh ? '\u2318\u2303I' : 'Ctrl+Alt+I');
-		case OnboardingStepId.Trial:
-			return localize('onboarding.step.trial.subtitle', "Your free 7-day trial ran at sign-up. One flat plan keeps the patent data and analytics.");
-		case OnboardingStepId.Model:
-			return localize('onboarding.step.model.subtitle', "FlowLeap runs on your own AI model. One key connects it.");
-		case OnboardingStepId.Finale:
-			return localize('onboarding.step.finale.subtitle', "Copy the prompt, paste it into chat, and press send — you'll see FlowLeap work with real sources.");
 	}
 }
 
 /**
- * Ordered step IDs for the onboarding flow (patent-persona funnel, issue #79).
- *
- * Role \u2192 See it work \u2192 Sign in \u2192 Trial \u2192 Connect a model. The {@link OnboardingStepId.Trial}
- * step is only reachable when signed in; {@link computeVisibleSteps} filters it out otherwise.
- * The legacy {@link OnboardingStepId.Personalize} / {@link OnboardingStepId.AiPreference} steps
- * are intentionally absent \u2014 the theme default is applied silently (issue #79 principle 4).
+ * Ordered step IDs for the onboarding flow.
  */
 export const ONBOARDING_STEPS: readonly OnboardingStepId[] = [
-	OnboardingStepId.Role,
-	OnboardingStepId.AgentSessions,
 	OnboardingStepId.SignIn,
-	OnboardingStepId.Trial,
-	OnboardingStepId.Model,
-	OnboardingStepId.Finale,
+	OnboardingStepId.Personalize,
 ];
-
-/**
- * Runtime facts that decide which steps are shown.
- */
-export interface OnboardingStepContext {
-	/** Whether a FlowLeap session currently exists. */
-	readonly signedIn: boolean;
-	/** Whether the user already has access-granting subscription (active or trialing). */
-	readonly hasAccess: boolean;
-}
-
-/**
- * The steps visible for a given runtime {@link OnboardingStepContext}, in {@link ONBOARDING_STEPS}
- * order. The Trial step only makes sense once signed in AND without access: the trial itself starts
- * at account creation (backend ADR 0018), so a fresh signed-in user has access and skips it — the
- * step reaches only expired or never-subscribed users, and its offer is Subscribe.
- */
-export function computeVisibleSteps(context: OnboardingStepContext): OnboardingStepId[] {
-	return ONBOARDING_STEPS.filter(stepId => stepId !== OnboardingStepId.Trial || (context.signedIn && !context.hasAccess));
-}
-
-/**
- * Persona the user selects on the first (Role) step. Captured and stored in P1; it tailors later
- * copy and the finale investigation in a later phase (issue #79 P2/P3).
- */
-export const enum OnboardingRole {
-	PatentAttorney = 'patent-attorney',
-	IpAnalyst = 'ip-analyst',
-	Researcher = 'researcher',
-	Founder = 'founder',
-}
-
-/**
- * A selectable role card on the Role step.
- */
-export interface IOnboardingRoleOption {
-	readonly id: OnboardingRole;
-	readonly label: string;
-	readonly description: string;
-	readonly icon: string;
-}
-
-/**
- * Role cards shown on the first onboarding step, in display order.
- */
-export const ONBOARDING_ROLE_OPTIONS: readonly IOnboardingRoleOption[] = [
-	{
-		id: OnboardingRole.PatentAttorney,
-		label: localize('onboarding.role.attorney', "Patent attorney"),
-		description: localize('onboarding.role.attorney.desc', "Draft and prosecute applications, analyze claims, and assess freedom to operate."),
-		icon: 'law',
-	},
-	{
-		id: OnboardingRole.IpAnalyst,
-		label: localize('onboarding.role.analyst', "IP analyst"),
-		description: localize('onboarding.role.analyst.desc', "Map patent landscapes, track competitors, and build portfolio intelligence."),
-		icon: 'graph',
-	},
-	{
-		id: OnboardingRole.Researcher,
-		label: localize('onboarding.role.researcher', "Researcher"),
-		description: localize('onboarding.role.researcher.desc', "Explore prior art across patents and academic literature for your field."),
-		icon: 'beaker',
-	},
-	{
-		id: OnboardingRole.Founder,
-		label: localize('onboarding.role.founder', "Founder"),
-		description: localize('onboarding.role.founder.desc', "Validate an idea, sketch freedom to operate, and shape a patent strategy."),
-		icon: 'rocket',
-	},
-];
-
-/**
- * Map the stored persona to a role-tailored first-investigation prompt shown on the finale step.
- * The user copies it into chat themselves (issue #79 finale — no auto-run). Copy is patent-domain
- * and readable; an unknown/absent role falls back to a generic prior-art search. Pure so the mapping
- * is unit-tested directly.
- */
-export function roleToFirstInvestigation(role: OnboardingRole | undefined): string {
-	switch (role) {
-		case OnboardingRole.PatentAttorney:
-			return localize('onboarding.finale.prompt.attorney', "Analyze the claims of US 7,479,949 (Apple's multitouch patent): list the independent claims, break claim 1 into its limitations, and find the closest prior art — flag any X-category references that could challenge novelty.");
-		case OnboardingRole.IpAnalyst:
-			return localize('onboarding.finale.prompt.analyst', "Sketch the patent landscape for solid-state battery electrolytes: surface the leading assignees, how filings have trended over the last five years, and where the whitespace is.");
-		case OnboardingRole.Researcher:
-			return localize('onboarding.finale.prompt.researcher', "Run a prior-art sweep on CRISPR base editing across both patents and academic literature, and summarize the most relevant disclosures with citations.");
-		case OnboardingRole.Founder:
-			return localize('onboarding.finale.prompt.founder', "Run a quick freedom-to-operate sketch for a smart-ring sleep tracker: find the patents most likely to read on it and flag the biggest infringement risks.");
-		default:
-			return localize('onboarding.finale.prompt.generic', "Search for prior art on an invention you care about — describe it in a sentence or two and I'll find the closest patents and publications, with citations.");
-	}
-}
-
-/**
- * Tri-state FlowLeap subscription access, mirroring the extension's `getSubscriptionAccess()`
- * bridge: `active` (active or trialing), a confirmed `inactive`, or an `unknown` inconclusive check.
- */
-export type SubscriptionAccess = 'active' | 'inactive' | 'unknown';
-
-/** How often the Trial step re-checks the subscription while the user is in the browser checkout. */
-export const TRIAL_POLL_INTERVAL_MS = 5_000;
-
-/** How long the Trial step keeps polling before giving up and letting the user advance manually. */
-export const TRIAL_POLL_TIMEOUT_MS = 5 * 60 * 1000;
-
-/** The decision the Trial poll loop makes after each subscription check. */
-export type TrialPollDecision = 'advance' | 'continue' | 'timeout';
-
-/**
- * Pure decision for one tick of the Trial subscription poll. Advances the wizard the moment access
- * is confirmed (`active`), stops once the {@link TRIAL_POLL_TIMEOUT_MS} budget is spent, and keeps
- * polling otherwise. An `unknown` result (e.g. the check couldn't reach the backend) is treated as
- * "keep waiting" \u2014 the checkout may simply not have completed yet.
- */
-export function decideTrialPoll(access: SubscriptionAccess, elapsedMs: number): TrialPollDecision {
-	if (access === 'active') {
-		return 'advance';
-	}
-	if (elapsedMs >= TRIAL_POLL_TIMEOUT_MS) {
-		return 'timeout';
-	}
-	return 'continue';
-}
 
 /**
  * Theme option for the onboarding personalization step.
@@ -262,12 +104,6 @@ export const ONBOARDING_AI_PREFERENCE_OPTIONS: readonly IAiPreferenceOption[] = 
  * Storage key for persisting onboarding completion state.
  */
 export const ONBOARDING_STORAGE_KEY = 'welcomeOnboarding.state';
-
-/**
- * Storage key for the persisted role selection ({@link OnboardingRole}). APPLICATION scope, so the
- * choice survives across windows and a wizard re-trigger pre-selects it.
- */
-export const ONBOARDING_ROLE_STORAGE_KEY = 'welcomeOnboarding.role';
 
 /**
  * Regex matching a single-word GHE instance slug (e.g. "octocat").

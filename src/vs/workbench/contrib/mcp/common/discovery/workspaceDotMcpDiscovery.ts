@@ -4,23 +4,22 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { Disposable, DisposableMap, DisposableStore, IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { isEqual, joinPath } from '../../../../../base/common/resources.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
+import { parseWorkspaceRootMcpConfiguration, WORKSPACE_ROOT_MCP_COLLECTION_ID_PREFIX, WORKSPACE_ROOT_MCP_CONFIG_FILE } from '../../../../../platform/mcp/common/mcpWorkspaceConfiguration.js';
 import { StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService, IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import { IRemoteAgentService } from '../../../../services/remote/common/remoteAgentService.js';
 import { IMcpRegistry } from '../mcpRegistryTypes.js';
-import { McpCollectionSortOrder, McpServerDefinition, McpServerTrust } from '../mcpTypes.js';
+import { McpCollectionProvenance, McpCollectionSortOrder, McpServerDefinition, McpServerTrust } from '../mcpTypes.js';
 import { IMcpDiscovery } from './mcpDiscovery.js';
 import { claudeConfigToServerDefinition } from './nativeMcpDiscoveryAdapters.js';
 
-/**
- * Discovers workspace-root `.mcp.json` files using the Claude-style `{ "mcpServers": { ... } }` format.
- * Servers inherit workspace trust, matching `.vscode/mcp.json`.
- */
+/** Discovers workspace-root `.mcp.json` files, which inherit workspace trust. */
 export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscovery {
 	readonly fromGallery = false;
 
@@ -57,12 +56,13 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 	}
 
 	private _watchFolder(folder: IWorkspaceFolder) {
-		const configFile = joinPath(folder.uri, '.mcp.json');
-		const collectionId = `workspace-dot-mcp.${folder.index}`;
+		const configFile = joinPath(folder.uri, WORKSPACE_ROOT_MCP_CONFIG_FILE);
+		const collectionId = `${WORKSPACE_ROOT_MCP_COLLECTION_ID_PREFIX}${folder.index}`;
 		const serverDefinitions = observableValue<readonly McpServerDefinition[]>(this, []);
 
 		const collection = {
 			id: collectionId,
+			provenance: McpCollectionProvenance.WorkspaceDotMcp,
 			label: `${folder.name}/.mcp.json`,
 			remoteAuthority: this._remoteAgentService.getConnection()?.remoteAuthority || null,
 			scope: StorageScope.WORKSPACE,
@@ -77,13 +77,16 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 
 		const store = new DisposableStore();
 		const collectionRegistration = store.add(new MutableDisposable());
+		let updateSequence = 0;
 		let isLazyCollection = true;
 
 		const updateFile = async () => {
+			const sequence = updateSequence;
 			let definitions: McpServerDefinition[] = [];
 			try {
 				const contents = await this._fileService.readFile(configFile);
-				const defs = await claudeConfigToServerDefinition(collectionId, contents.value, folder.uri);
+				const { servers } = parseWorkspaceRootMcpConfiguration(contents.value.toString());
+				const defs = await claudeConfigToServerDefinition(collectionId, VSBuffer.fromString(JSON.stringify({ mcpServers: servers })), { defaultCwd: folder.uri });
 				if (defs) {
 					for (const d of defs) {
 						d.roots = [folder.uri];
@@ -94,6 +97,9 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 				// file doesn't exist or is malformed
 			}
 
+			if (sequence !== updateSequence || store.isDisposed) {
+				return;
+			}
 			if (!definitions.length) {
 				collectionRegistration.clear();
 			} else {
@@ -107,7 +113,10 @@ export class WorkspaceDotMcpDiscovery extends Disposable implements IMcpDiscover
 
 		const throttler = store.add(new RunOnceScheduler(updateFile, 500));
 		const watcher = store.add(this._fileService.createWatcher(configFile, { recursive: false, excludes: [] }));
-		store.add(watcher.onDidChange(() => throttler.schedule()));
+		store.add(watcher.onDidChange(() => {
+			updateSequence++;
+			throttler.schedule();
+		}));
 		let initialUpdate: Promise<void> | undefined;
 		const loadInitial = () => initialUpdate ??= updateFile();
 		collectionRegistration.value = this._mcpRegistry.registerCollection({

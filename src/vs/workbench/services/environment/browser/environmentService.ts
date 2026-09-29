@@ -34,6 +34,11 @@ export interface IBrowserWorkbenchEnvironmentService extends IWorkbenchEnvironme
 	readonly options?: IWorkbenchConstructionOptions;
 
 	/**
+	 * Title of the agent session that launched this workbench.
+	 */
+	readonly sessionTitle?: string;
+
+	/**
 	 * Gets whether a resolver extension is expected for the environment.
 	 */
 	readonly expectsResolverExtension: boolean;
@@ -203,7 +208,15 @@ export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvi
 			this.extensionHostDebugEnvironment = this.resolveExtensionHostDebugEnvironment();
 		}
 
-		return this.extensionHostDebugEnvironment.extensionEnabledProposedApi;
+		if (this.extensionHostDebugEnvironment.extensionEnabledProposedApi !== undefined) {
+			return this.extensionHostDebugEnvironment.extensionEnabledProposedApi;
+		}
+
+		if (this.options.enabledExtensionProposedApi !== undefined) {
+			return [...this.options.enabledExtensionProposedApi];
+		}
+
+		return undefined;
 	}
 
 	@memoize
@@ -262,6 +275,9 @@ export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvi
 
 	@memoize
 	get isSessionsWindow(): boolean { return this.payload?.get('isSessionsWindow') === 'true'; }
+
+	@memoize
+	get sessionTitle(): string | undefined { return this.payload?.get('sessionTitle'); }
 
 	@memoize
 	get profile(): string | undefined { return this.payload?.get('profile'); }

@@ -14,6 +14,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { IDiffEditorOptionsService, SESSIONS_DIFF_EDITOR_WORD_WRAP_SETTING, SESSIONS_EDITOR_WORD_WRAP_SETTING, SessionsDiffViewModeContext, SessionsWordWrap } from '../common/diffEditorOptionsService.js';
 
 const VIEW_MODE_STORAGE_KEY = 'sessions.diffEditor.viewMode';
+const LEGACY_RENDER_SIDE_BY_SIDE_STORAGE_KEY = 'sessions.diffEditor.renderSideBySide';
 
 export class DiffEditorOptionsService extends Disposable implements IDiffEditorOptionsService {
 
@@ -31,7 +32,10 @@ export class DiffEditorOptionsService extends Disposable implements IDiffEditorO
 	) {
 		super();
 		const storedViewMode = storageService.get(VIEW_MODE_STORAGE_KEY, StorageScope.PROFILE);
-		this.viewMode = observableValue<DiffEditorViewMode>(this, isDiffEditorViewMode(storedViewMode) ? storedViewMode : 'automatic');
+		const legacyRenderSideBySide = storageService.getBoolean(LEGACY_RENDER_SIDE_BY_SIDE_STORAGE_KEY, StorageScope.PROFILE);
+		this.viewMode = observableValue<DiffEditorViewMode>(this, isDiffEditorViewMode(storedViewMode)
+			? storedViewMode
+			: legacyRenderSideBySide === false ? 'inline' : 'automatic');
 		this.renderSideBySide = this.viewMode.map(this, mode => mode !== 'inline');
 		this.diffEditorWordWrap = this.observeWordWrapSetting(SESSIONS_DIFF_EDITOR_WORD_WRAP_SETTING);
 		this.editorWordWrap = this.observeWordWrapSetting(SESSIONS_EDITOR_WORD_WRAP_SETTING);

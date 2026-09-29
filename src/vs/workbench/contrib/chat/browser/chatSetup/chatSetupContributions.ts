@@ -23,7 +23,6 @@ import { Action2, MenuId, MenuRegistry, registerAction2 } from '../../../../../p
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { IsWebContext } from '../../../../../platform/contextkey/common/contextkeys.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
@@ -50,14 +49,15 @@ import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { IExtension, IExtensionsWorkbenchService } from '../../../extensions/common/extensions.js';
+import { UpdateTitleBarEditorVisibleContext } from '../../../update/common/update.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { IChatSessionsService } from '../../common/chatSessionsService.js';
-import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../common/constants.js';
+import { ChatAIDisabledSettingId, ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../common/constants.js';
 import { CHAT_CATEGORY, CHAT_SETUP_ACTION_ID, CHAT_SETUP_SUPPORT_ANONYMOUS_ACTION_ID } from '../actions/chatActions.js';
 import { ChatViewContainerId, IChatWidget, IChatWidgetService } from '../chat.js';
 import { ChatInputNotificationSeverity, IChatInputNotificationService } from '../widget/input/chatInputNotificationService.js';
 import { chatViewsWelcomeRegistry } from '../viewsWelcome/chatViewsWelcome.js';
-import { buildUpgradeUrlWithRedirect, ChatSetupAnonymous, ChatSetupStrategy, refreshTokens } from './chatSetup.js';
+import { buildUpgradeUrlWithRedirect, ChatSetupAnonymous, ChatSetupSource, ChatSetupStrategy, IChatSetupCommandOptions, IChatSetupResult, refreshTokens } from './chatSetup.js';
 import { ChatSetupController } from './chatSetupController.js';
 import { GrowthSessionController, registerGrowthSession } from './chatSetupGrowthSession.js';
 import { AICodeActionsHelper, AINewSymbolNamesProvider, ChatCodeActionsProvider, SetupAgent } from './chatSetupProviders.js';
@@ -224,7 +224,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 		class ChatSetupTriggerAction extends Action2 {
 
-			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with FlowLeap for free...");
+			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with Copilot for free...");
 
 			constructor() {
 				super({
@@ -232,20 +232,17 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					title: ChatSetupTriggerAction.CHAT_SETUP_ACTION_LABEL,
 					category: CHAT_CATEGORY,
 					f1: true,
-					precondition: ContextKeyExpr.and(
-						ContextKeyExpr.or(
-							ChatContextKeys.Setup.hidden,
-							ChatContextKeys.Setup.disabledInWorkspace,
-							ChatContextKeys.Setup.untrusted,
-							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.canSignUp
-						),
-						PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub "Use AI Features with FlowLeap" setup command in Patent IDE mode
+					precondition: ContextKeyExpr.or(
+						ChatContextKeys.Setup.hidden,
+						ChatContextKeys.Setup.disabledInWorkspace,
+						ChatContextKeys.Setup.untrusted,
+						ChatContextKeys.Setup.completed.negate(),
+						ChatContextKeys.Entitlement.canSignUp
 					)
 				});
 			}
 
-			override async run(accessor: ServicesAccessor, mode?: ChatModeKind | string, options?: { forceSignInDialog?: boolean; additionalScopes?: readonly string[]; forceAnonymous?: ChatSetupAnonymous; inputValue?: string; dialogIcon?: ThemeIcon; dialogTitle?: string; setupStrategy?: ChatSetupStrategy; disableCloseButton?: boolean; onSignInStarted?: () => void }): Promise<boolean> {
+			override async run(accessor: ServicesAccessor, mode?: ChatModeKind | string, options?: IChatSetupCommandOptions): Promise<boolean | IChatSetupResult> {
 				const widgetService = accessor.get(IChatWidgetService);
 				const instantiationService = accessor.get(IInstantiationService);
 				const dialogService = accessor.get(IDialogService);
@@ -254,7 +251,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				const configurationService = accessor.get(IConfigurationService);
 
 				await context.update({ hidden: false });
-				configurationService.updateValue(ChatConfiguration.AIDisabled, false);
+				configurationService.updateValue(ChatAIDisabledSettingId, false);
 
 				if (mode) {
 					const chatWidget = await widgetService.revealWidget();
@@ -273,8 +270,12 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				}
 
 				const setup = ChatSetup.getInstance(instantiationService, context, controller);
-				const { success } = await setup.run(options);
-				if (success === false && !lifecycleService.willShutdown) {
+				const result = await setup.run({ telemetrySource: ChatSetupSource.Command, ...options });
+				if (options?.returnResult) {
+					return result;
+				}
+				const { success } = result;
+				if (success === false && !result.errorAlreadyHandled && !lifecycleService.willShutdown) {
 					const { confirmed } = await dialogService.confirm({
 						type: Severity.Error,
 						message: localize('setupErrorDialog', "Chat setup failed. Would you like to try again?"),
@@ -311,7 +312,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				});
 			}
 
-			override async run(accessor: ServicesAccessor, options?: { dialogIcon?: ThemeIcon; dialogTitle?: string; setupStrategy?: ChatSetupStrategy }): Promise<unknown> {
+			override async run(accessor: ServicesAccessor, options?: { dialogIcon?: ThemeIcon; dialogTitle?: string; setupStrategy?: ChatSetupStrategy; telemetrySource?: ChatSetupSource }): Promise<unknown> {
 				const commandService = accessor.get(ICommandService);
 				const telemetryService = accessor.get(ITelemetryService);
 				const chatEntitlementService = accessor.get(IChatEntitlementService);
@@ -319,6 +320,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: CHAT_SETUP_ACTION_ID, from: 'api' });
 
 				return commandService.executeCommand(CHAT_SETUP_ACTION_ID, undefined, {
+					telemetrySource: ChatSetupSource.AnonymousCommand,
 					forceAnonymous: chatEntitlementService.anonymous ? ChatSetupAnonymous.EnabledWithDialog : undefined,
 					...options
 				});
@@ -330,7 +332,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupForceSignIn',
-					title: localize2('forceSignIn', "Sign in to use FlowLeap")
+					title: localize2('forceSignIn', "Sign in to use GitHub Copilot")
 				});
 			}
 
@@ -340,7 +342,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: CHAT_SETUP_ACTION_ID, from: 'api' });
 
-				return commandService.executeCommand(CHAT_SETUP_ACTION_ID, undefined, { forceSignInDialog: true });
+				return commandService.executeCommand(CHAT_SETUP_ACTION_ID, undefined, { forceSignInDialog: true, telemetrySource: ChatSetupSource.ForcedSignInCommand });
 			}
 		}
 
@@ -368,7 +370,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupFromAccounts',
-					title: localize2('triggerChatSetupFromAccounts', "Sign in to use FlowLeap..."),
+					title: localize2('triggerChatSetupFromAccounts', "Sign in to use GitHub Copilot..."),
 					menu: {
 						id: MenuId.AccountsContext,
 						group: '2_copilot',
@@ -377,8 +379,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Setup.disabledInWorkspace.negate(),
 							CONTEXT_DEFAULT_ACCOUNT_STATE.notEqualsTo(DefaultAccountStatus.Available), // hide only when signed in (a default GitHub account is present); still shown while signed out or before the account state resolves, incl. untrusted workspaces — no auth prompt
 							ChatContextKeys.Setup.completed.negate(),
-							ChatContextKeys.Entitlement.signedOut,
-							PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub Copilot setup CTA in Patent IDE mode; the FlowLeap Accounts CTA (patentAuth.contribution) is the only sign-in entry
+							ChatContextKeys.Entitlement.signedOut
 						)
 					}
 				});
@@ -390,7 +391,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: CHAT_SETUP_ACTION_ID, from: 'accounts' });
 
-				return commandService.executeCommand(CHAT_SETUP_ACTION_ID);
+				return commandService.executeCommand(CHAT_SETUP_ACTION_ID, undefined, { telemetrySource: ChatSetupSource.Accounts });
 			}
 		}
 
@@ -405,7 +406,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 					f1: false,
 					menu: [{
 						id: MenuId.TitleBarAdjacentCenter,
-						order: 0, // same position as the update button
+						order: 0,
 						when: ContextKeyExpr.and(
 							IsWebContext.negate(),
 							ChatContextKeys.Entitlement.signedOut,
@@ -414,9 +415,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Setup.hidden.negate(),
 							ChatContextKeys.Setup.disabledInWorkspace.negate(),
 							ContextKeyExpr.equals(`config.${ChatConfiguration.TitleBarSignInEnabled}`, true),
-							ContextKeyExpr.has('updateTitleBar').negate(),
+							UpdateTitleBarEditorVisibleContext.negate(),
 							InEditorZenModeContext.negate(),
-							PatentIdeContextKeys.Mode.negate(), // FlowLeap: hide the GitHub title-bar Sign In in Patent IDE mode
 						),
 					}]
 				});
@@ -428,7 +428,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: CHAT_SETUP_ACTION_ID, from: 'titlebar' });
 
-				return commandService.executeCommand(CHAT_SETUP_ACTION_ID);
+				return commandService.executeCommand(CHAT_SETUP_ACTION_ID, undefined, { telemetrySource: ChatSetupSource.TitleBar });
 			}
 		}
 
@@ -436,8 +436,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super(
 					ChatConfiguration.TitleBarSignInEnabled,
-					localize('toggle.chatSignIn', 'FlowLeap Sign In'),
-					localize('toggle.chatSignInDescription', "Toggle visibility of the FlowLeap Sign In button in title bar"),
+					localize('toggle.chatSignIn', 'Copilot Sign In'),
+					localize('toggle.chatSignInDescription', "Toggle visibility of the Copilot Sign In button in title bar"),
 					3,
 					ContextKeyExpr.and(
 						IsWebContext.negate(),
@@ -454,7 +454,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.upgradePlan',
-					title: localize2('managePlan', "Upgrade to FlowLeap Pro"),
+					title: localize2('managePlan', "Upgrade to GitHub Copilot Pro"),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
 					precondition: ContextKeyExpr.and(
@@ -463,8 +463,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 						ContextKeyExpr.or(
 							ChatContextKeys.Entitlement.canSignUp,
 							ChatContextKeys.Entitlement.planFree
-						),
-						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub plan-upgrade command, hidden in Patent IDE mode (already inert — no GitHub entitlement)
+						)
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -492,6 +491,9 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: 'workbench.action.chat.upgradePlan', from: 'command' });
 
 				const baseUrl = defaultAccountService.resolveGitHubUrl(GitHubPaths.copilotUpgrade);
+				if (!baseUrl) {
+					throw new Error(localize('githubUrlUnavailable', "The GitHub Enterprise URL is unavailable. Sign in and try again."));
+				}
 				const upgradeUrl = buildUpgradeUrlWithRedirect(baseUrl, productService.urlProtocol, productService.quality);
 				openerService.open(upgradeUrl);
 
@@ -520,7 +522,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.manageAdditionalSpend',
-					title: localize2('manageAdditionalSpend', "Manage FlowLeap Budget"),
+					title: localize2('manageAdditionalSpend', "Manage GitHub Copilot Budget"),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
 					precondition: ContextKeyExpr.and(
@@ -531,8 +533,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 							ChatContextKeys.Entitlement.planProPlus,
 							ChatContextKeys.Entitlement.planMax,
 							ChatContextKeys.Entitlement.planEdu,
-						),
-						PatentIdeContextKeys.Mode.negate() // FlowLeap: GitHub budget command, hidden in Patent IDE mode (already inert — no GitHub entitlement)
+						)
 					),
 					menu: {
 						id: MenuId.ChatTitleBarMenu,
@@ -559,7 +560,11 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 				const telemetryService = accessor.get(ITelemetryService);
 				const defaultAccountService = accessor.get(IDefaultAccountService);
 				telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: 'workbench.action.chat.manageAdditionalSpend', from: 'command' });
-				openerService.open(URI.parse(defaultAccountService.resolveGitHubUrl(GitHubPaths.billingBudgets)));
+				const budgetsUrl = defaultAccountService.resolveGitHubUrl(GitHubPaths.billingBudgets);
+				if (!budgetsUrl) {
+					throw new Error(localize('githubUrlUnavailable', "The GitHub Enterprise URL is unavailable. Sign in and try again."));
+				}
+				openerService.open(URI.parse(budgetsUrl));
 			}
 		}
 
@@ -605,7 +610,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 						break;
 					}
 					case 'chat.internal.review': {
-						const result = await commandService.executeCommand(CHAT_SETUP_SUPPORT_ANONYMOUS_ACTION_ID);
+						const result = await commandService.executeCommand(CHAT_SETUP_SUPPORT_ANONYMOUS_ACTION_ID, { telemetrySource: ChatSetupSource.CodeReview });
 						if (result) {
 							await commandService.executeCommand(actualCommand);
 						}
@@ -622,7 +627,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			ChatContextKeys.Setup.hidden.negate(),
 			ChatContextKeys.Setup.disabledInWorkspace.negate(),
 			ChatContextKeys.Setup.completed.negate(),
-			PatentIdeContextKeys.Mode.negate() // FlowLeap: hide the GitHub editor context-menu Explain/Fix/Code Review entries in Patent IDE mode
 		);
 
 		MenuRegistry.appendMenuItem(MenuId.EditorContext, {
@@ -748,7 +752,7 @@ class ChatSetupExtensionUrlHandler implements IExtensionUrlHandlerOverride {
 			return false;
 		}
 
-		await this.commandService.executeCommand(CHAT_SETUP_ACTION_ID, agentParam, inputParam ? { inputValue: inputParam } : undefined);
+		await this.commandService.executeCommand(CHAT_SETUP_ACTION_ID, agentParam, { inputValue: inputParam || undefined, telemetrySource: ChatSetupSource.Url });
 		return true;
 	}
 
@@ -800,7 +804,7 @@ export class ChatTeardownContribution extends Disposable implements IWorkbenchCo
 	}
 
 	private handleChatDisabled(fromEvent: boolean): void {
-		const chatDisabled = this.configurationService.inspect(ChatConfiguration.AIDisabled);
+		const chatDisabled = this.configurationService.inspect(ChatAIDisabledSettingId);
 		if (chatDisabled.value === true) {
 			this.maybeEnableOrDisableExtension(typeof chatDisabled.workspaceValue === 'boolean' ? EnablementState.DisabledWorkspace : EnablementState.DisabledGlobally);
 			if (fromEvent) {
@@ -815,7 +819,7 @@ export class ChatTeardownContribution extends Disposable implements IWorkbenchCo
 
 		// Configuration changes
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
-			if (!e.affectsConfiguration(ChatConfiguration.AIDisabled)) {
+			if (!e.affectsConfiguration(ChatAIDisabledSettingId)) {
 				return;
 			}
 
@@ -832,11 +836,11 @@ export class ChatTeardownContribution extends Disposable implements IWorkbenchCo
 			const defaultChatExtension = this.extensionsWorkbenchService.local.find(value => ExtensionIdentifier.equals(value.identifier.id, defaultChat.chatExtensionId));
 			if (defaultChatExtension?.local && this.extensionEnablementService.isEnabled(defaultChatExtension.local)) {
 				if (defaultChatExtension.enablementState === EnablementState.EnabledWorkspace) {
-					if (this.configurationService.inspect(ChatConfiguration.AIDisabled).workspaceValue === true) {
-						this.configurationService.updateValue(ChatConfiguration.AIDisabled, false, ConfigurationTarget.WORKSPACE);
+					if (this.configurationService.inspect(ChatAIDisabledSettingId).workspaceValue === true) {
+						this.configurationService.updateValue(ChatAIDisabledSettingId, false, ConfigurationTarget.WORKSPACE);
 					}
 				} else {
-					this.configurationService.updateValue(ChatConfiguration.AIDisabled, false);
+					this.configurationService.updateValue(ChatAIDisabledSettingId, false);
 				}
 			}
 		}));
@@ -898,7 +902,7 @@ export class ChatTeardownContribution extends Disposable implements IWorkbenchCo
 			override async run(accessor: ServicesAccessor): Promise<void> {
 				const preferencesService = accessor.get(IPreferencesService);
 
-				preferencesService.openSettings({ jsonEditor: false, query: `@id:${ChatConfiguration.AIDisabled}` });
+				preferencesService.openSettings({ jsonEditor: false, query: `@id:${ChatAIDisabledSettingId}` });
 			}
 		}
 

@@ -56,11 +56,6 @@ type OpenCommandActionDescriptor = {
 	readonly mnemonicTitle?: string;
 	readonly order?: number;
 	readonly keybindings?: IKeybindings & { when?: ContextKeyExpression };
-	/**
-	 * Additional condition for showing the container's entry in the View menu,
-	 * composed with the container's enablement context key.
-	 */
-	readonly when?: ContextKeyExpression;
 };
 
 /**

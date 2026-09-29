@@ -61,19 +61,36 @@ suite('CommandLineAutoApprover', () => {
 		return commandLineAutoApprover.isCommandLineAutoApproved(commandLine).result === 'approved';
 	}
 
-	function setDefaultAutoApproveRules() {
-		setAutoApproveWithCommandLine(
-			terminalChatAgentToolsConfiguration[TerminalChatAgentToolsSettingId.AutoApprove].default as Record<string, boolean | { approve: boolean; matchCommandLine?: boolean }>
-		);
-	}
-
-	suite('default Git rules', () => {
+	suite('default PowerShell rules', () => {
 		setup(() => {
-			// PowerShell on Windows matches rules case-insensitively, which is what makes the
-			// `GIT -C repo DIFF` case meaningful.
 			shell = 'pwsh';
 			os = OperatingSystem.Windows;
-			setDefaultAutoApproveRules();
+			setAutoApproveWithCommandLine(
+				terminalChatAgentToolsConfiguration[TerminalChatAgentToolsSettingId.AutoApprove].default as Record<string, boolean | { approve: boolean; matchCommandLine?: boolean }>
+			);
+		});
+
+		test('auto-approves explicit safe cmdlets case-insensitively', async () => {
+			const commands = [
+				'Select-Object Name',
+				'select-object Name',
+				'Measure-Object Length',
+				'Compare-Object $a $b',
+				'Format-Table',
+				'Sort-Object Name',
+			];
+			strictEqual((await Promise.all(commands.map(isAutoApproved))).every(Boolean), true);
+		});
+
+		test('does not auto-approve arbitrary cmdlets by verb', async () => {
+			const commands = [
+				'Select-Custom',
+				'Measure-Command',
+				'Compare-Custom',
+				'Format-Hex',
+				'Sort-Custom',
+			];
+			deepStrictEqual(await Promise.all(commands.map(isAutoApproved)), [false, false, false, false, false]);
 		});
 
 		test('keeps the Git directory option case-sensitive', async () => {
@@ -124,13 +141,43 @@ suite('CommandLineAutoApprover', () => {
 				deepStrictEqual(await Promise.all(confirmationRequiredCommands.map(isAutoApproved)), confirmationRequiredCommands.map(() => false));
 			}
 		});
+	});
 
-		test('requires confirmation when git log or git show writes through --output', async () => {
+	suite('default sort rules', () => {
+		setup(() => {
+			setAutoApproveWithCommandLine(
+				terminalChatAgentToolsConfiguration[TerminalChatAgentToolsSettingId.AutoApprove].default as Record<string, boolean | { approve: boolean; matchCommandLine?: boolean }>
+			);
+		});
+
+		test('auto-approves benign forms', async () => {
 			const commands = [
-				'git log --output=log.txt',
-				'git show --output=message.txt HEAD',
-				'git show --output message.txt HEAD',
-				'git -C repo show --format=%B --output=message.txt HEAD',
+				'sort input.txt',
+				'sort --check input.txt',
+				'sort --check=quiet input.txt',
+				'sort "--check" input.txt',
+				'sort --buffer-size=1K input.txt',
+				'sort<input.txt',
+			];
+			deepStrictEqual(await Promise.all(commands.map(isAutoApproved)), commands.map(() => true));
+		});
+
+		test('denies blocked options', async () => {
+			const commands = [
+				'sort -o output.txt input.txt',
+				'sort -S 1G input.txt',
+				'sort --compress-program=/bin/sh input.txt',
+				'sort --compress-program /bin/sh input.txt',
+				'sort --compress-prog=/bin/sh input.txt',
+				'sort --compress-p=/bin/sh input.txt',
+				'sort --com=/bin/sh input.txt',
+				'sort --co=/bin/sh input.txt',
+				'sort "--compress-program=/bin/sh" input.txt',
+				'sort \'--compress-prog=/bin/sh\' input.txt',
+				'sort \\-\\-compress-program=/bin/sh input.txt',
+				'sort --compress-program\\=/bin/sh input.txt',
+				'sort --"compress-program=/bin/sh" input.txt',
+				'sort $\'--compress-program=/bin/sh\' input.txt',
 			];
 			deepStrictEqual(await Promise.all(commands.map(isAutoApproved)), commands.map(() => false));
 		});
@@ -138,7 +185,9 @@ suite('CommandLineAutoApprover', () => {
 
 	suite('default package manager install rules', () => {
 		setup(() => {
-			setDefaultAutoApproveRules();
+			setAutoApproveWithCommandLine(
+				terminalChatAgentToolsConfiguration[TerminalChatAgentToolsSettingId.AutoApprove].default as Record<string, boolean | { approve: boolean; matchCommandLine?: boolean }>
+			);
 		});
 
 		test('auto-approves exact lockfile install commands', async () => {
@@ -195,6 +244,57 @@ suite('CommandLineAutoApprover', () => {
 			});
 			deepStrictEqual(await Promise.all(exactCommands.map(isAutoApproved)), exactCommands.map(() => false));
 			deepStrictEqual(await Promise.all(commandsWithOptions.map(isAutoApproved)), commandsWithOptions.map(() => false));
+		});
+	});
+
+	suite('default sed rules', () => {
+		setup(() => {
+			setAutoApproveWithCommandLine(
+				terminalChatAgentToolsConfiguration[TerminalChatAgentToolsSettingId.AutoApprove].default as Record<string, boolean | { approve: boolean; matchCommandLine?: boolean }>
+			);
+		});
+
+		test('auto-approves benign substitutions', async () => {
+			const commands = [
+				'sed "s/foo/bar/g" file.txt',
+				'sed -n "1,10p" file.txt',
+				'sed "/err/d" file.txt',
+				'sed "y/abc/xyz/" file.txt',
+				'sed "s/a/b/;s/c/d/" file.txt',
+				'sed "/w/d" file.txt',
+			];
+			deepStrictEqual(await Promise.all(commands.map(isAutoApproved)), commands.map(() => true));
+		});
+
+		test('denies dangerous script forms', async () => {
+			const commands = [
+				'sed -e "s/foo/bar/"',
+				'sed --expression "s/foo/bar/"',
+				'sed "s/foo/bar/e"',
+				'sed "s/foo/bar/w"',
+				'sed "1e id > /tmp/SECURITY_TEST_pwned"',
+				'sed "1w /tmp/SECURITY_TEST_pwned_file" input.txt',
+				'sed "1r /etc/passwd" input.txt',
+				'sed "1W /tmp/x" input.txt',
+				'sed "e id"',
+				'sed "s/a/b/;e id"',
+				'sed "/pat/e id"',
+				'sed -n "1e id" file.txt',
+				'sed 1e id',
+				'sed "s/a/b/; e id"',
+				'sed "s/a/\'/;e id"',
+				'sed /pat/e input.txt',
+				'sed "1 e id"',
+				'sed "1!e id"',
+				'sed "1, 3 w /tmp/x" input.txt',
+				'sed -l 80 "e id" input.txt',
+				'sed --line-length 80 "1w /tmp/x" input.txt',
+				'sed --line-length=80 "1r /etc/passwd" input.txt',
+				'sed "s/a/\\"/;e id" input.txt',
+				'sed "/x/p;//e id" input.txt',
+				'sed e',
+			];
+			deepStrictEqual(await Promise.all(commands.map(isAutoApproved)), commands.map(() => false));
 		});
 	});
 

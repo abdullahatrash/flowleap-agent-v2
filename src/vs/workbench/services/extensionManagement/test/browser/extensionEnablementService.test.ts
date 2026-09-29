@@ -12,7 +12,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IWorkspace, IWorkspaceContextService, WorkbenchState } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkbenchEnvironmentService } from '../../../environment/common/environmentService.js';
 import { IStorageService, InMemoryStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import { IExtensionContributions, ExtensionType, IExtension, IExtensionManifest, IExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
+import { EXTENSIONS_ENABLE_AGENTS_WINDOW_CAPABILITY, IExtensionContributions, ExtensionType, IExtension, IExtensionManifest, IExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 import { isUndefinedOrNull } from '../../../../../base/common/types.js';
 import { areSameExtensions } from '../../../../../platform/extensionManagement/common/extensionManagementUtil.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -1186,11 +1186,7 @@ suite('ExtensionEnablementService Test', () => {
 		assert.deepStrictEqual((<IExtension>target.args[0][0][0]).identifier, { id: 'pub.a' });
 	});
 
-	test('test patent chat extension stays enabled on profile switch even when setup is not completed', async () => {
-		// FlowLeap: `defaultChatAgent.alwaysEnabled` makes the patent chat extension this product's core
-		// agent, so unlike upstream it is never disabled by the chat-setup migration. The BYOK build has no
-		// GitHub chat setup to complete (`state.completed` is never true), and disabling the extension would
-		// keep the agent out of the registry forever. See ensureChatExtensionInitialDisabledState().
+	test('test chat extension is disabled on profile switch when setup is not completed', async () => {
 		const chatExtensionId = productService.defaultChatAgent!.chatExtensionId;
 		const chatExtension = aLocalExtension(chatExtensionId, undefined, ExtensionType.System);
 		installed.push(chatExtension);
@@ -1206,15 +1202,19 @@ suite('ExtensionEnablementService Test', () => {
 		testObject = disposableStore.add(new TestExtensionEnablementService(instantiationService, chatEntitlementService));
 		await testObject.waitUntilInitialized();
 
-		// Chat extension remains enabled after initial setup despite setup not being completed
+		// Chat extension should be disabled after initial setup
+		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.DisabledGlobally);
+
+		// Enable the chat extension to simulate it being enabled in a previous profile
+		await testObject.setEnablement([chatExtension], EnablementState.EnabledGlobally);
 		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.EnabledGlobally);
 
-		// Simulate switching to a fresh profile by clearing the migration flag; the extension must stay enabled
+		// Simulate switching to a fresh profile by clearing the migration flag
 		storageService = instantiationService.get(IStorageService);
 		storageService.store('builtinChatExtensionEnablementMigration', false, StorageScope.PROFILE, StorageTarget.MACHINE);
 
-		// Chat extension is still enabled after computing enablement state in the new profile
-		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.EnabledGlobally);
+		// Chat extension should be disabled again after computing enablement state
+		assert.strictEqual(testObject.getEnablementState(chatExtension), EnablementState.DisabledGlobally);
 	});
 
 	test('test extension is disabled by allowed list', async () => {
@@ -1290,6 +1290,22 @@ suite('ExtensionEnablementService Test', () => {
 		assert.deepStrictEqual([withMain, nonThemeContrib, withBrowser].map(ext => testObject.getEnablementState(ext)), [
 			EnablementState.EnabledGlobally,
 			EnablementState.EnabledGlobally,
+			EnablementState.DisabledByEnvironment,
+		]);
+	});
+
+	test('test extensions declaring agents window support are enabled in sessions window', async () => {
+		await (instantiationService.get(IConfigurationService) as TestConfigurationService).setUserConfiguration(EXTENSIONS_ENABLE_AGENTS_WINDOW_CAPABILITY, true);
+		instantiationService.stub(IWorkbenchEnvironmentService, { isSessionsWindow: true });
+		testObject = disposableStore.add(new TestExtensionEnablementService(instantiationService));
+
+		const supported = aLocalExtension2('pub.supported', { main: 'main.js', enabledApiProposals: ['agentsWindowActivation'], capabilities: { agentsWindow: { supported: true } } });
+		const unsupported = aLocalExtension2('pub.unsupported', { enabledApiProposals: ['agentsWindowActivation'], capabilities: { agentsWindow: { supported: false } }, contributes: aContributes('themes') });
+		const unsupportedWithoutProposal = aLocalExtension2('pub.unsupportedWithoutProposal', { main: 'main.js', capabilities: { agentsWindow: { supported: true } } });
+
+		assert.deepStrictEqual([supported, unsupported, unsupportedWithoutProposal].map(ext => testObject.getEnablementState(ext)), [
+			EnablementState.EnabledGlobally,
+			EnablementState.DisabledByEnvironment,
 			EnablementState.DisabledByEnvironment,
 		]);
 	});

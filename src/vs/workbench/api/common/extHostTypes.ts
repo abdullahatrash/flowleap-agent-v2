@@ -3190,8 +3190,6 @@ export class McpToolInvocationContentData {
 
 export class ChatSubagentToolInvocationData {
 	description?: string;
-	/** Human-readable name of the subagent type, shown in the subagent's header. */
-	agentDisplayName?: string;
 	agentName?: string;
 	prompt?: string;
 	result?: string;
@@ -3270,6 +3268,24 @@ export class ChatResponseHookPart {
 		this.stopReason = stopReason;
 		this.systemMessage = systemMessage;
 		this.metadata = metadata;
+	}
+}
+
+export type ChatResponseVoiceProgressStage = 'investigating' | 'planning' | 'editing' | 'validating' | 'recovering';
+
+export class ChatResponseVoiceProgressPart {
+	readonly id: ChatResponseVoiceProgressStage;
+	readonly value: string;
+	constructor(id: ChatResponseVoiceProgressStage, value: string) {
+		this.id = id;
+		this.value = value;
+	}
+}
+
+export class ChatResponseAutoModeResolutionPart {
+	resolvedModel: { id: string; name: string } | undefined;
+	constructor(resolvedModel?: { id: string; name: string }) {
+		this.resolvedModel = resolvedModel;
 	}
 }
 
@@ -3464,6 +3480,7 @@ export class ChatResponseTextEditPart implements vscode.ChatResponseTextEditPart
 	uri: vscode.Uri;
 	edits: vscode.TextEdit[];
 	isDone?: boolean;
+	autoTier?: vscode.ChatAutoModeTier;
 	constructor(uri: vscode.Uri, editsOrDone: vscode.TextEdit | vscode.TextEdit[] | true) {
 		this.uri = uri;
 		if (editsOrDone === true) {
@@ -3479,6 +3496,7 @@ export class ChatResponseNotebookEditPart implements vscode.ChatResponseNotebook
 	uri: vscode.Uri;
 	edits: vscode.NotebookEdit[];
 	isDone?: boolean;
+	autoTier?: vscode.ChatAutoModeTier;
 	constructor(uri: vscode.Uri, editsOrDone: vscode.NotebookEdit | vscode.NotebookEdit[] | true) {
 		this.uri = uri;
 		if (editsOrDone === true) {
@@ -3528,7 +3546,7 @@ export class ChatToolInvocationPart {
 	pastTenseMessage?: string | vscode.MarkdownString;
 	isConfirmed?: boolean;
 	isComplete?: boolean;
-	toolSpecificData?: ChatTerminalToolInvocationData2 | ChatSubagentToolInvocationData;
+	toolSpecificData?: ChatTerminalToolInvocationData2;
 	subAgentInvocationId?: string;
 	subAgentName?: string;
 	presentation?: 'hidden' | 'hiddenAfterComplete' | undefined;

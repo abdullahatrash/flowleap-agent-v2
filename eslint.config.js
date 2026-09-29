@@ -343,7 +343,7 @@ export default defineConfig(
 			'src/vs/workbench/services/remote/common/tunnelModel.ts',
 			'src/vs/workbench/services/search/common/textSearchManager.ts',
 			'src/vs/workbench/test/browser/workbenchTestServices.ts',
-			'src/vs/platform/agentSessionState/common/state/protocol/**',
+			'src/vs/platform/agentHost/common/state/protocol/**',
 			'test/automation/src/playwrightDriver.ts',
 			'.eslint-plugin-local/**/*',
 		],
@@ -357,7 +357,7 @@ export default defineConfig(
 	// Guard the agent host protocol `_meta` bag: no untyped field access or casts.
 	{
 		files: [
-			'src/vs/platform/agentSessionState/**/*.ts',
+			'src/vs/platform/agentHost/**/*.ts',
 			'src/vs/workbench/contrib/chat/browser/agentSessions/**/*.ts',
 			'src/vs/workbench/services/agentHost/**/*.ts',
 			'src/vs/sessions/**/*.ts',

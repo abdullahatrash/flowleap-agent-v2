@@ -32,6 +32,8 @@ import { IRawChatParticipantContribution } from '../common/participants/chatPart
 import { ChatAgentLocation, ChatModeKind } from '../common/constants.js';
 import { ChatViewId, ChatViewContainerId } from './chat.js';
 import { ChatViewPane } from './widgetHosts/viewPane/chatViewPane.js';
+import { ChatUpdateRequiredView } from './viewsWelcome/chatUpdateRequiredView.js';
+import { MANAGED_SETTINGS_UPDATE_VIEW_ID, ManagedSettingsUpdateRequiredContext } from '../../../services/policies/common/managedSettingsUpdate.js';
 
 // --- Chat Container &  View Registration
 
@@ -81,6 +83,25 @@ const chatViewDescriptor: IViewDescriptor = {
 	)
 };
 Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([chatViewDescriptor], chatViewContainer);
+
+Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
+	id: MANAGED_SETTINGS_UPDATE_VIEW_ID,
+	name: chatViewDescriptor.name,
+	containerIcon: chatViewIcon,
+	singleViewPaneContainerTitle: chatViewContainer.title.value,
+	canToggleVisibility: false,
+	canMoveView: false,
+	ctorDescriptor: new SyncDescriptor(ChatUpdateRequiredView),
+	when: ManagedSettingsUpdateRequiredContext,
+	openCommandActionDescriptor: {
+		id: 'workbench.action.chat.showUpdateRequired',
+		title: localize2('chat.updateRequiredView', "Chat Update Requirement"),
+		keybindings: {
+			primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyI,
+			mac: { primary: KeyMod.CtrlCmd | KeyMod.WinCtrl | KeyCode.KeyI },
+		},
+	},
+}], chatViewContainer);
 
 const chatParticipantExtensionPoint = extensionsRegistry.ExtensionsRegistry.registerExtensionPoint<IRawChatParticipantContribution[]>({
 	extensionPoint: 'chatParticipants',
@@ -359,7 +380,7 @@ export class ChatCompatibilityNotifier extends Disposable implements IWorkbenchC
 
 		this.registeredWelcomeView = true;
 		const showExtensionLabel = localize('showExtension', "Show Extension");
-		const mainMessage = localize('chatFailErrorMessage', "Chat failed to load because the installed version of the FlowLeap Chat extension is not compatible with this version of {0}. Please ensure that the FlowLeap Chat extension is up to date.", this.productService.nameLong);
+		const mainMessage = localize('chatFailErrorMessage', "Chat failed to load because the installed version of the Copilot Chat extension is not compatible with this version of {0}. Please ensure that the Copilot Chat extension is up to date.", this.productService.nameLong);
 		const commandButton = `[${showExtensionLabel}](${createCommandUri(showExtensionsWithIdsCommandId, [this.productService.defaultChatAgent?.chatExtensionId])})`;
 		const versionMessage = `Copilot Chat version: ${chatExtension.version}`;
 		const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);

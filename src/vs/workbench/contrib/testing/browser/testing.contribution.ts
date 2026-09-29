@@ -10,7 +10,6 @@ import { registerAction2 } from '../../../../platform/actions/common/actions.js'
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -97,7 +96,7 @@ viewsRegistry.registerViews([{
 	containerIcon: testingResultsIcon,
 	canToggleVisibility: false,
 	canMoveView: true,
-	when: ContextKeyExpr.and(TestingContextKeys.hasAnyResults.isEqualTo(true), PatentIdeContextKeys.Mode.toNegated()),
+	when: TestingContextKeys.hasAnyResults.isEqualTo(true),
 	ctorDescriptor: new SyncDescriptor(TestResultsView),
 }], testResultsViewContainer);
 
@@ -119,7 +118,7 @@ viewsRegistry.registerViews([{
 	weight: 80,
 	order: -999,
 	containerIcon: testingViewIcon,
-	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), ContextKeyExpr.greater(TestingContextKeys.providerCount.key, 0)),
+	when: ContextKeyExpr.greater(TestingContextKeys.providerCount.key, 0),
 }, {
 	id: Testing.CoverageViewId,
 	name: localize2('testCoverage', "Test Coverage"),
@@ -129,7 +128,7 @@ viewsRegistry.registerViews([{
 	weight: 80,
 	order: -998,
 	containerIcon: testingViewIcon,
-	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), TestingContextKeys.isTestCoverageOpen),
+	when: TestingContextKeys.isTestCoverageOpen,
 }], viewContainer);
 
 allTestActions.forEach(registerAction2);

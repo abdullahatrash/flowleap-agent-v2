@@ -3,15 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { FLOWLEAP_LOGO_PATHS, FLOWLEAP_LOGO_VIEWBOX } from './flowleapLogoPath.js';
+import { $ } from '../../../../base/browser/dom.js';
+import { VSCODE_LOGO_PATH } from './vscodeLogoPath.js';
 
 /**
- * FlowLeap brand-mark "fish" used by the Agents window aquarium. Each fish is a small
+ * VS Code logo "fish" used by the Agents window aquarium. Each fish is a small
  * SVG element styled with `color:` so the silhouette inherits via `currentColor`,
  * with animated body strips providing the swimming motion.
  */
 
-/** The three fish "species" tints. */
+/** The three VS Code release channel colors used as fish "species". */
 export const enum FishSpecies {
 	Stable = 'stable',
 	Insiders = 'insiders',
@@ -98,16 +99,14 @@ export class Fish {
 		this.size = opts.size;
 		this.wanderAngle = Math.atan2(opts.velocityY, opts.velocityX);
 
-		this.element = targetDocument.createElement('div');
-		this.element.className = 'agents-aquarium-fish';
+		this.element = $<HTMLDivElement>('.agents-aquarium-fish');
 		this.element.style.width = `${opts.size}px`;
 		this.element.style.height = `${opts.size}px`;
 		this.element.style.color = SPECIES_COLOR[opts.species];
 
 		// Inner element receives the directional flip so the body strip animations
 		// (driven by --agents-aquarium-strip-index) are unaffected by direction changes.
-		this.innerElement = targetDocument.createElement('div');
-		this.innerElement.className = 'agents-aquarium-fish-inner';
+		this.innerElement = $<HTMLDivElement>('.agents-aquarium-fish-inner');
 		this.innerElement.appendChild(buildFishSvg(targetDocument));
 		this.element.appendChild(this.innerElement);
 
@@ -171,8 +170,6 @@ export class Fish {
 	}
 }
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
 /**
  * Number of vertical strips the body is sliced into. More strips = smoother
  * wave, but each strip is one `<use>` node and one CSS animation per fish.
@@ -180,12 +177,12 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const NUM_BODY_STRIPS = 8;
 
 /** The body's bounding range in the original logo's user units. */
-const BODY_X_START = 4.5;
-const BODY_X_END = 91.5;
+const BODY_X_START = 5;
+const BODY_X_END = 90;
 
 /**
  * Lazily-built shared SVG element holding both the strip clipPath defs AND
- * a single `<symbol>` containing the FlowLeap brand-mark paths. All fish reference
+ * a single `<symbol>` containing the VS Code logo path. All fish reference
  * these via `clip-path: url(#…)` and `<use href="#…">` instead of duplicating
  * the path data per strip per fish (which previously caused 50 fish * 10
  * strips = 500 path parses on every aquarium activation).
@@ -204,8 +201,8 @@ function ensureSharedDefs(targetDocument: Document): void {
 		return;
 	}
 	const stripWidth = (BODY_X_END - BODY_X_START) / NUM_BODY_STRIPS;
-	const container = targetDocument.createElementNS(SVG_NS, 'svg');
-	container.setAttribute('xmlns', SVG_NS);
+	const container = $.SVG<SVGSVGElement>('svg');
+	container.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 	container.setAttribute('width', '0');
 	container.setAttribute('height', '0');
 	container.setAttribute('aria-hidden', 'true');
@@ -217,14 +214,14 @@ function ensureSharedDefs(targetDocument: Document): void {
 
 	// All strips reference this symbol via `<use href="#agents-aquarium-fish-logo">`,
 	// so the path data is parsed exactly ONCE per session instead of FISH_COUNT * NUM_STRIPS.
-	container.appendChild(createFlowLeapLogoSymbol(targetDocument));
+	container.appendChild(createVSCodeLogoSymbol());
 
-	const defs = targetDocument.createElementNS(SVG_NS, 'defs');
+	const defs = $.SVG<SVGDefsElement>('defs');
 	for (let i = 0; i < NUM_BODY_STRIPS; i++) {
-		const clip = targetDocument.createElementNS(SVG_NS, 'clipPath');
+		const clip = $.SVG<SVGClipPathElement>('clipPath');
 		clip.setAttribute('id', `agents-aquarium-fish-clip-${i}`);
 		clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
-		const rect = targetDocument.createElementNS(SVG_NS, 'rect');
+		const rect = $.SVG<SVGRectElement>('rect');
 		rect.setAttribute('x', String(BODY_X_START + i * stripWidth));
 		rect.setAttribute('y', '-20');
 		// Larger overlap (0.8 user-units) hides seams when adjacent strips
@@ -239,32 +236,28 @@ function ensureSharedDefs(targetDocument: Document): void {
 	sharedDefsByDocument.set(targetDocument, container);
 }
 
-function createFlowLeapLogoSymbol(targetDocument: Document): SVGSymbolElement {
-	const symbol = targetDocument.createElementNS(SVG_NS, 'symbol');
+function createVSCodeLogoSymbol(): SVGSymbolElement {
+	const symbol = $.SVG<SVGSymbolElement>('symbol');
 	symbol.setAttribute('id', SHARED_LOGO_SYMBOL_ID);
-	// The symbol's viewBox scales the brand-mark coordinate space into the
-	// 96x96 fish space of the referencing `<use>` elements.
-	symbol.setAttribute('viewBox', FLOWLEAP_LOGO_VIEWBOX);
+	symbol.setAttribute('viewBox', '0 0 96 96');
 	symbol.setAttribute('overflow', 'visible');
 
-	for (const pathData of FLOWLEAP_LOGO_PATHS) {
-		const logoPath = targetDocument.createElementNS(SVG_NS, 'path');
-		logoPath.setAttribute('d', pathData);
-		logoPath.setAttribute('fill', 'currentColor');
-		logoPath.setAttribute('fill-rule', 'evenodd');
-		symbol.appendChild(logoPath);
-	}
+	const logoPath = $.SVG<SVGPathElement>('path');
+	logoPath.setAttribute('d', VSCODE_LOGO_PATH);
+	logoPath.setAttribute('fill', 'currentColor');
+	logoPath.setAttribute('fill-rule', 'evenodd');
+	symbol.appendChild(logoPath);
 
 	return symbol;
 }
 
 /**
  * Build the inline SVG element tree for a fish:
- *   - FlowLeap brand-mark body, sliced into N vertical strips that each oscillate in
+ *   - VS Code logo body, sliced into N vertical strips that each oscillate in
  *     Y with a phase-offset CSS animation (the "swimming" sine wave)
  *
- * Colors come from `currentColor` on the parent element. Built with
- * `document.createElementNS` (no innerHTML) to satisfy Trusted Types.
+ * Colors come from `currentColor` on the parent element. Built without
+ * `innerHTML` to satisfy Trusted Types.
  *
  * The strip clipPath defs and the logo symbol are shared across all fish via
  * {@link ensureSharedDefs}.
@@ -272,11 +265,10 @@ function createFlowLeapLogoSymbol(targetDocument: Document): SVGSymbolElement {
 function buildFishSvg(targetDocument: Document): SVGSVGElement {
 	ensureSharedDefs(targetDocument);
 
-	const svg = targetDocument.createElementNS(SVG_NS, 'svg');
-	svg.setAttribute('xmlns', SVG_NS);
+	const svg = $.SVG<SVGSVGElement>('svg');
+	svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 	svg.setAttribute('focusable', 'false');
-	// viewBox 0..96 is the fish coordinate space; the shared symbol's own
-	// viewBox scales the brand mark into it.
+	// viewBox 0..96 matches the original VS Code icon.
 	svg.setAttribute('viewBox', '0 0 96 96');
 	svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 	// Tell the rasterizer to optimize for visual quality, not speed: smoother
@@ -286,13 +278,13 @@ function buildFishSvg(targetDocument: Document): SVGSVGElement {
 	// Body: NUM_BODY_STRIPS overlapping references to the shared logo symbol,
 	// each clipped to its vertical band via shared clipPath defs. Each strip
 	// animates translateY with a phase offset driven by --agents-aquarium-strip-index.
-	const bodyGroup = targetDocument.createElementNS(SVG_NS, 'g');
+	const bodyGroup = $.SVG<SVGGElement>('g');
 	bodyGroup.setAttribute('class', 'agents-aquarium-fish-body');
 	for (let i = 0; i < NUM_BODY_STRIPS; i++) {
-		const stripG = targetDocument.createElementNS(SVG_NS, 'g');
+		const stripG = $.SVG<SVGGElement>('g');
 		stripG.setAttribute('class', 'agents-aquarium-fish-strip');
 		stripG.style.setProperty('--agents-aquarium-strip-index', String(i));
-		const stripUse = targetDocument.createElementNS(SVG_NS, 'use');
+		const stripUse = $.SVG<SVGUseElement>('use');
 		stripUse.setAttribute('href', `#${SHARED_LOGO_SYMBOL_ID}`);
 		stripUse.setAttribute('clip-path', `url(#agents-aquarium-fish-clip-${i})`);
 		stripG.appendChild(stripUse);

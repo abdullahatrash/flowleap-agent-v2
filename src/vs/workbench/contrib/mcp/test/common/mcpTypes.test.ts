@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { McpResourceURI, McpServerDefinition, McpServerTransportType } from '../../common/mcpTypes.js';
+import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
+import { McpServerType } from '../../../../../platform/mcp/common/mcpPlatformTypes.js';
+import { getMcpCollectionProvenance, McpCollectionProvenance, McpResourceURI, McpServerDefinition, McpServerLaunch, McpServerTransportType } from '../../common/mcpTypes.js';
 import * as assert from 'assert';
 import { URI } from '../../../../../base/common/uri.js';
-import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 
 suite('MCP Types', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -82,6 +83,12 @@ suite('MCP Types', () => {
 		test('returns false when roots differ', () => {
 			const def1 = createBasicDefinition({ roots: [URI.file('/path1')] });
 			const def2 = createBasicDefinition({ roots: [URI.file('/path2')] });
+			assert.strictEqual(McpServerDefinition.equals(def1, def2), false);
+		});
+
+		test('returns false when default cwd differs', () => {
+			const def1 = createBasicDefinition({ defaultCwd: URI.file('/path1') });
+			const def2 = createBasicDefinition({ defaultCwd: URI.file('/path2') });
 			assert.strictEqual(McpServerDefinition.equals(def1, def2), false);
 		});
 
@@ -212,5 +219,112 @@ suite('MCP Types', () => {
 
 			assert.strictEqual(McpServerDefinition.equals(def1, def2), false);
 		});
+	});
+
+	test('McpServerDefinition serializes default cwd as a URI', () => {
+		const defaultCwd = URI.parse('vscode-remote://ssh-remote+linux/home/test/workspace');
+		const definition: McpServerDefinition = {
+			id: 'test-server',
+			label: 'Test Server',
+			cacheNonce: 'nonce',
+			defaultCwd,
+			launch: {
+				type: McpServerTransportType.Stdio,
+				cwd: undefined,
+				command: 'test-command',
+				args: [],
+				env: {},
+				envFile: undefined,
+				sandbox: undefined
+			},
+		};
+
+		const serialized = McpServerDefinition.toSerialized(definition);
+		const deserialized = McpServerDefinition.fromSerialized(serialized);
+		assert.deepStrictEqual({
+			serialized: serialized.defaultCwd,
+			deserialized: deserialized.defaultCwd?.toString(),
+		}, {
+			serialized: defaultCwd,
+			deserialized: defaultCwd.toString(),
+		});
+	});
+
+	test('McpServerDefinition preserves SSE transport when serialized', () => {
+		const definition: McpServerDefinition = {
+			id: 'test-server',
+			label: 'Test Server',
+			cacheNonce: 'nonce',
+			launch: {
+				type: McpServerTransportType.HTTP,
+				transport: 'sse',
+				uri: URI.parse('https://example.com/sse'),
+				headers: [],
+			},
+		};
+
+		const launch = McpServerDefinition.fromSerialized(McpServerDefinition.toSerialized(definition)).launch;
+		assert.deepStrictEqual(launch.type === McpServerTransportType.HTTP ? {
+			type: launch.type,
+			transport: launch.transport,
+		} : undefined, {
+			type: McpServerTransportType.HTTP,
+			transport: 'sse',
+		});
+	});
+
+	test('McpServerLaunch converts persisted configurations', () => {
+		assert.deepStrictEqual({
+			local: McpServerLaunch.fromServerConfiguration({
+				type: McpServerType.LOCAL,
+				command: 'server',
+				args: ['--port', '3000'],
+				env: { TOKEN: 'value' },
+				envFile: '.env',
+				cwd: '/workspace',
+			}, { network: { allowedDomains: ['example.com'] } }),
+			remote: McpServerLaunch.fromServerConfiguration({
+				type: McpServerType.REMOTE,
+				transport: 'sse',
+				url: 'https://example.com/mcp',
+				headers: { Authorization: 'Bearer token' },
+				oauth: { clientId: 'client' },
+			}),
+		}, {
+			local: {
+				type: McpServerTransportType.Stdio,
+				command: 'server',
+				args: ['--port', '3000'],
+				env: { TOKEN: 'value' },
+				envFile: '.env',
+				cwd: '/workspace',
+				sandbox: { network: { allowedDomains: ['example.com'] } },
+			},
+			remote: {
+				type: McpServerTransportType.HTTP,
+				transport: 'sse',
+				uri: URI.parse('https://example.com/mcp'),
+				headers: [['Authorization', 'Bearer token']],
+				oauth: { clientId: 'client' },
+			},
+		});
+	});
+
+	test('maps configuration targets to collection provenance', () => {
+		assert.deepStrictEqual([
+			getMcpCollectionProvenance(ConfigurationTarget.USER),
+			getMcpCollectionProvenance(ConfigurationTarget.USER_LOCAL),
+			getMcpCollectionProvenance(ConfigurationTarget.USER_REMOTE),
+			getMcpCollectionProvenance(ConfigurationTarget.WORKSPACE),
+			getMcpCollectionProvenance(ConfigurationTarget.WORKSPACE_FOLDER),
+			getMcpCollectionProvenance(undefined),
+		], [
+			McpCollectionProvenance.UserProfile,
+			McpCollectionProvenance.UserProfile,
+			McpCollectionProvenance.RemoteUser,
+			McpCollectionProvenance.WorkspaceConfiguration,
+			McpCollectionProvenance.WorkspaceFolderConfiguration,
+			undefined,
+		]);
 	});
 });

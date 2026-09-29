@@ -112,10 +112,6 @@ export const customAgentAttributes: Record<string, IAttributeDefinition> = {
 		type: 'scalar',
 		description: localize('promptHeader.agent.description', 'The description of the custom agent, what it does and when to use it.'),
 	},
-	[PromptHeaderAttributes.icon]: {
-		type: 'scalar',
-		description: localize('promptHeader.agent.icon', 'The icon (a codicon id such as `search`) shown next to the agent in the chat mode picker.'),
-	},
 	[PromptHeaderAttributes.argumentHint]: {
 		type: 'scalar',
 		description: localize('promptHeader.agent.argumentHint', 'The argument-hint describes what inputs the custom agent expects or supports.'),
@@ -123,6 +119,17 @@ export const customAgentAttributes: Record<string, IAttributeDefinition> = {
 	[PromptHeaderAttributes.model]: {
 		type: 'scalar | sequence',
 		description: localize('promptHeader.agent.model', 'Specify the model that runs this custom agent. Can also be a list of models. The first available model will be used.'),
+	},
+	[PromptHeaderAttributes.reasoningEffort]: {
+		type: 'scalar',
+		description: localize('promptHeader.agent.reasoningEffort', 'Specify the reasoning effort used by this custom agent.'),
+		enums: [
+			{ name: 'low' },
+			{ name: 'medium' },
+			{ name: 'high' },
+			{ name: 'xhigh' },
+			{ name: 'max' },
+		],
 	},
 	[PromptHeaderAttributes.tools]: {
 		type: 'scalar | sequence',

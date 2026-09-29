@@ -16,11 +16,6 @@ export const SESSIONS_EDITOR_WORD_WRAP_SETTING = 'sessions.editor.wordWrap';
 
 export type SessionsWordWrap = 'off' | 'on' | 'inherit';
 
-/**
- * Holds the preferred diff layout and word wrap for the editors of the Agents window.
- * The preference is window-local state, shared by the diff and multi-diff editors, so
- * reviewing a session's changes does not change the user's global editor settings.
- */
 export interface IDiffEditorOptionsService {
 	readonly _serviceBrand: undefined;
 	readonly viewMode: IObservable<DiffEditorViewMode>;

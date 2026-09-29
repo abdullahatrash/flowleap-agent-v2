@@ -170,7 +170,7 @@ export const startEntries: GettingStartedStartEntryContent = [
 		id: 'topLevelGitClone',
 		title: localize('gettingStarted.topLevelGitClone.title', "Clone Git Repository..."),
 		description: localize('gettingStarted.topLevelGitClone.description', "Clone a remote repository to a local folder"),
-		when: 'config.git.enabled && !git.missing && !patentIdeMode',
+		when: 'config.git.enabled && !git.missing',
 		icon: Codicon.sourceControl,
 		content: {
 			type: 'startEntry',
@@ -181,7 +181,7 @@ export const startEntries: GettingStartedStartEntryContent = [
 		id: 'topLevelGitOpen',
 		title: localize('gettingStarted.topLevelGitOpen.title', "Open Repository..."),
 		description: localize('gettingStarted.topLevelGitOpen.description', "Connect to a remote repository or pull request to browse, search, edit, and commit"),
-		when: 'workspacePlatform == \'webworker\' && !patentIdeMode',
+		when: 'workspacePlatform == \'webworker\'',
 		icon: Codicon.sourceControl,
 		content: {
 			type: 'startEntry',
@@ -192,7 +192,7 @@ export const startEntries: GettingStartedStartEntryContent = [
 		id: 'topLevelRemoteOpen',
 		title: localize('gettingStarted.topLevelRemoteOpen.title', "Connect to..."),
 		description: localize('gettingStarted.topLevelRemoteOpen.description', "Connect to remote development workspaces."),
-		when: '!isWeb && !patentIdeMode',
+		when: '!isWeb',
 		icon: Codicon.remote,
 		content: {
 			type: 'startEntry',
@@ -203,7 +203,7 @@ export const startEntries: GettingStartedStartEntryContent = [
 		id: 'topLevelOpenTunnel',
 		title: localize('gettingStarted.topLevelOpenTunnel.title', "Open Tunnel..."),
 		description: localize('gettingStarted.topLevelOpenTunnel.description', "Connect to a remote machine through a Tunnel"),
-		when: 'isWeb && showRemoteStartEntryInWeb && !patentIdeMode',
+		when: 'isWeb && showRemoteStartEntryInWeb',
 		icon: Codicon.remote,
 		content: {
 			type: 'startEntry',
@@ -215,22 +215,10 @@ export const startEntries: GettingStartedStartEntryContent = [
 		title: localize('gettingStarted.newWorkspaceChat.title', "Generate New Workspace..."),
 		description: localize('gettingStarted.newWorkspaceChat.description', "Chat to create a new workspace"),
 		icon: Codicon.chatSparkle,
-		when: '!isWeb && !chatSetupHidden && !chatSetupDisabledInWorkspace && !patentIdeMode',
+		when: '!isWeb && !chatSetupHidden && !chatSetupDisabledInWorkspace',
 		content: {
 			type: 'startEntry',
 			command: 'command:welcome.newWorkspaceChat',
-		}
-	},
-	// Patent IDE start entries
-	{
-		id: 'patentSearchPriorArt',
-		title: localize('gettingStarted.patentSearchPriorArt.title', "Search Prior Art..."),
-		description: localize('gettingStarted.patentSearchPriorArt.description', "Search patent databases for prior art references"),
-		icon: Codicon.search,
-		when: 'patentIdeMode',
-		content: {
-			type: 'startEntry',
-			command: 'command:flowleap.searchPriorArt',
 		}
 	},
 ];
@@ -254,7 +242,7 @@ function createCopilotSetupStep(id: string, button: string, when: string, includ
 		id,
 		title: CopilotStepTitle,
 		description,
-		when: `${when} && !chatSetupHidden && !chatSetupDisabledInWorkspace && !patentIdeMode`,
+		when: `${when} && !chatSetupHidden && !chatSetupDisabledInWorkspace`,
 		media: {
 			type: 'svg', altText: 'VS Code Copilot multi file edits', path: 'multi-file-edits.svg'
 		},
@@ -268,7 +256,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
 		description: localize('gettingStarted.setup.description', "Customize your editor, learn the basics, and start coding"),
 		isFeatured: true,
 		icon: setupIcon,
-		when: '!isWeb && !patentIdeMode',
+		when: '!isWeb',
 		walkthroughPageTitle: localize('gettingStarted.setup.walkthroughPageTitle', 'Setup VS Code'),
 		next: 'Beginner',
 		content: {
@@ -304,7 +292,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
 		description: localize('gettingStarted.setupWeb.description', "Customize your editor, learn the basics, and start coding"),
 		isFeatured: true,
 		icon: setupIcon,
-		when: 'isWeb && !patentIdeMode',
+		when: 'isWeb',
 		next: 'Beginner',
 		walkthroughPageTitle: localize('gettingStarted.setupWeb.walkthroughPageTitle', 'Setup VS Code Web'),
 		content: {
@@ -495,7 +483,6 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
 		isFeatured: false,
 		title: localize('gettingStarted.beginner.title', "Learn the Fundamentals"),
 		icon: beginnerIcon,
-		when: '!patentIdeMode',
 		description: localize('gettingStarted.beginner.description', "Get an overview of the most essential features"),
 		walkthroughPageTitle: localize('gettingStarted.beginner.walkthroughPageTitle', 'Essential Features'),
 		content: {
@@ -613,7 +600,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
 		description: '',
 		icon: setupIcon,
 		isFeatured: false,
-		when: `config.${NotebookSetting.openGettingStarted} && userHasOpenedNotebook && !patentIdeMode`,
+		when: `config.${NotebookSetting.openGettingStarted} && userHasOpenedNotebook`,
 		walkthroughPageTitle: localize('gettingStarted.notebook.walkthroughPageTitle', 'Notebooks'),
 		content: {
 			type: 'steps',

@@ -7,7 +7,7 @@ import { screen, WebContentsView, webContents } from 'electron';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
-import { IBrowserViewBounds, IBrowserViewDevToolsStateEvent, IBrowserViewFocusEvent, IBrowserViewKeyDownEvent, IBrowserViewState, IBrowserViewNavigationEvent, IBrowserViewLoadingEvent, IBrowserViewLoadError, IBrowserViewTitleChangeEvent, IBrowserViewFaviconChangeEvent, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions, IBrowserViewFindInPageResult, IBrowserViewVisibilityEvent, browserViewIsolatedWorldId, browserZoomFactors, browserZoomDefaultIndex, IBrowserViewOwner, IBrowserViewOpenOptions, IBrowserViewPermissionRequestEvent } from '../common/browserView.js';
+import { IBrowserViewAudience, IBrowserViewBounds, IBrowserViewDevToolsStateEvent, IBrowserViewFocusEvent, IBrowserViewKeyDownEvent, IBrowserViewState, IBrowserViewNavigationEvent, IBrowserViewLoadingEvent, IBrowserViewLoadError, IBrowserViewTitleChangeEvent, IBrowserViewFaviconChangeEvent, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions, IBrowserViewFindInPageResult, IBrowserViewVisibilityEvent, browserViewIsolatedWorldId, browserZoomFactors, browserZoomDefaultIndex, IBrowserViewOwner, IBrowserViewEditorOpenOptions, IBrowserViewPermissionRequestEvent, equalsBrowserViewAudience, isBrowserViewAssociatedResourceNavigation, matchesBrowserViewAudience, IBrowserViewHost } from '../common/browserView.js';
 import { BrowserViewEmulator } from './browserViewEmulator.js';
 import { BrowserViewInspector } from './browserViewInspector.js';
 import { IWindowsMainService } from '../../windows/electron-main/windows.js';
@@ -22,6 +22,7 @@ import { IAuxiliaryWindow } from '../../auxiliaryWindow/electron-main/auxiliaryW
 import { SCAN_CODE_STR_TO_EVENT_KEY_CODE } from '../../../base/common/keyCodes.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { logBrowserOpen } from '../common/browserViewTelemetry.js';
+import { URI } from '../../../base/common/uri.js';
 
 enum NewPageLocation {
 	Foreground = 'foreground',
@@ -56,8 +57,13 @@ export class BrowserView extends Disposable {
 	readonly inspector: BrowserViewInspector;
 
 	private _ownerWindow: ICodeWindow;
+	private _owner: IBrowserViewOwner;
 	private _currentWindow: ICodeWindow | IAuxiliaryWindow | undefined;
 	private _isDisposed = false;
+	private _audiences: readonly IBrowserViewAudience[] = [];
+
+	private _wantsVisibility = false;
+	private _hasBeenLaidOut = false;
 
 	private static readonly MAX_CONSOLE_LOG_ENTRIES = 1000;
 	private readonly _consoleLogs: string[] = [];
@@ -94,6 +100,9 @@ export class BrowserView extends Disposable {
 	private readonly _onDidChangeFavicon = this._register(new Emitter<IBrowserViewFaviconChangeEvent>());
 	readonly onDidChangeFavicon: Event<IBrowserViewFaviconChangeEvent> = this._onDidChangeFavicon.event;
 
+	private readonly _onDidChangeOwner = this._register(new Emitter<IBrowserViewOwner>());
+	readonly onDidChangeOwner: Event<IBrowserViewOwner> = this._onDidChangeOwner.event;
+
 	private readonly _onDidFindInPage = this._register(new Emitter<IBrowserViewFindInPageResult>());
 	readonly onDidFindInPage: Event<IBrowserViewFindInPageResult> = this._onDidFindInPage.event;
 
@@ -109,11 +118,16 @@ export class BrowserView extends Disposable {
 	private readonly _onDidChangePermissions = this._register(new Emitter<ISerializedBrowserPermissionsSnapshot>());
 	readonly onDidChangePermissions: Event<ISerializedBrowserPermissionsSnapshot> = this._onDidChangePermissions.event;
 
+	private readonly _onDidChangeAudiences = this._register(new Emitter<IBrowserViewAudience[]>());
+	readonly onDidChangeAudiences: Event<IBrowserViewAudience[]> = this._onDidChangeAudiences.event;
+
 	constructor(
 		public readonly id: string,
-		public readonly owner: IBrowserViewOwner,
+		public readonly host: IBrowserViewHost,
+		owner: IBrowserViewOwner,
+		public readonly associatedResource: URI | undefined,
 		public readonly session: BrowserSession,
-		createChildView: (url: string, electronOptions: Electron.WebContentsViewConstructorOptions | undefined, openOptions: IBrowserViewOpenOptions) => BrowserView,
+		private readonly _createChildView: (owner: IBrowserViewOwner, url: string, electronOptions: Electron.WebContentsViewConstructorOptions | undefined, editorOptions: IBrowserViewEditorOpenOptions) => BrowserView,
 		openContextMenu: (view: BrowserView, params: Electron.ContextMenuParams) => void,
 		options: Electron.WebContentsViewConstructorOptions | undefined,
 		@IWindowsMainService private readonly windowsMainService: IWindowsMainService,
@@ -122,6 +136,7 @@ export class BrowserView extends Disposable {
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 	) {
 		super();
+		this._owner = owner;
 
 		const webPreferences: Electron.WebPreferences = {
 			...options?.webPreferences,
@@ -147,12 +162,14 @@ export class BrowserView extends Disposable {
 		});
 
 		// Use a default size of 1024x768.
-		this._view.setBounds({ x: -10000, y: -10000, width: 1024, height: 768 });
+		// Important: The bounds here must be on-screen, otherwise some OSes (like macOS) may not actually start rendering.
+		//            We just have to be careful to not show the view until a layout has happened in the correct location.
+		this._view.setBounds({ x: 0, y: 0, width: 1024, height: 768 });
 		this._view.setBackgroundColor('#FFFFFF');
 
-		this._ownerWindow = this.windowsMainService.getWindowById(owner.mainWindowId)!;
+		this._ownerWindow = this.windowsMainService.getWindowById(host.windowId)!;
 		if (!this._ownerWindow) {
-			throw new Error(`Window with ID ${owner.mainWindowId} not found`);
+			throw new Error(`Window with ID ${host.windowId} not found`);
 		}
 		this._register(this._ownerWindow.onDidClose(() => this.dispose()));
 		this._register(this._ownerWindow.onWillLoad((e) => {
@@ -192,7 +209,7 @@ export class BrowserView extends Disposable {
 						}
 					})());
 
-					const childView = createChildView(details.url, options, {
+					const childView = this._createChildView(this.owner, details.url, options, {
 						pinned: true,
 						background: location === NewPageLocation.Background,
 						parentViewId: id,
@@ -218,7 +235,7 @@ export class BrowserView extends Disposable {
 			this.dispose();
 		});
 
-		this.debugger = new BrowserViewDebugger(this, this.logService);
+		this.debugger = new BrowserViewDebugger(this);
 		this.emulator = this._register(new BrowserViewEmulator(this, this.logService));
 		this.inspector = this._register(new BrowserViewInspector(this));
 
@@ -309,11 +326,20 @@ export class BrowserView extends Disposable {
 			}
 		});
 		webContents.on('will-navigate', (event) => {
+			if (this._redirectPinnedNavigation(event.url)) {
+				event.preventDefault();
+				return;
+			}
 			// URL.parse (vs `new URL`) tolerates about:/blob:/empty strings without throwing.
 			const host = URL.parse(event.url)?.host;
 			const currHost = URL.parse(this.webContents.getURL())?.host;
 			if (host !== currHost) {
 				this._lastFavicon = undefined;
+			}
+		});
+		webContents.on('will-redirect', event => {
+			if (this._redirectPinnedNavigation(event.url)) {
+				event.preventDefault();
 			}
 		});
 
@@ -570,6 +596,15 @@ export class BrowserView extends Disposable {
 		);
 	}
 
+	get owner(): IBrowserViewOwner {
+		return this._owner;
+	}
+
+	setOwner(owner: IBrowserViewOwner): void {
+		this._owner = owner;
+		this._onDidChangeOwner.fire(owner);
+	}
+
 	get webContents(): Electron.WebContents {
 		return this._view.webContents;
 	}
@@ -598,11 +633,40 @@ export class BrowserView extends Disposable {
 			storageKeys: { ...this.session.history.storageKeys, ...this.session.permissions.storageKeys },
 			permissions: this.session.permissions.serialize(),
 			browserZoomIndex: this._browserZoomIndex,
-			isElementSelectionActive: this.inspector.isElementSelectionActive,
+			elementSelectionState: this.inspector.elementSelectionState,
 			isRemoteSession: this.session.remote.isRemote,
 			isAreaSelectionActive: this.inspector.isAreaSelectionActive,
-			device: this.emulator.device
+			device: this.emulator.device,
+			audiences: [...this._audiences]
 		};
+	}
+
+	get audiences(): readonly IBrowserViewAudience[] {
+		return this._audiences;
+	}
+
+	setAudience(audience: IBrowserViewAudience, enabled: boolean): void {
+		if (enabled) {
+			if (!this._audiences.some(candidate => equalsBrowserViewAudience(candidate, audience))) {
+				this._audiences = [...this._audiences, audience];
+				this._onDidChangeAudiences.fire([...this._audiences]);
+			}
+		} else {
+			const audiences = this._audiences.filter(candidate => !matchesBrowserViewAudience(candidate, audience));
+			if (audiences.length !== this._audiences.length) {
+				this._audiences = audiences;
+				this._onDidChangeAudiences.fire([...this._audiences]);
+			}
+		}
+	}
+
+	setAudiences(audiences: readonly IBrowserViewAudience[]): void {
+		if (audiences.length === this._audiences.length && audiences.every(audience => this._audiences.some(candidate => equalsBrowserViewAudience(candidate, audience)))) {
+			return;
+		}
+
+		this._audiences = [...audiences];
+		this._onDidChangeAudiences.fire([...this._audiences]);
 	}
 
 	/**
@@ -637,6 +701,11 @@ export class BrowserView extends Disposable {
 			width: Math.round(bounds.width * bounds.zoomFactor),
 			height: Math.round(bounds.height * bounds.zoomFactor)
 		});
+
+		this._hasBeenLaidOut = true;
+		if (this._wantsVisibility && !this._view.getVisible()) {
+			this._view.setVisible(true);
+		}
 	}
 
 	setBrowserZoomIndex(zoomIndex: number): void {
@@ -649,7 +718,7 @@ export class BrowserView extends Disposable {
 	 * Set the visibility of this view
 	 */
 	setVisible(visible: boolean): void {
-		if (this._view.getVisible() === visible) {
+		if (this._wantsVisibility === visible) {
 			return;
 		}
 
@@ -658,7 +727,11 @@ export class BrowserView extends Disposable {
 			this._currentWindow?.win?.webContents.focus();
 		}
 
-		this._view.setVisible(visible);
+		if (this._hasBeenLaidOut || !visible) {
+			this._view.setVisible(visible);
+		}
+
+		this._wantsVisibility = visible;
 		this._onDidChangeVisibility.fire({ visible });
 	}
 
@@ -673,11 +746,27 @@ export class BrowserView extends Disposable {
 	 * Load a URL in this view
 	 */
 	async loadURL(url: string): Promise<void> {
+		if (this._redirectPinnedNavigation(url)) {
+			return;
+		}
 		this._explicitNavigationPending = true;
 		// Wait for the tunnel proxy (if any) to be applied so the navigation
 		// and the requests it triggers flow through the proxy.
 		await this.session.remote.whenReady;
 		await this._view.webContents.loadURL(url);
+	}
+
+	private _redirectPinnedNavigation(url: string): boolean {
+		if (!this.associatedResource || isBrowserViewAssociatedResourceNavigation(this.associatedResource, url)) {
+			return false;
+		}
+
+		logBrowserOpen(this.telemetryService, 'browserLinkForeground');
+		this._createChildView(this.owner, url, undefined, {
+			pinned: true,
+			parentViewId: this.id
+		});
+		return true;
 	}
 
 	/**
@@ -762,9 +851,29 @@ export class BrowserView extends Disposable {
 		if (options?.awaitNextPaint) {
 			await this._waitForNextPaint();
 		}
-		const image = await this._view.webContents.capturePage(options?.screenRect, {
-			stayHidden: true
-		});
+		const image = await (async () => {
+			const maxAttempts = 5;
+			let lastError: Error | undefined;
+			for (let i = 0; i < maxAttempts; i++) {
+				try {
+					return await this._view.webContents.capturePage(options?.screenRect, {
+						stayHidden: true
+					});
+				} catch (error) {
+					// `UnknownVizError` is a transient Electron error when no frame is available yet
+					// (e.g. offscreen scenarios where rendering has just been kicked off by `setVisible(true)`),
+					// so retry a few times.
+					if (error instanceof Error && error.message === 'UnknownVizError') {
+						lastError = error;
+						await new Promise(resolve => setTimeout(resolve, 16));
+						continue;
+					} else {
+						throw error;
+					}
+				}
+			}
+			throw new Error(`Failed to capture screenshot after ${maxAttempts} attempts`, { cause: lastError });
+		})();
 		const buffer = format === 'png' ? image.toPNG() : image.toJPEG(quality);
 		const screenshot = VSBuffer.wrap(buffer);
 		// Only update _lastScreenshot if capturing the full view
@@ -964,9 +1073,10 @@ export class BrowserView extends Disposable {
 		// Fire close event BEFORE disposing emitters. This signals the view has been destroyed.
 		this._onDidClose.fire();
 
-		// Clean up the view and all its event listeners
-		if (!this._view.webContents.isDestroyed()) {
-			this._view.webContents.close({ waitForBeforeUnload: false });
+		// Electron clears the view's webContents before emitting destroyed.
+		const webContents = this._view.webContents;
+		if (webContents && !webContents.isDestroyed()) {
+			webContents.close({ waitForBeforeUnload: false });
 		}
 
 		super.dispose();

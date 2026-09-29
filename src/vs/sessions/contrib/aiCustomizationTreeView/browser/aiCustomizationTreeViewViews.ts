@@ -362,7 +362,7 @@ class UnifiedAICustomizationDataSource implements IAsyncDataSource<RootElement, 
 	}
 
 	private getTypeCategories(): (IAICustomizationTypeItem | IAICustomizationLinkItem)[] {
-		return [
+		const items: (IAICustomizationTypeItem | IAICustomizationLinkItem)[] = [
 			{
 				type: 'category',
 				id: 'category-agents',
@@ -384,6 +384,8 @@ class UnifiedAICustomizationDataSource implements IAsyncDataSource<RootElement, 
 				promptType: PromptsType.instructions,
 				icon: instructionsIcon,
 			},
+		];
+		items.push(
 			{
 				type: 'link',
 				id: 'link-mcp-servers',
@@ -391,7 +393,8 @@ class UnifiedAICustomizationDataSource implements IAsyncDataSource<RootElement, 
 				icon: mcpServerIcon,
 				section: AICustomizationManagementSection.McpServers,
 			},
-		];
+		);
+		return items;
 	}
 
 	/**

@@ -55,6 +55,7 @@ export interface NativeParsedArgs {
 	'new-window'?: boolean;
 	'reuse-window'?: boolean;
 	'agents'?: boolean;
+	'session-title-base64'?: string;
 	locale?: string;
 	'user-data-dir'?: string;
 	'prof-startup'?: boolean;
@@ -89,6 +90,8 @@ export interface NativeParsedArgs {
 	debugRenderer?: boolean; // whether we expect a debugger (js-debug) to attach to the renderer, incl webviews+webworker
 	'inspect-ptyhost'?: string;
 	'inspect-brk-ptyhost'?: string;
+	'inspect-agenthost'?: string;
+	'inspect-brk-agenthost'?: string;
 	'inspect-sharedprocess'?: string;
 	'inspect-brk-sharedprocess'?: string;
 	'disable-extensions'?: boolean;
@@ -108,6 +111,7 @@ export interface NativeParsedArgs {
 	'skip-release-notes'?: boolean;
 	'skip-welcome'?: boolean;
 	'disable-telemetry'?: boolean;
+	'telemetry-level'?: string;
 	'export-default-configuration'?: string;
 	'export-policy-data'?: string;
 	'export-default-keybindings'?: string;

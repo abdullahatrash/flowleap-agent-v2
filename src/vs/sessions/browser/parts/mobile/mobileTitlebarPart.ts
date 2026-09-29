@@ -18,8 +18,9 @@ import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../../platform/a
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { fillInActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDefaultAccountService } from '../../../../platform/defaultAccount/common/defaultAccount.js';
-import { IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
+import { ACCOUNTS_AVATAR_SETTING, IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionFileChange } from '../../../services/sessions/common/session.js';
 import { IsNewChatSessionContext } from '../../../common/contextkeys.js';
@@ -27,7 +28,9 @@ import { SideBarVisibleContext } from '../../../../workbench/common/contextkeys.
 import { Menus } from '../../menus.js';
 import { ChatEntitlement, ChatEntitlementService, IChatEntitlementService } from '../../../../workbench/services/chat/common/chatEntitlementService.js';
 import { getAccountTitleBarState, getAccountProfileImageUrl, getAccountTitleBarBadgeKey, resolveAccountInfo } from '../../accountTitleBarState.js';
+import { IChatDashboardService } from '../../chatDashboardService.js';
 import { MOBILE_OPEN_CHANGES_VIEW_COMMAND_ID } from './contributions/mobileChangesView.js';
+import { URI } from '../../../../base/common/uri.js';
 
 /**
  * Mobile titlebar — prepended above the workbench grid on phone viewports
@@ -55,7 +58,7 @@ import { MOBILE_OPEN_CHANGES_VIEW_COMMAND_ID } from './contributions/mobileChang
  * and the account indicator (on welcome / new session). The account
  * indicator shows the user's avatar or a person icon with an optional
  * dot badge for quota/status warnings. Tapping it opens a panel with
- * account info and sign-in/sign-out actions.
+ * account info, copilot status dashboard, and sign-in/sign-out actions.
  */
 export class MobileTitlebarPart extends Disposable {
 
@@ -63,6 +66,7 @@ export class MobileTitlebarPart extends Disposable {
 
 	private readonly sessionTitleElement: HTMLElement;
 	private readonly actionsContainer: HTMLElement;
+	private readonly centerToolbar: MenuWorkbenchToolBar;
 
 	private readonly _onDidClickHamburger = this._register(new Emitter<void>());
 	readonly onDidClickHamburger: Event<void> = this._onDidClickHamburger.event;
@@ -81,6 +85,7 @@ export class MobileTitlebarPart extends Disposable {
 	private accountName: string | undefined;
 	private accountProviderId: string | undefined;
 	private accountProviderLabel: string | undefined;
+	private accountIcon: URI | undefined;
 	private isAccountLoading = true;
 	private accountRequestCounter = 0;
 	private avatarRequestCounter = 0;
@@ -91,6 +96,7 @@ export class MobileTitlebarPart extends Disposable {
 	private dismissedBadgeKey: string | undefined;
 	private readonly accountPanelDisposable = this._register(new MutableDisposable<DisposableStore>());
 	private readonly avatarLoadDisposable = this._register(new MutableDisposable());
+	private readonly copilotDashboardStore = this._register(new MutableDisposable<DisposableStore>());
 
 	// Changes pill state — kept here so the click handler can read the
 	// latest set without re-deriving it on each tap.
@@ -105,7 +111,9 @@ export class MobileTitlebarPart extends Disposable {
 		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
 		@IChatEntitlementService private readonly chatEntitlementService: ChatEntitlementService,
 		@IMenuService private readonly menuService: IMenuService,
+		@IChatDashboardService private readonly chatDashboardService: IChatDashboardService,
 		@ICommandService private readonly commandService: ICommandService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 
@@ -192,6 +200,11 @@ export class MobileTitlebarPart extends Disposable {
 		this._register(this.chatEntitlementService.onDidChangeSentiment(() => this.renderAccountState()));
 		this._register(this.chatEntitlementService.onDidChangeQuotaExceeded(() => this.renderAccountState()));
 		this._register(this.chatEntitlementService.onDidChangeQuotaRemaining(() => this.renderAccountState()));
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration(ACCOUNTS_AVATAR_SETTING)) {
+				this.refreshAvatar();
+			}
+		}));
 		this.refreshAccount();
 
 		// Keep the title in sync with the active session
@@ -201,7 +214,7 @@ export class MobileTitlebarPart extends Disposable {
 			this.sessionTitleElement.textContent = title || localize('mobileTopBar.newSession', "New Session");
 		}));
 
-		// Keep the changes pill in sync with the active session's changes.
+		// Keep the changes pill in sync with the active chat's changes.
 		// Hidden when there are no changes (counts are zero and list is empty).
 		const isNewChatRef = { value: !!IsNewChatSessionContext.getValue(contextKeyService) };
 		const renderChangesPill = () => {
@@ -234,7 +247,7 @@ export class MobileTitlebarPart extends Disposable {
 		};
 		this._register(autorun(reader => {
 			const session = this.sessionsService.activeSession.read(reader);
-			this.latestChanges = session?.changes.read(reader) ?? [];
+			this.latestChanges = session?.activeChat.read(reader).changes.read(reader) ?? [];
 			renderChangesPill();
 		}));
 
@@ -244,6 +257,7 @@ export class MobileTitlebarPart extends Disposable {
 			telemetrySource: 'mobileTitlebar.center',
 			toolbarOptions: { primaryGroup: () => true },
 		}));
+		this.centerToolbar = toolbar;
 
 		// Switch between title and toolbar based on whether a new (empty)
 		// chat session is active AND whether the toolbar has anything to
@@ -274,6 +288,14 @@ export class MobileTitlebarPart extends Disposable {
 			}
 		}));
 		this._register(toolbar.onDidChangeMenuItems(() => updateCenterMode()));
+	}
+
+	focus(): void {
+		if (this.element.classList.contains('show-actions')) {
+			this.centerToolbar.focus();
+		} else {
+			this.sessionTitleElement.focus();
+		}
 	}
 
 	/**
@@ -319,6 +341,7 @@ export class MobileTitlebarPart extends Disposable {
 		this.accountName = info?.accountName;
 		this.accountProviderId = info?.accountProviderId;
 		this.accountProviderLabel = info?.accountProviderLabel;
+		this.accountIcon = info?.accountIcon;
 		this.isAccountLoading = false;
 		this.refreshAvatar();
 		this.renderAccountState();
@@ -340,6 +363,9 @@ export class MobileTitlebarPart extends Disposable {
 			entitlement,
 			sentiment: this.chatEntitlementService.sentiment,
 			quotas: this.chatEntitlementService.quotas,
+			// The conditional-auth opt-in is desktop-only (the native agent host it
+			// lets in does not run on mobile/web).
+			allowSignedOutWhenUsable: false,
 		});
 
 		// Avatar
@@ -372,7 +398,9 @@ export class MobileTitlebarPart extends Disposable {
 	}
 
 	private refreshAvatar(): void {
-		const avatarUrl = getAccountProfileImageUrl(this.accountProviderId, this.accountName);
+		const avatarUrl = this.configurationService.getValue<boolean>(ACCOUNTS_AVATAR_SETTING)
+			? getAccountProfileImageUrl(this.accountProviderId, this.accountName, this.accountIcon)
+			: undefined;
 		if (avatarUrl === this.currentAvatarUrl) {
 			return;
 		}
@@ -426,6 +454,7 @@ export class MobileTitlebarPart extends Disposable {
 			entitlement: this.chatEntitlementService.entitlement,
 			sentiment: this.chatEntitlementService.sentiment,
 			quotas: this.chatEntitlementService.quotas,
+			allowSignedOutWhenUsable: false,
 		}));
 		if (badgeKey) {
 			this.dismissedBadgeKey = badgeKey;
@@ -436,6 +465,7 @@ export class MobileTitlebarPart extends Disposable {
 		panelStore.add({
 			dispose: () => {
 				this.isAccountMenuVisible = false;
+				this.copilotDashboardStore.clear();
 				this.renderAccountState();
 			}
 		});
@@ -480,6 +510,25 @@ export class MobileTitlebarPart extends Disposable {
 			}
 		} else {
 			append(profileInfo, $('div.mobile-account-sheet-name')).textContent = localize('mobileAccount.signedOut', "Not signed in");
+		}
+
+		// Copilot status dashboard — only when signed in AND entitlements
+		// have resolved. When entitlement is Unknown or Available (setup
+		// pending), the dashboard shows a "Set up Copilot" prompt that
+		// doesn't apply in the agents app.
+		const entitlement = this.chatEntitlementService.entitlement;
+		const showDashboard = !this.chatEntitlementService.sentiment.hidden
+			&& !!this.accountName
+			&& entitlement !== ChatEntitlement.Unknown
+			&& entitlement !== ChatEntitlement.Available;
+		if (showDashboard) {
+			const dashboardSection = append(content, $('div.mobile-account-sheet-section'));
+			const store = new DisposableStore();
+			this.copilotDashboardStore.value = store;
+			const dashboardElement = this.chatDashboardService.createDashboardElement(store);
+			if (dashboardElement) {
+				append(dashboardSection, dashboardElement);
+			}
 		}
 
 		// Actions list

@@ -31,8 +31,9 @@ import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { IChatModel, IChatModelInputState, IExportableChatData, ISerializableChatData } from '../../../common/model/chatModel.js';
 import { IChatService } from '../../../common/chatService/chatService.js';
 import { IChatSessionsService, localChatSessionType } from '../../../common/chatSessionsService.js';
-import { ChatAgentLocation, ChatModeKind } from '../../../common/constants.js';
+import { ChatAgentLocation, ChatModeKind, IResolvedNewChatSessionType, SessionTypeSelectionReason } from '../../../common/constants.js';
 import { clearChatEditor } from '../../actions/chatClear.js';
+import { AgentHostSessionInputPills } from '../../agentSessions/agentHost/agentHostSessionInputPills.js';
 import { ChatEditorInput } from './chatEditorInput.js';
 import { ChatWidget } from '../../widget/chatWidget.js';
 import { IChatWidgetViewState, setModelPreservingInputTypedWhileLoading } from '../../chat.js';
@@ -44,6 +45,15 @@ export interface IChatEditorOptions extends IEditorOptions {
 	 * https://github.com/microsoft/vscode/pull/278476 as input state is stored on the model.
 	 */
 	modelInputState?: IChatModelInputState;
+	/**
+	 * Session type explicitly selected by the user when opening a new chat editor.
+	 * Non-local session types are already encoded in the editor resource, so this
+	 * currently preserves an explicit local selection when default/last-used
+	 * provider resolution would otherwise apply.
+	 */
+	explicitSessionType?: string;
+	/** Creation-only metadata describing why the new session type was selected. */
+	sessionTypeSelectionReason?: SessionTypeSelectionReason;
 	target?: { data: IExportableChatData | ISerializableChatData };
 	title?: {
 		preferred?: string;
@@ -85,9 +95,9 @@ export class ChatEditor extends AbstractEditorWithViewState<IChatEditorViewState
 		super(ChatEditorInput.EditorID, group, ChatEditor.VIEW_STATE_KEY, telemetryService, instantiationService, storageService, textResourceConfigurationService, themeService, editorService, editorGroupService);
 	}
 
-	private async clear() {
+	private async clear(resolvedSessionType?: IResolvedNewChatSessionType) {
 		if (this.input) {
-			return this.instantiationService.invokeFunction(clearChatEditor, this.input as ChatEditorInput);
+			return this.instantiationService.invokeFunction(clearChatEditor, this.input as ChatEditorInput, resolvedSessionType);
 		}
 	}
 
@@ -106,9 +116,10 @@ export class ChatEditor extends AbstractEditorWithViewState<IChatEditorViewState
 				undefined,
 				{
 					autoScroll: mode => mode !== ChatModeKind.Ask,
+					readOnlyBannerAtTop: true,
 					renderFollowups: true,
 					supportsFileReferences: true,
-					clear: () => this.clear(),
+					clear: resolvedSessionType => this.clear(resolvedSessionType),
 					enableFind: true,
 					rendererOptions: {
 						renderTextEditsAsSummary: (uri) => {
@@ -120,6 +131,7 @@ export class ChatEditor extends AbstractEditorWithViewState<IChatEditorViewState
 					enableImplicitContext: true,
 					enableWorkingSet: 'explicit',
 					supportsChangingModes: true,
+					enableSessionStateIndicator: true,
 				},
 				{
 					listForeground: editorForeground,
@@ -140,6 +152,7 @@ export class ChatEditor extends AbstractEditorWithViewState<IChatEditorViewState
 			}
 		}));
 		this.widget.render(parent);
+		this._register(scopedInstantiationService.createInstance(AgentHostSessionInputPills, this.widget, 'auto'));
 		this.widget.setVisible(true);
 	}
 

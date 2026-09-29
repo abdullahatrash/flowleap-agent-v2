@@ -143,6 +143,7 @@ suite('WebPageLoader', () => {
 		const agentNetworkFilterService: IAgentNetworkFilterService = {
 			_serviceBrand: undefined,
 			onDidChange: Event.None,
+			isEnabled: () => true,
 			isUriAllowed: isDomainAllowed ?? (() => true),
 			formatError: (u) => `Access to ${u.authority} is blocked by network domain policy.`,
 		};

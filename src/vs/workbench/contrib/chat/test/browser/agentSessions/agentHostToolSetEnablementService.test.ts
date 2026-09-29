@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { InMemoryStorageService } from '../../../../../../platform/storage/common/storage.js';
-import { AgentHostToolSetEnablementService, AGENT_HOST_COPILOT_CLI_SESSION_TYPE, countEnabledCustomizationTools, getToolSetTriState, isToolEnabledInSet } from '../../../browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
+import { AgentHostToolSetEnablementService, AGENT_HOST_COPILOT_CLI_SESSION_TYPE, countEnabledCustomizationTools, getToolSetTriState, isCopilotCliSessionType, isToolEnabledInSet } from '../../../browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
 
 suite('AgentHostToolSetEnablementService', () => {
 
@@ -19,6 +19,18 @@ suite('AgentHostToolSetEnablementService', () => {
 	function createSut(storageService = store.add(new InMemoryStorageService())) {
 		return { storageService, sut: store.add(new AgentHostToolSetEnablementService(storageService)) };
 	}
+
+	test('isCopilotCliSessionType matches local and remote Copilot CLI harnesses', () => {
+		assert.deepStrictEqual(
+			[
+				AGENT_HOST_COPILOT_CLI_SESSION_TYPE,
+				'remote-devbox-copilotcli',
+				'remote-my-dash-box-copilotcli',
+				'remote-devbox-claude',
+				'agent-host-claude',
+			].map(isCopilotCliSessionType),
+			[true, true, true, false, false]);
+	});
 
 	test('default state: everything enabled, set tri-state on', () => {
 		const { sut } = createSut();
@@ -64,16 +76,15 @@ suite('AgentHostToolSetEnablementService', () => {
 		assert.deepStrictEqual([...sut.getState(SESSION).tools], []);
 	});
 
-	test('countEnabledCustomizationTools counts distinct effective members across the given sets', () => {
+	test('countEnabledCustomizationTools counts effective members and skips deprecated sets', () => {
 		const { sut } = createSut();
 		sut.setToolSetEnabled(SESSION, SET, TOOLS, false);
 		sut.setToolEnabled(SESSION, SET, 't1', true);
 		const toolSets = [
 			{ id: SET, getTools: () => TOOLS.map(id => ({ id })) },
-			{ id: 'other', getTools: () => [{ id: 'x' }] },
+			{ id: 'dep', deprecated: true, getTools: () => [{ id: 'x' }] },
 		];
-		// SET contributes only its per-tool override (t1); 'other' contributes its member (x).
-		assert.strictEqual(countEnabledCustomizationTools(toolSets, sut.getState(SESSION)), 2);
+		assert.strictEqual(countEnabledCustomizationTools(toolSets, sut.getState(SESSION)), 1);
 	});
 
 	test('enablement is isolated per session type', () => {

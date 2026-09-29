@@ -9,8 +9,8 @@ import { URI } from '../../../base/common/uri.js';
 import { ServicesAccessor } from '../../../editor/browser/editorExtensions.js';
 import { localize2 } from '../../../nls.js';
 import { Action2 } from '../../../platform/actions/common/actions.js';
-import { AGENT_HOST_SCHEME, fromAgentHostUri } from '../../../platform/agentSessionState/common/agentHostUri.js';
-import { IRemoteAgentHostService } from '../../../platform/agentSessionState/common/remoteAgentHostService.js';
+import { AGENT_HOST_SCHEME, fromAgentHostUri } from '../../../platform/agentHost/common/agentHostUri.js';
+import { IRemoteAgentHostService } from '../../../platform/agentHost/common/remoteAgentHostService.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../platform/product/common/productService.js';
@@ -34,7 +34,7 @@ export class OpenInVSCodeAction extends Action2 {
 	constructor() {
 		super({
 			id: OpenInVSCodeAction.ID,
-			title: localize2('openInVSCode', 'Open in Patent Workspace'),
+			title: localize2('openInVSCode', 'Open in Editor'),
 			icon: Codicon.vscodeInsiders,
 			precondition: ContextKeyExpr.and(IsAuxiliaryWindowContext.toNegated(), SessionsWelcomeVisibleContext.toNegated()),
 			menu: [{
@@ -73,7 +73,7 @@ export class OpenInVSCodeAction extends Action2 {
 			return;
 		}
 
-		const workspace = activeSession.workspace.get();
+		const workspace = activeSession.activeChat.get().workspace.get();
 		const folder = workspace?.folders[0];
 		const rawFolderUri = workspace?.isVirtualWorkspace ? undefined : folder?.workingDirectory;
 

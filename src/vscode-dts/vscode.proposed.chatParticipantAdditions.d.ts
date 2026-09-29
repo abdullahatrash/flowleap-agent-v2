@@ -49,10 +49,15 @@ declare module 'vscode' {
 		ranges: Range[];
 	}
 
+	/** The Auto routing tier a request was resolved with. */
+	export type ChatAutoModeTier = 'efficiency' | 'balance' | 'intelligence' | 'fast';
+
 	export class ChatResponseTextEditPart {
 		uri: Uri;
 		edits: TextEdit[];
 		isDone?: boolean;
+		/** The Auto routing tier that produced these edits, for edit attribution. */
+		autoTier?: ChatAutoModeTier;
 		constructor(uri: Uri, done: true);
 		constructor(uri: Uri, edits: TextEdit | TextEdit[]);
 	}
@@ -61,6 +66,8 @@ declare module 'vscode' {
 		uri: Uri;
 		edits: NotebookEdit[];
 		isDone?: boolean;
+		/** The Auto routing tier that produced these edits, for edit attribution. */
+		autoTier?: ChatAutoModeTier;
 		constructor(uri: Uri, done: true);
 		constructor(uri: Uri, edits: NotebookEdit | NotebookEdit[]);
 	}
@@ -317,12 +324,6 @@ declare module 'vscode' {
 		description?: string;
 
 		/**
-		 * A human-readable name for the subagent type, shown in the subagent's header.
-		 * When it is missing, the header falls back to {@link agentName}.
-		 */
-		agentDisplayName?: string;
-
-		/**
 		 * The name of the subagent being invoked.
 		 */
 		agentName?: string;
@@ -453,6 +454,7 @@ declare module 'vscode' {
 		ChatResponseThinkingProgressPart: ChatResponseThinkingProgressPart;
 		ChatResponseExternalEditPart: ChatResponseExternalEditPart;
 		ChatResponseQuestionCarouselPart: ChatResponseQuestionCarouselPart;
+		ChatResponseAutoModeResolutionPart: ChatResponseAutoModeResolutionPart;
 	}
 
 	export type ExtendedChatResponsePart = ExtendedChatResponseParts[keyof ExtendedChatResponseParts];
@@ -575,6 +577,17 @@ declare module 'vscode' {
 		readonly description: string;
 		readonly author: string;
 		constructor(uriOrCommand: Uri | Command, title: string, description: string, author: string, linkTag: string);
+	}
+
+	/**
+	 * Explains what the "Auto" model routed a turn to, as a single status line.
+	 * Push a part without a model for the in-flight state, then a resolved one.
+	 * Auto may route several times in a turn; each route gets its own row.
+	 */
+	export class ChatResponseAutoModeResolutionPart {
+		/** The model the router picked, or `undefined` while routing is in flight. */
+		resolvedModel: { id: string; name: string } | undefined;
+		constructor(resolvedModel?: { id: string; name: string });
 	}
 
 	export interface ChatResponseStream {
@@ -849,32 +862,6 @@ declare module 'vscode' {
 	}
 
 	/**
-	 * Whole-turn token consumption attributed to a single model.
-	 */
-	export interface ChatResultModelTotal {
-		/**
-		 * The human-readable model name, rendered verbatim in the UI
-		 * (e.g. "Claude Sonnet 4.5").
-		 */
-		readonly model: string;
-
-		/**
-		 * The total number of input (prompt) tokens sent to this model this turn.
-		 */
-		readonly inputTokens: number;
-
-		/**
-		 * The portion of {@link inputTokens} the provider served from its prompt cache.
-		 */
-		readonly cachedTokens: number;
-
-		/**
-		 * The total number of output (completion) tokens produced by this model this turn.
-		 */
-		readonly outputTokens: number;
-	}
-
-	/**
 	 * Token usage information for a chat request.
 	 */
 	export interface ChatResultUsage {
@@ -904,14 +891,6 @@ declare module 'vscode' {
 		 * If the percentages do not sum to 100%, the remaining will be shown as "Uncategorized".
 		 */
 		readonly promptTokenDetails?: readonly ChatResultPromptTokenDetail[];
-
-		/**
-		 * Whole-turn token consumption broken down per model. A turn can call several
-		 * models, so each entry is the running total for one model rather than the
-		 * numbers of a single call. Rendered on hover of the response footer's model
-		 * stat; omit it to show no breakdown.
-		 */
-		readonly modelTotals?: readonly ChatResultModelTotal[];
 	}
 
 	export interface ChatResult {
