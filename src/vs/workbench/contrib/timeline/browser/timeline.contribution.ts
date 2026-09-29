@@ -10,7 +10,6 @@ import { IViewsRegistry, IViewDescriptor, Extensions as ViewExtensions } from '.
 import { VIEW_CONTAINER } from '../../files/browser/explorerViewlet.js';
 import { ITimelineService, TimelinePaneId } from '../common/timeline.js';
 import { TimelineHasProviderContext } from '../common/timelineService.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { TimelinePane } from './timelinePane.js';
 import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -22,6 +21,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { ILocalizedString } from '../../../../platform/action/common/action.js';
 import { URI } from '../../../../base/common/uri.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const timelineViewIcon = registerIcon('timeline-view-icon', Codicon.history, localize('timelineViewIcon', 'View icon of the timeline view.'));
 const timelineOpenIcon = registerIcon('timeline-open', Codicon.history, localize('timelineOpenIcon', 'Icon for the open timeline action.'));

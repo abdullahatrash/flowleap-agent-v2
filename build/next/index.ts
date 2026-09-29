@@ -138,6 +138,7 @@ const serverEntryPoints = [
 // Bootstrap files per target
 const bootstrapEntryPointsDesktop = [
 	'main',
+	'mainImpl',
 	'cli',
 	'bootstrap-fork',
 ];
@@ -614,6 +615,22 @@ function inlineMinimistPlugin(): esbuild.Plugin {
 	};
 }
 
+/**
+ * Keeps `./mainImpl.js` external when bundling `main`, so `main` stays a thin entry point that
+ * loads the separately bundled `mainImpl` (upstream 1.140 split of src/main.ts).
+ */
+function mainImplExternalPlugin(): esbuild.Plugin {
+	return {
+		name: 'main-impl-external',
+		setup(build) {
+			build.onResolve({ filter: /^\.\/mainImpl\.js$/ }, args => ({
+				path: args.path,
+				external: true,
+			}));
+		},
+	};
+}
+
 function cssExternalPlugin(): esbuild.Plugin {
 	// Mark CSS imports as external so they stay as import statements
 	// The CSS files are copied separately and loaded by the browser at runtime
@@ -892,6 +909,9 @@ ${tslib}`,
 		const outPath = path.join(REPO_ROOT, outDir, `${entry}.js`);
 
 		const bootstrapPlugins: esbuild.Plugin[] = [inlineMinimistPlugin(), contentMapperPlugin];
+		if (entry === 'main') {
+			bootstrapPlugins.push(mainImplExternalPlugin());
+		}
 		if (doNls) {
 			bootstrapPlugins.unshift(nlsPlugin({
 				baseDir: path.join(REPO_ROOT, SRC_DIR),

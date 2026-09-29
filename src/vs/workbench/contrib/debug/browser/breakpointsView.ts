@@ -36,7 +36,6 @@ import { getActionBarActions, getContextMenuActions } from '../../../../platform
 import { Action2, IMenu, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { TextEditorSelectionRevealType } from '../../../../platform/editor/common/editor.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
@@ -62,6 +61,7 @@ import * as icons from './debugIcons.js';
 import { DisassemblyView } from './disassemblyView.js';
 import { equals } from '../../../../base/common/arrays.js';
 import { hasKey } from '../../../../base/common/types.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const $ = dom.$;
 
@@ -1955,12 +1955,12 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.addFunctionBreakpointAction',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...localize2('addFunctionBreakpoint', "Add Function Breakpoint"),
 				mnemonicTitle: localize({ key: 'miFunctionBreakpoint', comment: ['&& denotes a mnemonic'] }, "&&Function Breakpoint..."),
 			},
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			icon: icons.watchExpressionsAddFuncBreakpoint,
 			menu: [{
 				id: MenuId.ViewTitle,
@@ -2112,12 +2112,12 @@ registerAction2(class extends MemoryBreakpointAction {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.addDataBreakpointOnAddress',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...localize2('addDataBreakpointOnAddress', "Add Data Breakpoint at Address"),
 				mnemonicTitle: localize({ key: 'miDataBreakpoint', comment: ['&& denotes a mnemonic'] }, "&&Data Breakpoint..."),
 			},
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			icon: icons.watchExpressionsAddDataBreakpoint,
 			menu: [{
 				id: MenuId.ViewTitle,
@@ -2153,9 +2153,9 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.toggleBreakpointsActivatedAction',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: localize2('activateBreakpoints', 'Toggle Activate Breakpoints'),
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			icon: icons.breakpointsActivate,
 			menu: {
 				id: MenuId.ViewTitle,
@@ -2210,12 +2210,12 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.debug.viewlet.action.removeAllBreakpoints',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...localize2('removeAllBreakpoints', "Remove All Breakpoints"),
 				mnemonicTitle: localize({ key: 'miRemoveAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "Remove &&All Breakpoints"),
 			},
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			icon: icons.breakpointsRemoveAll,
 			menu: [{
 				id: MenuId.ViewTitle,

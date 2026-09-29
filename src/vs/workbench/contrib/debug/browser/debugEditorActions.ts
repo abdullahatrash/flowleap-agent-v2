@@ -18,7 +18,6 @@ import { ILocalizedString } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -34,6 +33,7 @@ import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TOGGLE_BREAKPOINT_ID } from '../../../../workbench/contrib/debug/browser/debugCommands.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 class ToggleBreakpointAction extends Action2 {
 	constructor() {
@@ -276,6 +276,7 @@ class ToggleDisassemblyViewSourceCodeAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleDisassemblyViewSourceCodeAction.ID,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...nls.localize2('toggleDisassemblyViewSourceCode', "Toggle Source Code in Disassembly View"),
 				mnemonicTitle: nls.localize({ key: 'mitogglesource', comment: ['&& denotes a mnemonic'] }, "&&ToggleSource"),
@@ -284,7 +285,6 @@ class ToggleDisassemblyViewSourceCodeAction extends Action2 {
 				description: nls.localize2('toggleDisassemblyViewSourceCodeDescription', 'Shows or hides source code in disassembly')
 			},
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 		});
 	}
 

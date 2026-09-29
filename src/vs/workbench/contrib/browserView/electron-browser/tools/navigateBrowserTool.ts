@@ -10,7 +10,7 @@ import { localize } from '../../../../../nls.js';
 import { IPlaywrightService } from '../../../../../platform/browserView/common/playwrightService.js';
 import { ToolDataSource, type CountTokensCallback, type IPreparedToolInvocation, type IToolData, type IToolImpl, type IToolInvocation, type IToolInvocationPreparationContext, type IToolResult, type ToolProgress } from '../../../chat/common/tools/languageModelToolsService.js';
 import { IAgentNetworkFilterService } from '../../../../../platform/networkFilter/common/networkFilterService.js';
-import { createBrowserPageLink, errorResult, getBrowserNetworkPolicyError, getExternalTunnelNetworkPolicyError, getSessionId, playwrightInvoke, remoteUrlRewriteNotice, rewriteRemoteLocalhostUrl } from './browserToolHelpers.js';
+import { createBrowserPageLink, errorResult, getBrowserNetworkPolicyError, getBrowserPageResourceNavigationError, getExternalTunnelNetworkPolicyError, getSessionId, playwrightInvoke, remoteUrlRewriteNotice, rewriteRemoteLocalhostUrl } from './browserToolHelpers.js';
 import { BrowserChatToolReferenceName } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import { IRemoteExplorerService } from '../../../../services/remote/common/remoteExplorerService.js';
@@ -92,6 +92,11 @@ export class NavigateBrowserTool implements IToolImpl {
 
 				params.url = parsed.href;
 
+				const resourceNavigationError = this.getResourceNavigationError(params.pageId, params.url);
+				if (resourceNavigationError) {
+					throw new Error(resourceNavigationError);
+				}
+
 				const networkPolicyError = getBrowserNetworkPolicyError(params.url, this.agentNetworkFilterService);
 				if (networkPolicyError) {
 					throw new Error(networkPolicyError);
@@ -131,6 +136,11 @@ export class NavigateBrowserTool implements IToolImpl {
 					return errorResult(networkPolicyError);
 				}
 
+				const resourceNavigationError = this.getResourceNavigationError(params.pageId, params.url!);
+				if (resourceNavigationError) {
+					return errorResult(resourceNavigationError);
+				}
+
 				// In a remote workspace without the remote proxy, the integrated
 				// browser runs locally and cannot reach the remote's localhost directly.
 				// Rewrite to the forwarded local address (if any) so the page can be reached.
@@ -147,5 +157,10 @@ export class NavigateBrowserTool implements IToolImpl {
 					: result;
 			}
 		}
+	}
+
+	private getResourceNavigationError(pageId: string, target: string): string | undefined {
+		const editor = this.browserViewService.getKnownBrowserViews().get(pageId);
+		return getBrowserPageResourceNavigationError(editor, target);
 	}
 }

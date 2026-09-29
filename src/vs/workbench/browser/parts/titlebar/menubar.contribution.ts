@@ -36,7 +36,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		mnemonicTitle: localize({ key: 'mSelection', comment: ['&& denotes a mnemonic'] }, "&&Selection")
 	},
 	order: 3,
-	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: Hide when Patent IDE mode is ON
+	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide the Selection menu
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
@@ -57,7 +57,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		mnemonicTitle: localize({ key: 'mGoto', comment: ['&& denotes a mnemonic'] }, "&&Go")
 	},
 	order: 5,
-	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: Hide when Patent IDE mode is ON
+	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide the Go menu
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
@@ -68,7 +68,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		mnemonicTitle: localize({ key: 'mTerminal', comment: ['&& denotes a mnemonic'] }, "&&Terminal")
 	},
 	order: 7,
-	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: Hide when Patent IDE mode is ON
+	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide the Terminal menu
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {

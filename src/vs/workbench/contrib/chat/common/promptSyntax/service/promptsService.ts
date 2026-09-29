@@ -120,6 +120,10 @@ export enum PromptsStorage {
 	builtIn = 'builtin',
 }
 
+export function isUserToggleableCustomization(type: PromptsType, storage: PromptsStorage): boolean {
+	return type === PromptsType.skill && storage === PromptsStorage.builtIn;
+}
+
 /**
  * Represents a prompt path with its type.
  * This is used for both prompt files and prompt source folders.
@@ -383,7 +387,7 @@ export interface IChatPromptSlashCommand {
 }
 
 export interface IResolvedChatPromptSlashCommand extends IChatPromptSlashCommand {
-	readonly parsedPromptFile: ParsedPromptFile;
+	readonly parsedPromptFile?: ParsedPromptFile;
 }
 
 
@@ -620,9 +624,9 @@ export interface IPromptsService extends IDisposable {
 	listPromptFiles(type: PromptsType, token: CancellationToken): Promise<readonly IPromptPath[]>;
 
 	/**
-	 * List all available prompt files.
+	 * Lists all available prompt files from a storage location. For local storage, root scopes relative locations; it is ignored for other storages, and without it the current workspace folders are used.
 	 */
-	listPromptFilesForStorage(type: PromptsType, storage: PromptsStorage, token: CancellationToken): Promise<readonly IPromptPath[]>;
+	listPromptFilesForStorage(type: PromptsType, storage: PromptsStorage, token: CancellationToken, root?: URI): Promise<readonly IPromptPath[]>;
 
 	/**
 	 * Get a list of prompt source folders based on the provided prompt type.
@@ -682,6 +686,11 @@ export interface IPromptsService extends IDisposable {
 	readonly onDidChangeInstructions: Event<void>;
 
 	/**
+	 * Event that is triggered when the list of agent instruction files changes.
+	 */
+	readonly onDidChangeAgentInstructions: Event<void>;
+
+	/**
 	 * Finds all available custom agents
 	 */
 	getCustomAgents(token: CancellationToken): Promise<readonly ICustomAgent[]>;
@@ -711,6 +720,18 @@ export interface IPromptsService extends IDisposable {
 	 * Combines results from listAgentMDs (non-nested), listClaudeMDs, and listCopilotInstructionsMDs.
 	 */
 	listAgentInstructions(token: CancellationToken, logger?: Logger): Promise<IAgentInstructionFile[]>;
+
+	/**
+	 * Gets the combined voice customization from `~/.copilot/voice.md` and each
+	 * trusted workspace's `.github/voice.md`.
+	 */
+	getVoiceInstructions(token: CancellationToken): Promise<string | undefined>;
+
+	/**
+	 * Gets the combined dictation customization from `~/.copilot/dictation.md`
+	 * and each trusted workspace's `.github/dictation.md`.
+	 */
+	getDictationInstructions(token: CancellationToken): Promise<string | undefined>;
 
 	/**
 	 * For a chat mode file URI, return the name of the agent file that it should use.

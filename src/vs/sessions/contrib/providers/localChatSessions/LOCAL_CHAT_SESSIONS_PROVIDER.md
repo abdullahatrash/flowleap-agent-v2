@@ -137,11 +137,11 @@ A local session may host multiple chats. The hierarchy is stored entirely in the
 
 ## Picker Contributions
 
-Local sessions reuse the Copilot provider's pickers (`ModePicker`, `PermissionPicker`) via `when` clauses that match `SessionTypeContext === 'local'`. The picker actions in `copilotChatSessionsActions.ts` include `IsActiveSessionLocal` in their `when` expressions so the same widgets surface for both the copilot CLI provider and this local provider.
+`localChatSessionsActions.ts` registers upstream's shared `ModePicker` and `PermissionPicker` widgets for sessions whose `SessionTypeContext` is `'local'` and whose provider is `'local-chat'`. They read and change the session through `LocalChatSessionsProvider.getSessionConfiguration()`. Upstream removed the Local harness (445ff849bd5); FlowLeap keeps it (PRD 0017 A11), including the Local customization harness in `contrib/chat/browser/customizationHarnessService.ts`.
 
-The model picker is contributed by the sessions core (`contrib/chat/browser/modelPicker.ts`), not by this provider. It reads models via `ISessionsProvider.getModels`; for local sessions this returns general-purpose registered language models (those without a `targetChatSessionType` that are user-selectable). This provider's `getModelPickerOptions` returns `showManageModelsAction: true`, so the core picker surfaces the **Manage Models** action for local sessions — the decision lives in the provider, not in core.
+The model picker is contributed by the sessions core (`contrib/chat/browser/modelPicker.ts`), not by this provider. It reads models via `ISessionsProvider.getModelsSnapshot`; for local sessions this returns general-purpose registered language models (those without a `targetChatSessionType` that are user-selectable). This provider's `getModelPickerOptions` returns `showManageModelsAction: true`, so the core picker surfaces the **Manage Models** action for local sessions.
 
-## Differences from `CopilotChatSessionsProvider`
+## Differences from `ClaudeChatSessionsProvider`
 
 - **No `IAgentSessionsService` dependency.** Uses `IChatService` directly.
 - **No untitled→committed URI swap.** Local session resources never change.

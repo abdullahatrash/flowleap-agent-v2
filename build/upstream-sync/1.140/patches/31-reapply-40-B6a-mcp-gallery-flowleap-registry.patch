@@ -1,0 +1,92 @@
+diff --git a/src/vs/platform/mcp/common/mcpGalleryManifestService.ts b/src/vs/platform/mcp/common/mcpGalleryManifestService.ts
+index 9588465219d..fc544a1f47a 100644
+--- a/src/vs/platform/mcp/common/mcpGalleryManifestService.ts
++++ b/src/vs/platform/mcp/common/mcpGalleryManifestService.ts
+@@ -44,7 +44,9 @@ export class McpGalleryManifestService extends Disposable implements IMcpGallery
+ 		if (!this.productService.mcpGallery) {
+ 			return null;
+ 		}
+-		return this.createMcpGalleryManifest(this.productService.mcpGallery.serviceUrl, SUPPORTED_VERSIONS[0]);
++		// FlowLeap: negotiate the API version against the configured service instead of
++		// pinning the newest one; the FlowLeap registry serves the standard v0 API.
++		return this.createMcpGalleryManifest(this.productService.mcpGallery.serviceUrl);
+ 	}
+ 
+ 	protected async createMcpGalleryManifest(url: string, version?: string): Promise<IMcpGalleryManifest> {
+diff --git a/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts b/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
+index 65b6b126a64..3696163c488 100644
+--- a/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
++++ b/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
+@@ -17,6 +17,10 @@ import { IRequestService } from '../../../request/common/request.js';
+ import { IGalleryMcpServer, IMcpServerInput, McpGalleryResolveStatus } from '../../common/mcpManagement.js';
+ import { IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
+ import { McpGalleryService, UnsupportedMcpGalleryPackageError } from '../../common/mcpGalleryService.js';
++import { McpGalleryManifestService } from '../../common/mcpGalleryManifestService.js';
++import { getMcpGalleryManifestResourceUri } from '../../common/mcpGalleryManifest.js';
++import product from '../../../product/common/product.js';
++import { IProductService } from '../../../product/common/productService.js';
+ 
+ const SERVERS_URL = 'https://registry.test/servers';
+ const NAMED_TEMPLATE = 'https://registry.test/servers/{name}';
+@@ -535,3 +539,48 @@ suite('McpGalleryService - getMcpServer validation', () => {
+ 		});
+ 	});
+ });
++
++suite('McpGalleryManifestService - product gallery version', () => {
++
++	const store = ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('negotiates the API version the product gallery serves (v0), not the newest one it does not', async () => {
++		// The FlowLeap registry serves the standard v0 API and its v0.1 path is unavailable.
++		const productService: IProductService = {
++			_serviceBrand: undefined,
++			...product,
++			mcpGallery: {
++				serviceUrl: 'https://registry.test/api/mcp',
++				itemWebUrl: 'https://www.flowleap.co/en/marketplace/mcp/{name}',
++				publisherUrl: 'https://www.flowleap.co/en/marketplace',
++				supportUrl: 'https://www.flowleap.co/en/contact',
++				privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
++				termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
++				reportUrl: 'https://www.flowleap.co/en/contact'
++			}
++		};
++		const requestService: IRequestService = {
++			_serviceBrand: undefined,
++			onDidCompleteRequest: Event.None,
++			request: async options => ({
++				res: { statusCode: options.url?.includes('/v0/servers') ? 200 : 404, headers: {} },
++				stream: bufferToStream(VSBuffer.fromString('')),
++			}),
++			resolveProxy: async () => undefined,
++			lookupAuthorization: async () => undefined,
++			lookupKerberosAuthorization: async () => undefined,
++			loadCertificates: async () => [],
++		};
++		const manifestService = store.add(new McpGalleryManifestService(productService, requestService, new NullLogService()));
++
++		const actual = await manifestService.getMcpGalleryManifest();
++
++		assert.deepStrictEqual({
++			version: actual?.version,
++			serversUrl: actual ? getMcpGalleryManifestResourceUri(actual, McpGalleryResourceType.McpServersQueryService) : undefined,
++		}, {
++			version: 'v0',
++			serversUrl: 'https://registry.test/api/mcp/v0/servers',
++		});
++	});
++});
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
+index d33e61416c1..e594233cf20 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
+@@ -1778,7 +1778,7 @@ export class McpListWidget extends Disposable {
+ 		sectionTitleDescription.appendChild(document.createTextNode(' '));
+ 		this.sectionLink = DOM.append(sectionTitleDescription, $('a.section-title-link')) as HTMLAnchorElement;
+ 		this.sectionLink.textContent = localize('learnMoreMcp', "Learn more about MCP servers");
+-		this.sectionLink.href = 'https://code.visualstudio.com/docs/agent-customization/mcp-servers?referrer=in-product';
++		this.sectionLink.href = 'https://www.flowleap.co/en/mcp';
+ 		this._register(DOM.addDisposableListener(this.sectionLink, 'click', (e) => {
+ 			e.preventDefault();
+ 			const href = this.sectionLink.href;

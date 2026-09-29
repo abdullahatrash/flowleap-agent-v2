@@ -10,7 +10,7 @@ import { IListContextMenuEvent } from '../../../../base/browser/ui/list/list.js'
 import { IPagedRenderer } from '../../../../base/browser/ui/list/listPaging.js';
 import { Action, IAction, Separator } from '../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { Event } from '../../../../base/common/event.js';
@@ -39,6 +39,7 @@ import { getLocationBasedViewColors } from '../../../browser/parts/views/viewPan
 import { IViewletViewOptions } from '../../../browser/parts/views/viewsViewlet.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IViewDescriptorService, IViewsRegistry, Extensions as ViewExtensions } from '../../../common/views.js';
+import { getWorkbenchMenuMotionContextMenuOptions } from '../../../browser/actions/menuMotion.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { VIEW_CONTAINER } from '../../extensions/browser/extensions.contribution.js';
 import { manageExtensionIcon } from '../../extensions/browser/extensionsIcons.js';
@@ -52,7 +53,7 @@ import { hasSourceChanged, IMarketplacePlugin, IPluginMarketplaceService } from 
 import { AgentPluginEditorInput } from './agentPluginEditor/agentPluginEditorInput.js';
 import { AgentPluginItemKind, IAgentPluginItem, IInstalledPluginItem, IMarketplacePluginItem } from './agentPluginEditor/agentPluginItems.js';
 import { getInstalledPluginContextMenuActions, InstallPluginAction, OpenPluginReadmeAction } from './agentPluginActions.js';
-import { InstalledAgentPluginsViewId, HasInstalledAgentPluginsContext } from './chat.js';
+import { HasInstalledAgentPluginsContext, InstalledAgentPluginsViewId, RefreshAgentPluginMarketplacesCommandId } from './chat.js';
 
 //#region Item model
 
@@ -68,6 +69,7 @@ function marketplacePluginToItem(plugin: IMarketplacePlugin): IMarketplacePlugin
 		kind: AgentPluginItemKind.Marketplace,
 		name: plugin.name,
 		description: plugin.description,
+		version: plugin.version,
 		source: plugin.source,
 		sourceDescriptor: plugin.sourceDescriptor,
 		marketplace: plugin.marketplace,
@@ -143,9 +145,8 @@ class DropDownActionViewItem extends ActionViewItem {
 		if (actions.length > 0) {
 			actions.pop();
 		}
-		const { left, top, height } = dom.getDomNodePagePosition(this.element);
 		this.contextMenuService.showContextMenu({
-			getAnchor: () => ({ x: left, y: top + height + 10 }),
+			...getWorkbenchMenuMotionContextMenuOptions(this.element),
 			getActions: () => actions,
 			onHide: () => disposeIfDisposable(actions),
 		});
@@ -466,7 +467,7 @@ export class AgentPluginsListView extends AbstractExtensionsListView<IAgentPlugi
 				const expectedUri = this.pluginInstallService.getPluginInstallUri({
 					name: m.name,
 					description: m.description,
-					version: '',
+					version: m.version ?? '',
 					source: m.source,
 					sourceDescriptor: m.sourceDescriptor,
 					marketplace: m.marketplace,
@@ -585,42 +586,10 @@ class AgentPluginsBrowseCommand extends Action2 {
 	}
 }
 
-class CheckForPluginUpdatesCommand extends Action2 {
-	constructor() {
-		super({
-			id: 'workbench.agentPlugins.checkForUpdates',
-			title: localize2('agentPlugins.checkForUpdates', "Update Plugins"),
-			category: localize2('chat.category', "Chat"),
-			precondition: ChatContextKeys.enabled,
-			f1: true,
-		});
-	}
-
-	async run(accessor: ServicesAccessor) {
-		await accessor.get(IPluginInstallService).updateAllPlugins({}, CancellationToken.None);
-	}
-}
-
-class ForceUpdatePluginsCommand extends Action2 {
-	constructor() {
-		super({
-			id: 'workbench.agentPlugins.forceUpdate',
-			title: localize2('agentPlugins.forceUpdate', "Update Plugins (Force)"),
-			category: localize2('chat.category', "Chat"),
-			precondition: ChatContextKeys.enabled,
-			f1: true,
-		});
-	}
-
-	async run(accessor: ServicesAccessor) {
-		await accessor.get(IPluginInstallService).updateAllPlugins({ force: true }, CancellationToken.None);
-	}
-}
-
 class RefreshPluginMarketplacesCommand extends Action2 {
 	constructor() {
 		super({
-			id: 'workbench.agentPlugins.refreshMarketplaces',
+			id: RefreshAgentPluginMarketplacesCommandId,
 			title: localize2('agentPlugins.refreshMarketplaces', "Refresh Plugin Marketplaces"),
 			category: localize2('chat.category', "Chat"),
 			icon: Codicon.refresh,
@@ -691,8 +660,6 @@ export class AgentPluginsViewsContribution extends Disposable implements IWorkbe
 		}));
 
 		registerAction2(AgentPluginsBrowseCommand);
-		registerAction2(CheckForPluginUpdatesCommand);
-		registerAction2(ForceUpdatePluginsCommand);
 		registerAction2(RefreshPluginMarketplacesCommand);
 
 		Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([

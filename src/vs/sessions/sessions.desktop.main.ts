@@ -19,8 +19,11 @@ import './sessions.common.main.js';
 
 //#region --- workbench (sessions desktop main)
 
+import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';
 import './electron-browser/sessions.main.js';
 import '../workbench/electron-browser/desktop.contribution.js';
+
+registerOpenAgentsWindowCommand();
 
 // Per-session layout controller (desktop / web desktop layout).
 import './contrib/layout/browser/sessions.layout.contribution.js';
@@ -48,6 +51,7 @@ import '../workbench/services/host/electron-browser/nativeHostService.js';
 import './services/title/electron-browser/titleService.js';
 import '../platform/meteredConnection/electron-browser/meteredConnectionService.js';
 import '../workbench/services/request/electron-browser/requestService.js';
+import '../platform/customizationMarketplace/electron-browser/customizationMarketplaceService.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import '../workbench/services/contextmenu/electron-browser/contextmenuService.js';
 import '../workbench/services/configurationResolver/electron-browser/configurationResolverService.js';
@@ -69,9 +73,11 @@ import '../workbench/services/localization/electron-browser/localeService.js';
 import '../workbench/services/extensions/electron-browser/extensionsScannerService.js';
 import '../workbench/services/extensionManagement/electron-browser/extensionManagementServerService.js';
 import '../workbench/services/extensionManagement/electron-browser/extensionGalleryManifestService.js';
+import '../workbench/services/extensionManagement/electron-browser/extensionGalleryAccountService.js';
 import '../workbench/services/extensionManagement/electron-browser/extensionTipsService.js';
 import '../workbench/services/userDataSync/electron-browser/userDataSyncService.js';
 import '../workbench/services/userDataSync/electron-browser/userDataAutoSyncService.js';
+import '../workbench/contrib/userDataSync/electron-browser/userDataSyncUtilChannel.contribution.js';
 import '../workbench/services/timer/electron-browser/timerService.js';
 import '../workbench/services/environment/electron-browser/shellEnvironmentService.js';
 import '../workbench/services/integrity/electron-browser/integrityService.js';
@@ -97,9 +103,22 @@ import '../platform/webContentExtractor/electron-browser/webContentExtractorServ
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import '../workbench/services/process/electron-browser/processService.js';
 import '../workbench/services/power/electron-browser/powerService.js';
+import '../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 
 import { ILocalGitService } from '../platform/git/common/localGitService.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+import { IRemoteAgentHostService } from '../platform/agentHost/common/remoteAgentHostService.js';
+import { AgentsWindowRemoteAgentHostService } from '../platform/agentHost/browser/remoteAgentHostServiceImpl.js';
+import { IRemoteAgentHostLocationPreferenceService } from '../platform/agentHost/common/remoteAgentHostLocationPreference.js';
+import { RemoteAgentHostLocationPreferenceService } from '../platform/agentHost/browser/remoteAgentHostLocationPreferenceService.js';
+import { ISSHHostKeyTrustService } from '../platform/agentHost/common/sshHostKeyTrust.js';
+import { SSHHostKeyTrustService } from '../platform/agentHost/browser/sshHostKeyTrustService.js';
+import { IAgentHostService } from '../platform/agentHost/common/agentService.js';
+import { EditorRemoteAgentHostServiceClient } from '../workbench/services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
+import { ISSHRemoteAgentHostService } from '../platform/agentHost/common/sshRemoteAgentHost.js';
+import { NullSSHRemoteAgentHostService } from '../platform/agentHost/browser/nullSshRemoteAgentHostService.js';
+import { IWSLRemoteAgentHostService } from '../platform/agentHost/common/wslRemoteAgentHost.js';
+import { NullWSLRemoteAgentHostService } from '../platform/agentHost/browser/nullWslRemoteAgentHostService.js';
 import { registerSharedProcessRemoteService } from '../platform/ipc/electron-browser/services.js';
 import { IPluginGitService } from '../workbench/contrib/chat/common/plugins/pluginGitService.js';
 import { NativePluginGitCommandService } from '../workbench/contrib/chat/electron-browser/pluginGitCommandService.js';
@@ -111,10 +130,15 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
 // Override the browser PluginGitCommandService with the native one that always
 // runs git locally via the shared process.
 registerSingleton(IPluginGitService, NativePluginGitCommandService, InstantiationType.Delayed);
-registerSharedProcessRemoteService(ILocalGitService, 'localGit');
-
+registerSingleton(IRemoteAgentHostService, AgentsWindowRemoteAgentHostService, InstantiationType.Delayed);
+registerSingleton(IRemoteAgentHostLocationPreferenceService, RemoteAgentHostLocationPreferenceService, InstantiationType.Delayed);
+// FlowLeap: no agent host process and no SSH/WSL agent host transports (PRD 0004, PRD 0017 keep-out).
+// IAgentHostService is the remote client (inert without a remote), as at 810ad70ca59; the null service throws on use.
 registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
-registerSingleton(IRemoteAgentHostService, NullRemoteAgentHostService, InstantiationType.Delayed);
+registerSingleton(ISSHRemoteAgentHostService, NullSSHRemoteAgentHostService, InstantiationType.Delayed);
+registerSingleton(IWSLRemoteAgentHostService, NullWSLRemoteAgentHostService, InstantiationType.Delayed);
+registerSingleton(ISSHHostKeyTrustService, SSHHostKeyTrustService, InstantiationType.Delayed);
+registerSharedProcessRemoteService(ILocalGitService, 'localGit');
 
 
 //#endregion
@@ -186,6 +210,9 @@ import '../workbench/contrib/splash/electron-browser/splash.contribution.js';
 // Local History
 import '../workbench/contrib/localHistory/electron-browser/localHistory.contribution.js';
 
+// Onboarding
+import '../workbench/contrib/onboarding/electron-browser/onboardingTryout.contribution.js';
+
 // Merge Editor
 import '../workbench/contrib/mergeEditor/electron-browser/mergeEditor.contribution.js';
 
@@ -207,21 +234,27 @@ import '../workbench/contrib/mcp/electron-browser/mcp.contribution.js';
 // Policy Export
 import '../workbench/contrib/policyExport/electron-browser/policyExport.contribution.js';
 
+// Keybindings Export
+import '../workbench/contrib/keybindingsExport/electron-browser/keybindingsExport.contribution.js';
+
 //#endregion
 
 
 //#region --- sessions contributions
 
 import './electron-browser/sessions.desktop.contribution.js';
+import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 
-// Remote Agent Host: the runtime is removed; the dormant editor client + null remote service are
-// registered below so keep-list consumers that inject these interfaces resolve without spawning a host.
-import { IAgentHostService } from '../platform/agentSessionState/common/agentService.js';
-import { EditorRemoteAgentHostServiceClient } from '../workbench/services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
-import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../platform/agentSessionState/common/remoteAgentHostService.js';
+// Remote Agent Host
+// Change Preferred Remote Agent Location (Chat: ... command)
+// Copilot cloud sandbox connections (copilot-developer-cli) over a Web PubSub AHP relay
 // Chat
 import './contrib/agentFeedback/browser/agentFeedback.contribution.js';
 import './contrib/chat/electron-browser/chat.contribution.js';
+
+// Local Agent Host
+
+// Tunnel Host (allow remote connections to local agent host)
 
 // FlowLeap CLI
 import './contrib/flowleapCli/browser/flowleapCliNudge.contribution.js';

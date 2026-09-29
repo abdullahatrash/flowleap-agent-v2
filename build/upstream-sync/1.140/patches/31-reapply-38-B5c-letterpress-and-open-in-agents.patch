@@ -1,0 +1,255 @@
+diff --git a/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts b/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
+index a63f37ce249..64973fc4fcc 100644
+--- a/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
++++ b/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
+@@ -5,15 +5,15 @@
+ 
+ import { $, append, clearNode, h } from '../../../../base/browser/dom.js';
+ import { KeybindingLabel } from '../../../../base/browser/ui/keybindingLabel/keybindingLabel.js';
+-import { coalesce, shuffle } from '../../../../base/common/arrays.js';
++import { shuffle } from '../../../../base/common/arrays.js';
+ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+-import { isMacintosh, isWeb, OS } from '../../../../base/common/platform.js';
++import { isWeb, OS } from '../../../../base/common/platform.js';
+ import { localize } from '../../../../nls.js';
+ import { MenuId } from '../../../../platform/actions/common/actions.js';
+ import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+ import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+ import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+-import { ContextKeyExpr, ContextKeyExpression, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
++import { ContextKeyExpression, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+ import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+ import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../platform/storage/common/storage.js';
+@@ -29,42 +29,31 @@ interface WatermarkEntry {
+ 	};
+ }
+ 
+-const showChatContextKey = ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false));
+-
+-const openChat: WatermarkEntry = { text: localize('watermark.openChat', "Open Chat"), id: 'workbench.action.chat.open', when: { native: showChatContextKey, web: showChatContextKey } };
++// FlowLeap Patent IDE - AI-first watermark entries
++const openChat: WatermarkEntry = { text: localize('watermark.openChat', "Open Chat"), id: 'workbench.action.chat.open' };
++const showExplorer: WatermarkEntry = { text: localize('watermark.showFiles', "Show Files"), id: 'workbench.view.explorer' };
++const gotoFile: WatermarkEntry = { text: localize('watermark.searchFiles', "Search Files"), id: 'workbench.action.quickOpen' };
+ const showCommands: WatermarkEntry = { text: localize('watermark.showCommands', "Show All Commands"), id: 'workbench.action.showCommands' };
+-const gotoFile: WatermarkEntry = { text: localize('watermark.quickAccess', "Go to File"), id: 'workbench.action.quickOpen' };
+-const openFile: WatermarkEntry = { text: localize('watermark.openFile', "Open File"), id: 'workbench.action.files.openFile' };
+-const openFolder: WatermarkEntry = { text: localize('watermark.openFolder', "Open Folder"), id: 'workbench.action.files.openFolder' };
+-const openFileOrFolder: WatermarkEntry = { text: localize('watermark.openFileFolder', "Open File or Folder"), id: 'workbench.action.files.openFileFolder' };
+-const openRecent: WatermarkEntry = { text: localize('watermark.openRecent', "Open Recent"), id: 'workbench.action.openRecent' };
+-const newUntitledFile: WatermarkEntry = { text: localize('watermark.newUntitledFile', "New Untitled Text File"), id: 'workbench.action.files.newUntitledFile' };
+ const findInFiles: WatermarkEntry = { text: localize('watermark.findInFiles', "Find in Files"), id: 'workbench.action.findInFiles' };
+-const toggleTerminal: WatermarkEntry = { text: localize({ key: 'watermark.toggleTerminal', comment: ['toggle is a verb here'] }, "Toggle Terminal"), id: 'workbench.action.terminal.toggleTerminal', when: { web: ContextKeyExpr.equals('terminalProcessSupported', true) } };
+-const startDebugging: WatermarkEntry = { text: localize('watermark.startDebugging', "Start Debugging"), id: 'workbench.action.debug.start', when: { web: ContextKeyExpr.equals('terminalProcessSupported', true) } };
++const openRecent: WatermarkEntry = { text: localize('watermark.openRecent', "Open Recent"), id: 'workbench.action.openRecent' };
+ const openSettings: WatermarkEntry = { text: localize('watermark.openSettings', "Open Settings"), id: 'workbench.action.openSettings' };
+ 
+-const baseEntries: WatermarkEntry[] = [
++const emptyWindowEntries: WatermarkEntry[] = [
+ 	openChat,
+-	showCommands,
+-];
+-
+-const emptyWindowEntries: WatermarkEntry[] = coalesce([
+-	...baseEntries,
++	showExplorer,
++	gotoFile,
+ 	openRecent,
+-	...(isMacintosh && !isWeb ? [openFileOrFolder] : [openFile, openFolder]),
+-	isMacintosh && !isWeb ? newUntitledFile : undefined, // fill in one more on macOS to get to 5 entries
+-]);
++];
+ 
+ const workspaceEntries: WatermarkEntry[] = [
+-	...baseEntries,
++	openChat,
++	showExplorer,
++	gotoFile,
++	findInFiles,
+ ];
+ 
+ const otherEntries: WatermarkEntry[] = [
+-	gotoFile,
+-	findInFiles,
+-	startDebugging,
+-	toggleTerminal,
++	showCommands,
+ 	openSettings,
+ ];
+ 
+@@ -180,9 +169,6 @@ export class EditorGroupWatermark extends Disposable {
+ 
+ 			for (const entry of entries) {
+ 				const keys = this.keybindingService.lookupKeybinding(entry.id);
+-				if (!keys) {
+-					continue;
+-				}
+ 
+ 				const dl = append(box, $('dl'));
+ 				const dt = append(dl, $('dt'));
+@@ -190,8 +176,10 @@ export class EditorGroupWatermark extends Disposable {
+ 
+ 				const dd = append(dl, $('dd'));
+ 
+-				const label = this.keybindingLabels.add(new KeybindingLabel(dd, OS, { renderUnboundKeybindings: true, ...defaultKeybindingLabelStyles }));
+-				label.set(keys);
++				if (keys) {
++					const label = this.keybindingLabels.add(new KeybindingLabel(dd, OS, { renderUnboundKeybindings: true, ...defaultKeybindingLabelStyles }));
++					label.set(keys);
++				}
+ 			}
+ 		};
+ 
+@@ -209,8 +197,7 @@ export class EditorGroupWatermark extends Disposable {
+ 				const contextKey = isWeb ? entry.when?.web : entry.when?.native;
+ 				return !contextKey /* works without context */ || this.contextKeyService.contextMatchesRules(contextKey);
+ 			})
+-			.filter(entry => !!CommandsRegistry.getCommand(entry.id))
+-			.filter(entry => !!this.keybindingService.lookupKeybinding(entry.id));
++			.filter(entry => !!CommandsRegistry.getCommand(entry.id)); // no keybinding filter: show commands even without keybindings (FlowLeap)
+ 
+ 		return filteredEntries;
+ 	}
+diff --git a/src/vs/workbench/browser/parts/editor/media/editorgroupview.css b/src/vs/workbench/browser/parts/editor/media/editorgroupview.css
+index 86c87f9d3ed..50945955067 100644
+--- a/src/vs/workbench/browser/parts/editor/media/editorgroupview.css
++++ b/src/vs/workbench/browser/parts/editor/media/editorgroupview.css
+@@ -126,15 +126,15 @@
+ 	height: calc(100% - 70px);
+ }
+ 
++/* FlowLeap - smaller brand mark with shortcuts below */
+ .monaco-workbench .part.editor > .content .editor-group-container > .editor-group-watermark-wrapper .editor-group-watermark .letterpress {
+-	width: 100%;
+-	max-height: 100%;
+-	aspect-ratio: 1/1;
++	width: 80px;
++	height: 80px;
++	flex-shrink: 0;
+ 	background-image: url('./letterpress-light.svg');
+ 	background-size: contain;
+-	background-position-x: center;
++	background-position: center;
+ 	background-repeat: no-repeat;
+-	max-width: 256px;
+ }
+ 
+ .monaco-workbench.vs-dark .part.editor > .content .editor-group-container .editor-group-watermark .letterpress {
+diff --git a/src/vs/workbench/browser/parts/editor/media/letterpress-dark.svg b/src/vs/workbench/browser/parts/editor/media/letterpress-dark.svg
+index 90b799da3b3..8ece4bf3795 100644
+--- a/src/vs/workbench/browser/parts/editor/media/letterpress-dark.svg
++++ b/src/vs/workbench/browser/parts/editor/media/letterpress-dark.svg
+@@ -1,3 +1,5 @@
+-<svg width="260" height="260" viewBox="0 0 260 260" opacity="0.3" xmlns="http://www.w3.org/2000/svg">
+-<path d="M220 16H40C17.909 16 0 33.909 0 56V204C0 226.091 17.909 244 40 244H220C242.091 244 260 226.091 260 204V56C260 33.909 242.091 16 220 16ZM12 204V56C12 40.561 24.561 28 40 28H75V232H40C24.561 232 12 219.439 12 204ZM248 204C248 219.439 235.439 232 220 232H87V28H220C235.439 28 248 40.561 248 56V204ZM112 58C112 54.686 114.686 52 118 52H187C190.314 52 193 54.686 193 58C193 61.314 190.314 64 187 64H118C114.686 64 112 61.314 112 58ZM193 202C193 205.314 190.314 208 187 208H118C114.686 208 112 205.314 112 202C112 198.686 114.686 196 118 196H187C190.314 196 193 198.686 193 202ZM222 94C222 97.314 219.314 100 216 100H147C143.686 100 141 97.314 141 94C141 90.686 143.686 88 147 88H216C219.314 88 222 90.686 222 94ZM222 130C222 133.314 219.314 136 216 136H147C143.686 136 141 133.314 141 130C141 126.686 143.686 124 147 124H216C219.314 124 222 126.686 222 130ZM222 166C222 169.314 219.314 172 216 172H147C143.686 172 141 169.314 141 166C141 162.686 143.686 160 147 160H216C219.314 160 222 162.686 222 166Z"/>
++<svg width="260" height="260" viewBox="0 0 840 882" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.25">
++<path d="M24 174.5L174.5 24L326 174.5L200.5 300L177 323.5L563.5 710.5L414 858L24 471V174.5Z" fill="currentColor"/>
++<path fill-rule="evenodd" clip-rule="evenodd" d="M375 75.5L378 378.5L640 635L781 497.605L677.202 300L642 335L375 75.5Z" fill="currentColor"/>
++<path d="M816 463.5V162L677.202 300L781 497.605L816 463.5Z" fill="currentColor"/>
+ </svg>
+diff --git a/src/vs/workbench/browser/parts/editor/media/letterpress-hcDark.svg b/src/vs/workbench/browser/parts/editor/media/letterpress-hcDark.svg
+index c3978773a56..da016cc2890 100644
+--- a/src/vs/workbench/browser/parts/editor/media/letterpress-hcDark.svg
++++ b/src/vs/workbench/browser/parts/editor/media/letterpress-hcDark.svg
+@@ -1,3 +1,5 @@
+-<svg width="260" height="260" viewBox="0 0 260 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<path d="M220 16H40C17.909 16 0 33.909 0 56V204C0 226.091 17.909 244 40 244H220C242.091 244 260 226.091 260 204V56C260 33.909 242.091 16 220 16ZM12 204V56C12 40.561 24.561 28 40 28H75V232H40C24.561 232 12 219.439 12 204ZM248 204C248 219.439 235.439 232 220 232H87V28H220C235.439 28 248 40.561 248 56V204ZM112 58C112 54.686 114.686 52 118 52H187C190.314 52 193 54.686 193 58C193 61.314 190.314 64 187 64H118C114.686 64 112 61.314 112 58ZM193 202C193 205.314 190.314 208 187 208H118C114.686 208 112 205.314 112 202C112 198.686 114.686 196 118 196H187C190.314 196 193 198.686 193 202ZM222 94C222 97.314 219.314 100 216 100H147C143.686 100 141 97.314 141 94C141 90.686 143.686 88 147 88H216C219.314 88 222 90.686 222 94ZM222 130C222 133.314 219.314 136 216 136H147C143.686 136 141 133.314 141 130C141 126.686 143.686 124 147 124H216C219.314 124 222 126.686 222 130ZM222 166C222 169.314 219.314 172 216 172H147C143.686 172 141 169.314 141 166C141 162.686 143.686 160 147 160H216C219.314 160 222 162.686 222 166Z" fill="#3C3C3C"/>
++<svg width="260" height="260" viewBox="0 0 840 882" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M24 174.5L174.5 24L326 174.5L200.5 300L177 323.5L563.5 710.5L414 858L24 471V174.5Z" fill="#3C3C3C"/>
++<path fill-rule="evenodd" clip-rule="evenodd" d="M375 75.5L378 378.5L640 635L781 497.605L677.202 300L642 335L375 75.5Z" fill="#3C3C3C"/>
++<path d="M816 463.5V162L677.202 300L781 497.605L816 463.5Z" fill="#3C3C3C"/>
+ </svg>
+diff --git a/src/vs/workbench/browser/parts/editor/media/letterpress-hcLight.svg b/src/vs/workbench/browser/parts/editor/media/letterpress-hcLight.svg
+index 1e86d85c604..f763f728d96 100644
+--- a/src/vs/workbench/browser/parts/editor/media/letterpress-hcLight.svg
++++ b/src/vs/workbench/browser/parts/editor/media/letterpress-hcLight.svg
+@@ -1,3 +1,5 @@
+-<svg width="260" height="260" viewBox="0 0 260 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<path d="M220 16H40C17.909 16 0 33.909 0 56V204C0 226.091 17.909 244 40 244H220C242.091 244 260 226.091 260 204V56C260 33.909 242.091 16 220 16ZM12 204V56C12 40.561 24.561 28 40 28H75V232H40C24.561 232 12 219.439 12 204ZM248 204C248 219.439 235.439 232 220 232H87V28H220C235.439 28 248 40.561 248 56V204ZM112 58C112 54.686 114.686 52 118 52H187C190.314 52 193 54.686 193 58C193 61.314 190.314 64 187 64H118C114.686 64 112 61.314 112 58ZM193 202C193 205.314 190.314 208 187 208H118C114.686 208 112 205.314 112 202C112 198.686 114.686 196 118 196H187C190.314 196 193 198.686 193 202ZM222 94C222 97.314 219.314 100 216 100H147C143.686 100 141 97.314 141 94C141 90.686 143.686 88 147 88H216C219.314 88 222 90.686 222 94ZM222 130C222 133.314 219.314 136 216 136H147C143.686 136 141 133.314 141 130C141 126.686 143.686 124 147 124H216C219.314 124 222 126.686 222 130ZM222 166C222 169.314 219.314 172 216 172H147C143.686 172 141 169.314 141 166C141 162.686 143.686 160 147 160H216C219.314 160 222 162.686 222 166Z" fill="#D9D9D9"/>
++<svg width="260" height="260" viewBox="0 0 840 882" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M24 174.5L174.5 24L326 174.5L200.5 300L177 323.5L563.5 710.5L414 858L24 471V174.5Z" fill="#D9D9D9"/>
++<path fill-rule="evenodd" clip-rule="evenodd" d="M375 75.5L378 378.5L640 635L781 497.605L677.202 300L642 335L375 75.5Z" fill="#D9D9D9"/>
++<path d="M816 463.5V162L677.202 300L781 497.605L816 463.5Z" fill="#D9D9D9"/>
+ </svg>
+diff --git a/src/vs/workbench/browser/parts/editor/media/letterpress-light.svg b/src/vs/workbench/browser/parts/editor/media/letterpress-light.svg
+index a45c3e6defc..303179ee1e4 100644
+--- a/src/vs/workbench/browser/parts/editor/media/letterpress-light.svg
++++ b/src/vs/workbench/browser/parts/editor/media/letterpress-light.svg
+@@ -1,3 +1,5 @@
+-<svg width="260" height="260" viewBox="0 0 260 260" opacity="0.1" xmlns="http://www.w3.org/2000/svg">
+-<path d="M220 16H40C17.909 16 0 33.909 0 56V204C0 226.091 17.909 244 40 244H220C242.091 244 260 226.091 260 204V56C260 33.909 242.091 16 220 16ZM12 204V56C12 40.561 24.561 28 40 28H75V232H40C24.561 232 12 219.439 12 204ZM248 204C248 219.439 235.439 232 220 232H87V28H220C235.439 28 248 40.561 248 56V204ZM112 58C112 54.686 114.686 52 118 52H187C190.314 52 193 54.686 193 58C193 61.314 190.314 64 187 64H118C114.686 64 112 61.314 112 58ZM193 202C193 205.314 190.314 208 187 208H118C114.686 208 112 205.314 112 202C112 198.686 114.686 196 118 196H187C190.314 196 193 198.686 193 202ZM222 94C222 97.314 219.314 100 216 100H147C143.686 100 141 97.314 141 94C141 90.686 143.686 88 147 88H216C219.314 88 222 90.686 222 94ZM222 130C222 133.314 219.314 136 216 136H147C143.686 136 141 133.314 141 130C141 126.686 143.686 124 147 124H216C219.314 124 222 126.686 222 130ZM222 166C222 169.314 219.314 172 216 172H147C143.686 172 141 169.314 141 166C141 162.686 143.686 160 147 160H216C219.314 160 222 162.686 222 166Z"/>
++<svg width="260" height="260" viewBox="0 0 840 882" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.1">
++<path d="M24 174.5L174.5 24L326 174.5L200.5 300L177 323.5L563.5 710.5L414 858L24 471V174.5Z" fill="currentColor"/>
++<path fill-rule="evenodd" clip-rule="evenodd" d="M375 75.5L378 378.5L640 635L781 497.605L677.202 300L642 335L375 75.5Z" fill="currentColor"/>
++<path d="M816 463.5V162L677.202 300L781 497.605L816 463.5Z" fill="currentColor"/>
+ </svg>
+diff --git a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
+index adab30c5aa1..2201103b561 100644
+--- a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
++++ b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/agentSessionsActions.ts
+@@ -11,6 +11,8 @@ import { disposableLongTimeout } from '../../../../../base/common/async.js';
+ import { isCancellationError } from '../../../../../base/common/errors.js';
+ import { MarkdownString } from '../../../../../base/common/htmlContent.js';
+ import { Disposable, DisposableStore, IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
++import { ThemeIcon } from '../../../../../base/common/themables.js';
++import { Codicon } from '../../../../../base/common/codicons.js';
+ import { autorun, observableFromEvent } from '../../../../../base/common/observable.js';
+ import { ServicesAccessor } from '../../../../../editor/browser/editorExtensions.js';
+ import { EditorContextKeys } from '../../../../../editor/common/editorContextKeys.js';
+@@ -429,7 +431,7 @@ class OpenWorkspaceInAgentsTitleBarWidget extends BaseActionViewItem {
+ 		container.setAttribute('aria-label', hoverText);
+ 		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), container, hoverText));
+ 
+-		const icon = append(container, $('span.open-in-agents-titlebar-widget-icon'));
++		const icon = append(container, $(`span.open-in-agents-titlebar-widget-icon${ThemeIcon.asCSSSelector(Codicon.robot)}`));
+ 		icon.setAttribute('aria-hidden', 'true');
+ 
+ 		const labelEl = append(container, $('span.open-in-agents-titlebar-widget-label'));
+diff --git a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/media/openInAgents.css b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/media/openInAgents.css
+index 18614e6cf19..5f3eefd49b1 100644
+--- a/src/vs/workbench/contrib/chat/electron-browser/agentSessions/media/openInAgents.css
++++ b/src/vs/workbench/contrib/chat/electron-browser/agentSessions/media/openInAgents.css
+@@ -16,30 +16,24 @@
+ 	white-space: nowrap;
+ }
+ 
++/* FlowLeap: robot codicon instead of the agent-sessions brand SVG, gradient-clipped in the brand blues so the entry point stands out in the title bar. */
+ .monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon {
+ 	width: 16px;
+ 	height: 16px;
+ 	flex: 0 0 auto;
+-	background-image: url('../../../../../../sessions/browser/media/sessions-icon.svg');
+-	background-repeat: no-repeat;
+-	background-position: center center;
+-	background-size: contain;
+-	filter: grayscale(1);
+-}
+-
+-.monaco-enable-motion .monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon,
+-.monaco-workbench.monaco-enable-motion .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon {
+-	transition: filter 160ms ease;
+-}
+-
+-.monaco-reduce-motion .monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon,
+-.monaco-workbench.monaco-reduce-motion .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon {
+-	transition-duration: 0ms !important;
++	display: flex;
++	align-items: center;
++	justify-content: center;
++	font-size: 16px;
++	background: linear-gradient(135deg, #3AC6FF 0%, #1797D9 55%, #005B9E 100%);
++	-webkit-background-clip: text;
++	background-clip: text;
+ }
+ 
+-.monaco-workbench .open-in-agents-titlebar-widget:hover > .open-in-agents-titlebar-widget-icon,
+-.monaco-workbench .open-in-agents-titlebar-widget:focus-visible > .open-in-agents-titlebar-widget-icon {
+-	filter: none;
++/* Outrank the titlebar action-toolbar codicon color (titlebarpart.css) so the gradient clip shows through */
++.monaco-workbench .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon.codicon.codicon-robot,
++.monaco-workbench .part.titlebar .action-toolbar-container .open-in-agents-titlebar-widget > .open-in-agents-titlebar-widget-icon.codicon.codicon-robot {
++	color: transparent;
+ }
+ 
+ 

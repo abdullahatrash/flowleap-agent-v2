@@ -1,0 +1,2564 @@
+diff --git a/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css b/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css
+index 4875126d4bb..5ce3a68d16f 100644
+--- a/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css
++++ b/src/vs/workbench/contrib/welcomeOnboarding/browser/media/variationA.css
+@@ -286,12 +286,17 @@
+ 	height: 152px;
+ 	border-radius: 0;
+ 	border: none;
+-	background: transparent;
+ 	box-shadow: none;
+-	background-image: url('../../../../browser/media/code-icon.svg');
+-	background-repeat: no-repeat;
+-	background-position: center center;
+-	background-size: 148px;
++	/* FlowLeap brand mark — masked so it recolors to a theme-aware accent and stays visible on light & dark. */
++	background-color: var(--vscode-textLink-foreground, #3b6fed);
++	-webkit-mask-image: url('./flowleap-logo.svg');
++	mask-image: url('./flowleap-logo.svg');
++	-webkit-mask-repeat: no-repeat;
++	mask-repeat: no-repeat;
++	-webkit-mask-position: center center;
++	mask-position: center center;
++	-webkit-mask-size: 120px;
++	mask-size: 120px;
+ }
+ 
+ .onboarding-a-signin-content {
+@@ -503,6 +508,15 @@
+ 	color: var(--vscode-descriptionForeground);
+ }
+ 
++.onboarding-a-signin-error {
++	display: flex;
++	align-items: center;
++	gap: 8px;
++	padding: 8px 0;
++	font-size: 13px;
++	color: var(--vscode-errorForeground);
++}
++
+ .onboarding-a-provider-mark {
+ 	display: flex;
+ 	width: 18px;
+@@ -557,6 +571,10 @@
+ 	padding: 0;
+ }
+ 
++.onboarding-a-personalize > .onboarding-a-sessions-tip {
++	margin-top: auto;
++}
++
+ .onboarding-a-personalize-section {
+ 	display: flex;
+ 	flex-direction: column;
+@@ -774,6 +792,94 @@
+ 	text-align: center;
+ }
+ 
++/* Agent Sessions step */
++.onboarding-a-sessions {
++	display: flex;
++	flex-direction: column;
++	gap: 0;
++	flex: 1;
++	width: 100%;
++	min-height: 0;
++	margin: 0 auto;
++	padding: 0;
++}
++
++.onboarding-a-sessions-features {
++	display: flex;
++	flex-direction: column;
++	gap: 14px;
++	flex: 1;
++}
++
++.onboarding-a-sessions-group {
++	display: flex;
++	flex-direction: column;
++	gap: 6px;
++}
++
++.onboarding-a-sessions-group-label {
++	font-size: 11px;
++	font-weight: 600;
++	text-transform: uppercase;
++	letter-spacing: 0.5px;
++	color: var(--vscode-descriptionForeground);
++}
++
++.onboarding-a-sessions-grid {
++	display: grid;
++	gap: 10px;
++}
++
++.onboarding-a-sessions-grid-2 {
++	grid-template-columns: repeat(2, minmax(0, 1fr));
++}
++
++.onboarding-a-feature-card {
++	display: flex;
++	align-items: flex-start;
++	gap: 12px;
++	padding: 14px 16px;
++	border-radius: 8px;
++	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
++	font-family: inherit;
++	text-align: left;
++	color: inherit;
++}
++
++.onboarding-a-feature-icon {
++	display: flex;
++	align-items: center;
++	justify-content: center;
++	flex-shrink: 0;
++	width: 24px;
++	height: 24px;
++	margin-top: 1px;
++}
++
++.onboarding-a-feature-icon .codicon {
++	font-size: 20px;
++	color: var(--vscode-descriptionForeground);
++}
++
++.onboarding-a-feature-text {
++	display: flex;
++	flex-direction: column;
++	gap: 2px;
++	min-width: 0;
++}
++
++.onboarding-a-feature-title {
++	font-size: 13px;
++	font-weight: 600;
++	color: var(--vscode-editor-foreground);
++}
++
++.onboarding-a-feature-desc {
++	font-size: 12px;
++	color: var(--vscode-descriptionForeground);
++	line-height: 1.4;
++}
++
+ .onboarding-a-kbd {
+ 	display: inline-block;
+ 	padding: 1px 6px;
+@@ -788,6 +894,33 @@
+ 	vertical-align: middle;
+ }
+ 
++.onboarding-a-sessions-docs {
++	display: flex;
++	align-items: center;
++	gap: 16px;
++	margin-top: auto;
++	padding: 14px 4px 4px 4px;
++}
++
++/* Tip banner */
++.onboarding-a-sessions-tip {
++	display: flex;
++	align-items: center;
++	gap: 8px;
++	padding: 8px 14px;
++	font-size: 13px;
++}
++
++.onboarding-a-sessions-tip-icon .codicon {
++	font-size: 16px;
++	color: var(--vscode-textLink-foreground, #3794ff);
++}
++
++.onboarding-a-sessions-tip-text {
++	color: var(--vscode-descriptionForeground);
++	line-height: 1.5;
++}
++
+ /* Sign-in nudge */
+ .onboarding-a-signin-nudge {
+ 	display: flex;
+@@ -817,6 +950,29 @@
+ 	outline-offset: -2px;
+ }
+ 
++.onboarding-a-doc-link {
++	font-size: 12px;
++	color: var(--vscode-textLink-foreground, #3794ff);
++	text-decoration: none;
++	display: inline-flex;
++	align-items: center;
++	gap: 4px;
++}
++
++.onboarding-a-doc-link .codicon {
++	color: var(--vscode-textLink-foreground, #3794ff);
++}
++
++.onboarding-a-doc-link:hover {
++	text-decoration: underline;
++}
++
++.onboarding-a-doc-link:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: 2px;
++	border-radius: 2px;
++}
++
+ /* Sign-in icon row */
+ .onboarding-a-signin-icon-row {
+ 	display: flex;
+@@ -902,7 +1058,8 @@
+ 	}
+ 
+ 	.onboarding-a-signin-brand-icon {
+-		background-size: 78px;
++		-webkit-mask-size: 78px;
++		mask-size: 78px;
+ 	}
+ 
+ 	.onboarding-a-signin-content {
+@@ -930,11 +1087,16 @@
+ 		grid-template-columns: repeat(2, minmax(0, 1fr));
+ 	}
+ 
++	.onboarding-a-sessions-grid-2 {
++		grid-template-columns: 1fr;
++	}
++
+ 	.onboarding-a-ai-pref-cards {
+ 		grid-template-columns: 1fr;
+ 	}
+ 
+-	.onboarding-a-personalize {
++	.onboarding-a-personalize,
++	.onboarding-a-sessions {
+ 		justify-content: flex-start;
+ 	}
+ }
+@@ -945,6 +1107,373 @@
+ 	opacity: 0.7;
+ }
+ 
++/* =========================================================================
++ * Step: Role (persona picker) — issue #79
++ * ========================================================================= */
++.onboarding-a-role {
++	display: flex;
++	flex-direction: column;
++	justify-content: center;
++	gap: 16px;
++	flex: 1;
++	width: 100%;
++	min-height: 0;
++	margin: 0 auto;
++	padding: 0;
++}
++
++.onboarding-a-role-cards {
++	display: grid;
++	grid-template-columns: repeat(2, minmax(0, 1fr));
++	gap: 14px;
++}
++
++.onboarding-a-role-card {
++	display: flex;
++	flex-direction: column;
++	gap: 8px;
++	padding: 18px;
++	border-radius: 12px;
++	border: 2px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
++	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
++	cursor: pointer;
++	transition: border-color 0.15s ease, background 0.12s ease, transform 0.12s ease;
++	outline: none;
++	font-family: inherit;
++	text-align: left;
++	color: inherit;
++}
++
++.onboarding-a-role-card:hover {
++	background: var(--vscode-list-hoverBackground);
++	border-color: var(--vscode-focusBorder);
++	transform: translateY(-1px);
++}
++
++.onboarding-a-role-card:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: -2px;
++}
++
++.onboarding-a-role-card.selected {
++	border-color: var(--vscode-focusBorder);
++	background: color-mix(in srgb, var(--vscode-focusBorder) 8%, var(--vscode-editor-background));
++	box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
++}
++
++.onboarding-a-role-card-icon .codicon {
++	font-size: 28px;
++	color: var(--vscode-textLink-foreground, #3794ff);
++}
++
++.onboarding-a-role-card-title {
++	font-size: 15px;
++	font-weight: 600;
++	color: var(--vscode-editor-foreground);
++}
++
++.onboarding-a-role-card-desc {
++	font-size: 13px;
++	color: var(--vscode-descriptionForeground);
++	line-height: 1.4;
++}
++
++.onboarding-a-role-skip {
++	align-self: center;
++	background: none;
++	border: none;
++	padding: 4px 8px;
++	font-family: inherit;
++	font-size: 13px;
++	color: var(--vscode-textLink-foreground);
++	cursor: pointer;
++	border-radius: 4px;
++}
++
++.onboarding-a-role-skip:hover {
++	text-decoration: underline;
++}
++
++.onboarding-a-role-skip:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: 2px;
++}
++
++/* =========================================================================
++ * Step: Trial — issue #79
++ * ========================================================================= */
++.onboarding-a-trial {
++	display: flex;
++	flex-direction: column;
++	justify-content: center;
++	gap: 18px;
++	flex: 1;
++	width: 100%;
++	min-height: 0;
++	margin: 0 auto;
++}
++
++.onboarding-a-trial-points {
++	list-style: none;
++	margin: 0;
++	padding: 0;
++	display: flex;
++	flex-direction: column;
++	gap: 10px;
++}
++
++.onboarding-a-trial-point {
++	display: flex;
++	align-items: flex-start;
++	gap: 10px;
++	font-size: 14px;
++	color: var(--vscode-editor-foreground);
++}
++
++.onboarding-a-trial-point-icon .codicon {
++	color: var(--vscode-charts-green, #89d185);
++	font-size: 16px;
++}
++
++.onboarding-a-trial-actions {
++	display: flex;
++	justify-content: center;
++}
++
++.onboarding-a-trial-start {
++	min-width: 220px;
++}
++
++.onboarding-a-trial-status,
++.onboarding-a-model-status {
++	min-height: 18px;
++	font-size: 13px;
++	color: var(--vscode-descriptionForeground);
++	text-align: center;
++}
++
++/* =========================================================================
++ * Step: Model — issue #79
++ * ========================================================================= */
++.onboarding-a-model {
++	display: flex;
++	flex-direction: column;
++	justify-content: center;
++	gap: 16px;
++	flex: 1;
++	width: 100%;
++	min-height: 0;
++	margin: 0 auto;
++}
++
++.onboarding-a-model-rec {
++	display: flex;
++	flex-direction: column;
++	gap: 6px;
++	padding: 16px 18px;
++	border-radius: 12px;
++	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
++	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
++}
++
++.onboarding-a-model-rec-title {
++	font-size: 14px;
++	font-weight: 600;
++	color: var(--vscode-editor-foreground);
++}
++
++.onboarding-a-model-rec-body {
++	font-size: 13px;
++	color: var(--vscode-descriptionForeground);
++	line-height: 1.5;
++}
++
++.onboarding-a-model-actions {
++	display: flex;
++	justify-content: center;
++}
++
++.onboarding-a-model-connect {
++	min-width: 220px;
++}
++
++.onboarding-a-model-skip {
++	align-self: center;
++	background: none;
++	border: none;
++	padding: 4px 8px;
++	font-family: inherit;
++	font-size: 13px;
++	color: var(--vscode-textLink-foreground);
++	cursor: pointer;
++	border-radius: 4px;
++}
++
++.onboarding-a-model-skip:hover {
++	text-decoration: underline;
++}
++
++.onboarding-a-model-skip:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: 2px;
++}
++
++/* Optional "already have data keys" footnote on the Model step */
++.onboarding-a-model-datakeys {
++	align-self: center;
++	max-width: 460px;
++	text-align: center;
++	font-size: 12px;
++	line-height: 1.5;
++	color: var(--vscode-descriptionForeground);
++}
++
++.onboarding-a-model-datakeys-link {
++	background: none;
++	border: none;
++	padding: 0;
++	font-family: inherit;
++	font-size: 12px;
++	color: var(--vscode-textLink-foreground);
++	cursor: pointer;
++}
++
++.onboarding-a-model-datakeys-link:hover {
++	text-decoration: underline;
++}
++
++.onboarding-a-model-datakeys-link:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: 2px;
++	border-radius: 2px;
++}
++
++/* =========================================================================
++ * Step: Finale — run the first investigation (issue #79 P2a)
++ * ========================================================================= */
++.onboarding-a-finale {
++	display: flex;
++	flex-direction: column;
++	justify-content: center;
++	gap: 14px;
++	flex: 1;
++	width: 100%;
++	min-height: 0;
++	margin: 0 auto;
++}
++
++.onboarding-a-finale-prompt-label {
++	font-size: 11px;
++	font-weight: 600;
++	text-transform: uppercase;
++	letter-spacing: 0.5px;
++	color: var(--vscode-descriptionForeground);
++}
++
++.onboarding-a-finale-prompt {
++	display: flex;
++	align-items: flex-start;
++	gap: 10px;
++	padding: 16px 18px;
++	border-radius: 12px;
++	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
++	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
++}
++
++.onboarding-a-finale-prompt-icon .codicon {
++	font-size: 18px;
++	color: var(--vscode-textLink-foreground, #3794ff);
++}
++
++.onboarding-a-finale-prompt-text {
++	margin: 0;
++	font-size: 14px;
++	line-height: 1.55;
++	color: var(--vscode-editor-foreground);
++}
++
++.onboarding-a-finale-actions {
++	display: flex;
++	justify-content: center;
++}
++
++.onboarding-a-finale-copy {
++	min-width: 240px;
++}
++
++.onboarding-a-finale-copy.copied {
++	background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
++	color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
++}
++
++.onboarding-a-finale-openrow {
++	min-height: 18px;
++	font-size: 12px;
++	color: var(--vscode-descriptionForeground);
++	text-align: center;
++}
++
++.onboarding-a-finale-openchat {
++	background: none;
++	border: none;
++	padding: 0;
++	font-family: inherit;
++	font-size: 12px;
++	color: var(--vscode-textLink-foreground);
++	cursor: pointer;
++}
++
++.onboarding-a-finale-openchat:hover {
++	text-decoration: underline;
++}
++
++.onboarding-a-finale-openchat:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: 2px;
++	border-radius: 2px;
++}
++
++/* =========================================================================
++ * Minimize / restore — hide the overlay while a step's workbench UI is open
++ * ========================================================================= */
++.onboarding-a-overlay.minimized {
++	visibility: hidden;
++	pointer-events: none;
++}
++
++.onboarding-a-resume {
++	position: fixed;
++	right: 20px;
++	bottom: 20px;
++	z-index: 10001;
++	display: flex;
++	align-items: center;
++	gap: 6px;
++	padding: 8px 14px;
++	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
++	border-radius: 999px;
++	background: var(--vscode-button-background);
++	color: var(--vscode-button-foreground);
++	font-family: inherit;
++	font-size: 13px;
++	font-weight: 600;
++	cursor: pointer;
++	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
++}
++
++.onboarding-a-resume:hover {
++	background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
++}
++
++.onboarding-a-resume:focus-visible {
++	outline: 2px solid var(--vscode-focusBorder);
++	outline-offset: 2px;
++}
++
++.onboarding-a-resume-icon .codicon {
++	font-size: 14px;
++}
++
+ @media (prefers-reduced-motion: reduce) {
+ 	.onboarding-a-overlay,
+ 	.onboarding-a-card,
+diff --git a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
+index 0588c751c2d..8b9ce23eeb0 100644
+--- a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
++++ b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
+@@ -6,46 +6,46 @@
+ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+ import { Emitter, Event } from '../../../../base/common/event.js';
+ import { $, append, addDisposableListener, EventType, clearNode, getActiveWindow } from '../../../../base/browser/dom.js';
+-import { isCancellationError } from '../../../../base/common/errors.js';
+-import { StopWatch } from '../../../../base/common/stopwatch.js';
+ import { URI } from '../../../../base/common/uri.js';
+ import { isWindows, isMacintosh, isLinux } from '../../../../base/common/platform.js';
+-import { assertDefined } from '../../../../base/common/types.js';
+ import { FileAccess } from '../../../../base/common/network.js';
+ import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+ import { KeyCode } from '../../../../base/common/keyCodes.js';
+ import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+-import { InputBox } from '../../../../base/browser/ui/inputbox/inputBox.js';
+ import { localize } from '../../../../nls.js';
+ import { Codicon } from '../../../../base/common/codicons.js';
+ import { ThemeIcon } from '../../../../base/common/themables.js';
+ import { renderIcon } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
+-import { Action } from '../../../../base/common/actions.js';
+ import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
+ import { EXTENSION_INSTALL_SKIP_WALKTHROUGH_CONTEXT, IExtensionGalleryService, IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+-import { GitHubPaths, IDefaultAccountService } from '../../../../platform/defaultAccount/common/defaultAccount.js';
+ import { CancellationToken } from '../../../../base/common/cancellation.js';
+ import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
+ import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+-import { defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
++import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import product from '../../../../platform/product/common/product.js';
+ import { IFileService } from '../../../../platform/files/common/files.js';
+ import { IPathService } from '../../../services/path/common/pathService.js';
+ import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
+-import { InstallChatEvent, InstallChatClassification, ChatSetupStrategy } from '../../chat/browser/chatSetup/chatSetup.js';
+ import { ICommandService } from '../../../../platform/commands/common/commands.js';
+ import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
++import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
++import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
++import { IEditorService } from '../../../services/editor/common/editorService.js';
+ import {
+ 	OnboardingStepId,
+-	ONBOARDING_STEPS,
+ 	ONBOARDING_AI_PREFERENCE_OPTIONS,
++	ONBOARDING_ROLE_OPTIONS,
++	ONBOARDING_ROLE_STORAGE_KEY,
+ 	AiCollaborationMode,
++	OnboardingRole,
+ 	IOnboardingThemeOption,
++	SubscriptionAccess,
++	computeVisibleSteps,
++	decideTrialPoll,
++	roleToFirstInvestigation,
+ 	getOnboardingStepTitle,
+ 	getOnboardingStepSubtitle,
+-	GHE_FULL_URI_REGEX,
+-	GheParseResultKind,
+-	parseGheInstanceInput,
++	TRIAL_POLL_INTERVAL_MS,
+ } from '../common/onboardingTypes.js';
+ import { IOnboardingService } from '../common/onboardingService.js';
+ 
+@@ -75,10 +75,24 @@ type OnboardingActionEvent = {
+ 	argument: string | undefined;
+ };
+ 
+-type EnterpriseSignInUiState = 'options' | 'instance' | 'progress';
++/**
++ * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
++ * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
++ */
++const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
++
++/** Set form for {@link IContextKeyService.onDidChangeContext} `affectsSome` checks. */
++const FLOWLEAP_SIGNED_IN_CONTEXT_KEYS = new Set([FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
++
++/**
++ * Editor input typeId of the chat models management editor (owned by
++ * `contrib/chat/browser/chatManagement/chatManagementEditorInput`). Referenced by string so this
++ * contrib doesn't take a cross-contrib dependency just to detect the editor closing.
++ */
++const MODELS_MANAGEMENT_EDITOR_TYPE_ID = 'workbench.input.modelsManagement';
+ 
+-assertDefined(product.defaultChatAgent, 'Onboarding requires a default chat agent product configuration.');
+-const defaultChat = product.defaultChatAgent;
++/** How often the minimized wizard re-checks an action's completion condition (e.g. model added). */
++const MINIMIZE_POLL_INTERVAL_MS = 3_000;
+ 
+ /**
+  * Variation A — Classic Wizard Modal
+@@ -87,9 +101,20 @@ const defaultChat = product.defaultChatAgent;
+  * and polished navigation. Sits on top of the agent sessions welcome
+  * tab. When dismissed, the welcome tab is revealed underneath.
+  *
+- * Steps:
+- * 1. Sign In — sessions-style sign-in hero with GitHub Copilot, Google, and Apple options
+- * 2. Personalize — Theme selection grid + keymap pills
++ * Steps (patent-persona funnel, issue #79): Role → See it work → Sign in → Trial → Model.
++ * 1. Role — "What brings you to FlowLeap?" persona picker (patent attorney / IP analyst /
++ *    researcher / founder). The choice is persisted and tailors later phases.
++ * 2. See it work — the "Build with AI Agents" placeholder demo (unchanged in P1).
++ * 3. Sign In — FlowLeap sign-in hero (a single "Continue with FlowLeap" action). Soft, not a hard
++ *    gate: the modal stays dismissable and "Continue without Signing In" is offered (see ADR 0003).
++ * 4. Trial — value-framed 7-day trial; only shown when signed in. Opens checkout in the browser
++ *    and polls the subscription, auto-advancing when it turns active/trialing.
++ * 5. Model — connect a BYO AI model (OpenRouter recommended); reflects an already-connected model.
++ *
++ * The legacy Personalize (theme/keymap) and AiPreference steps are no longer in the flow; their
++ * render code is retained (referenced by the `_renderStep` switch) but never reached. The wizard
++ * never touches the theme: the product default (Light Modern) already is the sensible default
++ * (issue #79 principle 4), and theme selection stays available in Settings.
+  */
+ export class OnboardingVariationA extends Disposable implements IOnboardingService {
+ 
+@@ -116,7 +141,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 	private _footerSignInBtn: HTMLButtonElement | undefined;
+ 
+ 	private currentStepIndex = 0;
+-	private readonly steps = ONBOARDING_STEPS;
++	private steps: OnboardingStepId[] = computeVisibleSteps({ signedIn: false, hasAccess: false });
+ 	private readonly disposables = this._register(new DisposableStore());
+ 	private readonly stepDisposables = this._register(new DisposableStore());
+ 	private previouslyFocusedElement: HTMLElement | undefined;
+@@ -128,15 +153,37 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 	private selectedKeymapId = 'vscode';
+ 	private _detectedEditorIds: Set<string> | undefined;
+ 	private _userSignedIn = false;
++	// Whether the user already has an access-granting subscription (active/trialing). When true the
++	// Trial step is filtered out (nothing to start). Refreshed asynchronously via the subscription
++	// bridge; `_accessCheckToken` invalidates a stale in-flight check so it can't clobber newer state.
++	private _hasAccess = false;
++	private _accessCheckToken = 0;
++	private _signInInFlight = false;
++	private _signInError: string | undefined;
+ 	private selectedAiMode: AiCollaborationMode = AiCollaborationMode.Balanced;
+-	private enterpriseSignInUiState: EnterpriseSignInUiState = 'options';
+-	private enterpriseInstanceValue = '';
+-	private enterpriseSignInWatch: StopWatch | undefined;
++	private selectedRole: OnboardingRole | undefined;
++	// Trial subscription poll. `_trialPollToken` invalidates any in-flight tick when the poll is
++	// stopped (step change, dispose, or a resolved advance) so a late async result can't act stale.
++	private _trialPollHandle: number | undefined;
++	private _trialPollToken = 0;
++	// Fire `model_key_added` at most once per wizard run.
++	private _modelKeyAddedLogged = false;
++	// Minimize/restore: when a step action opens workbench UI (the models editor, the FlowLeap
++	// Settings sidebar) the full-screen overlay would sit on top of it, so we hide the overlay and
++	// restore when the opened surface is done. `_minimizeDisposables` holds the restore listeners;
++	// `_minimizePollToken` invalidates a stale completion poll; `_resumeButton` is the always-there
++	// escape hatch for surfaces with no close event.
++	private _minimized = false;
++	private readonly _minimizeDisposables = this._register(new DisposableStore());
++	private _minimizePollToken = 0;
++	private _minimizePollHandle: number | undefined;
++	private _resumeButton: HTMLButtonElement | undefined;
++	// Timer that reverts the finale "Copied" confirmation back to "Copy prompt".
++	private _finaleCopyResetHandle: number | undefined;
+ 
+ 	constructor(
+ 		@ILayoutService private readonly layoutService: ILayoutService,
+ 		@IWorkbenchThemeService private readonly themeService: IWorkbenchThemeService,
+-		@IDefaultAccountService private readonly defaultAccountService: IDefaultAccountService,
+ 		@IExtensionGalleryService private readonly extensionGalleryService: IExtensionGalleryService,
+ 		@IExtensionManagementService private readonly extensionManagementService: IExtensionManagementService,
+ 		@IConfigurationService private readonly configurationService: IConfigurationService,
+@@ -146,6 +193,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		@ITelemetryService private readonly telemetryService: ITelemetryService,
+ 		@ICommandService private readonly commandService: ICommandService,
+ 		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
++		@IContextKeyService private readonly contextKeyService: IContextKeyService,
++		@IStorageService private readonly storageService: IStorageService,
++		@IEditorService private readonly editorService: IEditorService,
++		@IClipboardService private readonly clipboardService: IClipboardService,
+ 	) {
+ 		super();
+ 
+@@ -157,7 +208,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 			this.selectedThemeId = matchingTheme.id;
+ 		}
+ 
+-		// Start detecting installed editors early so results are ready by the Personalize step
++		// Pre-select a previously stored role so a wizard re-trigger resumes sensibly (ADR 0003).
++		const storedRole = this.storageService.get(ONBOARDING_ROLE_STORAGE_KEY, StorageScope.APPLICATION);
++		if (ONBOARDING_ROLE_OPTIONS.some(o => o.id === storedRole)) {
++			this.selectedRole = storedRole as OnboardingRole;
++		}
++
++		// Start detecting installed editors early so results are ready if the Personalize step ever runs.
+ 		this._detectInstalledEditors().then(ids => { this._detectedEditorIds = ids; });
+ 	}
+ 
+@@ -171,6 +228,11 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		}
+ 
+ 		this._isShowing = true;
++		this._modelKeyAddedLogged = false;
++		this._hasAccess = false;
++		this._userSignedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
++		this._recomputeSteps();
++		this._logAction('wizard_started', this.steps[0]);
+ 		this.previouslyFocusedElement = getActiveWindow().document.activeElement as HTMLElement | undefined;
+ 
+ 		const container = this.layoutService.activeContainer;
+@@ -227,28 +289,19 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 			this._dismiss('skip');
+ 		}));
+ 		this.disposables.add(addDisposableListener(this.backButton, EventType.CLICK, () => {
+-			if (this.currentStepIndex === 0 && this.enterpriseSignInUiState === 'instance') {
+-				this._logAction('cancelEnterpriseInstancePrompt');
+-				this.enterpriseSignInWatch = undefined;
+-				this._setEnterpriseSignInUiState('options');
+-				return;
+-			}
+-
+ 			this._logAction('back');
+ 			this._prevStep();
+ 		}));
+ 		this.disposables.add(addDisposableListener(this.nextButton, EventType.CLICK, () => {
+ 			if (this._isLastStep()) {
+-				this._applyStepSelections(this.steps[this.currentStepIndex]);
+-				this._logAction('complete');
++				// Finishing on the finale without running is the finale's skip; any other last step
++				// is a plain completion.
++				this._logAction(this.steps[this.currentStepIndex] === OnboardingStepId.Finale ? 'first_run_skipped' : 'complete');
+ 				this._dismiss('complete');
+-			} else if (this.currentStepIndex === 0) {
+-				this._logAction('continueWithoutSignIn');
+-				this._nextStep();
+-			} else {
+-				this._logAction('next');
+-				this._nextStep();
++				return;
+ 			}
++			this._logFooterAdvance(this.steps[this.currentStepIndex]);
++			this._nextStep();
+ 		}));
+ 
+ 		this.disposables.add(addDisposableListener(this.overlay, EventType.MOUSE_DOWN, (e: MouseEvent) => {
+@@ -274,6 +327,21 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 			}
+ 		}));
+ 
++		// The `flowleap.signedIn` context key is set asynchronously by the FlowLeap extension after
++		// activation + token restore, so the value read above can be a cold-launch false. Track later
++		// changes for the whole time the modal is up so the sign-in and Trial steps recover once it lands.
++		this.disposables.add(this.contextKeyService.onDidChangeContext(e => {
++			if (e.affectsSome(FLOWLEAP_SIGNED_IN_CONTEXT_KEYS)) {
++				this._syncSignedInFromContext();
++			}
++		}));
++
++		// If we already look signed in, confirm existing access so a returning user with an active
++		// trial never sees the Trial step (issue #79 state-awareness fix).
++		if (this._userSignedIn) {
++			void this._refreshAccess();
++		}
++
+ 		// Entrance animation
+ 		this.overlay.classList.add('entering');
+ 		getActiveWindow().requestAnimationFrame(() => {
+@@ -314,12 +382,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 	private _nextStep(): void {
+ 		if (this.currentStepIndex < this.steps.length - 1) {
+ 			const leavingStep = this.steps[this.currentStepIndex];
+-			if (leavingStep === OnboardingStepId.SignIn) {
+-				this.enterpriseSignInUiState = 'options';
+-				this.enterpriseInstanceValue = '';
+-				this.enterpriseSignInWatch = undefined;
++			if (leavingStep === OnboardingStepId.Personalize) {
++				this._applyKeymap(this.selectedKeymapId);
+ 			}
+-			this._applyStepSelections(leavingStep);
+ 			this.currentStepIndex++;
+ 			this._renderStep();
+ 			this._renderProgress();
+@@ -330,12 +395,108 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 	}
+ 
+ 	/**
+-	 * Applies the selections made on a step once the user moves past it, either
+-	 * by continuing to the next step or by completing the onboarding.
++	 * Recompute the visible steps from the current sign-in state, preserving the step the user is on.
++	 * Called at {@link show} and after a successful sign-in (which unlocks the Trial step).
++	 */
++	private _recomputeSteps(): void {
++		const currentStepId = this.steps[this.currentStepIndex];
++		this.steps = computeVisibleSteps({ signedIn: this._userSignedIn, hasAccess: this._hasAccess });
++		const newIndex = this.steps.indexOf(currentStepId);
++		this.currentStepIndex = newIndex >= 0 ? newIndex : Math.min(this.currentStepIndex, this.steps.length - 1);
++	}
++
++	/** Re-render the current step, progress dots, and footer in place (no focus steal). */
++	private _rerenderCurrentStep(): void {
++		if (!this._isShowing) {
++			return;
++		}
++		this._renderStep();
++		this._renderProgress();
++		this._updateButtonStates();
++	}
++
++	/**
++	 * React to the `flowleap.signedIn` context key changing while the modal is open (Bug 1). The key
++	 * arrives asynchronously, so we sync `_userSignedIn`, rebuild the flow, and re-render the current
++	 * step so the sign-in step reflects the session and the Trial step becomes reachable. A passive
++	 * flip does not auto-advance — that's reserved for the explicit sign-in click.
++	 */
++	private _syncSignedInFromContext(): void {
++		const signedIn = this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
++		if (signedIn === this._userSignedIn) {
++			return;
++		}
++		this._userSignedIn = signedIn;
++		if (!signedIn) {
++			// Session lost — access no longer holds and any in-flight check is now stale.
++			this._hasAccess = false;
++			this._accessCheckToken++;
++		}
++		this._recomputeSteps();
++		this._rerenderCurrentStep();
++		if (signedIn) {
++			void this._refreshAccess();
++		}
++	}
++
++	/**
++	 * Confirm whether the signed-in user already has access (active/trialing) and, if so, drop the
++	 * Trial step — there is nothing to start (Bug 2). Guarded by a token + `_isShowing` so a stale or
++	 * post-dismiss result can't clobber newer state. Only a confirmed `active` flips state; an
++	 * `inactive`/`unknown` result leaves the Trial step in place.
++	 */
++	private async _refreshAccess(): Promise<void> {
++		if (!this._userSignedIn || this._hasAccess) {
++			return;
++		}
++		const token = ++this._accessCheckToken;
++		let access: SubscriptionAccess = 'unknown';
++		try {
++			access = await this.commandService.executeCommand<SubscriptionAccess>('flowleap.checkSubscription') ?? 'unknown';
++		} catch {
++			access = 'unknown';
++		}
++		// Superseded, dismissed, signed out, or inconclusive — leave the Trial step alone.
++		if (token !== this._accessCheckToken || !this._isShowing || !this._userSignedIn || access !== 'active') {
++			return;
++		}
++		this._hasAccess = true;
++		// Don't yank the Trial step out from under a user looking at it — re-render it in place so the
++		// belt-and-braces confirmation shows; otherwise recompute so it's filtered out of the flow.
++		if (this.steps[this.currentStepIndex] !== OnboardingStepId.Trial) {
++			this._recomputeSteps();
++		}
++		this._rerenderCurrentStep();
++	}
++
++	/**
++	 * Log the first-class skip/advance telemetry for leaving a step via the footer primary button.
++	 * The role/theme captures and demo completion are the P1 funnel signals (issue #79).
+ 	 */
+-	private _applyStepSelections(stepId: OnboardingStepId): void {
+-		if (stepId === OnboardingStepId.Personalize) {
+-			this._applyKeymap(this.selectedKeymapId);
++	private _logFooterAdvance(stepId: OnboardingStepId): void {
++		switch (stepId) {
++			case OnboardingStepId.Role:
++				if (!this.selectedRole) {
++					this._logAction('role_skipped');
++				}
++				break;
++			case OnboardingStepId.AgentSessions:
++				this._logAction('demo_completed');
++				break;
++			case OnboardingStepId.SignIn:
++				if (!this._userSignedIn) {
++					this._logAction('signin_skipped');
++				}
++				break;
++			case OnboardingStepId.Trial:
++				this._stopTrialPoll();
++				// Advancing past an already-active trial is a plain Continue, not a skip.
++				if (!this._hasAccess) {
++					this._logAction('trial_skipped');
++				}
++				break;
++			default:
++				this._logAction('next');
+ 		}
+ 	}
+ 
+@@ -392,7 +553,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		this.titleEl.style.display = useSignInHero ? 'none' : '';
+ 		this.subtitleEl.style.display = useSignInHero ? 'none' : '';
+ 		this.titleEl.textContent = getOnboardingStepTitle(stepId);
+-		if (stepId === OnboardingStepId.Personalize) {
++		if (stepId === OnboardingStepId.AgentSessions) {
++			this._renderAgentSessionsSubtitle(this.subtitleEl);
++		} else if (stepId === OnboardingStepId.Personalize) {
+ 			this._renderPersonalizeSubtitle(this.subtitleEl);
+ 		} else {
+ 			this.subtitleEl.textContent = getOnboardingStepSubtitle(stepId);
+@@ -401,6 +564,9 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		clearNode(this.contentEl);
+ 
+ 		switch (stepId) {
++			case OnboardingStepId.Role:
++				this._renderRoleStep(this.contentEl);
++				break;
+ 			case OnboardingStepId.SignIn:
+ 				this._renderSignInStep(this.contentEl);
+ 				break;
+@@ -410,6 +576,18 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 			case OnboardingStepId.AiPreference:
+ 				this._renderAiPreferenceStep(this.contentEl);
+ 				break;
++			case OnboardingStepId.AgentSessions:
++				this._renderAgentSessionsStep(this.contentEl);
++				break;
++			case OnboardingStepId.Trial:
++				this._renderTrialStep(this.contentEl);
++				break;
++			case OnboardingStepId.Model:
++				this._renderModelStep(this.contentEl);
++				break;
++			case OnboardingStepId.Finale:
++				this._renderFinaleStep(this.contentEl);
++				break;
+ 		}
+ 
+ 		this.bodyEl?.setAttribute('aria-label', localize(
+@@ -423,26 +601,12 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 
+ 	private _updateButtonStates(): void {
+ 		if (this.backButton) {
+-			const showEnterpriseBack = this.currentStepIndex === 0 && this.enterpriseSignInUiState === 'instance';
+-			this.backButton.style.display = (this.currentStepIndex === 0 && !showEnterpriseBack) ? 'none' : '';
++			this.backButton.style.display = this.currentStepIndex === 0 ? 'none' : '';
+ 		}
+ 		if (this.nextButton) {
+-			if (this.currentStepIndex === 0) {
+-				if (this._userSignedIn) {
+-					this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
+-					this.nextButton.textContent = localize('onboarding.continue', "Continue");
+-				} else {
+-					// Sign-in step: secondary "Continue without Signing In"
+-					this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-secondary';
+-					this.nextButton.textContent = localize('onboarding.continueWithoutSignIn', "Continue without Signing In");
+-				}
+-			} else if (this._isLastStep()) {
+-				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
+-				this.nextButton.textContent = localize('onboarding.getStarted', "Get Started");
+-			} else {
+-				this.nextButton.className = 'onboarding-a-btn onboarding-a-btn-primary';
+-				this.nextButton.textContent = localize('onboarding.next', "Continue");
+-			}
++			const { className, label } = this._footerNextButtonState(this.steps[this.currentStepIndex]);
++			this.nextButton.className = className;
++			this.nextButton.textContent = label;
+ 		}
+ 		if (this.footerLeft) {
+ 			if (this._isLastStep()) {
+@@ -450,7 +614,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 				if (!this._footerSignInBtn && !this._userSignedIn) {
+ 					this._footerSignInBtn = append(this.footerLeft, $<HTMLButtonElement>('button.onboarding-a-signin-nudge-btn'));
+ 					this._footerSignInBtn.type = 'button';
+-					this._footerSignInBtn.textContent = localize('onboarding.sessions.signInNudge', "Sign in to use GitHub Copilot");
++					this._footerSignInBtn.textContent = localize('onboarding.sessions.signInNudge', "Sign in to FlowLeap");
+ 					this.stepDisposables.add(addDisposableListener(this._footerSignInBtn, EventType.CLICK, async () => {
+ 						this._logAction('signInNudge');
+ 						await this._handleSignIn();
+@@ -468,6 +632,99 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		}
+ 	}
+ 
++	/**
++	 * The label + styling for the footer primary button on a given step. The last step always
++	 * completes ("Done"); the Sign In step degrades to a secondary "Continue without Signing In"
++	 * when signed out (ADR 0003); the Trial step's footer is the "Decide later" skip, unless the
++	 * trial is already active — then there's nothing to decide, so it's a primary "Continue".
++	 */
++	private _footerNextButtonState(stepId: OnboardingStepId): { className: string; label: string } {
++		const primary = 'onboarding-a-btn onboarding-a-btn-primary';
++		const secondary = 'onboarding-a-btn onboarding-a-btn-secondary';
++		if (this._isLastStep()) {
++			// The finale's primary CTA is the in-content "Run" button, so the footer is the
++			// de-emphasized skip; any other last step keeps a primary "Done".
++			return stepId === OnboardingStepId.Finale
++				? { className: secondary, label: localize('onboarding.finale.later', "Maybe later") }
++				: { className: primary, label: localize('onboarding.done', "Done") };
++		}
++		switch (stepId) {
++			case OnboardingStepId.SignIn:
++				return this._userSignedIn
++					? { className: primary, label: localize('onboarding.continue', "Continue") }
++					: { className: secondary, label: localize('onboarding.continueWithoutSignIn', "Continue without Signing In") };
++			case OnboardingStepId.Trial:
++				return this._hasAccess
++					? { className: primary, label: localize('onboarding.continue', "Continue") }
++					: { className: secondary, label: localize('onboarding.trial.decideLater', "Decide later") };
++			default:
++				return { className: primary, label: localize('onboarding.next', "Continue") };
++		}
++	}
++
++	// =====================================================================
++	// Step: Role
++	// =====================================================================
++
++	private _renderRoleStep(container: HTMLElement): void {
++		const wrapper = append(container, $('.onboarding-a-role'));
++
++		const cards = append(wrapper, $('.onboarding-a-role-cards'));
++		cards.setAttribute('role', 'radiogroup');
++		cards.setAttribute('aria-label', localize('onboarding.role.label', "What brings you to FlowLeap?"));
++
++		const allCards: HTMLButtonElement[] = [];
++		for (const option of ONBOARDING_ROLE_OPTIONS) {
++			const card = this._registerStepFocusable(append(cards, $<HTMLButtonElement>('button.onboarding-a-role-card')));
++			card.type = 'button';
++			card.dataset.id = option.id;
++			card.setAttribute('role', 'radio');
++			card.setAttribute('aria-checked', option.id === this.selectedRole ? 'true' : 'false');
++			allCards.push(card);
++
++			if (option.id === this.selectedRole) {
++				card.classList.add('selected');
++			}
++
++			const iconEl = append(card, $('span.onboarding-a-role-card-icon'));
++			iconEl.setAttribute('aria-hidden', 'true');
++			const icon = Codicon[option.icon as keyof typeof Codicon] ?? Codicon.sparkle;
++			iconEl.appendChild(renderIcon(icon));
++
++			const titleEl = append(card, $('div.onboarding-a-role-card-title'));
++			titleEl.textContent = option.label;
++
++			const descEl = append(card, $('div.onboarding-a-role-card-desc'));
++			descEl.textContent = option.description;
++
++			this.stepDisposables.add(addDisposableListener(card, EventType.CLICK, () => {
++				this._selectRole(option.id);
++				for (const c of allCards) {
++					c.classList.toggle('selected', c.dataset.id === option.id);
++					c.setAttribute('aria-checked', c.dataset.id === option.id ? 'true' : 'false');
++				}
++				this.accessibilityService.alert(localize('onboarding.role.selected.alert', "{0} selected", option.label));
++			}));
++		}
++		const selectedRoleIndex = ONBOARDING_ROLE_OPTIONS.findIndex(o => o.id === this.selectedRole);
++		this._setupRadioGroupNavigation(allCards, Math.max(0, selectedRoleIndex));
++
++		// Subtle "Just exploring" skip — advances without capturing a role (issue #79 flow, step 1).
++		const skip = this._registerStepFocusable(append(wrapper, $<HTMLButtonElement>('button.onboarding-a-role-skip')));
++		skip.type = 'button';
++		skip.textContent = localize('onboarding.role.skip', "Just exploring");
++		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
++			this._logAction('role_skipped');
++			this._nextStep();
++		}));
++	}
++
++	private _selectRole(role: OnboardingRole): void {
++		this.selectedRole = role;
++		this.storageService.store(ONBOARDING_ROLE_STORAGE_KEY, role, StorageScope.APPLICATION, StorageTarget.USER);
++		this._logAction('role_selected', OnboardingStepId.Role, role);
++	}
++
+ 	// =====================================================================
+ 	// Step: Sign In
+ 	// =====================================================================
+@@ -482,10 +739,10 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		const content = append(wrapper, $('.onboarding-a-signin-content'));
+ 		const contentMain = append(content, $('.onboarding-a-signin-content-main'));
+ 		const title = append(contentMain, $('h2.onboarding-a-signin-title'));
+-		title.textContent = localize('onboarding.signIn.heroTitle', "Welcome to VS Code");
++		title.textContent = localize('onboarding.signIn.heroTitle', "Welcome to {0}", product.nameShort);
+ 
+ 		const subtitle = append(contentMain, $('p.onboarding-a-signin-subtitle'));
+-		subtitle.textContent = localize('onboarding.signIn.heroSubtitle', "Sign in to use GitHub Copilot.");
++		subtitle.textContent = localize('onboarding.signIn.heroSubtitle', "Sign in to unlock the patent tools and your subscription.");
+ 
+ 		const actions = append(contentMain, $('.onboarding-a-signin-actions'));
+ 
+@@ -496,311 +753,111 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 			icon.setAttribute('aria-hidden', 'true');
+ 			const text = append(signedIn, $('span'));
+ 			text.textContent = localize('onboarding.signIn.signedIn', "You're signed in. You can continue to the next step.");
+-		} else {
+-			switch (this.enterpriseSignInUiState) {
+-				case 'instance':
+-					this._renderEnterpriseInstanceForm(actions);
+-					break;
+-				case 'progress':
+-					this._renderEnterpriseSignInProgress(actions);
+-					break;
+-				default:
+-					this._renderDefaultSignInActions(actions);
+-					break;
+-			}
++			return;
+ 		}
+ 
+-		const footer = append(wrapper, $('.onboarding-a-signin-footer'));
+-
+-		const disclaimerCol = append(footer, $('.onboarding-a-signin-disclaimer-col'));
+-
+-		// GitHub Copilot disclaimer
+-		const copilotDisclaimer = append(disclaimerCol, $('.onboarding-a-signin-disclaimer'));
+-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.prefix', "By signing in, you agree to {0}'s ", defaultChat.provider.default.name));
+-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.terms', "Terms"), defaultChat.termsStatementUrl);
+-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.middle', " and "));
+-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.privacy', "Privacy Statement"), defaultChat.privacyStatementUrl);
+-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.copilotPrefix', ". {0} Copilot may show ", defaultChat.provider.default.name));
+-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.publicCode', "public code"), defaultChat.publicCodeMatchesUrl);
+-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.improveSuffix', " suggestions and use your data to improve the product."));
+-		copilotDisclaimer.append(' ');
+-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.settingsPrefix', "You can change these "));
+-		this._createInlineLink(copilotDisclaimer, localize('onboarding.signIn.disclaimer.settings', "settings"), this.defaultAccountService.resolveGitHubUrl(GitHubPaths.copilotSettings));
+-		copilotDisclaimer.append(localize('onboarding.signIn.disclaimer.suffix', " anytime."));
+-	}
+-
+-	private _renderDefaultSignInActions(actions: HTMLElement): void {
+-		const githubBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github', localize('onboarding.signIn.github', "Continue with GitHub"), {
+-			emphasized: true,
+-			label: localize('onboarding.signIn.github.aria', "Continue with GitHub")
+-		}));
+-		this.stepDisposables.add(addDisposableListener(githubBtn, EventType.CLICK, () => {
+-			this._logAction('signIn', undefined, 'github');
+-			this._handleSignIn();
+-		}));
+-
+-		const googleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'google', localize('onboarding.signIn.google', "Continue with Google"), {
+-			iconOnly: true,
+-			label: localize('onboarding.signIn.google', "Continue with Google")
+-		}));
+-		this.stepDisposables.add(addDisposableListener(googleBtn, EventType.CLICK, () => {
+-			this._logAction('signIn', undefined, 'google');
+-			this._handleSignIn('google');
++		const signInBtn = this._registerStepFocusable(this._createSignInButton(actions));
++		signInBtn.disabled = this._signInInFlight;
++		this.stepDisposables.add(addDisposableListener(signInBtn, EventType.CLICK, () => {
++			this._logAction('signIn', undefined, 'flowleap');
++			void this._handleSignIn();
+ 		}));
+ 
+-		const appleBtn = this._registerStepFocusable(this._createSignInButton(actions, 'apple', localize('onboarding.signIn.apple', "Continue with Apple"), {
+-			iconOnly: true,
+-			label: localize('onboarding.signIn.apple', "Continue with Apple")
+-		}));
+-		this.stepDisposables.add(addDisposableListener(appleBtn, EventType.CLICK, () => {
+-			this._logAction('signIn', undefined, 'apple');
+-			this._handleSignIn('apple');
+-		}));
+-
+-		const gheBtn = this._registerStepFocusable(this._createSignInButton(actions, 'github-enterprise', localize('onboarding.signIn.ghe', "GHE"), {
+-			textOnly: true,
+-			label: localize('onboarding.signIn.ghe.aria', "Continue with GitHub Enterprise")
+-		}));
+-		this.stepDisposables.add(addDisposableListener(gheBtn, EventType.CLICK, () => {
+-			this._logAction('signIn', undefined, 'github-enterprise');
+-			void this._handleEnterpriseSignIn();
+-		}));
+-	}
+-
+-	private static readonly GHE_INPUT_ACTION_PADDING = 28;
+-
+-	private _renderEnterpriseInstanceForm(actions: HTMLElement): void {
+-		const enterprisePromptLabel = this._getEnterpriseInstancePromptLabel();
+-
+-		const container = append(actions, $('.onboarding-a-signin-ghe-input'));
+-
+-		const submitAction = this.stepDisposables.add(new Action(
+-			'onboarding.signIn.enterprise.submit',
+-			localize('onboarding.signIn.enterprise.continue', "Continue"),
+-			ThemeIcon.asClassName(Codicon.arrowRight),
+-			false,
+-		));
+-
+-		const inputBox = this.stepDisposables.add(new InputBox(container, undefined, {
+-			placeholder: localize('onboarding.signIn.enterprise.placeholder', 'i.e. "octocat" or "https://octocat.ghe.com"...'),
+-			ariaLabel: enterprisePromptLabel,
+-			actions: [submitAction],
+-			inputBoxStyles: defaultInputBoxStyles,
+-		}));
+-		inputBox.value = this.enterpriseInstanceValue;
+-		inputBox.paddingRight = OnboardingVariationA.GHE_INPUT_ACTION_PADDING;
+-		const input = this._registerStepFocusable(inputBox.inputElement);
+-
+-		const submit = async () => {
+-			const result = parseGheInstanceInput(inputBox.value);
+-			if (result.kind === GheParseResultKind.Empty || result.kind === GheParseResultKind.Invalid) {
+-				validate();
+-				return;
+-			}
+-			await this._submitEnterpriseInstance(result.resolvedUri);
+-		};
+-		submitAction.run = submit;
+-
+-		const message = append(container, $('.onboarding-a-signin-ghe-message'));
+-
+-		const validate = (): boolean => {
+-			this.enterpriseInstanceValue = inputBox.value;
+-			inputBox.element.classList.remove('error');
+-			message.classList.remove('error', 'info');
+-
+-			const result = parseGheInstanceInput(inputBox.value);
+-			switch (result.kind) {
+-				case GheParseResultKind.Empty:
+-					message.textContent = enterprisePromptLabel;
+-					submitAction.enabled = false;
+-					return false;
+-				case GheParseResultKind.SingleWord:
+-					message.classList.add('info');
+-					message.textContent = localize('onboarding.signIn.enterprise.resolve', "Will resolve to {0}", result.resolvedUri);
+-					submitAction.enabled = true;
+-					return true;
+-				case GheParseResultKind.FullUri:
+-					submitAction.enabled = true;
+-					message.textContent = '';
+-					return true;
+-				case GheParseResultKind.Invalid:
+-					inputBox.element.classList.add('error');
+-					message.classList.add('error');
+-					message.textContent = localize('onboarding.signIn.enterprise.invalid', 'You must enter a valid {0} instance (i.e. "octocat" or "https://octocat.ghe.com")', defaultChat.provider.enterprise.name);
+-					submitAction.enabled = false;
+-					return false;
+-			}
+-		};
+-
+-		this.stepDisposables.add(inputBox.onDidChange(() => {
+-			validate();
+-		}));
+-
+-		this.stepDisposables.add(addDisposableListener(input, EventType.KEY_DOWN, e => {
+-			const event = new StandardKeyboardEvent(e);
+-			if (event.keyCode === KeyCode.Enter) {
+-				e.preventDefault();
+-				void submitAction.run();
+-				return;
+-			}
+-
+-			if (event.keyCode === KeyCode.Escape) {
+-				e.preventDefault();
+-				e.stopPropagation();
+-				this._logAction('cancelEnterpriseInstancePrompt');
+-				this.enterpriseSignInWatch = undefined;
+-				this._setEnterpriseSignInUiState('options');
+-			}
+-		}));
+-
+-		validate();
+-	}
+-
+-	private _renderEnterpriseSignInProgress(actions: HTMLElement): void {
+-		const container = append(actions, $('.onboarding-a-signin-ghe-progress'));
+-		container.setAttribute('aria-live', 'polite');
+-		const spinner = append(container, $('span'));
+-		spinner.classList.add(...ThemeIcon.asClassNameArray(Codicon.loading), 'codicon-modifier-spin');
+-		spinner.setAttribute('aria-hidden', 'true');
+-		const message = append(container, $('.onboarding-a-signin-ghe-progress-message'));
+-		message.textContent = localize('onboarding.signIn.enterprise.progress', "Waiting for {0} sign-in to complete...", defaultChat.provider.enterprise.name);
+-	}
+-
+-	private _getEnterpriseInstancePromptLabel(): string {
+-		return localize('onboarding.signIn.enterprise.prompt', "What is your {0} instance?", defaultChat.provider.enterprise.name);
+-	}
+-
+-	private _setEnterpriseSignInUiState(state: EnterpriseSignInUiState): void {
+-		this.enterpriseSignInUiState = state;
+-		if (this.steps[this.currentStepIndex] === OnboardingStepId.SignIn && this.contentEl) {
+-			this._renderStep();
+-			this._updateButtonStates();
+-			this._focusCurrentStepElement();
++		if (this._signInError) {
++			const error = append(actions, $('.onboarding-a-signin-error'));
++			error.setAttribute('role', 'alert');
++			const errorIcon = append(error, $('span'));
++			errorIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.error));
++			errorIcon.setAttribute('aria-hidden', 'true');
++			const errorText = append(error, $('span'));
++			errorText.textContent = this._signInError;
+ 		}
+ 	}
+ 
+-	private _createSignInButton(parent: HTMLElement, providerClass: 'github' | 'github-enterprise' | 'google' | 'apple', label: string, options?: { emphasized?: boolean; iconOnly?: boolean; textOnly?: boolean; label?: string }): HTMLButtonElement {
+-		const isCompact = options?.iconOnly || options?.textOnly;
+-		const btn = append(parent, $<HTMLButtonElement>(isCompact ? 'button.onboarding-a-signin-icon-btn' : 'button.onboarding-a-signin-btn'));
++	/**
++	 * The single FlowLeap sign-in button. While an attempt is in flight it shows a spinner and a
++	 * "Signing in…" label (disabled by the caller); otherwise it reads "Continue with FlowLeap", or
++	 * "Try Again" after a failed attempt.
++	 */
++	private _createSignInButton(parent: HTMLElement): HTMLButtonElement {
++		const btn = append(parent, $<HTMLButtonElement>('button.onboarding-a-signin-btn.primary'));
+ 		btn.type = 'button';
+-		btn.title = options?.label ?? label;
+-		btn.setAttribute('aria-label', options?.label ?? label);
+-		if (options?.emphasized) {
+-			btn.classList.add('primary');
+-		}
+-
+-		if (!options?.textOnly) {
+-			const mark = append(btn, $('span.onboarding-a-provider-mark'));
+-			mark.classList.add(providerClass);
+-			mark.setAttribute('aria-hidden', 'true');
+-			if (providerClass === 'github' || providerClass === 'github-enterprise') {
+-				mark.appendChild(renderIcon(Codicon.github));
+-			}
++
++		const mark = append(btn, $('span.onboarding-a-provider-mark'));
++		mark.setAttribute('aria-hidden', 'true');
++		if (this._signInInFlight) {
++			mark.classList.add(...ThemeIcon.asClassNameArray(Codicon.loading), 'codicon-modifier-spin');
+ 		}
+ 
+-		if (!options?.iconOnly) {
+-			const labelEl = append(btn, $('span.onboarding-a-signin-btn-label'));
+-			labelEl.textContent = label;
++		let label: string;
++		if (this._signInInFlight) {
++			label = localize('onboarding.signIn.inProgress', "Signing in…");
++		} else if (this._signInError) {
++			label = localize('onboarding.signIn.retry', "Try Again");
++		} else {
++			label = localize('onboarding.signIn.flowleap', "Continue with FlowLeap");
+ 		}
+ 
++		const labelEl = append(btn, $('span.onboarding-a-signin-btn-label'));
++		labelEl.textContent = label;
++		btn.title = label;
++		btn.setAttribute('aria-label', label);
+ 		return btn;
+ 	}
+ 
+-	private async _handleSignIn(socialProvider?: string): Promise<void> {
+-		const provider = socialProvider ?? 'github';
+-		const watch = StopWatch.create();
+-		try {
+-			const account = await this.defaultAccountService.signIn({
+-				extraAuthorizeParameters: { get_started_with: 'copilot-vscode' },
+-				provider: socialProvider,
+-			});
+-			if (account) {
+-				this._userSignedIn = true;
+-				this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'installed', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
+-				// Run chat setup in the background (sign-up, extension install, entitlement resolution)
+-				this.commandService.executeCommand('workbench.action.chat.triggerSetup', undefined, {
+-					disableChatViewReveal: true,
+-					setupStrategy: ChatSetupStrategy.DefaultSetup,
+-				});
+-				this._nextStep();
+-			}
+-		} catch (error) {
+-			if (isCancellationError(error)) {
+-				this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'cancelled', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
+-				return;
+-			}
+-
+-			this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'failedNotSignedIn', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
+-			this.notificationService.notify({
+-				severity: Severity.Error,
+-				message: localize('onboarding.signIn.error', "Sign-in failed. You can try again later from the Accounts menu."),
+-			});
+-		}
+-	}
+-
+-	private async _handleEnterpriseSignIn(): Promise<void> {
+-		const existingUri = this.configurationService.getValue<string>(defaultChat.providerUriSetting);
+-		if (typeof existingUri !== 'string' || !GHE_FULL_URI_REGEX.test(existingUri)) {
+-			this.enterpriseInstanceValue = existingUri ?? '';
+-			this.enterpriseSignInWatch = StopWatch.create();
+-			this._setEnterpriseSignInUiState('instance');
++	/**
++	 * Drive the native FlowLeap sign-in (PRD 0002 #5) through the `flowleap.signIn` command with
++	 * `silent:true` — a blocking overlay dims toasts, so the step renders its own inline status. On
++	 * success the modal advances; on failure it resets to a "Try Again" state with an inline error.
++	 */
++	private async _handleSignIn(): Promise<void> {
++		if (this._signInInFlight) {
+ 			return;
+ 		}
++		const onSignInStep = this.steps[this.currentStepIndex] === OnboardingStepId.SignIn;
++		this._signInInFlight = true;
++		this._signInError = undefined;
++		if (onSignInStep) {
++			this._renderStep();
++			this._updateButtonStates();
++		}
+ 
+-		this.enterpriseInstanceValue = existingUri;
+-		await this._runEnterpriseSignInSetup();
+-	}
+-
+-	private async _submitEnterpriseInstance(resolvedUri: string): Promise<void> {
++		let signedIn = false;
+ 		try {
+-			await this.configurationService.updateValue(defaultChat.providerUriSetting, resolvedUri, ConfigurationTarget.USER);
+-			this.enterpriseInstanceValue = resolvedUri;
+-			await this._runEnterpriseSignInSetup();
++			signedIn = await this.commandService.executeCommand<boolean>('flowleap.signIn', { silent: true }) === true;
+ 		} catch {
+-			this.enterpriseSignInWatch = undefined;
+-			this._setEnterpriseSignInUiState('instance');
+-			this._notifyEnterpriseSignInError();
++			// `flowleap.signIn` lives in the copilot extension; if it isn't registered yet (activation
++			// race) or it throws, surface a generic inline error rather than a hidden toast.
++			this._signInError = localize('onboarding.signIn.error', "Sign-in is unavailable right now. Please try again.");
+ 		}
+-	}
+-
+-	private async _runEnterpriseSignInSetup(): Promise<void> {
+-		const watch = this.enterpriseSignInWatch ?? StopWatch.create();
+-		const provider = defaultChat.provider.enterprise.id;
+-		this._setEnterpriseSignInUiState('progress');
+ 
+-		try {
+-			const success = await this.commandService.executeCommand<boolean>('workbench.action.chat.triggerSetup', undefined, {
+-				disableChatViewReveal: true,
+-				setupStrategy: ChatSetupStrategy.SetupWithEnterpriseProvider,
+-			});
+-
+-			if (success) {
+-				this._userSignedIn = true;
+-				this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'installed', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
+-				this._nextStep();
+-			} else {
+-				this._setEnterpriseSignInUiState('options');
++		this._signInInFlight = false;
++
++		if (signedIn) {
++			this._userSignedIn = true;
++			this._signInError = undefined;
++			this._logAction('signin_done', OnboardingStepId.SignIn);
++			// Signing in unlocks the value-framed Trial step; rebuild the flow so it appears next.
++			// Also confirm access, so a user who already had an active trial skips the Trial step.
++			this._recomputeSteps();
++			void this._refreshAccess();
++			if (this._footerSignInBtn) {
++				this._footerSignInBtn.style.display = 'none';
+ 			}
+-		} catch (error) {
+-			if (isCancellationError(error)) {
+-				this._setEnterpriseSignInUiState('options');
+-				this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'cancelled', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
+-				return;
++			if (onSignInStep) {
++				this._nextStep();
+ 			}
+-
+-			this._setEnterpriseSignInUiState('instance');
+-			this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'failedNotSignedIn', installDuration: watch.elapsed(), signUpErrorCode: undefined, provider });
+-			this._notifyEnterpriseSignInError();
+-		} finally {
+-			this.enterpriseSignInWatch = undefined;
++			return;
+ 		}
+-	}
+ 
+-	private _notifyEnterpriseSignInError(): void {
+-		this.notificationService.notify({
+-			severity: Severity.Error,
+-			message: localize('onboarding.signIn.enterprise.error', "GitHub Enterprise sign-in failed. Check your instance URL and try again."),
+-		});
++		if (!this._signInError) {
++			this._signInError = localize('onboarding.signIn.failed', "Sign-in didn't complete. Please try again.");
++		}
++		if (onSignInStep) {
++			this._renderStep();
++			this._updateButtonStates();
++			this._focusCurrentStepElement();
++		}
+ 	}
+ 
+ 	// =====================================================================
+@@ -1109,23 +1166,467 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		}
+ 	}
+ 
++	// =====================================================================
++	// Step: Agent Sessions
++	// =====================================================================
++
++	private _renderAgentSessionsSubtitle(el: HTMLElement): void {
++		clearNode(el);
++		const keys = isMacintosh
++			? ['\u2318', '\u2303', 'I']  // Cmd+Control+I
++			: ['Ctrl', 'Alt', 'I'];
++		const shortcut = keys.map(k => this._createKbd(k));
++		el.append(localize('onboarding.step.agentSessions.subtitle.before', "Open Chat anytime with "));
++		for (let i = 0; i < shortcut.length; i++) {
++			if (i > 0) {
++				el.append('+');
++			}
++			el.append(shortcut[i]);
++		}
++	}
++
++	private _renderAgentSessionsStep(container: HTMLElement): void {
++		const wrapper = append(container, $('.onboarding-a-sessions'));
++
++		const features = append(wrapper, $('.onboarding-a-sessions-features'));
++
++		// Group 1: Chat modes — Plan / Agent
++		const chatGroup = append(features, $('.onboarding-a-sessions-group'));
++		const chatLabel = append(chatGroup, $('div.onboarding-a-sessions-group-label'));
++		chatLabel.textContent = localize('onboarding.sessions.group.chat', "Agents made for the task");
++		const chatGrid = append(chatGroup, $('.onboarding-a-sessions-grid.onboarding-a-sessions-grid-2'));
++
++		this._createFeatureCard(chatGrid, Codicon.listOrdered,
++			localize('onboarding.sessions.planMode', "Plan"),
++			localize('onboarding.sessions.planMode.desc', "Produce a structured implementation plan before any code changes, then hand it off to an agent to execute."));
++
++		this._createFeatureCard(chatGrid, Codicon.commentDiscussion,
++			localize('onboarding.sessions.agentMode', "Agent"),
++			localize('onboarding.sessions.agentMode.desc', "Describe a goal. The agent plans the approach, edits files, runs commands, and self-corrects. You review and approve along the way."));
++
++		// Group 2: ways to customize agents beyond the default Chat experience
++		const moreGroup = append(features, $('.onboarding-a-sessions-group'));
++		const moreLabel = append(moreGroup, $('div.onboarding-a-sessions-group-label'));
++		moreLabel.textContent = localize('onboarding.sessions.group.more', "Agents that work your way");
++		const moreGrid = append(moreGroup, $('.onboarding-a-sessions-grid.onboarding-a-sessions-grid-2'));
++
++		this._createFeatureCard(moreGrid, Codicon.settingsGear,
++			localize('onboarding.sessions.customize', "Customize Your Agents"),
++			localize('onboarding.sessions.customize.desc', "Tailor FlowLeap to your patent project with custom instructions and agents, skills, reusable prompts, and MCP servers that connect to the tools and context you rely on."));
++	}
++
++	private _createFeatureCard(parent: HTMLElement, icon: ThemeIcon, title: string, description?: string): HTMLElement {
++		const card = append(parent, $('div.onboarding-a-feature-card'));
++		const iconCol = append(card, $('div.onboarding-a-feature-icon'));
++		iconCol.appendChild(renderIcon(icon));
++		const textCol = append(card, $('div.onboarding-a-feature-text'));
++		const titleEl = append(textCol, $('div.onboarding-a-feature-title'));
++		titleEl.textContent = title;
++		const descEl = append(textCol, $('div.onboarding-a-feature-desc'));
++		if (description) {
++			descEl.textContent = description;
++		}
++		return descEl;
++	}
++
+ 	private _createKbd(label: string): HTMLElement {
+ 		const kbd = $('kbd.onboarding-a-kbd');
+ 		kbd.textContent = label;
+ 		return kbd;
+ 	}
+ 
+-	private _createInlineLink(parent: HTMLElement, label: string, href: string | undefined): void {
+-		if (!href) {
+-			parent.append(label);
++	// =====================================================================
++	// Step: Trial (only reachable when signed in)
++	// =====================================================================
++
++	private _renderTrialStep(container: HTMLElement): void {
++		const wrapper = append(container, $('.onboarding-a-trial'));
++
++		// The user already has access (e.g. an active trial) — show a confirmation, not the CTA.
++		if (this._hasAccess) {
++			const confirmation = append(wrapper, $('.onboarding-a-signin-confirmation'));
++			const icon = append(confirmation, $('span'));
++			icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.check));
++			icon.setAttribute('aria-hidden', 'true');
++			const text = append(confirmation, $('span'));
++			text.textContent = localize('onboarding.trial.active', "You have full access. Continue to the next step.");
++			return;
++		}
++
++		const points = append(wrapper, $('ul.onboarding-a-trial-points'));
++		for (const text of [
++			localize('onboarding.trial.point.data', "Full patent data, PATSTAT analytics, and the patent brain on one flat plan."),
++			localize('onboarding.trial.point.card', "Billing starts only when you subscribe. Cancel anytime."),
++		]) {
++			const li = append(points, $('li.onboarding-a-trial-point'));
++			const icon = append(li, $('span.onboarding-a-trial-point-icon'));
++			icon.setAttribute('aria-hidden', 'true');
++			icon.appendChild(renderIcon(Codicon.check));
++			const label = append(li, $('span'));
++			label.textContent = text;
++		}
++
++		// Belt-and-braces: access may have appeared (e.g. an existing trial) since the last check —
++		// re-confirm on render; if active it flips `_hasAccess` and re-renders as the confirmation above.
++		void this._refreshAccess();
++
++		const actions = append(wrapper, $('.onboarding-a-trial-actions'));
++		const startBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-trial-start')));
++		startBtn.type = 'button';
++		startBtn.textContent = localize('onboarding.trial.start', "Subscribe");
++
++		const status = append(wrapper, $('.onboarding-a-trial-status'));
++		status.setAttribute('role', 'status');
++		status.setAttribute('aria-live', 'polite');
++
++		this.stepDisposables.add(addDisposableListener(startBtn, EventType.CLICK, () => {
++			void this._handleStartTrial(status);
++		}));
++
++		// Stop polling whenever this step is torn down (navigation away, dispose).
++		this.stepDisposables.add({ dispose: () => this._stopTrialPoll() });
++	}
++
++	/**
++	 * Open the subscribe checkout in the browser and begin polling the subscription. The wizard
++	 * auto-advances the moment the backend reports access (issue #79 flow, step 4), so returning
++	 * from the browser feels seamless. Reuses the extension seam via the `flowleap.startTrial`
++	 * command (id kept for compatibility), mirroring the reactive `402` "Subscribe" path.
++	 */
++	private async _handleStartTrial(status: HTMLElement): Promise<void> {
++		this._logAction('trial_started', OnboardingStepId.Trial);
++		try {
++			await this.commandService.executeCommand('flowleap.startTrial');
++		} catch {
++			// The command lives in the copilot extension; if it isn't registered yet, surface an
++			// inline hint rather than a hidden toast (the modal dims toasts).
++			status.textContent = localize('onboarding.trial.openError', "Couldn't open checkout. Please try again.");
+ 			return;
+ 		}
++		status.textContent = localize('onboarding.trial.waiting', "Waiting for checkout to complete in your browser…");
++		this._startTrialPoll(status);
++	}
++
++	private _startTrialPoll(status: HTMLElement): void {
++		this._stopTrialPoll();
++		const token = ++this._trialPollToken;
++		const startedAt = Date.now();
++		const win = getActiveWindow();
++
++		const tick = async () => {
++			this._trialPollHandle = undefined;
++
++			let access: SubscriptionAccess = 'unknown';
++			try {
++				access = await this.commandService.executeCommand<SubscriptionAccess>('flowleap.checkSubscription') ?? 'unknown';
++			} catch {
++				access = 'unknown';
++			}
++
++			// A newer poll started, or the poll was stopped, while this check was in flight.
++			if (token !== this._trialPollToken) {
++				return;
++			}
++
++			const decision = decideTrialPoll(access, Date.now() - startedAt);
++			if (decision === 'advance') {
++				this._stopTrialPoll();
++				this._logAction('trial_confirmed', OnboardingStepId.Trial);
++				this.accessibilityService.alert(localize('onboarding.trial.confirmed.alert', "Access confirmed. Continuing."));
++				this._nextStep();
++			} else if (decision === 'timeout') {
++				this._stopTrialPoll();
++				if (status.isConnected) {
++					status.textContent = localize('onboarding.trial.timeout', "Finish checkout in your browser, then choose Continue.");
++				}
++			} else {
++				this._trialPollHandle = win.setTimeout(tick, TRIAL_POLL_INTERVAL_MS);
++			}
++		};
+ 
+-		const link = this._registerStepFocusable(append(parent, $<HTMLAnchorElement>('a.onboarding-a-inline-link')));
+-		link.textContent = label;
+-		link.href = href;
+-		link.target = '_blank';
+-		link.rel = 'noopener';
++		this._trialPollHandle = win.setTimeout(tick, TRIAL_POLL_INTERVAL_MS);
++	}
++
++	private _stopTrialPoll(): void {
++		// Bump the token so any in-flight tick's post-await result is ignored.
++		this._trialPollToken++;
++		if (this._trialPollHandle !== undefined) {
++			getActiveWindow().clearTimeout(this._trialPollHandle);
++			this._trialPollHandle = undefined;
++		}
++	}
++
++	// =====================================================================
++	// Minimize / restore (so workbench UI opened by a step is not trapped under the overlay)
++	// =====================================================================
++
++	/**
++	 * Hide the overlay so a workbench surface a step just opened (the models editor, the FlowLeap
++	 * Settings sidebar) is usable. This is NOT a dismiss — all state is kept and no complete/skip is
++	 * logged. Restores automatically when the models editor closes or (optionally) when
++	 * {@link options.restoreWhen} becomes true, and always via the resume affordance for surfaces
++	 * with no close event.
++	 */
++	private _minimize(options: { restoreWhen?: () => Promise<boolean> } = {}): void {
++		if (this._minimized || !this.overlay) {
++			return;
++		}
++		this._minimized = true;
++		this.overlay.classList.add('minimized');
++
++		// Auto-restore when the chat models-management editor we opened is closed.
++		this._minimizeDisposables.add(this.editorService.onDidCloseEditor(e => {
++			if (e.editor.typeId === MODELS_MANAGEMENT_EDITOR_TYPE_ID) {
++				this._restore();
++			}
++		}));
++
++		// Optionally restore early once the action completes (e.g. a model gets connected).
++		if (options.restoreWhen) {
++			this._startMinimizePoll(options.restoreWhen);
++		}
++
++		// Universal escape hatch: some surfaces (the sidebar view opened by `flowleap.patentDataKeys`)
++		// have no editor-close event, so always offer an explicit way back.
++		this._showResumeAffordance();
++	}
++
++	private _startMinimizePoll(restoreWhen: () => Promise<boolean>): void {
++		const token = ++this._minimizePollToken;
++		const win = getActiveWindow();
++		const tick = async () => {
++			this._minimizePollHandle = undefined;
++			let done = false;
++			try {
++				done = await restoreWhen();
++			} catch {
++				done = false;
++			}
++			if (token !== this._minimizePollToken || !this._minimized) {
++				return;
++			}
++			if (done) {
++				this._restore();
++			} else {
++				this._minimizePollHandle = win.setTimeout(tick, MINIMIZE_POLL_INTERVAL_MS);
++			}
++		};
++		this._minimizePollHandle = win.setTimeout(tick, MINIMIZE_POLL_INTERVAL_MS);
++	}
++
++	private _showResumeAffordance(): void {
++		const btn = append(this.layoutService.activeContainer, $<HTMLButtonElement>('button.onboarding-a-resume'));
++		btn.type = 'button';
++		const icon = append(btn, $('span.onboarding-a-resume-icon'));
++		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronUp));
++		icon.setAttribute('aria-hidden', 'true');
++		const label = append(btn, $('span'));
++		label.textContent = localize('onboarding.resume', "Resume FlowLeap setup");
++		btn.setAttribute('aria-label', label.textContent);
++		this._minimizeDisposables.add(addDisposableListener(btn, EventType.CLICK, () => this._restore()));
++		this._resumeButton = btn;
++	}
++
++	private _restore(): void {
++		if (!this._minimized) {
++			return;
++		}
++		this._teardownMinimize();
++		this.overlay?.classList.remove('minimized');
++		// Re-render so any state the opened surface changed (e.g. a model now connected) is fresh,
++		// then return focus into the modal.
++		this._rerenderCurrentStep();
++		this._focusCurrentStepElement();
++	}
++
++	private _teardownMinimize(): void {
++		this._minimized = false;
++		this._minimizePollToken++;
++		if (this._minimizePollHandle !== undefined) {
++			getActiveWindow().clearTimeout(this._minimizePollHandle);
++			this._minimizePollHandle = undefined;
++		}
++		this._minimizeDisposables.clear();
++		if (this._resumeButton) {
++			this._resumeButton.remove();
++			this._resumeButton = undefined;
++		}
++	}
++
++	// =====================================================================
++	// Step: Model (connect a BYO AI model)
++	// =====================================================================
++
++	private _renderModelStep(container: HTMLElement): void {
++		const wrapper = append(container, $('.onboarding-a-model'));
++
++		const rec = append(wrapper, $('.onboarding-a-model-rec'));
++		const recTitle = append(rec, $('div.onboarding-a-model-rec-title'));
++		recTitle.textContent = localize('onboarding.model.rec.title', "OpenRouter is the easy path");
++		const recBody = append(rec, $('div.onboarding-a-model-rec-body'));
++		recBody.textContent = localize('onboarding.model.rec.body', "One key connects every model. A typical patent session costs cents. Already have an Anthropic, OpenAI, or Gemini key? You can pick that instead.");
++
++		const actions = append(wrapper, $('.onboarding-a-model-actions'));
++		const connectBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-model-connect')));
++		connectBtn.type = 'button';
++		connectBtn.textContent = localize('onboarding.model.connect', "Connect your AI model");
++
++		const status = append(wrapper, $('.onboarding-a-model-status'));
++		status.setAttribute('role', 'status');
++		status.setAttribute('aria-live', 'polite');
++
++		const skip = this._registerStepFocusable(append(wrapper, $<HTMLButtonElement>('button.onboarding-a-model-skip')));
++		skip.type = 'button';
++		skip.textContent = localize('onboarding.model.later', "I'll do this later");
++
++		this.stepDisposables.add(addDisposableListener(connectBtn, EventType.CLICK, () => {
++			this._logAction('model_connect', OnboardingStepId.Model);
++			// The manage editor opens in the workbench, under the overlay — minimize so it's usable,
++			// and auto-restore when it closes or as soon as a model is connected.
++			this._minimize({ restoreWhen: () => this._isModelConfigured() });
++			this.commandService.executeCommand('workbench.action.chat.manage').then(undefined, () => {
++				// Manage UI unavailable — pop straight back so the user isn't stranded behind nothing.
++				this._restore();
++			});
++		}));
++
++		this.stepDisposables.add(addDisposableListener(skip, EventType.CLICK, () => {
++			this._logAction('model_skipped', OnboardingStepId.Model);
++			// Model is no longer the last step — advance to the finale (the wizard's payoff).
++			this._nextStep();
++		}));
++
++		// Optional shortcut for users who already hold EPO/USPTO keys. Data keys are deliberately not
++		// a wizard step (the trial covers patent data; EPO registration is slow — issue #79 / ADR 0008),
++		// so this is a muted footnote, not a CTA.
++		const dataKeysNote = append(wrapper, $('.onboarding-a-model-datakeys'));
++		dataKeysNote.append(localize('onboarding.model.dataKeys.prefix', "Optional — FlowLeap covers patent data during your trial. Already have EPO OPS or USPTO keys? "));
++		const dataKeysLink = this._registerStepFocusable(append(dataKeysNote, $<HTMLButtonElement>('button.onboarding-a-model-datakeys-link')));
++		dataKeysLink.type = 'button';
++		dataKeysLink.textContent = localize('onboarding.model.dataKeys.link', "Add them now");
++		this.stepDisposables.add(addDisposableListener(dataKeysLink, EventType.CLICK, () => {
++			this._logAction('data_keys_opened', OnboardingStepId.Model);
++			// The keys UI is the FlowLeap Settings sidebar — minimize so it's usable; it has no
++			// editor-close event, so the resume affordance is the way back (no completion poll).
++			this._minimize();
++			this.commandService.executeCommand('flowleap.patentDataKeys').then(undefined, () => this._restore());
++		}));
++
++		void this._refreshModelState(status, connectBtn);
++	}
++
++	/**
++	 * Reflect whether a BYO model is already connected, detected the same way the Setup tree does
++	 * (`vscode.lm.selectChatModels` minus the agent pseudo-vendors) via the `flowleap.checkModelConfigured`
++	 * command seam. Fires `model_key_added` once when a model is present.
++	 */
++	private async _refreshModelState(status: HTMLElement, connectBtn: HTMLButtonElement): Promise<void> {
++		const configured = await this._isModelConfigured();
++		if (!status.isConnected) {
++			return;
++		}
++		if (configured) {
++			if (!this._modelKeyAddedLogged) {
++				this._modelKeyAddedLogged = true;
++				this._logAction('model_key_added', OnboardingStepId.Model);
++			}
++			status.textContent = localize('onboarding.model.connected', "A model is connected. You're ready to go.");
++			connectBtn.textContent = localize('onboarding.model.manage', "Manage models");
++		} else {
++			status.textContent = '';
++		}
++	}
++
++	/** Whether a BYO model is connected, via the extension bridge (same test as the Setup tree). */
++	private async _isModelConfigured(): Promise<boolean> {
++		try {
++			return await this.commandService.executeCommand<boolean>('flowleap.checkModelConfigured') === true;
++		} catch {
++			return false;
++		}
++	}
++
++	// =====================================================================
++	// Step: Finale (run the first investigation — the wizard's payoff)
++	// =====================================================================
++
++	private _renderFinaleStep(container: HTMLElement): void {
++		const wrapper = append(container, $('.onboarding-a-finale'));
++		const prompt = roleToFirstInvestigation(this.selectedRole);
++
++		const promptLabel = append(wrapper, $('div.onboarding-a-finale-prompt-label'));
++		promptLabel.textContent = localize('onboarding.finale.promptLabel', "Your first investigation");
++
++		const promptBox = append(wrapper, $('.onboarding-a-finale-prompt'));
++		const icon = append(promptBox, $('span.onboarding-a-finale-prompt-icon'));
++		icon.setAttribute('aria-hidden', 'true');
++		icon.appendChild(renderIcon(Codicon.sparkle));
++		const promptText = append(promptBox, $('p.onboarding-a-finale-prompt-text'));
++		promptText.textContent = prompt;
++
++		const actions = append(wrapper, $('.onboarding-a-finale-actions'));
++		const copyBtn = this._registerStepFocusable(append(actions, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.onboarding-a-finale-copy')));
++		copyBtn.type = 'button';
++		copyBtn.textContent = localize('onboarding.finale.copy', "Copy prompt");
++
++		// The "open chat" follow-up appears only after the prompt is copied — it's the next move.
++		const openRow = append(wrapper, $('.onboarding-a-finale-openrow'));
++		openRow.style.display = 'none';
++		const openHint = append(openRow, $('span.onboarding-a-finale-openhint'));
++		openHint.textContent = localize('onboarding.finale.openHint', "Paste it into chat and press send. ");
++		const openChatBtn = this._registerStepFocusable(append(openRow, $<HTMLButtonElement>('button.onboarding-a-finale-openchat')));
++		openChatBtn.type = 'button';
++		openChatBtn.textContent = localize('onboarding.finale.openChat', "Open chat");
++
++		this.stepDisposables.add(addDisposableListener(copyBtn, EventType.CLICK, () => {
++			void this._handleCopyPrompt(prompt, copyBtn, openRow);
++		}));
++		this.stepDisposables.add(addDisposableListener(openChatBtn, EventType.CLICK, () => this._handleOpenChat()));
++
++		// Cancel a pending "Copied" revert if the step is torn down mid-confirmation.
++		this.stepDisposables.add({ dispose: () => this._clearFinaleCopyReset() });
++	}
++
++	/** Copy the prompt to the clipboard and briefly confirm; then surface the "open chat" follow-up. */
++	private async _handleCopyPrompt(prompt: string, copyBtn: HTMLButtonElement, openRow: HTMLElement): Promise<void> {
++		try {
++			await this.clipboardService.writeText(prompt);
++		} catch {
++			// Clipboard unavailable — leave the button as-is; the prompt is still readable above.
++			return;
++		}
++		// Keep the funnel event name for continuity even though the user runs it themselves.
++		this._logAction('first_run_started', OnboardingStepId.Finale, this.selectedRole);
++		this.accessibilityService.alert(localize('onboarding.finale.copied.alert', "Prompt copied to clipboard."));
++
++		copyBtn.textContent = localize('onboarding.finale.copied', "Copied to clipboard");
++		copyBtn.classList.add('copied');
++		openRow.style.display = '';
++
++		this._clearFinaleCopyReset();
++		this._finaleCopyResetHandle = getActiveWindow().setTimeout(() => {
++			this._finaleCopyResetHandle = undefined;
++			if (copyBtn.isConnected) {
++				copyBtn.textContent = localize('onboarding.finale.copy', "Copy prompt");
++				copyBtn.classList.remove('copied');
++			}
++		}, 2000);
++	}
++
++	/** Complete the wizard and reveal chat (no query injected) so the user can paste and send. */
++	private _handleOpenChat(): void {
++		this._clearFinaleCopyReset();
++		Event.once(this.onDidComplete)(() => {
++			void this.commandService.executeCommand('workbench.action.chat.open');
++		});
++		this._dismiss('complete');
++	}
++
++	private _clearFinaleCopyReset(): void {
++		if (this._finaleCopyResetHandle !== undefined) {
++			getActiveWindow().clearTimeout(this._finaleCopyResetHandle);
++			this._finaleCopyResetHandle = undefined;
++		}
+ 	}
+ 
+ 	// =====================================================================
+@@ -1247,6 +1748,19 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 	// =====================================================================
+ 
+ 	private _removeFromDOM(): void {
++		this._stopTrialPoll();
++		this._clearFinaleCopyReset();
++		// Tear down any minimize state (listeners, poll, resume button) — covers a dismiss while minimized.
++		this._teardownMinimize();
++		// Invalidate any in-flight subscription check so a late result can't act on a torn-down modal.
++		this._accessCheckToken++;
++
++		if (this._signInInFlight) {
++			// Don't leave the provider's deep-link wait dangling when the modal is torn down mid-attempt.
++			this.commandService.executeCommand('patent-ai.cancelSignIn').then(undefined, () => { });
++			this._signInInFlight = false;
++		}
++
+ 		if (this.overlay) {
+ 			this.overlay.remove();
+ 			this.overlay = undefined;
+@@ -1266,9 +1780,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		this._footerSignInBtn = undefined;
+ 		this.footerFocusableElements.length = 0;
+ 		this.stepFocusableElements.length = 0;
+-		this.enterpriseSignInUiState = 'options';
+-		this.enterpriseInstanceValue = '';
+-		this.enterpriseSignInWatch = undefined;
++		this._signInError = undefined;
+ 		this._isShowing = false;
+ 		this.disposables.clear();
+ 		this.stepDisposables.clear();
+diff --git a/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts b/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts
+index abb4923ce64..c9f8ee07eeb 100644
+--- a/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts
++++ b/src/vs/workbench/contrib/welcomeOnboarding/common/onboardingTypes.ts
+@@ -4,15 +4,21 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import { localize } from '../../../../nls.js';
++import { isMacintosh } from '../../../../base/common/platform.js';
+ import { IProductOnboardingTheme } from '../../../../base/common/product.js';
+ 
+ /**
+  * Step identifiers for the onboarding walkthrough.
+  */
+ export const enum OnboardingStepId {
++	Role = 'onboarding.role',
+ 	SignIn = 'onboarding.signIn',
+ 	Personalize = 'onboarding.personalize',
+ 	AiPreference = 'onboarding.aiPreference',
++	AgentSessions = 'onboarding.agentSessions',
++	Trial = 'onboarding.trial',
++	Model = 'onboarding.model',
++	Finale = 'onboarding.finale',
+ }
+ 
+ /**
+@@ -20,12 +26,22 @@ export const enum OnboardingStepId {
+  */
+ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
+ 	switch (stepId) {
++		case OnboardingStepId.Role:
++			return localize('onboarding.step.role', "What brings you to FlowLeap?");
+ 		case OnboardingStepId.SignIn:
+ 			return localize('onboarding.step.signIn', "Sign In");
+ 		case OnboardingStepId.Personalize:
+ 			return localize('onboarding.step.personalize', "Make It Yours");
+ 		case OnboardingStepId.AiPreference:
+ 			return localize('onboarding.step.aiPreference', "Your AI Style");
++		case OnboardingStepId.AgentSessions:
++			return localize('onboarding.step.agentSessions', "Build with AI Agents");
++		case OnboardingStepId.Trial:
++			return localize('onboarding.step.trial', "Subscribe to Continue");
++		case OnboardingStepId.Model:
++			return localize('onboarding.step.model', "Connect Your AI Model");
++		case OnboardingStepId.Finale:
++			return localize('onboarding.step.finale', "Run Your First Investigation");
+ 	}
+ }
+ 
+@@ -34,23 +50,165 @@ export function getOnboardingStepTitle(stepId: OnboardingStepId): string {
+  */
+ export function getOnboardingStepSubtitle(stepId: OnboardingStepId): string {
+ 	switch (stepId) {
++		case OnboardingStepId.Role:
++			return localize('onboarding.step.role.subtitle', "This tailors your first investigation and the examples we show you.");
+ 		case OnboardingStepId.SignIn:
+ 			return localize('onboarding.step.signIn.subtitle', "Sync settings, unlock AI features, and connect to GitHub");
+ 		case OnboardingStepId.Personalize:
+ 			return localize('onboarding.step.personalize.subtitle', "Choose your theme and keyboard mapping");
+ 		case OnboardingStepId.AiPreference:
+ 			return localize('onboarding.step.aiPreference.subtitle', "Choose how much AI collaboration fits your workflow");
++		case OnboardingStepId.AgentSessions:
++			return localize('onboarding.step.agentSessions.subtitle', "Open Chat anytime with {0}", isMacintosh ? '\u2318\u2303I' : 'Ctrl+Alt+I');
++		case OnboardingStepId.Trial:
++			return localize('onboarding.step.trial.subtitle', "Your free 7-day trial ran at sign-up. One flat plan keeps the patent data and analytics.");
++		case OnboardingStepId.Model:
++			return localize('onboarding.step.model.subtitle', "FlowLeap runs on your own AI model. One key connects it.");
++		case OnboardingStepId.Finale:
++			return localize('onboarding.step.finale.subtitle', "Copy the prompt, paste it into chat, and press send — you'll see FlowLeap work with real sources.");
+ 	}
+ }
+ 
+ /**
+- * Ordered step IDs for the onboarding flow.
++ * Ordered step IDs for the onboarding flow (patent-persona funnel, issue #79).
++ *
++ * Role \u2192 See it work \u2192 Sign in \u2192 Trial \u2192 Connect a model. The {@link OnboardingStepId.Trial}
++ * step is only reachable when signed in; {@link computeVisibleSteps} filters it out otherwise.
++ * The legacy {@link OnboardingStepId.Personalize} / {@link OnboardingStepId.AiPreference} steps
++ * are intentionally absent \u2014 the theme default is applied silently (issue #79 principle 4).
+  */
+ export const ONBOARDING_STEPS: readonly OnboardingStepId[] = [
++	OnboardingStepId.Role,
++	OnboardingStepId.AgentSessions,
+ 	OnboardingStepId.SignIn,
+-	OnboardingStepId.Personalize,
++	OnboardingStepId.Trial,
++	OnboardingStepId.Model,
++	OnboardingStepId.Finale,
+ ];
+ 
++/**
++ * Runtime facts that decide which steps are shown.
++ */
++export interface OnboardingStepContext {
++	/** Whether a FlowLeap session currently exists. */
++	readonly signedIn: boolean;
++	/** Whether the user already has access-granting subscription (active or trialing). */
++	readonly hasAccess: boolean;
++}
++
++/**
++ * The steps visible for a given runtime {@link OnboardingStepContext}, in {@link ONBOARDING_STEPS}
++ * order. The Trial step only makes sense once signed in AND without access: the trial itself starts
++ * at account creation (backend ADR 0018), so a fresh signed-in user has access and skips it — the
++ * step reaches only expired or never-subscribed users, and its offer is Subscribe.
++ */
++export function computeVisibleSteps(context: OnboardingStepContext): OnboardingStepId[] {
++	return ONBOARDING_STEPS.filter(stepId => stepId !== OnboardingStepId.Trial || (context.signedIn && !context.hasAccess));
++}
++
++/**
++ * Persona the user selects on the first (Role) step. Captured and stored in P1; it tailors later
++ * copy and the finale investigation in a later phase (issue #79 P2/P3).
++ */
++export const enum OnboardingRole {
++	PatentAttorney = 'patent-attorney',
++	IpAnalyst = 'ip-analyst',
++	Researcher = 'researcher',
++	Founder = 'founder',
++}
++
++/**
++ * A selectable role card on the Role step.
++ */
++export interface IOnboardingRoleOption {
++	readonly id: OnboardingRole;
++	readonly label: string;
++	readonly description: string;
++	readonly icon: string;
++}
++
++/**
++ * Role cards shown on the first onboarding step, in display order.
++ */
++export const ONBOARDING_ROLE_OPTIONS: readonly IOnboardingRoleOption[] = [
++	{
++		id: OnboardingRole.PatentAttorney,
++		label: localize('onboarding.role.attorney', "Patent attorney"),
++		description: localize('onboarding.role.attorney.desc', "Draft and prosecute applications, analyze claims, and assess freedom to operate."),
++		icon: 'law',
++	},
++	{
++		id: OnboardingRole.IpAnalyst,
++		label: localize('onboarding.role.analyst', "IP analyst"),
++		description: localize('onboarding.role.analyst.desc', "Map patent landscapes, track competitors, and build portfolio intelligence."),
++		icon: 'graph',
++	},
++	{
++		id: OnboardingRole.Researcher,
++		label: localize('onboarding.role.researcher', "Researcher"),
++		description: localize('onboarding.role.researcher.desc', "Explore prior art across patents and academic literature for your field."),
++		icon: 'beaker',
++	},
++	{
++		id: OnboardingRole.Founder,
++		label: localize('onboarding.role.founder', "Founder"),
++		description: localize('onboarding.role.founder.desc', "Validate an idea, sketch freedom to operate, and shape a patent strategy."),
++		icon: 'rocket',
++	},
++];
++
++/**
++ * Map the stored persona to a role-tailored first-investigation prompt shown on the finale step.
++ * The user copies it into chat themselves (issue #79 finale — no auto-run). Copy is patent-domain
++ * and readable; an unknown/absent role falls back to a generic prior-art search. Pure so the mapping
++ * is unit-tested directly.
++ */
++export function roleToFirstInvestigation(role: OnboardingRole | undefined): string {
++	switch (role) {
++		case OnboardingRole.PatentAttorney:
++			return localize('onboarding.finale.prompt.attorney', "Analyze the claims of US 7,479,949 (Apple's multitouch patent): list the independent claims, break claim 1 into its limitations, and find the closest prior art — flag any X-category references that could challenge novelty.");
++		case OnboardingRole.IpAnalyst:
++			return localize('onboarding.finale.prompt.analyst', "Sketch the patent landscape for solid-state battery electrolytes: surface the leading assignees, how filings have trended over the last five years, and where the whitespace is.");
++		case OnboardingRole.Researcher:
++			return localize('onboarding.finale.prompt.researcher', "Run a prior-art sweep on CRISPR base editing across both patents and academic literature, and summarize the most relevant disclosures with citations.");
++		case OnboardingRole.Founder:
++			return localize('onboarding.finale.prompt.founder', "Run a quick freedom-to-operate sketch for a smart-ring sleep tracker: find the patents most likely to read on it and flag the biggest infringement risks.");
++		default:
++			return localize('onboarding.finale.prompt.generic', "Search for prior art on an invention you care about — describe it in a sentence or two and I'll find the closest patents and publications, with citations.");
++	}
++}
++
++/**
++ * Tri-state FlowLeap subscription access, mirroring the extension's `getSubscriptionAccess()`
++ * bridge: `active` (active or trialing), a confirmed `inactive`, or an `unknown` inconclusive check.
++ */
++export type SubscriptionAccess = 'active' | 'inactive' | 'unknown';
++
++/** How often the Trial step re-checks the subscription while the user is in the browser checkout. */
++export const TRIAL_POLL_INTERVAL_MS = 5_000;
++
++/** How long the Trial step keeps polling before giving up and letting the user advance manually. */
++export const TRIAL_POLL_TIMEOUT_MS = 5 * 60 * 1000;
++
++/** The decision the Trial poll loop makes after each subscription check. */
++export type TrialPollDecision = 'advance' | 'continue' | 'timeout';
++
++/**
++ * Pure decision for one tick of the Trial subscription poll. Advances the wizard the moment access
++ * is confirmed (`active`), stops once the {@link TRIAL_POLL_TIMEOUT_MS} budget is spent, and keeps
++ * polling otherwise. An `unknown` result (e.g. the check couldn't reach the backend) is treated as
++ * "keep waiting" \u2014 the checkout may simply not have completed yet.
++ */
++export function decideTrialPoll(access: SubscriptionAccess, elapsedMs: number): TrialPollDecision {
++	if (access === 'active') {
++		return 'advance';
++	}
++	if (elapsedMs >= TRIAL_POLL_TIMEOUT_MS) {
++		return 'timeout';
++	}
++	return 'continue';
++}
++
+ /**
+  * Theme option for the onboarding personalization step.
+  * Sourced from product.json via `onboardingThemes`.
+@@ -105,6 +263,12 @@ export const ONBOARDING_AI_PREFERENCE_OPTIONS: readonly IAiPreferenceOption[] =
+  */
+ export const ONBOARDING_STORAGE_KEY = 'welcomeOnboarding.state';
+ 
++/**
++ * Storage key for the persisted role selection ({@link OnboardingRole}). APPLICATION scope, so the
++ * choice survives across windows and a wizard re-trigger pre-selects it.
++ */
++export const ONBOARDING_ROLE_STORAGE_KEY = 'welcomeOnboarding.role';
++
+ /**
+  * Regex matching a single-word GHE instance slug (e.g. "octocat").
+  * Only allows characters valid in DNS hostnames (letters, digits, hyphens).
+diff --git a/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts b/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts
+index 69cf08548e2..71a65daf331 100644
+--- a/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts
++++ b/src/vs/workbench/contrib/welcomeOnboarding/test/browser/onboardingVariationA.test.ts
+@@ -8,44 +8,35 @@ import { $ } from '../../../../../base/browser/dom.js';
+ import { mainWindow } from '../../../../../base/browser/window.js';
+ import { toDisposable } from '../../../../../base/common/lifecycle.js';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+-import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
+ import { IExtensionGalleryService, IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagement.js';
+ import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+ import { ColorThemeData } from '../../../../services/themes/common/colorThemeData.js';
+ import { IWorkbenchThemeService } from '../../../../services/themes/common/workbenchThemeService.js';
+ import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+ import { OnboardingVariationA } from '../../browser/onboardingVariationA.js';
++import { ONBOARDING_ROLE_OPTIONS } from '../../common/onboardingTypes.js';
+ 
+ suite('OnboardingVariationA', () => {
+ 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+ 
+-	for (const settingsUrl of [undefined, 'https://tenant.ghe.com/settings/copilot/features']) {
+-		test(`settings disclaimer ${settingsUrl ? 'links to the selected server' : 'has no link or focus stop when the URL is unavailable'}`, () => {
+-			const container = mainWindow.document.body.appendChild($('div'));
+-			store.add(toDisposable(() => container.remove()));
+-			const instantiationService = workbenchInstantiationService(undefined, store);
+-			instantiationService.stub(ILayoutService, { activeContainer: container });
+-			instantiationService.stub(IWorkbenchThemeService, { getColorTheme: () => ColorThemeData.createLoadedEmptyTheme('test', '') });
+-			instantiationService.stub(IExtensionGalleryService, {});
+-			instantiationService.stub(IExtensionManagementService, {});
+-			instantiationService.stub(IDefaultAccountService, { resolveGitHubUrl: () => settingsUrl });
+-			const onboarding = store.add(instantiationService.createInstance(OnboardingVariationA));
+-			onboarding.show();
++	test('opens on the FlowLeap Role step with no GitHub sign-in disclaimer', () => {
++		const container = mainWindow.document.body.appendChild($('div'));
++		store.add(toDisposable(() => container.remove()));
++		const instantiationService = workbenchInstantiationService(undefined, store);
++		instantiationService.stub(ILayoutService, { activeContainer: container });
++		instantiationService.stub(IWorkbenchThemeService, { getColorTheme: () => ColorThemeData.createLoadedEmptyTheme('test', '') });
++		instantiationService.stub(IExtensionGalleryService, {});
++		instantiationService.stub(IExtensionManagementService, {});
++		const onboarding = store.add(instantiationService.createInstance(OnboardingVariationA));
++		onboarding.show();
+ 
+-			const disclaimer = container.querySelector('.onboarding-a-signin-disclaimer');
+-			assert.ok(disclaimer);
+-			const settingsLinks = Array.from(disclaimer.querySelectorAll('a, [tabindex]'))
+-				.filter(element => element.textContent === 'settings');
+-			assert.deepStrictEqual({
+-				coherentText: disclaimer.textContent?.endsWith('You can change these settings anytime.'),
+-				settingsLinks: settingsLinks.map(link => ({
+-					tag: link.tagName,
+-					href: link.getAttribute('href'),
+-				})),
+-			}, {
+-				coherentText: true,
+-				settingsLinks: settingsUrl ? [{ tag: 'A', href: settingsUrl }] : [],
+-			});
++		const roleCards = Array.from(container.querySelectorAll<HTMLElement>('.onboarding-a-role-card'));
++		assert.deepStrictEqual({
++			roleCards: roleCards.map(card => card.dataset.id),
++			githubDisclaimer: container.querySelector('.onboarding-a-signin-disclaimer') !== null,
++		}, {
++			roleCards: ONBOARDING_ROLE_OPTIONS.map(option => option.id),
++			githubDisclaimer: false,
+ 		});
+-	}
++	});
+ });
+diff --git a/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts b/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts
+index 94a8fdfa800..28a196474d3 100644
+--- a/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts
++++ b/src/vs/workbench/contrib/welcomeOnboarding/test/common/onboardingTypes.test.ts
+@@ -5,7 +5,142 @@
+ 
+ import assert from 'assert';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+-import { GheParseResultKind, parseGheInstanceInput } from '../../common/onboardingTypes.js';
++import {
++	GheParseResultKind,
++	parseGheInstanceInput,
++	computeVisibleSteps,
++	decideTrialPoll,
++	roleToFirstInvestigation,
++	ONBOARDING_STEPS,
++	OnboardingStepId,
++	OnboardingRole,
++	TRIAL_POLL_TIMEOUT_MS,
++} from '../../common/onboardingTypes.js';
++
++suite('onboarding step ordering + visibility', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('canonical order is Role → See it work → Sign in → Trial → Model → Finale', () => {
++		assert.deepStrictEqual([...ONBOARDING_STEPS], [
++			OnboardingStepId.Role,
++			OnboardingStepId.AgentSessions,
++			OnboardingStepId.SignIn,
++			OnboardingStepId.Trial,
++			OnboardingStepId.Model,
++			OnboardingStepId.Finale,
++		]);
++	});
++
++	test('the deleted Personalize step is not in the flow', () => {
++		assert.ok(!ONBOARDING_STEPS.includes(OnboardingStepId.Personalize));
++	});
++
++	test('the Finale step is the last step and always visible', () => {
++		assert.strictEqual(ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1], OnboardingStepId.Finale);
++		for (const signedIn of [true, false]) {
++			for (const hasAccess of [true, false]) {
++				const visible = computeVisibleSteps({ signedIn, hasAccess });
++				assert.strictEqual(visible[visible.length - 1], OnboardingStepId.Finale, `signedIn=${signedIn} hasAccess=${hasAccess}`);
++			}
++		}
++	});
++
++	test('signed-in users without access see the Trial step', () => {
++		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true, hasAccess: false }), [
++			OnboardingStepId.Role,
++			OnboardingStepId.AgentSessions,
++			OnboardingStepId.SignIn,
++			OnboardingStepId.Trial,
++			OnboardingStepId.Model,
++			OnboardingStepId.Finale,
++		]);
++	});
++
++	test('signed-out users skip the Trial step regardless of access', () => {
++		const withoutTrial = [
++			OnboardingStepId.Role,
++			OnboardingStepId.AgentSessions,
++			OnboardingStepId.SignIn,
++			OnboardingStepId.Model,
++			OnboardingStepId.Finale,
++		];
++		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: false }), withoutTrial);
++		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: true }), withoutTrial);
++	});
++
++	test('signed-in users who already have access skip the Trial step', () => {
++		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true, hasAccess: true }), [
++			OnboardingStepId.Role,
++			OnboardingStepId.AgentSessions,
++			OnboardingStepId.SignIn,
++			OnboardingStepId.Model,
++			OnboardingStepId.Finale,
++		]);
++	});
++
++	test('the Trial step appears only for the signed-in-without-access quadrant', () => {
++		for (const signedIn of [true, false]) {
++			for (const hasAccess of [true, false]) {
++				const includesTrial = computeVisibleSteps({ signedIn, hasAccess }).includes(OnboardingStepId.Trial);
++				assert.strictEqual(includesTrial, signedIn && !hasAccess, `signedIn=${signedIn} hasAccess=${hasAccess}`);
++			}
++		}
++	});
++
++	test('visible steps preserve canonical relative order', () => {
++		for (const signedIn of [true, false]) {
++			for (const hasAccess of [true, false]) {
++				const visible = computeVisibleSteps({ signedIn, hasAccess });
++				const canonicalIndices = visible.map(s => ONBOARDING_STEPS.indexOf(s));
++				const sorted = [...canonicalIndices].sort((a, b) => a - b);
++				assert.deepStrictEqual(canonicalIndices, sorted);
++			}
++		}
++	});
++});
++
++suite('roleToFirstInvestigation', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('every role (and no role) maps to a non-empty prompt', () => {
++		for (const role of [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder, undefined]) {
++			assert.ok(roleToFirstInvestigation(role).trim().length > 0, `role=${role}`);
++		}
++	});
++
++	test('distinct roles get distinct prompts', () => {
++		const prompts = [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder]
++			.map(r => roleToFirstInvestigation(r));
++		assert.strictEqual(new Set(prompts).size, prompts.length);
++	});
++
++	test('an unknown role falls back to the generic prompt', () => {
++		assert.strictEqual(roleToFirstInvestigation(undefined), roleToFirstInvestigation('nonsense' as unknown as OnboardingRole));
++	});
++});
++
++suite('decideTrialPoll', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('advances the instant access is active', () => {
++		assert.strictEqual(decideTrialPoll('active', 0), 'advance');
++		assert.strictEqual(decideTrialPoll('active', TRIAL_POLL_TIMEOUT_MS + 1), 'advance');
++	});
++
++	test('keeps polling while inactive and within the time budget', () => {
++		assert.strictEqual(decideTrialPoll('inactive', 0), 'continue');
++		assert.strictEqual(decideTrialPoll('inactive', TRIAL_POLL_TIMEOUT_MS - 1), 'continue');
++	});
++
++	test('treats an inconclusive check as keep-waiting', () => {
++		assert.strictEqual(decideTrialPoll('unknown', 1_000), 'continue');
++	});
++
++	test('times out once the budget is spent without access', () => {
++		assert.strictEqual(decideTrialPoll('inactive', TRIAL_POLL_TIMEOUT_MS), 'timeout');
++		assert.strictEqual(decideTrialPoll('unknown', TRIAL_POLL_TIMEOUT_MS), 'timeout');
++	});
++});
+ 
+ suite('parseGheInstanceInput', () => {
+ 	ensureNoDisposablesAreLeakedInTestSuite();
+diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
+index c7f182b41f6..dbcb15ce299 100644
+--- a/src/vs/workbench/workbench.common.main.ts
++++ b/src/vs/workbench/workbench.common.main.ts
+@@ -243,6 +243,7 @@ import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
+ 
+ // FlowLeap (Patent)
+ import './contrib/patent/browser/patentAuth.contribution.js';
++import './contrib/patent/browser/patentWalkthrough.contribution.js';
+ 
+ // Interactive
+ import './contrib/interactive/browser/interactive.contribution.js';
+@@ -403,7 +404,8 @@ import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
+ 
+ // Onboarding (scenario engine)
+ import './contrib/onboarding/browser/onboarding.contribution.js';
+-import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
++// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
++// import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+ import './contrib/codeEditor/browser/diffEditorTryout.contribution.js';
+ 
+ // Call Hierarchy

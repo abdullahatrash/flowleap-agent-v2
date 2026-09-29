@@ -7,10 +7,11 @@ import * as DOM from '../../base/browser/dom.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, IDisposable } from '../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../base/common/themables.js';
+import { URI } from '../../base/common/uri.js';
 import { createPixelSpinner } from '../../base/browser/ui/pixelSpinner/pixelSpinner.js';
 import { asCssVariable } from '../../platform/theme/common/colorUtils.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
-import { SessionStatus } from '../services/sessions/common/session.js';
+import { isActiveSessionStatus, SessionStatus } from '../services/sessions/common/session.js';
 import { ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 
 const $ = DOM.$;
@@ -33,6 +34,7 @@ interface ISessionStatusInputs {
 	readonly status: SessionStatus;
 	readonly isRead: boolean;
 	readonly isArchived: boolean;
+	readonly completedStateIcon: ThemeIcon | undefined;
 }
 
 /**
@@ -48,13 +50,13 @@ interface ISessionStatusInputs {
  * - cross-fades between glyphs/variants,
  * - re-renders automatically when the reduced-motion preference changes.
  *
- * Call {@link setStatus} on every status/read/archive change, and {@link reset}
- * to snap (no cross-fade) the next render — e.g. when the host is rebound to a
- * different session.
+ * Call {@link setStatus} on every status/read/archive change. Reusable hosts pass
+ * the session resource so rebinding snaps instead of cross-fading stale content.
  */
 export class SessionStatusIcon extends Disposable {
 
 	private _currentCacheKey: string | undefined;
+	private _currentSessionResource: string | undefined;
 	private _lastInputs: ISessionStatusInputs | undefined;
 
 	/** Owns the removal timers for outgoing icons mid cross-fade. */
@@ -82,10 +84,16 @@ export class SessionStatusIcon extends Disposable {
 
 	/**
 	 * Updates the rendered status. Cross-fades when the glyph/variant changes
-	 * (after the first render); identical re-renders only refresh the color.
+	 * within one session; a different session resource snaps to the new icon.
 	 */
-	setStatus(status: SessionStatus, isRead: boolean, isArchived: boolean): void {
-		const inputs: ISessionStatusInputs = { status, isRead, isArchived };
+	setStatus(status: SessionStatus, isRead: boolean, isArchived: boolean, completedStateIcon?: ThemeIcon, sessionResource?: URI): void {
+		const sessionResourceKey = sessionResource?.toString();
+		if (sessionResourceKey !== undefined && sessionResourceKey !== this._currentSessionResource) {
+			this.reset();
+			this._currentSessionResource = sessionResourceKey;
+		}
+
+		const inputs: ISessionStatusInputs = { status, isRead, isArchived, completedStateIcon };
 		this._lastInputs = inputs;
 		this._render(inputs);
 	}
@@ -96,6 +104,7 @@ export class SessionStatusIcon extends Disposable {
 	 */
 	reset(): void {
 		this._currentCacheKey = undefined;
+		this._currentSessionResource = undefined;
 		this._lastInputs = undefined;
 		this._swapStore.clear();
 		this._iconDisposables.clearAndDisposeAll();
@@ -103,8 +112,8 @@ export class SessionStatusIcon extends Disposable {
 	}
 
 	private _render(inputs: ISessionStatusInputs): void {
-		const { status, isRead, isArchived } = inputs;
-		const isSpinner = (status === SessionStatus.InProgress || status === SessionStatus.NeedsInput) && !this._accessibilityService.isMotionReduced();
+		const { status, isRead, isArchived, completedStateIcon } = inputs;
+		const isSpinner = isActiveSessionStatus(status) && !this._accessibilityService.isMotionReduced();
 
 		let cacheKey: string;
 		let color: string;
@@ -119,7 +128,7 @@ export class SessionStatusIcon extends Disposable {
 				return { element: spinner.element, disposable: spinner };
 			};
 		} else {
-			const icon = this._sessionsListModelService.getStatusIcon(status, isRead, isArchived);
+			const icon = this._sessionsListModelService.getStatusIcon(status, isRead, isArchived, completedStateIcon);
 			cacheKey = ThemeIcon.asCSSSelector(icon);
 			color = icon.color ? asCssVariable(icon.color.id) : '';
 			createIcon = () => ({ element: $(`span${cacheKey}`) });

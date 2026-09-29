@@ -4,281 +4,582 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { bufferToStream, VSBuffer } from '../../../../base/common/buffer.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
-import { Schemas } from '../../../../base/common/network.js';
-import { URI } from '../../../../base/common/uri.js';
+import { VSBuffer, bufferToStream } from '../../../../base/common/buffer.js';
+import { Event } from '../../../../base/common/event.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { IRequestContext, IRequestOptions } from '../../../../base/parts/request/common/request.js';
-import { FileService } from '../../../files/common/fileService.js';
-import { InMemoryFileSystemProvider } from '../../../files/common/inMemoryFilesystemProvider.js';
+import { agentFinderMcpRegistryManifest, getAgentFinderMcpServerUrl } from '../../../agentFinder/common/agentFinderMcpRegistry.js';
+import { IFileService } from '../../../files/common/files.js';
 import { NullLogService } from '../../../log/common/log.js';
+import { IRequestContext, IRequestOptions } from '../../../../base/parts/request/common/request.js';
+import { IRequestService } from '../../../request/common/request.js';
+import { IGalleryMcpServer, IMcpServerInput, McpGalleryResolveStatus } from '../../common/mcpManagement.js';
+import { getMcpGalleryManifestResourceUri, IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
+import { McpGalleryService, UnsupportedMcpGalleryPackageError } from '../../common/mcpGalleryService.js';
+import { McpGalleryManifestService } from '../../common/mcpGalleryManifestService.js';
 import product from '../../../product/common/product.js';
 import { IProductService } from '../../../product/common/productService.js';
-import { AbstractRequestService, AuthInfo, Credentials } from '../../../request/common/request.js';
-import { getMcpGalleryManifestResourceUri, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
-import { McpGalleryManifestService } from '../../common/mcpGalleryManifestService.js';
-import { McpGalleryService } from '../../common/mcpGalleryService.js';
 
-class TestRequestService extends AbstractRequestService {
+const SERVERS_URL = 'https://registry.test/servers';
+const NAMED_TEMPLATE = 'https://registry.test/servers/{name}';
 
-	readonly requests: IRequestOptions[] = [];
-
-	constructor(private readonly handler: (options: IRequestOptions) => IRequestContext) {
-		super(new NullLogService());
-	}
-
-	async request(options: IRequestOptions): Promise<IRequestContext> {
-		this.requests.push(options);
-		return this.handler(options);
-	}
-
-	async resolveProxy(): Promise<string | undefined> { return undefined; }
-	async lookupAuthorization(_authInfo: AuthInfo): Promise<Credentials | undefined> { return undefined; }
-	async lookupKerberosAuthorization(): Promise<string | undefined> { return undefined; }
-	async loadCertificates(): Promise<string[]> { return []; }
+function serverUrl(name: string): string {
+	return `https://registry.test/servers/${name}`;
 }
 
-function response(statusCode: number, body: string = ''): IRequestContext {
+function serverDocumentData(name: string, registryTypes: readonly string[], remotes?: readonly { type: string; url: string; variables?: Record<string, IMcpServerInput> }[]) {
 	return {
-		res: { headers: {}, statusCode },
-		stream: bufferToStream(VSBuffer.fromString(body))
-	};
-}
-
-function productWithMcpGallery(mcpGallery: IProductService['mcpGallery']): IProductService {
-	return { _serviceBrand: undefined, ...product, mcpGallery };
-}
-
-// The item web URL template is what product.json ships; the gallery substitutes the raw
-// server name (slashes preserved) into `{name}` to build each entry's marketplace link.
-const ITEM_WEB_URL = 'https://www.flowleap.co/en/marketplace/mcp/{name}';
-
-// A fixture in the gallery's internal result shape. The `file:` source path reads this
-// directly (it bypasses the HTTP serializer), mirroring the data our live v0 registry
-// returns for these servers so we assert against the shape the installer consumes.
-const FIXTURE_REGISTRY = JSON.stringify({
-	metadata: { count: 2 },
-	servers: [
-		{
-			name: 'co.flowleap/flowleap',
-			description: 'FlowLeap Patent AI over MCP.',
-			version: '0.3.0',
-			status: 'active',
-			packages: [{
-				registryType: 'npm',
-				identifier: 'flowleap',
-				version: '0.3.0',
-				runtimeHint: 'npx',
-				transport: { type: 'stdio' },
-				environmentVariables: [
-					{ name: 'FLOWLEAP_API_KEY', description: 'FlowLeap personal API token.', isRequired: false, isSecret: true },
-					{ name: 'FLOWLEAP_EPO_KEY', description: 'EPO OPS consumer key.', isRequired: false, isSecret: true },
-					{ name: 'FLOWLEAP_EPO_SECRET', description: 'EPO OPS consumer secret.', isRequired: false, isSecret: true },
-					{ name: 'FLOWLEAP_USPTO_KEY', description: 'USPTO ODP API key.', isRequired: false, isSecret: true }
-				]
-			}]
-		},
-		{
-			name: 'io.modelcontextprotocol/filesystem',
-			description: 'Secure local file access.',
-			version: '1.0.0',
-			status: 'active',
-			packages: [{
-				registryType: 'npm',
-				identifier: '@modelcontextprotocol/server-filesystem',
-				version: '1.0.0',
-				runtimeHint: 'npx',
-				transport: { type: 'stdio' }
-			}]
-		}
-	]
-});
-
-suite('McpGalleryService', () => {
-
-	const store = ensureNoDisposablesAreLeakedInTestSuite();
-
-	test('enumerates entries and install metadata from a file: registry, linking each to its marketplace page', async () => {
-		const fileService = store.add(new FileService(new NullLogService()));
-		store.add(fileService.registerProvider(Schemas.file, store.add(new InMemoryFileSystemProvider())));
-
-		// The gallery appends `/{version}/servers` to the service URL. With no reachable
-		// version endpoint the manifest falls back to the newest supported version, so the
-		// fixture lives at that path under the configured base.
-		await fileService.createFolder(URI.parse('file:///registry/v0.1'));
-		await fileService.writeFile(URI.parse('file:///registry/v0.1/servers'), VSBuffer.fromString(FIXTURE_REGISTRY));
-
-		const productService = productWithMcpGallery({
-			serviceUrl: 'file:///registry',
-			itemWebUrl: ITEM_WEB_URL,
-			publisherUrl: 'https://www.flowleap.co/en/marketplace',
-			supportUrl: 'https://www.flowleap.co/en/contact',
-			privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
-			termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
-			reportUrl: 'https://www.flowleap.co/en/contact'
-		});
-		const requestService = store.add(new TestRequestService(() => response(404)));
-		const manifestService = store.add(new McpGalleryManifestService(productService, requestService, new NullLogService()));
-		const galleryService = store.add(new McpGalleryService(requestService, fileService, new NullLogService(), manifestService));
-
-		const { firstPage } = await galleryService.query(undefined, CancellationToken.None);
-
-		const actual = firstPage.items.map(server => ({
-			name: server.name,
-			displayName: server.displayName,
-			publisher: server.publisher,
-			version: server.version,
-			webUrl: server.webUrl,
-			packageId: server.configuration.packages?.[0].identifier,
-			registryType: server.configuration.packages?.[0].registryType,
-			environmentVariables: (server.configuration.packages?.[0].environmentVariables ?? []).map(v => v.name)
-		}));
-
-		assert.deepStrictEqual(actual, [
-			{
-				name: 'co.flowleap/flowleap',
-				displayName: 'Flowleap',
-				publisher: 'flowleap',
-				version: '0.3.0',
-				webUrl: 'https://www.flowleap.co/en/marketplace/mcp/co.flowleap/flowleap',
-				packageId: 'flowleap',
-				registryType: 'npm',
-				environmentVariables: ['FLOWLEAP_API_KEY', 'FLOWLEAP_EPO_KEY', 'FLOWLEAP_EPO_SECRET', 'FLOWLEAP_USPTO_KEY']
-			},
-			{
-				name: 'io.modelcontextprotocol/filesystem',
-				displayName: 'Filesystem',
-				publisher: 'modelcontextprotocol',
-				version: '1.0.0',
-				webUrl: 'https://www.flowleap.co/en/marketplace/mcp/io.modelcontextprotocol/filesystem',
-				packageId: '@modelcontextprotocol/server-filesystem',
-				registryType: 'npm',
-				environmentVariables: []
-			}
-		]);
-	});
-
-	// Our live marketplace answers `https://www.flowleap.co/api/mcp/v0.1/...`, so this is the
-	// exact document shape `getMcpServer` has to accept after the gallery source validation.
-	const FIXTURE_SERVER_DOCUMENT = JSON.stringify({
 		server: {
-			name: 'co.flowleap/flowleap',
-			description: 'FlowLeap Patent AI over MCP.',
-			version: '0.3.8',
-			websiteUrl: 'https://www.flowleap.co',
-			repository: { url: 'https://github.com/flowleap-ai/flowleap-cli', source: 'github' },
-			packages: [{
-				identifier: 'flowleap',
-				registryType: 'npm',
-				version: '0.3.8',
-				transport: { type: 'stdio' },
-				runtimeHint: 'npx',
-				packageArguments: [{ description: 'Runs the FlowLeap CLI as a stdio MCP server.', value: 'mcp', type: 'positional', valueHint: 'subcommand' }],
-				environmentVariables: [{ name: 'FLOWLEAP_API_KEY', description: 'FlowLeap personal API token.', isRequired: false, isSecret: true }]
-			}]
+			$schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
+			name,
+			description: 'Test server',
+			version: '1.0.0',
+			packages: registryTypes.map(registryType => ({
+				identifier: 'test-package',
+				registryType,
+				transport: { type: 'stdio' }
+			})),
+			remotes
 		},
 		_meta: {
 			'io.modelcontextprotocol.registry/official': {
 				status: 'active',
 				isLatest: true,
-				publishedAt: '2026-07-11T00:00:00.000Z',
-				updatedAt: '2026-07-23T16:06:48.000Z'
+				publishedAt: '2026-01-01T00:00:00.000Z'
 			}
 		}
-	});
+	};
+}
 
-	function galleryFixture(handler: (options: IRequestOptions) => IRequestContext) {
-		const fileService = store.add(new FileService(new NullLogService()));
-		store.add(fileService.registerProvider(Schemas.file, store.add(new InMemoryFileSystemProvider())));
-		const productService = productWithMcpGallery({
-			serviceUrl: 'https://registry.test/api/mcp',
-			itemWebUrl: ITEM_WEB_URL,
-			publisherUrl: 'https://www.flowleap.co/en/marketplace',
-			supportUrl: 'https://www.flowleap.co/en/contact',
-			privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
-			termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
-			reportUrl: 'https://www.flowleap.co/en/contact'
-		});
-		const requestService = store.add(new TestRequestService(handler));
-		const manifestService = store.add(new McpGalleryManifestService(productService, requestService, new NullLogService()));
-		const galleryService = store.add(new McpGalleryService(requestService, fileService, new NullLogService(), manifestService));
-		return { galleryService, manifestService, requestService };
+function serverDocument(registryType?: string): string {
+	return JSON.stringify(serverDocumentData('io.github.owner/server', registryType ? [registryType] : []));
+}
+
+function modernServerDocumentData(name: string, registryTypes: readonly string[]) {
+	return {
+		$schema: 'https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json',
+		name,
+		description: 'Test server',
+		version: '1.0.0',
+		created_at: '2026-01-01T00:00:00.000Z',
+		updated_at: '2026-01-01T00:00:00.000Z',
+		packages: registryTypes.map(registryType => ({
+			registry_name: registryType,
+			registry_type: registryType,
+			name: 'test-package',
+			identifier: 'test-package',
+			version: '1.0.0',
+			transport: { type: 'stdio' }
+		})),
+		_meta: {
+			'io.modelcontextprotocol.registry/official': {
+				id: name,
+				is_latest: true,
+				published_at: '2026-01-01T00:00:00.000Z',
+				updated_at: '2026-01-01T00:00:00.000Z'
+			}
+		}
+	};
+}
+
+class TestMcpGalleryService extends McpGalleryService {
+	readonly responses = new Map<string, IGalleryMcpServer | 'notfound' | 'error'>();
+
+	override async getMcpServer(url: string): Promise<IGalleryMcpServer | undefined> {
+		const response = this.responses.get(url);
+		if (response === 'error') {
+			throw new Error(`Request failed for ${url}`);
+		}
+		if (response === undefined || response === 'notfound') {
+			return undefined;
+		}
+		return response;
+	}
+}
+
+class StatusRequestService implements IRequestService {
+	readonly _serviceBrand: undefined;
+	readonly onDidCompleteRequest = Event.None;
+	readonly requests: IRequestOptions[] = [];
+
+	constructor(private readonly statusCode: number, private readonly body: string = '') { }
+
+	async request(options: IRequestOptions): Promise<IRequestContext> {
+		this.requests.push(options);
+		return {
+			res: { statusCode: this.statusCode, headers: {} },
+			stream: bufferToStream(VSBuffer.fromString(this.body)),
+		};
 	}
 
-	test('resolves an install from our marketplace shape through the validated gallery URL', async () => {
-		const { galleryService, requestService } = galleryFixture(options => {
-			if (options.url === 'https://registry.test/api/mcp/v0.1/servers?limit=1') {
-				return response(200, JSON.stringify({ metadata: { count: 0 }, servers: [] }));
-			}
-			if (options.url === 'https://registry.test/api/mcp/v0.1/servers/co.flowleap%2Fflowleap/versions/latest') {
-				return response(200, FIXTURE_SERVER_DOCUMENT);
-			}
-			return response(404);
+	async resolveProxy() { return undefined; }
+	async lookupAuthorization() { return undefined; }
+	async lookupKerberosAuthorization() { return undefined; }
+	async loadCertificates() { return []; }
+}
+
+function createManifestService(manifest: IMcpGalleryManifest | null): IMcpGalleryManifestService {
+	return {
+		_serviceBrand: undefined,
+		mcpGalleryManifestStatus: manifest ? McpGalleryManifestStatus.Available : McpGalleryManifestStatus.Unavailable,
+		onDidChangeMcpGalleryManifestStatus: Event.None,
+		onDidChangeMcpGalleryManifest: Event.None,
+		getMcpGalleryManifest: async () => manifest,
+		getDefaultMcpGalleryManifest: async () => manifest,
+	};
+}
+
+const manifest: IMcpGalleryManifest = {
+	version: 'v0',
+	url: 'https://registry.test',
+	resources: [
+		{ id: SERVERS_URL, type: McpGalleryResourceType.McpServersQueryService },
+		{ id: NAMED_TEMPLATE, type: McpGalleryResourceType.McpServerNamedResourceUri }
+	]
+};
+
+suite('McpGalleryService - marketplace pages', () => {
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('uses the gallery cursor and bounded page size without replaying the search text', async () => {
+		const requests = new StatusRequestService(200, JSON.stringify({
+			servers: [serverDocumentData('io.github.owner/server', ['npm'])],
+			metadata: { count: 2, nextCursor: 'opaque+/=' },
+		}));
+		const service = disposables.add(new McpGalleryService(requests, {} as IFileService, new NullLogService(), createManifestService(manifest)));
+		const first = await service.queryPage({ text: 'server', pageSize: 2 }, CancellationToken.None);
+		const next = await service.queryPage({ text: 'server', cursor: first.nextCursor, pageSize: 2 }, CancellationToken.None);
+		assert.deepStrictEqual({
+			urls: requests.requests.map(request => request.url),
+			first: { names: first.items.map(item => item.name), total: first.total, cursor: first.nextCursor },
+			next: { names: next.items.map(item => item.name), cursor: next.nextCursor },
+		}, {
+			urls: [`${SERVERS_URL}?limit=2&version=latest&search=server`, `${SERVERS_URL}?limit=2&version=latest&cursor=opaque%2B%2F%3D`],
+			first: { names: ['io.github.owner/server'], total: 2, cursor: 'opaque+/=' },
+			next: { names: ['io.github.owner/server'], cursor: 'opaque+/=' },
+		});
+	});
+
+	test('pins marketplace pages to the supplied custom registry while legacy queries use the active manifest', async () => {
+		const requests = new StatusRequestService(200, JSON.stringify({ servers: [], metadata: { count: 0 } }));
+		const productManifest = {
+			...manifest, url: 'https://api.mcp.github.com',
+			resources: [{ id: 'https://api.mcp.github.com/v0.1/servers', type: McpGalleryResourceType.McpServersQueryService }],
+		};
+		const service = disposables.add(new McpGalleryService(requests, {} as IFileService, new NullLogService(), createManifestService(productManifest)));
+		await service.queryPage({ pageSize: 2 }, CancellationToken.None, manifest);
+		await service.queryPage({ pageSize: 2 }, CancellationToken.None);
+		assert.deepStrictEqual(requests.requests.map(request => request.url), [
+			`${SERVERS_URL}?limit=2&version=latest`,
+			'https://api.mcp.github.com/v0.1/servers?limit=2&version=latest',
+		]);
+	});
+
+	test('reports registry failures to the marketplace without changing the legacy query fallback', async () => {
+		const requests = new StatusRequestService(503);
+		const service = disposables.add(new McpGalleryService(requests, {} as IFileService, new NullLogService(), createManifestService(manifest)));
+		await assert.rejects(service.queryPage({ pageSize: 30 }, CancellationToken.None), /HTTP 503/);
+		const legacy = await service.query(undefined, CancellationToken.None);
+		assert.deepStrictEqual(legacy.firstPage, { items: [], hasMore: false });
+	});
+
+	test('does not invent a zero total when older registry responses omit count', async () => {
+		const requests = new StatusRequestService(200, JSON.stringify({
+			servers: [serverDocumentData('io.github.owner/server', ['npm'])], metadata: {},
+		}));
+		const service = disposables.add(new McpGalleryService(requests, {} as IFileService, new NullLogService(), createManifestService(manifest)));
+		const page = await service.queryPage({ pageSize: 2 }, CancellationToken.None);
+		assert.deepStrictEqual({ names: page.items.map(item => item.name), total: page.total }, {
+			names: ['io.github.owner/server'], total: undefined,
+		});
+	});
+});
+
+suite('McpGalleryService - resolveMcpServersFromGallery', () => {
+
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+
+	function createService(manifest: IMcpGalleryManifest | null): TestMcpGalleryService {
+		const store = disposables.add(new DisposableStore());
+		return store.add(new TestMcpGalleryService(
+			{} as IRequestService,
+			{} as IFileService,
+			new NullLogService(),
+			createManifestService(manifest),
+		));
+	}
+
+	test('distinguishes found, not-found and transient failures', async () => {
+		const service = createService(manifest);
+		const found = { name: 'io.github.owner/found' } as IGalleryMcpServer;
+		service.responses.set(serverUrl('io.github.owner/found'), found);
+		service.responses.set(serverUrl('io.github.owner/missing'), 'notfound');
+		service.responses.set(serverUrl('io.github.owner/flaky'), 'error');
+
+		const resolved = await service.resolveMcpServersFromGallery([
+			{ name: 'io.github.owner/found' },
+			{ name: 'io.github.owner/missing' },
+			{ name: 'io.github.owner/flaky' },
+		]);
+
+		assert.deepStrictEqual([...resolved.entries()].map(([name, result]) => [name, result.status]), [
+			['io.github.owner/found', McpGalleryResolveStatus.Found],
+			['io.github.owner/missing', McpGalleryResolveStatus.NotFound],
+			['io.github.owner/flaky', McpGalleryResolveStatus.Failed],
+		]);
+	});
+
+	test('reports failure (undetermined) when the registry manifest is unavailable', async () => {
+		const service = createService(null);
+
+		const resolved = await service.resolveMcpServersFromGallery([{ name: 'io.github.owner/found' }]);
+
+		assert.deepStrictEqual([...resolved.entries()].map(([name, result]) => [name, result.status]), [
+			['io.github.owner/found', McpGalleryResolveStatus.Failed],
+		]);
+	});
+
+	test('reports failure (undetermined) when the manifest has no server lookup endpoint', async () => {
+		const service = createService({ version: 'v0', url: 'https://registry.test', resources: [] });
+
+		const resolved = await service.resolveMcpServersFromGallery([{ name: 'io.github.owner/found' }]);
+
+		assert.deepStrictEqual([...resolved.entries()].map(([name, result]) => [name, result.status]), [
+			['io.github.owner/found', McpGalleryResolveStatus.Failed],
+		]);
+	});
+
+	test('reports failure (undetermined) when a lookup returns a different server name', async () => {
+		const service = createService(manifest);
+		service.responses.set(serverUrl('io.github.owner/requested'), { name: 'io.github.owner/unrelated' } as IGalleryMcpServer);
+
+		const resolved = await service.resolveMcpServersFromGallery([{ name: 'io.github.owner/requested' }]);
+
+		assert.deepStrictEqual([...resolved.entries()].map(([name, result]) => [name, result.status]), [
+			['io.github.owner/requested', McpGalleryResolveStatus.Failed],
+		]);
+	});
+
+	test('getMcpServersFromGallery only returns matched servers', async () => {
+		const service = createService(manifest);
+		const found = { name: 'io.github.owner/found' } as IGalleryMcpServer;
+		service.responses.set(serverUrl('io.github.owner/found'), found);
+		service.responses.set(serverUrl('io.github.owner/missing'), 'notfound');
+		service.responses.set(serverUrl('io.github.owner/flaky'), 'error');
+
+		const servers = await service.getMcpServersFromGallery([
+			{ name: 'io.github.owner/found' },
+			{ name: 'io.github.owner/missing' },
+			{ name: 'io.github.owner/flaky' },
+		]);
+
+		assert.deepStrictEqual(servers, [found]);
+	});
+});
+
+suite('McpGalleryService - getMcpServer HTTP status classification', () => {
+
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+
+	function resolveStatusFor(statusCode: number, body: string = ''): Promise<McpGalleryResolveStatus> {
+		const store = disposables.add(new DisposableStore());
+		const service = store.add(new McpGalleryService(
+			new StatusRequestService(statusCode, body),
+			{} as IFileService,
+			new NullLogService(),
+			createManifestService(manifest),
+		));
+		return service.resolveMcpServersFromGallery([{ name: 'io.github.owner/server' }])
+			.then(resolved => resolved.get('io.github.owner/server')!.status);
+	}
+
+	test('only a definitive 404 is treated as not-found; every other status is undetermined', async () => {
+		const results = await Promise.all([
+			resolveStatusFor(404),
+			resolveStatusFor(401),
+			resolveStatusFor(403),
+			resolveStatusFor(429),
+			resolveStatusFor(500),
+			resolveStatusFor(503),
+			resolveStatusFor(204),
+			resolveStatusFor(200, 'null'),
+		]);
+
+		assert.deepStrictEqual(results, [
+			McpGalleryResolveStatus.NotFound,
+			McpGalleryResolveStatus.Failed,
+			McpGalleryResolveStatus.Failed,
+			McpGalleryResolveStatus.Failed,
+			McpGalleryResolveStatus.Failed,
+			McpGalleryResolveStatus.Failed,
+			McpGalleryResolveStatus.Failed,
+			McpGalleryResolveStatus.Failed,
+		]);
+	});
+});
+
+suite('McpGalleryService - getMcpServer validation', () => {
+
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+
+	function createService(requestService: IRequestService, galleryManifest: IMcpGalleryManifest = manifest): McpGalleryService {
+		const store = disposables.add(new DisposableStore());
+		return store.add(new McpGalleryService(
+			requestService,
+			{} as IFileService,
+			new NullLogService(),
+			createManifestService(galleryManifest),
+		));
+	}
+
+	test('rejects URLs outside the configured gallery before requesting them', async () => {
+		const requestService = new StatusRequestService(200, serverDocument());
+		const service = createService(requestService);
+
+		for (const url of [
+			'https://registry.test.example/servers/server',
+			'https://registry.test/servers-other/server',
+			'https://registry.test/servers%2Foutside/server',
+			'https://registry.test/servers/%2e%2e/outside/server',
+		]) {
+			await assert.rejects(() => service.getMcpServer(url), /outside the configured MCP gallery/);
+		}
+
+		assert.deepStrictEqual(requestService.requests, []);
+	});
+
+	test('rejects opaque-origin gallery URLs before requesting them', async () => {
+		const requestService = new StatusRequestService(200, serverDocument());
+		const service = createService(requestService, {
+			version: 'v0.1',
+			url: 'file:///registry',
+			resources: [{ id: 'file:///registry/servers', type: McpGalleryResourceType.McpServersQueryService }]
 		});
 
-		const servers = await galleryService.getMcpServersFromGallery([{ name: 'co.flowleap/flowleap' }]);
+		for (const url of [
+			'file:///registry/servers/server',
+			'data:/registry/servers/server',
+			'custom:/registry/servers/server',
+		]) {
+			await assert.rejects(() => service.getMcpServer(url), /outside the configured MCP gallery/);
+		}
 
-		assert.deepStrictEqual(servers.map(server => ({
-			name: server.name,
-			version: server.version,
-			registryType: server.configuration.packages?.[0].registryType,
-			packageId: server.configuration.packages?.[0].identifier,
-			environmentVariables: (server.configuration.packages?.[0].environmentVariables ?? []).map(v => v.name),
-			followedRedirects: requestService.requests.some(r => r.url?.includes('/versions/latest') && r.followRedirects !== 0)
+		assert.deepStrictEqual(requestService.requests, []);
+	});
+
+	test('does not follow redirects when requesting a gallery server', async () => {
+		const requestService = new StatusRequestService(302, serverDocument());
+		const service = createService(requestService);
+		const url = serverUrl('io.github.owner/server');
+
+		await assert.rejects(() => service.getMcpServer(url), /302/);
+
+		assert.deepStrictEqual(requestService.requests.map(request => ({
+			url: request.url,
+			followRedirects: request.followRedirects
 		})), [{
-			name: 'co.flowleap/flowleap',
-			version: '0.3.8',
-			registryType: 'npm',
-			packageId: 'flowleap',
-			environmentVariables: ['FLOWLEAP_API_KEY'],
-			followedRedirects: false
+			url,
+			followRedirects: 0
 		}]);
 	});
 
-	test('refuses a server document outside the configured gallery without issuing a request', async () => {
-		const { galleryService, manifestService, requestService } = galleryFixture(options =>
-			response(options.url === 'https://registry.test/api/mcp/v0.1/servers?limit=1' ? 200 : 404));
-		const manifest = await manifestService.getMcpGalleryManifest();
-		const requestsAfterManifest = requestService.requests.length;
+	test('rejects unsupported v0.1 package registry types', async () => {
+		const data = serverDocumentData('io.github.owner/server', ['other']);
+		const document = { ...data, server: { ...data.server, repository: { source: 'github', url: 'https://github.com/owner/server' } } };
+		const requestService = new StatusRequestService(200, JSON.stringify(document));
+		const service = createService(requestService, { ...manifest, version: 'v0.1' });
 
-		await assert.rejects(() => galleryService.getMcpServer('https://evil.test/api/mcp/v0.1/servers/co.flowleap%2Fflowleap', manifest));
-		assert.strictEqual(requestService.requests.length, requestsAfterManifest);
+		await assert.rejects(() => service.getMcpServer(serverUrl('io.github.owner/server')), error =>
+			error instanceof UnsupportedMcpGalleryPackageError && error.repositoryUrl?.toString() === 'https://github.com/owner/server');
 	});
 
-	test('treats a redirected server document as a failure, not a missing server', async () => {
-		const { galleryService, manifestService } = galleryFixture(options =>
-			response(options.url === 'https://registry.test/api/mcp/v0.1/servers?limit=1' ? 200 : 302));
-		const manifest = await manifestService.getMcpGalleryManifest();
+	test('filters unsupported packages while preserving supported launch options', async () => {
+		const data = serverDocumentData(
+			'io.github.owner/server',
+			['mcpb', 'npm'],
+			[{
+				type: 'streamable-http',
+				url: 'https://{environment_id}.{region}.example/{prefix}server',
+				variables: {
+					environment_id: {
+						description: 'Environment ID',
+						isRequired: true
+					},
+					region: { value: 'eu' },
+					prefix: { value: '' }
+				}
+			}]
+		);
+		const requestService = new StatusRequestService(200, JSON.stringify(data));
+		const service = createService(requestService, { ...manifest, version: 'v0.1' });
 
-		await assert.rejects(() => galleryService.getMcpServer('https://registry.test/api/mcp/v0.1/servers/co.flowleap%2Fflowleap/versions/latest', manifest));
-	});
+		const server = await service.getMcpServer(serverUrl('io.github.owner/server'));
 
-	test('negotiates the API version the endpoint serves (v0), not the newest one it does not', async () => {
-		// Guards the fix for the FlowLeap registry: it serves the standard v0 API and its
-		// v0.1 path is unavailable, so the product gallery must probe and settle on v0
-		// instead of pinning the newest supported version.
-		const fileService = store.add(new FileService(new NullLogService()));
-		store.add(fileService.registerProvider(Schemas.file, store.add(new InMemoryFileSystemProvider())));
-
-		const productService = productWithMcpGallery({
-			serviceUrl: 'https://registry.test/api/mcp',
-			itemWebUrl: ITEM_WEB_URL,
-			publisherUrl: 'https://www.flowleap.co/en/marketplace',
-			supportUrl: 'https://www.flowleap.co/en/contact',
-			privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
-			termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
-			reportUrl: 'https://www.flowleap.co/en/contact'
+		assert.deepStrictEqual({
+			packageTypes: server?.configuration.packages?.map(serverPackage => serverPackage.registryType),
+			remotes: server?.configuration.remotes
+		}, {
+			packageTypes: ['npm'],
+			remotes: [{
+				type: 'streamable-http',
+				url: 'https://{environment_id}.{region}.example/{prefix}server',
+				variables: {
+					environment_id: {
+						description: 'Environment ID',
+						isRequired: true
+					},
+					region: { value: 'eu' },
+					prefix: { value: '' }
+				}
+			}]
 		});
-		const requestService = store.add(new TestRequestService(options => response(options.url!.includes('/v0/servers') ? 200 : 404)));
+	});
+
+	test('resolves a pinned GitHub Feed version with the supported package parser rather than the configured registry', async () => {
+		const name = 'io.github.owner/server';
+		const requestService = new StatusRequestService(200, JSON.stringify(serverDocumentData(name, ['npm'])));
+		const service = createService(requestService);
+		const url = getAgentFinderMcpServerUrl(name, '1.0.0');
+		const server = await service.getMcpServer(url, agentFinderMcpRegistryManifest);
+		assert.deepStrictEqual({
+			name: server?.name,
+			version: server?.version,
+			packageTypes: server?.configuration.packages?.map(pkg => pkg.registryType),
+			requests: requestService.requests.map(request => ({ url: request.url, followRedirects: request.followRedirects, timeout: request.timeout })),
+		}, {
+			name, version: '1.0.0', packageTypes: ['npm'],
+			requests: [{ url, followRedirects: 0, timeout: 30_000 }],
+		});
+	});
+
+	test('bounds versioned feed MCP records without truncating an allowed response', async () => {
+		const name = 'io.github.owner/server';
+		const url = getAgentFinderMcpServerUrl(name, '1.0.0');
+		const document = JSON.stringify(serverDocumentData(name, ['npm']));
+		const size = 5 * 1024 * 1024;
+		const allowed = createService(new StatusRequestService(200, document.padEnd(size, ' ')));
+		const oversized = createService(new StatusRequestService(200, document.padEnd(size + 1, ' ')));
+		const server = await allowed.getMcpServer(url, agentFinderMcpRegistryManifest);
+		await assert.rejects(oversized.getMcpServer(url, agentFinderMcpRegistryManifest), /response is too large/);
+		assert.strictEqual(server?.name, name);
+	});
+
+	test('skips unusable servers without dropping a v0.1 gallery page', async () => {
+		const data = {
+			metadata: { count: 2 },
+			servers: [
+				serverDocumentData('io.github.owner/unsupported', ['mcpb']),
+				serverDocumentData('io.github.owner/supported', ['npm'])
+			]
+		};
+		const requestService = new StatusRequestService(200, JSON.stringify(data));
+		const service = createService(requestService, { ...manifest, version: 'v0.1' });
+
+		const page = (await service.query()).firstPage;
+
+		assert.deepStrictEqual(page.items.map(server => server.name), ['io.github.owner/supported']);
+	});
+
+	test('skips unusable servers without dropping a modern gallery page', async () => {
+		const data = {
+			metadata: { count: 2 },
+			servers: [
+				modernServerDocumentData('io.github.owner/unsupported', ['mcpb']),
+				modernServerDocumentData('io.github.owner/supported', ['npm'])
+			]
+		};
+		const requestService = new StatusRequestService(200, JSON.stringify(data));
+		const service = createService(requestService);
+
+		const page = (await service.query()).firstPage;
+
+		assert.deepStrictEqual(page.items.map(server => server.name), ['io.github.owner/supported']);
+	});
+
+	test('skips malformed wrapped entries without misclassifying a modern gallery page', async () => {
+		const data = {
+			metadata: { count: 2, next_cursor: 'next-page' },
+			servers: [
+				{ server: {} },
+				modernServerDocumentData('io.github.owner/supported', ['npm'])
+			]
+		};
+		const requestService = new StatusRequestService(200, JSON.stringify(data));
+		const service = createService(requestService);
+
+		const page = (await service.query()).firstPage;
+
+		assert.deepStrictEqual({
+			names: page.items.map(server => server.name),
+			hasMore: page.hasMore
+		}, {
+			names: ['io.github.owner/supported'],
+			hasMore: true
+		});
+	});
+
+	test('accepts a gallery page without optional count metadata', async () => {
+		const data = {
+			metadata: { next_cursor: 'next-page' },
+			servers: [modernServerDocumentData('io.github.owner/supported', ['npm'])]
+		};
+		const requestService = new StatusRequestService(200, JSON.stringify(data));
+		const service = createService(requestService);
+
+		const page = (await service.query()).firstPage;
+
+		assert.deepStrictEqual({
+			names: page.items.map(server => server.name),
+			hasMore: page.hasMore
+		}, {
+			names: ['io.github.owner/supported'],
+			hasMore: true
+		});
+	});
+});
+
+suite('McpGalleryManifestService - product gallery version', () => {
+
+	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('negotiates the API version the product gallery serves (v0), not the newest one it does not', async () => {
+		// The FlowLeap registry serves the standard v0 API and its v0.1 path is unavailable.
+		const productService: IProductService = {
+			_serviceBrand: undefined,
+			...product,
+			mcpGallery: {
+				serviceUrl: 'https://registry.test/api/mcp',
+				itemWebUrl: 'https://www.flowleap.co/en/marketplace/mcp/{name}',
+				publisherUrl: 'https://www.flowleap.co/en/marketplace',
+				supportUrl: 'https://www.flowleap.co/en/contact',
+				privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
+				termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
+				reportUrl: 'https://www.flowleap.co/en/contact'
+			}
+		};
+		const requestService: IRequestService = {
+			_serviceBrand: undefined,
+			onDidCompleteRequest: Event.None,
+			request: async options => ({
+				res: { statusCode: options.url?.includes('/v0/servers') ? 200 : 404, headers: {} },
+				stream: bufferToStream(VSBuffer.fromString('')),
+			}),
+			resolveProxy: async () => undefined,
+			lookupAuthorization: async () => undefined,
+			lookupKerberosAuthorization: async () => undefined,
+			loadCertificates: async () => [],
+		};
 		const manifestService = store.add(new McpGalleryManifestService(productService, requestService, new NullLogService()));
 
-		const manifest = await manifestService.getMcpGalleryManifest();
+		const actual = await manifestService.getMcpGalleryManifest();
 
-		assert.strictEqual(manifest?.version, 'v0');
-		assert.strictEqual(
-			getMcpGalleryManifestResourceUri(manifest!, McpGalleryResourceType.McpServersQueryService),
-			'https://registry.test/api/mcp/v0/servers'
-		);
+		assert.deepStrictEqual({
+			version: actual?.version,
+			serversUrl: actual ? getMcpGalleryManifestResourceUri(actual, McpGalleryResourceType.McpServersQueryService) : undefined,
+		}, {
+			version: 'v0',
+			serversUrl: 'https://registry.test/api/mcp/v0/servers',
+		});
 	});
 });

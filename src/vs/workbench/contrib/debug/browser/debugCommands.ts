@@ -21,7 +21,6 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { InputFocusedContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { IExtensionHostDebugService } from '../../../../platform/debug/common/extensionHostDebug.js';
 import { IEnvironmentService } from '../../../../platform/environment/common/environment.js';
@@ -43,6 +42,7 @@ import { saveAllBeforeDebugStart, resolveChildSession } from '../common/debugUti
 import { showLoadedScriptMenu } from '../common/loadedScriptsPicker.js';
 import { openBreakpointSource } from './breakpointsView.js';
 import { showDebugSessionMenu } from './debugSessionPicker.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export const ADD_CONFIGURATION_ID = 'debug.addConfiguration';
 export const COPY_ADDRESS_ID = 'editor.debug.action.copyAddress';
@@ -989,10 +989,10 @@ registerAction2(class AddConfigurationAction extends Action2 {
 	constructor() {
 		super({
 			id: ADD_CONFIGURATION_ID,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: nls.localize2('addConfiguration', "Add Configuration..."),
 			category: DEBUG_COMMAND_CATEGORY,
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			menu: {
 				id: MenuId.EditorContent,
 				when: ContextKeyExpr.and(

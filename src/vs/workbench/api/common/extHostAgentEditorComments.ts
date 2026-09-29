@@ -4,61 +4,83 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { Event } from '../../../base/common/event.js';
+import { Emitter } from '../../../base/common/event.js';
+import { ExtHostAgentEditorCommentsShape, IAgentEditorCommentDto, IMainContext, MainContext, MainThreadAgentEditorCommentsShape } from './extHost.protocol.js';
+import * as typeConvert from './extHostTypeConverters.js';
 
-/**
- * A provider that reports "this resource accepts no comments" and stays that way.
- *
- * It satisfies the whole {@link vscode.AgentEditorCommentsProvider} contract: `comments` is always
- * empty, `acceptsComments` is always `false`, both events never fire, and `addComment` /
- * `deleteComment` / `dispose` do nothing. An extension that wires comment UI to this provider hides
- * that UI, which is the behaviour we want.
- */
-class InertAgentEditorCommentsProvider implements vscode.AgentEditorCommentsProvider {
+class ExtHostAgentEditorCommentsProvider implements vscode.AgentEditorCommentsProvider {
 
-	readonly comments: readonly vscode.AgentEditorComment[] = Object.freeze([]);
-	readonly acceptsComments = false;
-	readonly onDidChange = Event.None;
-	readonly onDidRevealComment = Event.None;
+	private readonly _onDidChange = new Emitter<void>();
+	readonly onDidChange = this._onDidChange.event;
+	private readonly _onDidRevealComment = new Emitter<string>();
+	readonly onDidRevealComment = this._onDidRevealComment.event;
 
-	addComment(_range: vscode.Range, _body: string): void {
-		// No session comment store exists, so there is nothing to add to.
+	private _comments: readonly vscode.AgentEditorComment[] = [];
+	get comments(): readonly vscode.AgentEditorComment[] { return this._comments; }
+
+	private _acceptsComments = false;
+	get acceptsComments(): boolean { return this._acceptsComments; }
+
+	constructor(
+		private readonly handle: number,
+		private readonly proxy: MainThreadAgentEditorCommentsShape,
+		private readonly onDispose: (handle: number) => void
+	) { }
+
+	$acceptComments(comments: IAgentEditorCommentDto[], acceptsComments: boolean): void {
+		this._comments = comments.map(comment => Object.freeze({
+			id: comment.id,
+			range: typeConvert.Range.to(comment.range),
+			body: comment.body,
+			author: comment.author,
+		} satisfies vscode.AgentEditorComment));
+		this._acceptsComments = acceptsComments;
+		this._onDidChange.fire();
 	}
 
-	deleteComment(_id: string): void {
-		// No session comment store exists, so there is nothing to delete from.
+	$revealComment(id: string): void {
+		this._onDidRevealComment.fire(id);
+	}
+
+	addComment(range: vscode.Range, body: string): void {
+		this.proxy.$addComment(this.handle, typeConvert.Range.from(range), body);
+	}
+
+	deleteComment(id: string): void {
+		this.proxy.$deleteComment(this.handle, id);
 	}
 
 	dispose(): void {
-		// Nothing is held: no RPC handle, no emitters, no listeners.
+		this.proxy.$disposeAgentEditorComments(this.handle);
+		this._onDidChange.dispose();
+		this._onDidRevealComment.dispose();
+		this.onDispose(this.handle);
 	}
 }
 
-/**
- * The FlowLeap stand-in for upstream's `ExtHostAgentEditorComments` — a **null object** in the same
- * shape as our GitHub-bypass authentication service (`PatentAIAuthService`, ADR 0002).
- *
- * Upstream's real implementation is one half of the agent-feedback comment stack: it allocates an RPC
- * handle, talks to `MainThreadAgentEditorComments`, and reads the session comment store in
- * `src/vs/sessions/contrib/agentFeedback/`. FlowLeap has none of that — no `agentFeedback`
- * contribution, no session comment store, no main-thread counterpart — and the patent workflows this
- * fork ships do not comment on agent edits.
- *
- * The seam exists only so that the bundled Markdown editor, which calls
- * `vscode.window.createAgentEditorComments` unconditionally, keeps compiling and running unchanged
- * against our fork. Because {@link vscode.AgentEditorCommentsProvider.acceptsComments} is `false`,
- * that editor hides its comment affordances, which is exactly the upstream behaviour for a resource
- * that is not in scope for a session. Keeping the null object here, rather than deleting the API call
- * from the extension, is what keeps `extensions/markdown-language-features` byte-identical to
- * upstream and therefore cheap to re-port.
- *
- * There is deliberately no `extHost.protocol.ts` entry and no `mainThread` counterpart: adding either
- * would imply a workbench-side store that does not exist. If FlowLeap ever wants real agent comments,
- * port `sessions/contrib/agentFeedback` and replace this class outright.
- */
-export class ExtHostAgentEditorComments {
+export class ExtHostAgentEditorComments implements ExtHostAgentEditorCommentsShape {
+	private static handlePool = 0;
 
-	createAgentEditorComments(_uri: vscode.Uri): vscode.AgentEditorCommentsProvider {
-		return new InertAgentEditorCommentsProvider();
+	private readonly proxy: MainThreadAgentEditorCommentsShape;
+	private readonly providers = new Map<number, ExtHostAgentEditorCommentsProvider>();
+
+	constructor(mainContext: IMainContext) {
+		this.proxy = mainContext.getProxy(MainContext.MainThreadAgentEditorComments);
+	}
+
+	createAgentEditorComments(uri: vscode.Uri): vscode.AgentEditorCommentsProvider {
+		const handle = ExtHostAgentEditorComments.handlePool++;
+		const provider = new ExtHostAgentEditorCommentsProvider(handle, this.proxy, h => this.providers.delete(h));
+		this.providers.set(handle, provider);
+		this.proxy.$createAgentEditorComments(handle, uri);
+		return provider;
+	}
+
+	$acceptAgentEditorComments(handle: number, comments: IAgentEditorCommentDto[], acceptsComments: boolean): void {
+		this.providers.get(handle)?.$acceptComments(comments, acceptsComments);
+	}
+
+	$revealAgentEditorComment(handle: number, id: string): void {
+		this.providers.get(handle)?.$revealComment(id);
 	}
 }

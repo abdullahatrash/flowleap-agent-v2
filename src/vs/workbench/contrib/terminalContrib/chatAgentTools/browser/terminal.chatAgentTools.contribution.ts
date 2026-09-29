@@ -23,6 +23,7 @@ import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey
 import { TerminalChatAgentToolsCommandId } from '../common/terminal.chatAgentTools.js';
 import { TerminalChatAgentToolsSettingId } from '../common/terminalChatAgentToolsConfiguration.js';
 import { AgentNetworkDomainSettingId } from '../../../../../platform/networkFilter/common/settings.js';
+import { AgentHostSandboxForwarder } from './agentHostSandboxForwarder.js';
 import { GetTerminalLastCommandTool, GetTerminalLastCommandToolData } from './tools/getTerminalLastCommandTool.js';
 import { KillTerminalTool, KillTerminalToolData } from './tools/killTerminalTool.js';
 import { GetTerminalOutputTool, GetTerminalOutputToolData } from './tools/getTerminalOutputTool.js';
@@ -150,18 +151,12 @@ export class ChatAgentToolsContribution extends Disposable implements IWorkbench
 			if (
 				e.affectsConfiguration(AgentSandboxSettingId.AgentSandboxEnabled) ||
 				e.affectsConfiguration(AgentSandboxSettingId.AgentSandboxWindowsEnabled) ||
-				e.affectsConfiguration(AgentSandboxSettingId.DeprecatedAgentSandboxEnabled) ||
+				e.affectsConfiguration(AgentSandboxSettingId.AgentSandboxAllowNetwork) ||
 				e.affectsConfiguration(AgentSandboxSettingId.AgentSandboxAllowUnsandboxedCommands) ||
 				e.affectsConfiguration(AgentNetworkDomainSettingId.AllowedNetworkDomains) ||
 				e.affectsConfiguration(AgentNetworkDomainSettingId.DeniedNetworkDomains) ||
-				e.affectsConfiguration(AgentNetworkDomainSettingId.DeprecatedOldAllowedNetworkDomains) ||
-				e.affectsConfiguration(AgentNetworkDomainSettingId.DeprecatedOldDeniedNetworkDomains) ||
-				e.affectsConfiguration(AgentNetworkDomainSettingId.DeprecatedSandboxAllowedNetworkDomains) ||
-				e.affectsConfiguration(AgentNetworkDomainSettingId.DeprecatedSandboxDeniedNetworkDomains) ||
 				e.affectsConfiguration(TerminalChatAgentToolsSettingId.AgentSandboxLinuxFileSystem) ||
-				e.affectsConfiguration(TerminalChatAgentToolsSettingId.DeprecatedAgentSandboxLinuxFileSystem) ||
 				e.affectsConfiguration(TerminalChatAgentToolsSettingId.AgentSandboxMacFileSystem) ||
-				e.affectsConfiguration(TerminalChatAgentToolsSettingId.DeprecatedAgentSandboxMacFileSystem) ||
 				e.affectsConfiguration(TerminalChatAgentToolsSettingId.AgentSandboxWindowsFileSystem)
 			) {
 				this._registerRunInTerminalTool();
@@ -192,6 +187,7 @@ export class ChatAgentToolsContribution extends Disposable implements IWorkbench
 	}
 }
 registerWorkbenchContribution2(ChatAgentToolsContribution.ID, ChatAgentToolsContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(AgentHostSandboxForwarder.ID, AgentHostSandboxForwarder, WorkbenchPhase.AfterRestored);
 
 // #endregion Contributions
 

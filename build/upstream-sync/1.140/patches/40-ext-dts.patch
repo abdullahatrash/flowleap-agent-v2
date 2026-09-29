@@ -1,0 +1,146 @@
+diff --git a/extensions/copilot/src/extension/chatSessions/vscode-node/claudeCustomizationProvider.ts b/extensions/copilot/src/extension/chatSessions/vscode-node/claudeCustomizationProvider.ts
+index e324defc723..fd9ccbfab30 100644
+--- a/extensions/copilot/src/extension/chatSessions/vscode-node/claudeCustomizationProvider.ts
++++ b/extensions/copilot/src/extension/chatSessions/vscode-node/claudeCustomizationProvider.ts
+@@ -178,6 +178,7 @@ export class ClaudeCustomizationProvider extends Disposable implements vscode.Ch
+ 					folders.push({
+ 						uri: URI.joinPath(folder, ...root.path),
+ 						label: root.path.join('/'),
++						source: 'local',
+ 					});
+ 				}
+ 			}
+@@ -187,6 +188,7 @@ export class ClaudeCustomizationProvider extends Disposable implements vscode.Ch
+ 				folders.push({
+ 					uri: URI.joinPath(this.envService.userHome, ...root.path),
+ 					label: `~/${root.path.join('/')}`,
++					source: 'user',
+ 				});
+ 			}
+ 		}
+diff --git a/extensions/copilot/src/extension/codeBlocks/node/codeBlockProcessor.ts b/extensions/copilot/src/extension/codeBlocks/node/codeBlockProcessor.ts
+index daec78f3059..cfbeb0acb13 100644
+--- a/extensions/copilot/src/extension/codeBlocks/node/codeBlockProcessor.ts
++++ b/extensions/copilot/src/extension/codeBlocks/node/codeBlockProcessor.ts
+@@ -127,6 +127,7 @@ export class CodeBlockTrackingChatResponseStream implements ChatResponseStream {
+ 	warning = this.forward(this._wrapped.warning.bind(this._wrapped));
+ 	info = this.forward(this._wrapped.info.bind(this._wrapped));
+ 	hookProgress = this.forward(this._wrapped.hookProgress.bind(this._wrapped));
++	voiceProgress = this.forward(this._wrapped.voiceProgress.bind(this._wrapped));
+ 	reference2 = this.forward(this._wrapped.reference2.bind(this._wrapped));
+ 	codeCitation = this.forward(this._wrapped.codeCitation.bind(this._wrapped));
+ 	anchor = this.forward(this._wrapped.anchor.bind(this._wrapped));
+diff --git a/extensions/copilot/src/extension/linkify/common/responseStreamWithLinkification.ts b/extensions/copilot/src/extension/linkify/common/responseStreamWithLinkification.ts
+index 5c8b96734c4..dadba459bb4 100644
+--- a/extensions/copilot/src/extension/linkify/common/responseStreamWithLinkification.ts
++++ b/extensions/copilot/src/extension/linkify/common/responseStreamWithLinkification.ts
+@@ -2,7 +2,7 @@
+  *  Copyright (c) Microsoft Corporation. All rights reserved.
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+-import type { ChatQuestion, ChatResponseClearToPreviousToolInvocationReason, ChatResponseFileTree, ChatResponsePart, ChatResponseStream, ChatResultUsage, ChatToolInvocationStreamData, ChatVulnerability, ChatWorkspaceFileEdit, Command, Location, NotebookEdit, TextEdit, ThinkingDelta, Uri } from 'vscode';
++import type { ChatQuestion, ChatResponseClearToPreviousToolInvocationReason, ChatResponseVoiceProgressStage, ChatResponseFileTree, ChatResponsePart, ChatResponseStream, ChatResultUsage, ChatToolInvocationStreamData, ChatVulnerability, ChatWorkspaceFileEdit, Command, Location, NotebookEdit, TextEdit, ThinkingDelta, Uri } from 'vscode';
+ import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+ import { FinalizableChatResponseStream } from '../../../util/common/chatResponseStreamImpl';
+ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
+@@ -89,6 +89,11 @@ export class ResponseStreamWithLinkification implements FinalizableChatResponseS
+ 		return this;
+ 	}
+ 
++	voiceProgress(id: ChatResponseVoiceProgressStage, value: string): ChatResponseStream {
++		this.enqueue(() => this._progress.voiceProgress(id, value), false);
++		return this;
++	}
++
+ 
+ 	reference(value: Uri | Location): ChatResponseStream {
+ 		this.enqueue(() => this._progress.reference(value), false);
+diff --git a/extensions/copilot/src/util/common/chatResponseStreamImpl.ts b/extensions/copilot/src/util/common/chatResponseStreamImpl.ts
+index 07db8ae9aa7..c059d35e356 100644
+--- a/extensions/copilot/src/util/common/chatResponseStreamImpl.ts
++++ b/extensions/copilot/src/util/common/chatResponseStreamImpl.ts
+@@ -4,7 +4,7 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import { ChatResponseReferencePartStatusKind } from '@vscode/prompt-tsx';
+-import type { ChatQuestion, ChatResponseFileTree, ChatResponseStream, ChatResultUsage, ChatToolInvocationStreamData, ChatVulnerability, ChatWorkspaceFileEdit, Command, ExtendedChatResponsePart, Location, NotebookEdit, Progress, ThinkingDelta, Uri } from 'vscode';
++import type { ChatQuestion, ChatResponseFileTree, ChatResponseStream, ChatResponseVoiceProgressStage, ChatResultUsage, ChatToolInvocationStreamData, ChatVulnerability, ChatWorkspaceFileEdit, Command, ExtendedChatResponsePart, Location, NotebookEdit, Progress, ThinkingDelta, Uri } from 'vscode';
+ import { ChatHookType, ChatResponseAnchorPart, ChatResponseClearToPreviousToolInvocationReason, ChatResponseCodeblockUriPart, ChatResponseCodeCitationPart, ChatResponseCommandButtonPart, ChatResponseConfirmationPart, ChatResponseExternalEditPart, ChatResponseFileTreePart, ChatResponseHookPart, ChatResponseInfoPart, ChatResponseMarkdownPart, ChatResponseMarkdownWithVulnerabilitiesPart, ChatResponseNotebookEditPart, ChatResponseProgressPart, ChatResponseProgressPart2, ChatResponseReferencePart, ChatResponseReferencePart2, ChatResponseTextEditPart, ChatResponseThinkingProgressPart, ChatResponseWarningPart, ChatResponseWorkspaceEditPart, MarkdownString, TextEdit } from '../../vscodeTypes';
+ import type { ThemeIcon } from '../vs/base/common/themables';
+ 
+@@ -135,6 +135,10 @@ export class ChatResponseStreamImpl implements FinalizableChatResponseStream {
+ 		this._push(new ChatResponseHookPart(hookType, stopReason, systemMessage));
+ 	}
+ 
++	voiceProgress(_id: ChatResponseVoiceProgressStage, _value: string): void {
++		// Voice Mode narration is not used by this extension; the member exists for API conformance.
++	}
++
+ 	button(command: Command): void {
+ 		this._push(new ChatResponseCommandButtonPart(command));
+ 	}
+diff --git a/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts b/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts
+index 3ec459e6ca1..f016f43334e 100644
+--- a/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts
++++ b/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts
+@@ -323,6 +323,12 @@ declare module 'vscode' {
+ 		 */
+ 		description?: string;
+ 
++		/**
++		 * A human-readable name for the subagent type, shown in the subagent's header.
++		 * When it is missing, the header falls back to {@link agentName}.
++		 */
++		agentDisplayName?: string;
++
+ 		/**
+ 		 * The name of the subagent being invoked.
+ 		 */
+@@ -861,6 +867,32 @@ declare module 'vscode' {
+ 		readonly percentageOfPrompt: number;
+ 	}
+ 
++	/**
++	 * Whole-turn token consumption attributed to a single model.
++	 */
++	export interface ChatResultModelTotal {
++		/**
++		 * The human-readable model name, rendered verbatim in the UI
++		 * (e.g. "Claude Sonnet 4.5").
++		 */
++		readonly model: string;
++
++		/**
++		 * The total number of input (prompt) tokens sent to this model this turn.
++		 */
++		readonly inputTokens: number;
++
++		/**
++		 * The portion of {@link inputTokens} the provider served from its prompt cache.
++		 */
++		readonly cachedTokens: number;
++
++		/**
++		 * The total number of output (completion) tokens produced by this model this turn.
++		 */
++		readonly outputTokens: number;
++	}
++
+ 	/**
+ 	 * Token usage information for a chat request.
+ 	 */
+@@ -891,6 +923,14 @@ declare module 'vscode' {
+ 		 * If the percentages do not sum to 100%, the remaining will be shown as "Uncategorized".
+ 		 */
+ 		readonly promptTokenDetails?: readonly ChatResultPromptTokenDetail[];
++
++		/**
++		 * Whole-turn token consumption broken down per model. A turn can call several
++		 * models, so each entry is the running total for one model rather than the
++		 * numbers of a single call. Rendered on hover of the response footer's model
++		 * stat; omit it to show no breakdown.
++		 */
++		readonly modelTotals?: readonly ChatResultModelTotal[];
+ 	}
+ 
+ 	export interface ChatResult {

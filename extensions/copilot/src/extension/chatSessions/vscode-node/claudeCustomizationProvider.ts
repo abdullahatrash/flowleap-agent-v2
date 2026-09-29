@@ -178,6 +178,7 @@ export class ClaudeCustomizationProvider extends Disposable implements vscode.Ch
 					folders.push({
 						uri: URI.joinPath(folder, ...root.path),
 						label: root.path.join('/'),
+						source: 'local',
 					});
 				}
 			}
@@ -187,6 +188,7 @@ export class ClaudeCustomizationProvider extends Disposable implements vscode.Ch
 				folders.push({
 					uri: URI.joinPath(this.envService.userHome, ...root.path),
 					label: `~/${root.path.join('/')}`,
+					source: 'user',
 				});
 			}
 		}

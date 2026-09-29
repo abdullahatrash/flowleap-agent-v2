@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { IListRenderer, IListVirtualDelegate } from '../../../../browser/ui/list/list.js';
+import { CachedListVirtualDelegate, IListRenderer, IListVirtualDelegate } from '../../../../browser/ui/list/list.js';
 import { ListView } from '../../../../browser/ui/list/listView.js';
 import { range } from '../../../../common/arrays.js';
 import { IRange } from '../../../../common/range.js';
@@ -462,6 +462,144 @@ suite('ListView', function () {
 		} finally {
 			listView.dispose();
 			element.remove();
+		}
+	});
+
+	test('publishes freshly measured dynamic heights', function () {
+		const element = document.createElement('div');
+		element.style.height = '200px';
+		element.style.width = '200px';
+		document.body.appendChild(element);
+
+		type TestElement = { height: number };
+		const delegate = new class extends CachedListVirtualDelegate<TestElement> {
+			protected estimateHeight() { return 100; }
+			getTemplateId() { return 'template'; }
+			hasDynamicHeight() { return true; }
+			getMeasuredHeight(element: TestElement) { return this.getCachedHeight(element); }
+		};
+		const renderer: IListRenderer<TestElement, HTMLElement> = {
+			templateId: 'template',
+			renderTemplate(container) {
+				const content = document.createElement('div');
+				container.appendChild(content);
+				return content;
+			},
+			renderElement(element, _index, templateData) { templateData.style.height = `${element.height}px`; },
+			disposeTemplate() { }
+		};
+
+		const elements: TestElement[] = [{ height: 40 }, { height: 100 }, { height: 160 }];
+		const listView = new ListView<TestElement>(element, delegate, [renderer], { supportDynamicHeights: true });
+		try {
+			listView.layout(200, 200);
+			listView.splice(0, 0, elements);
+			assert.deepStrictEqual(elements.map(element => delegate.getMeasuredHeight(element)), [40, 100, 160]);
+		} finally {
+			listView.dispose();
+			element.remove();
+		}
+	});
+
+	test('publishes positive delegate-provided dynamic heights', function () {
+		type TestElement = { height: number };
+		const publishedHeights = new Map<TestElement, number>();
+		const delegate: IListVirtualDelegate<TestElement> = {
+			getHeight() { return 100; },
+			getTemplateId() { return 'template'; },
+			getDynamicHeight(element) { return element.height; },
+			setDynamicHeight(element, height) { publishedHeights.set(element, height); }
+		};
+		const renderer: IListRenderer<TestElement, void> = {
+			templateId: 'template',
+			renderTemplate() { },
+			renderElement() { },
+			disposeTemplate() { }
+		};
+
+		const elements: TestElement[] = [{ height: 0 }, { height: 40 }, { height: 100 }, { height: 160 }];
+		const listView = new ListView<TestElement>(document.createElement('div'), delegate, [renderer], { supportDynamicHeights: true });
+		try {
+			listView.layout(400, 200);
+			listView.splice(0, 0, elements);
+			assert.deepStrictEqual(elements.map(element => publishedHeights.get(element)), [undefined, 40, 100, 160]);
+		} finally {
+			listView.dispose();
+		}
+	});
+
+	test('preserves offscreen rows when extending user selection with shift click', function () {
+		const element = document.createElement('div');
+		document.body.appendChild(element);
+
+		const delegate: IListVirtualDelegate<number> = {
+			getHeight() { return 20; },
+			getTemplateId() { return 'template'; }
+		};
+		const renderer: IListRenderer<number, HTMLElement> = {
+			templateId: 'template',
+			renderTemplate(container) { return container; },
+			renderElement(element, _index, container) { container.textContent = String(element); },
+			disposeTemplate() { }
+		};
+
+		const listView = new ListView<number>(element, delegate, [renderer], { userSelection: true });
+		const selection = document.getSelection()!;
+		try {
+			listView.layout(60, 200);
+			listView.splice(0, 0, range(10));
+
+			const firstRow = listView.domElement(0)!;
+			const lastSelectedRow = listView.domElement(2)!;
+			firstRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+			firstRow.dispatchEvent(new Event('selectstart', { bubbles: true }));
+
+			const selectionRange = document.createRange();
+			selectionRange.setStart(firstRow.firstChild!, 0);
+			selectionRange.setEnd(lastSelectedRow.firstChild!, lastSelectedRow.textContent!.length);
+			selection.removeAllRanges();
+			selection.addRange(selectionRange);
+			document.dispatchEvent(new Event('selectionchange'));
+			document.dispatchEvent(new MouseEvent('mouseup'));
+
+			listView.setScrollTop(100);
+			const extensionRow = listView.domElement(7)!;
+			extensionRow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, shiftKey: true }));
+			extensionRow.dispatchEvent(new Event('selectstart', { bubbles: true }));
+			document.dispatchEvent(new MouseEvent('mousemove', { clientY: 30 }));
+			document.dispatchEvent(new MouseEvent('mouseup'));
+
+			assert.strictEqual(listView.domElement(0), firstRow);
+		} finally {
+			listView.dispose();
+			selection.removeAllRanges();
+			document.dispatchEvent(new Event('selectionchange'));
+			element.remove();
+		}
+	});
+
+	test('does not throw when laid out with a collapsed viewport and zero-height dynamic items', function () {
+		type TestElement = { height: number };
+		const delegate: IListVirtualDelegate<TestElement> = {
+			getHeight() { return 0; },
+			getTemplateId() { return 'template'; },
+			getDynamicHeight(element) { return element.height; }
+		};
+		const renderer: IListRenderer<TestElement, void> = {
+			templateId: 'template',
+			renderTemplate() { },
+			renderElement() { },
+			disposeTemplate() { }
+		};
+
+		const elements: TestElement[] = [{ height: 0 }, { height: 0 }, { height: 0 }];
+		const listView = new ListView<TestElement>(document.createElement('div'), delegate, [renderer], { supportDynamicHeights: true });
+		try {
+			// Collapsing the viewport before splicing zero-height items previously yielded an inverted range that crashed probeDynamicHeights.
+			listView.layout(0, 200);
+			assert.doesNotThrow(() => listView.splice(0, 0, elements));
+		} finally {
+			listView.dispose();
 		}
 	});
 });

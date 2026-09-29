@@ -40,7 +40,7 @@ function makeWorkspace(hasWorktree: boolean): ISessionWorkspace {
 			workingDirectory: workTreeUri ?? root,
 			name: 'repo',
 			description: undefined,
-			gitRepository: { uri: root, workTreeUri, baseBranchName: undefined },
+			gitRepository: { uri: root, workTreeUri, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
 		}],
 		requiresWorkspaceTrust: true,
 		isVirtualWorkspace: false,
@@ -64,8 +64,6 @@ function makeSession(opts: { id?: string; providerId?: string; runsWorktreeCreat
 		title: observableValue('title', 'session'),
 		updatedAt: observableValue('updatedAt', new Date()),
 		status,
-		changesets: constObservable([]),
-		changes: constObservable([]),
 		modelId: observableValue('modelId', undefined),
 		mode: observableValue('mode', undefined),
 		loading,
@@ -75,7 +73,7 @@ function makeSession(opts: { id?: string; providerId?: string; runsWorktreeCreat
 		description: observableValue('description', undefined),
 		chats: observableValue('chats', [chat]),
 		mainChat: constObservable(chat),
-		capabilities: { supportsMultipleChats: false, runsWorktreeCreatedTasks: opts.runsWorktreeCreatedTasks },
+		capabilities: constObservable({ supportsMultipleChats: false, runsWorktreeCreatedTasks: opts.runsWorktreeCreatedTasks }),
 	};
 	return { session, loading, status, workspace, isArchived };
 }

@@ -30,6 +30,16 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
+	submenu: MenuId.MenubarSelectionMenu,
+	title: {
+		value: 'Selection',
+		original: 'Selection',
+		mnemonicTitle: localize({ key: 'mSelection', comment: ['&& denotes a mnemonic'] }, "&&Selection")
+	},
+	order: 3
+});
+
+MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 	submenu: MenuId.MenubarViewMenu,
 	title: {
 		value: 'View',
@@ -57,7 +67,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		mnemonicTitle: localize({ key: 'mTerminal', comment: ['&& denotes a mnemonic'] }, "&&Terminal")
 	},
 	order: 7,
-	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: Hide when Patent IDE mode is ON
+	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide when Patent IDE mode is on (#82)
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {

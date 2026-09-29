@@ -261,7 +261,7 @@ export class EditorService extends Disposable implements EditorServiceImpl {
 			const replacements: (IUntypedEditorReplacement | IEditorReplacement)[] = [];
 
 			for (const editor of group.editors) {
-				const resource = editor.resource;
+				const resource = EditorResourceAccessor.getOriginalUri(editor) ?? editor.resource;
 				if (!resource || !this.uriIdentityService.extUri.isEqualOrParent(resource, source)) {
 					continue; // not matching our resource
 				}
@@ -338,7 +338,7 @@ export class EditorService extends Disposable implements EditorServiceImpl {
 	private handleDeletedFile(arg1: URI | FileChangesEvent, isExternal: boolean, movedTo?: URI): void {
 		for (const editor of this.getAllNonDirtyEditors({ includeUntitled: false, supportSideBySide: true })) {
 			(async () => {
-				const resource = editor.resource;
+				const resource = EditorResourceAccessor.getOriginalUri(editor) ?? editor.resource;
 				if (!resource) {
 					return;
 				}

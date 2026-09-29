@@ -35,7 +35,7 @@ import { IAccessibilityService } from '../../../../platform/accessibility/common
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, ContextKeyExpression, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+import { IDefaultAccountService } from '../../../../platform/defaultAccount/common/defaultAccount.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -70,12 +70,13 @@ import { IExtensionService } from '../../../services/extensions/common/extension
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { GettingStartedIndexList } from './gettingStartedList.js';
-import { canShowAgentsBanner, createAgentsBanner } from '../../chat/browser/agentSessions/agentSessionsBanner.js';
+import { createAgentsBanner } from '../../chat/browser/agentSessions/agentSessionsBanner.js';
 import { IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
 import { AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibilityConfiguration.js';
 import { AccessibleViewAction } from '../../accessibility/browser/accessibleViewActions.js';
 import { KeybindingLabel } from '../../../../base/browser/ui/keybindingLabel/keybindingLabel.js';
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const SLIDE_TRANSITION_TIME_MS = 250;
 const configurationKey = 'workbench.startupEditor';
@@ -198,6 +199,7 @@ export class GettingStartedPage extends EditorPane {
 		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
 		@IMarkdownRendererService private readonly markdownRendererService: IMarkdownRendererService,
 		@IChatEntitlementService private readonly chatEntitlementService: IChatEntitlementService,
+		@IDefaultAccountService private readonly defaultAccountService: IDefaultAccountService,
 	) {
 
 		super(GettingStartedPage.ID, group, telemetryService, themeService, storageService);
@@ -924,9 +926,8 @@ export class GettingStartedPage extends EditorPane {
 			onShowOnStartupChanged();
 		}));
 
-		// FlowLeap Patent IDE: Use patent-focused subtitle when in patent mode
-		const isPatentMode = this.contextService.contextMatchesRules(PatentIdeContextKeys.Mode);
-		const subtitle = isPatentMode
+		// FlowLeap Patent IDE: patent-focused subtitle in patent mode
+		const subtitle = this.contextService.contextMatchesRules(PatentIdeContextKeys.Mode)
 			? localize({ key: 'gettingStarted.patentSubtitle', comment: ['Shown as subtitle on the Welcome page in patent mode.'] }, "AI-powered patent analysis")
 			: localize({ key: 'gettingStarted.editingEvolved', comment: ['Shown as subtitle on the Welcome page.'] }, "Editing evolved");
 
@@ -943,18 +944,19 @@ export class GettingStartedPage extends EditorPane {
 		const gettingStartedList = this.buildGettingStartedWalkthroughsList();
 
 		const footerChildren: HTMLElement[] = [];
-		if (canShowAgentsBanner(this.chatEntitlementService)) {
-			const agentsBanner = createAgentsBanner(
-				{
-					cssClass: 'getting-started-category.agents-banner',
-					source: 'welcomePage',
-				},
-				this.commandService,
-				this.telemetryService,
-			);
-			this.categoriesSlideDisposables.add(agentsBanner.disposables);
-			footerChildren.push(agentsBanner.element);
-		}
+		const agentsBanner = createAgentsBanner(
+			{
+				cssClass: 'getting-started-category.agents-banner',
+				source: 'welcomePage',
+			},
+			this.commandService,
+			this.telemetryService,
+			this.configurationService,
+			this.chatEntitlementService,
+			this.defaultAccountService,
+		);
+		this.categoriesSlideDisposables.add(agentsBanner.disposables);
+		footerChildren.push(agentsBanner.element);
 		footerChildren.push($('p.showOnStartup', {},
 			showOnStartupCheckbox.domNode,
 			showOnStartupLabel,

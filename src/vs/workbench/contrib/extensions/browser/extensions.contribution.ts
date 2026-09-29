@@ -24,7 +24,8 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { Extensions as ConfigurationExtensions, ConfigurationScope, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { ExtensionGalleryManifestStatus, ExtensionGalleryResourceType, ExtensionGalleryServiceUrlConfigKey, getExtensionGalleryManifestResourceUri, IExtensionGalleryManifest, IExtensionGalleryManifestService } from '../../../../platform/extensionManagement/common/extensionGalleryManifest.js';
+import { ExtensionGalleryManifestStatus, ExtensionGalleryResourceType, ExtensionGalleryAuthProviderConfigKey, ExtensionGalleryServiceUrlConfigKey, getExtensionGalleryManifestResourceUri, IExtensionGalleryManifest, IExtensionGalleryManifestService } from '../../../../platform/extensionManagement/common/extensionGalleryManifest.js';
+import { IExtensionGalleryAccountService } from '../../../services/extensionManagement/common/extensionGalleryAccount.js';
 import { EXTENSION_INSTALL_SOURCE_CONTEXT, ExtensionInstallSource, ExtensionRequestsTimeoutConfigKey, ExtensionsLocalizedLabel, FilterType, IExtensionGalleryService, IExtensionManagementService, PreferencesLocalizedLabel, SortBy, VerifyExtensionSignatureConfigKey } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { areSameExtensions, getIdAndVersion } from '../../../../platform/extensionManagement/common/extensionManagementUtil.js';
 import { ExtensionStorageService } from '../../../../platform/extensionManagement/common/extensionStorage.js';
@@ -47,11 +48,9 @@ import { IUserDataProfilesService } from '../../../../platform/userDataProfile/c
 import { EditorPaneDescriptor, IEditorPaneRegistry } from '../../../browser/editor.js';
 import { Extensions as ConfigurationMigrationExtensions, IConfigurationMigrationRegistry } from '../../../common/configuration.js';
 import { IsSessionsWindowContext, ResourceContextKey, WorkbenchStateContext } from '../../../common/contextkeys.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IWorkbenchContribution, IWorkbenchContributionsRegistry, registerWorkbenchContribution2, Extensions as WorkbenchExtensions, WorkbenchPhase } from '../../../common/contributions.js';
 import { EditorExtensions } from '../../../common/editor.js';
 import { IViewContainersRegistry, Extensions as ViewContainerExtensions, ViewContainerLocation } from '../../../common/views.js';
-import { DEFAULT_ACCOUNT_SIGN_IN_COMMAND } from '../../../services/accounts/browser/defaultAccount.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { EnablementState, IExtensionManagementServerService, IPublisherInfo, IWorkbenchExtensionEnablementService, IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
 import { IExtensionIgnoredRecommendationsService, IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
@@ -80,6 +79,7 @@ import { ExtensionRecommendationsService } from './extensionRecommendationsServi
 import { ClearLanguageAction, ConfigureWorkspaceFolderRecommendedExtensionsAction, ConfigureWorkspaceRecommendedExtensionsAction, InstallAction, InstallAnotherVersionAction, InstallSpecificVersionOfExtensionAction, SetColorThemeAction, SetFileIconThemeAction, SetProductIconThemeAction, ToggleAutoUpdateForExtensionAction, ToggleAutoUpdatesForPublisherAction, TogglePreReleaseExtensionAction } from './extensionsActions.js';
 import { ExtensionActivationProgress } from './extensionsActivationProgress.js';
 import { ExtensionsCompletionItemsProvider } from './extensionsCompletionItemsProvider.js';
+import { ExtensionEnablementContextKeysContribution } from './extensionEnablementContext.js';
 import { ExtensionDependencyChecker } from './extensionsDependencyChecker.js';
 import { clearSearchResultsIcon, configureRecommendedIcon, extensionsViewIcon, filterIcon, installWorkspaceRecommendedIcon, refreshIcon } from './extensionsIcons.js';
 import { InstallExtensionQuickAccessProvider, ManageExtensionsQuickAccessProvider } from './extensionsQuickAccess.js';
@@ -87,6 +87,7 @@ import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, Extensions
 import { ExtensionsWorkbenchService } from './extensionsWorkbenchService.js';
 import './media/extensionManagement.css';
 import { UnsupportedExtensionsMigrationContrib } from './unsupportedExtensionsMigrationContribution.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 // Singletons
 registerSingleton(IExtensionsWorkbenchService, ExtensionsWorkbenchService, InstantiationType.Eager /* Auto updates extensions */);
@@ -120,7 +121,7 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
 			id: VIEWLET_ID,
 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
 			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX, when: PatentIdeContextKeys.Mode.toNegated() },
-			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: Hide View menu entry when Patent IDE mode is ON
+			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the View menu entry
 			order: 4,
 		},
 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),
@@ -172,7 +173,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			},
 			'extensions.autoUpdateDelay': {
 				type: 'number',
-				default: 2,
+				default: 12,
 				minimum: 0,
 				markdownDescription: localize('extensions.autoUpdateDelay', "Controls the delay in hours after an extension update is published before it is automatically installed. Only applies when `#extensions.autoUpdate#` is set to `on`. This delay helps avoid installing potentially problematic updates immediately after release."),
 				scope: ConfigurationScope.APPLICATION,
@@ -358,6 +359,39 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 							key: 'extensions.gallery.serviceUrl',
 							value: localize('extensions.gallery.serviceUrl', "Configure the Marketplace service URL to connect to"),
 						}
+					}
+				},
+			},
+			[ExtensionGalleryAuthProviderConfigKey]: {
+				type: 'string',
+				enum: ['github', 'microsoft'],
+				enumDescriptions: [
+					localize('extensions.gallery.authProvider.github', "Authenticate to the Extensions Marketplace using GitHub."),
+					localize('extensions.gallery.authProvider.microsoft', "Authenticate to the Extensions Marketplace using a Microsoft (Entra ID) account."),
+				],
+				description: localize('extensions.gallery.authProvider', "Configure the authentication provider for the Extensions Marketplace"),
+				default: 'github',
+				scope: ConfigurationScope.APPLICATION,
+				included: false,
+				policy: {
+					name: 'ExtensionGalleryAuthProvider',
+					category: PolicyCategory.Extensions,
+					minimumVersion: '1.137',
+					localization: {
+						description: {
+							key: 'extensions.gallery.authProvider',
+							value: localize('extensions.gallery.authProvider', "Configure the authentication provider for the Extensions Marketplace"),
+						},
+						enumDescriptions: [
+							{
+								key: 'extensions.gallery.authProvider.github',
+								value: localize('extensions.gallery.authProvider.github', "Authenticate to the Extensions Marketplace using GitHub."),
+							},
+							{
+								key: 'extensions.gallery.authProvider.microsoft',
+								value: localize('extensions.gallery.authProvider.microsoft', "Authenticate to the Extensions Marketplace using a Microsoft (Entra ID) account."),
+							},
+						]
 					}
 				},
 			},
@@ -2102,6 +2136,7 @@ workbenchRegistry.registerWorkbenchContribution(ExtensionActivationProgress, Lif
 workbenchRegistry.registerWorkbenchContribution(ExtensionDependencyChecker, LifecyclePhase.Eventually);
 workbenchRegistry.registerWorkbenchContribution(ExtensionEnablementWorkspaceTrustTransitionParticipant, LifecyclePhase.Restored);
 workbenchRegistry.registerWorkbenchContribution(ExtensionsCompletionItemsProvider, LifecyclePhase.Restored);
+workbenchRegistry.registerWorkbenchContribution(ExtensionEnablementContextKeysContribution, LifecyclePhase.Restored);
 workbenchRegistry.registerWorkbenchContribution(UnsupportedExtensionsMigrationContrib, LifecyclePhase.Eventually);
 workbenchRegistry.registerWorkbenchContribution(TrustedPublishersInitializer, LifecyclePhase.Eventually);
 workbenchRegistry.registerWorkbenchContribution(ExtensionMarketplaceStatusUpdater, LifecyclePhase.Eventually);
@@ -2118,12 +2153,15 @@ registerAction2(class ExtensionsGallerySignInAction extends Action2 {
 			title: localize2('signInToMarketplace', 'Sign in to access Extensions Marketplace'),
 			menu: {
 				id: MenuId.AccountsContext,
-				when: CONTEXT_EXTENSIONS_GALLERY_STATUS.isEqualTo(ExtensionGalleryManifestStatus.RequiresSignIn)
+				when: ContextKeyExpr.or(
+					CONTEXT_EXTENSIONS_GALLERY_STATUS.isEqualTo(ExtensionGalleryManifestStatus.RequiresSignIn),
+					CONTEXT_EXTENSIONS_GALLERY_STATUS.isEqualTo(ExtensionGalleryManifestStatus.AccessDenied),
+				)
 			},
 		});
 	}
-	run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(ICommandService).executeCommand(DEFAULT_ACCOUNT_SIGN_IN_COMMAND);
+	async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IExtensionGalleryAccountService).signIn();
 	}
 });
 

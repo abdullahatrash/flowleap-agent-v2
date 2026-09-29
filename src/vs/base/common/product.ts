@@ -74,8 +74,24 @@ export type ExtensionVirtualWorkspaceSupport = {
  * `{sdkTarget}` is recognised; the build emits e.g.
  * `https://main.vscode-cdn.net/agent-sdk/claude/0.3.168/{sdkTarget}.tgz`
  * and the runtime substitutes `darwin-arm64`, `linux-x64-musl`, etc.
+ *
+ * See `src/vs/platform/agentHost/node/claude/roadmap.md` Phase 15 for
+ * the rationale (macOS Universal compatibility, trust model).
  */
 export interface IAgentSdkProductConfig {
+	readonly version: string;
+	readonly urlTemplate: string;
+}
+
+/**
+ * Configuration for downloading the on-device dictation native runtime (the
+ * Foundry Local addon + core libraries) on demand. Produced per platform build
+ * and stamped by `build/dictation-runtime/produce.ts`; consumed by
+ * `foundryLocalRuntime.ts`, which substitutes `{target}` in `urlTemplate`
+ * against the host's `<platform>-<arch>` key. Absent in local dev builds, in
+ * which case the runtime falls back to the SDK's own `node_modules` payload.
+ */
+export interface IDictationRuntimeProductConfig {
 	readonly version: string;
 	readonly urlTemplate: string;
 }
@@ -97,6 +113,7 @@ export interface IProductConfiguration {
 	readonly win32VersionedUpdate?: boolean;
 	readonly win32ContextMenu?: { readonly [arch: string]: { readonly clsid: string } };
 	readonly applicationName: string;
+	readonly linuxDesktopName?: string;
 	readonly embedderIdentifier?: string;
 	readonly agentsTelemetryAppName?: string;
 
@@ -115,6 +132,8 @@ export interface IProductConfiguration {
 	readonly webviewContentExternalBaseUrlTemplate?: string;
 	readonly target?: string;
 	readonly nlsCoreBaseUrl?: string;
+	/** Build-time hash of the commit and core NLS tables used to identify translated-message caches. */
+	readonly nlsMetadataHash?: string;
 
 	readonly settingsSearchBuildId?: number;
 	readonly settingsSearchUrl?: string;
@@ -132,9 +151,17 @@ export interface IProductConfiguration {
 		readonly resourceUrlTemplate: string;
 		readonly nlsBaseUrl: string;
 		readonly accessSKUs?: string[];
+		readonly accessScopes?: string[];
 	};
 
 	readonly agentSdks?: { readonly [packageId: string]: IAgentSdkProductConfig };
+
+	readonly copilotVersions?: {
+		readonly runtime: string;
+		readonly sdk: string;
+	};
+
+	readonly dictationRuntime?: IDictationRuntimeProductConfig;
 
 	readonly mcpGallery?: {
 		readonly serviceUrl: string;
@@ -419,8 +446,7 @@ export interface IDefaultChatAgent {
 
 	readonly documentationUrl: string;
 	readonly skusDocumentationUrl: string;
-	/** Optional here: absent from this fork's product.json, so the cache-break "Learn more" link is simply not rendered. */
-	readonly optimizeUsageDocumentationUrl?: string;
+	readonly optimizeUsageDocumentationUrl: string;
 	readonly publicCodeMatchesUrl: string;
 	readonly managePlanUrl: string;
 	readonly upgradePlanUrl: string;
@@ -433,6 +459,7 @@ export interface IDefaultChatAgent {
 		enterprise: { id: string; name: string };
 		google: { id: string; name: string };
 		apple: { id: string; name: string };
+		microsoft: { id: string; name: string };
 	};
 
 	readonly providerExtensionId: string;
@@ -443,6 +470,7 @@ export interface IDefaultChatAgent {
 	readonly entitlementSignupLimitedUrl: string;
 	readonly tokenEntitlementUrl: string;
 	readonly mcpRegistryDataUrl: string;
+	readonly mcpConnectorsUrl?: string;
 	readonly managedSettingsUrl: string;
 
 	readonly chatQuotaExceededContext: string;

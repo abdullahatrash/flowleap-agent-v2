@@ -10,6 +10,7 @@ import { autorun, derived, IObservable, observableFromEvent } from '../../../../
 import { isWindows } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IApplicationBadge, INativeHostService } from '../../../../platform/native/common/native.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import product from '../../../../platform/product/common/product.js';
@@ -18,6 +19,7 @@ import { IWorkbenchContribution } from '../../../../workbench/common/contributio
 import { ACTIVITY_BAR_BADGE_BACKGROUND, ACTIVITY_BAR_BADGE_FOREGROUND } from '../../../../workbench/common/theme.js';
 import { ISession, SessionStatus } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { BlockedSessions } from '../../blockedSessions/browser/blockedSessions.js';
 
 export const SESSIONS_APPLICATION_BADGE_SETTING = 'sessions.showApplicationBadge';
 export const SESSIONS_APPLICATION_BADGE_DEFAULT = product.quality !== 'stable';
@@ -25,6 +27,7 @@ export const SESSIONS_APPLICATION_BADGE_OPTIONS_SETTING = 'sessions.applicationB
 export const SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT = {
 	inputNeeded: true,
 	unread: false,
+	ciFailing: false,
 };
 
 /**
@@ -47,17 +50,20 @@ export class SessionsApplicationBadge extends Disposable implements IWorkbenchCo
 	private readonly _sessions: IObservable<readonly ISession[]>;
 	private readonly _colorTheme: IObservable<IColorTheme>;
 	private readonly _count: IObservable<number>;
+	private readonly _blockedSessions: BlockedSessions;
 
 	constructor(
 		@ISessionsManagementService private readonly _sessionsManagementService: ISessionsManagementService,
 		@INativeHostService private readonly _nativeHostService: INativeHostService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IThemeService private readonly _themeService: IThemeService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 
 		this._enabled = observableConfigValue(SESSIONS_APPLICATION_BADGE_SETTING, SESSIONS_APPLICATION_BADGE_DEFAULT, this._configurationService);
 		const badgeOptions = observableConfigValue(SESSIONS_APPLICATION_BADGE_OPTIONS_SETTING, SESSIONS_APPLICATION_BADGE_OPTIONS_DEFAULT, this._configurationService);
+		this._blockedSessions = this._register(instantiationService.createInstance(BlockedSessions));
 
 		this._sessions = observableFromEvent(this, this._sessionsManagementService.onDidChangeSessions, () => this._sessionsManagementService.getSessions());
 
@@ -69,6 +75,9 @@ export class SessionsApplicationBadge extends Disposable implements IWorkbenchCo
 			}
 
 			const options = badgeOptions.read(reader);
+			const ciFailingSessionIds = options.ciFailing
+				? new Set(this._blockedSessions.failingCISessions.read(reader).map(session => session.sessionId))
+				: undefined;
 			let count = 0;
 			for (const session of this._sessions.read(reader)) {
 				if (session.isArchived.read(reader)) {
@@ -76,7 +85,8 @@ export class SessionsApplicationBadge extends Disposable implements IWorkbenchCo
 				}
 
 				if ((options.inputNeeded && session.status.read(reader) === SessionStatus.NeedsInput)
-					|| (options.unread && !session.isRead.read(reader) && session.status.read(reader) !== SessionStatus.InProgress)) {
+					|| (options.unread && !session.isRead.read(reader) && session.status.read(reader) !== SessionStatus.InProgress)
+					|| ciFailingSessionIds?.has(session.sessionId)) {
 					count++;
 				}
 			}

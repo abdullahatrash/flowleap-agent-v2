@@ -51,6 +51,7 @@ import './api/browser/viewsExtensionPoint.js';
 //#region --- workbench parts
 
 import './browser/parts/editor/editor.contribution.js';
+import './browser/parts/editor/diffEditor.workbench.contribution.js';
 import './browser/parts/editor/editorParts.js';
 import './browser/parts/paneCompositePartService.js';
 import './browser/parts/banner/bannerPart.js';
@@ -141,10 +142,11 @@ import './services/userAttention/browser/userAttentionBrowser.js';
 import './services/editor/browser/editorPaneService.js';
 import './services/editor/common/customEditorLabelService.js';
 import './services/dataChannel/browser/dataChannelService.js';
+import './services/github/browser/githubService.js';
 import './services/inlineCompletions/common/inlineCompletionsUnification.js';
 import './services/chat/common/chatEntitlementService.js';
 import './services/agentHost/common/agentHostResourceService.js';
-import '../platform/agentSessionState/browser/agentHostConnectionsService.js';
+import '../platform/agentHost/browser/agentHostConnectionsService.js';
 import './services/log/common/defaultLogLevels.js';
 
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
@@ -203,6 +205,10 @@ import './services/accounts/browser/defaultAccount.js';
 
 // Account Policy Gate
 import './services/policies/browser/accountPolicyGate.contribution.js';
+import './services/policies/browser/managedSettingsUpdate.contribution.js';
+
+// Policy Telemetry
+import './services/policies/browser/policyTelemetry.contribution.js';
 
 // Telemetry
 import './contrib/telemetry/browser/telemetry.contribution.js';
@@ -339,8 +345,8 @@ import './contrib/externalTerminal/browser/externalTerminal.contribution.js';
 // Relauncher
 import './contrib/relauncher/browser/relauncher.contribution.js';
 
-// Style Overrides (experimental)
-import './contrib/styleOverrides/browser/styleOverrides.contribution.js';
+// Modern UI (experimental)
+import './contrib/modernUI/browser/modernUI.contribution.js';
 
 // Tasks
 import './contrib/tasks/browser/task.contribution.js';
@@ -398,6 +404,9 @@ import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
 
 // Onboarding (scenario engine)
 import './contrib/onboarding/browser/onboarding.contribution.js';
+// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
+// import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+import './contrib/codeEditor/browser/diffEditorTryout.contribution.js';
 
 // Call Hierarchy
 import './contrib/callHierarchy/browser/callHierarchy.contribution.js';

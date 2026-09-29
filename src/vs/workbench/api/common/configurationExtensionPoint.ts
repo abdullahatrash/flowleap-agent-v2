@@ -99,6 +99,16 @@ const configurationEntrySchema: IJSONSchema = {
 								type: 'string',
 								description: nls.localize('scope.markdownDeprecationMessage', 'If set, the property is marked as deprecated and the given message is shown as an explanation in the markdown format.')
 							},
+							deprecationMessageSeverity: {
+								type: 'string',
+								enum: ['warning', 'info'],
+								enumDescriptions: [
+									nls.localize('scope.deprecationMessageSeverity.warning', 'Shows the deprecation message using the standard warning treatment.'),
+									nls.localize('scope.deprecationMessageSeverity.info', 'Shows the deprecation message using an informational treatment.')
+								],
+								default: 'warning',
+								description: nls.localize('scope.deprecationMessageSeverity', 'Controls the severity used to display the deprecation message.')
+							},
 							editPresentation: {
 								type: 'string',
 								enum: ['singlelineText', 'multilineText'],
@@ -326,6 +336,10 @@ configurationExtPoint.setHandler((extensions, { added, removed }) => {
 				if (propertyConfiguration.agentsWindow && !isProposedApiEnabled(extension.description, 'agentsWindowConfiguration')) {
 					extension.collector.error(nls.localize('config.property.agentsWindow.proposed', "Extension '{0}' CANNOT use 'agentsWindow' property on configuration '{1}' without enabling the 'agentsWindowConfiguration' API proposal.", extension.description.identifier.value, key));
 					delete propertyConfiguration.agentsWindow;
+				}
+				if (propertyConfiguration.agentHost) {
+					extension.collector.error(nls.localize('config.property.agentHost.unsupported', "Extension '{0}' CANNOT use the 'agentHost' property on configuration '{1}'.", extension.description.identifier.value, key));
+					delete propertyConfiguration.agentHost;
 				}
 				seenProperties.add(key);
 				propertyConfiguration.scope = propertyConfiguration.scope ? parseScope(propertyConfiguration.scope.toString()) : ConfigurationScope.WINDOW;

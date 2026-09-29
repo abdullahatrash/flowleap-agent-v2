@@ -73,6 +73,7 @@ export namespace PromptHeaderAttributes {
 	export const agent = 'agent';
 	export const mode = 'mode';
 	export const model = 'model';
+	export const reasoningEffort = 'reasoning-effort';
 	export const applyTo = 'applyTo';
 	export const paths = 'paths';
 	export const tools = 'tools';
@@ -171,7 +172,7 @@ export class PromptHeader {
 	}
 
 	/**
-	 * Optional icon id (a product-icon / codicon id such as `search`) shown next to the
+	 * Optional icon id (a codicon id such as `search`) shown next to the
 	 * agent in the chat mode picker. When unset, custom agent modes render without an icon.
 	 */
 	public get icon(): string | undefined {

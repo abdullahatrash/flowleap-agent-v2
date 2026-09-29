@@ -5,8 +5,8 @@
 
 import { Disposable } from '../../base/common/lifecycle.js';
 import { IContextKeyService, IContextKey, setConstant as setConstantContextKey } from '../../platform/contextkey/common/contextkey.js';
-import { IsMacContext, IsLinuxContext, IsWindowsContext, IsWebContext, IsMacNativeContext, IsDevelopmentContext, IsIOSContext, ProductQualityContext, IsMobileContext } from '../../platform/contextkey/common/contextkeys.js';
-import { SplitEditorsVertically, InEditorZenModeContext, AuxiliaryBarVisibleContext, SideBarVisibleContext, PanelAlignmentContext, PanelMaximizedContext, PanelVisibleContext, EmbedderIdentifierContext, EditorTabsVisibleContext, IsMainEditorCenteredLayoutContext, MainEditorAreaVisibleContext, DirtyWorkingCopiesContext, EmptyWorkspaceSupportContext, EnterMultiRootWorkspaceSupportContext, HasWebFileSystemAccess, IsMainWindowFullscreenContext, OpenFolderWorkspaceSupportContext, RemoteNameContext, VirtualWorkspaceContext, WorkbenchStateContext, WorkspaceFolderCountContext, PanelPositionContext, TemporaryWorkspaceContext, TitleBarVisibleContext, TitleBarStyleContext, IsAuxiliaryWindowFocusedContext, ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, ActiveEditorGroupLockedContext, MultipleEditorGroupsContext, EditorsVisibleContext, AuxiliaryBarMaximizedContext, InAutomationContext, IsSessionsWindowContext } from '../common/contextkeys.js';
+import { IsMacContext, IsLinuxContext, IsWindowsContext, IsWebContext, IsMacNativeContext, IsDevelopmentContext, IsIOSContext, ProductQualityContext, IsMobileContext, IsChromeOSContext } from '../../platform/contextkey/common/contextkeys.js';
+import { SplitEditorsVertically, InEditorZenModeContext, AuxiliaryBarVisibleContext, SecondarySideBarVisibleContext, SideBarVisibleContext, PanelAlignmentContext, PanelMaximizedContext, PanelVisibleContext, EmbedderIdentifierContext, EditorTabsVisibleContext, IsMainEditorCenteredLayoutContext, MainEditorAreaVisibleContext, DirtyWorkingCopiesContext, EmptyWorkspaceSupportContext, EnterMultiRootWorkspaceSupportContext, HasWebFileSystemAccess, IsMainWindowFullscreenContext, OpenFolderWorkspaceSupportContext, RemoteNameContext, VirtualWorkspaceContext, WorkbenchStateContext, WorkspaceFolderCountContext, PanelPositionContext, TemporaryWorkspaceContext, TitleBarVisibleContext, TitleBarStyleContext, IsAuxiliaryWindowFocusedContext, ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, ActiveEditorGroupLockedContext, MultipleEditorGroupsContext, EditorsVisibleContext, AuxiliaryBarMaximizedContext, InAutomationContext, IsSessionsWindowContext } from '../common/contextkeys.js';
 import { preferredSideBySideGroupDirection, GroupDirection, IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
@@ -25,8 +25,6 @@ import { IEditorService } from '../services/editor/common/editorService.js';
 import { PatentIdeContextKeys } from '../common/patent/patentIdeContextKeys.js';
 
 export class WorkbenchContextKeysHandler extends Disposable {
-
-	private patentIdeModeContext: IContextKey<boolean>;
 
 	private dirtyWorkingCopiesContext: IContextKey<boolean>;
 
@@ -50,6 +48,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 	private virtualWorkspaceContext: IContextKey<string>;
 	private temporaryWorkspaceContext: IContextKey<boolean>;
 	private isSessionsWindowContext: IContextKey<boolean>;
+	private patentIdeModeContext: IContextKey<boolean>;
 	private inAutomationContext: IContextKey<boolean>;
 
 	private inZenModeContext: IContextKey<boolean>;
@@ -63,6 +62,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 	private panelAlignmentContext: IContextKey<string>;
 	private panelMaximizedContext: IContextKey<boolean>;
 	private auxiliaryBarVisibleContext: IContextKey<boolean>;
+	private secondarySideBarVisibleContext: IContextKey<boolean>;
 	private auxiliaryBarMaximizedContext: IContextKey<boolean>;
 	private editorTabsVisibleContext: IContextKey<boolean>;
 	private titleAreaVisibleContext: IContextKey<boolean>;
@@ -85,6 +85,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		IsMacContext.bindTo(this.contextKeyService);
 		IsLinuxContext.bindTo(this.contextKeyService);
 		IsWindowsContext.bindTo(this.contextKeyService);
+		IsChromeOSContext.bindTo(this.contextKeyService);
 
 		IsWebContext.bindTo(this.contextKeyService);
 		IsMacNativeContext.bindTo(this.contextKeyService);
@@ -97,6 +98,10 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		this.temporaryWorkspaceContext = TemporaryWorkspaceContext.bindTo(this.contextKeyService);
 		this.isSessionsWindowContext = IsSessionsWindowContext.bindTo(this.contextKeyService);
 		this.isSessionsWindowContext.set(this.environmentService.isSessionsWindow);
+
+		// FlowLeap: Patent IDE mode hides developer-focused UI
+		this.patentIdeModeContext = PatentIdeContextKeys.Mode.bindTo(this.contextKeyService);
+		this.patentIdeModeContext.set(true);
 		this.updateWorkspaceContextKeys();
 
 		// Capabilities
@@ -114,10 +119,6 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		// Automation
 		this.inAutomationContext = InAutomationContext.bindTo(this.contextKeyService);
 		this.inAutomationContext.set(!!this.environmentService.enableSmokeTestDriver);
-
-		// Patent IDE Mode
-		this.patentIdeModeContext = PatentIdeContextKeys.Mode.bindTo(this.contextKeyService);
-		this.patentIdeModeContext.set(true); // Enable Patent IDE mode by default
 
 		// Editor Groups
 		this.activeEditorGroupEmpty = ActiveEditorGroupEmptyContext.bindTo(this.contextKeyService);
@@ -206,6 +207,8 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		// Auxiliary Bar
 		this.auxiliaryBarVisibleContext = AuxiliaryBarVisibleContext.bindTo(this.contextKeyService);
 		this.auxiliaryBarVisibleContext.set(this.layoutService.isVisible(Parts.AUXILIARYBAR_PART));
+		this.secondarySideBarVisibleContext = SecondarySideBarVisibleContext.bindTo(this.contextKeyService);
+		this.secondarySideBarVisibleContext.set(this.layoutService.isSecondarySideBarVisible());
 		this.auxiliaryBarMaximizedContext = AuxiliaryBarMaximizedContext.bindTo(this.contextKeyService);
 		this.auxiliaryBarMaximizedContext.set(this.layoutService.isAuxiliaryBarMaximized());
 
@@ -257,6 +260,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			this.panelVisibleContext.set(this.layoutService.isVisible(Parts.PANEL_PART));
 			this.panelMaximizedContext.set(this.layoutService.isPanelMaximized());
 			this.auxiliaryBarVisibleContext.set(this.layoutService.isVisible(Parts.AUXILIARYBAR_PART));
+			this.secondarySideBarVisibleContext.set(this.layoutService.isSecondarySideBarVisible());
 			this.sideBarVisibleContext.set(this.layoutService.isVisible(Parts.SIDEBAR_PART));
 
 			this.updateTitleBarContextKeys();

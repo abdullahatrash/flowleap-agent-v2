@@ -48,6 +48,10 @@ export interface IStrictMarketplaceSource {
  *
  * Plain-string entries (allowed by the policy schema but unnamed) are stored with
  * the value used as both key and value so they survive the round-trip intact.
+ *
+ * Marketplace names come from managed settings (untrusted input) and are written as object keys,
+ * so `__proto__` / `constructor` / `prototype` keys are skipped to avoid prototype pollution
+ * (mirroring the guard in the managed-settings normalizer's string-map encoder).
  */
 export function extraKnownMarketplacesToConfigDict(entries: readonly (string | IExtraKnownMarketplaceEntry)[] | undefined): ExtraKnownMarketplacesConfigDict | undefined {
 	if (!entries?.length) {
@@ -56,8 +60,14 @@ export function extraKnownMarketplacesToConfigDict(entries: readonly (string | I
 	const obj: ExtraKnownMarketplacesConfigDict = {};
 	for (const entry of entries) {
 		if (typeof entry === 'string') {
+			if (isUnsafeMarketplaceKey(entry)) {
+				continue;
+			}
 			obj[entry] = entry;
 		} else {
+			if (isUnsafeMarketplaceKey(entry.name)) {
+				continue;
+			}
 			const s = entry.source;
 			const base = s.source === 'github' ? s.repo : s.url;
 			const source = s.ref ? `${base}#${s.ref}` : base;
@@ -65,4 +75,9 @@ export function extraKnownMarketplacesToConfigDict(entries: readonly (string | I
 		}
 	}
 	return obj;
+}
+
+/** Whether a marketplace name would pollute the prototype chain if used as an object key. */
+function isUnsafeMarketplaceKey(key: string): boolean {
+	return key === '__proto__' || key === 'constructor' || key === 'prototype';
 }

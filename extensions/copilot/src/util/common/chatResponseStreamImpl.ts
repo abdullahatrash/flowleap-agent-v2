@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ChatResponseReferencePartStatusKind } from '@vscode/prompt-tsx';
-import type { ChatQuestion, ChatResponseFileTree, ChatResponseStream, ChatResultUsage, ChatToolInvocationStreamData, ChatVulnerability, ChatWorkspaceFileEdit, Command, ExtendedChatResponsePart, Location, NotebookEdit, Progress, ThinkingDelta, Uri } from 'vscode';
+import type { ChatQuestion, ChatResponseFileTree, ChatResponseStream, ChatResponseVoiceProgressStage, ChatResultUsage, ChatToolInvocationStreamData, ChatVulnerability, ChatWorkspaceFileEdit, Command, ExtendedChatResponsePart, Location, NotebookEdit, Progress, ThinkingDelta, Uri } from 'vscode';
 import { ChatHookType, ChatResponseAnchorPart, ChatResponseClearToPreviousToolInvocationReason, ChatResponseCodeblockUriPart, ChatResponseCodeCitationPart, ChatResponseCommandButtonPart, ChatResponseConfirmationPart, ChatResponseExternalEditPart, ChatResponseFileTreePart, ChatResponseHookPart, ChatResponseInfoPart, ChatResponseMarkdownPart, ChatResponseMarkdownWithVulnerabilitiesPart, ChatResponseNotebookEditPart, ChatResponseProgressPart, ChatResponseProgressPart2, ChatResponseReferencePart, ChatResponseReferencePart2, ChatResponseTextEditPart, ChatResponseThinkingProgressPart, ChatResponseWarningPart, ChatResponseWorkspaceEditPart, MarkdownString, TextEdit } from '../../vscodeTypes';
 import type { ThemeIcon } from '../vs/base/common/themables';
 
@@ -133,6 +133,10 @@ export class ChatResponseStreamImpl implements FinalizableChatResponseStream {
 
 	hookProgress(hookType: ChatHookType, stopReason?: string, systemMessage?: string): void {
 		this._push(new ChatResponseHookPart(hookType, stopReason, systemMessage));
+	}
+
+	voiceProgress(_id: ChatResponseVoiceProgressStage, _value: string): void {
+		// Voice Mode narration is not used by this extension; the member exists for API conformance.
 	}
 
 	button(command: Command): void {

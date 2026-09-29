@@ -12,7 +12,6 @@ import { createActionViewItem } from '../../../../platform/actions/browser/menuE
 import { Action2, MenuId, MenuItemAction, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
@@ -37,6 +36,7 @@ import { IWorkbenchLayoutService } from '../../../services/layout/browser/layout
 import { IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export class DebugViewPaneContainer extends ViewPaneContainer {
 

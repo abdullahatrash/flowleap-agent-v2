@@ -48,7 +48,7 @@ Registry.as<IExtensionFeaturesRegistry>(Extensions.ExtensionFeaturesRegistry).re
 	id: CopilotUsageExtensionFeatureId,
 	label: localize('Language Models', "Language Models"),
 	description: localize('languageModels', "Language models usage statistics of this extension."),
-	icon: Codicon.sparkle,
+	icon: Codicon.copilot,
 	access: {
 		canToggle: false
 	},

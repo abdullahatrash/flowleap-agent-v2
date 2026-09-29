@@ -1,0 +1,55 @@
+diff --git a/src/vs/sessions/contrib/keptOutServices/browser/keptOutServices.contribution.ts b/src/vs/sessions/contrib/keptOutServices/browser/keptOutServices.contribution.ts
+new file mode 100644
+index 00000000000..bb469574200
+--- /dev/null
++++ b/src/vs/sessions/contrib/keptOutServices/browser/keptOutServices.contribution.ts
+@@ -0,0 +1,36 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++// FlowLeap (PRD 0017 keep-out): the github, codeReview and automations contributions stay out of
++// registration (no PR/CI/review UI, no automations entry points), but upstream's core Agents Window
++// parts inject their services (sessions list, changes view, agent feedback, blocked sessions). This
++// file registers the services only, so those parts can be created. The services stay inert for
++// sessions without GitHub metadata or an automations-capable provider.
++
++import { observableFromPromise } from '../../../../base/common/observable.js';
++import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
++import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
++import { Registry } from '../../../../platform/registry/common/platform.js';
++import { Extensions as WorkbenchExtensions, IWorkbenchContributionsRegistry } from '../../../../workbench/common/contributions.js';
++import { IAutomationDialogService } from '../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
++import { IAutomationRunner } from '../../../../workbench/contrib/chat/common/automations/automationRunner.js';
++import { IAutomationService } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
++import { AutomationDialogService } from '../../automations/browser/automationDialogService.js';
++import { AutomationRunner } from '../../automations/browser/automationRunner.js';
++import { ProviderAutomationService } from '../../automations/browser/providerAutomationService.js';
++import { CodeReviewService, ICodeReviewService } from '../../codeReview/browser/codeReviewService.js';
++import { GitHubService, IGitHubService } from '../../github/browser/githubService.js';
++import { IPullRequestIconCache, PullRequestIconCache } from '../../github/browser/pullRequestIconCache.js';
++
++registerSingleton(IGitHubService, GitHubService, InstantiationType.Delayed);
++registerSingleton(IPullRequestIconCache, PullRequestIconCache, InstantiationType.Delayed);
++registerSingleton(ICodeReviewService, CodeReviewService, InstantiationType.Delayed);
++
++const initialProvidersSettled = observableFromPromise(
++	Registry.as<IWorkbenchContributionsRegistry>(WorkbenchExtensions.Workbench).whenRestored.then(() => true)
++).map(result => result.value === true);
++registerSingleton(IAutomationService, new SyncDescriptor(ProviderAutomationService, [initialProvidersSettled], true));
++registerSingleton(IAutomationRunner, AutomationRunner, InstantiationType.Delayed);
++registerSingleton(IAutomationDialogService, AutomationDialogService, InstantiationType.Delayed);
+diff --git a/src/vs/sessions/sessions.common.main.ts b/src/vs/sessions/sessions.common.main.ts
+index ebb3bf7f77c..bceeb592b86 100644
+--- a/src/vs/sessions/sessions.common.main.ts
++++ b/src/vs/sessions/sessions.common.main.ts
+@@ -501,6 +501,8 @@ import './contrib/customViewTest/browser/customViewTest.contribution.js';
+ // Onboarding: the engine + spotlight presentation (from the workbench layer) and
+ // the Agents window scenario data.
+ import '../workbench/contrib/onboarding/browser/onboarding.contribution.js';
++// FlowLeap keep-out: services of the kept-out github/codeReview/automations contribs that core parts inject (PRD 0017)
++import './contrib/keptOutServices/browser/keptOutServices.contribution.js';
+ // FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
+ // import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+ import '../workbench/contrib/codeEditor/browser/diffEditorTryout.contribution.js';

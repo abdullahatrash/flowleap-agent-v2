@@ -45,6 +45,7 @@ import './services/title/electron-browser/titleService.js';
 import './services/host/electron-browser/nativeHostService.js';
 import '../platform/meteredConnection/electron-browser/meteredConnectionService.js';
 import './services/request/electron-browser/requestService.js';
+import '../platform/customizationMarketplace/electron-browser/customizationMarketplaceService.js';
 import './services/clipboard/electron-browser/clipboardService.js';
 import './services/contextmenu/electron-browser/contextmenuService.js';
 import './services/workspaces/electron-browser/workspaceEditingService.js';
@@ -58,6 +59,7 @@ import './services/mcp/electron-browser/mcpGalleryManifestService.js';
 import './services/mcp/electron-browser/mcpWorkbenchManagementService.js';
 import './services/encryption/electron-browser/encryptionService.js';
 import './services/imageResize/electron-browser/imageResizeService.js';
+import './services/localTranscription/electron-browser/localTranscriptionService.js';
 import './services/secrets/electron-browser/secretStorageService.js';
 import './services/localization/electron-browser/languagePackService.js';
 import './services/telemetry/electron-browser/telemetryService.js';
@@ -67,6 +69,7 @@ import './services/localization/electron-browser/localeService.js';
 import './services/extensions/electron-browser/extensionsScannerService.js';
 import './services/extensionManagement/electron-browser/extensionManagementServerService.js';
 import './services/extensionManagement/electron-browser/extensionGalleryManifestService.js';
+import './services/extensionManagement/electron-browser/extensionGalleryAccountService.js';
 import './services/extensionManagement/electron-browser/extensionTipsService.js';
 import './services/userDataSync/electron-browser/userDataSyncService.js';
 import './services/userDataSync/electron-browser/userDataAutoSyncService.js';
@@ -91,28 +94,31 @@ import './services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import '../platform/extensionManagement/electron-browser/extensionsProfileScannerService.js';
 import '../platform/sandbox/electron-browser/sandboxHelperService.js';
 import '../platform/webContentExtractor/electron-browser/webContentExtractorService.js';
+import '../platform/agentHost/electron-browser/remoteAgentHostService.js';
+import '../platform/agentHost/browser/agentHostEnablementService.js';
 import './services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './services/process/electron-browser/processService.js';
 import './services/power/electron-browser/powerService.js';
 
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IUserDataInitializationService, UserDataInitializationService } from './services/userData/browser/userDataInit.js';
-import { SyncDescriptor } from '../platform/instantiation/common/descriptors.js';
-import { IAgentHostService } from '../platform/agentSessionState/common/agentService.js';
+import { IAgentHostService } from '../platform/agentHost/common/agentService.js';
 import { EditorRemoteAgentHostServiceClient } from './services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
-import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../platform/agentSessionState/common/remoteAgentHostService.js';
+import { SyncDescriptor } from '../platform/instantiation/common/descriptors.js';
 
 registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataInitializationService, [[]], true));
-// The agent-host runtime is removed; register the dormant editor client + null remote service so
-// keep-list consumers that inject these interfaces resolve without spawning a local agent host.
+// FlowLeap: no agent host process (PRD 0004, PRD 0017 keep-out); the remote client stays inert without a remote.
+// The browser null service throws on use and breaks the chat view.
 registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
-registerSingleton(IRemoteAgentHostService, NullRemoteAgentHostService, InstantiationType.Delayed);
 
 
 //#endregion
 
 
 //#region --- workbench contributions
+
+// Onboarding
+import './contrib/onboarding/electron-browser/onboardingTryout.contribution.js';
 
 // Logs
 import './contrib/logs/electron-browser/logs.contribution.js';
@@ -207,6 +213,9 @@ import './contrib/policyExport/electron-browser/policyExport.contribution.js';
 
 // Keybindings Export
 import './contrib/keybindingsExport/electron-browser/keybindingsExport.contribution.js';
+
+// System-wide (OS global) Keybindings
+import './contrib/keybindings/electron-browser/systemWideKeybindings.contribution.js';
 
 //#endregion
 

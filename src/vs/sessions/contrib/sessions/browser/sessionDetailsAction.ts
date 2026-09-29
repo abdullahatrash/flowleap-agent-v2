@@ -15,7 +15,7 @@ import { IsSessionsWindowContext } from '../../../../workbench/common/contextkey
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { ISession } from '../../../services/sessions/common/session.js';
+import { getUntitledSessionTitle, ISession } from '../../../services/sessions/common/session.js';
 
 class ShowSessionDetailsAction extends Action2 {
 
@@ -50,7 +50,7 @@ class ShowSessionDetailsAction extends Action2 {
 registerAction2(ShowSessionDetailsAction);
 
 export function formatSessionDetails(allSessions: readonly ISession[]): string {
-	const sessions = allSessions.filter(session => !session.isArchived.get());
+	const sessions = allSessions.filter(session => !session.isArchived.get() && !(session.isAutomation?.get() ?? false));
 	const lines = ['Session Details', ''];
 
 	if (sessions.length === 0) {
@@ -59,7 +59,7 @@ export function formatSessionDetails(allSessions: readonly ISession[]): string {
 	}
 
 	for (const [index, session] of sessions.entries()) {
-		const title = session.title.get() || localize('sessions.details.untitledSession', "New Session");
+		const title = session.title.get() || getUntitledSessionTitle(session.isQuickChat?.get() ?? false);
 		const workingDirectories = session.workspace.get()?.folders.map(folder => formatWorkingDirectory(folder.workingDirectory)) ?? [];
 
 		lines.push(`Session: ${title.replace(/\r\n?|\n/g, ' ')}`);

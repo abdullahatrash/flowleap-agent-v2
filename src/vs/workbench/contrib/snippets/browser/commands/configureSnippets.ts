@@ -5,7 +5,7 @@
 
 import { isValidBasename } from '../../../../../base/common/extpath.js';
 import { extname } from '../../../../../base/common/path.js';
-import { joinPath } from '../../../../../base/common/resources.js';
+import { basename, joinPath } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import * as nls from '../../../../../nls.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
@@ -29,6 +29,33 @@ interface ICategoryPick extends IQuickPickItem {
 
 interface ITemplatePick extends IQuickPickItem {
 	template: PromptTemplate;
+}
+
+interface ISnippetPick extends IQuickPickItem {
+	filepath: URI;
+	hint?: true;
+}
+
+// Move the active editor's language to the front of each group and mark it as detected.
+export function promoteActiveLanguage(existing: ISnippetPick[], future: ISnippetPick[], activeLanguageId: string | undefined): void {
+	if (!activeLanguageId) {
+		return;
+	}
+	const detectedHint = nls.localize('detected', "This file type was detected from the current file.");
+	promote(existing, existing.findIndex(pick => basename(pick.filepath) === `${activeLanguageId}.json`), detectedHint);
+	promote(future, future.findIndex(pick => pick.label === activeLanguageId), detectedHint);
+}
+
+function promote(picks: ISnippetPick[], index: number, hint: string): void {
+	if (index < 0) {
+		return;
+	}
+	const pick = picks[index];
+	pick.tooltip = hint;
+	pick.description = pick.description ? `${pick.description} *` : '*';
+	if (index > 0) {
+		picks.unshift(picks.splice(index, 1)[0]);
+	}
 }
 
 async function createSnippetFile(scope: string, defaultPath: URI, quickInputService: IQuickInputService, fileService: IFileService, textFileService: ITextFileService, opener: IOpenerService) {

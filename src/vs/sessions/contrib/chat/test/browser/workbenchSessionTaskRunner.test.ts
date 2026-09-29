@@ -29,7 +29,7 @@ function makeSession(opts: { repository?: URI; worktree?: URI } = {}): ISession 
 			workingDirectory: opts.worktree ?? opts.repository,
 			name: 'test',
 			description: undefined,
-			gitRepository: { uri: opts.repository, workTreeUri: opts.worktree, baseBranchName: undefined },
+			gitRepository: { uri: opts.repository, workTreeUri: opts.worktree, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
 		} satisfies ISessionFolder],
 		requiresWorkspaceTrust: false,
 	} : undefined;
@@ -45,8 +45,6 @@ function makeSession(opts: { repository?: URI; worktree?: URI } = {}): ISession 
 		title: observableValue('title', 'session'),
 		updatedAt: observableValue('updatedAt', new Date()),
 		status: observableValue('status', SessionStatus.Untitled),
-		changesets: constObservable([]),
-		changes: constObservable([]),
 		modelId: observableValue('modelId', undefined),
 		mode: observableValue('mode', undefined),
 		loading: observableValue('loading', false),
@@ -56,7 +54,7 @@ function makeSession(opts: { repository?: URI; worktree?: URI } = {}): ISession 
 		description: observableValue('description', undefined),
 		chats: observableValue('chats', [chat]),
 		mainChat: constObservable(chat),
-		capabilities: { supportsMultipleChats: false },
+		capabilities: constObservable({ supportsMultipleChats: false }),
 	};
 }
 

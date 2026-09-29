@@ -579,15 +579,14 @@ class MarkersStatusBarContributions extends Disposable implements IWorkbenchCont
 		@IMarkerService private readonly markerService: IMarkerService,
 		@IStatusbarService private readonly statusbarService: IStatusbarService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@IContextKeyService private readonly contextKeyService: IContextKeyService
+		@IContextKeyService contextKeyService: IContextKeyService
 	) {
 		super();
 
-		// FlowLeap Patent IDE: the Problems counter is developer residue; do not register it in patent mode.
-		if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false) {
+		// FlowLeap Patent IDE: the Problems counter is developer residue; do not register it in patent mode
+		if (PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false) {
 			return;
 		}
-
 		this.markersStatusItem = this._register(this.statusbarService.addEntry(this.getMarkersItem(), 'status.problems', StatusbarAlignment.LEFT, 50 /* Medium Priority */));
 
 		const addStatusBarEntry = () => {

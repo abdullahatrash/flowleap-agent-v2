@@ -18,10 +18,16 @@ import { LanguagePackCachedDataCleaner } from './contrib/languagePackCachedDataC
 import { LocalizationsUpdater } from './contrib/localizationsUpdater.js';
 import { LogsDataCleaner } from './contrib/logsDataCleaner.js';
 import { UnusedWorkspaceStorageDataCleaner } from './contrib/storageDataCleaner.js';
+import { AgentFinderRestProvider } from '../../../platform/agentFinder/common/agentFinderRestProvider.js';
+import { COPILOT_CONNECTORS_REQUEST_CHANNEL_NAME, CopilotConnectorsRequestChannel } from '../../../platform/copilotConnectors/common/copilotConnectorsIpc.js';
+import { CopilotConnectorsRequestService } from '../../../platform/copilotConnectors/common/copilotConnectorsRequestService.js';
 import { IChecksumService } from '../../../platform/checksum/common/checksumService.js';
 import { ChecksumService } from '../../../platform/checksum/node/checksumService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ConfigurationService } from '../../../platform/configuration/common/configurationService.js';
+import { CUSTOMIZATION_MARKETPLACE_CHANNEL_NAME, CustomizationMarketplaceChannel } from '../../../platform/customizationMarketplace/common/customizationMarketplaceIpc.js';
+import { createLazyCustomizationMarketplaceProvider, CustomizationMarketplaceService } from '../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
+import { CustomizationMarketplaceSources } from '../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
 import { IDiagnosticsService } from '../../../platform/diagnostics/common/diagnostics.js';
 import { DiagnosticsService } from '../../../platform/diagnostics/node/diagnosticsService.js';
 import { IDownloadService } from '../../../platform/download/common/download.js';
@@ -70,6 +76,7 @@ import { UserDataSyncService } from '../../../platform/userDataSync/common/userD
 import { UserDataSyncServiceChannel } from '../../../platform/userDataSync/common/userDataSyncServiceIpc.js';
 import { UserDataSyncStoreManagementService, UserDataSyncStoreService } from '../../../platform/userDataSync/common/userDataSyncStoreService.js';
 import { IUserDataProfileStorageService } from '../../../platform/userDataProfile/common/userDataProfileStorageService.js';
+import { markNodeCompileCacheReady } from '../../../base/node/nodeCompileCache.js';
 import { SharedProcessUserDataProfileStorageService } from '../../../platform/userDataProfile/node/userDataProfileStorageService.js';
 import { ActiveWindowManager } from '../../../platform/windows/node/windowTracker.js';
 import { ISignService } from '../../../platform/sign/common/sign.js';
@@ -101,6 +108,7 @@ import { localize } from '../../../nls.js';
 import { LogService } from '../../../platform/log/common/logService.js';
 import { ISharedProcessLifecycleService, SharedProcessLifecycleService } from '../../../platform/lifecycle/node/sharedProcessLifecycleService.js';
 import { RemoteTunnelService } from '../../../platform/remoteTunnel/node/remoteTunnelService.js';
+import { ITunnelProcessCoordinator, TunnelProcessCoordinator } from '../../../platform/remoteTunnel/node/tunnelProcessCoordinator.js';
 import { ExtensionsProfileScannerService } from '../../../platform/extensionManagement/node/extensionsProfileScannerService.js';
 import { ExtensionRecommendationNotificationServiceChannelClient } from '../../../platform/extensionRecommendations/common/extensionRecommendationsIpc.js';
 import { INativeHostService } from '../../../platform/native/common/native.js';
@@ -403,6 +411,7 @@ class SharedProcessMain extends Disposable implements IClientConnectionFilter {
 		services.set(ISharedProcessTunnelService, new SyncDescriptor(SharedProcessTunnelService));
 
 		// Remote Tunnel
+		services.set(ITunnelProcessCoordinator, new SyncDescriptor(TunnelProcessCoordinator, [undefined], true));
 		services.set(IRemoteTunnelService, new SyncDescriptor(RemoteTunnelService));
 
 		// Web Content Extractor
@@ -411,10 +420,18 @@ class SharedProcessMain extends Disposable implements IClientConnectionFilter {
 		// Local Git
 		services.set(ILocalGitService, new SyncDescriptor(LocalGitService, undefined, false /* proxied to other processes */));
 
+		// FlowLeap: no SSH / Dev Container / WSL / Tunnel agent host services (PRD 0004, #73)
+
 		return new InstantiationService(services);
 	}
 
 	private initChannels(accessor: ServicesAccessor): void {
+
+		const instantiationService = accessor.get(IInstantiationService);
+		this.server.registerChannel(COPILOT_CONNECTORS_REQUEST_CHANNEL_NAME, new CopilotConnectorsRequestChannel(() => instantiationService.createInstance(CopilotConnectorsRequestService)));
+		this.server.registerChannel(CUSTOMIZATION_MARKETPLACE_CHANNEL_NAME, new CustomizationMarketplaceChannel(() => new CustomizationMarketplaceService([
+			createLazyCustomizationMarketplaceProvider(CustomizationMarketplaceSources.AgentFinderPublicFeed.id, () => instantiationService.createInstance(AgentFinderRestProvider)),
+		])));
 
 		// Extensions Management
 		const channel = new ExtensionManagementChannel(accessor.get(IExtensionManagementService), () => null);
@@ -486,6 +503,8 @@ class SharedProcessMain extends Disposable implements IClientConnectionFilter {
 		// Local Git
 		const localGitChannel = ProxyChannel.fromService(accessor.get(ILocalGitService), this._store);
 		this.server.registerChannel('localGit', localGitChannel);
+
+		// FlowLeap: no SSH / Dev Container / WSL / Tunnel agent host services (PRD 0004, #73)
 	}
 
 	private registerErrorHandler(logService: ILogService): void {
@@ -579,6 +598,7 @@ export async function main(configuration: ISharedProcessConfiguration): Promise<
 		await sharedProcess.init();
 
 		process.parentPort.postMessage(SharedProcessLifecycle.initDone);
+		markNodeCompileCacheReady();
 	} catch (error) {
 		process.parentPort.postMessage({ error: error.toString() });
 	}

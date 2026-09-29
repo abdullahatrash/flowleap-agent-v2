@@ -131,6 +131,8 @@ export function annotateSpecialMarkdownContentWithSource(response: Iterable<ICha
 					sourceIndexes: [...previousEntry.sourceIndexes, currentSourceIndex],
 				});
 			}
+		} else if (item.kind === 'voiceProgress') {
+			continue;
 		} else {
 			result.push({ content: item, sourceIndexes: [currentSourceIndex] });
 		}

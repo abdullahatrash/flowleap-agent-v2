@@ -14,7 +14,6 @@ import { ICommandActionTitle, Icon } from '../../../../platform/action/common/ac
 import { MenuId, MenuRegistry } from '../../../../platform/actions/common/actions.js';
 import { Extensions as ConfigurationExtensions, ConfigurationScope, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr, ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { KeybindingWeight, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IQuickAccessRegistry, Extensions as QuickAccessExtensions } from '../../../../platform/quickinput/common/quickAccess.js';
@@ -67,6 +66,7 @@ import { DebugChatContextContribution } from './debugChatIntegration.js';
 
 // Register services
 import './debug.service.contribution.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const debugCategory = nls.localize('debugCategory', "Debug");
 registerColors();
@@ -266,7 +266,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		mnemonicTitle: nls.localize({ key: 'mRun', comment: ['&& denotes a mnemonic'] }, "&&Run")
 	},
 	order: 6,
-	when: ContextKeyExpr.and(IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: Hide when Patent IDE mode is ON
+	when: ContextKeyExpr.and(IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: hide the Run menu
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
@@ -440,7 +440,7 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
 	containerIcon: icons.debugConsoleViewIcon,
 	canToggleVisibility: true,
 	canMoveView: true,
-	when: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()), // Hide when Patent IDE mode is ON
+	when: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: hide the Debug Console
 	ctorDescriptor: new SyncDescriptor(Repl),
 	openCommandActionDescriptor: {
 		id: 'workbench.debug.action.toggleRepl',
@@ -468,13 +468,13 @@ const viewContainer = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewCo
 
 // Register default debug views
 const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
-const patentIdeHidden = PatentIdeContextKeys.Mode.toNegated(); // Hide when Patent IDE mode is ON
+const patentIdeHidden = PatentIdeContextKeys.Mode.toNegated(); // FlowLeap Patent IDE: hide the Run and Debug views
 viewsRegistry.registerViews([{ id: VARIABLES_VIEW_ID, name: nls.localize2('variables', "Variables"), containerIcon: icons.variablesViewIcon, ctorDescriptor: new SyncDescriptor(VariablesView), order: 10, weight: 40, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusVariablesView' }, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
 viewsRegistry.registerViews([{ id: WATCH_VIEW_ID, name: nls.localize2('watch', "Watch"), containerIcon: icons.watchViewIcon, ctorDescriptor: new SyncDescriptor(WatchExpressionsView), order: 20, weight: 10, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusWatchView' }, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
 viewsRegistry.registerViews([{ id: CALLSTACK_VIEW_ID, name: nls.localize2('callStack', "Call Stack"), containerIcon: icons.callStackViewIcon, ctorDescriptor: new SyncDescriptor(CallStackView), order: 30, weight: 30, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusCallStackView' }, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
 viewsRegistry.registerViews([{ id: BREAKPOINTS_VIEW_ID, name: nls.localize2('breakpoints', "Breakpoints"), containerIcon: icons.breakpointsViewIcon, ctorDescriptor: new SyncDescriptor(BreakpointsView), order: 40, weight: 20, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusBreakpointsView' }, when: ContextKeyExpr.and(ContextKeyExpr.or(CONTEXT_BREAKPOINTS_EXIST, CONTEXT_DEBUG_UX.isEqualTo('default'), CONTEXT_HAS_DEBUGGED), patentIdeHidden) }], viewContainer);
 viewsRegistry.registerViews([{ id: WelcomeView.ID, name: WelcomeView.LABEL, containerIcon: icons.runViewIcon, ctorDescriptor: new SyncDescriptor(WelcomeView), order: 1, weight: 40, canToggleVisibility: true, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('simple'), patentIdeHidden) }], viewContainer);
-viewsRegistry.registerViews([{ id: LOADED_SCRIPTS_VIEW_ID, name: nls.localize2('loadedScripts', "Loaded Scripts"), containerIcon: icons.loadedScriptsViewIcon, ctorDescriptor: new SyncDescriptor(LoadedScriptsView), order: 35, weight: 5, canToggleVisibility: true, canMoveView: true, collapsed: true, when: ContextKeyExpr.and(CONTEXT_LOADED_SCRIPTS_SUPPORTED, CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
+viewsRegistry.registerViews([{ id: LOADED_SCRIPTS_VIEW_ID, name: nls.localize2('loadedScripts', "Loaded Scripts"), containerIcon: icons.loadedScriptsViewIcon, ctorDescriptor: new SyncDescriptor(LoadedScriptsView), order: 35, weight: 5, canToggleVisibility: true, canMoveView: true, collapsed: true, when: ContextKeyExpr.and(ContextKeyExpr.and(CONTEXT_LOADED_SCRIPTS_SUPPORTED, CONTEXT_DEBUG_UX.isEqualTo('default')), patentIdeHidden) }], viewContainer);
 
 // Register disassembly view
 

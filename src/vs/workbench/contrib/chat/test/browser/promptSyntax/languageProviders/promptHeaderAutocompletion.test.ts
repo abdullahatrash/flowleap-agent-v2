@@ -146,6 +146,7 @@ suite('PromptHeaderAutocompletion', () => {
 				{ label: 'icon', result: 'icon: $0' },
 				{ label: 'model', result: 'model: ${0:MAE 4 (olama)}' },
 				{ label: 'name', result: 'name: $0' },
+				{ label: 'reasoning-effort', result: 'reasoning-effort: ${0:low}' },
 				{ label: 'target', result: 'target: ${0:vscode}' },
 				{ label: 'tools', result: 'tools: ${0:[]}' },
 				{ label: 'user-invocable', result: 'user-invocable: ${0:true}' },
@@ -165,6 +166,24 @@ suite('PromptHeaderAutocompletion', () => {
 			assert.deepStrictEqual(actual.sort(sortByLabel), [
 				{ label: 'MAE 4 (olama)', result: 'model: MAE 4 (olama)' },
 				{ label: 'MAE 4.1 (copilot)', result: 'model: MAE 4.1 (copilot)' },
+			].sort(sortByLabel));
+		});
+
+		test('complete reasoning effort attribute value', async () => {
+			const content = [
+				'---',
+				'description: "Test"',
+				'reasoning-effort: |',
+				'---',
+			].join('\n');
+
+			const actual = await getCompletions(content, PromptsType.agent);
+			assert.deepStrictEqual(actual.sort(sortByLabel), [
+				{ label: 'high', result: 'reasoning-effort: high' },
+				{ label: 'low', result: 'reasoning-effort: low' },
+				{ label: 'max', result: 'reasoning-effort: max' },
+				{ label: 'medium', result: 'reasoning-effort: medium' },
+				{ label: 'xhigh', result: 'reasoning-effort: xhigh' },
 			].sort(sortByLabel));
 		});
 

@@ -4,217 +4,287 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event } from '../../../../base/common/event.js';
+import { createMarkdownCommandLink } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
+import { isMacintosh, isWeb } from '../../../../base/common/platform.js';
 import { PolicyCategory } from '../../../../base/common/policy.js';
-import '../../../../platform/agentSessionState/common/agentHost.config.contribution.js';
-import '../../../../platform/agentSessionState/browser/agentHost.config.contribution.js';
-import '../../../../platform/agentSessionState/common/agentHostStarter.config.contribution.js';
-import { AgentHostAhpJsonlLoggingSettingId, AgentHostCustomTerminalToolEnabledSettingId, AgentHostOpus48PromptEnabledSettingId, AgentHostSdkSandboxEnabledSettingId, ClaudePreferAgentHostAgentsSettingId, ClaudePreferAgentHostEditorSettingId } from '../../../../platform/agentSessionState/common/agentService.js';
-import { AgentNetworkFilterService, IAgentNetworkFilterService } from '../../../../platform/networkFilter/common/networkFilterService.js';
-import { AgentNetworkDomainSettingId } from '../../../../platform/networkFilter/common/settings.js';
-import { COPILOT_DISABLE_BYPASS_PERMISSIONS_MODE_KEY, COPILOT_ENABLED_PLUGINS_KEY, COPILOT_EXTRA_MARKETPLACES_KEY, COPILOT_MODEL_KEY, COPILOT_STRICT_MARKETPLACES_KEY, managedSettingValue } from '../../../../platform/policy/common/copilotManagedSettings.js';
-import { AgentSandboxEnabledValue, AgentSandboxSettingId } from '../../../../platform/sandbox/common/settings.js';
 import { registerEditorFeature } from '../../../../editor/common/editorFeatures.js';
 import * as nls from '../../../../nls.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { Extensions as ConfigurationExtensions, ConfigurationScope, IConfigurationNode, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import '../../../../platform/agentHost/browser/agentHostEnablementService.js';
+import '../../../../platform/agentHost/common/agentHostEnablementService.js';
+import { AgentHostMapLegacySettingsToManagedSettingsSettingId } from '../../../../platform/agentHost/common/agentHostManagedSettings.js';
+import { AgentHostAutoReplyEnabledConfigKey, AgentHostEditAutoApprovePatternsConfigKey, AgentHostExternalSessionsMode, AgentHostGlobalAutoApproveEnabledConfigKey, AgentHostMcpConnectorsEnabledConfigKey, AgentHostMigrateLegacyCopilotCliEnabledConfigKey, AgentHostSessionCatalogEnabledConfigKey, AgentHostSessionSyncEnabledConfigKey, AgentHostShowExternalSessionsConfigKey } from '../../../../platform/agentHost/common/agentHostSchema.js';
+import '../../../../platform/agentHost/common/agentHostStarter.config.contribution.js';
+import { AgentMergeSettingId } from '../../../../platform/agentHost/common/agentMerge.js';
+import { AgentHostAhpJsonlLoggingSettingId, AgentHostAllowSignedOutWhenUsableSettingId, AgentHostSdkSandboxEnabledSettingId, AgentHostSdkSandboxWindowsEnabledSettingId, CodexPreferAgentHostEditorSettingId } from '../../../../platform/agentHost/common/agentService.js';
+import { AgentHostCopilotModelCapabilityOverridesSettingId, AgentHostCopilotRuntimePathSettingId, AgentHostCopilotSdkLogLevelSettingId, AgentHostCustomTerminalToolEnabledSettingId, AgentHostHydraFusionEnabledSettingId, AgentHostOpus48PromptEnabledSettingId, AgentHostShellToolInitScriptEnabledSettingId, AgentHostToolSearchDeferThresholdSettingId, AgentHostToolSearchEnabledSettingId, CopilotAutoModeTierOverrideSettingId, CopilotClaudeAdvisorEnabledSettingId, CopilotCliConfigKey, CopilotSkillCharBudgetSettingId, CopilotTgrepEnabledSettingId, copilotSdkLogLevelSettingValues, DEFAULT_COPILOT_SKILL_CHAR_BUDGET, normalizeSkillCharBudget } from '../../../../platform/agentHost/common/copilotCliConfig.js';
+import { CopilotSemanticSearchEnabledSettingId } from '../../../../platform/agentHost/common/semanticSearchConstants.js';
+import { ChatMicrosoftAuthenticationEnabledSettingId, DEFAULT_EDIT_AUTO_APPROVE_PATTERNS, mergeChatEditAutoApprovePatterns } from '../../../../platform/chat/common/chatSettings.js';
+import { reasoningEffortLevels } from '../../../../platform/agentHost/common/reasoningEffort.js';
+import { ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { AgentHostConfigurationSyncScope, Extensions as ConfigurationExtensions, ConfigurationScope, IConfigurationNode, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { CustomizationMarketplaceConfiguration } from '../../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-import { McpAccessValue, McpAutoStartValue, mcpAccessConfig, mcpAutoStartConfig, mcpGalleryServiceEnablementConfig, mcpGalleryServiceUrlConfig, mcpAppsEnabledConfig } from '../../../../platform/mcp/common/mcpManagement.js';
+import { IJSONContributionRegistry, Extensions as JSONExtensions } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { McpAccessValue, McpAutoStartValue, mcpAccessConfig, mcpAllowedServersConfig, mcpAppsEnabledConfig, mcpAutoStartConfig, mcpDeniedServersConfig, mcpGalleryServiceEnablementConfig, mcpGalleryServiceUrlConfig } from '../../../../platform/mcp/common/mcpManagement.js';
+import { AgentNetworkFilterService, IAgentNetworkFilterService } from '../../../../platform/networkFilter/common/networkFilterService.js';
+import { AgentNetworkDomainSettingId } from '../../../../platform/networkFilter/common/settings.js';
+import { COPILOT_ALLOWED_MCP_SERVERS_KEY, COPILOT_ALLOW_MANAGED_HOOKS_ONLY_CONFIG, COPILOT_ALLOW_MANAGED_HOOKS_ONLY_KEY, COPILOT_ALLOW_MANAGED_MCP_SERVERS_ONLY_CONFIG, COPILOT_ALLOW_MANAGED_MCP_SERVERS_ONLY_KEY, COPILOT_DENIED_MCP_SERVERS_KEY, COPILOT_DISABLE_BYPASS_PERMISSIONS_MODE_KEY, COPILOT_ENABLED_PLUGINS_KEY, COPILOT_EXTRA_MARKETPLACES_KEY, COPILOT_MODEL_KEY, COPILOT_STRICT_MARKETPLACES_KEY, COPILOT_STRICT_PLUGIN_ONLY_CUSTOMIZATION_CONFIG, COPILOT_STRICT_PLUGIN_ONLY_CUSTOMIZATION_KEY, COPILOT_TOP_LEVEL_MODEL_KEY, managedModelValue, managedSettingsDisabledValue, managedSettingValue } from '../../../../platform/policy/common/copilotManagedSettings.js';
 import product from '../../../../platform/product/common/product.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { AgentSandboxEnabledValue, AgentSandboxSettingId } from '../../../../platform/sandbox/common/settings.js';
+import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { EditorPaneDescriptor, IEditorPaneRegistry } from '../../../browser/editor.js';
 import { type ConfigurationKeyValuePairs, Extensions, IConfigurationMigrationRegistry } from '../../../common/configuration.js';
-import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
 import { EditorExtensions, IEditorFactoryRegistry } from '../../../common/editor.js';
 import { IWorkbenchAssignmentService } from '../../../services/assignment/common/assignmentService.js';
 import { ChatEntitlement, IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
-import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorResolverService, RegisteredEditorPriority } from '../../../services/editor/common/editorResolverService.js';
 import { IPathService } from '../../../services/path/common/pathService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { AddConfigurationType, AssistedTypes } from '../../mcp/browser/mcpCommandsAddConfiguration.js';
-import { allDiscoverySources, discoverySourceSettingsLabel, McpCollisionBehavior, mcpDiscoverySection, mcpEnterpriseManagedAuthIdpSection, mcpServerCollisionBehaviorSection, mcpServerSamplingSection } from '../../mcp/common/mcpConfiguration.js';
-import { ChatAgentNameService, ChatAgentService, IChatAgentNameService, IChatAgentService } from '../common/participants/chatAgents.js';
-import { CodeMapperService, ICodeMapperService } from '../common/editing/chatCodeMapperService.js';
-import '../common/widget/chatColors.js';
-import { IChatEditingService } from '../common/editing/chatEditingService.js';
-import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
+import { McpCollisionBehavior, allDiscoverySources, discoverySourceSettingsLabel, mcpDiscoverySection, mcpEnterpriseManagedAuthIdpSection, mcpServerCollisionBehaviorSection, mcpServerSamplingSection, mcpWorkspaceRootConfig } from '../../mcp/common/mcpConfiguration.js';
+import { autoApprovePolicyValue } from '../common/agentHostConfigPolicy.js';
+import { IChatVariablesService } from '../common/attachments/chatVariables.js';
+import { IChatDebugService } from '../common/chatDebugService.js';
+import { ChatDebugServiceImpl } from '../common/chatDebugServiceImpl.js';
 import { ChatModeService, IChatMode, IChatModeService, IChatModes } from '../common/chatModes.js';
-import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { IChatService } from '../common/chatService/chatService.js';
+import { ChatRequestOriginService, IChatRequestOriginService } from '../common/chatRequestOrigin.js';
 import { ChatService } from '../common/chatService/chatServiceImpl.js';
 import { IChatSessionsService } from '../common/chatSessionsService.js';
-import { ChatSlashCommandService, IChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
-import { ChatArtifactsService, IChatArtifactsService } from '../common/tools/chatArtifactsService.js';
-import { ChatTodoListService, IChatTodoListService } from '../common/tools/chatTodoListService.js';
-import { ChatTransferService, IChatTransferService } from '../common/model/chatTransferService.js';
-import { LocalAgentDisabledInputTipContribution } from './agentSessions/localAgentDisabledInputTipContribution.js';
-import { IChatVariablesService } from '../common/attachments/chatVariables.js';
-import { ChatWidgetHistoryService, IChatWidgetHistoryService } from '../common/widget/chatWidgetHistoryService.js';
-import { ChatAgentLocation, ChatConfiguration, ChatNotificationMode, ChatPermissionLevel } from '../common/constants.js';
+import { ChatSideChatService, IChatSideChatService } from '../common/chatSideChatService.js';
+import { BYOKUtilityModelDefault, ChatAIDisabledSettingId, ChatAgentLocation, ChatConfiguration, ChatClosedPromoNotification, ChatDefaultPermissionLevel, CustomizationMigrationHintMode, ChatNotificationMode, ChatPermissionLevel } from '../common/constants.js';
+import { agentsWindowHandoffConfigurationProperties } from './agentSessionsConfiguration.js';
+import { chatProgressConfigurationProperties } from './chatProgressConfiguration.js';
+import { customizationMarketplaceConfigurationProperties } from './aiCustomization/customizationMarketplaceConfiguration.js';
+import { CodeMapperService, ICodeMapperService } from '../common/editing/chatCodeMapperService.js';
+import { IChatEditingService } from '../common/editing/chatEditingService.js';
 import { ILanguageModelIgnoredFilesService, LanguageModelIgnoredFilesService } from '../common/ignoredFiles.js';
 import { ILanguageModelsService, LanguageModelsService } from '../common/languageModels.js';
 import { ILanguageModelStatsService, LanguageModelStatsService } from '../common/languageModelStats.js';
-import { ILanguageModelToolsConfirmationService } from '../common/tools/languageModelToolsConfirmationService.js';
-import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
-import { ChatToolRiskAssessmentService, IChatToolRiskAssessmentService } from './tools/chatToolRiskAssessmentService.js';
-import { ChatGoalSummaryService, IChatGoalSummaryService } from './chatGoalSummaryService.js';
-import { AgentPluginDiscoveryPriority, agentPluginDiscoveryRegistry, IAgentPluginService } from '../common/plugins/agentPluginService.js';
+import { ChatTransferService, IChatTransferService } from '../common/model/chatTransferService.js';
+import { ChatAgentNameService, ChatAgentService, IChatAgentNameService, IChatAgentService } from '../common/participants/chatAgents.js';
+import { ChatSlashCommandService, IChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
+import { ISessionChatPillVisibilityService, SessionChatPillVisibility } from '../common/sessionChatPills.js';
+import { AgentPluginDiscoveryPriority, IAgentPluginService, agentPluginDiscoveryRegistry } from '../common/plugins/agentPluginService.js';
 import { ChatPromptFilesExtensionPointHandler } from '../common/promptSyntax/chatPromptFilesContribution.js';
-import { isTildePath, PromptsConfig } from '../common/promptSyntax/config/config.js';
-import { INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, INSTRUCTION_FILE_EXTENSION, LEGACY_MODE_DEFAULT_SOURCE_FOLDER, LEGACY_MODE_FILE_EXTENSION, PROMPT_DEFAULT_SOURCE_FOLDER, PROMPT_FILE_EXTENSION, DEFAULT_SKILL_SOURCE_FOLDERS, AGENTS_SOURCE_FOLDER, AGENT_FILE_EXTENSION, SKILL_FILENAME, CLAUDE_AGENTS_SOURCE_FOLDER, DEFAULT_HOOK_FILE_PATHS, DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS, COPILOT_USER_AGENTS_SOURCE_FOLDER } from '../common/promptSyntax/config/promptFileLocations.js';
-import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
-import { AGENT_DOCUMENTATION_URL, INSTRUCTIONS_DOCUMENTATION_URL, PROMPT_DOCUMENTATION_URL, SKILL_DOCUMENTATION_URL, HOOK_DOCUMENTATION_URL, PromptsType, PromptFileSource } from '../common/promptSyntax/promptTypes.js';
-import { hookFileSchema, HOOK_SCHEMA_URI } from '../common/promptSyntax/hookSchema.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { Extensions as JSONExtensions, IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { PromptsConfig, isTildePath } from '../common/promptSyntax/config/config.js';
+import { AGENTS_SOURCE_FOLDER, AGENT_FILE_EXTENSION, CLAUDE_AGENTS_SOURCE_FOLDER, COPILOT_USER_AGENTS_SOURCE_FOLDER, DEFAULT_HOOK_FILE_PATHS, DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS, DEFAULT_SKILL_SOURCE_FOLDERS, INSTRUCTIONS_DEFAULT_SOURCE_FOLDER, INSTRUCTION_FILE_EXTENSION, LEGACY_MODE_DEFAULT_SOURCE_FOLDER, LEGACY_MODE_FILE_EXTENSION, PROMPT_DEFAULT_SOURCE_FOLDER, PROMPT_FILE_EXTENSION, SKILL_FILENAME } from '../common/promptSyntax/config/promptFileLocations.js';
+import { HOOK_SCHEMA_URI, hookFileSchema } from '../common/promptSyntax/hookSchema.js';
+import { AgentHostAgentDebugLogEnabledSettingId, AgentHostAgentDebugLogMaxEventsSettingId, getDocumentationUrl, PromptFileSource, PromptsType } from '../common/promptSyntax/promptTypes.js';
+import { ICustomizationMigrationService } from '../common/promptSyntax/service/customizationMigrationService.js';
+import { CustomizationMigrationTelemetryService, ICustomizationMigrationTelemetryService } from '../common/promptSyntax/service/customizationMigrationTelemetryService.js';
+import { CustomizationMigrationService } from './aiCustomization/customizationMigrationServiceImpl.js';
 import { IPromptsService } from '../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../common/promptSyntax/service/promptsServiceImpl.js';
-import { LanguageModelToolsExtensionPointHandler } from '../common/tools/languageModelToolsContribution.js';
-import { ClientToolSetsContribution } from './tools/clientToolSetsContribution.js';
-import './telemetry/chatModelCountTelemetry.js';
 import { BuiltinToolsContribution } from '../common/tools/builtinTools/tools.js';
-import { RenameToolContribution } from './tools/renameTool.js';
-import { UsagesToolContribution } from './tools/usagesTool.js';
+import { ChatArtifactsService, IChatArtifactsService } from '../common/tools/chatArtifactsService.js';
+import { ChatTodoListService, IChatTodoListService } from '../common/tools/chatTodoListService.js';
+import { ILanguageModelToolsConfirmationService } from '../common/tools/languageModelToolsConfirmationService.js';
+import { LanguageModelToolsExtensionPointHandler } from '../common/tools/languageModelToolsContribution.js';
+import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
 import { IVoiceChatService, VoiceChatService } from '../common/voiceChatService.js';
-import './voiceClient/voiceClientService.js';
-import './voiceClient/micCaptureService.js';
-import './voiceClient/ttsPlaybackService.js';
-import './voiceClient/voiceToolDispatchService.js';
-import './voiceClient/voiceSessionController.js';
+import '../common/widget/chatColors.js';
+import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
+import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatTerminalOutputTextModelService, ChatTerminalOutputTextModelWorkbenchContribution, IChatTerminalOutputTextModelService } from './agentSessions/agentHost/chatTerminalOutputTextModelContentProvider.js';
+import { ChatWidgetHistoryService, IChatWidgetHistoryService } from '../common/widget/chatWidgetHistoryService.js';
 import { registerChatAccessibilityActions } from './actions/chatAccessibilityActions.js';
 import { AgentChatAccessibilityHelp, EditsChatAccessibilityHelp, PanelChatAccessibilityHelp, QuickChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
 import { ModeOpenChatGlobalAction, registerChatActions } from './actions/chatActions.js';
+import { ChatAgentRecommendation } from './actions/chatAgentRecommendationActions.js';
 import { CodeBlockActionRendering, registerChatCodeBlockActions, registerChatCodeCompareBlockActions } from './actions/chatCodeblockActions.js';
 import { ChatContextContributions } from './actions/chatContext.js';
 import { registerChatContextActions } from './actions/chatContextActions.js';
 import { ChatCopyActionRendering, registerChatCopyActions } from './actions/chatCopyActions.js';
+import { ChatModelFeedbackSurveyActionRendering, registerChatModelFeedbackSurveyActions } from './actions/chatModelFeedbackSurveyActions.js';
+import { ChatHarnessSwitchFeedbackSurveyService, IChatHarnessSwitchFeedbackSurveyService } from './feedbackSurvey/chatHarnessSwitchFeedbackSurveyService.js';
+import { ChatModelFeedbackSurveyService, IChatModelFeedbackSurveyService } from './feedbackSurvey/chatModelFeedbackSurveyService.js';
+import { ChatModelFeedbackSurveyPromptContribution } from './feedbackSurvey/chatModelFeedbackSurveyPromptContribution.js';
 import { registerChatDeveloperActions } from './actions/chatDeveloperActions.js';
+import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
 import { registerChatExecuteActions } from './actions/chatExecuteActions.js';
-import { registerChatFindActions } from './actions/chatFindActions.js';
 import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
+import { registerChatFindActions } from './actions/chatFindActions.js';
 import { ChatGettingStartedContribution } from './actions/chatGettingStarted.js';
 import { registerChatExportActions } from './actions/chatImportExport.js';
 import { registerLanguageModelActions } from './actions/chatLanguageModelActions.js';
-import { registerChatPluginActions } from './actions/chatPluginActions.js';
 import { registerMoveActions } from './actions/chatMoveActions.js';
 import { registerNewChatActions } from './actions/chatNewActions.js';
+import { registerChatOpenAgentDebugPanelAction } from './actions/chatOpenAgentDebugPanelAction.js';
+import { registerChatPluginActions } from './actions/chatPluginActions.js';
 import { registerChatPromptNavigationActions } from './actions/chatPromptNavigationActions.js';
 import { registerChatQueueActions } from './actions/chatQueueActions.js';
 import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
-import { ChatAgentRecommendation } from './actions/chatAgentRecommendationActions.js';
+import { registerChatSpeechToTextActions } from './actions/chatSpeechToTextActions.js';
 import { registerChatTitleActions } from './actions/chatTitleActions.js';
-import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
 import { ChatTransferContribution } from './actions/chatTransfer.js';
-import { registerChatOpenAgentDebugPanelAction } from './actions/chatOpenAgentDebugPanelAction.js';
-import { IChatDebugService } from '../common/chatDebugService.js';
-import { ChatDebugServiceImpl } from '../common/chatDebugServiceImpl.js';
-import { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
-import { PromptsDebugContribution } from './promptsDebugContribution.js';
-import { ChatDebugEditorInput, ChatDebugEditorInputSerializer } from './chatDebug/chatDebugEditorInput.js';
+import { CONFIGURE_DICTATION_INSTRUCTIONS_ACTION_ID, registerConfigureSpeechInstructionsActions } from './actions/configureVoiceInstructionsAction.js';
 import './agentSessions/agentSessions.contribution.js';
+import { AgentHostChatDebugContribution } from './chatDebug/agentHostChatDebugProvider.js';
+import { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
+import { ChatDebugEditorInput, ChatDebugEditorInputSerializer } from './chatDebug/chatDebugEditorInput.js';
+import { ChatGoalSummaryService, IChatGoalSummaryService } from './chatGoalSummaryService.js';
+import { ChatSubmitRequestHandlerService, IChatSubmitRequestHandlerService } from './chatSubmitRequestHandlerService.js';
+import { PromptsDebugContribution } from './promptsDebugContribution.js';
+import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
+import { ChatSpeechToTextService, DICTATION_MAI_MODEL_ID, DictationSettingId, IChatSpeechToTextService } from './speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
+import './telemetry/chatEditorTopologyTelemetry.js';
+import './telemetry/chatModelCountTelemetry.js';
+import { ChatToolRiskAssessmentService, IChatToolRiskAssessmentService } from './tools/chatToolRiskAssessmentService.js';
+import { ClientToolSetsContribution } from './tools/clientToolSetsContribution.js';
+import { RenameToolContribution } from './tools/renameTool.js';
+import { UsagesToolContribution } from './tools/usagesTool.js';
+import './voiceClient/micCaptureService.js';
+import './voiceClient/ttsPlaybackService.js';
+import './voiceClient/voiceClientService.js';
+import './voiceClient/voiceSessionController.js';
+import './voiceClient/voiceToolDispatchService.js';
+import './voiceInputMode/voiceInputMode.js';
+import { ChatVoiceInputModeAction, ChatVoiceInputModeToggleListenAction, registerVoiceInputModeSimulateActions } from './voiceInputMode/voiceInputModeActionViewItem.js';
 
 import { ChatContextKeys } from '../common/actions/chatContextKeys.js';
+import { AICustomizationManagementCommands } from '../common/aiCustomizationWorkspaceService.js';
 
-import { ChatViewId, IChatAccessibilityService, IChatCodeBlockContextProviderService, IChatPasteTargetService, IChatWidgetService, IQuickChatService, isIChatResourceViewContext, isIChatViewViewContext } from './chat.js';
 import { ChatAccessibilityService } from './accessibility/chatAccessibilityService.js';
+import './aiCustomization/aiCustomizationItemsModel.js';
+import './aiCustomization/aiCustomizationManagement.contribution.js';
+import './aiCustomization/aiCustomizationWorkspaceService.js';
+import './aiCustomization/customizationHarnessService.js';
 import './attachments/chatAttachmentModel.js';
-import './widget/input/chatInputNotificationService.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from './attachments/chatAttachmentResolveService.js';
 import { ChatAttachmentWidgetRegistry, IChatAttachmentWidgetRegistry } from './attachments/chatAttachmentWidgetRegistry.js';
-import { ChatMarkdownAnchorService, IChatMarkdownAnchorService } from './widget/chatContentParts/chatMarkdownAnchorService.js';
 import { ChatContextPickService, IChatContextPickService } from './attachments/chatContextPickService.js';
-import { ChatInputBoxContentProvider } from './widget/input/editor/chatEditorInputContentProvider.js';
+import { ChatReferenceAttachmentWidgetContribution } from './attachments/chatReferenceAttachmentWidget.contribution.js';
+import { TranscriptContextAttachmentWidgetContribution } from './attachments/transcriptContextAttachmentWidget.contribution.js';
+import { ChatViewId, IChatAccessibilityService, IChatCodeBlockContextProviderService, IChatPasteTargetService, IChatWidgetService, IQuickChatService, isIChatResourceViewContext, isIChatViewViewContext } from './chat.js';
 import { ChatEditingEditorAccessibility } from './chatEditing/chatEditingEditorAccessibility.js';
 import { registerChatEditorActions } from './chatEditing/chatEditingEditorActions.js';
 import { ChatEditingEditorContextKeys } from './chatEditing/chatEditingEditorContextKeys.js';
 import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
 import { ChatEditingNotebookFileSystemProviderContrib } from './chatEditing/notebook/chatEditingNotebookFileSystemProvider.js';
-import { ChatEditor, IChatEditorOptions } from './widgetHosts/editor/chatEditor.js';
-import { ChatOutlineCreator } from './chatOutlineCreator.js';
-import { ChatEditorInput, ChatEditorInputSerializer } from './widgetHosts/editor/chatEditorInput.js';
-import { ChatLayoutService } from './widget/chatLayoutService.js';
-import { ChatLanguageModelsDataContribution, LanguageModelsConfigurationService } from './languageModelsConfigurationService.js';
 import './chatManagement/chatManagement.contribution.js';
-import './aiCustomization/aiCustomizationWorkspaceService.js';
-import './aiCustomization/customizationHarnessService.js';
-import './aiCustomization/aiCustomizationManagement.contribution.js';
-import './aiCustomization/aiCustomizationItemsModel.js';
+import { ChatOutlineCreator } from './chatOutlineCreator.js';
+import { ChatLanguageModelsDataContribution, LanguageModelsConfigurationService } from './languageModelsConfigurationService.js';
+import { ChatMarkdownAnchorService, IChatMarkdownAnchorService } from './widget/chatContentParts/chatMarkdownAnchorService.js';
+import { ChatLayoutService } from './widget/chatLayoutService.js';
+import './widget/input/chatInputNoticeHub.js';
+import './widget/input/chatInputNotificationService.js';
+import { ChatInputBoxContentProvider } from './widget/input/editor/chatEditorInputContentProvider.js';
+import { ChatEditor, IChatEditorOptions } from './widgetHosts/editor/chatEditor.js';
+import { ChatEditorInput, ChatEditorInputSerializer } from './widgetHosts/editor/chatEditorInput.js';
 
-import { ChatOutputRendererService, IChatOutputRendererService } from './chatOutputItemRenderer.js';
-import { ChatCompatibilityNotifier, ChatExtensionPointHandler } from './chatParticipant.contribution.js';
-import { ChatPasteProvidersFeature } from './widget/input/editor/chatPasteProviders.js';
-import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
-import { QuickChatService } from './widgetHosts/chatQuick.js';
-import { ChatResponseAccessibleView } from './accessibility/chatResponseAccessibleView.js';
-import { ChatFindAccessibilityHelp } from './widget/chatFind/chatFindAccessibilityHelp.js';
-import { ChatTerminalOutputAccessibleView } from './accessibility/chatTerminalOutputAccessibleView.js';
-import { ChatSetupContribution, ChatTeardownContribution } from './chatSetup/chatSetupContributions.js';
-import { ChatQuotaNotificationContribution } from './chatQuotaNotification.js';
-import { HasByokModelsContribution } from './hasByokModelsContribution.js';
-import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
-import { ChatVariablesService } from './attachments/chatVariables.js';
-import { ChatWidget } from './widget/chatWidget.js';
-import { ChatCodeBlockContextProviderService } from './codeBlockContextProviderService.js';
-import { ChatDynamicVariableModel } from './attachments/chatDynamicVariables.js';
-import { ChatImplicitContextContribution } from './attachments/chatImplicitContext.js';
-import './widget/input/editor/chatInputCompletions.js';
-import './widget/input/editor/chatInputEditorContrib.js';
-import './widget/input/editor/chatInputEditorHover.js';
-import { LanguageModelToolsConfirmationService } from './tools/languageModelToolsConfirmationService.js';
-import { LanguageModelToolsService, globalAutoApproveDescription } from './tools/languageModelToolsService.js';
-import { IToolResultCompressor } from '../common/tools/toolResultCompressor.js';
-import { ToolResultCompressorService } from './tools/toolResultCompressorService.js';
-import { AgentPluginService, ConfiguredAgentPluginDiscovery, CopilotCliAgentPluginDiscovery, ExtensionAgentPluginDiscovery, MarketplaceAgentPluginDiscovery } from '../common/plugins/agentPluginServiceImpl.js';
+import { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
 import { IAgentPluginRepositoryService } from '../common/plugins/agentPluginRepositoryService.js';
+import { AgentPluginService, ConfiguredAgentPluginDiscovery, CopilotCliAgentPluginDiscovery, ExtensionAgentPluginDiscovery, MarketplaceAgentPluginDiscovery } from '../common/plugins/agentPluginServiceImpl.js';
+import { IPluginGitService } from '../common/plugins/pluginGitService.js';
 import { IPluginInstallService } from '../common/plugins/pluginInstallService.js';
+import { DEFAULT_PLUGIN_MARKETPLACE } from '../common/plugins/marketplaceReference.js';
 import { IPluginMarketplaceService, PluginMarketplaceService } from '../common/plugins/pluginMarketplaceService.js';
-import { DEFAULT_PLUGIN_MARKETPLACES } from '../common/plugins/marketplaceReference.js';
-import { WorkspacePluginSettingsService, IWorkspacePluginSettingsService } from '../common/plugins/workspacePluginSettingsService.js';
-import { AgentPluginRecommendations } from './claudePluginRecommendations.js';
+import { IWorkspacePluginSettingsService, WorkspacePluginSettingsService } from '../common/plugins/workspacePluginSettingsService.js';
+import { VALID_PROMPT_FOLDER_PATTERN } from '../common/promptSyntax/utils/promptFilesLocator.js';
+import { IToolResultCompressor } from '../common/tools/toolResultCompressor.js';
+import { ChatResponseAccessibleView } from './accessibility/chatResponseAccessibleView.js';
+import { ChatTerminalOutputAccessibleView } from './accessibility/chatTerminalOutputAccessibleView.js';
+import { AgentPluginCommandsContribution } from './agentPluginCommands.js';
 import { AgentPluginEditor } from './agentPluginEditor/agentPluginEditor.js';
 import { AgentPluginEditorInput } from './agentPluginEditor/agentPluginEditorInput.js';
 import { AgentPluginRepositoryService } from './agentPluginRepositoryService.js';
-import { BrowserPluginGitCommandService } from './pluginGitCommandService.js';
-import { IPluginGitService } from '../common/plugins/pluginGitService.js';
-import { PluginInstallService } from './pluginInstallService.js';
+import { AgentHostImportConversationStore, IAgentHostImportConversationStore } from './agentSessions/agentHost/agentHostImportConversationStore.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from './agentSessions/sessionSummaryHoverService.js';
+import { ChatDynamicVariableModel } from './attachments/chatDynamicVariables.js';
+import { ChatImplicitContextContribution } from './attachments/chatImplicitContext.js';
+import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
+import { ChatVariablesService } from './attachments/chatVariables.js';
+import { ChatImageCarouselService, IChatImageCarouselService } from './chatImageCarouselService.js';
+import { EditorChatUsageContribution } from './editorChatUsage.contribution.js';
+import { ChatOutputRendererService, IChatOutputRendererService } from './chatOutputItemRenderer.js';
+import { ChatCompatibilityNotifier, ChatExtensionPointHandler } from './chatParticipant.contribution.js';
+import { ChatPetAchievementsAccessibilityHelp, ChatPetContextContribution, ChatPetCustomizationAchievementContribution, ChatPetEditingAchievementContribution } from './chatPetAchievements.contribution.js';
+import { ChatPetService, IChatPetService } from './chatPetService.js';
+import { ChatPetWidgetService, IChatPetWidgetService } from './widget/chatPetWidgetService.js';
+import { ChatPromoNotificationContribution } from './chatPromoNotification.js';
+import { ChatExpNotificationContribution } from './expNotification/chatExpNotificationContribution.js';
+import { ChatQuotaNotificationContribution } from './chatQuotaNotification.js';
+import { ChatRepoInfoContribution } from './chatRepoInfo.js';
+import { ChatSetupContribution, ChatTeardownContribution } from './chatSetup/chatSetupContributions.js';
+import { ChatSessionOptionSlashCommandsContribution, ChatSlashCommandsContribution } from './chatSlashCommands.js';
+import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
+import { ChatTipService, IChatTipService } from './chatTipService.js';
+import { ChatWindowNotifier } from './chatWindowNotifier.js';
+import { AgentPluginRecommendations } from './claudePluginRecommendations.js';
+import { ChatCodeBlockContextProviderService } from './codeBlockContextProviderService.js';
+import { ExploreAgentDefaultModel } from './exploreAgentDefaultModel.js';
+import { HasByokModelsContribution } from './hasByokModelsContribution.js';
+import { PlanAgentDefaultModel } from './planAgentDefaultModel.js';
+import './planReviewFeedback/planReviewFeedbackEditorOverlay.js';
+import { IPlanReviewFeedbackService, PlanReviewFeedbackService } from './planReviewFeedback/planReviewFeedbackService.js';
 import { PluginAutoUpdate } from './pluginAutoUpdate.js';
+import { BrowserPluginGitCommandService } from './pluginGitCommandService.js';
+import { PluginInstallService } from './pluginInstallService.js';
+import { PluginUrlHandler } from './pluginUrlHandler.js';
 import './promptSyntax/promptCodingAgentActionContribution.js';
 import './promptSyntax/promptToolsCodeLensProvider.js';
 import './promptSyntax/promptToolSetsCodeLensProvider.js';
-import { ChatSessionOptionSlashCommandsContribution, ChatSlashCommandsContribution } from './chatSlashCommands.js';
-import './planReviewFeedback/planReviewFeedbackEditorContribution.js';
-import { registerPlanReviewFeedbackEditorActions } from './planReviewFeedback/planReviewFeedbackEditorActions.js';
-import { IPlanReviewFeedbackService, PlanReviewFeedbackService } from './planReviewFeedback/planReviewFeedbackService.js';
-import { PluginUrlHandler } from './pluginUrlHandler.js';
 import { PromptUrlHandler } from './promptSyntax/promptUrlHandler.js';
+import './promptTimeline/promptTimeline.contribution.js';
+import { LanguageModelToolsConfirmationService } from './tools/languageModelToolsConfirmationService.js';
+import { LanguageModelToolsService, globalAutoApproveDescription } from './tools/languageModelToolsService.js';
+import { ToolResultCompressorService } from './tools/toolResultCompressorService.js';
 import { ConfigureToolSets, UserToolSetsContributions } from './tools/toolSetsContribution.js';
-import { ChatViewsWelcomeHandler } from './viewsWelcome/chatViewsWelcomeHandler.js';
-import { ChatWidgetService } from './widget/chatWidgetService.js';
-import { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
-import { ChatWindowNotifier } from './chatWindowNotifier.js';
-import { ChatRepoInfoContribution } from './chatRepoInfo.js';
-import { VALID_PROMPT_FOLDER_PATTERN } from '../common/promptSyntax/utils/promptFilesLocator.js';
-import { ChatTipService, IChatTipService } from './chatTipService.js';
-import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
-import { ExploreAgentDefaultModel } from './exploreAgentDefaultModel.js';
-import { PlanAgentDefaultModel } from './planAgentDefaultModel.js';
 import { UtilityModelContribution, UtilitySmallModelContribution } from './utilityModelContribution.js';
-import { ChatImageCarouselService, IChatImageCarouselService } from './chatImageCarouselService.js';
+import { ChatViewsWelcomeHandler } from './viewsWelcome/chatViewsWelcomeHandler.js';
+import './widget/chatContentParts/chatSubagentOpenChat.js';
+import { ChatFindAccessibilityHelp } from './widget/chatFind/chatFindAccessibilityHelp.js';
+import { ChatWidget } from './widget/chatWidget.js';
+import { ChatWidgetService } from './widget/chatWidgetService.js';
+import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
+import './widget/input/editor/agentHostInputCompletions.js';
+import './widget/input/editor/chatInputCommandArgumentHint.js';
+import './widget/input/editor/chatInputCompletions.js';
+import './widget/input/editor/chatInputEditorContrib.js';
+import './widget/input/editor/chatInputEditorHover.js';
+import { ChatPasteProvidersFeature } from './widget/input/editor/chatPasteProviders.js';
+import { QuickChatService } from './widgetHosts/chatQuick.js';
+import { IRepositoryPickerOptions, PICK_REPOSITORY_COMMAND_ID, RepositoryPicker } from './agentSessions/repositoryPicker.js';
 
 CommandsRegistry.registerCommand('_chat.notifyQuestionCarouselAnswer', (accessor: ServicesAccessor, resolveId: string, answers?: import('../common/chatService/chatService.js').IChatQuestionAnswers) => {
 	accessor.get(IChatService).notifyQuestionCarouselAnswer('', resolveId, answers);
+});
+
+CommandsRegistry.registerCommand(PICK_REPOSITORY_COMMAND_ID, async (accessor: ServicesAccessor, repositoriesCommand: string, options?: IRepositoryPickerOptions) => {
+	if (typeof repositoriesCommand !== 'string' || !repositoriesCommand || repositoriesCommand === PICK_REPOSITORY_COMMAND_ID) {
+		throw new Error('A repository search command is required');
+	}
+	const commandService = accessor.get(ICommandService);
+	const store = new DisposableStore();
+	try {
+		const picker = store.add(accessor.get(IInstantiationService).createInstance(RepositoryPicker));
+		return await picker.pickRepository(async query => {
+			const repositories = await commandService.executeCommand<readonly string[]>(repositoriesCommand, query);
+			if (!Array.isArray(repositories) || !repositories.every(repository => typeof repository === 'string')) {
+				throw new Error('The repository search command did not return repository names');
+			}
+			return repositories;
+		}, options);
+	} finally {
+		store.dispose();
+	}
 });
 
 const toolReferenceNameEnumValues: string[] = [];
@@ -226,6 +296,12 @@ jsonContributionRegistry.registerSchema(HOOK_SCHEMA_URI, hookFileSchema);
 
 // Register configuration
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+const migrationsTabLink = createMarkdownCommandLink({
+	id: AICustomizationManagementCommands.OpenEditor,
+	text: nls.localize('chat.locations.migrate', "Migrations tab"),
+	tooltip: nls.localize('chat.locations.migrate.tooltip', "Open the Migrations Tab"),
+	arguments: [{ migration: true }],
+});
 configurationRegistry.registerConfiguration({
 	id: 'chatSidebar',
 	title: nls.localize('interactiveSessionConfigurationTitle', "Chat"),
@@ -238,6 +314,19 @@ configurationRegistry.registerConfiguration({
 			tags: ['experimental'],
 			agentsWindow: { default: true },
 		},
+		'chat.experimentalModelPicker': {
+			type: 'boolean',
+			description: nls.localize('chat.experimentalModelPicker', "When enabled, the model picker uses provider tabs and a model details page for information and configuration. Open details from a model's information button or the thinking effort and context readout in the chat input."),
+			default: false,
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
+		},
+		[ChatConfiguration.ExperimentalModePermissionsPicker]: {
+			type: 'boolean',
+			description: nls.localize('chat.experimentalModePermissionsPicker', "Shows mode and permissions in a combined picker with expandable permission choices for Agent Host sessions."),
+			default: product.quality !== 'stable',
+			tags: ['experimental'],
+		},
 		'chat.fontSize': {
 			type: 'number',
 			description: nls.localize('chat.fontSize', "Controls the font size in pixels in chat messages."),
@@ -249,6 +338,102 @@ configurationRegistry.registerConfiguration({
 			type: 'string',
 			description: nls.localize('chat.fontFamily', "Controls the font family in chat messages."),
 			default: 'default'
+		},
+		'dictation.enabled': {
+			type: 'boolean',
+			markdownDescription: nls.localize('dictation.enabled', "Enables dictation across the product (chat input, editor, and terminal). When enabled, a microphone button appears in the chat input and the dictation shortcut becomes available. Desktop uses the selected transcription model; web uses cloud transcription."),
+			default: true,
+			tags: ['experimental'],
+			policy: {
+				name: 'DictationEnabled',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.131',
+				localization: {
+					description: {
+						key: 'dictation.enabled.policy',
+						value: nls.localize('dictation.enabled.policy', "Controls whether dictation is available across the product (chat input, editor, and terminal).")
+					}
+				},
+			}
+		},
+		'dictation.model': {
+			type: 'string',
+			enum: [
+				DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
+				DICTATION_MAI_MODEL_ID,
+			],
+			enumItemLabels: [
+				nls.localize('dictation.model.nemotronMultilingual.label', "Nemotron 3.5 ASR (Multilingual) — On-Device"),
+				nls.localize('dictation.model.mai.label', "MAI — Cloud"),
+			],
+			markdownEnumDescriptions: [
+				nls.localize('dictation.model.nemotronMultilingual', "NVIDIA Nemotron 3.5 multilingual streaming RNN-T, run on-device through Microsoft Foundry Local. Works offline; no audio leaves the device. Automatic language selection follows the Voice Mode language setting; when that setting is Automatic, dictation uses the configured display language when supported, then the system or browser locale, with model detection as a fallback. Downloaded on first use and cached on disk."),
+				nls.localize('dictation.model.mai', "Cloud transcription through the same Microsoft AI voice service used by Voice Mode. Requires a network connection and GitHub sign-in; audio is streamed to the service."),
+			],
+			markdownDescription: nls.localize('dictation.model', "The model used for dictation. On-device models download on first use and run locally through Microsoft Foundry Local; the cloud option streams audio to the Microsoft AI voice service. On the web, user and default on-device selections use cloud transcription because local transcription is unsupported. If policy requires on-device transcription, dictation is unavailable on the web."),
+			default: isWeb ? DICTATION_MAI_MODEL_ID : DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
+			policy: {
+				name: 'DictationModel',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.136',
+				localization: {
+					description: {
+						key: 'dictation.model.policy',
+						value: nls.localize('dictation.model.policy', "Controls the transcription model used for dictation.")
+					},
+					enumDescriptions: [
+						{
+							key: 'dictation.model.nemotronMultilingual.policy',
+							value: nls.localize('dictation.model.nemotronMultilingual.policy', "Use the on-device transcription model. Audio does not leave the device.")
+						},
+						{
+							key: 'dictation.model.mai.policy',
+							value: nls.localize('dictation.model.mai.policy', "Use the cloud transcription service. Audio is streamed to the service.")
+						},
+					]
+				},
+			}
+		},
+		[DictationSettingId.ShowTranscript]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('dictation.showTranscript', "Controls whether the transcript is shown while dictating. The final transcript is inserted when dictation ends."),
+			default: true,
+			tags: ['experimental']
+		},
+		[DictationSettingId.ShowButton]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('dictation.showButton', "Controls whether the dictation microphone button is shown in the chat input. When hidden, dictation can still be started with its keyboard shortcut."),
+			default: true,
+			tags: ['experimental']
+		},
+		'dictation.experimental.llmCleanup': {
+			type: 'boolean',
+			markdownDescription: nls.localize('dictation.experimental.llmCleanup', "Experimental: when dictation ends, the final transcript is passed through a small language model to restore punctuation, capitalization, paragraphs, and lists. Requires AI features to be enabled; the transcript is sent to the language model for cleanup. Falls back to the raw transcript when no model is available. Use [dictation instructions](command:{0}) to customize terminology and formatting.", CONFIGURE_DICTATION_INSTRUCTIONS_ACTION_ID),
+			default: true,
+			tags: ['experimental'],
+			policy: {
+				name: 'DictationLLMCleanup',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.136',
+				localization: {
+					description: {
+						key: 'dictation.experimental.llmCleanup.policy',
+						value: nls.localize('dictation.experimental.llmCleanup.policy', "Controls whether final dictation transcripts are sent to a language model for cleanup.")
+					}
+				},
+			}
+		},
+		'dictation.experimental.llmCleanupModel': {
+			type: 'string',
+			enum: ['auto', 'copilot-utility-small', 'gpt-5.6-luna'],
+			markdownDescription: nls.localize('dictation.experimental.llmCleanupModel', "Controls the language model used for experimental dictation cleanup. `auto` follows the experiment-provided default."),
+			default: 'auto',
+			tags: ['experimental'],
+			experiment: {
+				mode: 'auto'
+			}
 		},
 		'chat.editor.fontSize': {
 			type: 'number',
@@ -300,6 +485,48 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			tags: ['experimental'],
 		},
+		[ChatConfiguration.MigrateLegacyCopilotCliSessions]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentSessions.migrateLegacyCopilotCli', "Controls whether legacy extension host CLI Agent chat sessions are migrated in place to the Agent host when opened, so their history becomes editable. When disabled, legacy sessions open as before.\n\nChanging this setting requires a restart to take effect."),
+			default: false,
+			tags: ['experimental'],
+			// Migration is a global, one-time behavior over the shared agent host, so it is a
+			// single value for all windows rather than a per-window preference.
+			scope: ConfigurationScope.APPLICATION,
+			experiment: {
+				mode: 'startup'
+			},
+			agentHost: { key: AgentHostMigrateLegacyCopilotCliEnabledConfigKey },
+		},
+		[ChatConfiguration.SessionCatalogEnabled]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.sessionCatalog', "Controls whether the agent session list is served from the Agent host's session catalog. When disabled, sessions are listed from provider metadata and per-session storage instead, which is slower.\n\nChanging this setting requires a restart to take effect."),
+			default: true,
+			tags: ['experimental', 'advanced'],
+			// The catalog backs the shared agent host, so it is a single value for all
+			// windows rather than a per-window preference.
+			scope: ConfigurationScope.APPLICATION,
+			experiment: {
+				mode: 'startup'
+			},
+			agentHost: { key: AgentHostSessionCatalogEnabledConfigKey },
+		},
+		[ChatConfiguration.ShowExternalAgentSessions]: {
+			type: 'string',
+			enum: [AgentHostExternalSessionsMode.None, AgentHostExternalSessionsMode.Recent, AgentHostExternalSessionsMode.Last24Hours, AgentHostExternalSessionsMode.Last7Days, AgentHostExternalSessionsMode.Last30Days],
+			enumDescriptions: [
+				nls.localize('chat.agentSessions.showExternal.none', "Do not show external sessions."),
+				nls.localize('chat.agentSessions.showExternal.recent', "Show up to the 2 most recent external sessions updated in the last 7 days. At startup, external sessions older than the second-most-recently updated local session are hidden."),
+				nls.localize('chat.agentSessions.showExternal.last24Hours', "Show external sessions updated in the last 24 hours."),
+				nls.localize('chat.agentSessions.showExternal.last7Days', "Show external sessions updated in the last 7 days."),
+				nls.localize('chat.agentSessions.showExternal.last30Days', "Show external sessions updated in the last 30 days."),
+			],
+			default: AgentHostExternalSessionsMode.Recent,
+			markdownDescription: nls.localize('chat.agentSessions.showExternal', "Controls which external agent sessions are shown. External sessions are sessions that were created in a different application and have not received a message from this application yet."),
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
+			agentHost: { key: AgentHostShowExternalSessionsConfigKey },
+		},
 		[ChatConfiguration.SaveBeforeSend]: {
 			type: 'boolean',
 			description: nls.localize('chat.saveBeforeSend', "Controls whether all dirty editors except untitled editors are saved before sending a chat message."),
@@ -331,6 +558,13 @@ configurationRegistry.registerConfiguration({
 			type: 'boolean',
 			markdownDescription: nls.localize('chat.implicitContext.suggestedContext', "Controls whether the new implicit context flow is shown. In Ask and Edit modes, the context will automatically be included. When using an agent, context will be suggested as an attachment. Selections are always included as context."),
 			default: true,
+			agentsWindow: { default: false },
+		},
+		'chat.implicitContext.includeActiveEditor': {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.implicitContext.includeActiveEditor', "When enabled, the active editor is automatically forwarded as context, even when it would otherwise only be suggested. Selections and explicitly attached files are always included regardless of this setting.\n\nNote: this setting currently only applies to Agent Host sessions."),
+			default: true,
+			tags: ['experimental'],
 			agentsWindow: { default: false },
 		},
 		'chat.editing.autoAcceptDelay': {
@@ -402,6 +636,13 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			tags: ['experimental'],
 		},
+		[ChatConfiguration.RichLinks]: {
+			type: 'boolean',
+			description: nls.localize('chat.experimental.richLinks.enabled', "Controls whether supported links in chat are rendered as rich links with live metadata. Enabling this may make authenticated requests to services such as GitHub."),
+			default: false,
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
+		},
 		[ChatConfiguration.IncrementalRenderingStyle]: {
 			type: 'string',
 			enum: ['none', 'fade', 'rise', 'blur', 'scale', 'slide', 'reveal'],
@@ -433,7 +674,7 @@ configurationRegistry.registerConfiguration({
 		[ChatConfiguration.CollapseCompletedResponses]: {
 			type: 'boolean',
 			description: nls.localize('chat.agent.collapseCompletedResponses', "Controls whether completed chat responses collapse intermediate work while keeping the final response visible."),
-			default: product.quality !== 'stable',
+			default: true,
 		},
 		'chat.detectParticipant.enabled': {
 			type: 'boolean',
@@ -442,8 +683,8 @@ configurationRegistry.registerConfiguration({
 		},
 		[ChatConfiguration.ExperimentalStickyScrollEnabled]: {
 			type: 'boolean',
-			description: nls.localize('chat.experimental.stickyScroll.enabled', "Controls whether the chat transcript pins the request you have scrolled past to the top of the list."),
-			default: product.quality !== 'stable',
+			description: nls.localize('chat.experimental.stickyScroll.enabled', "Controls whether chat requests use experimental tree-based sticky scroll instead of the sticky prompt header."),
+			default: true,
 			tags: ['experimental'],
 		},
 		[ChatConfiguration.InlineReferencesStyle]: {
@@ -482,6 +723,7 @@ configurationRegistry.registerConfiguration({
 			type: 'boolean',
 			scope: ConfigurationScope.APPLICATION_MACHINE,
 			tags: ['experimental', 'advanced'],
+			agentHost: { key: AgentHostAutoReplyEnabledConfigKey },
 		},
 		[ChatConfiguration.AutopilotAdvancedEnabled]: {
 			type: 'boolean',
@@ -489,31 +731,26 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			tags: ['experimental'],
 		},
-		[ChatConfiguration.PlanReviewInlineEditorEnabled]: {
-			type: 'boolean',
-			markdownDescription: nls.localize('chat.planReview.inlineEditor.enabled', "When enabled, the plan review widget mounts an editor inline, as opposed to in a separate editor tab."),
-			default: true,
-		},
 		[ChatConfiguration.DefaultPermissionLevel]: {
 			type: 'string',
 			enum: [ChatPermissionLevel.Default, ChatPermissionLevel.AutoApprove, ChatPermissionLevel.Autopilot],
 			enumItemLabels: [
-				nls.localize('chat.permissions.default.default.label', "Default Approvals"),
+				nls.localize('chat.permissions.default.default.label', "Default Permissions"),
 				nls.localize('chat.permissions.default.autoApprove.label', "Bypass Approvals"),
 				nls.localize('chat.permissions.default.autopilot.label', "Autopilot (Preview)"),
 			],
 			enumDescriptions: [
-				nls.localize('chat.permissions.default.default.description', "Start new chat sessions with Default Approvals."),
+				nls.localize('chat.permissions.default.default.description', "Start new chat sessions with Default Permissions."),
 				nls.localize('chat.permissions.default.autoApprove.description', "Start new chat sessions in Bypass Approvals mode."),
 				nls.localize('chat.permissions.default.autopilot.description', "Start new chat sessions in Autopilot mode."),
 			],
-			description: nls.localize('chat.permissions.default.settingDescription', "Controls the default permissions picker mode for new local chat sessions. You can still change the permission mode per session, and each session remembers the permission mode that was used. If enterprise policy disables auto approval, new sessions use Default Approvals."),
+			description: nls.localize('chat.permissions.default.settingDescription', "Controls the default permissions picker mode for new local chat sessions. You can still change the permission mode per session, and each session remembers the permission mode that was used. If enterprise policy disables auto approval, new sessions use Default Permissions."),
 			default: ChatPermissionLevel.Default,
 		},
 		[ChatConfiguration.PermissionsSandboxToggleEnabled]: {
 			type: 'boolean',
-			default: false,
-			markdownDescription: nls.localize('chat.experimental.permissionsSandboxToggle.enabled', "Controls whether the permissions picker shows an inline \"Sandboxing for terminal\" toggle on the Default Approvals option. The toggle reflects and updates `#chat.agent.sandbox.enabled#`."),
+			default: true,
+			markdownDescription: nls.localize('chat.experimental.permissionsSandboxToggle.enabled', "Controls whether the permissions picker shows a \"Sandboxing for terminal\" toggle. Local sessions show it on the Default permissions option. Local and remote Agent Host sessions show it as a session-specific setting that applies to every permission mode; changing it saves the choice only for that session. New Agent Host sessions initially follow `#chat.agent.sandbox.enabled#` or `#chat.agent.sandbox.enabledWindows#` based on the host's operating system, for both the SDK's built-in shell tool and the Agent Host terminal tool."),
 			tags: ['experimental'],
 			experiment: {
 				mode: 'auto'
@@ -536,33 +773,34 @@ configurationRegistry.registerConfiguration({
 				},
 				approvals: {
 					type: 'string',
-					enum: [ChatPermissionLevel.Default, ChatPermissionLevel.AutoApprove],
+					enum: [ChatDefaultPermissionLevel.Manual, ChatDefaultPermissionLevel.Assisted, ChatDefaultPermissionLevel.AllowAll],
 					enumDescriptions: [
-						nls.localize('chat.defaultConfiguration.approvals.default', "Default Approvals — FlowLeap uses your configured settings."),
-						nls.localize('chat.defaultConfiguration.approvals.autoApprove', "Bypass Approvals — all tool calls are auto-approved."),
+						nls.localize('chat.defaultConfiguration.approvals.manual', "Manual permissions — asks when approval settings don't apply."),
+						nls.localize('chat.defaultConfiguration.approvals.assisted', "Assisted permissions — evaluates risk before running tools."),
+						nls.localize('chat.defaultConfiguration.approvals.allowAll', "Allow All — runs tool calls without asking."),
 					],
-					default: ChatPermissionLevel.Default,
-					description: nls.localize('chat.defaultConfiguration.approvals.description', "The starting approval behavior for new agent sessions. If enterprise policy disables auto approval, new sessions use Default Approvals."),
+					default: ChatDefaultPermissionLevel.Manual,
+					description: nls.localize('chat.defaultConfiguration.approvals.description', "The starting approval behavior for new agent sessions. If enterprise policy disables auto approval, new sessions use Manual permissions."),
 				},
 			},
-			default: { mode: 'interactive', approvals: ChatPermissionLevel.Default },
+			default: { mode: 'interactive', approvals: ChatDefaultPermissionLevel.Manual },
 			markdownDescription: nls.localize('chat.defaultConfiguration.settingDescription', "Controls the default configuration for new agent sessions (such as the CLI Agent). You can still change the mode and approval behavior per session, and each session remembers what was used."),
 		},
 		[ChatConfiguration.DefaultModel]: {
 			type: 'string',
 			default: '',
 			markdownDescription: nls.localize('chat.defaultModel.description', "The default model for new chat conversations. Use \"auto\" to let FlowLeap pick a model, a model family name (such as \"opus\" or \"gemini\") to use the latest available model in that family, or a full model id. You can still switch the model within a conversation; each new conversation starts at this model."),
+			experiment: {
+				mode: 'auto'
+			},
 			policy: {
 				name: 'ChatDefaultModel',
 				category: PolicyCategory.InteractiveSession,
 				minimumVersion: '1.127',
-				value: (policyData) => {
-					const model = policyData.managedSettings?.[COPILOT_MODEL_KEY];
-					const trimmed = typeof model === 'string' ? model.trim() : undefined;
-					return trimmed ? trimmed : undefined;
-				},
+				value: managedModelValue(),
 				managedSettings: {
 					[COPILOT_MODEL_KEY]: { type: 'string' },
+					[COPILOT_TOP_LEVEL_MODEL_KEY]: { type: 'string' },
 				},
 				localization: {
 					description: {
@@ -578,11 +816,12 @@ configurationRegistry.registerConfiguration({
 			type: 'boolean',
 			scope: ConfigurationScope.APPLICATION_MACHINE,
 			tags: ['experimental'],
+			agentHost: { key: AgentHostGlobalAutoApproveEnabledConfigKey },
 			policy: {
 				name: 'ChatToolsAutoApprove',
 				category: PolicyCategory.InteractiveSession,
 				minimumVersion: '1.99',
-				value: (policyData) => policyData.managedSettings?.[COPILOT_DISABLE_BYPASS_PERMISSIONS_MODE_KEY] === 'disable' || policyData.chat_preview_features_enabled === false ? false : undefined,
+				value: autoApprovePolicyValue,
 				managedSettings: {
 					[COPILOT_DISABLE_BYPASS_PERMISSIONS_MODE_KEY]: { type: 'string' },
 				},
@@ -613,7 +852,8 @@ configurationRegistry.registerConfiguration({
 						value: nls.localize('chat.sessionSync.enabled.policy', "Enable session sync for cross-device FlowLeap session history. When disabled by organization policy, session data is kept local only."),
 					}
 				},
-			}
+			},
+			agentHost: { key: AgentHostSessionSyncEnabledConfigKey },
 		},
 		[ChatConfiguration.SessionSyncExcludeRepositories]: {
 			type: 'array',
@@ -623,22 +863,17 @@ configurationRegistry.registerConfiguration({
 			tags: ['experimental', 'advanced'],
 		},
 		[ChatConfiguration.AutoApproveEdits]: {
-			default: {
-				'**/*': true,
-				'**/.vscode/*.json': false,
-				'**/.git/**': false,
-				'**/{package.json,server.xml,build.rs,web.config,.gitattributes,.env,Cargo.toml}': false,
-				'**/*.{code-workspace,csproj,fsproj,vbproj,vcxproj,proj,targets,props,gradle,gradle.kts}': false,
-				'**/gradle.properties': false,
-				'**/ruby_lsp/*/addon': false, // Auto-included Ruby addons
-				'**/*.lock': false, // yarn.lock, bun.lock, etc.
-				'**/*-lock.{yaml,json}': false, // pnpm-lock.yaml, package-lock.json
-			},
+			default: DEFAULT_EDIT_AUTO_APPROVE_PATTERNS,
 			markdownDescription: nls.localize('chat.tools.autoApprove.edits', "Controls whether edits made by the agent are automatically approved. The default is to approve all edits except those made to certain files which have the potential to cause immediate unintended side-effects, such as `**/.vscode/*.json`.\n\nSet to `true` to automatically approve edits to matching files, `false` to always require explicit approval. The last pattern matching a given file will determine whether the edit is automatically approved."),
 			type: 'object',
 			additionalProperties: {
 				type: 'boolean',
-			}
+			},
+			scope: ConfigurationScope.APPLICATION,
+			agentHost: {
+				key: AgentHostEditAutoApprovePatternsConfigKey,
+				transform: mergeChatEditAutoApprovePatterns,
+			},
 		},
 		[ChatConfiguration.AutoApprovedUrls]: {
 			default: {
@@ -688,12 +923,6 @@ configurationRegistry.registerConfiguration({
 					}
 				},
 			}
-		},
-		'chat.sendElementsToChat.attachImages': {
-			default: true,
-			markdownDescription: nls.localize('chat.sendElementsToChat.attachImages', "Controls whether a screenshot of the selected element will be added to the chat."),
-			type: 'boolean',
-			tags: ['experimental']
 		},
 		[ChatConfiguration.ArtifactsEnabled]: {
 			default: false,
@@ -787,6 +1016,18 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			description: nls.localize('chat.viewProgressBadge.enabled', "Show a progress badge on the chat view when an agent session is in progress that is opened in that view."),
 		},
+		[ChatSessionArchiveActionWordingSettingId]: {
+			type: 'string',
+			enum: ['archive', 'done'],
+			enumDescriptions: [
+				nls.localize('chat.experimental.sessionArchiveActionWording.archive', "Use Archive, Archive All, Unarchive, and Unarchive All."),
+				nls.localize('chat.experimental.sessionArchiveActionWording.done', "Use Mark as Done, Mark All as Done, Restore, and Restore All."),
+			],
+			default: 'done',
+			tags: ['experimental'],
+			experiment: { mode: 'startup' },
+			description: nls.localize('chat.experimental.sessionArchiveActionWording', "Controls the wording and icons used by actions that archive and unarchive chat sessions, as well as the label of the archived sessions section."),
+		},
 		[ChatConfiguration.AgentsHandoffTipMode]: {
 			type: 'string',
 			enum: ['hidden', 'default', 'custom'],
@@ -800,17 +1041,17 @@ configurationRegistry.registerConfiguration({
 			experiment: { mode: 'startup' },
 			description: nls.localize('chat.agentsHandoffTip.mode', "Controls the tip shown above the chat input offering to continue eligible agent sessions in the Agents Window."),
 		},
-		[ClaudePreferAgentHostAgentsSettingId]: {
+		[ChatConfiguration.BtwTipEnabled]: {
 			type: 'boolean',
-			description: nls.localize('chat.agents.claude.preferAgentHost', "When enabled, Claude sessions opened from the Agents Window run inside the agent host process instead of the FlowLeap Chat extension. Only one Claude implementation surfaces per window."),
 			default: false,
 			tags: ['experimental'],
 			experiment: { mode: 'startup' },
+			markdownDescription: nls.localize('chat.btwTip.enabled', "Controls whether the Agents Window shows a tip about using `/btw` to ask side questions."),
 		},
-		[ClaudePreferAgentHostEditorSettingId]: {
+		[CodexPreferAgentHostEditorSettingId]: {
 			type: 'boolean',
-			description: nls.localize('chat.editor.claude.preferAgentHost', "When enabled, Claude sessions opened from the regular workbench (sidebar chat) run inside the agent host process instead of the FlowLeap Chat extension. Only one Claude implementation surfaces per window."),
-			default: false,
+			markdownDescription: nls.localize('chat.editor.codex.preferAgentHost', "When enabled, Codex sessions opened from the regular workbench (sidebar chat) run inside the agent host process using the Codex App Server instead of the OpenAI extension. Only one Codex implementation surfaces per window. Requires `#chat.agentHost.codexAgent.enabled#`."),
+			default: product.quality !== 'stable',
 			tags: ['experimental'],
 			experiment: { mode: 'startup' },
 		},
@@ -824,15 +1065,17 @@ configurationRegistry.registerConfiguration({
 			default: true,
 			description: nls.localize('chat.verbose', "Show request and completion timestamps. Hover over a completion timestamp to show the elapsed response time."),
 		},
-		[ChatConfiguration.ChatPersistentProgressEnabled]: {
-			type: 'boolean',
-			default: product.quality !== 'stable',
-			description: nls.localize('chat.persistentProgress.enabled', "Always show progress in chat."),
-		},
 		[ChatConfiguration.ProgressBorder]: {
 			type: 'boolean',
 			default: true,
-			markdownDescription: nls.localize('chat.progressBorder.enabled', "Show an animated gradient border around the chat input while the agent is working or thinking. When enabled and reduced motion is not enabled, this overrides {0} to be off. Has no effect when reduced motion is enabled.", '`#chat.persistentProgress.enabled#`'),
+			markdownDescription: nls.localize('chat.progressBorder.enabled', "Show an animated gradient border around the chat input while the agent is working or thinking. Has no effect when reduced motion is enabled."),
+		},
+		...chatProgressConfigurationProperties,
+		[ChatConfiguration.SessionStateIndicatorEnabled]: {
+			type: 'boolean',
+			default: false,
+			markdownDescription: nls.localize('chat.experimental.sessionStateIndicator.enabled', "Enable state indicators around chat editor sessions that are in progress, need input, or have an unvisited completion. Customize the borders with `chat.sessionStateIndicator.inProgressBorder`, `chat.sessionStateIndicator.needsInputBorder`, and `chat.sessionStateIndicator.unvisitedBorder` in `#workbench.colorCustomizations#`."),
+			tags: ['experimental'],
 		},
 		[ChatConfiguration.NotifyWindowOnResponseReceived]: {
 			type: 'string',
@@ -865,7 +1108,7 @@ configurationRegistry.registerConfiguration({
 			],
 			enumDescriptions: [
 				nls.localize('chat.mcp.access.none', "No access to MCP servers."),
-				nls.localize('chat.mcp.access.registry', "Allows access to MCP servers installed from the registry that VS Code is connected to."),
+				nls.localize('chat.mcp.access.registry', "Allows access to MCP servers listed in the registry that VS Code is connected to."),
 				nls.localize('chat.mcp.access.any', "Allow access to any installed MCP server.")
 			],
 			default: McpAccessValue.All,
@@ -892,12 +1135,110 @@ configurationRegistry.registerConfiguration({
 							key: 'chat.mcp.access.none', value: nls.localize('chat.mcp.access.none', "No access to MCP servers."),
 						},
 						{
-							key: 'chat.mcp.access.registry', value: nls.localize('chat.mcp.access.registry', "Allows access to MCP servers installed from the registry that VS Code is connected to."),
+							key: 'chat.mcp.access.registry', value: nls.localize('chat.mcp.access.registry', "Allows access to MCP servers listed in the registry that VS Code is connected to."),
 						},
 						{
 							key: 'chat.mcp.access.any', value: nls.localize('chat.mcp.access.any', "Allow access to any installed MCP server.")
 						}
 					]
+				},
+			}
+		},
+		[mcpAllowedServersConfig]: {
+			type: ['array', 'null'],
+			items: {
+				type: 'object',
+				additionalProperties: false,
+				properties: {
+					serverName: { type: 'string', minLength: 1, description: nls.localize('chat.mcp.allowedServers.serverName', "Match a server by its configured name.") },
+					serverUrl: { type: 'string', minLength: 1, description: nls.localize('chat.mcp.allowedServers.serverUrl', "Match a remote server by its URL. Supports `*` wildcards, for example `https://*.example.com/*`.") },
+					serverCommand: { type: 'array', minItems: 1, items: { type: 'string' }, description: nls.localize('chat.mcp.allowedServers.serverCommand', "Match a local server by its exact command invocation, given as the command followed by its arguments.") },
+				},
+				oneOf: [
+					{ required: ['serverName'] },
+					{ required: ['serverUrl'] },
+					{ required: ['serverCommand'] },
+				],
+			},
+			markdownDescription: nls.localize('chat.mcp.allowedServers', "Enterprise-managed allowlist that controls which Model Context Protocol servers may be installed and run. When set, only servers matching an entry are permitted; any other server is blocked. Servers can be matched by name, remote URL pattern (with `*` wildcards), or local command invocation. Omit entirely to allow all servers (subject to the deny list). Delivered via enterprise policy for governance; this setting is not surfaced to end users."),
+			default: null,
+			scope: ConfigurationScope.APPLICATION,
+			// Governance-only: delivered via the `ChatAllowedMcpServers` enterprise policy and hidden
+			// from the Settings UI so it is not configurable by end users.
+			included: false,
+			policy: {
+				name: 'ChatAllowedMcpServers',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.130',
+				value: managedSettingValue(COPILOT_ALLOWED_MCP_SERVERS_KEY),
+				managedSettings: {
+					[COPILOT_ALLOWED_MCP_SERVERS_KEY]: { type: 'string' },
+				},
+				localization: {
+					description: {
+						key: 'chat.mcp.allowedServers.policy',
+						value: nls.localize('chat.mcp.allowedServers.policy', "Allowlist of Model Context Protocol servers. When set, only servers matching an entry may be installed or run; omit entirely to allow all servers (subject to the deny list).")
+					}
+				},
+			}
+		},
+		[mcpDeniedServersConfig]: {
+			type: ['array', 'null'],
+			items: {
+				type: 'object',
+				additionalProperties: false,
+				properties: {
+					serverName: { type: 'string', minLength: 1, description: nls.localize('chat.mcp.deniedServers.serverName', "Match a server by its configured name.") },
+					serverUrl: { type: 'string', minLength: 1, description: nls.localize('chat.mcp.deniedServers.serverUrl', "Match a remote server by its URL. Supports `*` wildcards, for example `https://*.example.com/*`.") },
+					serverCommand: { type: 'array', minItems: 1, items: { type: 'string' }, description: nls.localize('chat.mcp.deniedServers.serverCommand', "Match a local server by its exact command invocation, given as the command followed by its arguments.") },
+				},
+				oneOf: [
+					{ required: ['serverName'] },
+					{ required: ['serverUrl'] },
+					{ required: ['serverCommand'] },
+				],
+			},
+			markdownDescription: nls.localize('chat.mcp.deniedServers', "Enterprise-managed denylist of Model Context Protocol servers. Servers matching any entry are unconditionally blocked from being installed or run, even if they also match the allow list — deny rules always take precedence. Servers can be matched by name, remote URL pattern (with `*` wildcards), or local command invocation. Delivered via enterprise policy for governance; this setting is not surfaced to end users."),
+			default: null,
+			scope: ConfigurationScope.APPLICATION,
+			// Governance-only: delivered via the `ChatDeniedMcpServers` enterprise policy and hidden
+			// from the Settings UI so it is not configurable by end users.
+			included: false,
+			policy: {
+				name: 'ChatDeniedMcpServers',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.130',
+				value: managedSettingValue(COPILOT_DENIED_MCP_SERVERS_KEY),
+				managedSettings: {
+					[COPILOT_DENIED_MCP_SERVERS_KEY]: { type: 'string' },
+				},
+				localization: {
+					description: {
+						key: 'chat.mcp.deniedServers.policy',
+						value: nls.localize('chat.mcp.deniedServers.policy', "Denylist of Model Context Protocol servers. Servers matching any entry are blocked from being installed or run, even if they also match the allow list; deny rules always take precedence.")
+					}
+				},
+			}
+		},
+		[COPILOT_ALLOW_MANAGED_MCP_SERVERS_ONLY_CONFIG]: {
+			type: 'boolean',
+			default: false,
+			scope: ConfigurationScope.APPLICATION,
+			included: false,
+			description: nls.localize('chat.mcp.allowManagedServersOnly', "Use only the enterprise-managed MCP allowlist when deciding which servers may run."),
+			policy: {
+				name: 'ChatAllowManagedMcpServersOnly',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.132',
+				value: managedSettingValue(COPILOT_ALLOW_MANAGED_MCP_SERVERS_ONLY_KEY),
+				managedSettings: {
+					[COPILOT_ALLOW_MANAGED_MCP_SERVERS_ONLY_KEY]: { type: 'boolean' },
+				},
+				localization: {
+					description: {
+						key: 'chat.mcp.allowManagedServersOnly.policy',
+						value: nls.localize('chat.mcp.allowManagedServersOnly.policy', "Use only the enterprise-managed MCP allowlist when deciding which servers may run.")
+					}
 				},
 			}
 		},
@@ -1050,7 +1391,7 @@ configurationRegistry.registerConfiguration({
 		[ChatConfiguration.EnabledPlugins]: {
 			type: 'object',
 			additionalProperties: { type: 'boolean' },
-			markdownDescription: nls.localize('chat.plugins.enabledPlugins', "Controls which [agent plugins](https://aka.ms/vscode-agent-plugins) are enabled or disabled. Keys are plugin IDs in `<plugin>@<marketplace>` form (where marketplace is defined in {1}); values enable (`true`) or disable (`false`) the plugin. Discovered alongside the path-keyed entries in {0}. When set by policy, only plugins mapped to `true` here are allowed to load.", `\`#${ChatConfiguration.PluginLocations}#\``, `\`#${ChatConfiguration.PluginMarketplaces}#\``),
+			markdownDescription: nls.localize('chat.plugins.enabledPlugins', "Controls which [agent plugins](https://aka.ms/vscode-agent-plugins) are enabled or disabled. Keys are plugin IDs in `<plugin>@<marketplace>` form (where marketplace is defined in {1}); values enable (`true`) or disable (`false`) the plugin. Discovered alongside the path-keyed entries in {0}. When set by policy, entries are additive: plugins mapped to `true` are enabled in addition to the user's own plugins, and only plugins mapped to `false` are blocked from loading.", `\`#${ChatConfiguration.PluginLocations}#\``, `\`#${ChatConfiguration.PluginMarketplaces}#\``),
 			scope: ConfigurationScope.APPLICATION,
 			policy: {
 				name: 'ChatEnabledPlugins',
@@ -1074,7 +1415,7 @@ configurationRegistry.registerConfiguration({
 				type: 'string',
 			},
 			markdownDescription: nls.localize('chat.plugins.marketplaces', "Plugin marketplaces to query. Entries may be GitHub shorthand (`owner/repo` or `owner/repo#ref`), direct Git repository URIs (`https://...git`, `ssh://...git`, or `git@host:path.git`, each optionally suffixed with `#ref`), or local repository URIs (`file:///...`). Equivalent GitHub shorthand and URI entries are deduplicated."),
-			default: [...DEFAULT_PLUGIN_MARKETPLACES],
+			default: [DEFAULT_PLUGIN_MARKETPLACE],
 			scope: ConfigurationScope.APPLICATION,
 			tags: ['experimental'],
 		},
@@ -1152,6 +1493,50 @@ configurationRegistry.registerConfiguration({
 				},
 			},
 		},
+		[COPILOT_STRICT_PLUGIN_ONLY_CUSTOMIZATION_CONFIG]: {
+			type: 'boolean',
+			default: false,
+			scope: ConfigurationScope.APPLICATION,
+			included: false,
+			description: nls.localize('chat.customizations.strictPluginOnlyCustomization', "Blocks standalone user and workspace skills, agents, hooks, instructions, and MCP servers while keeping eligible plugin customizations available."),
+			policy: {
+				name: 'ChatStrictPluginOnlyCustomization',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.132',
+				value: managedSettingValue(COPILOT_STRICT_PLUGIN_ONLY_CUSTOMIZATION_KEY),
+				managedSettings: {
+					[COPILOT_STRICT_PLUGIN_ONLY_CUSTOMIZATION_KEY]: { type: 'boolean' },
+				},
+				localization: {
+					description: {
+						key: 'chat.customizations.strictPluginOnlyCustomization.policy',
+						value: nls.localize('chat.customizations.strictPluginOnlyCustomization.policy', "Blocks standalone user and workspace skills, agents, hooks, instructions, and MCP servers while keeping eligible plugin customizations available.")
+					}
+				},
+			}
+		},
+		[COPILOT_ALLOW_MANAGED_HOOKS_ONLY_CONFIG]: {
+			type: 'boolean',
+			default: false,
+			scope: ConfigurationScope.APPLICATION,
+			included: false,
+			description: nls.localize('chat.hooks.allowManagedOnly', "Allows hooks only from enterprise-managed sources and plugins force-enabled by policy."),
+			policy: {
+				name: 'ChatAllowManagedHooksOnly',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.132',
+				value: managedSettingValue(COPILOT_ALLOW_MANAGED_HOOKS_ONLY_KEY),
+				managedSettings: {
+					[COPILOT_ALLOW_MANAGED_HOOKS_ONLY_KEY]: { type: 'boolean' },
+				},
+				localization: {
+					description: {
+						key: 'chat.hooks.allowManagedOnly.policy',
+						value: nls.localize('chat.hooks.allowManagedOnly.policy', "Allows hooks only from enterprise-managed sources and plugins force-enabled by policy.")
+					}
+				},
+			}
+		},
 		[ChatConfiguration.AgentEnabled]: {
 			type: 'boolean',
 			description: nls.localize('chat.agent.enabled.description', "When enabled, agent mode can be activated from chat and tools in agentic contexts with side effects can be used."),
@@ -1171,9 +1556,10 @@ configurationRegistry.registerConfiguration({
 			}
 		},
 		[AgentNetworkDomainSettingId.NetworkFilter]: {
-			markdownDescription: nls.localize('chat.agent.networkFilter', "When enabled, network access by agent tools (fetch tool, integrated browser) is restricted according to {0} and {1}. Domain filtering is also applied to those tools when {2} is enabled.", `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``),
+			markdownDescription: nls.localize('chat.agent.networkFilter', "When enabled, network access by agent tools (fetch tool, integrated browser) is restricted according to {0} and {1}. Domain filtering is also applied to those tools when {2} is enabled.\n\nChanges may not take full effect until VS Code is restarted.", `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``),
 			type: 'boolean',
 			default: false,
+			scope: ConfigurationScope.APPLICATION,
 			restricted: true,
 			policy: {
 				name: 'ChatAgentNetworkFilter',
@@ -1182,16 +1568,17 @@ configurationRegistry.registerConfiguration({
 				localization: {
 					description: {
 						key: 'chat.agent.networkFilter',
-						value: nls.localize('chat.agent.networkFilter', "When enabled, network access by agent tools (fetch tool, integrated browser) is restricted according to {0} and {1}. Domain filtering is also applied to those tools when {2} is enabled.", `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``),
+						value: nls.localize('chat.agent.networkFilter', "When enabled, network access by agent tools (fetch tool, integrated browser) is restricted according to {0} and {1}. Domain filtering is also applied to those tools when {2} is enabled.\n\nChanges may not take full effect until VS Code is restarted.", `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``),
 					}
 				}
 			}
 		},
 		[AgentNetworkDomainSettingId.AllowedNetworkDomains]: {
-			markdownDescription: nls.localize('chat.agent.allowedNetworkDomains', "Allowed domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. When {1} is set to {2}, all domains are allowed. Supports wildcards like {3}. When both allowed and denied lists are empty, all domains are blocked. Denied domains (see {4}) take precedence.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`${AgentSandboxEnabledValue.AllowNetwork}\``, '`*.example.com`', `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``),
+			markdownDescription: nls.localize('chat.agent.allowedNetworkDomains', "Allowed domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. When {2} is enabled, all domains are allowed. Supports wildcards like {3}. When both allowed and denied lists are empty, all domains are blocked. Denied domains (see {4}) take precedence.\n\nChanges may not take full effect until VS Code is restarted.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`#${AgentSandboxSettingId.AgentSandboxAllowNetwork}#\``, '`*.example.com`', `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``),
 			type: 'array',
 			items: { type: 'string' },
 			default: [],
+			scope: ConfigurationScope.APPLICATION,
 			restricted: true,
 			policy: {
 				name: 'ChatAgentAllowedNetworkDomains',
@@ -1200,16 +1587,17 @@ configurationRegistry.registerConfiguration({
 				localization: {
 					description: {
 						key: 'chat.agent.allowedNetworkDomains',
-						value: nls.localize('chat.agent.allowedNetworkDomains', "Allowed domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. When {1} is set to {2}, all domains are allowed. Supports wildcards like {3}. When both allowed and denied lists are empty, all domains are blocked. Denied domains (see {4}) take precedence.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`${AgentSandboxEnabledValue.AllowNetwork}\``, '`*.example.com`', `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``),
+						value: nls.localize('chat.agent.allowedNetworkDomains', "Allowed domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. When {2} is enabled, all domains are allowed. Supports wildcards like {3}. When both allowed and denied lists are empty, all domains are blocked. Denied domains (see {4}) take precedence.\n\nChanges may not take full effect until VS Code is restarted.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`#${AgentSandboxSettingId.AgentSandboxAllowNetwork}#\``, '`*.example.com`', `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``),
 					}
 				}
 			}
 		},
 		[AgentNetworkDomainSettingId.DeniedNetworkDomains]: {
-			markdownDescription: nls.localize('chat.agent.deniedNetworkDomains', "Denied domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. This does not apply when {1} is set to {2}. Takes precedence over {3}. Supports wildcards like {4}.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`${AgentSandboxEnabledValue.AllowNetwork}\``, `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, '`*.example.com`'),
+			markdownDescription: nls.localize('chat.agent.deniedNetworkDomains', "Denied domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. This does not apply when {2} is enabled. Takes precedence over {3}. Supports wildcards like {4}.\n\nChanges may not take full effect until VS Code is restarted.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`#${AgentSandboxSettingId.AgentSandboxAllowNetwork}#\``, `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, '`*.example.com`'),
 			type: 'array',
 			items: { type: 'string' },
 			default: [],
+			scope: ConfigurationScope.APPLICATION,
 			restricted: true,
 			policy: {
 				name: 'ChatAgentDeniedNetworkDomains',
@@ -1218,39 +1606,25 @@ configurationRegistry.registerConfiguration({
 				localization: {
 					description: {
 						key: 'chat.agent.deniedNetworkDomains',
-						value: nls.localize('chat.agent.deniedNetworkDomains', "Denied domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. This does not apply when {1} is set to {2}. Takes precedence over {3}. Supports wildcards like {4}.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`${AgentSandboxEnabledValue.AllowNetwork}\``, `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, '`*.example.com`'),
+						value: nls.localize('chat.agent.deniedNetworkDomains', "Denied domains for network access by agent tools (fetch tool, integrated browser). Applies when {0} or {1} is enabled. This does not apply when {2} is enabled. Takes precedence over {3}. Supports wildcards like {4}.\n\nChanges may not take full effect until VS Code is restarted.", `\`#${AgentNetworkDomainSettingId.NetworkFilter}#\``, `\`#${AgentSandboxSettingId.AgentSandboxEnabled}#\``, `\`#${AgentSandboxSettingId.AgentSandboxAllowNetwork}#\``, `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``, '`*.example.com`'),
 					}
 				}
 			}
-		},
-		[AgentNetworkDomainSettingId.DeprecatedOldAllowedNetworkDomains]: {
-			type: 'array',
-			items: { type: 'string' },
-			deprecated: true,
-			markdownDeprecationMessage: nls.localize('agentSandbox.allowedNetworkDomains.deprecated', 'Use {0} instead', `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``),
-		},
-		[AgentNetworkDomainSettingId.DeprecatedOldDeniedNetworkDomains]: {
-			type: 'array',
-			items: { type: 'string' },
-			deprecated: true,
-			markdownDeprecationMessage: nls.localize('agentSandbox.deniedNetworkDomains.deprecated', 'Use {0} instead', `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``),
-		},
-		[AgentNetworkDomainSettingId.DeprecatedSandboxAllowedNetworkDomains]: {
-			type: 'array',
-			items: { type: 'string' },
-			deprecated: true,
-			markdownDeprecationMessage: nls.localize('agentSandbox.allowedNetworkDomains2.deprecated', 'Use {0} instead', `\`#${AgentNetworkDomainSettingId.AllowedNetworkDomains}#\``),
-		},
-		[AgentNetworkDomainSettingId.DeprecatedSandboxDeniedNetworkDomains]: {
-			type: 'array',
-			items: { type: 'string' },
-			deprecated: true,
-			markdownDeprecationMessage: nls.localize('agentSandbox.deniedNetworkDomains2.deprecated', 'Use {0} instead', `\`#${AgentNetworkDomainSettingId.DeniedNetworkDomains}#\``),
 		},
 		[ChatConfiguration.DefaultNewSessionMode]: {
 			type: 'string',
 			description: nls.localize('chat.newSession.defaultMode', "The default mode for new chat sessions. When empty, the chat view's default mode is used."),
 			default: '',
+		},
+		[ChatConfiguration.AgentHostDebugLogsDefaultExportLocation]: {
+			type: 'string',
+			pattern: '^((\\/|\\\\\\\\|[a-zA-Z]:\\\\).*)?$',
+			patternErrorMessage: nls.localize('chat.agentHost.debugLogs.defaultExportLocation.error', "The default Agent Host debug-log export location must be an absolute path (for example, C:\\\\myFolder or /myFolder)."),
+			description: nls.localize('chat.agentHost.debugLogs.defaultExportLocation', "The default folder for archives and folders created by the Developer: Export Agent Host Debug Logs command. When empty or unavailable, the default file-dialog location is used."),
+			default: '',
+			scope: ConfigurationScope.APPLICATION,
+			ignoreSync: true,
+			tags: ['advanced'],
 		},
 		[AgentHostAhpJsonlLoggingSettingId]: {
 			type: 'boolean',
@@ -1258,10 +1632,95 @@ configurationRegistry.registerConfiguration({
 			default: product.quality !== 'stable',
 			tags: ['experimental', 'advanced'],
 		},
+		[AgentHostAgentDebugLogEnabledSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.agentDebugLog.enabled', "Enable agent debug logging for agent host sessions: surface their debug events in the agent debug panel. Takes effect immediately; only sessions that run while this is enabled are captured."),
+			default: false,
+			tags: ['experimental', 'advanced'],
+			experiment: {
+				mode: 'startup'
+			},
+		},
+		[AgentHostAgentDebugLogMaxEventsSettingId]: {
+			type: 'number',
+			minimum: 10,
+			markdownDescription: nls.localize('chat.agentHost.agentDebugLog.maxEventsInMemory', "Maximum number of debug events kept in memory per agent host session for the agent debug panel. Older events beyond this limit are dropped from the in-memory buffer, which also lowers the totals (such as token usage) shown in the panel overview."),
+			default: 10000,
+			tags: ['experimental', 'advanced'],
+			experiment: {
+				mode: 'startup'
+			},
+		},
 		[AgentHostCustomTerminalToolEnabledSettingId]: {
 			type: 'boolean',
 			description: nls.localize('chat.agentHost.customTerminalTool.enabled', "When enabled, agent SDK sessions use the Agent Host terminal tool override instead of the SDK's default terminal behavior."),
 			default: false,
+			tags: ['experimental', 'advanced'],
+			policy: {
+				name: 'ChatAgentHostCustomTerminalTool',
+				category: PolicyCategory.InteractiveSession,
+				minimumVersion: '1.137',
+				value: managedSettingsDisabledValue,
+				localization: {
+					description: {
+						key: 'chat.agentHost.customTerminalTool.enabled.policy',
+						value: nls.localize('chat.agentHost.customTerminalTool.enabled.policy', "Enable the Agent Host custom terminal tool override for agent SDK sessions."),
+					}
+				}
+			},
+		},
+		[AgentHostShellToolInitScriptEnabledSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.shellTool.initScript.enabled', "When enabled, agent SDK sessions load your shell profile (`~/.bashrc` on macOS and Linux, PowerShell profiles on Windows) and activate the Python environment selected for the workspace before each shell command. Python activation requires the Python Environments extension with `#python-envs.terminal.autoActivationType#` set to `shellStartup`. Local windows only."),
+			default: false,
+			tags: ['experimental', 'advanced'],
+			scope: ConfigurationScope.APPLICATION,
+		},
+		[AgentHostCopilotSdkLogLevelSettingId]: {
+			type: 'string',
+			enum: [...copilotSdkLogLevelSettingValues],
+			enumDescriptions: [
+				nls.localize('chat.agentHost.copilotSdk.logLevel.info', "Log informational messages. Running VS Code with trace logging still enables all agent SDK runtime diagnostics."),
+				nls.localize('chat.agentHost.copilotSdk.logLevel.trace', "Log all agent SDK runtime diagnostics."),
+			],
+			markdownDescription: nls.localize('chat.agentHost.copilotSdk.logLevel', "Controls the log level for the agent SDK runtime used by the local agent host. Changing this setting restarts the agent SDK client; active sessions are reloaded when next used."),
+			default: 'info',
+			scope: ConfigurationScope.APPLICATION,
+			tags: ['experimental', 'advanced'],
+		},
+		[AgentHostCopilotRuntimePathSettingId]: {
+			type: 'string',
+			markdownDescription: nls.localize('chat.agentHost.copilot.runtimePath', "Absolute path to a local `copilot-runtime` executable. The bundled agent SDK wrapper remains in use. Empty uses the bundled runtime. Changing this setting restarts the agent SDK client after active turns finish."),
+			default: '',
+			scope: ConfigurationScope.APPLICATION,
+			ignoreSync: true,
+			tags: ['experimental', 'advanced'],
+			included: false,
+			agentHost: {
+				key: CopilotCliConfigKey.RuntimePath,
+				scope: AgentHostConfigurationSyncScope.Local,
+			},
+		},
+		[CopilotClaudeAdvisorEnabledSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.copilot.claudeAdvisor.enabled', "When enabled, Agent Host sessions using a supported Claude model can call the provider-native Advisor tool. Changing this setting restarts the agent SDK client after active turns finish."),
+			default: false,
+			tags: ['experimental', 'advanced'],
+			scope: ConfigurationScope.APPLICATION,
+		},
+		[CopilotTgrepEnabledSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.copilot.tgrep.enabled', "When enabled, local Agent Host sessions force-enable tgrep indexed search, bypassing the repository-size threshold. Requires a local Git repository on a non-virtual filesystem. Changing this setting restarts the agent SDK client after active turns finish."),
+			default: false,
+			experiment: { mode: 'auto' },
+			tags: ['experimental', 'advanced'],
+			scope: ConfigurationScope.APPLICATION,
+		},
+		[AgentHostMapLegacySettingsToManagedSettingsSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.copilot.mapLegacySettingsToManagedSettings', "When enabled, maps supported legacy VS Code settings to equivalent agent SDK managed settings for local Agent Host sessions. Only restrictions are mapped, and only from globally-scoped values — workspace and folder values are ignored. Applies to local Agent Host sessions; remote hosts and other agents are unaffected. This compatibility bridge is temporary and is not used for new settings."),
+			default: false,
+			scope: ConfigurationScope.APPLICATION_MACHINE,
 			tags: ['experimental', 'advanced'],
 		},
 		[AgentHostOpus48PromptEnabledSettingId]: {
@@ -1270,24 +1729,135 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			tags: ['experimental', 'advanced'],
 		},
+		[AgentHostToolSearchEnabledSettingId]: {
+			type: 'boolean',
+			description: nls.localize('chat.agentHost.copilot.toolSearch.enabled', "When enabled, agent SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front."),
+			default: true,
+			tags: ['experimental', 'advanced'],
+		},
+		[AgentHostToolSearchDeferThresholdSettingId]: {
+			type: 'number',
+			description: nls.localize('chat.agentHost.copilot.toolSearch.deferThreshold', "Minimum number of tools before MCP and external tools are deferred behind tool search. Set to 0 to always defer external tools. Only effective when tool search is enabled."),
+			default: 1,
+			minimum: 0,
+			tags: ['experimental', 'advanced'],
+		},
+		[CopilotSkillCharBudgetSettingId]: {
+			type: 'number',
+			description: nls.localize('chat.copilot.skillCharBudget', "Maximum number of characters available for skill descriptions in the agent SDK system message."),
+			default: DEFAULT_COPILOT_SKILL_CHAR_BUDGET,
+			minimum: 1,
+			experiment: { mode: 'startup' },
+			scope: ConfigurationScope.APPLICATION,
+			tags: ['experimental', 'advanced'],
+			agentHost: {
+				key: CopilotCliConfigKey.SkillCharBudget,
+				transform: value => normalizeSkillCharBudget(typeof value === 'number' ? value : undefined),
+				scope: AgentHostConfigurationSyncScope.Local,
+			},
+		},
+		[CopilotSemanticSearchEnabledSettingId]: {
+			type: 'boolean',
+			description: nls.localize('chat.copilot.semanticSearch.enabled', "Controls whether Agent Host sessions can use VS Code's semantic workspace search. When disabled, semantic search is unavailable."),
+			default: false,
+			experiment: { mode: 'auto' },
+			tags: ['experimental', 'advanced'],
+		},
+		[AgentHostHydraFusionEnabledSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.copilot.hydraFusion.enabled', "When enabled, makes the experimental HydraFusion model available to local Agent Host sessions. Changing this setting restarts the local agent runtime."),
+			default: true,
+			experiment: { mode: 'startup' },
+			scope: ConfigurationScope.APPLICATION_MACHINE,
+			tags: ['preview', 'experimental', 'advanced'],
+		},
+		[CopilotAutoModeTierOverrideSettingId]: {
+			type: ['string', 'null'],
+			markdownDescription: nls.localize('chat.copilot.autoModeTierOverride', "Override Auto's \"Optimize for\" preference for evals and debugging. Accepts `efficiency`, `balance`, or `intelligence` in both Copilot Chat and agent SDK sessions; `fast` is extension-only. Set to `null` to clear."),
+			default: null,
+			tags: ['advanced'],
+		},
+		[AgentHostCopilotModelCapabilityOverridesSettingId]: {
+			type: 'object',
+			markdownDescription: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides', "Per-model overrides for Agent Host sessions. Use `*` to match every model. Supports model family, reasoning effort, tool filters, model capabilities, and YAML prompt overrides."),
+			additionalProperties: {
+				type: 'object',
+				properties: {
+					family: {
+						type: 'string',
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.family', "Route the model to another family's tuned system prompt and tool profile (e.g. `claude-opus-4.8`). The model id sent to the runtime is unaffected, so the session still runs on the selected model."),
+					},
+					reasoningEffort: {
+						type: 'string',
+						enum: [...reasoningEffortLevels],
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.reasoningEffort', "Reasoning effort for sessions on this model, overriding the model picker's thinking level. Use the `*` entry to set it for every model. Unrecognized values are ignored."),
+					},
+					availableTools: {
+						type: 'array',
+						items: { type: 'string' },
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.availableTools', "When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (agent runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources."),
+					},
+					excludedTools: {
+						type: 'array',
+						items: { type: 'string' },
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.excludedTools', "Tools disabled for sessions on this model; same pattern syntax as `availableTools` and takes precedence over it. Note that `custom:*` and a bare `*` also disable the agent host's own terminal tools registered with the SDK."),
+					},
+					modelCapabilities: {
+						type: 'object',
+						additionalProperties: true,
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.modelCapabilities', "Per-property model capability overrides passed through to the agent SDK's `modelCapabilities` session field (e.g. `{ \"supports\": { \"vision\": false }, \"limits\": { \"max_context_window_tokens\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes."),
+					},
+					promptOverrideString: {
+						type: 'string',
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.promptOverrideString', "Inline YAML containing `systemPrompt` and/or `toolDescriptions` overrides. Takes precedence over `promptOverrideFile`. A system prompt replaces all Agent Host and SDK prompt sections and guardrails."),
+					},
+					promptOverrideFile: {
+						type: 'string',
+						description: nls.localize('chat.agentHost.copilot.modelCapabilityOverrides.promptOverrideFile', "Path to a YAML file containing `systemPrompt` and/or `toolDescriptions` overrides. Ignored when `promptOverrideString` is configured."),
+					},
+				},
+			},
+			default: {},
+			scope: ConfigurationScope.APPLICATION,
+			tags: ['experimental', 'advanced'],
+		},
+		[AgentHostAllowSignedOutWhenUsableSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.allowSignedOutWhenUsable', "When enabled, Agent Host sessions remain available while signed out. The Agents window opens without forcing GitHub sign-in, and editor chat lets you select the Agent Host harness. Agents usable without GitHub (for example Codex with ChatGPT authentication or Claude in native mode with your own Anthropic credentials) work while signed out; agents that require GitHub prompt you to add a model or sign in. When disabled (the default), GitHub sign-in is required before the Agents window opens."),
+			default: false,
+			scope: ConfigurationScope.APPLICATION,
+			tags: ['experimental', 'advanced'],
+			experiment: { mode: 'startup' }
+		},
+		[ChatMicrosoftAuthenticationEnabledSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.microsoftAuthentication.enabled', "When enabled, sign-in dialogs offer \"Continue with Microsoft\". Signing in with Microsoft exchanges your Microsoft account for the GitHub access your organization has linked to it. The resulting GitHub sign-in lasts for the current window session only and is not saved."),
+			default: false,
+			scope: ConfigurationScope.APPLICATION,
+			tags: ['experimental', 'advanced'],
+			// Read when a sign-in dialog opens, so `startup` keeps the offered buttons stable for the
+			// life of the window instead of changing under a dialog the user already has open.
+			experiment: { mode: 'startup' }
+		},
 		[AgentHostSdkSandboxEnabledSettingId]: {
 			type: 'string',
-			enum: [AgentSandboxEnabledValue.Off, AgentSandboxEnabledValue.On, AgentSandboxEnabledValue.AllowNetwork],
-			enumDescriptions: [
-				nls.localize('chat.agentHost.sdkSandbox.enabled.off', "No sandbox policy is forwarded for the SDK's built-in shell tool — commands run unsandboxed."),
-				nls.localize('chat.agentHost.sdkSandbox.enabled.on', "The SDK's built-in shell tool runs inside a sandbox using the configured filesystem policy and host-list-restricted network."),
-				nls.localize('chat.agentHost.sdkSandbox.enabled.allowNetwork', "The SDK's built-in shell tool runs inside a sandbox with unrestricted outbound network access."),
-			],
-			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabled', "Sandbox mode for the agent SDK's built-in shell tool. Only takes effect when `#chat.agentHost.customTerminalTool.enabled#` is `false`; when the Agent Host's own terminal tool is enabled, the engine sandbox is controlled by `#chat.agent.sandbox.enabled#`. The sandbox applies only to requests that run with default approvals — not when approvals are bypassed — and is not supported on Windows yet."),
+			enum: [AgentSandboxEnabledValue.Off, AgentSandboxEnabledValue.On],
+			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabled.description', "Deprecated sandbox mode for the agent SDK's built-in shell tool on macOS and Linux."),
+			markdownDeprecationMessage: nls.localize('chat.agentHost.sdkSandbox.enabled.deprecated', "This setting no longer has any effect. Use `#chat.agent.sandbox.enabled#` for both the SDK's built-in shell tool and the Agent Host's custom terminal tool."),
 			default: AgentSandboxEnabledValue.Off,
 			tags: ['experimental', 'advanced'],
-			experiment: {
-				mode: 'auto'
-			},
+		},
+		[AgentHostSdkSandboxWindowsEnabledSettingId]: {
+			type: 'string',
+			enum: [AgentSandboxEnabledValue.Off, AgentSandboxEnabledValue.On],
+			markdownDescription: nls.localize('chat.agentHost.sdkSandbox.enabledWindows.description', "Deprecated sandbox mode for the agent SDK's built-in shell tool on Windows."),
+			markdownDeprecationMessage: nls.localize('chat.agentHost.sdkSandbox.enabledWindows.deprecated', "This setting no longer has any effect. Use `#chat.agent.sandbox.enabledWindows#` for both the SDK's built-in shell tool and the Agent Host's custom terminal tool."),
+			default: AgentSandboxEnabledValue.Off,
+			tags: ['experimental', 'advanced'],
 		},
 		[ChatConfiguration.ToolConfirmationCarousel]: {
 			type: 'boolean',
-			description: nls.localize('chat.tools.confirmationCarousel', "When enabled, multiple tool confirmations are batched into a carousel above the input."),
+			description: nls.localize('chat.tools.confirmationCarousel', "When enabled, tool confirmations are shown in a carousel above the input, including confirmations from subagents and earlier responses."),
 			default: true,
 		},
 		[ChatConfiguration.ToolRiskAssessmentEnabled]: {
@@ -1323,9 +1893,25 @@ configurationRegistry.registerConfiguration({
 			enumItemLabels: ExploreAgentDefaultModel.modelLabels,
 			markdownEnumDescriptions: ExploreAgentDefaultModel.modelDescriptions
 		},
+		[ChatConfiguration.BYOKUtilityModelDefault]: {
+			type: 'string',
+			markdownDescription: nls.localize('chat.byokUtilityModelDefault.description', "Controls the default model used by built-in utility flows when the selected main agent model is a bring your own key (BYOK) model. This setting has no effect when the selected main agent model is provided by GitHub Copilot. A specific model configured in {0} or {1} takes precedence.", '`#chat.utilityModel#`', '`#chat.utilitySmallModel#`'),
+			enum: [BYOKUtilityModelDefault.None, BYOKUtilityModelDefault.MainAgent, BYOKUtilityModelDefault.Copilot],
+			enumItemLabels: [
+				nls.localize('chat.byokUtilityModelDefault.none.label', "None"),
+				nls.localize('chat.byokUtilityModelDefault.mainAgent.label', "Main Agent Model"),
+				nls.localize('chat.byokUtilityModelDefault.copilot.label', "Default"),
+			],
+			markdownEnumDescriptions: [
+				nls.localize('chat.byokUtilityModelDefault.none.description', "Do not use a default utility model."),
+				nls.localize('chat.byokUtilityModelDefault.mainAgent.description', "Use the selected BYOK main agent model."),
+				nls.localize('chat.byokUtilityModelDefault.copilot.description', "Use the default utility models."),
+			],
+			default: BYOKUtilityModelDefault.Copilot,
+		},
 		[ChatConfiguration.UtilityModel]: {
 			type: 'string',
-			description: nls.localize('chat.utilityModel.description', "Override the language model used by built-in utility flows. Leave empty to use the default model."),
+			description: nls.localize('chat.utilityModel.description', "Override the language model used by built-in utility flows. Leave empty to use the configured default behavior."),
 			default: '',
 			enum: UtilityModelContribution.modelIds,
 			enumItemLabels: UtilityModelContribution.modelLabels,
@@ -1333,7 +1919,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[ChatConfiguration.UtilitySmallModel]: {
 			type: 'string',
-			description: nls.localize('chat.utilitySmallModel.description', "Override the language model used by built-in small/fast utility flows. A fast and inexpensive model is recommended. Leave empty to use the default model."),
+			description: nls.localize('chat.utilitySmallModel.description', "Override the language model used by built-in small/fast utility flows. A fast and inexpensive model is recommended. Leave empty to use the configured default behavior."),
 			default: '',
 			enum: UtilitySmallModelContribution.modelIds,
 			enumItemLabels: UtilitySmallModelContribution.modelLabels,
@@ -1366,6 +1952,13 @@ configurationRegistry.registerConfiguration({
 			additionalProperties: false,
 			default: Object.fromEntries(allDiscoverySources.map(k => [k, false])),
 			markdownDescription: nls.localize('mcp.discovery.enabled', "Configures discovery of Model Context Protocol servers from configuration from various other applications."),
+		},
+		[mcpWorkspaceRootConfig]: {
+			type: 'boolean',
+			default: true,
+			scope: ConfigurationScope.WINDOW,
+			tags: ['experimental'],
+			markdownDescription: nls.localize('mcp.workspaceRootConfig.enabled', "Offer the workspace root `.mcp.json` file when adding MCP servers manually. When `.vscode/mcp.json` exists, choose which file to add to. Marketplace installations continue to use `.vscode/mcp.json`. Existing `.mcp.json` files can be opened and read independently of this setting."),
 		},
 		[mcpGalleryServiceEnablementConfig]: {
 			type: 'boolean',
@@ -1402,13 +1995,15 @@ configurationRegistry.registerConfiguration({
 			),
 			markdownDescription: nls.localize(
 				'chat.instructions.config.locations.description',
-				"Specify location(s) of instructions files (`*{0}`) that can be attached in Chat sessions. [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.",
+				"Specify location(s) of instructions files (`*{0}`) that can be attached in Chat sessions. [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.\n\nThis setting is only used by the Local agent harness.",
 				INSTRUCTION_FILE_EXTENSION,
-				INSTRUCTIONS_DOCUMENTATION_URL,
+				getDocumentationUrl(PromptsType.instructions),
 			),
 			default: {
 				...DEFAULT_INSTRUCTIONS_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: true })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
 			},
+			markdownDeprecationMessage: nls.localize('chat.instructions.config.locations.deprecated', "This setting and the Local agent harness will be removed in a future release. Review the {0} in the Agent Customizations editor to move instructions into supported locations.", migrationsTabLink),
+			deprecationMessageSeverity: 'info',
 			additionalProperties: { type: 'boolean' },
 			propertyNames: {
 				pattern: VALID_PROMPT_FOLDER_PATTERN,
@@ -1434,13 +2029,15 @@ configurationRegistry.registerConfiguration({
 			),
 			markdownDescription: nls.localize(
 				'chat.reusablePrompts.config.locations.description',
-				"Specify location(s) of reusable prompt files (`*{0}`) that can be run in Chat sessions. [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.",
+				"Specify location(s) of reusable prompt files (`*{0}`) that can be run in Chat sessions. [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.\n\nThis setting is only used by the Local agent harness.",
 				PROMPT_FILE_EXTENSION,
-				PROMPT_DOCUMENTATION_URL,
+				getDocumentationUrl(PromptsType.prompt),
 			),
 			default: {
 				[PROMPT_DEFAULT_SOURCE_FOLDER]: true,
 			},
+			markdownDeprecationMessage: nls.localize('chat.reusablePrompts.config.locations.deprecated', "This setting and the Local agent harness will be removed in a future release. Review the {0} in the Agent Customizations editor to convert prompt files into skills.", migrationsTabLink),
+			deprecationMessageSeverity: 'info',
 			additionalProperties: { type: 'boolean' },
 			unevaluatedProperties: { type: 'boolean' },
 			propertyNames: {
@@ -1467,14 +2064,15 @@ configurationRegistry.registerConfiguration({
 			),
 			markdownDescription: nls.localize(
 				'chat.mode.config.locations.description',
-				"Specify location(s) of custom chat mode files (`*{0}`). [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.",
+				"Specify location(s) of custom chat mode files (`*{0}`). [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.\n\nThis setting is only used by the Local agent harness.",
 				LEGACY_MODE_FILE_EXTENSION,
-				AGENT_DOCUMENTATION_URL,
+				getDocumentationUrl(PromptsType.agent),
 			),
 			default: {
 				[LEGACY_MODE_DEFAULT_SOURCE_FOLDER]: true,
 			},
-			deprecationMessage: nls.localize('chat.mode.config.locations.deprecated', "This setting is deprecated and will be removed in future releases. Chat modes are now called custom agents and are located in `.github/agents`"),
+			markdownDeprecationMessage: nls.localize('chat.mode.config.locations.deprecated', "This setting and the Local agent harness will be removed in a future release. Chat modes are now called custom agents and are located in `.github/agents`. Review the {0} in the Agent Customizations editor to move them into supported locations.", migrationsTabLink),
+			deprecationMessageSeverity: 'info',
 			additionalProperties: { type: 'boolean' },
 			unevaluatedProperties: { type: 'boolean' },
 			restricted: true,
@@ -1497,15 +2095,17 @@ configurationRegistry.registerConfiguration({
 			),
 			markdownDescription: nls.localize(
 				'chat.agents.config.locations.description',
-				"Specify location(s) of custom agent files (`*{0}`). [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.",
+				"Specify location(s) of custom agent files (`*{0}`). [Learn More]({1}).\n\nRelative paths are resolved from the root folder(s) of your workspace.\n\nThis setting is only used by the Local agent harness.",
 				AGENT_FILE_EXTENSION,
-				AGENT_DOCUMENTATION_URL,
+				getDocumentationUrl(PromptsType.agent),
 			),
 			default: {
 				[AGENTS_SOURCE_FOLDER]: true,
 				[CLAUDE_AGENTS_SOURCE_FOLDER]: true,
 				[COPILOT_USER_AGENTS_SOURCE_FOLDER]: true,
 			},
+			markdownDeprecationMessage: nls.localize('chat.agents.config.locations.deprecated', "This setting and the Local agent harness will be removed in a future release. Review the {0} in the Agent Customizations editor to move agents into supported locations.", migrationsTabLink),
+			deprecationMessageSeverity: 'info',
 			additionalProperties: { type: 'boolean' },
 			propertyNames: {
 				pattern: VALID_PROMPT_FOLDER_PATTERN,
@@ -1528,7 +2128,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_AGENT_MD]: {
 			type: 'boolean',
 			title: nls.localize('chat.useAgentMd.title', "Use AGENTS.md file",),
-			markdownDescription: nls.localize('chat.useAgentMd.description', "Controls whether instructions from `AGENTS.md` file found in a workspace roots are attached to all chat requests.",),
+			markdownDescription: nls.localize('chat.useAgentMd.description', "Controls whether instructions from `AGENTS.md` file found in a workspace roots are attached to all chat requests. This setting is only used by the Local agent harness.",),
 			default: true,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1537,7 +2137,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_NESTED_AGENT_MD]: {
 			type: 'boolean',
 			title: nls.localize('chat.useNestedAgentMd.title', "Use nested AGENTS.md files",),
-			markdownDescription: nls.localize('chat.useNestedAgentMd.description', "Controls whether instructions from nested `AGENTS.md` files found in the workspace are listed in all chat requests. The language model can load these skills on-demand if the `read` tool is available.",),
+			markdownDescription: nls.localize('chat.useNestedAgentMd.description', "Controls whether instructions from nested `AGENTS.md` files found in the workspace are listed in all chat requests. The language model can load these skills on-demand if the `read` tool is available. This setting is only used by the Local agent harness.",),
 			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1546,7 +2146,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_CLAUDE_MD]: {
 			type: 'boolean',
 			title: nls.localize('chat.useClaudeMd.title', "Use CLAUDE.md file",),
-			markdownDescription: nls.localize('chat.useClaudeMd.description', "Controls whether instructions from `CLAUDE.md` file found in workspace roots, .claude and ~/.claude folder are attached to all chat requests.",),
+			markdownDescription: nls.localize('chat.useClaudeMd.description', "Controls whether instructions from `CLAUDE.md` file found in workspace roots, .claude and ~/.claude folder are attached to all chat requests. This setting is only used by the Local agent harness.",),
 			// Patent AI: off by default. A personal ~/.claude/CLAUDE.md belongs to the user's coding
 			// assistant, not their patent assistant; with it on, every chat opened by hunting for the
 			// files it names (2026-09-02). Claude sessions in the Agents window read CLAUDE.md through
@@ -1559,7 +2159,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_AGENT_SKILLS]: {
 			type: 'boolean',
 			title: nls.localize('chat.useAgentSkills.title', "Use Agent skills",),
-			markdownDescription: nls.localize('chat.useAgentSkills.description', "Controls whether skills are provided as specialized capabilities to the chat requests. Skills are loaded from the folders configured in `#chat.agentSkillsLocations#`. The language model can load these skills on-demand if the `read` tool is available. Learn more about [Agent Skills](https://aka.ms/vscode-agent-skills).",),
+			markdownDescription: nls.localize('chat.useAgentSkills.description', "Controls whether skills are provided as specialized capabilities to the chat requests. Skills are loaded from the folders configured in `#chat.agentSkillsLocations#`. The language model can load these skills on-demand if the `read` tool is available. Learn more about [Agent Skills](https://aka.ms/vscode-agent-skills). This setting is only used by the Local agent harness.",),
 			default: true,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1568,7 +2168,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_SKILL_ADHERENCE_PROMPT]: {
 			type: 'boolean',
 			title: nls.localize('chat.useSkillAdherencePrompt.title', "Use Skill Adherence Prompt",),
-			markdownDescription: nls.localize('chat.useSkillAdherencePrompt.description', "Controls whether a stronger skill adherence prompt is used that encourages the model to immediately invoke skills when relevant rather than just announcing them."),
+			markdownDescription: nls.localize('chat.useSkillAdherencePrompt.description', "Controls whether a stronger skill adherence prompt is used that encourages the model to immediately invoke skills when relevant rather than just announcing them. This setting is only used by the Local agent harness."),
 			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1580,7 +2180,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.INCLUDE_APPLYING_INSTRUCTIONS]: {
 			type: 'boolean',
 			title: nls.localize('chat.includeApplyingInstructions.title', "Include Applying Instructions",),
-			markdownDescription: nls.localize('chat.includeApplyingInstructions.description', "Controls whether instructions with a matching 'applyTo' attribute are automatically included in chat requests.",),
+			markdownDescription: nls.localize('chat.includeApplyingInstructions.description', "Controls whether instructions with a matching 'applyTo' attribute are automatically included in chat requests. This setting is only used by the Local agent harness.",),
 			default: true,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1589,7 +2189,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.INCLUDE_REFERENCED_INSTRUCTIONS]: {
 			type: 'boolean',
 			title: nls.localize('chat.includeReferencedInstructions.title', "Include Referenced Instructions",),
-			markdownDescription: nls.localize('chat.includeReferencedInstructions.description', "Controls whether referenced instructions are automatically included in chat requests.",),
+			markdownDescription: nls.localize('chat.includeReferencedInstructions.description', "Controls whether referenced instructions are automatically included in chat requests. This setting is only used by the Local agent harness.",),
 			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1598,7 +2198,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_CUSTOMIZATIONS_IN_PARENT_REPOS]: {
 			type: 'boolean',
 			title: nls.localize('chat.useCustomizationsInParentRepos.title', "Use Customizations in Parent Repositories",),
-			markdownDescription: nls.localize('chat.useCustomizationsInParentRepos.description', "Controls whether to use chat customization files in parent repositories.",),
+			markdownDescription: nls.localize('chat.useCustomizationsInParentRepos.description', "Controls whether to use chat customization files in parent repositories. This setting is only used by the Local agent harness.",),
 			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1609,9 +2209,9 @@ configurationRegistry.registerConfiguration({
 			title: nls.localize('chat.agentSkillsLocations.title', "Agent Skills Locations",),
 			markdownDescription: nls.localize(
 				'chat.agentSkillsLocations.description',
-				"Specify location(s) of agent skills (`{0}`) that can be used in Chat Sessions. [Learn More]({1}).\n\nEach path should contain skill subfolders with SKILL.md files (e.g., add `my-skills` if you have `my-skills/skillA/SKILL.md`). Relative paths are resolved from the root folder(s) of your workspace.",
+				"Specify location(s) of agent skills (`{0}`) that can be used in Chat Sessions. [Learn More]({1}).\n\nEach path should contain skill subfolders with SKILL.md files (e.g., add `my-skills` if you have `my-skills/skillA/SKILL.md`). Relative paths are resolved from the root folder(s) of your workspace.\n\nThis setting is only used by the Local agent harness.",
 				SKILL_FILENAME,
-				SKILL_DOCUMENTATION_URL,
+				getDocumentationUrl(PromptsType.skill),
 			),
 			default: {
 				// FlowLeap: the personal Claude skills folder holds CLI-oriented recipes (flowleap-cli skill packs)
@@ -1619,6 +2219,8 @@ configurationRegistry.registerConfiguration({
 				// gives the agent two conflicting instruction sets for the same task. Users can turn it on.
 				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: folder.path !== '~/.claude/skills' })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
 			},
+			markdownDeprecationMessage: nls.localize('chat.agentSkillsLocations.deprecated', "This setting and the Local agent harness will be removed in a future release. Review the {0} in the Agent Customizations editor to move skills into supported locations.", migrationsTabLink),
+			deprecationMessageSeverity: 'info',
 			additionalProperties: { type: 'boolean' },
 			propertyNames: {
 				pattern: VALID_PROMPT_FOLDER_PATTERN,
@@ -1643,8 +2245,8 @@ configurationRegistry.registerConfiguration({
 			title: nls.localize('chat.hookFilesLocations.title', "Hook File Locations",),
 			markdownDescription: nls.localize(
 				'chat.hookFilesLocations.description',
-				"Specify paths to hook configuration files that define custom shell commands to execute at strategic points in an agent's workflow. [Learn More]({0}).\n\nRelative paths are resolved from the root folder(s) of your workspace. Supports FlowLeap hooks (`*.json`) and Claude Code hooks (`settings.json`, `settings.local.json`).",
-				HOOK_DOCUMENTATION_URL,
+				"Specify paths to hook configuration files that define custom shell commands to execute at strategic points in an agent's workflow. [Learn More]({0}).\n\nRelative paths are resolved from the root folder(s) of your workspace. Supports FlowLeap hooks (`*.json`) and Claude Code hooks (`settings.json`, `settings.local.json`).\n\nThis setting is only used by the Local agent harness.",
+				getDocumentationUrl(PromptsType.hook),
 			),
 			default: {
 				...DEFAULT_HOOK_FILE_PATHS.map((f) => ({ [f.path]: true })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
@@ -1670,7 +2272,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_CHAT_HOOKS]: {
 			type: 'boolean',
 			title: nls.localize('chat.useHooks.title', "Use Chat Hooks",),
-			markdownDescription: nls.localize('chat.useHooks.description', "Controls whether chat hooks are executed at strategic points during an agent's workflow. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`.",),
+			markdownDescription: nls.localize('chat.useHooks.description', "Controls whether chat hooks are executed at strategic points during an agent's workflow. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.",),
 			default: true,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1683,7 +2285,7 @@ configurationRegistry.registerConfiguration({
 				localization: {
 					description: {
 						key: 'chat.useHooks.description',
-						value: nls.localize('chat.useHooks.description', "Controls whether chat hooks are executed at strategic points during an agent's workflow. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`.",)
+						value: nls.localize('chat.useHooks.description', "Controls whether chat hooks are executed at strategic points during an agent's workflow. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.",)
 					}
 				},
 			}
@@ -1691,7 +2293,7 @@ configurationRegistry.registerConfiguration({
 		[PromptsConfig.USE_CLAUDE_HOOKS]: {
 			type: 'boolean',
 			title: nls.localize('chat.useClaudeHooks.title', "Use Claude Hooks",),
-			markdownDescription: nls.localize('chat.useClaudeHooks.description', "Controls whether hooks from Claude configuration files can execute. When disabled, only FlowLeap-format hooks are used. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`.",),
+			markdownDescription: nls.localize('chat.useClaudeHooks.description', "Controls whether hooks from Claude configuration files can execute. When disabled, only FlowLeap-format hooks are used. Hooks are loaded from the files configured in `#chat.hookFilesLocations#`. This setting is only used by the Local agent harness.",),
 			default: false,
 			restricted: true,
 			disallowConfigurationDefault: true,
@@ -1738,7 +2340,7 @@ configurationRegistry.registerConfiguration({
 				nls.localize('chat.agent.thinkingMode.collapsedPreview', "Thinking parts will be expanded first, then collapse once we reach a part that is not thinking."),
 				nls.localize('chat.agent.thinkingMode.fixedScrolling', "Show thinking in a fixed-height streaming panel that auto-scrolls; click header to expand to full height."),
 			],
-			description: nls.localize('chat.agent.thinkingStyle', "Controls how thinking is rendered."),
+			description: nls.localize('chat.agent.thinkingStyle', "Controls how thinking is rendered. Read-only chats always use the collapsed preview style."),
 			tags: ['experimental'],
 		},
 		[ChatConfiguration.ThinkingGenerateTitles]: {
@@ -1770,6 +2372,11 @@ configurationRegistry.registerConfiguration({
 			default: true,
 			markdownDescription: nls.localize('chat.tools.terminal.simpleCollapsible', "When enabled, terminal tool calls are always displayed in a collapsible container with a simplified view."),
 			tags: ['experimental'],
+		},
+		[ChatConfiguration.TerminalOutputReflow]: {
+			type: 'boolean',
+			default: true,
+			description: nls.localize('chat.tools.terminal.outputReflow', "Controls whether terminal output in chat reflows to fit the available width. When disabled, previews use the terminal's column count, or 80 columns when no terminal is available, and scroll horizontally when needed. This does not resize the terminal running the command."),
 		},
 		[ChatConfiguration.CompressOutputEnabled]: {
 			type: 'boolean',
@@ -1809,7 +2416,7 @@ configurationRegistry.registerConfiguration({
 			default: true,
 			markdownDescription: nls.localize('chat.tools.autoExpandFailures', "When enabled, terminal tool failures are automatically expanded in the chat UI to show error details."),
 		},
-		[ChatConfiguration.AIDisabled]: {
+		[ChatAIDisabledSettingId]: {
 			type: 'boolean',
 			description: nls.localize('chat.disableAIFeatures', "Disable and hide built-in AI features provided by FlowLeap, including chat and inline suggestions."),
 			default: false,
@@ -1820,11 +2427,26 @@ configurationRegistry.registerConfiguration({
 			description: nls.localize('chat.titleBar.signIn.enabled', "Controls whether the FlowLeap Sign In button is shown in the title bar when signed out. When disabled, the Sign In affordance falls back to the status bar."),
 			default: true,
 		},
+		[ChatConfiguration.WelcomePageSignInEnabled]: {
+			type: 'boolean',
+			description: nls.localize('chat.welcomePage.signIn.enabled', "Controls whether the Welcome page shows a GitHub sign-in button instead of the Agents window button when signed out."),
+			default: false,
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
+		},
 		[ChatConfiguration.TitleBarOpenInAgentsWindowEnabled]: {
 			type: 'boolean',
 			description: nls.localize('chat.titleBar.openInAgentsWindow.enabled', "Controls whether the Open in Agents Window button is shown in the title bar."),
 			default: true,
 		},
+		[ChatConfiguration.OpenInAgentsWindowRevealCurrentSession]: {
+			type: 'boolean',
+			description: nls.localize('chat.experimental.openInAgentsWindow.revealCurrentSession', "Controls whether Open in Agents Window reveals the current local Agent Host session instead of opening a new session."),
+			default: false,
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
+		},
+		...agentsWindowHandoffConfigurationProperties,
 		'chat.approvedAccountOrganizations': {
 			type: 'array',
 			items: { type: 'string' },
@@ -1862,6 +2484,21 @@ configurationRegistry.registerConfiguration({
 				mode: 'auto'
 			}
 		},
+		[ChatConfiguration.ChatClosedPromoNotification]: {
+			type: 'string',
+			enum: [ChatClosedPromoNotification.None, ChatClosedPromoNotification.CopilotIconPopup],
+			enumItemLabels: [
+				nls.localize('chat.closedPromoNotification.none.label', "None"),
+				nls.localize('chat.closedPromoNotification.copilotIconPopup.label', "FlowLeap Icon Popup"),
+			],
+			enumDescriptions: [
+				nls.localize('chat.closedPromoNotification.none.description', "Do not show a promo on the FlowLeap icon when Chat is closed."),
+				nls.localize('chat.closedPromoNotification.copilotIconPopup.description', "Show a promo tooltip when hovering or clicking the FlowLeap status icon while Chat is closed. Viewing the offer clears its indicator; the offer remains available for the current window session. Choosing Try dismisses the offer and its chat banner."),
+			],
+			description: nls.localize('chat.closedPromoNotification', "Controls whether a live model promo is shown on the FlowLeap icon when Chat is closed. When explicitly set, this overrides the experiment without an experiment lookup. Otherwise, eligible promos use the experiment treatment."),
+			default: ChatClosedPromoNotification.None,
+			tags: ['experimental'],
+		},
 		[ChatConfiguration.RestoreLastPanelSession]: {
 			type: 'boolean',
 			description: nls.localize('chat.restoreLastPanelSession', "Controls whether the last session is restored in panel after restart."),
@@ -1882,15 +2519,6 @@ configurationRegistry.registerConfiguration({
 				mode: 'auto'
 			}
 		},
-		[ChatConfiguration.GeneralPurposeAgentEnabled]: {
-			type: 'boolean',
-			description: nls.localize('chat.generalPurposeAgent.enabled', "Controls whether the built-in General Purpose agent is available as a subagent."),
-			default: false,
-			tags: ['experimental', 'advanced'],
-			experiment: {
-				mode: 'auto'
-			}
-		},
 		[ChatConfiguration.SubagentsAllowInvocationsFromSubagents]: {
 			type: 'boolean',
 			description: nls.localize('chat.subagents.allowInvocationsFromSubagents', "Allow subagents to invoke subagents."),
@@ -1898,6 +2526,38 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			experiment: {
 				mode: 'auto'
+			}
+		},
+		[ChatConfiguration.SubagentsDefaultToAuto]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.subagents.defaultToAuto', "Controls whether local subagents use the Auto model when neither the tool call nor the selected agent specifies a model. Explicit tool and agent model selections take precedence. Subagents of a BYOK main model continue to use that model. Auto routing is not constrained by the main model's fixed cost tier."),
+			default: false,
+			tags: ['experimental'],
+			experiment: {
+				mode: 'auto'
+			},
+		},
+		[ChatConfiguration.SubagentsShowCreditUsage]: {
+			type: 'boolean',
+			description: nls.localize('chat.subagents.showCreditUsage', "Controls whether AI credit usage is shown next to the duration for subagents."),
+			default: false,
+		},
+		[ChatConfiguration.TerminalAgentHostEnabled]: {
+			type: 'boolean',
+			description: nls.localize('chat.terminal.agentHost.enabled', "Controls whether Terminal Chat is backed by the Agent Host instead of the extension host. Applied on startup."),
+			default: false,
+			tags: ['experimental'],
+			experiment: {
+				mode: 'startup'
+			}
+		},
+		[ChatConfiguration.InlineChatAgentHostEnabled]: {
+			type: 'boolean',
+			description: nls.localize('chat.inlineChat.agentHost.enabled', "Controls whether editor inline chat is backed by the Agent Host instead of the extension host. Applied on startup."),
+			default: false,
+			tags: ['experimental'],
+			experiment: {
+				mode: 'startup'
 			}
 		},
 		[ChatConfiguration.CollectInstructionsInExtension]: {
@@ -1911,6 +2571,64 @@ configurationRegistry.registerConfiguration({
 			tags: ['preview'],
 			description: nls.localize('chat.customizations.structuredPreview.enabled', "Controls whether the Chat Customizations editor shows a structured preview for markdown customization files (agents, skills, instructions, prompts). When disabled, the editor always opens the raw markdown in the embedded code editor."),
 			default: false,
+		},
+		[ChatConfiguration.ChatCustomizationsToggleStyle]: {
+			type: 'string',
+			enum: ['checkbox', 'switch'],
+			enumDescriptions: [
+				nls.localize('chat.experimental.customizations.toggleStyle.checkbox', "Use checkboxes for customization enablement controls."),
+				nls.localize('chat.experimental.customizations.toggleStyle.switch', "Use switches for customization enablement controls."),
+			],
+			tags: ['experimental'],
+			description: nls.localize('chat.experimental.customizations.toggleStyle', "Controls whether Plugin, MCP, and Tools customization pages use checkboxes or switches for enablement."),
+			default: 'switch',
+		},
+		...customizationMarketplaceConfigurationProperties,
+		[CustomizationMarketplaceConfiguration.CopilotConnectorsEnabled]: {
+			type: 'boolean',
+			tags: ['experimental'],
+			description: nls.localize('chat.customizations.copilotConnectors.enabled', "Enables Copilot connectors in the unified marketplace and exposes connected connector MCP servers in Chat Customizations and Copilot agent sessions."),
+			default: false,
+			scope: ConfigurationScope.APPLICATION,
+			experiment: { mode: 'auto' },
+			agentHost: { key: AgentHostMcpConnectorsEnabledConfigKey },
+		},
+		[ChatConfiguration.ChatCustomizationsPromptMigrationEnabled]: {
+			type: 'boolean',
+			tags: ['experimental'],
+			description: nls.localize('chat.customizations.promptMigration.enabled', "Controls whether the Chat Customizations editor offers to convert prompt files into skills for agent-host harnesses, which ignore prompt files. When disabled, the migration card and sidebar shortcut are hidden."),
+			default: true,
+		},
+		[ChatConfiguration.ChatCustomizationsUserDataMigrationEnabled]: {
+			type: 'boolean',
+			tags: ['experimental'],
+			description: nls.localize('chat.customizations.userDataMigration.enabled', "Controls whether the Chat Customizations editor offers to move agents and instructions stored in user data to the active agent-host harness, which ignores the user data location. When disabled, the migration card and sidebar shortcut are hidden."),
+			default: false,
+		},
+		[ChatConfiguration.ChatCustomizationsLocationsMigrationEnabled]: {
+			type: 'boolean',
+			tags: ['experimental'],
+			description: nls.localize('chat.customizations.locationsMigration.enabled', "Controls whether the Chat Customizations editor offers to move agents, instructions, and skills from configured locations that are not supported by the active agent-host harness. When disabled, the migration card and sidebar shortcut are hidden."),
+			default: false,
+		},
+		[ChatConfiguration.ChatCustomizationsMcpServerMigrationEnabled]: {
+			type: 'boolean',
+			tags: ['experimental'],
+			description: nls.localize('chat.customizations.mcpServerMigration.enabled', "Controls whether VS Code shows MCP server migration actions, hints, compatibility badges, and compatibility details. Migration moves eligible workspace MCP servers out of .vscode/mcp.json and into a .mcp.json file at the workspace root, where the active agent-host harness discovers them directly."),
+			default: false,
+		},
+		[ChatConfiguration.ChatCustomizationsMigrationHint]: {
+			type: 'string',
+			enum: [CustomizationMigrationHintMode.Never, CustomizationMigrationHintMode.Once, CustomizationMigrationHintMode.Always],
+			enumDescriptions: [
+				nls.localize('chat.customizations.migrationHint.never', "Never show customization migration hints in chat."),
+				nls.localize('chat.customizations.migrationHint.once', "Show a customization migration hint once per chat session."),
+				nls.localize('chat.customizations.migrationHint.always', "Show a customization migration hint for every chat request."),
+			],
+			description: nls.localize('chat.customizations.migrationHint', "Controls whether chat shows information about customizations that are not used by the active Agent Host harness."),
+			default: CustomizationMigrationHintMode.Never,
+			tags: ['experimental'],
+			experiment: { mode: 'auto' },
 		}
 	}
 });
@@ -1944,13 +2662,66 @@ Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane
 		new SyncDescriptor(AgentPluginEditorInput)
 	]
 );
+function isStringKeyedObject(value: unknown): value is Record<string, unknown> {
+	return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function migrateChatDefaultConfiguration(value: unknown): Record<string, unknown> | undefined {
+	if (!isStringKeyedObject(value)) {
+		return undefined;
+	}
+	let approvals: ChatDefaultPermissionLevel;
+	switch (value.approvals) {
+		case ChatPermissionLevel.Default:
+			approvals = ChatDefaultPermissionLevel.Manual;
+			break;
+		case ChatPermissionLevel.AutoApprove:
+			approvals = ChatDefaultPermissionLevel.AllowAll;
+			break;
+		default:
+			return undefined;
+	}
+	return { ...value, approvals };
+}
+
+/** Maps the retired boolean form of the Agent Merge merge setting onto its enum. */
+function migrateAgentMergeMergePullRequest(value: unknown): unknown {
+	return typeof value === 'boolean' ? (value ? 'always' : 'never') : value;
+}
+
 Registry.as<IConfigurationMigrationRegistry>(Extensions.ConfigurationMigration).registerConfigurationMigrations([
 	{
 		key: 'chat.agentSessions.defaultConfiguration',
 		migrateFn: (value, _accessor) => ([
 			['chat.agentSessions.defaultConfiguration', { value: undefined }],
-			[ChatConfiguration.DefaultConfiguration, { value }]
+			[ChatConfiguration.DefaultConfiguration, { value: migrateChatDefaultConfiguration(value) ?? value }]
 		])
+	},
+	{
+		key: ChatConfiguration.DefaultConfiguration,
+		migrateFn: value => ({ value: migrateChatDefaultConfiguration(value) ?? value })
+	},
+	{
+		key: 'chat.experimental.autoApprovals.enabled',
+		migrateFn: () => ({ value: undefined })
+	},
+	{
+		key: 'chat.assistedPermissions.enabled',
+		migrateFn: () => ({ value: undefined })
+	},
+	{
+		key: 'chat.agentSessions.sessionCatalog.enabled',
+		// The setting is application-scoped, so an existing value can live in the
+		// application settings file. Without this the migration only inspects the
+		// user target and silently drops such a value.
+		includeApplication: true,
+		migrateFn: (value, accessor) => {
+			const pairs: ConfigurationKeyValuePairs = [['chat.agentSessions.sessionCatalog.enabled', { value: undefined }]];
+			if (accessor(ChatConfiguration.SessionCatalogEnabled) === undefined) {
+				pairs.push([ChatConfiguration.SessionCatalogEnabled, { value }]);
+			}
+			return pairs;
+		}
 	},
 	{
 		key: 'chat.experimental.detectParticipant.enabled',
@@ -1958,6 +2729,16 @@ Registry.as<IConfigurationMigrationRegistry>(Extensions.ConfigurationMigration).
 			['chat.experimental.detectParticipant.enabled', { value: undefined }],
 			['chat.detectParticipant.enabled', { value: value !== false }]
 		])
+	},
+	{
+		key: 'chat.useCopilotModelsForUtilityModels',
+		migrateFn: (value: unknown, valueAccessor) => {
+			const result: ConfigurationKeyValuePairs = [['chat.useCopilotModelsForUtilityModels', { value: undefined }]];
+			if (typeof value === 'boolean' && valueAccessor(ChatConfiguration.BYOKUtilityModelDefault) === undefined) {
+				result.push([ChatConfiguration.BYOKUtilityModelDefault, { value: value ? BYOKUtilityModelDefault.Copilot : BYOKUtilityModelDefault.None }]);
+			}
+			return result;
+		}
 	},
 	{
 		key: 'chat.useClaudeSkills',
@@ -1975,6 +2756,14 @@ Registry.as<IConfigurationMigrationRegistry>(Extensions.ConfigurationMigration).
 
 			return { value };
 		}
+	},
+	{
+		key: ChatConfiguration.ShowExternalAgentSessions,
+		migrateFn: (value: unknown) => ({
+			value: value === 'all'
+				? AgentHostExternalSessionsMode.Last30Days
+				: value,
+		})
 	},
 	{
 		key: ChatConfiguration.NotifyWindowOnConfirmation,
@@ -2005,49 +2794,89 @@ Registry.as<IConfigurationMigrationRegistry>(Extensions.ConfigurationMigration).
 			[ChatConfiguration.PluginLocations, { value }]
 		])
 	},
+	// Agent Merge settings dropped the `agentHost` segment from their ids. Without
+	// this an explicit opt-out (for example `fixCI: false`) would silently revert to
+	// the permissive default for sessions that already have Agent Merge enabled.
+	...Object.values(AgentMergeSettingId).map(settingId => {
+		const legacyKey = settingId.replace(/^chat\./, 'chat.agentHost.');
+		return {
+			key: legacyKey,
+			migrateFn: (value: unknown, accessor: (key: string) => unknown): ConfigurationKeyValuePairs => {
+				const pairs: ConfigurationKeyValuePairs = [[legacyKey, { value: undefined }]];
+				// Never clobber an explicitly configured new key (e.g. after settings
+				// sync brought both keys across versions).
+				if (accessor(settingId) === undefined) {
+					pairs.push([settingId, { value: settingId === AgentMergeSettingId.MergePullRequest ? migrateAgentMergeMergePullRequest(value) : value }]);
+				}
+				return pairs;
+			}
+		};
+	}),
 	{
-		key: AgentNetworkDomainSettingId.DeprecatedSandboxAllowedNetworkDomains,
-		migrateFn: (value, accessor) => {
-			const pairs: ConfigurationKeyValuePairs = [];
-			pairs.push([AgentNetworkDomainSettingId.DeprecatedSandboxAllowedNetworkDomains, { value: undefined }]);
-			if (value !== undefined && accessor(AgentNetworkDomainSettingId.AllowedNetworkDomains) === undefined) {
-				pairs.push([AgentNetworkDomainSettingId.AllowedNetworkDomains, { value }]);
+		// `chat.agentMerge.mergePullRequest` became a three-way enum. An explicit
+		// `true` must keep merging rather than fall back to the `never` default.
+		key: AgentMergeSettingId.MergePullRequest,
+		migrateFn: (value: unknown): ConfigurationKeyValuePairs => {
+			if (typeof value !== 'boolean') {
+				return [];
+			}
+			return [[AgentMergeSettingId.MergePullRequest, { value: migrateAgentMergeMergePullRequest(value) }]];
+		}
+	},
+	{
+		// The on-device dictation runtime moved to Foundry Local; the old
+		// transformers.js/onnxruntime model IDs no longer resolve and would fail
+		// with an unknown-model error. Map any explicitly-stored legacy value to
+		// the new default so existing users keep working. Also migrate the setting
+		// from its old `chat.speechToText.model` id to `dictation.model`.
+		key: 'chat.speechToText.model',
+		migrateFn: (value: unknown, accessor) => {
+			const legacyModelIds = [
+				'onnx-community/whisper-tiny',
+				'onnx-community/whisper-base',
+				'onnx-community/whisper-small',
+				'onnx-community/nemotron-3.5-asr-streaming-0.6b-onnx-int4',
+				'nemotron-speech-streaming-en-0.6b',
+			];
+			const migrated = (typeof value === 'string' && legacyModelIds.includes(value))
+				? DEFAULT_LOCAL_TRANSCRIPTION_MODEL
+				: value;
+			const pairs: ConfigurationKeyValuePairs = [['chat.speechToText.model', { value: undefined }]];
+			// Never clobber an explicitly configured new key (e.g. after settings
+			// sync brought both keys across versions).
+			if (accessor('dictation.model') === undefined) {
+				pairs.push(['dictation.model', { value: migrated }]);
 			}
 			return pairs;
 		}
 	},
 	{
-		key: AgentNetworkDomainSettingId.DeprecatedSandboxDeniedNetworkDomains,
-		migrateFn: (value, accessor) => {
-			const pairs: ConfigurationKeyValuePairs = [];
-			pairs.push([AgentNetworkDomainSettingId.DeprecatedSandboxDeniedNetworkDomains, { value: undefined }]);
-			if (value !== undefined && accessor(AgentNetworkDomainSettingId.DeniedNetworkDomains) === undefined) {
-				pairs.push([AgentNetworkDomainSettingId.DeniedNetworkDomains, { value }]);
+		// Existing users may have the former English-only default stored
+		// explicitly. Move them to the multilingual replacement as well.
+		key: 'dictation.model',
+		migrateFn: value => ({
+			value: value === 'nemotron-speech-streaming-en-0.6b'
+				? DEFAULT_LOCAL_TRANSCRIPTION_MODEL
+				: value
+		})
+	},
+	{
+		// Dictation settings were regrouped under the top-level `dictation.*`
+		// namespace (they govern dictation across chat, editor, and terminal).
+		key: 'chat.speechToText.enabled',
+		migrateFn: (value: unknown, accessor) => {
+			const pairs: ConfigurationKeyValuePairs = [['chat.speechToText.enabled', { value: undefined }]];
+			if (accessor('dictation.enabled') === undefined) {
+				pairs.push(['dictation.enabled', { value }]);
 			}
 			return pairs;
 		}
 	},
 	{
-		key: AgentNetworkDomainSettingId.DeprecatedOldAllowedNetworkDomains,
-		migrateFn: (value, accessor) => {
-			const pairs: ConfigurationKeyValuePairs = [];
-			pairs.push([AgentNetworkDomainSettingId.DeprecatedOldAllowedNetworkDomains, { value: undefined }]);
-			if (value !== undefined && accessor(AgentNetworkDomainSettingId.AllowedNetworkDomains) === undefined) {
-				pairs.push([AgentNetworkDomainSettingId.AllowedNetworkDomains, { value }]);
-			}
-			return pairs;
-		}
-	},
-	{
-		key: AgentNetworkDomainSettingId.DeprecatedOldDeniedNetworkDomains,
-		migrateFn: (value, accessor) => {
-			const pairs: ConfigurationKeyValuePairs = [];
-			pairs.push([AgentNetworkDomainSettingId.DeprecatedOldDeniedNetworkDomains, { value: undefined }]);
-			if (value !== undefined && accessor(AgentNetworkDomainSettingId.DeniedNetworkDomains) === undefined) {
-				pairs.push([AgentNetworkDomainSettingId.DeniedNetworkDomains, { value }]);
-			}
-			return pairs;
-		}
+		// `chat.speechToText.mode` was removed (the shortcut is always tap-toggle /
+		// hold-to-talk); clear it so it does not linger as an unknown setting.
+		key: 'chat.speechToText.mode',
+		migrateFn: () => ([['chat.speechToText.mode', { value: undefined }]])
 	},
 ]);
 
@@ -2124,7 +2953,7 @@ class CopilotTelemetryContribution extends Disposable implements IWorkbenchContr
 	private updateCommonProperties(): void {
 		const copilotTrackingId = this.chatEntitlementService.copilotTrackingId;
 		if (copilotTrackingId) {
-			// __GDPR__COMMON__ "common.copilotTrackingId" : { "endPoint": "GoogleAnalyticsID", "classification": "EndUserPseudonymizedInformation", "purpose": "BusinessInsight", "comment": "The anonymized FlowLeap analytics tracking ID from the entitlement API." }
+			// __GDPR__COMMON__ "common.copilotTrackingId" : { "endPoint": "GoogleAnalyticsID", "classification": "EndUserPseudonymizedInformation", "purpose": "BusinessInsight", "comment": "The anonymized Copilot analytics tracking ID from the entitlement API." }
 			this.telemetryService.setCommonProperty('common.copilotTrackingId', copilotTrackingId);
 		}
 
@@ -2250,7 +3079,6 @@ class ChatForegroundSessionCountContribution extends Disposable implements IWork
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IChatWidgetService private readonly chatWidgetService: IChatWidgetService,
 		@IViewsService private readonly viewsService: IViewsService,
-		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super();
 		this.foregroundSessionCountContextKey = ChatContextKeys.foregroundSessionCount.bindTo(this.contextKeyService);
@@ -2259,7 +3087,7 @@ class ChatForegroundSessionCountContribution extends Disposable implements IWork
 			this.updateForegroundSessionCount();
 		}));
 
-		this._register(this.editorService.onDidVisibleEditorsChange(() => {
+		this._register(this.chatWidgetService.onDidChangeWidgetVisibility(() => {
 			this.updateForegroundSessionCount();
 		}));
 
@@ -2274,7 +3102,7 @@ class ChatForegroundSessionCountContribution extends Disposable implements IWork
 		let count = this.viewsService.isViewVisible(ChatViewId) ? 1 : 0;
 
 		for (const widget of this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.Chat)) {
-			if (widget.domNode.offsetParent === null) {
+			if (!widget.visible) {
 				continue;
 			}
 
@@ -2468,6 +3296,23 @@ class ToolReferenceNamesContribution extends Disposable implements IWorkbenchCon
 	}
 }
 
+/**
+ * Forces the eager {@link ChatSpeechToTextService} to instantiate at startup so
+ * it can publish the `chatSpeechToTextConfigured` context key that gates the
+ * dictation (mic) button. Registered singletons are created lazily on first
+ * access, so without this the key would never be set and the button never shows.
+ */
+class ChatSpeechToTextInitContribution implements IWorkbenchContribution {
+
+	static readonly ID = 'workbench.contrib.chatSpeechToTextInit';
+
+	constructor(
+		@IChatSpeechToTextService _chatSpeechToTextService: IChatSpeechToTextService,
+	) {
+		// Injecting the service is enough to construct it.
+	}
+}
+
 AccessibleViewRegistry.register(new ChatTerminalOutputAccessibleView());
 AccessibleViewRegistry.register(new ChatResponseAccessibleView());
 AccessibleViewRegistry.register(new PanelChatAccessibilityHelp());
@@ -2475,15 +3320,19 @@ AccessibleViewRegistry.register(new QuickChatAccessibilityHelp());
 AccessibleViewRegistry.register(new EditsChatAccessibilityHelp());
 AccessibleViewRegistry.register(new AgentChatAccessibilityHelp());
 AccessibleViewRegistry.register(new ChatFindAccessibilityHelp());
+AccessibleViewRegistry.register(new ChatPetAchievementsAccessibilityHelp());
 
 registerEditorFeature(ChatInputBoxContentProvider);
 Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory).registerEditorSerializer(ChatEditorInput.TypeID, ChatEditorInputSerializer);
 Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory).registerEditorSerializer(ChatDebugEditorInput.ID, ChatDebugEditorInputSerializer);
 
 registerWorkbenchContribution2(CopilotTelemetryContribution.ID, CopilotTelemetryContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(EditorChatUsageContribution.ID, EditorChatUsageContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(ChatSpeechToTextInitContribution.ID, ChatSpeechToTextInitContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatResolverContribution.ID, ChatResolverContribution, WorkbenchPhase.BlockStartup);
 registerWorkbenchContribution2(ChatDebugResolverContribution.ID, ChatDebugResolverContribution, WorkbenchPhase.BlockStartup);
 registerWorkbenchContribution2(PromptsDebugContribution.ID, PromptsDebugContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(AgentHostChatDebugContribution.ID, AgentHostChatDebugContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatLanguageModelsDataContribution.ID, ChatLanguageModelsDataContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatSlashCommandsContribution.ID, ChatSlashCommandsContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatSessionOptionSlashCommandsContribution.ID, ChatSessionOptionSlashCommandsContribution, WorkbenchPhase.Eventually);
@@ -2495,12 +3344,15 @@ registerWorkbenchContribution2(ChatPromptFilesExtensionPointHandler.ID, ChatProm
 registerWorkbenchContribution2(ChatCompatibilityNotifier.ID, ChatCompatibilityNotifier, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(CodeBlockActionRendering.ID, CodeBlockActionRendering, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatCopyActionRendering.ID, ChatCopyActionRendering, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(ChatModelFeedbackSurveyActionRendering.ID, ChatModelFeedbackSurveyActionRendering, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(ChatModelFeedbackSurveyPromptContribution.ID, ChatModelFeedbackSurveyPromptContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatImplicitContextContribution.ID, ChatImplicitContextContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatViewsWelcomeHandler.ID, ChatViewsWelcomeHandler, WorkbenchPhase.BlockStartup);
 registerWorkbenchContribution2(ChatGettingStartedContribution.ID, ChatGettingStartedContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatSetupContribution.ID, ChatSetupContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatQuotaNotificationContribution.ID, ChatQuotaNotificationContribution, WorkbenchPhase.AfterRestored);
-registerWorkbenchContribution2(LocalAgentDisabledInputTipContribution.ID, LocalAgentDisabledInputTipContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(ChatPromoNotificationContribution.ID, ChatPromoNotificationContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(ChatExpNotificationContribution.ID, ChatExpNotificationContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(HasByokModelsContribution.ID, HasByokModelsContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatTeardownContribution.ID, ChatTeardownContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(ChatStatusBarEntry.ID, ChatStatusBarEntry, WorkbenchPhase.BlockRestore);
@@ -2523,17 +3375,25 @@ registerWorkbenchContribution2(ChatContextContributions.ID, ChatContextContribut
 registerWorkbenchContribution2(PromptUrlHandler.ID, PromptUrlHandler, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(PluginUrlHandler.ID, PluginUrlHandler, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(ChatEditingNotebookFileSystemProviderContrib.ID, ChatEditingNotebookFileSystemProviderContrib, WorkbenchPhase.BlockStartup);
-registerWorkbenchContribution2(ChatResponseResourceWorkbenchContribution.ID, ChatResponseResourceWorkbenchContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(ChatResponseResourceWorkbenchContribution.ID, ChatResponseResourceWorkbenchContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(ChatTerminalOutputTextModelWorkbenchContribution.ID, ChatTerminalOutputTextModelWorkbenchContribution, WorkbenchPhase.BlockRestore);
 registerWorkbenchContribution2(UserToolSetsContributions.ID, UserToolSetsContributions, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(PromptLanguageFeaturesProvider.ID, PromptLanguageFeaturesProvider, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(ChatWindowNotifier.ID, ChatWindowNotifier, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(ChatRepoInfoContribution.ID, ChatRepoInfoContribution, WorkbenchPhase.Eventually);
 registerWorkbenchContribution2(AgentPluginRecommendations.ID, AgentPluginRecommendations, WorkbenchPhase.Eventually);
+registerWorkbenchContribution2(AgentPluginCommandsContribution.ID, AgentPluginCommandsContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(PluginAutoUpdate.ID, PluginAutoUpdate, WorkbenchPhase.Eventually);
+registerWorkbenchContribution2(ChatReferenceAttachmentWidgetContribution.ID, ChatReferenceAttachmentWidgetContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(TranscriptContextAttachmentWidgetContribution.ID, TranscriptContextAttachmentWidgetContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(ChatPetContextContribution.ID, ChatPetContextContribution, WorkbenchPhase.BlockRestore);
+registerWorkbenchContribution2(ChatPetCustomizationAchievementContribution.ID, ChatPetCustomizationAchievementContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(ChatPetEditingAchievementContribution.ID, ChatPetEditingAchievementContribution, WorkbenchPhase.AfterRestored);
 
 registerChatActions();
 registerChatAccessibilityActions();
 registerChatCopyActions();
+registerChatModelFeedbackSurveyActions();
 registerChatOpenAgentDebugPanelAction();
 registerChatCodeBlockActions();
 registerChatCodeCompareBlockActions();
@@ -2542,6 +3402,11 @@ registerChatPromptNavigationActions();
 registerChatTitleActions();
 registerChatExecuteActions();
 registerChatFindActions();
+registerAction2(ChatVoiceInputModeAction);
+registerAction2(ChatVoiceInputModeToggleListenAction);
+registerVoiceInputModeSimulateActions();
+registerChatSpeechToTextActions();
+registerConfigureSpeechInstructionsActions();
 registerChatQueueActions();
 registerQuickChatActions();
 registerChatExportActions();
@@ -2554,7 +3419,6 @@ registerChatElicitationActions();
 registerChatToolActions();
 registerLanguageModelActions();
 registerChatPluginActions();
-registerPlanReviewFeedbackEditorActions();
 registerAction2(ConfigureToolSets);
 registerEditorFeature(ChatPasteProvidersFeature);
 
@@ -2564,10 +3428,20 @@ agentPluginDiscoveryRegistry.register(new SyncDescriptor(ExtensionAgentPluginDis
 agentPluginDiscoveryRegistry.register(new SyncDescriptor(CopilotCliAgentPluginDiscovery), AgentPluginDiscoveryPriority.CopilotCli);
 
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
+registerSingleton(IChatTerminalOutputTextModelService, ChatTerminalOutputTextModelService, InstantiationType.Delayed);
+registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Eager);
+registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatTransferService, ChatTransferService, InstantiationType.Delayed);
 registerSingleton(IChatService, ChatService, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
+registerSingleton(ISessionChatPillVisibilityService, SessionChatPillVisibility, InstantiationType.Delayed);
 registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
+registerSingleton(IChatSideChatService, ChatSideChatService, InstantiationType.Delayed);
+registerSingleton(IChatRequestOriginService, ChatRequestOriginService, InstantiationType.Delayed);
+registerSingleton(IChatHarnessSwitchFeedbackSurveyService, ChatHarnessSwitchFeedbackSurveyService, InstantiationType.Delayed);
+registerSingleton(IChatModelFeedbackSurveyService, ChatModelFeedbackSurveyService, InstantiationType.Delayed);
+registerSingleton(IChatPetService, ChatPetService, InstantiationType.Delayed);
+registerSingleton(IChatPetWidgetService, ChatPetWidgetService, InstantiationType.Delayed);
 registerSingleton(IQuickChatService, QuickChatService, InstantiationType.Delayed);
 registerSingleton(IChatAccessibilityService, ChatAccessibilityService, InstantiationType.Delayed);
 registerSingleton(IChatWidgetHistoryService, ChatWidgetHistoryService, InstantiationType.Delayed);
@@ -2589,6 +3463,7 @@ registerSingleton(IToolResultCompressor, ToolResultCompressorService, Instantiat
 registerSingleton(ILanguageModelToolsConfirmationService, LanguageModelToolsConfirmationService, InstantiationType.Delayed);
 registerSingleton(IChatToolRiskAssessmentService, ChatToolRiskAssessmentService, InstantiationType.Delayed);
 registerSingleton(IChatGoalSummaryService, ChatGoalSummaryService, InstantiationType.Delayed);
+registerSingleton(IChatSubmitRequestHandlerService, ChatSubmitRequestHandlerService, InstantiationType.Delayed);
 registerSingleton(IVoiceChatService, VoiceChatService, InstantiationType.Delayed);
 registerSingleton(IChatCodeBlockContextProviderService, ChatCodeBlockContextProviderService, InstantiationType.Delayed);
 registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
@@ -2597,6 +3472,8 @@ registerSingleton(IChatMarkdownAnchorService, ChatMarkdownAnchorService, Instant
 registerSingleton(IAgentNetworkFilterService, AgentNetworkFilterService, InstantiationType.Delayed);
 registerSingleton(ILanguageModelIgnoredFilesService, LanguageModelIgnoredFilesService, InstantiationType.Delayed);
 registerSingleton(IPromptsService, PromptsService, InstantiationType.Delayed);
+registerSingleton(ICustomizationMigrationService, CustomizationMigrationService, InstantiationType.Delayed);
+registerSingleton(ICustomizationMigrationTelemetryService, CustomizationMigrationTelemetryService, InstantiationType.Delayed);
 registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
 registerSingleton(IChatModeService, ChatModeService, InstantiationType.Delayed);
 registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
@@ -2609,5 +3486,7 @@ registerSingleton(IPlanReviewFeedbackService, PlanReviewFeedbackService, Instant
 registerSingleton(IChatTipService, ChatTipService, InstantiationType.Delayed);
 registerSingleton(IChatDebugService, ChatDebugServiceImpl, InstantiationType.Delayed);
 registerSingleton(IChatImageCarouselService, ChatImageCarouselService, InstantiationType.Delayed);
+registerSingleton(IAgentHostImportConversationStore, AgentHostImportConversationStore, InstantiationType.Delayed);
+registerSingleton(ISessionSummaryHoverService, SessionSummaryHoverService, InstantiationType.Delayed);
 
 ChatWidget.CONTRIBS.push(ChatDynamicVariableModel);

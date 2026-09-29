@@ -259,7 +259,7 @@ class OpenLicenseUrlAction extends Action2 {
 				id: MenuId.MenubarHelpMenu,
 				group: '4_legal',
 				order: 1,
-				when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: Hide VS Code license link when Patent IDE mode is ON
+				when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide the VS Code license link
 			}
 		});
 	}
@@ -346,7 +346,7 @@ class AskVSCodeCopilot extends Action2 {
 			title: localize2('askVScode', 'Ask @vscode'),
 			category: Categories.Help,
 			f1: true,
-			precondition: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: Hide in patent mode
+			precondition: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated())
 		});
 	}
 
@@ -364,7 +364,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarHelpMenu, {
 	},
 	order: 7,
 	group: '1_welcome',
-	when: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: Hide in patent mode
+	when: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated())
 });
 
 // --- Actions Registration

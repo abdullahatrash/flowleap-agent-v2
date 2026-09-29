@@ -46,7 +46,6 @@ import { Action2, IMenu, IMenuService, MenuId, registerAction2 } from '../../../
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { registerAndCreateHistoryNavigationContext } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
@@ -79,6 +78,7 @@ import { debugConsoleClearAll, debugConsoleEvaluationPrompt } from './debugIcons
 import './media/repl.css';
 import { ReplFilter } from './replFilter.js';
 import { ReplAccessibilityProvider, ReplDataSource, ReplDelegate, ReplEvaluationInputsRenderer, ReplEvaluationResultsRenderer, ReplGroupRenderer, ReplOutputElementRenderer, ReplRawObjectsRenderer, ReplVariablesRenderer } from './replViewer.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const $ = dom.$;
 
@@ -1068,13 +1068,13 @@ registerAction2(class extends ViewAction<Repl> {
 	constructor() {
 		super({
 			id: 'workbench.debug.panel.action.clearReplAction',
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			viewId: REPL_VIEW_ID,
 			title: localize2('clearRepl', 'Clear Console'),
 			metadata: {
 				description: localize2('clearRepl.descriotion', 'Clears all program output from your debug REPL')
 			},
 			f1: true,
-			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			icon: debugConsoleClearAll,
 			menu: [{
 				id: MenuId.ViewTitle,

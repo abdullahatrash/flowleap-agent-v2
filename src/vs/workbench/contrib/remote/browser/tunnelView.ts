@@ -7,7 +7,6 @@ import './media/tunnelView.css';
 import * as nls from '../../../../nls.js';
 import * as dom from '../../../../base/browser/dom.js';
 import { IViewDescriptor, IEditableData, IViewDescriptorService } from '../../../common/views.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -58,6 +57,7 @@ import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform
 import { Attributes, CandidatePort, Tunnel, TunnelCloseReason, TunnelModel, TunnelSource, forwardedPortsViewEnabled, makeAddress, mapHasAddressLocalhostOrAllInterfaces, parseAddress } from '../../../services/remote/common/tunnelModel.js';
 import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 export const openPreviewEnabledContext = new RawContextKey<boolean>('openPreviewEnabled', false);
 
@@ -995,7 +995,7 @@ export class TunnelPanel extends ViewPane {
 			this.tunnelTypeContext.set(item.tunnelType);
 			this.tunnelCloseableContext.set(!!item.closeable);
 			this.tunnelPrivacyContext.set(item.privacy.id);
-			this.tunnelProtocolContext.set(item.protocol === TunnelProtocol.Https ? TunnelProtocol.Https : TunnelProtocol.Https);
+			this.tunnelProtocolContext.set(item.protocol === TunnelProtocol.Https ? TunnelProtocol.Https : TunnelProtocol.Http);
 			this.portChangableContextKey.set(!!item.localPort);
 		} else {
 			this.tunnelTypeContext.reset();
@@ -1108,7 +1108,7 @@ export class TunnelPanelDescriptor implements IViewDescriptor {
 	readonly remoteAuthority?: string | string[];
 	readonly canMoveView = true;
 	readonly containerIcon = portsViewIcon;
-	readonly when = PatentIdeContextKeys.Mode.toNegated(); // Hide when Patent IDE mode is ON
+	readonly when = PatentIdeContextKeys.Mode.toNegated(); // FlowLeap Patent IDE: hide the Ports view
 
 	constructor(viewModel: ITunnelViewModel, environmentService: IWorkbenchEnvironmentService) {
 		this.ctorDescriptor = new SyncDescriptor(TunnelPanel, [viewModel]);

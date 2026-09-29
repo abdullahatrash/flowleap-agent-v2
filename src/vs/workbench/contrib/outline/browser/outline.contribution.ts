@@ -14,11 +14,11 @@ import { Codicon } from '../../../../base/common/codicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { OutlineConfigKeys } from '../../../services/outline/browser/outline.js';
 import { IOutlinePane } from './outline.js';
-import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 // --- actions
 
 import './outlineActions.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 // --- view
 
@@ -32,11 +32,11 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
 	canToggleVisibility: true,
 	canMoveView: true,
 	hideByDefault: false,
-	when: PatentIdeContextKeys.Mode.toNegated(),
 	collapsed: true,
 	order: 2,
 	weight: 30,
-	focusCommand: { id: 'outline.focus' }
+	focusCommand: { id: 'outline.focus' },
+	when: PatentIdeContextKeys.Mode.toNegated()
 }], VIEW_CONTAINER);
 
 // --- configurations

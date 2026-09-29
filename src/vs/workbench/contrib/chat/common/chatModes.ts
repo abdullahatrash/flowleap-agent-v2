@@ -313,7 +313,10 @@ class ChatModes extends Disposable implements IChatModes {
 
 	private getCustomModes(): IChatMode[] {
 		// Show custom modes when agent mode is enabled OR when disabled by policy (to show them in the policy-managed group)
-		return this.chatAgentService.hasToolsAgent || this.isAgentModeDisabledByPolicy() ? Array.from(this._customModeInstances.values()) : [];
+		if (!this.chatAgentService.hasToolsAgent && !this.isAgentModeDisabledByPolicy()) {
+			return [];
+		}
+		return Array.from(this._customModeInstances.values()).sort((a, b) => a.label.get().localeCompare(b.label.get()));
 	}
 
 	private isAgentModeDisabledByPolicy(): boolean {
@@ -438,6 +441,14 @@ export namespace IChatModeInstructions {
 
 }
 
+/**
+ * Converts an optional icon id from a custom agent's header (a codicon id such as `search`)
+ * into a {@link ThemeIcon}, or `undefined` when no icon was specified.
+ */
+function toChatModeIcon(iconId: string | undefined): ThemeIcon | undefined {
+	return iconId ? ThemeIcon.fromId(iconId) : undefined;
+}
+
 function isCachedChatModeData(data: unknown): data is IChatModeData {
 	if (typeof data !== 'object' || data === null) {
 		return false;
@@ -459,14 +470,6 @@ function isCachedChatModeData(data: unknown): data is IChatModeData {
 		(mode.visibility === undefined || isCustomAgentVisibility(mode.visibility)) &&
 		(mode.agents === undefined || Array.isArray(mode.agents)) &&
 		(mode.sessionTypes === undefined || Array.isArray(mode.sessionTypes));
-}
-
-/**
- * Converts an optional icon id from a custom agent's header (a codicon id such as `search`)
- * into a {@link ThemeIcon}, or `undefined` when no icon was specified.
- */
-function toChatModeIcon(iconId: string | undefined): ThemeIcon | undefined {
-	return iconId ? ThemeIcon.fromId(iconId) : undefined;
 }
 
 export class CustomChatMode implements IChatMode {

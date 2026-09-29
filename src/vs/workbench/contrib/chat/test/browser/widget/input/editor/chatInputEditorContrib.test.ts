@@ -111,31 +111,16 @@ suite('getPatentModeInputPlaceholder', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('returns the ratified patent-voice placeholder per mode when patent mode is enabled', () => {
+	test('returns the patent-voice placeholder per mode in patent mode and undefined otherwise', () => {
+		const modes = [ChatModeKind.Agent, ChatModeKind.Ask, ChatModeKind.Edit];
 		assert.deepStrictEqual(
 			{
-				agent: getPatentModeInputPlaceholder(ChatModeKind.Agent, true),
-				ask: getPatentModeInputPlaceholder(ChatModeKind.Ask, true),
-				edit: getPatentModeInputPlaceholder(ChatModeKind.Edit, true),
+				patent: modes.map(mode => getPatentModeInputPlaceholder(mode, true)),
+				upstream: modes.map(mode => getPatentModeInputPlaceholder(mode, false)),
 			},
 			{
-				agent: 'Describe a patent research task',
-				ask: 'Ask about patents, claims, or prior art',
-				edit: 'Describe the document changes to make',
-			});
-	});
-
-	test('returns undefined for every mode when patent mode is disabled (upstream fallback)', () => {
-		assert.deepStrictEqual(
-			{
-				agent: getPatentModeInputPlaceholder(ChatModeKind.Agent, false),
-				ask: getPatentModeInputPlaceholder(ChatModeKind.Ask, false),
-				edit: getPatentModeInputPlaceholder(ChatModeKind.Edit, false),
-			},
-			{
-				agent: undefined,
-				ask: undefined,
-				edit: undefined,
+				patent: ['Describe a patent research task', 'Ask about patents, claims, or prior art', 'Describe the document changes to make'],
+				upstream: [undefined, undefined, undefined],
 			});
 	});
 });

@@ -1,0 +1,34 @@
+diff --git a/src/vs/sessions/sessions.desktop.main.ts b/src/vs/sessions/sessions.desktop.main.ts
+index 343ef5ef05f..4de0306741b 100644
+--- a/src/vs/sessions/sessions.desktop.main.ts
++++ b/src/vs/sessions/sessions.desktop.main.ts
+@@ -98,6 +98,7 @@ import '../platform/userDataProfile/electron-browser/userDataProfileStorageServi
+ import '../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
+ import '../platform/extensionManagement/electron-browser/extensionsProfileScannerService.js';
+ import '../platform/sandbox/electron-browser/sandboxHelperService.js';
++import '../platform/flowleapCli/electron-browser/flowleapCliService.js';
+ import '../platform/webContentExtractor/electron-browser/webContentExtractorService.js';
+ import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
+ import '../workbench/services/process/electron-browser/processService.js';
+@@ -254,6 +255,9 @@ import './contrib/chat/electron-browser/chat.contribution.js';
+ 
+ // Tunnel Host (allow remote connections to local agent host)
+ 
++// FlowLeap CLI
++import './contrib/flowleapCli/browser/flowleapCliNudge.contribution.js';
++
+ // Sessions (desktop only)
+ import './contrib/sessions/electron-browser/sessions.contribution.js';
+ 
+diff --git a/src/vs/sessions/sessions.web.main.ts b/src/vs/sessions/sessions.web.main.ts
+index c82e27995b2..8c91aed63d5 100644
+--- a/src/vs/sessions/sessions.web.main.ts
++++ b/src/vs/sessions/sessions.web.main.ts
+@@ -78,6 +78,7 @@ import '../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js'
+ import '../workbench/services/power/browser/powerService.js';
+ import '../workbench/services/localTranscription/browser/localTranscriptionService.js';
+ import '../platform/sandbox/browser/sandboxHelperService.js';
++import '../platform/flowleapCli/browser/flowleapCliService.js';
+ 
+ import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+ import { IAccessibilityService } from '../platform/accessibility/common/accessibility.js';

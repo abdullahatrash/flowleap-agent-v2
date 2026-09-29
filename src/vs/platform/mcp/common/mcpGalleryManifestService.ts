@@ -37,13 +37,15 @@ export class McpGalleryManifestService extends Disposable implements IMcpGallery
 	}
 
 	async getMcpGalleryManifest(): Promise<IMcpGalleryManifest | null> {
+		return this.getDefaultMcpGalleryManifest();
+	}
+
+	async getDefaultMcpGalleryManifest(): Promise<IMcpGalleryManifest | null> {
 		if (!this.productService.mcpGallery) {
 			return null;
 		}
-		// Negotiate the supported API version against the configured service instead
-		// of pinning the newest one: the FlowLeap registry serves the standard v0 API,
-		// and probing lets the gallery settle on whichever version the endpoint actually
-		// answers rather than querying a version it does not serve.
+		// FlowLeap: negotiate the API version against the configured service instead of
+		// pinning the newest one; the FlowLeap registry serves the standard v0 API.
 		return this.createMcpGalleryManifest(this.productService.mcpGallery.serviceUrl);
 	}
 

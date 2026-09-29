@@ -1,0 +1,16 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+index 7e5ab1cf53b..05d339f82b9 100644
+--- a/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
++++ b/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+@@ -2214,7 +2214,10 @@ configurationRegistry.registerConfiguration({
+ 				getDocumentationUrl(PromptsType.skill),
+ 			),
+ 			default: {
+-				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: true })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
++				// FlowLeap: the personal Claude skills folder holds CLI-oriented recipes (flowleap-cli skill packs)
++				// that describe commands this app does not have; loading them beside the bundled patent skills
++				// gives the agent two conflicting instruction sets for the same task. Users can turn it on.
++				...DEFAULT_SKILL_SOURCE_FOLDERS.map((folder) => ({ [folder.path]: folder.path !== '~/.claude/skills' })).reduce((acc, curr) => ({ ...acc, ...curr }), {}),
+ 			},
+ 			markdownDeprecationMessage: nls.localize('chat.agentSkillsLocations.deprecated', "This setting and the Local agent harness will be removed in a future release. Review the {0} in the Agent Customizations editor to move skills into supported locations.", migrationsTabLink),
+ 			deprecationMessageSeverity: 'info',

@@ -24,10 +24,9 @@ export class DebugStatusContribution implements IWorkbenchContribution {
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextKeyService contextKeyService: IContextKeyService
 	) {
-		// FlowLeap Patent IDE: Don't show debug status bar in Patent IDE mode
-		// Default to true (Patent IDE mode) if context key is not yet initialized
-		const isPatentIdeMode = PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false;
-		if (isPatentIdeMode) {
+
+		// FlowLeap Patent IDE: no debug status bar entry in Patent IDE mode
+		if (PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false) {
 			return;
 		}
 

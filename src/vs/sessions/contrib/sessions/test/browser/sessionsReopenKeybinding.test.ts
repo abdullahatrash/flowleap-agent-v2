@@ -13,6 +13,7 @@ import { KeybindingsRegistry, KeybindingWeight } from '../../../../../platform/k
 import '../../browser/sessionsActions.js';
 
 const REOPEN_CLOSED_ITEM_ID = 'sessions.reopenLastClosedItem';
+const REOPEN_CLOSED_CHAT_ID = 'sessions.chatCompositeBar.reopenLastClosedChat';
 const CTRL_SHIFT_T = decodeKeybinding(KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyT, OS)!.getHashCode();
 
 /** Minimal {@link IContext} over a plain record of context key values. */
@@ -24,10 +25,11 @@ suite('Sessions - Reopen Closed Chat or Session keybinding', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	const boundToChord = () => KeybindingsRegistry.getDefaultKeybindings()
+		.filter(item => item.keybinding?.getHashCode() === CTRL_SHIFT_T);
+
 	test('takes Ctrl/Cmd+Shift+T from VS Code\'s Reopen Closed Editor only outside the editor scope', () => {
-		const rule = KeybindingsRegistry.getDefaultKeybindings()
-			.filter(item => item.keybinding?.getHashCode() === CTRL_SHIFT_T)
-			.find(item => item.command === REOPEN_CLOSED_ITEM_ID)!;
+		const rule = boundToChord().find(item => item.command === REOPEN_CLOSED_ITEM_ID)!;
 		const evaluate = (values: Record<string, boolean>) => rule.when?.evaluate(context(values)) ?? true;
 
 		assert.deepStrictEqual({
@@ -44,6 +46,18 @@ suite('Sessions - Reopen Closed Chat or Session keybinding', () => {
 			sessionsList: true,
 			editorArea: false,
 			sidePaneDetail: false,
+		});
+	});
+
+	test('supersedes the chord that Reopen Last Closed Chat used to own', () => {
+		const commands = boundToChord().map(item => item.command);
+
+		assert.deepStrictEqual({
+			reopenClosedItem: commands.includes(REOPEN_CLOSED_ITEM_ID),
+			reopenClosedChat: commands.includes(REOPEN_CLOSED_CHAT_ID),
+		}, {
+			reopenClosedItem: true,
+			reopenClosedChat: false,
 		});
 	});
 });

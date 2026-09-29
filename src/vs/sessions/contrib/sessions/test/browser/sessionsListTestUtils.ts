@@ -6,48 +6,69 @@
 import { mainWindow } from '../../../../../base/browser/window.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { Event } from '../../../../../base/common/event.js';
-import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { IObservable, ISettableObservable, constObservable, observableValue } from '../../../../../base/common/observable.js';
+import { constObservable, ISettableObservable, observableValue } from '../../../../../base/common/observable.js';
+import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { mock } from '../../../../../base/test/common/mock.js';
-import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { IWorkbenchAssignmentService } from '../../../../../workbench/services/assignment/common/assignmentService.js';
-import { IAgentSessionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
-import { workbenchInstantiationService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
-import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
-import { ISessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
-import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
-import { IChatModel } from '../../../../../workbench/contrib/chat/common/model/chatModel.js';
+import { IVoicePlaybackService } from '../../../../../workbench/contrib/chat/common/voicePlaybackService.js';
+import { workbenchInstantiationService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
+import { IAgentHostFilterService } from '../../../../services/agentHostFilter/common/agentHostFilter.js';
+import { ISessionGroup, ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionsListModelService, SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
+import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import { IChat, ISession, ISessionChangesSummary, ISessionWorkspace, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { ISessionsWindowUsageService } from '../../../../services/sessions/browser/sessionsWindowUsageService.js';
 import { IActiveSession, ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { IChat, ISession, ISessionCapabilities, ISessionChangesSummary, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { IDeleteChatOptions } from '../../../../services/sessions/common/sessionsProvider.js';
+
+const ITestAgentSessionsService = createDecorator<object>('agentSessions');
 
 export class TestCommandService extends mock<ICommandService>() {
-	readonly executed: { readonly id: string; readonly args: unknown[] }[] = [];
+	readonly calls: { readonly commandId: string; readonly args: readonly unknown[] }[] = [];
 
-	override readonly onWillExecuteCommand = Event.None;
-	override readonly onDidExecuteCommand = Event.None;
-
-	override async executeCommand<T>(id: string, ...args: unknown[]): Promise<T | undefined> {
-		this.executed.push({ id, args });
+	override async executeCommand<T = unknown>(commandId: string, ...args: unknown[]): Promise<T | undefined> {
+		this.calls.push({ commandId, args });
 		return undefined;
 	}
 }
 
 export class TestSessionsManagementService extends mock<ISessionsManagementService>() {
-	readonly renamed: { readonly session: ISession; readonly title: string }[] = [];
-	renameError: Error | undefined;
-	sessions: ISession[] = [];
-
 	override readonly onDidChangeSessions = Event.None;
+	sessions: ISession[];
+	readonly readSessions: ISession[] = [];
+	readonly renamed: { readonly session: ISession; readonly title: string }[] = [];
+	readonly archived: ISession[] = [];
+	readonly cancelled: ISession[] = [];
+	readonly imported: ISession[] = [];
+	readonly renamedChats: { readonly session: ISession; readonly chatResource: URI; readonly title: string }[] = [];
+	readonly deletedChats: { readonly session: ISession; readonly chatResource: URI }[] = [];
+	readonly deleteChatOptions: (IDeleteChatOptions | undefined)[] = [];
+	renameError: Error | undefined;
+	renameChatError: Error | undefined;
+
+	constructor(sessions: ISession[]) {
+		super();
+		this.sessions = sessions;
+	}
 
 	override getSessions(): ISession[] {
 		return this.sessions;
+	}
+
+	override async markRead(session: ISession): Promise<void> {
+		this.readSessions.push(session);
+	}
+
+	override async markAllRead(sessions: readonly ISession[]): Promise<void> {
+		this.readSessions.push(...sessions);
 	}
 
 	override async renameSession(session: ISession, title: string): Promise<void> {
@@ -56,82 +77,107 @@ export class TestSessionsManagementService extends mock<ISessionsManagementServi
 			throw this.renameError;
 		}
 	}
-}
 
-export interface ITestSessionOptions {
-	readonly supportsRename?: boolean;
-	readonly createdAt?: Date;
-	readonly isArchived?: boolean;
-	/**
-	 * Gives the session a workspace with this label, so the row renders its
-	 * workspace badge. Absent by default: a session with no workspace at all.
-	 */
-	readonly workspaceLabel?: string;
-	/**
-	 * The provider-supplied aggregate the diff stats are read from. Absent by
-	 * default, and then the property is left off the session entirely, matching a
-	 * provider that publishes per-file changes only.
-	 */
-	readonly changesSummary?: ISessionChangesSummary;
+	override async archiveSession(session: ISession): Promise<void> {
+		this.archived.push(session);
+	}
+
+	override async cancelCurrentRequest(session: ISession): Promise<void> {
+		this.cancelled.push(session);
+	}
+
+	override async importSession(session: ISession): Promise<void> {
+		this.imported.push(session);
+	}
+
+	override async deleteChat(session: ISession, chatResource: URI, options?: IDeleteChatOptions): Promise<boolean> {
+		this.deletedChats.push({ session, chatResource });
+		this.deleteChatOptions.push(options);
+		return true;
+	}
+
+	override async renameChat(session: ISession, chatResource: URI, title: string): Promise<void> {
+		this.renamedChats.push({ session, chatResource, title });
+		if (this.renameChatError) {
+			throw this.renameChatError;
+		}
+	}
 }
 
 export interface ITestSession {
 	readonly session: ISession;
-	readonly title: ISettableObservable<string>;
-	readonly status: ISettableObservable<SessionStatus>;
+	readonly capabilities: ISettableObservable<ISessionCapabilities, void>;
+	readonly status: ISettableObservable<SessionStatus, void>;
+	readonly isArchived: ISettableObservable<boolean, void>;
+	readonly isRead: ISettableObservable<boolean, void>;
+	readonly isExternal: ISettableObservable<boolean, void>;
 }
 
-/**
- * Builds a session whose observables are settable, so a test can drive the same
- * reactive paths the renderer subscribes to.
- */
+export interface ITestSessionOptions {
+	readonly resourceId?: string;
+	readonly workspaceLabel?: string;
+	readonly status?: SessionStatus;
+	readonly isArchived?: boolean;
+	readonly isRead?: boolean;
+	readonly isQuickChat?: boolean;
+	readonly isExternal?: boolean;
+	readonly changesSummary?: ISessionChangesSummary;
+}
+
 export function createTestSession(title: string, options: ITestSessionOptions = {}): ITestSession {
-	const createdAt = options.createdAt ?? new Date();
-	const titleObservable = observableValue<string>(`title-${title}`, title);
-	const statusObservable = observableValue<SessionStatus>(`status-${title}`, SessionStatus.Completed);
+	const resourceId = options.resourceId ?? title;
+	const now = new Date();
+	const resource = URI.parse(`test-session://${resourceId}`);
+	const capabilities = observableValue<ISessionCapabilities>(`capabilities-${resourceId}`, { supportsMultipleChats: false, supportsRename: true });
+	const status = observableValue(`status-${resourceId}`, options.status ?? SessionStatus.Completed);
 	const mainChat = new class extends mock<IChat>() {
-		override readonly resource = URI.parse(`test-chat://${title}`);
-		override readonly title: IObservable<string> = titleObservable;
+		override readonly resource = resource.with({ fragment: 'main' });
+		override readonly status = status;
+		override readonly changes = constObservable([]);
+		override readonly changesets = constObservable([]);
 	}();
-	const workspace: ISessionWorkspace | undefined = options.workspaceLabel === undefined ? undefined : {
-		uri: URI.file(`/test/${options.workspaceLabel}`),
-		label: options.workspaceLabel,
-		icon: Codicon.folder,
-		folders: [{
-			root: URI.file(`/test/${options.workspaceLabel}`),
-			workingDirectory: URI.file(`/test/${options.workspaceLabel}`),
-			name: options.workspaceLabel,
-			description: undefined,
-		}],
-		requiresWorkspaceTrust: false,
-		isVirtualWorkspace: false,
-	};
+	const isArchived = observableValue(`archived-${resourceId}`, options.isArchived ?? false);
+	const isRead = observableValue(`read-${resourceId}`, options.isRead ?? true);
+	const isExternal = observableValue(`external-${resourceId}`, options.isExternal ?? false);
+	const workspaceLabel = options.workspaceLabel ?? 'Workspace';
+	const isQuickChat = options.isQuickChat ?? false;
 	const session: ISession = {
-		sessionId: title,
-		resource: URI.parse(`test-session://${title}`),
+		sessionId: resourceId,
+		resource,
 		providerId: 'test',
 		sessionType: 'test',
 		icon: Codicon.account,
-		createdAt,
-		workspace: observableValue<ISessionWorkspace | undefined>(`workspace-${title}`, workspace),
-		title: titleObservable,
-		updatedAt: observableValue(`updatedAt-${title}`, createdAt),
-		status: statusObservable,
-		changesets: observableValue(`changesets-${title}`, []),
-		changes: observableValue(`changes-${title}`, []),
-		...(options.changesSummary ? { changesSummary: observableValue<ISessionChangesSummary | undefined>(`changesSummary-${title}`, options.changesSummary) } : {}),
-		modelId: observableValue(`modelId-${title}`, undefined),
-		mode: observableValue(`mode-${title}`, undefined),
-		loading: observableValue(`loading-${title}`, false),
-		isArchived: observableValue(`isArchived-${title}`, options.isArchived ?? false),
-		isRead: observableValue(`isRead-${title}`, true),
-		description: observableValue(`description-${title}`, undefined),
-		lastTurnEnd: observableValue(`lastTurnEnd-${title}`, undefined),
-		chats: observableValue<readonly IChat[]>(`chats-${title}`, [mainChat]),
-		mainChat: observableValue<IChat>(`mainChat-${title}`, mainChat),
-		capabilities: { supportsMultipleChats: false, supportsRename: options.supportsRename ?? true },
+		createdAt: now,
+		workspace: constObservable(isQuickChat ? undefined : {
+			uri: URI.parse(`test-workspace://${resourceId}`),
+			label: workspaceLabel,
+			icon: Codicon.folder,
+			folders: [],
+			requiresWorkspaceTrust: false,
+			isVirtualWorkspace: false,
+		}),
+		isQuickChat: constObservable(isQuickChat),
+		title: constObservable(title),
+		updatedAt: constObservable(now),
+		status,
+		changesSummary: constObservable(options.changesSummary),
+		modelId: constObservable(undefined),
+		mode: constObservable(undefined),
+		loading: constObservable(false),
+		isArchived,
+		isRead,
+		isExternal,
+		description: constObservable(undefined),
+		lastTurnEnd: constObservable(undefined),
+		chats: constObservable<readonly IChat[]>([]),
+		mainChat: constObservable(mainChat),
+		capabilities,
 	};
-	return { session, title: titleObservable, status: statusObservable };
+	return { session, capabilities, status, isArchived, isRead, isExternal };
+}
+
+export function createSession(title: string, resourceId: string = title): ITestSession {
+	return createTestSession(title, { resourceId });
 }
 
 export interface IListHarness {
@@ -139,96 +185,115 @@ export interface IListHarness {
 	readonly instantiationService: TestInstantiationService;
 	readonly managementService: TestSessionsManagementService;
 	readonly commandService: TestCommandService;
-	readonly activeSession: ISettableObservable<IActiveSession | undefined>;
-	createContainer(): HTMLElement;
+	/** Manual sort-key changes applied through the sessions list model service. */
+	readonly sortChanges: ISortChangeRecord[];
+	createContainer(width?: number, height?: number): HTMLElement;
 }
 
-/**
- * Stubs every service the sessions list reaches for, so a test can instantiate a
- * real list against real DOM. Only the services the list actually calls are
- * given behaviour; the rest are left as bare mocks on purpose, so a future
- * dependency fails loudly instead of silently returning `undefined`.
- */
-export function createListHarness(disposables: Pick<DisposableStore, 'add'>, sessions: ISession[]): IListHarness {
+/** A recorded manual reorder applied through the sessions list model service. */
+export interface ISortChangeRecord {
+	readonly set: ReadonlyMap<string, number>;
+	readonly clear: readonly string[];
+}
+
+export interface IListHarnessOptions {
+	readonly groups?: readonly ISessionGroup[];
+	readonly memberships?: ReadonlyMap<string, string>;
+	readonly pinnedSessionIds?: ReadonlySet<string>;
+}
+
+type ConfigureListHarness = (instantiationService: TestInstantiationService) => void;
+
+export function createListHarness(disposables: Pick<DisposableStore, 'add'>, sessions: ISession[], optionsOrConfigure: IListHarnessOptions | ConfigureListHarness = {}): IListHarness {
 	const store = disposables.add(new DisposableStore());
 	const instantiationService = workbenchInstantiationService(undefined, store);
-	const managementService = new TestSessionsManagementService();
-	managementService.sessions = sessions;
+	const managementService = new TestSessionsManagementService(sessions);
 	const commandService = new TestCommandService();
-	const activeSession = observableValue<IActiveSession | undefined>('activeSession', undefined);
-	const pinned = new Set<string>();
-	const read = new Set<string>();
+	const configure = typeof optionsOrConfigure === 'function' ? optionsOrConfigure : undefined;
+	const options: IListHarnessOptions = typeof optionsOrConfigure === 'function' ? {} : optionsOrConfigure;
+	const groups = options.groups ?? [];
+	const memberships = options.memberships ?? new Map();
+	const pinnedSessionIds = options.pinnedSessionIds ?? new Set();
+	const sortChanges: ISortChangeRecord[] = [];
 
-	instantiationService.stub(ISessionsManagementService, managementService as unknown as ISessionsManagementService);
+	instantiationService.stub(ISessionsManagementService, managementService);
 	instantiationService.stub(ICommandService, commandService);
-	instantiationService.stub(IAccessibilityService, new class extends mock<IAccessibilityService>() {
-		override readonly onDidChangeScreenReaderOptimized = Event.None;
-		override readonly onDidChangeReducedMotion = Event.None;
-		override isScreenReaderOptimized(): boolean { return false; }
-		// Read by SessionStatusIcon to decide between a spinner and a static glyph,
-		// so a session that is in progress or needs input reaches it.
-		override isMotionReduced(): boolean { return false; }
-	}());
 	instantiationService.stub(ISessionsService, new class extends mock<ISessionsService>() {
-		override readonly activeSession = activeSession;
 		override readonly visibleSessions = constObservable<readonly (IActiveSession | undefined)[]>([]);
-		override async openSession(): Promise<void> { }
-		override async openChat(): Promise<void> { }
-	}());
+		override readonly activeSession = constObservable<IActiveSession | undefined>(undefined);
+	});
 	instantiationService.stub(ISessionsListModelService, new class extends mock<ISessionsListModelService>() {
 		override readonly onDidChange = Event.None;
-		override isSessionPinned(session: ISession): boolean { return pinned.has(session.sessionId); }
-		override isSessionRead(session: ISession): boolean { return read.has(session.sessionId); }
-		override getStatusIcon(): ThemeIcon { return Codicon.circle; }
-		override getSortKey(session: ISession): number { return session.createdAt.getTime(); }
-		override getNaturalSortKey(session: ISession): number { return session.createdAt.getTime(); }
-		override markRead(session: ISession): void { read.add(session.sessionId); }
-		override markUnread(session: ISession): void { read.delete(session.sessionId); }
-		override pinSession(session: ISession): void { pinned.add(session.sessionId); }
-		override unpinSession(session: ISession): void { pinned.delete(session.sessionId); }
-		override applySortChanges(): void { }
-	}() as unknown as ISessionsListModelService);
+		override isSessionPinned(session: ISession): boolean { return pinnedSessionIds.has(session.sessionId); }
+		override migrateLegacyReadState(): void { }
+		override getSortKey(session: ISession, mode: SessionSortMode): number {
+			return mode === 'created' ? session.createdAt.getTime() : session.updatedAt.get().getTime();
+		}
+		override getNaturalSortKey(session: ISession, mode: SessionSortMode): number {
+			return mode === 'created' ? session.createdAt.getTime() : session.updatedAt.get().getTime();
+		}
+		override applySortChanges(_mode: SessionSortMode, set: ReadonlyMap<string, number>, clear: Iterable<string>): void {
+			sortChanges.push({ set: new Map(set), clear: [...clear] });
+		}
+		override getStatusIcon(status: SessionStatus, _isRead: boolean, isArchived: boolean, completedStateIcon?: ThemeIcon) {
+			return status === SessionStatus.Error ? Codicon.error : isArchived ? Codicon.passFilled : completedStateIcon ?? Codicon.circleSmallFilled;
+		}
+	});
 	instantiationService.stub(ISessionGroupsService, new class extends mock<ISessionGroupsService>() {
 		override readonly onDidChange = Event.None;
-		override getGroups() { return []; }
-		override getGroup() { return undefined; }
-		override getGroupOfSession() { return undefined; }
-		override getSessionIdsInGroup() { return []; }
-	}());
+		override getGroups() { return [...groups]; }
+		override getGroup(groupId: string) { return groups.find(group => group.id === groupId); }
+		override getGroupOfSession(sessionId: string) { return memberships.get(sessionId); }
+		override getSessionIdsInGroup(groupId: string) {
+			return [...memberships].filter(([, memberGroupId]) => memberGroupId === groupId).map(([sessionId]) => sessionId);
+		}
+	});
 	instantiationService.stub(ISessionSectionOrderService, new class extends mock<ISessionSectionOrderService>() {
 		override readonly onDidChange = Event.None;
-		override resolveOrder(defaultOrderedIds: readonly string[]): string[] { return [...defaultOrderedIds]; }
-		override isPromoted(): boolean { return false; }
+		override resolveOrder(ids: readonly string[]) { return [...ids]; }
+		override isPromoted() { return false; }
 		override retain(): void { }
-	}());
+	});
+	instantiationService.stub(IAgentHostFilterService, new class extends mock<IAgentHostFilterService>() {
+		override readonly onDidChange = Event.None;
+		override readonly selectedHostId = undefined;
+		override readonly selectedHost = undefined;
+	});
 	instantiationService.stub(IWorkbenchAssignmentService, new class extends mock<IWorkbenchAssignmentService>() {
 		override readonly onDidRefetchAssignments = Event.None;
 		override async getTreatment<T extends string | number | boolean>(): Promise<T | undefined> { return undefined; }
-	}());
-	// The approval model reads the chat service's models observable.
-	instantiationService.stub(IChatService, new class extends mock<IChatService>() {
-		override readonly chatModels = constObservable<readonly IChatModel[]>([]);
-	}() as unknown as IChatService);
+	});
 	instantiationService.stub(ISessionsProvidersService, new class extends mock<ISessionsProvidersService>() {
+		override readonly onDidChangeProviders = Event.None;
+		override getProviders() { return []; }
 		override getProvider() { return undefined; }
-	}());
-	instantiationService.stub(IAgentSessionsService, new class extends mock<IAgentSessionsService>() {
-		override readonly model = { observeSession: () => { } } as unknown as IAgentSessionsService['model'];
-	}() as unknown as IAgentSessionsService);
-
-	return {
-		store,
-		instantiationService,
-		managementService,
-		commandService,
-		activeSession,
-		createContainer(): HTMLElement {
-			const container = mainWindow.document.createElement('div');
-			container.style.width = '400px';
-			container.style.height = '300px';
-			mainWindow.document.body.appendChild(container);
-			store.add({ dispose: () => container.remove() });
-			return container;
+	});
+	instantiationService.stub(ISessionsWindowUsageService, new class extends mock<ISessionsWindowUsageService>() {
+		override readonly hadPriorWindowOpen = true;
+		override readonly windowOpenCount = 2;
+	});
+	instantiationService.stub(IVoicePlaybackService, new class extends mock<IVoicePlaybackService>() {
+		override readonly pendingResponseVersion = constObservable(0);
+		override hasPendingResponse() { return false; }
+	});
+	instantiationService.stub(ITestAgentSessionsService, {
+		model: {
+			observeSession: () => constObservable(undefined),
 		},
+	});
+	instantiationService.stub(IChatService, new class extends mock<IChatService>() {
+		override readonly chatModels = constObservable([]);
+	});
+	configure?.(instantiationService);
+
+	const createContainer = (width = 400, height = 300) => {
+		const container = mainWindow.document.createElement('div');
+		container.style.width = `${width}px`;
+		container.style.height = `${height}px`;
+		mainWindow.document.body.appendChild(container);
+		store.add({ dispose: () => container.remove() });
+		return container;
 	};
+
+	return { store, instantiationService, managementService, commandService, sortChanges, createContainer };
 }

@@ -1,0 +1,16 @@
+diff --git a/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts b/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
+index 3696163c488..ab33880b6ed 100644
+--- a/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
++++ b/src/vs/platform/mcp/test/common/mcpGalleryService.test.ts
+@@ -15,10 +15,9 @@ import { NullLogService } from '../../../log/common/log.js';
+ import { IRequestContext, IRequestOptions } from '../../../../base/parts/request/common/request.js';
+ import { IRequestService } from '../../../request/common/request.js';
+ import { IGalleryMcpServer, IMcpServerInput, McpGalleryResolveStatus } from '../../common/mcpManagement.js';
+-import { IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
++import { getMcpGalleryManifestResourceUri, IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
+ import { McpGalleryService, UnsupportedMcpGalleryPackageError } from '../../common/mcpGalleryService.js';
+ import { McpGalleryManifestService } from '../../common/mcpGalleryManifestService.js';
+-import { getMcpGalleryManifestResourceUri } from '../../common/mcpGalleryManifest.js';
+ import product from '../../../product/common/product.js';
+ import { IProductService } from '../../../product/common/productService.js';
+ 

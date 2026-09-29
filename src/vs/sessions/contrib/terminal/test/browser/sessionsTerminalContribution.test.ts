@@ -5,27 +5,34 @@
 
 import assert from 'assert';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { constObservable, observableValue } from '../../../../../base/common/observable.js';
+import { IAgentHostTerminalCreateOptions, IAgentHostTerminalService } from '../../../../../workbench/contrib/terminal/browser/agentHostTerminalService.js';
+import { ITerminalProfileService } from '../../../../../workbench/contrib/terminal/common/terminal.js';
+import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { mock } from '../../../../../base/test/common/mock.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { NullLogService, ILogService } from '../../../../../platform/log/common/log.js';
 import { ITerminalInstance, ITerminalService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { ITerminalCapabilityStore, ICommandDetectionCapability, TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { toAgentHostUri } from '../../../../../platform/agentHost/common/agentHostUri.js';
 import { AgentSessionProviders } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessions.js';
-import { IChat, ISession, ISessionWorkspace } from '../../../../services/sessions/common/session.js';
+import { ChatInteractivity, IChat, ISession, ISessionWorkspace, SessionRemoteConnectionFailureReason, SessionRemoteConnectionStatus } from '../../../../services/sessions/common/session.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { SessionsTerminalContribution } from '../../browser/sessionsTerminalContribution.js';
 import { TestPathService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { IPathService } from '../../../../../workbench/services/path/common/pathService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { IActiveSession, ISessionsChangeEvent, ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 
 const HOME_DIR = URI.file('/home/user');
 
@@ -45,12 +52,16 @@ class TestLogService extends NullLogService {
 type TestTerminalInstance = ITerminalInstance & {
 	_testCommandHistory: { timestamp: number }[];
 	_testSetDisposed(disposed: boolean): void;
+	_testSetInitialCwdBarrier(barrier: Promise<void> | undefined): void;
 	_testSetShellLaunchConfig(shellLaunchConfig: ITerminalInstance['shellLaunchConfig']): void;
 };
 
 type TestActiveSession = IActiveSession & {
+	activeChat: ReturnType<typeof observableValue<IChat>>;
 	loading: ReturnType<typeof observableValue<boolean>>;
 	isArchived: ReturnType<typeof observableValue<boolean>>;
+	worktreePending: ReturnType<typeof observableValue<boolean>>;
+	remoteConnectionStatus?: ReturnType<typeof observableValue<SessionRemoteConnectionStatus>>;
 };
 
 function makeAgentSession(opts: {
@@ -59,26 +70,43 @@ function makeAgentSession(opts: {
 	providerType?: string;
 	isArchived?: boolean;
 	loading?: boolean;
+	worktreePending?: boolean;
 	sessionId?: string;
+	providerId?: string;
+	remoteConnectionStatus?: SessionRemoteConnectionStatus;
 }): TestActiveSession {
 	const folder = opts.repository || opts.worktree ? {
 		root: opts.repository ?? opts.worktree!,
 		workingDirectory: opts.worktree ?? opts.repository!,
 		name: 'test',
 		description: undefined,
-		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined },
+		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
 	} : undefined;
+	const workspace = observableValue('test.workspace', folder
+		? {
+			uri: folder.root,
+			label: 'test',
+			icon: Codicon.repo,
+			folders: [folder],
+			requiresWorkspaceTrust: false,
+			isVirtualWorkspace: false
+		} satisfies ISessionWorkspace
+		: undefined);
 	const chat = {
 		resource: URI.parse('file:///session'),
 		createdAt: new Date(),
+		workspace,
 		title: observableValue('test.title', 'Test Session'),
 		updatedAt: observableValue('test.updatedAt', new Date()),
 		status: observableValue('test.status', 0),
 		changes: observableValue('test.changes', []),
+		changesets: constObservable([]),
 		modelId: observableValue('test.modelId', undefined),
+		modelSource: observableValue('test.modelSource', undefined),
 		mode: observableValue('test.mode', undefined),
 		isArchived: observableValue<boolean>('test.isArchived', opts.isArchived ?? false),
 		isRead: observableValue('test.isRead', true),
+		interactivity: observableValue('test.interactivity', ChatInteractivity.Full),
 		checkpoints: observableValue('test.checkpoints', undefined),
 		lastTurnEnd: observableValue('test.lastTurnEnd', undefined),
 		description: observableValue('test.description', undefined),
@@ -86,28 +114,19 @@ function makeAgentSession(opts: {
 	const session = {
 		sessionId: opts.sessionId ?? 'test:session',
 		resource: chat.resource,
-		providerId: 'test',
+		providerId: opts.providerId ?? 'test',
 		sessionType: opts.providerType ?? AgentSessionProviders.Local,
 		icon: Codicon.copilot,
 		createdAt: chat.createdAt,
-		workspace: observableValue('test.workspace', folder
-			? {
-				uri: folder.root,
-				label: 'test',
-				icon: Codicon.repo,
-				folders: [folder],
-				requiresWorkspaceTrust: false,
-				isVirtualWorkspace: false
-			} satisfies ISessionWorkspace
-			: undefined),
+		workspace,
 		title: chat.title,
 		updatedAt: chat.updatedAt,
 		status: chat.status,
-		changesets: constObservable([]),
-		changes: chat.changes,
 		modelId: chat.modelId,
 		mode: chat.mode,
 		loading: observableValue('test.loading', opts.loading ?? false),
+		worktreePending: observableValue('test.worktreePending', opts.worktreePending ?? false),
+		...(opts.remoteConnectionStatus ? { remoteConnectionStatus: observableValue('test.remoteConnectionStatus', opts.remoteConnectionStatus) } : {}),
 		isArchived: chat.isArchived,
 		isRead: chat.isRead,
 		lastTurnEnd: chat.lastTurnEnd,
@@ -115,34 +134,49 @@ function makeAgentSession(opts: {
 		chats: observableValue('test.chats', [chat]),
 		activeChat: observableValue('test.activeChat', chat),
 		mainChat: constObservable(chat),
-		capabilities: { supportsMultipleChats: false },
+		capabilities: constObservable({ supportsMultipleChats: false }),
 		isCreated: observableValue('test.isCreated', true),
 		sticky: observableValue('test.sticky', false),
 		openChats: observableValue('test.openChats', [chat]),
 		closedChats: constObservable([]),
+		lastClosedChat: undefined,
+		visibleChatTabs: constObservable([chat]),
+		shouldShowChatTabs: constObservable(false),
 	} satisfies TestActiveSession;
 	return session;
 }
 
-function makeNonAgentSession(opts: { repository?: URI; worktree?: URI; providerType?: string; sessionId?: string }): ISession {
+function makeNonAgentSession(opts: { repository?: URI; worktree?: URI; providerType?: string; sessionId?: string }): IActiveSession {
 	const folder = opts.repository || opts.worktree ? {
 		root: opts.repository ?? opts.worktree!,
 		workingDirectory: opts.worktree ?? opts.repository!,
 		name: 'test',
 		description: undefined,
-		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined },
+		gitRepository: { uri: opts.repository ?? opts.worktree!, workTreeUri: opts.worktree, baseBranchName: undefined, gitHubInfo: constObservable(undefined) },
 	} : undefined;
+	const workspace = observableValue('test.workspace', folder
+		? {
+			uri: folder.root,
+			label: 'test',
+			icon: Codicon.repo,
+			folders: [folder],
+			requiresWorkspaceTrust: false,
+		} as ISessionWorkspace : undefined);
 	const chat: IChat = {
 		resource: URI.parse('file:///session'),
 		createdAt: new Date(),
+		workspace,
 		title: observableValue('test.title', 'Test Session'),
 		updatedAt: observableValue('test.updatedAt', new Date()),
 		status: observableValue('test.status', 0),
 		changes: observableValue('test.changes', []),
+		changesets: constObservable([]),
 		modelId: observableValue('test.modelId', undefined),
+		modelSource: observableValue('test.modelSource', undefined),
 		mode: observableValue('test.mode', undefined),
 		isArchived: observableValue('test.isArchived', false),
 		isRead: observableValue('test.isRead', true),
+		interactivity: observableValue('test.interactivity', ChatInteractivity.Full),
 		checkpoints: observableValue('test.checkpoints', undefined),
 		lastTurnEnd: observableValue('test.lastTurnEnd', undefined),
 		description: observableValue('test.description', undefined),
@@ -154,19 +188,10 @@ function makeNonAgentSession(opts: { repository?: URI; worktree?: URI; providerT
 		sessionType: opts.providerType ?? AgentSessionProviders.Local,
 		icon: Codicon.copilot,
 		createdAt: chat.createdAt,
-		workspace: observableValue('test.workspace', folder
-			? {
-				uri: folder.root,
-				label: 'test',
-				icon: Codicon.repo,
-				folders: [folder],
-				requiresWorkspaceTrust: false,
-			} as ISessionWorkspace : undefined),
+		workspace,
 		title: chat.title,
 		updatedAt: chat.updatedAt,
 		status: chat.status,
-		changesets: constObservable([]),
-		changes: chat.changes,
 		modelId: chat.modelId,
 		mode: chat.mode,
 		loading: observableValue('test.loading', false),
@@ -175,15 +200,24 @@ function makeNonAgentSession(opts: { repository?: URI; worktree?: URI; providerT
 		lastTurnEnd: chat.lastTurnEnd,
 		description: chat.description,
 		chats: observableValue('test.chats', [chat]),
+		activeChat: observableValue('test.activeChat', chat),
 		mainChat: constObservable(chat),
-		capabilities: { supportsMultipleChats: false },
-	} satisfies ISession;
+		capabilities: constObservable({ supportsMultipleChats: false }),
+		isCreated: observableValue('test.isCreated', true),
+		sticky: observableValue('test.sticky', false),
+		openChats: observableValue('test.openChats', [chat]),
+		closedChats: constObservable([]),
+		lastClosedChat: undefined,
+		visibleChatTabs: constObservable([chat]),
+		shouldShowChatTabs: constObservable(false),
+	} satisfies IActiveSession;
 	return session;
 }
 
 function makeTerminalInstance(id: number, cwd: string): TestTerminalInstance {
 	const commandHistory: { timestamp: number }[] = [];
 	let isDisposed = false;
+	let initialCwdBarrier: Promise<void> | undefined;
 	let shellLaunchConfig: ITerminalInstance['shellLaunchConfig'] = {} as ITerminalInstance['shellLaunchConfig'];
 	const capabilities = {
 		get(cap: TerminalCapability) {
@@ -198,11 +232,17 @@ function makeTerminalInstance(id: number, cwd: string): TestTerminalInstance {
 		instanceId: id,
 		get isDisposed() { return isDisposed; },
 		get shellLaunchConfig() { return shellLaunchConfig; },
-		getInitialCwd: () => Promise.resolve(cwd),
+		async getInitialCwd() {
+			await initialCwdBarrier;
+			return cwd;
+		},
 		capabilities,
 		_testCommandHistory: commandHistory,
 		_testSetDisposed(disposed: boolean) {
 			isDisposed = disposed;
+		},
+		_testSetInitialCwdBarrier(barrier: Promise<void> | undefined) {
+			initialCwdBarrier = barrier;
 		},
 		_testSetShellLaunchConfig(value: ITerminalInstance['shellLaunchConfig']) {
 			shellLaunchConfig = value;
@@ -220,10 +260,16 @@ suite('SessionsTerminalContribution', () => {
 	let activeSessionObs: ReturnType<typeof observableValue<IActiveSession | undefined>>;
 	let onDidChangeSessions: Emitter<ISessionsChangeEvent>;
 	let onDidReplaceSession: Emitter<{ readonly from: ISession; readonly to: ISession }>;
+	let onDidReplaceNewDraftSession: Emitter<{ readonly from: ISession; readonly to: ISession }>;
 	let onDidCreateInstance: Emitter<ITerminalInstance>;
 	let onDidDisposeInstance: Emitter<ITerminalInstance>;
 
 	let createdTerminals: { cwd: URI }[];
+	let agentHostTerminalAddresses: string[];
+	/** The agent host each agent host terminal runs on, keyed by instance id. */
+	let agentHostTerminalAddressById: Map<number, string>;
+	let terminalCreationBarriers: Map<string, DeferredPromise<void>>;
+	let terminalCreationStarted: string[];
 	let activeInstanceSet: number[];
 	let activeInstanceId: number | undefined;
 	let focusCalls: number;
@@ -234,16 +280,21 @@ suite('SessionsTerminalContribution', () => {
 	let moveToBackgroundCalls: number[];
 	let showBackgroundCalls: number[];
 	let disposeOnCreatePaths: Set<string>;
-	/** Barriers that hold `createTerminal` open per cwd so archive can land mid-creation. */
-	let terminalCreationBarriers: Map<string, DeferredPromise<void>>;
+	let defaultCwdCalls: (URI | undefined)[];
 	let vetoSafeDispose: boolean;
 	let safeDisposeBarrier: DeferredPromise<void> | undefined;
 	let logService: TestLogService;
 	let allSessions: ISession[];
+	let sessionProviders: Map<string, ISessionsProvider>;
 	let instantiationService: TestInstantiationService;
+	let cwdExists: (uri: URI) => boolean;
 
 	setup(() => {
 		createdTerminals = [];
+		agentHostTerminalAddresses = [];
+		agentHostTerminalAddressById = new Map();
+		terminalCreationBarriers = new Map();
+		terminalCreationStarted = [];
 		activeInstanceSet = [];
 		activeInstanceId = undefined;
 		focusCalls = 0;
@@ -254,17 +305,19 @@ suite('SessionsTerminalContribution', () => {
 		moveToBackgroundCalls = [];
 		showBackgroundCalls = [];
 		disposeOnCreatePaths = new Set();
-		terminalCreationBarriers = new Map();
+		defaultCwdCalls = [];
 		vetoSafeDispose = false;
 		safeDisposeBarrier = undefined;
 		logService = new TestLogService();
 		allSessions = [];
+		sessionProviders = new Map();
 
 		instantiationService = store.add(new TestInstantiationService());
 
 		activeSessionObs = observableValue<IActiveSession | undefined>('activeSession', undefined);
 		onDidChangeSessions = store.add(new Emitter<ISessionsChangeEvent>());
 		onDidReplaceSession = store.add(new Emitter<{ readonly from: ISession; readonly to: ISession }>());
+		onDidReplaceNewDraftSession = store.add(new Emitter<{ readonly from: ISession; readonly to: ISession }>());
 		onDidCreateInstance = store.add(new Emitter<ITerminalInstance>());
 		onDidDisposeInstance = store.add(new Emitter<ITerminalInstance>());
 
@@ -273,6 +326,7 @@ suite('SessionsTerminalContribution', () => {
 		instantiationService.stub(ISessionsManagementService, new class extends mock<ISessionsManagementService>() {
 			override readonly onDidChangeSessions = onDidChangeSessions.event;
 			override readonly onDidReplaceSession = onDidReplaceSession.event;
+			override readonly onDidReplaceNewDraftSession = onDidReplaceNewDraftSession.event;
 			override getSessions(): ISession[] { return [...allSessions]; }
 		});
 		instantiationService.stub(ISessionsService, new class extends mock<ISessionsService>() {
@@ -294,6 +348,7 @@ suite('SessionsTerminalContribution', () => {
 			override async createTerminal(opts?: any): Promise<ITerminalInstance> {
 				const cwdUri: URI | undefined = opts?.config?.cwd;
 				const cwdStr = cwdUri?.fsPath ?? '';
+				terminalCreationStarted.push(cwdStr);
 				await terminalCreationBarriers.get(cwdStr)?.p;
 				const id = nextInstanceId++;
 				const instance = makeTerminalInstance(id, cwdStr);
@@ -340,6 +395,42 @@ suite('SessionsTerminalContribution', () => {
 
 		instantiationService.stub(IPathService, new TestPathService(HOME_DIR));
 
+		cwdExists = () => true;
+		instantiationService.stub(IFileService, new class extends mock<IFileService>() {
+			override async exists(resource: URI): Promise<boolean> { return cwdExists(resource); }
+		});
+
+		instantiationService.stub(IAgentHostTerminalService, new class extends mock<IAgentHostTerminalService>() {
+			override readonly profiles = constObservable<never[]>([]);
+			override getProfileForConnection() { return undefined; }
+			override setDefaultCwd(cwd: URI | undefined): void { defaultCwdCalls.push(cwd); }
+			override async createTerminalForEntry(address: string, options?: IAgentHostTerminalCreateOptions): Promise<ITerminalInstance | undefined> {
+				const cwd = typeof options?.cwd === 'string' ? URI.file(options.cwd) : options?.cwd;
+				if (!cwd) {
+					return undefined;
+				}
+				const instance = makeTerminalInstance(nextInstanceId++, cwd.fsPath);
+				agentHostTerminalAddresses.push(address);
+				agentHostTerminalAddressById.set(instance.instanceId, address);
+				createdTerminals.push({ cwd });
+				terminalInstances.set(instance.instanceId, instance);
+				return instance;
+			}
+			override getAgentHostAddress(instance: ITerminalInstance): string | undefined {
+				return agentHostTerminalAddressById.get(instance.instanceId);
+			}
+		});
+
+		instantiationService.stub(ITerminalProfileService, new class extends mock<ITerminalProfileService>() {
+			override overrideDefaultProfile() { return Disposable.None; }
+		});
+
+		instantiationService.stub(ISessionsProvidersService, new class extends mock<ISessionsProvidersService>() {
+			override getProvider<T extends ISessionsProvider>(providerId: string): T | undefined {
+				return sessionProviders.get(providerId) as T | undefined;
+			}
+		});
+
 		instantiationService.stub(IContextKeyService, store.add(new MockContextKeyService()));
 
 		instantiationService.stub(IViewsService, new class extends mock<IViewsService>() {
@@ -378,11 +469,32 @@ suite('SessionsTerminalContribution', () => {
 		assert.strictEqual(createdTerminals[0].cwd.fsPath, repoUri.fsPath);
 	});
 
-	// --- Claude provider: also uses worktree/repository path ---
+	// --- Missing local working directory: defer until it exists ---
 
-	test('creates a terminal at the worktree for a Claude session', async () => {
-		const worktreeUri = URI.file('/worktree');
-		const session = makeAgentSession({ worktree: worktreeUri, repository: URI.file('/repo'), providerType: AgentSessionProviders.Claude });
+	test('does not create a local terminal when the working directory does not exist', async () => {
+		const worktreeUri = URI.file('/missing-worktree');
+		cwdExists = uri => uri.fsPath !== worktreeUri.fsPath;
+		const session = makeAgentSession({ worktree: worktreeUri, providerType: AgentSessionProviders.Local });
+		activeSessionObs.set(session, undefined);
+		await tick();
+
+		assert.strictEqual(createdTerminals.length, 0);
+	});
+
+	test('creates the terminal once the missing working directory appears', async () => {
+		const worktreeUri = URI.file('/missing-worktree');
+		let exists = false;
+		cwdExists = uri => uri.fsPath !== worktreeUri.fsPath || exists;
+		const session = makeAgentSession({ worktree: worktreeUri, providerType: AgentSessionProviders.Local });
+		activeSessionObs.set(session, undefined);
+		await tick();
+		assert.strictEqual(createdTerminals.length, 0);
+
+		// The worktree is materialized; re-activating the session retries and now
+		// finds the directory (the early return never cached the active key).
+		exists = true;
+		activeSessionObs.set(undefined, undefined);
+		await tick();
 		activeSessionObs.set(session, undefined);
 		await tick();
 
@@ -390,14 +502,14 @@ suite('SessionsTerminalContribution', () => {
 		assert.strictEqual(createdTerminals[0].cwd.fsPath, worktreeUri.fsPath);
 	});
 
-	test('falls back to repository when worktree is undefined for a Claude session', async () => {
-		const repoUri = URI.file('/repo');
-		const session = makeAgentSession({ repository: repoUri, providerType: AgentSessionProviders.Claude });
+	test('creates an Agent Host terminal even when the local cwd check would fail', async () => {
+		const worktreeUri = toAgentHostUri(URI.file('/missing-worktree'), 'my-server');
+		cwdExists = () => false;
+		const session = makeAgentSession({ worktree: worktreeUri, providerType: AgentSessionProviders.Local });
 		activeSessionObs.set(session, undefined);
 		await tick();
 
 		assert.strictEqual(createdTerminals.length, 1);
-		assert.strictEqual(createdTerminals[0].cwd.fsPath, repoUri.fsPath);
 	});
 
 	// --- Workspace-backed sessions: use working directory ---
@@ -420,9 +532,47 @@ suite('SessionsTerminalContribution', () => {
 		assert.strictEqual(createdTerminals[0].cwd.fsPath, URI.file('/worktree').fsPath);
 	});
 
+	test('updates the terminal cwd when the active chat workspace changes', async () => {
+		const session = makeAgentSession({ repository: URI.file('/repo-a'), providerType: AgentSessionProviders.Local });
+		activeSessionObs.set(session, undefined);
+		await tick();
+		addCommandToInstance(terminalInstances.get(1)!, 100);
+
+		const activeChat = session.activeChat.get();
+		const secondWorkspace: ISessionWorkspace = {
+			...session.workspace.get()!,
+			uri: URI.file('/repo-b'),
+			folders: [{
+				root: URI.file('/repo-b'),
+				workingDirectory: URI.file('/repo-b'),
+				name: 'repo-b',
+				description: undefined,
+			}],
+		};
+		session.activeChat.set({
+			...activeChat,
+			resource: URI.parse('file:///session/chat-b'),
+			workspace: constObservable(secondWorkspace),
+		}, undefined);
+		await tick();
+		await tick();
+
+		assert.deepStrictEqual({
+			createdCwds: createdTerminals.map(terminal => terminal.cwd.fsPath),
+			defaultCwd: defaultCwdCalls.at(-1)?.fsPath,
+			activeInstanceId,
+			backgrounded: [...backgroundedInstances],
+		}, {
+			createdCwds: [URI.file('/repo-a').fsPath, URI.file('/repo-b').fsPath],
+			defaultCwd: URI.file('/repo-b').fsPath,
+			activeInstanceId: 2,
+			backgrounded: [1],
+		});
+	});
+
 	test('uses home directory for a non-agent session', async () => {
 		const session = makeNonAgentSession({ repository: URI.file('/repo') });
-		activeSessionObs.set(session as IActiveSession, undefined);
+		activeSessionObs.set(session, undefined);
 		await tick();
 
 		assert.strictEqual(createdTerminals.length, 1);
@@ -456,12 +606,137 @@ suite('SessionsTerminalContribution', () => {
 		await tick();
 
 		assert.strictEqual(createdTerminals.length, 0, 'should not create a terminal while session is loading');
+		assert.strictEqual(defaultCwdCalls.at(-1), undefined, 'should not set the default cwd while session is loading');
 
 		session.loading.set(false, undefined);
 		await tick();
 
 		assert.strictEqual(createdTerminals.length, 1);
 		assert.strictEqual(createdTerminals[0].cwd.fsPath, worktreeUri.fsPath);
+	});
+
+	test('waits for the worktree before creating a terminal', async () => {
+		const worktreeUri = URI.file('/worktree');
+		const session = makeAgentSession({
+			worktree: worktreeUri,
+			providerType: AgentSessionProviders.Background,
+			worktreePending: true,
+		});
+
+		activeSessionObs.set(session, undefined);
+		await tick();
+		assert.strictEqual(createdTerminals.length, 0);
+
+		session.worktreePending.set(false, undefined);
+		await tick();
+		assert.deepStrictEqual(createdTerminals.map(terminal => terminal.cwd.fsPath), [worktreeUri.fsPath]);
+	});
+
+	test('defers remote terminal creation until the host connects', async () => {
+		const worktreeUri = URI.file('/remote/worktree');
+		sessionProviders.set('agenthost-test', { id: 'agenthost-test', remoteAddress: 'remote-test' } as unknown as ISessionsProvider);
+		const session = makeAgentSession({
+			providerId: 'agenthost-test',
+			providerType: AgentSessionProviders.Background,
+			worktree: toAgentHostUri(worktreeUri, 'remote-test'),
+			remoteConnectionStatus: { kind: 'disconnected', reason: SessionRemoteConnectionFailureReason.HostNotRunning },
+		});
+
+		activeSessionObs.set(session, undefined);
+		await tick();
+		session.remoteConnectionStatus!.set({ kind: 'incompatible' }, undefined);
+		await tick();
+		session.remoteConnectionStatus!.set({ kind: 'connecting' }, undefined);
+		await tick();
+		const ensured = await contribution.ensureTerminal(worktreeUri, false, session);
+
+		assert.deepStrictEqual({
+			created: createdTerminals,
+			defaultCwd: defaultCwdCalls.at(-1),
+			ensured,
+		}, {
+			created: [],
+			defaultCwd: undefined,
+			ensured: [],
+		});
+
+		session.remoteConnectionStatus!.set({ kind: 'connected' }, undefined);
+		await tick();
+
+		assert.deepStrictEqual({
+			created: createdTerminals.map(terminal => terminal.cwd.path),
+			addresses: agentHostTerminalAddresses,
+			defaultCwd: defaultCwdCalls.at(-1)?.path,
+		}, {
+			created: [worktreeUri.path],
+			addresses: ['remote-test'],
+			defaultCwd: worktreeUri.path,
+		});
+	});
+
+	test('keeps an existing remote terminal during a transient reconnect', async () => {
+		const worktreeUri = URI.file('/remote/worktree');
+		sessionProviders.set('agenthost-test', { id: 'agenthost-test', remoteAddress: 'remote-test' } as unknown as ISessionsProvider);
+		const session = makeAgentSession({
+			providerId: 'agenthost-test',
+			providerType: AgentSessionProviders.Background,
+			worktree: toAgentHostUri(worktreeUri, 'remote-test'),
+			remoteConnectionStatus: { kind: 'connected' },
+		});
+
+		activeSessionObs.set(session, undefined);
+		await tick();
+		session.remoteConnectionStatus!.set({ kind: 'reconnecting' }, undefined);
+		await tick();
+		const duringReconnect = {
+			created: createdTerminals.map(terminal => terminal.cwd.path),
+			defaultCwd: defaultCwdCalls.at(-1),
+		};
+		session.remoteConnectionStatus!.set({ kind: 'connected' }, undefined);
+		await tick();
+
+		assert.deepStrictEqual({
+			duringReconnect,
+			created: createdTerminals.map(terminal => terminal.cwd.path),
+			defaultCwd: defaultCwdCalls.at(-1)?.path,
+		}, {
+			duringReconnect: {
+				created: [worktreeUri.path],
+				defaultCwd: undefined,
+			},
+			created: [worktreeUri.path],
+			defaultCwd: worktreeUri.path,
+		});
+	});
+
+	test('disposes terminal creation that becomes stale while the worktree is pending', async () => {
+		const worktreeUri = URI.file('/worktree');
+		const session = makeAgentSession({
+			worktree: worktreeUri,
+			providerType: AgentSessionProviders.Background,
+		});
+		const creationBarrier = new DeferredPromise<void>();
+		terminalCreationBarriers.set(worktreeUri.fsPath, creationBarrier);
+
+		activeSessionObs.set(session, undefined);
+		await tick();
+		session.worktreePending.set(true, undefined);
+		await creationBarrier.complete();
+		await tick();
+
+		session.worktreePending.set(false, undefined);
+		await tick();
+
+		assert.deepStrictEqual({
+			created: createdTerminals.map(terminal => terminal.cwd.fsPath),
+			disposed: disposedInstances.map(instance => instance.instanceId),
+			remaining: [...terminalInstances.keys()],
+		}, {
+			created: [worktreeUri.fsPath, worktreeUri.fsPath],
+			disposed: [1],
+			remaining: [2],
+		});
+		assert.strictEqual(defaultCwdCalls.at(-1)?.fsPath, worktreeUri.fsPath);
 	});
 
 	test('does not recreate terminal for the same path', async () => {
@@ -544,6 +819,260 @@ suite('SessionsTerminalContribution', () => {
 		assert.strictEqual(instances.length, 0);
 		assert.strictEqual(activeInstanceSet.length, 0);
 		assert.ok(logService.traces.some(message => message.includes(`Cannot activate created terminal for ${cwd.fsPath}; terminal 1 is no longer available`)));
+	});
+
+	// --- new-session draft replacement ---
+
+	test('reuses one terminal across repeated same-cwd replacement drafts', async () => {
+		const cwd = URI.file('/worktree');
+		sessionProviders.set('agenthost-one', new class extends mock<ISessionsProvider>() {
+			override readonly id = 'agenthost-one';
+			readonly remoteAddress = 'ssh-remote+one';
+		});
+		let currentSession = makeAgentSession({
+			sessionId: 'test:draft-1',
+			providerId: 'agenthost-one',
+			worktree: cwd,
+			providerType: AgentSessionProviders.Background,
+		});
+		const [firstTerminal] = await contribution.ensureTerminal(cwd, false, currentSession);
+		let latestResult: ITerminalInstance[] = [firstTerminal];
+
+		for (let i = 2; i <= 10; i++) {
+			const nextSession = makeAgentSession({
+				sessionId: `test:draft-${i}`,
+				providerId: 'agenthost-one',
+				worktree: cwd,
+				providerType: AgentSessionProviders.Background,
+			});
+			onDidReplaceNewDraftSession.fire({ from: currentSession, to: nextSession });
+			latestResult = await contribution.ensureTerminal(cwd, false, nextSession);
+			currentSession = nextSession;
+		}
+
+		assert.deepStrictEqual({
+			created: createdTerminals.length,
+			agentHostAddresses: agentHostTerminalAddresses,
+			transferredTerminalId: latestResult[0]?.instanceId,
+			disposed: disposedInstances.map(instance => instance.instanceId),
+		}, {
+			created: 1,
+			agentHostAddresses: ['ssh-remote+one'],
+			transferredTerminalId: firstTerminal.instanceId,
+			disposed: [],
+		});
+	});
+
+	test('does not accept stale terminal creation after worktree readiness toggles back', async () => {
+		const worktreeUri = URI.file('/worktree');
+		const session = makeAgentSession({
+			worktree: worktreeUri,
+			providerType: AgentSessionProviders.Background,
+		});
+		const creationBarrier = new DeferredPromise<void>();
+		terminalCreationBarriers.set(worktreeUri.fsPath, creationBarrier);
+
+		activeSessionObs.set(session, undefined);
+		await tick();
+		session.worktreePending.set(true, undefined);
+		session.worktreePending.set(false, undefined);
+		await creationBarrier.complete();
+		await tick();
+
+		assert.deepStrictEqual({
+			created: createdTerminals.map(terminal => terminal.cwd.fsPath),
+			disposed: disposedInstances.map(instance => instance.instanceId),
+			remaining: [...terminalInstances.keys()],
+		}, {
+			created: [worktreeUri.fsPath, worktreeUri.fsPath],
+			disposed: [1],
+			remaining: [2],
+		});
+	});
+
+	test('transfers all tracked terminals to a same-cwd replacement draft', async () => {
+		const cwd = URI.file('/worktree');
+		const firstSession = makeAgentSession({ sessionId: 'test:first-draft', worktree: cwd, providerType: AgentSessionProviders.Background });
+		const secondSession = makeAgentSession({ sessionId: 'test:second-draft', worktree: cwd, providerType: AgentSessionProviders.Background });
+		const first = makeTerminalInstance(1, cwd.fsPath);
+		const second = makeTerminalInstance(2, cwd.fsPath);
+		terminalInstances.set(first.instanceId, first);
+		terminalInstances.set(second.instanceId, second);
+		nextInstanceId = 3;
+
+		await contribution.ensureTerminal(cwd, false, firstSession);
+		onDidReplaceNewDraftSession.fire({ from: firstSession, to: secondSession });
+		const result = await contribution.ensureTerminal(cwd, false, secondSession);
+
+		assert.deepStrictEqual({
+			result: result.map(instance => instance.instanceId),
+			created: createdTerminals.length,
+			disposed: disposedInstances.map(instance => instance.instanceId),
+		}, {
+			result: [1, 2],
+			created: 0,
+			disposed: [],
+		});
+	});
+
+	test('rehomes terminals when replacement drafts use different cwd values', async () => {
+		const firstCwd = URI.file('/worktree-one');
+		const secondCwd = URI.file('/worktree-two');
+		const thirdSession = makeAgentSession({ sessionId: 'test:third-draft', worktree: firstCwd, providerType: AgentSessionProviders.Background });
+		const firstSession = makeAgentSession({ sessionId: 'test:first-draft', worktree: firstCwd, providerType: AgentSessionProviders.Background });
+		const secondSession = makeAgentSession({ sessionId: 'test:second-draft', worktree: secondCwd, providerType: AgentSessionProviders.Background });
+
+		const [firstTerminal] = await contribution.ensureTerminal(firstCwd, false, firstSession);
+		addCommandToInstance(firstTerminal, 100);
+		onDidReplaceNewDraftSession.fire({ from: firstSession, to: secondSession });
+		activeSessionObs.set(secondSession, undefined);
+		await tick();
+		const secondTerminal = terminalInstances.get(activeInstanceId!);
+
+		onDidReplaceNewDraftSession.fire({ from: secondSession, to: thirdSession });
+		activeSessionObs.set(thirdSession, undefined);
+		await tick();
+		const thirdTerminal = terminalInstances.get(activeInstanceId!);
+
+		assert.deepStrictEqual({
+			createdCwds: createdTerminals.map(terminal => terminal.cwd.fsPath),
+			firstStillAlive: terminalInstances.has(firstTerminal.instanceId),
+			secondStillAlive: secondTerminal ? terminalInstances.has(secondTerminal.instanceId) : false,
+			thirdTerminalId: thirdTerminal?.instanceId,
+			activeTerminalId: activeInstanceId,
+			backgrounded: moveToBackgroundCalls,
+			disposed: disposedInstances.map(instance => instance.instanceId),
+		}, {
+			createdCwds: [firstCwd.fsPath, secondCwd.fsPath, firstCwd.fsPath],
+			firstStillAlive: true,
+			secondStillAlive: true,
+			thirdTerminalId: 3,
+			activeTerminalId: 3,
+			backgrounded: [],
+			disposed: [],
+		});
+	});
+
+	test('rehomes a same-cwd terminal when the Agent Host backend changes', async () => {
+		const cwd = URI.file('/worktree');
+		sessionProviders.set('agenthost-one', new class extends mock<ISessionsProvider>() {
+			override readonly id = 'agenthost-one';
+			readonly remoteAddress = 'ssh-remote+one';
+		});
+		sessionProviders.set('agenthost-two', new class extends mock<ISessionsProvider>() {
+			override readonly id = 'agenthost-two';
+			readonly remoteAddress = 'ssh-remote+two';
+		});
+		const firstSession = makeAgentSession({
+			sessionId: 'test:first-draft',
+			providerId: 'agenthost-one',
+			worktree: cwd,
+			providerType: AgentSessionProviders.Background,
+		});
+		const secondSession = makeAgentSession({
+			sessionId: 'test:second-draft',
+			providerId: 'agenthost-two',
+			worktree: cwd,
+			providerType: AgentSessionProviders.Background,
+		});
+
+		const [firstTerminal] = await contribution.ensureTerminal(cwd, false, firstSession);
+		onDidReplaceNewDraftSession.fire({ from: firstSession, to: secondSession });
+		activeSessionObs.set(secondSession, undefined);
+		await tick();
+		const secondTerminal = terminalInstances.get(activeInstanceId!);
+
+		assert.deepStrictEqual({
+			created: createdTerminals.length,
+			agentHostAddresses: agentHostTerminalAddresses,
+			firstStillAlive: terminalInstances.has(firstTerminal.instanceId),
+			secondTerminalId: secondTerminal?.instanceId,
+			backgrounded: moveToBackgroundCalls,
+			disposed: disposedInstances.map(instance => instance.instanceId),
+		}, {
+			created: 2,
+			agentHostAddresses: ['ssh-remote+one', 'ssh-remote+two'],
+			firstStillAlive: true,
+			secondTerminalId: 2,
+			backgrounded: [],
+			disposed: [],
+		});
+	});
+
+	test('allows generic lookup to reuse a standalone terminal', async () => {
+		const firstCwd = URI.file('/worktree-one');
+		const secondCwd = URI.file('/worktree-two');
+		const firstSession = makeAgentSession({ sessionId: 'test:first-draft', worktree: firstCwd, providerType: AgentSessionProviders.Background });
+		const secondSession = makeAgentSession({ sessionId: 'test:second-draft', worktree: secondCwd, providerType: AgentSessionProviders.Background });
+
+		const [firstTerminal] = await contribution.ensureTerminal(firstCwd, false, firstSession);
+		onDidReplaceNewDraftSession.fire({ from: firstSession, to: secondSession });
+		const result = await contribution.ensureTerminal(firstCwd, false);
+
+		assert.deepStrictEqual({
+			result: result.map(instance => instance.instanceId),
+			created: createdTerminals.length,
+		}, {
+			result: [firstTerminal.instanceId],
+			created: 1,
+		});
+	});
+
+	test('disposes a terminal whose creation finishes after its draft is replaced', async () => {
+		const firstCwd = URI.file('/worktree-one');
+		const secondCwd = URI.file('/worktree-two');
+		const firstSession = makeAgentSession({ sessionId: 'test:first-draft', worktree: firstCwd, providerType: AgentSessionProviders.Background });
+		const secondSession = makeAgentSession({ sessionId: 'test:second-draft', worktree: secondCwd, providerType: AgentSessionProviders.Background });
+		const creationBarrier = new DeferredPromise<void>();
+		terminalCreationBarriers.set(firstCwd.fsPath, creationBarrier);
+
+		const operation = contribution.ensureTerminal(firstCwd, false, firstSession);
+		await tick();
+		assert.deepStrictEqual(terminalCreationStarted, [firstCwd.fsPath]);
+
+		onDidReplaceNewDraftSession.fire({ from: firstSession, to: secondSession });
+		await creationBarrier.complete();
+		const result = await operation;
+
+		assert.deepStrictEqual({
+			result: result.map(instance => instance.instanceId),
+			disposed: disposedInstances.map(instance => instance.instanceId),
+			activated: activeInstanceSet,
+			remaining: [...terminalInstances.keys()],
+		}, {
+			result: [],
+			disposed: [1],
+			activated: [],
+			remaining: [],
+		});
+	});
+
+	test('leaves an existing terminal untouched when lookup finishes after replacement', async () => {
+		const firstCwd = URI.file('/worktree-one');
+		const secondCwd = URI.file('/worktree-two');
+		const firstSession = makeAgentSession({ sessionId: 'test:first-draft', worktree: firstCwd, providerType: AgentSessionProviders.Background });
+		const secondSession = makeAgentSession({ sessionId: 'test:second-draft', worktree: secondCwd, providerType: AgentSessionProviders.Background });
+		const cwdBarrier = new DeferredPromise<void>();
+		const existing = makeTerminalInstance(1, firstCwd.fsPath);
+		existing._testSetInitialCwdBarrier(cwdBarrier.p);
+		terminalInstances.set(existing.instanceId, existing);
+		nextInstanceId = 2;
+
+		const operation = contribution.ensureTerminal(firstCwd, false, firstSession);
+		await tick();
+		onDidReplaceNewDraftSession.fire({ from: firstSession, to: secondSession });
+		await cwdBarrier.complete();
+		const result = await operation;
+
+		assert.deepStrictEqual({
+			result: result.map(instance => instance.instanceId),
+			disposed: disposedInstances.map(instance => instance.instanceId),
+			remaining: [...terminalInstances.keys()],
+		}, {
+			result: [],
+			disposed: [],
+			remaining: [1],
+		});
 	});
 
 	// --- onDidChangeSessions (archived) ---
@@ -712,6 +1241,33 @@ suite('SessionsTerminalContribution', () => {
 				sessionId: 'test:archived-session',
 				isArchived: true,
 				worktree: worktreeUri,
+				providerType: AgentSessionProviders.Background,
+			})],
+		});
+		await tick();
+
+		assert.deepStrictEqual({
+			disposed: disposedInstances.map(instance => instance.instanceId),
+			remaining: [...terminalInstances.keys()],
+		}, {
+			disposed: [],
+			remaining: [1],
+		});
+	});
+
+	test('does not cwd-match an untracked terminal for a remote archived worktree', async () => {
+		const remoteWorktree = toAgentHostUri(URI.file('C:\\repo\\worktree'), 'remote-windows');
+		const untrackedTerminal = makeTerminalInstance(nextInstanceId++, 'C:\\repo\\worktree');
+		untrackedTerminal._testSetShellLaunchConfig({ attachPersistentProcess: { id: 1 } } as ITerminalInstance['shellLaunchConfig']);
+		terminalInstances.set(untrackedTerminal.instanceId, untrackedTerminal);
+
+		onDidChangeSessions.fire({
+			added: [],
+			removed: [],
+			changed: [makeAgentSession({
+				sessionId: 'test:archived-session',
+				isArchived: true,
+				worktree: remoteWorktree,
 				providerType: AgentSessionProviders.Background,
 			})],
 		});
@@ -1171,10 +1727,12 @@ suite('SessionsTerminalContribution', () => {
 		assert.deepStrictEqual({
 			disposed: disposedInstances.map(instance => instance.instanceId),
 			backgrounded: moveToBackgroundCalls,
+			remaining: [...terminalInstances.keys()],
 		}, {
 			disposed: [2],
 			backgrounded: [],
-		}, 'only the archived session terminal should be disposed');
+			remaining: [1],
+		});
 	});
 
 	test('closes terminal when the only session at a cwd is removed even if other live sessions exist elsewhere', async () => {
@@ -1408,6 +1966,18 @@ suite('SessionsTerminalContribution', () => {
 		assert.strictEqual(activeInstanceSet.length, activeCountBefore, 'should not call setActiveInstance when no command history exists');
 	});
 
+	// --- Remote agent host sessions ---
+
+	test('uses the unwrapped repository path for a background session with a remote agent host repository', async () => {
+		const remoteRepoUri = toAgentHostUri(URI.file('/Users/user/repo'), 'my-server');
+		const session = makeAgentSession({ repository: remoteRepoUri, providerType: AgentSessionProviders.Background });
+		activeSessionObs.set(session, undefined);
+		await tick();
+
+		assert.strictEqual(createdTerminals.length, 1, 'should create a terminal at the unwrapped repository path');
+		assert.strictEqual(createdTerminals[0].cwd.fsPath, URI.file('/Users/user/repo').fsPath);
+	});
+
 	// --- Hidden tool terminals (hideFromUser) ---
 
 	test('does not dispose hidden tool terminals when session is archived', async () => {
@@ -1436,14 +2006,15 @@ suite('SessionsTerminalContribution', () => {
 		onDidChangeSessions.fire({ added: [], removed: [], changed: [session] });
 		await tick();
 
-		// The regular terminal is killed, but the tool terminal must survive untouched.
 		assert.deepStrictEqual({
 			disposed: disposedInstances.map(instance => instance.instanceId),
-			toolTerminalAlive: terminalInstances.has(toolTerminal.instanceId),
+			backgrounded: moveToBackgroundCalls,
+			toolTerminalDisposed: toolTerminal.isDisposed,
 		}, {
 			disposed: [1],
-			toolTerminalAlive: true,
-		}, 'only the regular terminal should be killed, not the tool terminal');
+			backgrounded: [],
+			toolTerminalDisposed: false,
+		});
 	});
 
 	test('does not dispose hidden tool terminals when session is removed', async () => {
@@ -1561,6 +2132,50 @@ suite('SessionsTerminalContribution', () => {
 		const result = await contribution.ensureTerminal(worktreeUri, false, session);
 		assert.strictEqual(createdTerminals.length, 2, 'should create a new terminal since the tracked one was disposed');
 		assert.notStrictEqual(result[0].instanceId, instance.instanceId, 'should be a different terminal');
+	});
+
+	test('does not adopt a same-cwd terminal of another Agent Host', async () => {
+		const cwd = URI.file('/worktree');
+		sessionProviders.set('agenthost-one', { id: 'agenthost-one', remoteAddress: 'ssh-remote+one' } as unknown as ISessionsProvider);
+		const otherHostTerminal = makeTerminalInstance(nextInstanceId++, cwd.fsPath);
+		terminalInstances.set(otherHostTerminal.instanceId, otherHostTerminal);
+		agentHostTerminalAddressById.set(otherHostTerminal.instanceId, 'ssh-remote+two');
+		const session = makeAgentSession({ sessionId: 'test:host-one', providerId: 'agenthost-one', worktree: cwd, providerType: AgentSessionProviders.Background });
+
+		const terminals = await contribution.ensureTerminal(cwd, false, session);
+
+		assert.deepStrictEqual({
+			terminals: terminals.map(terminal => terminal.instanceId),
+			agentHostAddresses: agentHostTerminalAddresses,
+		}, {
+			terminals: [otherHostTerminal.instanceId + 1],
+			agentHostAddresses: ['ssh-remote+one'],
+		});
+	});
+
+	test('shows a local task terminal of a local Agent Host session after switching back to it', async () => {
+		const cwd = URI.file('/worktree');
+		const otherCwd = URI.file('/other-worktree');
+		sessionProviders.set(LOCAL_AGENT_HOST_PROVIDER_ID, { id: LOCAL_AGENT_HOST_PROVIDER_ID } as unknown as ISessionsProvider);
+		const session = makeAgentSession({ sessionId: 'test:local-host', providerId: LOCAL_AGENT_HOST_PROVIDER_ID, worktree: cwd, providerType: AgentSessionProviders.Background });
+		const otherSession = makeAgentSession({ sessionId: 'test:other', worktree: otherCwd, providerType: AgentSessionProviders.Background });
+		activeSessionObs.set(session, undefined);
+		await tick();
+		// A task terminal runs locally, in the session's folder, untracked by this contribution.
+		const taskTerminal = makeTerminalInstance(nextInstanceId++, cwd.fsPath);
+		terminalInstances.set(taskTerminal.instanceId, taskTerminal);
+
+		activeSessionObs.set(otherSession, undefined);
+		await tick();
+		const hiddenWhileAway = backgroundedInstances.has(taskTerminal.instanceId);
+		activeSessionObs.set(session, undefined);
+		await tick();
+
+		assert.deepStrictEqual({ agentHostAddresses: agentHostTerminalAddresses, hiddenWhileAway, visibleAfterReturn: !backgroundedInstances.has(taskTerminal.instanceId) }, {
+			agentHostAddresses: ['__local__'],
+			hiddenWhileAway: true,
+			visibleAfterReturn: true,
+		});
 	});
 
 	test('untracked restored terminals are visible alongside tracked terminals for the same session', async () => {

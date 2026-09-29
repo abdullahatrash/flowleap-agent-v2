@@ -33,8 +33,8 @@ import { ISerializedModelContentChangedEvent } from '../../../editor/common/text
 import { IAccessibilityInformation } from '../../../platform/accessibility/common/accessibility.js';
 import { ILocalizedString } from '../../../platform/action/common/action.js';
 import { ConfigurationTarget, IConfigurationChange, IConfigurationData, IConfigurationOverrides } from '../../../platform/configuration/common/configuration.js';
-import { ConfigurationScope } from '../../../platform/configuration/common/configurationRegistry.js';
 import { LinkPresentationKind } from '../../../platform/dataChannel/common/dataChannel.js';
+import { ConfigurationScope } from '../../../platform/configuration/common/configurationRegistry.js';
 import { IEditorOptions } from '../../../platform/editor/common/editor.js';
 import { IExtensionIdWithVersion } from '../../../platform/extensionManagement/common/extensionStorage.js';
 import { ExtensionIdentifier, IExtensionDescription } from '../../../platform/extensions/common/extensions.js';
@@ -84,7 +84,7 @@ import { Timeline, TimelineChangeEvent, TimelineOptions, TimelineProviderDescrip
 import { TypeHierarchyItem } from '../../contrib/typeHierarchy/common/typeHierarchy.js';
 import { RelatedInformationResult, RelatedInformationType } from '../../services/aiRelatedInformation/common/aiRelatedInformation.js';
 import { AiSettingsSearchProviderOptions, AiSettingsSearchResult } from '../../services/aiSettingsSearch/common/aiSettingsSearch.js';
-import { AuthenticationSession, AuthenticationSessionAccount, AuthenticationSessionsChangeEvent, IAuthenticationConstraint, IAuthenticationCreateSessionOptions, IAuthenticationGetSessionsOptions, IAuthenticationWwwAuthenticateRequest } from '../../services/authentication/common/authentication.js';
+import { AuthenticationSession, AuthenticationSessionAccount, AuthenticationSessionsChangeEvent, IAuthenticationConstraint, IAuthenticationCreateSessionOptions, IAuthenticationGetSessionsOptions, IAuthenticationProviderSessionOptions, IAuthenticationWwwAuthenticateRequest } from '../../services/authentication/common/authentication.js';
 import { EditorGroupColumn } from '../../services/editor/common/editorGroupColumn.js';
 import { IExtensionDescriptionDelta, IStaticWorkspaceData } from '../../services/extensions/common/extensionHostProtocol.js';
 import { IResolveAuthorityResult } from '../../services/extensions/common/extensionHostProxy.js';
@@ -193,12 +193,10 @@ export interface AuthenticationInteractiveOptions {
 	sessionToRecreate?: AuthenticationSession;
 }
 
-export interface AuthenticationGetSessionOptions {
+export interface AuthenticationGetSessionOptions extends Dto<IAuthenticationProviderSessionOptions> {
 	clearSessionPreference?: boolean;
 	createIfNone?: boolean | AuthenticationInteractiveOptions;
 	forceNewSession?: boolean | AuthenticationInteractiveOptions;
-	silent?: boolean;
-	account?: AuthenticationSessionAccount;
 }
 export interface IRegisterAuthenticationProviderDetails {
 	id: string;
@@ -225,9 +223,9 @@ export interface MainThreadAuthenticationShape extends IDisposable {
 	$registerAuthenticationProvider(details: IRegisterAuthenticationProviderDetails): Promise<void>;
 	$unregisterAuthenticationProvider(id: string): Promise<void>;
 	$ensureProvider(id: string): Promise<void>;
-	$sendDidChangeSessions(providerId: string, event: AuthenticationSessionsChangeEvent): Promise<void>;
-	$getSession(providerId: string, scopeListOrRequest: ReadonlyArray<string> | IAuthenticationWwwAuthenticateRequest, extensionId: string, extensionName: string, options: AuthenticationGetSessionOptions): Promise<AuthenticationSession | undefined>;
-	$getAccounts(providerId: string): Promise<ReadonlyArray<AuthenticationSessionAccount>>;
+	$sendDidChangeSessions(providerId: string, event: Dto<AuthenticationSessionsChangeEvent>): Promise<void>;
+	$getSession(providerId: string, scopeListOrRequest: ReadonlyArray<string> | IAuthenticationWwwAuthenticateRequest, extensionId: string, extensionName: string, options: AuthenticationGetSessionOptions): Promise<Dto<AuthenticationSession> | undefined>;
+	$getAccounts(providerId: string): Promise<ReadonlyArray<Dto<AuthenticationSessionAccount>>>;
 	$removeSession(providerId: string, sessionId: string): Promise<void>;
 	$waitForUriHandler(expectedUri: UriComponents): Promise<UriComponents>;
 	$showContinueNotification(message: string): Promise<boolean>;
@@ -341,7 +339,7 @@ export interface ITextDocumentShowOptions {
 }
 
 export interface MainThreadBulkEditsShape extends IDisposable {
-	$tryApplyWorkspaceEdit(workspaceEditDto: SerializableObjectWithBuffers<IWorkspaceEditDto>, undoRedoGroupId?: number, respectAutoSaveConfig?: boolean): Promise<boolean>;
+	$tryApplyWorkspaceEdit(workspaceEditDto: SerializableObjectWithBuffers<IWorkspaceEditDto>, undoRedoGroupId?: number, isRefactoring?: boolean): Promise<boolean>;
 }
 
 export interface MainThreadTextEditorsShape extends IDisposable {
@@ -444,6 +442,8 @@ export interface IDocumentFilterDto {
 	notebookType?: string;
 	isBuiltin?: boolean;
 }
+
+export type ITabSelectorDto = { uri: IDocumentFilterDto[] } | { viewType: string };
 
 export interface IShareableItemDto {
 	resourceUri: UriComponents;
@@ -661,6 +661,7 @@ export interface TerminalLaunchConfig {
 	isExtensionCustomPtyTerminal?: boolean;
 	forceShellIntegration?: boolean;
 	isFeatureTerminal?: boolean;
+	isRemoteResolverTerminal?: boolean;
 	isExtensionOwnedTerminal?: boolean;
 	useShellEnvironment?: boolean;
 	location?: TerminalLocation | { viewColumn: number; preserveFocus?: boolean } | { parentTerminal: ExtHostTerminalIdentifier } | { splitActiveTerminal: boolean };
@@ -1477,7 +1478,7 @@ export interface ExtHostChatContextShape {
 	$provideWorkspaceChatContext(handle: number, token: CancellationToken): Promise<IChatContextItem[]>;
 	$provideExplicitChatContext(handle: number, token: CancellationToken): Promise<IChatContextItem[]>;
 	$resolveExplicitChatContext(handle: number, context: IChatContextItem, token: CancellationToken): Promise<IChatContextItem>;
-	$provideResourceChatContext(handle: number, options: { resource: UriComponents; withValue: boolean }, token: CancellationToken): Promise<IChatContextItem | undefined>;
+	$provideResourceChatContext(handle: number, options: { resource: UriComponents; withValue: boolean; viewType?: string }, token: CancellationToken): Promise<IChatContextItem | undefined>;
 	$resolveResourceChatContext(handle: number, context: IChatContextItem, token: CancellationToken): Promise<IChatContextItem>;
 	$executeChatContextItemCommand(itemHandle: number): Promise<void>;
 }
@@ -1485,7 +1486,7 @@ export interface ExtHostChatContextShape {
 export interface MainThreadChatContextShape extends IDisposable {
 	$registerChatWorkspaceContextProvider(handle: number, id: string): void;
 	$registerChatExplicitContextProvider(handle: number, id: string): void;
-	$registerChatResourceContextProvider(handle: number, id: string, selector: IDocumentFilterDto[]): void;
+	$registerChatResourceContextProvider(handle: number, id: string, selector: ITabSelectorDto): void;
 	$unregisterChatContextProvider(handle: number): void;
 	$updateWorkspaceContextItems(handle: number, items: IChatContextItemDto[]): void;
 	$executeChatContextItemCommand(itemHandle: number): Promise<void>;
@@ -1829,6 +1830,8 @@ export interface IChatSessionCustomizationItemDto {
 export interface IChatSessionCustomizationSourceFolderDto {
 	readonly uri: UriComponents;
 	readonly label: string;
+	readonly source: IChatResourceSourceDto;
+	readonly destinationGroupId?: string;
 }
 export interface IChatParticipantMetadata {
 	participant: string;
@@ -2073,6 +2076,7 @@ export interface SCMProviderFeatures {
 	actionButton?: SCMActionButtonDto | null;
 	statusBarCommands?: ICommandDto[];
 	contextValue?: string;
+	activeRepositoryName?: string | null;
 }
 
 export interface SCMActionButtonDto {
@@ -2197,6 +2201,25 @@ export interface MainThreadQuickDiffShape extends IDisposable {
 	$unregisterQuickDiffProvider(handle: number): Promise<void>;
 	$createSourceControlDiffInformation(handle: number, uri: UriComponents): Promise<void>;
 	$disposeSourceControlDiffInformation(handle: number): Promise<void>;
+}
+
+export interface IAgentEditorCommentDto {
+	id: string;
+	range: IRange;
+	body: string;
+	author?: string;
+}
+
+export interface MainThreadAgentEditorCommentsShape extends IDisposable {
+	$createAgentEditorComments(handle: number, uri: UriComponents): Promise<void>;
+	$addComment(handle: number, range: IRange, body: string): Promise<void>;
+	$deleteComment(handle: number, id: string): Promise<void>;
+	$disposeAgentEditorComments(handle: number): Promise<void>;
+}
+
+export interface ExtHostAgentEditorCommentsShape {
+	$acceptAgentEditorComments(handle: number, comments: IAgentEditorCommentDto[], acceptsComments: boolean): void;
+	$revealAgentEditorComment(handle: number, id: string): void;
 }
 
 export interface IDocumentDiffLineChangeDto {
@@ -2733,6 +2756,7 @@ export interface IChatNotebookEditDto {
 	edits: ICellEditOperationDto[];
 	kind: 'notebookEdit';
 	done?: boolean;
+	autoTier?: IChatNotebookEdit['autoTier'];
 }
 
 export interface IChatResponseClearToPreviousToolInvocationDto {
@@ -3703,6 +3727,8 @@ export interface IAuthMetadataSource {
 }
 
 export interface MainThreadMcpShape {
+	/** Checks an MCP request destination against current policy, returning the denial reason if blocked. */
+	$checkMcpServerAllowed(id: number, url: string): Promise<string | undefined>;
 	$onDidChangeState(id: number, state: McpConnectionState): void;
 	$onDidPublishLog(id: number, level: LogLevel, log: string): void;
 	$onDidReceiveMessage(id: number, message: string): void;
@@ -3846,6 +3872,7 @@ export type ChatInputNotificationDto = {
 	actions: ChatInputNotificationActionDto[];
 	dismissible: boolean;
 	autoDismissOnMessage: boolean;
+	sessionTypes: readonly string[] | undefined;
 };
 
 export interface MainThreadChatInputNotificationShape {
@@ -4052,6 +4079,7 @@ export const MainContext = {
 	MainThreadOutputService: createProxyIdentifier<MainThreadOutputServiceShape>('MainThreadOutputService'),
 	MainThreadProgress: createProxyIdentifier<MainThreadProgressShape>('MainThreadProgress'),
 	MainThreadQuickDiff: createProxyIdentifier<MainThreadQuickDiffShape>('MainThreadQuickDiff'),
+	MainThreadAgentEditorComments: createProxyIdentifier<MainThreadAgentEditorCommentsShape>('MainThreadAgentEditorComments'),
 	MainThreadDocumentDiff: createProxyIdentifier<MainThreadDocumentDiffShape>('MainThreadDocumentDiff'),
 	MainThreadQuickOpen: createProxyIdentifier<MainThreadQuickOpenShape>('MainThreadQuickOpen'),
 	MainThreadStatusBar: createProxyIdentifier<MainThreadStatusBarShape>('MainThreadStatusBar'),
@@ -4128,6 +4156,7 @@ export const ExtHostContext = {
 	ExtHostLanguageFeatures: createProxyIdentifier<ExtHostLanguageFeaturesShape>('ExtHostLanguageFeatures'),
 	ExtHostQuickOpen: createProxyIdentifier<ExtHostQuickOpenShape>('ExtHostQuickOpen'),
 	ExtHostQuickDiff: createProxyIdentifier<ExtHostQuickDiffShape>('ExtHostQuickDiff'),
+	ExtHostAgentEditorComments: createProxyIdentifier<ExtHostAgentEditorCommentsShape>('ExtHostAgentEditorComments'),
 	ExtHostStatusBar: createProxyIdentifier<ExtHostStatusBarShape>('ExtHostStatusBar'),
 	ExtHostShare: createProxyIdentifier<ExtHostShareShape>('ExtHostShare'),
 	ExtHostExtensionService: createProxyIdentifier<ExtHostExtensionServiceShape>('ExtHostExtensionService'),

@@ -7,7 +7,7 @@ import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
-import { InMemoryStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
+import { InMemoryStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { SESSIONS_DIFF_EDITOR_WORD_WRAP_SETTING, SESSIONS_EDITOR_WORD_WRAP_SETTING, SessionsDiffViewModeContext } from '../../common/diffEditorOptionsService.js';
 import { DiffEditorOptionsService } from '../../browser/diffEditorOptionsService.js';
 
@@ -56,34 +56,30 @@ suite('DiffEditorOptionsService', () => {
 		});
 	});
 
-	test('restores a stored inline preference and toggles back to automatic', () => {
+	test('migrates the legacy inline preference and toggles back to automatic', () => {
 		const storageService = disposables.add(new InMemoryStorageService());
+		storageService.store('sessions.diffEditor.renderSideBySide', false, StorageScope.PROFILE, StorageTarget.USER);
 		const contextKeyService = disposables.add(new MockContextKeyService());
-		const first = disposables.add(new DiffEditorOptionsService(storageService, contextKeyService, new TestConfigurationService()));
-		first.setViewMode('inline');
-		const restored = disposables.add(new DiffEditorOptionsService(storageService, contextKeyService, new TestConfigurationService()));
+		const service = disposables.add(new DiffEditorOptionsService(storageService, contextKeyService, new TestConfigurationService()));
 
-		const restoredViewMode = restored.viewMode.get();
-		const restoredRenderSideBySide = restored.renderSideBySide.get();
-		restored.toggleRenderSideBySide();
+		const migratedViewMode = service.viewMode.get();
+		service.toggleRenderSideBySide();
 
 		assert.deepStrictEqual({
-			restoredViewMode,
-			restoredRenderSideBySide,
-			viewMode: restored.viewMode.get(),
+			migratedViewMode,
+			viewMode: service.viewMode.get(),
 			storedValue: storageService.get('sessions.diffEditor.viewMode', StorageScope.PROFILE),
 		}, {
-			restoredViewMode: 'inline',
-			restoredRenderSideBySide: false,
+			migratedViewMode: 'inline',
 			viewMode: 'automatic',
 			storedValue: 'automatic',
 		});
 	});
 
-	test('uses and updates independent word wrap settings', async () => {
+	test('uses and updates independent experiment-controlled word wrap settings', async () => {
 		const storageService = disposables.add(new InMemoryStorageService());
 		const contextKeyService = disposables.add(new MockContextKeyService());
-		const updates: { key: string; value: unknown }[] = [];
+		const updates: Array<{ key: string; value: unknown }> = [];
 		const configurationService = new class extends TestConfigurationService {
 			override updateValue(key: string, value: unknown): Promise<void> {
 				updates.push({ key, value });

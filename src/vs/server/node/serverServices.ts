@@ -57,7 +57,7 @@ import { IServerTelemetryService, ServerNullTelemetryService, ServerTelemetrySer
 import { RemoteTerminalChannel } from './remoteTerminalChannel.js';
 import { createURITransformer } from '../../base/common/uriTransformer.js';
 import { ServerConnectionToken } from './serverConnectionToken.js';
-import { ServerEnvironmentService, ServerParsedArgs } from './serverEnvironmentService.js';
+import { getRedactedServerParsedArgs, ServerEnvironmentService, ServerParsedArgs } from './serverEnvironmentService.js';
 import { REMOTE_TERMINAL_CHANNEL_NAME } from '../../workbench/contrib/terminal/common/remote/remoteTerminalChannel.js';
 import { REMOTE_FILE_SYSTEM_CHANNEL_NAME } from '../../workbench/services/remote/common/remoteFileSystemProviderClient.js';
 import { ExtensionHostStatusService, IExtensionHostStatusService } from './extensionHostStatusService.js';
@@ -77,6 +77,8 @@ import { RemoteExtensionsScannerChannel, RemoteExtensionsScannerService } from '
 import { RemoteExtensionsScannerChannelName } from '../../platform/remote/common/remoteExtensionsScanner.js';
 import { RemoteUserDataProfilesServiceChannel } from '../../platform/userDataProfile/common/userDataProfileIpc.js';
 import { NodePtyHostStarter } from '../../platform/terminal/node/nodePtyHostStarter.js';
+import { AgentHostChannel, UnavailableAgentHostChannel } from './agentHostChannel.js';
+import { AgentHostIpcChannels } from '../../platform/agentHost/common/agentService.js';
 import { IServerLifetimeService, ServerLifetimeService } from './serverLifetimeService.js';
 import { CSSDevelopmentService, ICSSDevelopmentService } from '../../platform/cssDev/node/cssDevService.js';
 import { AllowedExtensionsService } from '../../platform/extensionManagement/common/allowedExtensionsService.js';
@@ -102,7 +104,7 @@ import { SandboxHelperService } from '../../platform/sandbox/node/sandboxHelper.
 
 const eventPrefix = 'monacoworkbench';
 
-export async function setupServerServices(connectionToken: ServerConnectionToken, args: ServerParsedArgs, REMOTE_DATA_FOLDER: string, disposables: DisposableStore) {
+export async function setupServerServices(connectionToken: ServerConnectionToken, args: ServerParsedArgs, REMOTE_DATA_FOLDER: string, agentHostBridgeConnectionToken: string | undefined, disposables: DisposableStore) {
 	const services = new ServiceCollection();
 	const socketServer = new SocketServer<RemoteAgentConnectionContext>();
 
@@ -124,7 +126,7 @@ export async function setupServerServices(connectionToken: ServerConnectionToken
 	disposables.add(logService.onDidChangeLogLevel(logLevel => log(logService, logLevel, `Log level changed to ${LogLevelToString(logService.getLevel())}`)));
 
 	logService.trace(`Remote configuration data at ${REMOTE_DATA_FOLDER}`);
-	logService.trace('process arguments:', environmentService.args);
+	logService.trace('process arguments:', getRedactedServerParsedArgs(environmentService.args));
 	if (Array.isArray(productService.serverGreeting)) {
 		logService.info(`\n\n${productService.serverGreeting.join('\n')}\n\n`);
 	}
@@ -234,8 +236,50 @@ export async function setupServerServices(connectionToken: ServerConnectionToken
 	const serverLifetimeService = instantiationService.createInstance(ServerLifetimeService, {
 		enableAutoShutdown: !!args['enable-remote-auto-shutdown'],
 		shutdownWithoutDelay: !!args['remote-auto-shutdown-without-delay'],
-	});
+	}, process.exit);
 	services.set(IServerLifetimeService, serverLifetimeService);
+
+	// ---- Agent host wiring -------------------------------------------------
+	//
+	// Three independent configurations:
+	//
+	// 1. SPAWN: when `--agent-host-port` / `--agent-host-path` is set, this
+	//    server spawns and owns an agent host child process, then bridges
+	//    renderers to its configured endpoint.
+	// 2. BRIDGE: when `--agent-host-bridge-*` is set without spawn flags,
+	//    register the `agentHostProxy` IPC channel so renderers can
+	//    reach the agent host over the remote-agent connection. The upstream
+	//    is one specified via `--agent-host-bridge-port` /
+	//    `--agent-host-bridge-path` (e.g. when a CLI sidecar manages the
+	//    agent host lifecycle).
+	// 3. DEFAULT: without either set of flags, lazily start a local agent host
+	//    on a fresh socket when the first renderer connects.
+	//
+	// The explicit configurations are deliberately separable so that scenarios
+	// with an externally-managed agent host don't accidentally fork a duplicate.
+
+	// FlowLeap: this server never spawns an agent host (PRD 0004, #73); the SPAWN and DEFAULT
+	// modes above are not shipped. Only BRIDGE to an externally managed agent host remains.
+	const bridgePort = args['agent-host-bridge-port'];
+	const bridgePath = args['agent-host-bridge-path'];
+	if (bridgePort || bridgePath) {
+		const bridgeHost = args['agent-host-bridge-host'] ?? args.host ?? 'localhost';
+		const bridgeToken = args['agent-host-bridge-connection-token'] ?? agentHostBridgeConnectionToken;
+		const agentHostBridge = disposables.add(new AgentHostChannel<RemoteAgentConnectionContext>(
+			socketServer,
+			{
+				host: bridgeHost,
+				port: bridgePort,
+				socketPath: bridgePath,
+				connectionToken: bridgeToken,
+			},
+			logService,
+		));
+		socketServer.registerChannel(AgentHostIpcChannels.RemoteProxy, agentHostBridge);
+		logService.info(`[AgentHostChannel] Registered IPC channel '${AgentHostIpcChannels.RemoteProxy}' (upstream: ${bridgePath ?? `${bridgeHost}:${bridgePort}`})`);
+	} else {
+		socketServer.registerChannel(AgentHostIpcChannels.RemoteProxy, new UnavailableAgentHostChannel<RemoteAgentConnectionContext>());
+	}
 
 	services.set(IAllowedMcpServersService, new SyncDescriptor(AllowedMcpServersService));
 	services.set(IMcpResourceScannerService, new SyncDescriptor(McpResourceScannerService));
