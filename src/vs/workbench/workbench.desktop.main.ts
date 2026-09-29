@@ -103,12 +103,13 @@ import './services/power/electron-browser/powerService.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IUserDataInitializationService, UserDataInitializationService } from './services/userData/browser/userDataInit.js';
 import { IAgentHostService } from '../platform/agentHost/common/agentService.js';
-import { NullAgentHostService } from '../platform/agentHost/browser/nullAgentHostService.js';
+import { EditorRemoteAgentHostServiceClient } from './services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
 import { SyncDescriptor } from '../platform/instantiation/common/descriptors.js';
 
 registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataInitializationService, [[]], true));
-// FlowLeap: no agent host process (PRD 0004, PRD 0017 keep-out)
-registerSingleton(IAgentHostService, NullAgentHostService, InstantiationType.Delayed);
+// FlowLeap: no agent host process (PRD 0004, PRD 0017 keep-out); the remote client stays inert without a remote.
+// The browser null service throws on use and breaks the chat view.
+registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
 
 
 //#endregion

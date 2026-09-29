@@ -114,7 +114,7 @@ import { RemoteAgentHostLocationPreferenceService } from '../platform/agentHost/
 import { ISSHHostKeyTrustService } from '../platform/agentHost/common/sshHostKeyTrust.js';
 import { SSHHostKeyTrustService } from '../platform/agentHost/browser/sshHostKeyTrustService.js';
 import { IAgentHostService } from '../platform/agentHost/common/agentService.js';
-import { NullAgentHostService } from '../platform/agentHost/browser/nullAgentHostService.js';
+import { EditorRemoteAgentHostServiceClient } from '../workbench/services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
 import { ISSHRemoteAgentHostService } from '../platform/agentHost/common/sshRemoteAgentHost.js';
 import { NullSSHRemoteAgentHostService } from '../platform/agentHost/browser/nullSshRemoteAgentHostService.js';
 import { IWSLRemoteAgentHostService } from '../platform/agentHost/common/wslRemoteAgentHost.js';
@@ -132,8 +132,9 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
 registerSingleton(IPluginGitService, NativePluginGitCommandService, InstantiationType.Delayed);
 registerSingleton(IRemoteAgentHostService, AgentsWindowRemoteAgentHostService, InstantiationType.Delayed);
 registerSingleton(IRemoteAgentHostLocationPreferenceService, RemoteAgentHostLocationPreferenceService, InstantiationType.Delayed);
-// FlowLeap: no agent host process and no SSH/WSL agent host transports (PRD 0004, PRD 0017 keep-out)
-registerSingleton(IAgentHostService, NullAgentHostService, InstantiationType.Delayed);
+// FlowLeap: no agent host process and no SSH/WSL agent host transports (PRD 0004, PRD 0017 keep-out).
+// IAgentHostService is the remote client (inert without a remote), as at 810ad70ca59; the null service throws on use.
+registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
 registerSingleton(ISSHRemoteAgentHostService, NullSSHRemoteAgentHostService, InstantiationType.Delayed);
 registerSingleton(IWSLRemoteAgentHostService, NullWSLRemoteAgentHostService, InstantiationType.Delayed);
 registerSingleton(ISSHHostKeyTrustService, SSHHostKeyTrustService, InstantiationType.Delayed);
