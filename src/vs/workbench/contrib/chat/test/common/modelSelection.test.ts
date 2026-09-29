@@ -7,7 +7,7 @@ import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 import { ILanguageModelChatMetadataAndIdentifier } from '../../common/languageModels.js';
-import { getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
+import { findRecommendedDefaultModel, getVisibleLanguageModelsForTarget, ModelSelectionReason, resolveConfiguredModel, resolveInitialModelSelection, resolveModelIdentifier, resolveModelIdentifierFromCatalog, resolveModelIdentifierFromLanguageModels } from '../../common/modelSelection.js';
 
 function model(identifier: string, metadataId = identifier, family = identifier, version = '1.0'): ILanguageModelChatMetadataAndIdentifier {
 	return {
@@ -180,5 +180,34 @@ suite('ModelSelection', () => {
 			opusAlias.identifier,
 			undefined,
 		]);
+	});
+
+	suite('findRecommendedDefaultModel', () => {
+
+		test('prefers the newest Sonnet over older Sonnet, Haiku and Opus', () => {
+			// A first-available fallback would pick Haiku first; the recommendation must win.
+			const models = [
+				model('Claude Haiku 4.5', 'claude-haiku-4-5'),
+				model('Claude Opus 4.8', 'claude-opus-4-8'),
+				model('Claude Sonnet 4.5', 'claude-sonnet-4-5-20250929'),
+				model('Claude Sonnet 4.6', 'claude-sonnet-4-6-20260101'),
+			];
+			assert.strictEqual(findRecommendedDefaultModel(models)?.metadata.id, 'claude-sonnet-4-6-20260101');
+		});
+
+		test('matches Sonnet from an OpenRouter-style prefixed name', () => {
+			const models = [
+				model('Anthropic: Claude 3.5 Haiku', 'anthropic/claude-3.5-haiku'),
+				model('Anthropic: Claude Sonnet 4.5', 'anthropic/claude-sonnet-4.5'),
+			];
+			assert.strictEqual(findRecommendedDefaultModel(models)?.metadata.id, 'anthropic/claude-sonnet-4.5');
+		});
+
+		test('returns undefined when no model is in the recommended family or the pool is empty', () => {
+			assert.deepStrictEqual([
+				findRecommendedDefaultModel([model('GPT-4o', 'gpt-4o'), model('Gemini 2.5 Pro', 'gemini-2.5-pro')]),
+				findRecommendedDefaultModel([]),
+			], [undefined, undefined]);
+		});
 	});
 });

@@ -132,6 +132,40 @@ function compareModelVersions(a: string | undefined, b: string | undefined): num
 	return rawA.localeCompare(rawB);
 }
 
+/**
+ * The model family recommended as the default for a fresh chat when the user has not configured
+ * or explicitly picked a model. Matches the tier the Agents window resolves to (the newest
+ * Sonnet), which measurably outperforms the weaker tiers a first-available fallback would pick.
+ */
+const RECOMMENDED_DEFAULT_MODEL_FAMILY = 'sonnet';
+
+function matchesRecommendedFamily(metadata: ILanguageModelChatMetadata): boolean {
+	const haystack = `${metadata.family ?? ''} ${metadata.id ?? ''} ${metadata.name ?? ''}`.toLowerCase();
+	return haystack.includes(RECOMMENDED_DEFAULT_MODEL_FAMILY);
+}
+
+/**
+ * Picks the recommended default model from a pool for a user who has neither configured nor
+ * explicitly selected one: the newest model in the {@link RECOMMENDED_DEFAULT_MODEL_FAMILY} tier,
+ * deliberately Sonnet rather than a pricier tier, since under BYOK the user pays per token.
+ *
+ * BYOK models report a uniform `version` and set `family` to the raw (often dated) model id, so the
+ * concrete generation is only legible from the display name (e.g. "Claude Sonnet 4.6");
+ * {@link compareModelVersions} on the name selects the newest. Returns `undefined` when the pool
+ * has no such model, letting the caller fall back to its normal default.
+ */
+export function findRecommendedDefaultModel(
+	models: readonly ILanguageModelChatMetadataAndIdentifier[],
+): ILanguageModelChatMetadataAndIdentifier | undefined {
+	const candidates = models.filter(model => matchesRecommendedFamily(model.metadata));
+	if (candidates.length === 0) {
+		return undefined;
+	}
+	return candidates.reduce((best, candidate) =>
+		compareModelVersions(candidate.metadata.name, best.metadata.name) > 0 ? candidate : best
+	);
+}
+
 /** Resolves a configured model id, family, or `auto` value against a model pool. */
 export function resolveConfiguredModel(
 	configuredValue: string | undefined,
