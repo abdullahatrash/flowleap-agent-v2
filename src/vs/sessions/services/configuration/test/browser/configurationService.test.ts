@@ -683,4 +683,29 @@ suite('Sessions ConfigurationService', () => {
 	}));
 
 	// #endregion
+
+	// #region MCP standalone configuration (inputs resolution)
+
+	test('mcp.json inputs are loaded on reload so ${input:} variables can resolve', () => runWithFakedTimers<void>({ useFakeTimers: true }, async () => {
+		// Shape written by the gallery installer: a server whose env references an
+		// `${input:...}` variable, plus the `inputs` section the resolver reads.
+		const mcpConfigWithInputs = {
+			servers: {
+				'co.flowleap/flowleap': {
+					type: 'stdio',
+					command: 'npx',
+					args: ['flowleap', 'mcp'],
+					env: { FLOWLEAP_API_KEY: '${input:FLOWLEAP_API_KEY}' }
+				}
+			},
+			inputs: [
+				{ id: 'FLOWLEAP_API_KEY', type: 'promptString', password: true, description: 'FlowLeap API key' }
+			]
+		};
+		await fileService.writeFile(userDataProfileService.currentProfile.mcpResource, VSBuffer.fromString(JSON.stringify(mcpConfigWithInputs)));
+		await testObject.reloadConfiguration();
+		assert.deepStrictEqual(testObject.inspect('mcp').userValue, mcpConfigWithInputs);
+	}));
+
+	// #endregion
 });

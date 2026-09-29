@@ -97,6 +97,8 @@ source providers
 
 Section counts and rendered rows consume the same filtered model so hidden or disabled sources cannot appear in one surface but not the other.
 
+The Tools count follows the same rule: the Tools section, the sidebar shortcut and the overview all count `getCustomizationToolSets(toolsService, reader)` (in `workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.ts`), which keeps running MCP server groups, so the sidebar "Tools N" total equals what the section renders.
+
 Prompt-based items use the prompts service adapter. MCP servers, tools, plugins, and external harness items use their owning providers directly when their data does not fit the prompt-file contract.
 
 Host-published MCP items retain the runtime-reported configuration source through typed metadata and the shared item contract, independently of lifecycle state or the availability of a local configuration definition.

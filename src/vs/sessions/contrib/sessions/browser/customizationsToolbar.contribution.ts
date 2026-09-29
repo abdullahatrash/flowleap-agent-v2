@@ -36,6 +36,7 @@ import { ISessionsService } from '../../../services/sessions/browser/sessionsSer
 import { SessionType } from '../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { IAICustomizationMcpServerCountService } from './customizationMcpServerCount.js';
 import { OPEN_AI_CUSTOMIZATIONS_COMMAND_ID } from './customizationsConstants.js';
+import { getCustomizationToolSets } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.js';
 
 export interface ICustomizationItemConfig {
 	readonly id: string;
@@ -86,7 +87,7 @@ export function readCustomizationCount(
 	}
 	if (config.isTools) {
 		const state = toolEnablementService.observe(AGENT_HOST_COPILOT_CLI_SESSION_TYPE).read(reader);
-		return countEnabledCustomizationTools(toolsService.toolSets.read(reader), state, reader);
+		return countEnabledCustomizationTools(getCustomizationToolSets(toolsService, reader), state, reader);
 	}
 	return 0;
 }

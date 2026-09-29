@@ -119,7 +119,12 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
 		await this.defaultConfiguration.initialize();
 		const [, userModel] = await Promise.all([
 			this.policyConfiguration.initialize(),
-			this.userConfiguration.initialize(),
+			// FlowLeap: `reload()` (not `initialize()`) so the profile's standalone
+			// tasks.json and mcp.json are parsed and watched from the start. mcp.json
+			// carries the `inputs` that `${input:...}` variables in MCP server env
+			// resolve against; without it, starting a gallery-installed server in
+			// this window throws "Variable '...' must be defined in an 'inputs' section".
+			this.userConfiguration.reload(),
 			this.workspaceConfiguration.initialize(workspaceIdentifier, true),
 		]);
 		this.workspaceConfiguration.reparseWorkspaceSettings({ exclude: [...this.agentsWindowReadOnlyKeys] });
@@ -287,7 +292,9 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
 			return;
 		}
 
-		const userModel = await this.userConfiguration.initialize();
+		// FlowLeap: `reload()` re-reads settings.json plus the standalone tasks.json
+		// and mcp.json; `initialize()` would drop the mcp `inputs` section.
+		const userModel = await this.userConfiguration.reload();
 		const previousData = this._configuration.toData();
 		const change = this._configuration.compareAndUpdateLocalUserConfiguration(userModel);
 
