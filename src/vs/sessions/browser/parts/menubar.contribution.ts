@@ -6,6 +6,7 @@
 import { localize } from '../../../nls.js';
 import { MenuId, MenuRegistry } from '../../../platform/actions/common/actions.js';
 import { IsMacNativeContext } from '../../../platform/contextkey/common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../workbench/common/patent/patentIdeContextKeys.js';
 import { Menus } from '../menus.js';
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
@@ -65,7 +66,8 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 		original: 'Terminal',
 		mnemonicTitle: localize({ key: 'mTerminal', comment: ['&& denotes a mnemonic'] }, "&&Terminal")
 	},
-	order: 7
+	order: 7,
+	when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide when Patent IDE mode is on (#82)
 });
 
 MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
