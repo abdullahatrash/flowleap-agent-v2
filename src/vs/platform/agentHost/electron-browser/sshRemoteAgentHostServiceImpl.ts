@@ -24,6 +24,7 @@ import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus, RemoteAgentHo
 import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../quickinput/common/quickInput.js';
 import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
+import { getSessionLogContent } from '../common/sessionLogContent.js';
 import { AgentHostAhpJsonlLoggingSettingId } from '../common/agentService.js';
 import type { AgentHostServerType } from '../common/agentHostEndpointRegistry.js';
 import { AgentHostClientConnectionKind } from '../common/agentHostTelemetry.js';
@@ -116,7 +117,7 @@ export class SSHRelayClientFactory implements ISSHRelayClientFactory {
 		return this._instantiationService.createInstance(AgentHostProtocolClient, address, () => {
 			const createLogger = (activeConnectionId: string) => ahpLoggingEnabled ? this._instantiationService.createInstance(
 				AhpJsonlLogger,
-				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'ssh' },
+				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'ssh', content: getSessionLogContent(this._configurationService) },
 			) : undefined;
 			return new ReconnectingRelayTransport(
 				establish,

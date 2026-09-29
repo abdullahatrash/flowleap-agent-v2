@@ -24,6 +24,7 @@ import { INotificationService } from '../../notification/common/notification.js'
 import { AgentHostIpcChannelTransport } from '../browser/agentHostIpcChannelTransport.js';
 import { AgentHostClientState, AgentHostProtocolClient } from '../browser/agentHostProtocolClient.js';
 import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
+import { getSessionLogContent } from '../common/sessionLogContent.js';
 import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel, NullAgentHostClientByokLmChannel } from '../common/agentHostClientByokLmChannel.js';
 import { getAgentHostClientType } from '../common/agentHostClientInfo.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL, AgentHostClientProxyChannel } from '../common/agentHostClientProxyChannel.js';
@@ -199,6 +200,7 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
 				logId: this.clientId,
 				connectionId: this.clientId,
 				transport: 'local',
+				content: getSessionLogContent(this._configurationService),
 			}))
 			: undefined;
 

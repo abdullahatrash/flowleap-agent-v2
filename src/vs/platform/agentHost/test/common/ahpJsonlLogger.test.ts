@@ -22,7 +22,7 @@ suite('AhpJsonlLogger', () => {
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
 
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket' },
+			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket', content: 'full' },
 			fileService,
 			new NullLogService(),
 		));
@@ -119,7 +119,7 @@ suite('AhpJsonlLogger', () => {
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
 
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'rotating', transport: 'websocket', maxFileSizeBytes: 1, maxFiles: 2 },
+			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'rotating', transport: 'websocket', maxFileSizeBytes: 1, maxFiles: 2, content: 'full' },
 			fileService,
 			new NullLogService(),
 		));
@@ -216,7 +216,7 @@ suite('AhpJsonlLogger', () => {
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
 
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket' },
+			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket', content: 'full' },
 			fileService,
 			new NullLogService(),
 		));
