@@ -372,6 +372,35 @@ suite('claudeSdkOptions / buildOptions plugins projection', () => {
 			nonessential: '1',
 		});
 	});
+
+	test('FlowLeap guardrail (decision #59, ADR 0009): native spawn carries no credential variables and no proxy', async () => {
+		const credentialKeys = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'];
+		const saved = credentialKeys.map(key => [key, process.env[key]] as const);
+		for (const key of credentialKeys) {
+			delete process.env[key];
+		}
+		try {
+			const opts = await buildOptions(input(undefined), { kind: 'native' }, () => { });
+			const spawnEnv = opts.env ?? {};
+			const settingsEnv = (opts.settings as { env?: Record<string, string> }).env ?? {};
+			const loopback = (env: Record<string, string | undefined>) => Object.keys(env).filter(key => /^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(env[key] ?? ''));
+			assert.deepStrictEqual({
+				spawnEnvCredentialKeys: credentialKeys.filter(key => spawnEnv[key] !== undefined),
+				settingsEnvCredentialKeys: credentialKeys.filter(key => settingsEnv[key] !== undefined),
+				loopbackEndpoints: [...loopback(spawnEnv), ...loopback(settingsEnv)],
+			}, {
+				spawnEnvCredentialKeys: [],
+				settingsEnvCredentialKeys: [],
+				loopbackEndpoints: [],
+			});
+		} finally {
+			for (const [key, value] of saved) {
+				if (value !== undefined) {
+					process.env[key] = value;
+				}
+			}
+		}
+	});
 });
 
 suite('claudeSdkOptions / buildOptions resumeSessionAt projection', () => {
