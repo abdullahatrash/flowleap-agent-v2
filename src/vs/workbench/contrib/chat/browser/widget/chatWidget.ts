@@ -53,6 +53,7 @@ import { ITelemetryService } from '../../../../../platform/telemetry/common/tele
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { SaveReason } from '../../../../common/editor.js';
 import { ChatEntitlementContextKeys, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
@@ -76,7 +77,7 @@ import { IChatTodoListService } from '../../common/tools/chatTodoListService.js'
 import { ChatRequestVariableSet, IChatRequestTranscriptContextVariableEntry, IChatRequestVariableEntry, isPastedTextArtifact, isPromptFileVariableEntry, isPromptTextVariableEntry, isWorkspaceVariableEntry, PromptFileVariableKind, toPromptFileVariableEntry } from '../../common/attachments/chatVariableEntries.js';
 import { ChatViewModel, IChatResponseViewModel, isRequestVM, isResponseVM } from '../../common/model/chatViewModel.js';
 import { ChatMessageRole, IChatMessage } from '../../common/languageModels.js';
-import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, IResolvedNewChatSessionType, ThinkingDisplayMode } from '../../common/constants.js';
+import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, IResolvedNewChatSessionType, MANAGE_CHAT_COMMAND_ID, ThinkingDisplayMode } from '../../common/constants.js';
 import { IChatGoalSummaryService } from '../chatGoalSummaryService.js';
 import { ILanguageModelToolsService, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { IHandOff, PromptHeader } from '../../common/promptSyntax/promptFileParser.js';
@@ -1637,6 +1638,14 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				if (this.chatEntitlementService.anonymous && !this.chatEntitlementService.sentiment.completed) {
 					const providers = product.defaultChatAgent.provider;
 					additionalMessage = new MarkdownString(localize({ key: 'settings', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3}).", providers.default.name, providers.default.name, product.defaultChatAgent.termsStatementUrl, product.defaultChatAgent.privacyStatementUrl), { isTrusted: true });
+				} else if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false && this.chatEntitlementService.clientByokEnabled && !this.chatEntitlementService.hasByokModels) {
+					// FlowLeap Patent IDE is BYOK-only: with no model connected a chat turn cannot run,
+					// so the empty state must carry the one-click path to the Manage Language Models editor.
+					additionalMessage = new MarkdownString(localize(
+						'chatWidget.connectModel',
+						"No AI model connected yet. [Add your AI model]({0}) with your own API key to start chatting.",
+						`command:${MANAGE_CHAT_COMMAND_ID}`
+					), { isTrusted: { enabledCommands: [MANAGE_CHAT_COMMAND_ID] } });
 				} else {
 					additionalMessage = defaultAgent?.metadata.additionalWelcomeMessage;
 				}
@@ -2730,7 +2739,9 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				this.renderGettingStartedTipIfNeeded();
 			}
 			if (e.affectsSome(hasByokModelsContextKeys)) {
-				this.updateChatViewVisibility();
+				// Also refreshes the welcome content: the empty-state "add your AI model" nudge
+				// must appear/disappear as the key flips (this ends in updateChatViewVisibility).
+				this.renderWelcomeViewContentIfNeeded();
 			}
 		}));
 		let previousModelIdentifier: string | undefined;
