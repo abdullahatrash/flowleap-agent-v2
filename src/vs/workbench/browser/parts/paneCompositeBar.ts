@@ -22,6 +22,7 @@ import { IViewDescriptorService, ViewContainer, IViewContainerModel, ViewContain
 import { IContextKeyService, ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { isString } from '../../../base/common/types.js';
 import { IWorkbenchEnvironmentService } from '../../services/environment/common/environmentService.js';
+import { IProductService } from '../../../platform/product/common/productService.js';
 import { isNative } from '../../../base/common/platform.js';
 import { Before2D, ICompositeDragAndDrop } from '../dnd.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
@@ -108,6 +109,7 @@ export class PaneCompositeBar extends Disposable {
 		@IContextKeyService protected readonly contextKeyService: IContextKeyService,
 		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 		@IWorkbenchLayoutService protected readonly layoutService: IWorkbenchLayoutService,
+		@IProductService private readonly productService: IProductService,
 	) {
 		super();
 
@@ -339,10 +341,15 @@ export class PaneCompositeBar extends Disposable {
 		for (const viewContainer of viewContainers) {
 			this.addComposite(viewContainer);
 
-			// Pin it by default if it is new
+			// Pin it by default if it is new, unless the product hides it by default.
+			// Note: addComposite() auto-pins unknown composites, so hiding requires an explicit unpin.
 			const cachedViewContainer = this.cachedViewContainers.filter(({ id }) => id === viewContainer.id)[0];
 			if (!cachedViewContainer) {
-				this.compositeBar.pin(viewContainer.id);
+				if (this.productService.defaultHiddenViewContainers?.includes(viewContainer.id)) {
+					this.compositeBar.unpin(viewContainer.id);
+				} else {
+					this.compositeBar.pin(viewContainer.id);
+				}
 			}
 
 			// Active
