@@ -6,6 +6,7 @@
 import { DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { CustomizationHarnessServiceBase, createVSCodeHarnessDescriptor, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 /**
@@ -27,8 +28,9 @@ export class SessionsCustomizationHarnessService extends CustomizationHarnessSer
 	constructor(
 		@IPromptsService promptsService: IPromptsService,
 		@ISessionsManagementService sessionsManagementService: ISessionsManagementService,
+		@IFileService fileService: IFileService,
 	) {
-		super([], '', promptsService);
+		super([], '', promptsService, fileService);
 
 		const localHarness = createVSCodeHarnessDescriptor();
 		const sync = () => {
