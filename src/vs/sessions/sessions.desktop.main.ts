@@ -98,6 +98,7 @@ import '../platform/userDataProfile/electron-browser/userDataProfileStorageServi
 import '../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import '../platform/extensionManagement/electron-browser/extensionsProfileScannerService.js';
 import '../platform/sandbox/electron-browser/sandboxHelperService.js';
+import '../platform/flowleapCli/electron-browser/flowleapCliService.js';
 import '../platform/webContentExtractor/electron-browser/webContentExtractorService.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import '../workbench/services/process/electron-browser/processService.js';
@@ -253,6 +254,9 @@ import './contrib/chat/electron-browser/chat.contribution.js';
 // Local Agent Host
 
 // Tunnel Host (allow remote connections to local agent host)
+
+// FlowLeap CLI
+import './contrib/flowleapCli/browser/flowleapCliNudge.contribution.js';
 
 // Sessions (desktop only)
 import './contrib/sessions/electron-browser/sessions.contribution.js';
