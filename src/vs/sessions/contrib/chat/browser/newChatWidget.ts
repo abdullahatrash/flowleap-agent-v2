@@ -322,7 +322,7 @@ export class NewChatWidget extends Disposable {
 			hasAdditionalSendContent: hasFeedback,
 			loading,
 			historyKey: constObservable(undefined), // no persisted history for the new-session view
-			placeholder: localize('newSessionPromptPlaceholder', "Pitch your idea"),
+			// FlowLeap: no fixed placeholder, so the input shows the patent-voice rotation (#65).
 			supportsBackground: true,
 			deferredNotificationsEnabled,
 			petHostPreferred: this.options.petHostPreferred,

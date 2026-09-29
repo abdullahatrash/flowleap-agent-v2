@@ -10,7 +10,7 @@ import { Range } from '../../../../../../../../editor/common/core/range.js';
 import { withTestCodeEditor } from '../../../../../../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidget } from '../../../../../browser/chat.js';
 import { ChatWidget } from '../../../../../browser/widget/chatWidget.js';
-import { getPatentModeInputPlaceholder } from '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
+import { getPatentModeInputPlaceholder } from '../../../../../common/widget/patentInputPlaceholder.js';
 import { ChatModeKind } from '../../../../../common/constants.js';
 
 suite('ChatTokenDeleter', () => {
