@@ -763,10 +763,13 @@ function logAuthenticationSessionResolution(
 	resource: string,
 	resolution: Exclude<AuthenticationSessionResolution, { readonly kind: 'resolved' }>,
 ): void {
+	// FlowLeap (PRD 0018 A3): trace, not info. Claude always lists the optional
+	// GitHub resources and there is no GitHub account in FlowLeap, so these
+	// lookups run many times per minute with no network and nothing to act on.
 	if (resolution.kind === 'unavailable') {
-		logService.info(`${logPrefix} Authentication provider is not ready for resource: ${resource}; deferring authentication`);
+		logService.trace(`${logPrefix} Authentication provider is not ready for resource: ${resource}; deferring authentication`);
 	} else {
-		logService.info(`${logPrefix} No signed-in session resolved for resource: ${resource}`);
+		logService.trace(`${logPrefix} No signed-in session resolved for resource: ${resource}`);
 	}
 }
 
