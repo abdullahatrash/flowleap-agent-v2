@@ -17,6 +17,7 @@ import { PromptsType, Target } from '../../common/promptSyntax/promptTypes.js';
 import { ICustomAgent, IPromptsService, PromptsStorage } from '../../common/promptSyntax/service/promptsService.js';
 import { SessionType } from '../../common/chatSessionsService.js';
 import { MockPromptsService } from './promptSyntax/service/mockPromptsService.js';
+import { TestFileService } from '../../../../test/common/workbenchTestServices.js';
 
 suite('CustomizationHarnessService', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -539,6 +540,36 @@ suite('CustomizationHarnessService', () => {
 				const agents = (await service.getCustomAgents(testSessionResource2, CancellationToken.None));
 				assert.deepStrictEqual(agents.map(agent => [agent.name, agent.enabled]), [['selected', true], ['not-selected', false]]);
 			}
+		});
+
+		test('resolves provider agents with unbacked URIs from metadata without reading the file', async () => {
+			// External harnesses may describe agents with synthetic, session-scoped URIs
+			// (e.g. `claude-code:/agents/...`) that have no file system provider. Resolving
+			// them must not route through the file service (which throws ENOPRO); the agent
+			// is built from the metadata the provider already supplied.
+			const promptsService = new class extends MockPromptsService {
+				override parseNew(): Promise<never> {
+					throw new Error('parseNew must not be called for provider agents without a file system provider');
+				}
+			}();
+
+			const emitter = new Emitter<void>();
+			store.add(emitter);
+			const service = new CustomizationHarnessServiceBase([{
+				id: testSessionType1,
+				label: 'Test Extension',
+				icon: ThemeIcon.fromId('extensions'),
+				itemProvider: {
+					onDidChange: emitter.event,
+					provideChatSessionCustomizations: async (_sessionResource: URI, _token: CancellationToken): Promise<ICustomizationItem[]> => [
+						{ uri: URI.parse('test-session-type1:/agents/.github:Agents Window Developer'), type: PromptsType.agent, source: 'local', name: 'Agents Window Developer', enabled: true, extensionId: undefined, pluginUri: undefined, userInvocable: undefined },
+					],
+				},
+			}], testSessionType1, promptsService, new TestFileService());
+			store.add(service);
+
+			const agents = await service.getCustomAgents(testSessionResource1, CancellationToken.None);
+			assert.deepStrictEqual(agents.map(agent => [agent.name, agent.enabled]), [['Agents Window Developer', true]]);
 		});
 	});
 

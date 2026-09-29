@@ -11,8 +11,10 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { AICustomizationManagementSection, AICustomizationSource, BUILTIN_STORAGE } from './aiCustomizationWorkspaceService.js';
 import { PromptsType } from './promptSyntax/promptTypes.js';
+import { PromptFileParser } from './promptSyntax/promptFileParser.js';
 import { AGENT_MD_FILENAME } from './promptSyntax/config/promptFileLocations.js';
 import { IAgentSource, IChatPromptSlashCommand, ICustomAgent, IPromptsService, IResolvedChatPromptSlashCommand, matchesSessionType, PromptsStorage } from './promptSyntax/service/promptsService.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
@@ -508,6 +510,7 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
 		staticHarnesses: readonly IHarnessDescriptor[],
 		defaultHarness: string,
 		private readonly promptsService: IPromptsService,
+		private readonly fileService?: IFileService,
 	) {
 		this._staticHarnesses = staticHarnesses;
 		this.promptsService = promptsService;
@@ -664,7 +667,13 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
 		const result: ICustomAgent[] = [];
 		for (const item of items) {
 			if (item.type === PromptsType.agent) {
-				const promptFile = await this.promptsService.parseNew(item.uri, token);
+				// External harnesses may describe agents with synthetic, session-scoped URIs
+				// (e.g. `claude-code:/agents/...`) that no file system provider backs, so they
+				// cannot be read. Only parse the file to enrich the agent when the resource is
+				// readable; otherwise build the agent from the metadata the provider supplied.
+				const promptFile = !this.fileService || this.fileService.hasProvider(item.uri)
+					? await this.promptsService.parseNew(item.uri, token)
+					: new PromptFileParser().parse(item.uri, '');
 				const extra = {
 					name: item.name,
 					description: item.description,
