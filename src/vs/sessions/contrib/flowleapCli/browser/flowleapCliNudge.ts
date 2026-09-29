@@ -18,19 +18,17 @@ const FLOWLEAP_CLI_INSTALL_URL = 'https://github.com/abdullahatrash/flowleap-cli
 const FLOWLEAP_CLI_NUDGE_NEVER_SHOW_AGAIN_ID = 'flowleap.cli.installNudge';
 
 /**
- * Session type ids of Claude sessions. `claude` is the agent host's Claude
- * agent; `claude-code` is the extension-host Claude provider, which PRD 0018
- * A6 removes. Kept as local strings since import patterns forbid
- * cross-contribution imports.
+ * Session type id of the agent host's Claude agent. Kept as a local string
+ * since import patterns forbid cross-contribution imports.
  */
-const CLAUDE_SESSION_TYPE_IDS: ReadonlySet<string> = new Set(['claude', 'claude-code']);
+const CLAUDE_SESSION_TYPE_ID = 'claude';
 
 /**
  * Returns whether a session type id is a Claude session, the moment the
  * FlowLeap CLI becomes relevant.
  */
 export function isClaudeSessionType(sessionType: string): boolean {
-	return CLAUDE_SESSION_TYPE_IDS.has(sessionType);
+	return sessionType === CLAUDE_SESSION_TYPE_ID;
 }
 
 /**

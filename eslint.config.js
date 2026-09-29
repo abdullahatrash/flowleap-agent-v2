@@ -2311,8 +2311,7 @@ export default defineConfig(
 			'src/vs/sessions/**/*.ts'
 		],
 		ignores: [
-			'src/vs/sessions/contrib/providers/copilotChatSessions/**/*.ts',
-			'src/vs/sessions/contrib/providers/claudeChatSessions/**/*.ts'
+			'src/vs/sessions/contrib/providers/copilotChatSessions/**/*.ts'
 		],
 		languageOptions: {
 			parser: tseslint.parser,

@@ -95,8 +95,8 @@ suite('FlowLeapCliNudge', () => {
 
 	test('fires for agent-host and extension-host Claude sessions only', () => {
 		assert.deepStrictEqual(
-			['claude', 'claude-code', 'codex', 'copilotcli', 'local'].map(type => [type, isClaudeSessionType(type)]),
-			[['claude', true], ['claude-code', true], ['codex', false], ['copilotcli', false], ['local', false]],
+			['claude', 'codex', 'copilotcli', 'local'].map(type => [type, isClaudeSessionType(type)]),
+			[['claude', true], ['codex', false], ['copilotcli', false], ['local', false]],
 		);
 	});
 });

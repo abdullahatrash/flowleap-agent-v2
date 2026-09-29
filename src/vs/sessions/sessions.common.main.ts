@@ -472,8 +472,6 @@ import './contrib/chat/browser/requestOriginProvider.contribution.js';
 import './contrib/chat/browser/sideChatProvider.contribution.js';
 import './contrib/chat/browser/customizationsDebugLog.contribution.js';
 // FlowLeap: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (kept out).
-// The fork-only extension-host Claude provider (PRD 0017 A2) stays registered until PRD 0018 A6 deletes it.
-import './contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.js';
 // Local agent host provider (PRD 0018 A1, ADR 0009).
 import './contrib/providers/agentHost/browser/exportDebugLogsAction.js';
 import './contrib/providers/agentHost/browser/agentHostSessionConfigPicker.js';
