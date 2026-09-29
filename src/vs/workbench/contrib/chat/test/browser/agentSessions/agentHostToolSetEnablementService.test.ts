@@ -87,6 +87,15 @@ suite('AgentHostToolSetEnablementService', () => {
 		assert.strictEqual(countEnabledCustomizationTools(toolSets, sut.getState(SESSION)), 1);
 	});
 
+	test('countEnabledCustomizationTools counts MCP server groups although they are marked deprecated', () => {
+		const { sut } = createSut();
+		const toolSets = [
+			{ id: 'mcp', deprecated: true, source: { type: 'mcp' }, getTools: () => [{ id: 'm1' }, { id: 'm2' }] },
+			{ id: 'dep', deprecated: true, source: { type: 'extension' }, getTools: () => [{ id: 'x' }] },
+		];
+		assert.strictEqual(countEnabledCustomizationTools(toolSets, sut.getState(SESSION)), 2);
+	});
+
 	test('enablement is isolated per session type', () => {
 		const { sut } = createSut();
 		sut.setToolSetEnabled(SESSION, SET, TOOLS, false);

@@ -36,7 +36,8 @@ import { IExtensionManifestPropertiesService } from '../../../../services/extens
 import { IWorkbenchEnvironmentService } from '../../../../services/environment/common/environmentService.js';
 import { ExtensionState, IExtension, IExtensionsWorkbenchService } from '../../../extensions/common/extensions.js';
 import { GalleryItemInstallState, GalleryItemRenderer, IGalleryItemProvider } from './galleryItemRenderer.js';
-import { ILanguageModelToolsService, IToolData, IToolSet, ToolDataSource } from '../../common/tools/languageModelToolsService.js';
+import { ILanguageModelToolsService, IToolData, IToolSet } from '../../common/tools/languageModelToolsService.js';
+import { COPILOT_CLI_TOOL_SET_ID, getCustomizationToolSets } from '../agentSessions/agentHost/agentHostCustomizationToolSets.js';
 import { countEnabledCustomizationTools, getToolSetTriState, IAgentHostToolSetEnablementService, isToolEnabledInSet, IToolEnablementState } from '../agentSessions/agentHost/agentHostToolSetEnablementService.js';
 import { CustomizationGroupHeaderRenderer, CUSTOMIZATION_GROUP_HEADER_HEIGHT, ICustomizationGroupHeaderEntry } from './customizationGroupHeaderRenderer.js';
 import { asTreeRenderer, customizationTreeStyles, getCustomizationTreeContentHeight, ICustomizationTreeGroup } from './customizationTree.js';
@@ -214,7 +215,7 @@ class ToolsSetRowRenderer implements IListRenderer<IToolsSetRowEntry, IToolsSetR
 		data.container.removeAttribute('aria-selected');
 		const vm = entry.vm;
 		const ts = vm.toolSet;
-		const setName = ts.description ?? ts.referenceName;
+		const setName = toolSetDisplayName(ts);
 
 		data.label.set(setName, vm.nameMatches);
 		data.subtext.style.display = vm.detail ? '' : 'none';
@@ -463,9 +464,6 @@ export class ToolsListWidget extends Disposable {
 	private _currentModel: readonly IToolSetViewModel[] = [];
 	private _setRenderer!: ToolsSetRowRenderer;
 
-	/** Read-only tool sets injected for the current session type (e.g. the Copilot CLI built-ins). */
-	private readonly _staticReadOnlySets: readonly IToolSet[];
-
 	constructor(
 		private readonly _sessionType: string,
 		@ILanguageModelToolsService private readonly _toolsService: ILanguageModelToolsService,
@@ -481,8 +479,6 @@ export class ToolsListWidget extends Disposable {
 		@IHoverService private readonly _hoverService: IHoverService,
 	) {
 		super();
-
-		this._staticReadOnlySets = this._createStaticReadOnlySets();
 
 		this.element = $('.tools-list-widget');
 		this._createHeader();
@@ -508,7 +504,7 @@ export class ToolsListWidget extends Disposable {
 		}));
 		this._register(autorun(reader => {
 			// Badge counts enabled individual tools across all visible sets, ignoring the search filter.
-			const count = countEnabledCustomizationTools(this._toolsService.toolSets.read(reader), this._readState(reader), reader);
+			const count = countEnabledCustomizationTools(getCustomizationToolSets(this._toolsService, reader), this._readState(reader), reader);
 			if (count !== this._lastCount) {
 				this._lastCount = count;
 				this._onDidChangeItemCount.fire(count);
@@ -521,7 +517,7 @@ export class ToolsListWidget extends Disposable {
 		DOM.append(DOM.append(this._header, $('.section-title-row')), $('h2.section-title')).textContent = localize('toolsListTitle', "Tools");
 
 		const description = DOM.append(this._header, $('p.section-title-description'));
-		DOM.append(description, $('span.section-title-description-text')).textContent = localize('toolsListSubtitle', "Enable or disable the tools available to chat. Disabled tools are not advertised to the agent. Tools other than the CLI Agent's built-in tools run on the client and require it to be connected.");
+		DOM.append(description, $('span.section-title-description-text')).textContent = localize('toolsListSubtitle', "Enable or disable the tools available to chat. Disabled tools are not advertised to the agent. Tools other than the CLI Agent's built-in tools run on the client and require it to be connected. Installed MCP servers appear here as a group once their server is running; start or stop them in the MCP Servers section.");
 		// Whitespace node so the gap collapses when the link wraps.
 		description.appendChild(document.createTextNode(' '));
 
@@ -672,26 +668,6 @@ export class ToolsListWidget extends Disposable {
 		return this._enablementService.observe(this._sessionType).read(reader);
 	}
 
-	private _createStaticReadOnlySets(): readonly IToolSet[] {
-		const tools: IToolData[] = COPILOT_CLI_TOOLS.map(t => ({
-			id: `copilot-cli:${t.name}`,
-			displayName: t.name,
-			modelDescription: t.description,
-			source: ToolDataSource.Internal,
-			canBeReferencedInPrompt: false,
-		}));
-		const copilotCliSet: IToolSet = {
-			id: 'copilot-cli',
-			referenceName: 'copilotCli',
-			icon: Codicon.copilot,
-			source: ToolDataSource.Internal,
-			description: localize('clientToolSet.copilotCli.description', "CLI Agent"),
-			detail: localize('clientToolSet.copilotCli.detail', "Built-in tools the CLI Agent runs inside its own runtime."),
-			getTools: () => tools,
-		};
-		return [copilotCliSet];
-	}
-
 	private _createViewModel(): IObservable<readonly IToolSetViewModel[]> {
 		// Refresh when extensions change so tool sets from an uninstalled extension drop out immediately (their tools linger in the extension host until reload).
 		const extensionsChanged = observableSignalFromEvent(this, this._extensionsWorkbenchService.onChange);
@@ -700,7 +676,7 @@ export class ToolsListWidget extends Disposable {
 			const query = this._searchQuery.read(reader).trim();
 
 			const result: IToolSetViewModel[] = [];
-			for (const ts of [...this._toolsService.toolSets.read(reader), ...this._staticReadOnlySets]) {
+			for (const ts of getCustomizationToolSets(this._toolsService, reader)) {
 				const vm = this._toViewModel(reader, ts, query);
 				if (vm) {
 					result.push(vm);
@@ -712,9 +688,6 @@ export class ToolsListWidget extends Disposable {
 	}
 
 	private _toViewModel(reader: IReader, ts: IToolSet, query: string): IToolSetViewModel | undefined {
-		if (ts.deprecated) {
-			return undefined;
-		}
 		// Hide extension-provided sets whose extension is gone or being removed.
 		if (ts.source.type === 'extension') {
 			const extensionId = ts.source.extensionId;
@@ -732,7 +705,7 @@ export class ToolsListWidget extends Disposable {
 		let visibleTools: IToolViewModel[] = memberTools.map(tool => ({ tool }));
 		let nameMatches: IMatch[] | undefined;
 		if (query) {
-			nameMatches = matchesContiguousSubString(query, ts.description ?? ts.referenceName) ?? undefined;
+			nameMatches = matchesContiguousSubString(query, toolSetDisplayName(ts)) ?? undefined;
 			if (nameMatches) {
 				visibleTools = memberTools.map(tool => ({ tool, nameMatches: matchesContiguousSubString(query, tool.displayName ?? tool.id) ?? undefined }));
 			} else {
@@ -755,7 +728,7 @@ export class ToolsListWidget extends Disposable {
 			visibleTools,
 			nameMatches,
 			forceExpanded: query !== '',
-			readOnly: ts.id === 'copilot-cli',
+			readOnly: ts.id === COPILOT_CLI_TOOL_SET_ID,
 			detail: this._resolveSetDetail(ts)
 		};
 	}
@@ -1091,6 +1064,9 @@ export class ToolsListWidget extends Disposable {
 		if (ts.detail) {
 			return ts.detail;
 		}
+		if (ts.source.type === 'mcp') {
+			return localize('toolsSetMcpDetail', "Tools provided by the {0} MCP server.", ts.source.serverLabel ?? ts.source.label);
+		}
 		if (ts.source.type !== 'extension') {
 			return undefined;
 		}
@@ -1163,37 +1139,16 @@ export class ToolsListWidget extends Disposable {
 	}
 }
 
-/**
- * The Copilot CLI's built-in tools, surfaced read-only for reference. Mirrored from the published
- * "Tool availability values" table (the SDK does not expose this list at runtime); keep in sync:
- * https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#tool-availability-values
- */
-const COPILOT_CLI_TOOLS: readonly { readonly name: string; readonly description: string }[] = [
-	// Shell tools
-	{ name: 'bash / powershell', description: localize('copilotCliTool.shell', "Execute commands") },
-	{ name: 'list_bash / list_powershell', description: localize('copilotCliTool.listShell', "List active shell sessions") },
-	{ name: 'read_bash / read_powershell', description: localize('copilotCliTool.readShell', "Read output from a shell session") },
-	{ name: 'stop_bash / stop_powershell', description: localize('copilotCliTool.stopShell', "Terminate a shell session") },
-	{ name: 'write_bash / write_powershell', description: localize('copilotCliTool.writeShell', "Send input to a shell session") },
-	// File operation tools
-	{ name: 'apply_patch', description: localize('copilotCliTool.applyPatch', "Apply patches (used by some models instead of edit/create)") },
-	{ name: 'create', description: localize('copilotCliTool.create', "Create new files") },
-	{ name: 'edit', description: localize('copilotCliTool.edit', "Edit files via string replacement") },
-	{ name: 'view', description: localize('copilotCliTool.view', "Read files or directories") },
-	// Agent and task delegation tools
-	{ name: 'list_agents', description: localize('copilotCliTool.listAgents', "List available agents") },
-	{ name: 'read_agent', description: localize('copilotCliTool.readAgent', "Check background agent status") },
-	{ name: 'task', description: localize('copilotCliTool.task', "Run subagents") },
-	// Other tools
-	{ name: 'ask_user', description: localize('copilotCliTool.askUser', "Ask the user a question") },
-	{ name: 'glob', description: localize('copilotCliTool.glob', "Find files matching patterns") },
-	{ name: 'grep (or rg)', description: localize('copilotCliTool.grep', "Search for text in files") },
-	{ name: 'skill', description: localize('copilotCliTool.skill', "Invoke custom skills") },
-	{ name: 'web_fetch', description: localize('copilotCliTool.webFetch', "Fetch and parse web content") },
-];
+/** Row title for a tool set: MCP groups show the server label; others show their description. */
+function toolSetDisplayName(toolSet: IToolSet): string {
+	if (toolSet.source.type === 'mcp') {
+		return toolSet.source.serverLabel ?? toolSet.source.label ?? toolSet.referenceName;
+	}
+	return toolSet.description ?? toolSet.referenceName;
+}
 
 const CUSTOM_TOOL_SET_ORDER: Record<string, number> = {
-	'copilot-cli': 0,
+	[COPILOT_CLI_TOOL_SET_ID]: 0,
 	'vscode-general': 1,
 	'vscode-tasks': 2,
 	'vscode-browser': 3,
@@ -1203,6 +1158,7 @@ const CUSTOM_TOOL_SET_ORDER: Record<string, number> = {
 function sortKey(toolSet: IToolSet): string {
 	const sourcePriority = toolSet.source.type === 'internal' ? '0' : '1';
 	const order = CUSTOM_TOOL_SET_ORDER[toolSet.id];
-	const orderKey = order !== undefined ? String(order) : `9-${toolSet.description ?? toolSet.referenceName}`;
+	// Built-in sets first (fixed order), then MCP server groups and others sorted by name.
+	const orderKey = order !== undefined ? String(order) : `9-${toolSetDisplayName(toolSet)}`;
 	return `${sourcePriority}-${orderKey}`;
 }

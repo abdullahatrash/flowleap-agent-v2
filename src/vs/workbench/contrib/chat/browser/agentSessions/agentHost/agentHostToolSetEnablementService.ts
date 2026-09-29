@@ -9,6 +9,7 @@ import { parseRemoteAgentHostHarness } from '../../../../../../platform/agentHos
 import { InstantiationType, registerSingleton } from '../../../../../../platform/instantiation/common/extensions.js';
 import { createDecorator } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
+import { isCustomizationToolSet } from './agentHostCustomizationToolSets.js';
 
 export const IAgentHostToolSetEnablementService = createDecorator<IAgentHostToolSetEnablementService>('agentHostToolSetEnablementService');
 
@@ -64,14 +65,19 @@ export function getToolSetTriState(state: IToolEnablementState, toolSetId: strin
 export interface ICountableToolSet {
 	readonly id: string;
 	readonly deprecated?: boolean;
+	readonly source?: { readonly type: string };
 	getTools(reader?: IReader): Iterable<{ readonly id: string }>;
 }
 
-/** Counts the enabled tools across the non-deprecated tool sets surfaced in Chat Customizations → Tools. */
+/**
+ * Counts the enabled tools across the tool sets surfaced in Chat Customizations → Tools. Pass
+ * `getCustomizationToolSets(...)` so the count matches what the section renders; sets outside the
+ * section ({@link isCustomizationToolSet}) are skipped either way.
+ */
 export function countEnabledCustomizationTools(toolSets: Iterable<ICountableToolSet>, state: IToolEnablementState, reader?: IReader): number {
 	const enabled = new Set<string>();
 	for (const ts of toolSets) {
-		if (ts.deprecated) {
+		if (!isCustomizationToolSet(ts)) {
 			continue;
 		}
 		for (const tool of ts.getTools(reader)) {

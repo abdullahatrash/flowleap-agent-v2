@@ -33,8 +33,8 @@ export function getCustomizationToolSets(toolsService: ILanguageModelToolsServic
  * parity with the chat tools picker. Every other `deprecated` set is a to-be-removed local-harness
  * grouping and stays hidden.
  */
-export function isCustomizationToolSet(toolSet: IToolSet): boolean {
-	return !toolSet.deprecated || toolSet.source.type === 'mcp';
+export function isCustomizationToolSet(toolSet: { readonly deprecated?: boolean; readonly source?: { readonly type: string } }): boolean {
+	return !toolSet.deprecated || toolSet.source?.type === 'mcp';
 }
 
 let staticReadOnlyToolSets: readonly IToolSet[] | undefined;
