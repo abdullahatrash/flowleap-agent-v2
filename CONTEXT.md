@@ -188,6 +188,41 @@ an exhausted route: the agent must not substitute web-scraped data for a gated o
 _Avoid_: "provider keys" (CLI legacy naming — align on this term); bare "API keys" (collides
 with the BYOK LLM key); framing the add-keys ask as a paywall — the keys are free.
 
+## Remote Access
+
+**Remote Access**:
+The feature that lets a signed-in user follow and steer their own **Agent Sessions** from another
+device. It is switched on per **Host** by the user. It moves the Agent Session, never the
+FlowLeap Session or the Model Path: inference and files stay on the Host.
+_Avoid_: "Remote Control" — that is Claude Code's name for an unrelated feature; "tunnel" — a
+transport detail, not the feature.
+
+**Agent Session**:
+One conversation with the Patent Agent in the Agents Window: its messages, tool calls,
+permission prompts and outputs. Distinct from the **FlowLeap Session** (sign-in).
+_Avoid_: bare "session" wherever the two could be confused.
+
+**Host**:
+A desktop running FlowLeap, signed in, that offers its Agent Sessions to paired **Viewers**.
+A user may have several Hosts. A Host that is closed or asleep offers nothing.
+
+**Viewer**:
+A device (phone, tablet, another computer) that follows a Host's Agent Sessions through the
+**Relay**. A Viewer can read an Agent Session, answer its permission prompts and send it the
+next message. Several Viewers may follow one Host at the same time.
+
+**Pairing**:
+The one-time act that lets a specific Viewer follow a specific Host. Both sides must belong to
+the same FlowLeap user, and the Host must show the pairing to the user (code or QR). A pair is
+remembered until the user removes it or signs out on the Host. Pairing is also where the two
+sides agree the secret that keeps the Relay blind.
+
+**Relay**:
+FlowLeap's own server that joins a Host and its paired Viewers when neither can reach the other
+directly. It checks that both sides are the same FlowLeap user and forwards bytes it cannot read.
+It stores no Agent Session content and holds nothing while a Host is offline.
+_Avoid_: "proxy" or "backend" — the Relay never sees plaintext and serves no patent data.
+
 ## Patent domain
 
 **Prior-Art Search**:
