@@ -177,7 +177,7 @@ export function getClaudeToolDisplayName(toolName: string): string {
 		case 'WebFetch': return localize('claude.tool.webFetch', "Fetch URL");
 		case 'Task':
 		case 'Agent': return localize('claude.tool.task', "Run subagent task");
-		case 'ExitPlanMode': return localize('claude.tool.exitPlanMode', "Ready to code?");
+		case 'ExitPlanMode': return localize('claude.tool.exitPlanMode', "Approve the plan?");
 		case 'AskUserQuestion': return localize('claude.tool.askUserQuestion', "Ask user a question");
 		case 'Skill': return localize('claude.tool.skill', "Run skill");
 		case 'TaskCreate': return localize('claude.tool.taskCreate', "Create task");

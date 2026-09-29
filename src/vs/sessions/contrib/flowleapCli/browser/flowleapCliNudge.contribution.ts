@@ -9,14 +9,7 @@ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase 
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsProvider } from '../../../services/sessions/common/sessionsProvider.js';
-import { FlowLeapCliNudge } from './flowleapCliNudge.js';
-
-/**
- * Session type id of Claude sessions, as registered by the Copilot chat
- * sessions provider (`ClaudeCodeSessionType`). Kept as a local constant since
- * import patterns forbid cross-contribution imports.
- */
-const CLAUDE_CODE_SESSION_TYPE_ID = 'claude-code';
+import { FlowLeapCliNudge, isClaudeSessionType } from './flowleapCliNudge.js';
 
 /**
  * Triggers the {@link FlowLeapCliNudge} the first time a Claude session shows
@@ -73,7 +66,7 @@ class FlowLeapCliNudgeContribution extends Disposable implements IWorkbenchContr
 }
 
 function isClaudeSession(session: ISession): boolean {
-	return session.sessionType === CLAUDE_CODE_SESSION_TYPE_ID;
+	return isClaudeSessionType(session.sessionType);
 }
 
 registerWorkbenchContribution2(FlowLeapCliNudgeContribution.ID, FlowLeapCliNudgeContribution, WorkbenchPhase.Eventually);

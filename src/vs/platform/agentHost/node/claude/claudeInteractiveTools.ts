@@ -38,7 +38,7 @@ export function buildExitPlanModeConfirmationState(input: Record<string, unknown
 		displayName: getClaudeToolDisplayName('ExitPlanMode'),
 		invocationMessage: { markdown: plan },
 		toolInput: JSON.stringify(input),
-		confirmationTitle: localize('claude.exitPlanMode.title', "Ready to code?"),
+		confirmationTitle: localize('claude.exitPlanMode.title', "Approve the plan?"),
 		options: [
 			{ id: 'approve', label: localize('claude.exitPlanMode.approve', "Approve"), kind: ConfirmationOptionKind.Approve },
 			{ id: 'deny', label: localize('claude.exitPlanMode.deny', "Deny"), kind: ConfirmationOptionKind.Deny },

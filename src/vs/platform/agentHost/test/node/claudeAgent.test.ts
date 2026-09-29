@@ -7503,10 +7503,10 @@ suite('ClaudeAgent (Phase 7 §3.5 — INTERACTIVE_CLAUDE_TOOLS)', () => {
 					status: ToolCallStatus.PendingConfirmation,
 					toolCallId: 'tu_plan_ok',
 					toolName: 'ExitPlanMode',
-					displayName: 'Ready to code?',
+					displayName: 'Approve the plan?',
 					invocationMessage: { markdown: '1. Read foo\n2. Edit foo' },
 					toolInput: '{"plan":"1. Read foo\\n2. Edit foo"}',
-					confirmationTitle: 'Ready to code?',
+					confirmationTitle: 'Approve the plan?',
 					options: [
 						{ id: 'approve', label: 'Approve', kind: 'approve' },
 						{ id: 'deny', label: 'Deny', kind: 'deny' },

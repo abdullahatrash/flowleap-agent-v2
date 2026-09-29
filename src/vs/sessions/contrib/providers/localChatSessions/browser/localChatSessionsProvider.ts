@@ -30,7 +30,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
 import { getRegisteredLanguageModels, resolveModelIdentifierFromLanguageModels } from '../../../../../workbench/contrib/chat/common/modelSelection.js';
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { createLocalChangesets } from '../../claudeChatSessions/browser/localChangesets.js';
+import { createLocalChangesets } from './localChangesets.js';
 import { IMarkdownString } from '../../../../../base/common/htmlContent.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 

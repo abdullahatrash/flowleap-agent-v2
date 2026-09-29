@@ -34,8 +34,8 @@ import { isCancellationError } from '../../../../../../../base/common/errors.js'
 import { IEditorService } from '../../../../../../services/editor/common/editorService.js';
 import { getChatSessionType } from '../../../../common/model/chatUri.js';
 import { ICustomizationHarnessService } from '../../../../common/customizationHarnessService.js';
-import { ChatModeKind } from '../../../../common/constants.js';
 import { PatentIdeContextKeys } from '../../../../../../common/patent/patentIdeContextKeys.js';
+import { getPatentModeInputPlaceholder } from '../../../../common/widget/patentInputPlaceholder.js';
 
 const decorationDescription = 'chat';
 const placeholderDecorationType = 'chat-session-detail';
@@ -59,28 +59,6 @@ function exactlyOneSpaceAfterPart(parsedRequest: readonly IParsedChatRequestPart
 
 	const nextPart = parsedRequest[partIdx + 1];
 	return nextPart && nextPart instanceof ChatRequestTextPart && nextPart.text === ' ';
-}
-
-/**
- * Returns the patent-voice chat input placeholder for the given mode when Patent IDE mode is
- * enabled, or `undefined` to fall back to the upstream mode description. Mirrors the per-mode
- * welcome-title override in {@link ChatWidget} so the input strip speaks the same voice.
- *
- * @param modeKind The kind of the currently active chat mode.
- * @param isPatentMode Whether Patent IDE mode is enabled (from the `patentIdeMode` context key).
- */
-export function getPatentModeInputPlaceholder(modeKind: ChatModeKind, isPatentMode: boolean): string | undefined {
-	if (!isPatentMode) {
-		return undefined;
-	}
-	switch (modeKind) {
-		case ChatModeKind.Ask:
-			return localize('patentChatInputPlaceholder.ask', "Ask about patents, claims, or prior art");
-		case ChatModeKind.Edit:
-			return localize('patentChatInputPlaceholder.edit', "Describe the document changes to make");
-		default:
-			return localize('patentChatInputPlaceholder.agent', "Describe a patent research task");
-	}
 }
 
 class InputEditorDecorations extends Disposable {
