@@ -857,7 +857,9 @@ class AICustomizationManagementActionsContribution extends Disposable implements
 				const input = AICustomizationManagementEditorInput.getOrCreate();
 				const pane = await editorService.openEditor(input, { pinned: true });
 				if (pane instanceof AICustomizationManagementEditor) {
-					const targetSection = section ?? AICustomizationManagementSection.McpServers;
+					// FlowLeap: default to the Plugins section (Skill Packs), the same destination
+					// as the Skills section's "Browse Skill Packs" action.
+					const targetSection = section ?? AICustomizationManagementSection.Plugins;
 					pane.selectSectionById(targetSection, { showMarketplace: true });
 				}
 			}

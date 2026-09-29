@@ -10,7 +10,13 @@ import { ChatConfiguration } from '../constants.js';
 
 export { extraKnownMarketplacesToConfigDict } from '../../../../../base/common/managedSettings.js';
 
-export const DEFAULT_PLUGIN_MARKETPLACE = 'github/awesome-copilot#marketplace';
+/**
+ * The FlowLeap plugin marketplace shipped as the app's out-of-box default source for
+ * {@link ChatConfiguration.PluginMarketplaces}. It is first-party curated content, so it
+ * is implicitly trusted (see {@link isDefaultMarketplaceReference}); marketplaces the user
+ * adds keep the standard trust-confirmation flow.
+ */
+export const DEFAULT_PLUGIN_MARKETPLACE = 'flowleap-ai/flowleap-plugins';
 
 export const enum MarketplaceReferenceKind {
 	GitHubShorthand = 'githubShorthand',
@@ -381,4 +387,14 @@ function getRefCacheSegments(ref: string | undefined): string[] {
 
 function sanitizePathSegment(value: string): string {
 	return value.replace(/[\\/:*?"<>|]/g, '_');
+}
+
+/**
+ * Whether a marketplace reference resolves to the app's product-default marketplace
+ * ({@link DEFAULT_PLUGIN_MARKETPLACE}). The default marketplace is first-party curated
+ * content and is implicitly trusted, so installing from it skips the "plugins can run code"
+ * confirmation. This checks against the shipped default and never writes storage.
+ */
+export function isDefaultMarketplaceReference(reference: IMarketplaceReference): boolean {
+	return reference.canonicalId === parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)?.canonicalId;
 }

@@ -29,6 +29,7 @@ import { IEnvironmentService } from '../../../../../../platform/environment/comm
 import { AutoUpdateConfigurationValue, IExtensionsWorkbenchService } from '../../../../extensions/common/extensions.js';
 import { ChatConfiguration } from '../../../common/constants.js';
 import { IAgentPluginRepositoryService } from '../../../common/plugins/agentPluginRepositoryService.js';
+import { DEFAULT_PLUGIN_MARKETPLACE } from '../../../common/plugins/marketplaceReference.js';
 import { IMarketplacePlugin, IMarketplaceReference, IPluginSourceDescriptor, MarketplaceReferenceKind, MarketplaceType, PluginMarketplaceService, PluginSourceKind, extraKnownMarketplacesToConfigDict, getPluginSourceLabel, parseMarketplaceReference, parseMarketplaceReferences, parsePluginSource, readConfiguredMarketplaces } from '../../../common/plugins/pluginMarketplaceService.js';
 import { IWorkspacePluginSettingsService } from '../../../common/plugins/workspacePluginSettingsService.js';
 
@@ -691,6 +692,17 @@ suite('PluginMarketplaceService - getMarketplacePluginMetadata', () => {
 		const result = service.getMarketplacePluginMetadata(pluginUri);
 
 		assert.deepStrictEqual(result, plugin);
+	});
+
+	test('pre-trusts only the product-default marketplace', () => {
+		const service = createService();
+		assert.deepStrictEqual({
+			productDefault: service.isMarketplaceTrusted(parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)!),
+			userAdded: service.isMarketplaceTrusted(marketplaceRef),
+		}, {
+			productDefault: true,
+			userAdded: false,
+		});
 	});
 
 	test('returns undefined for a URI that is not installed', () => {

@@ -27,6 +27,7 @@ import { IProductService } from '../../../../../../platform/product/common/produ
 import { IRequestService } from '../../../../../../platform/request/common/request.js';
 import { ICopilotConnector, ICopilotConnectorsService } from '../../../browser/aiCustomization/copilotConnectorsService.js';
 import { CustomizationMarketplaceWorkbenchService, PlatformCustomizationMarketplaceWorkbenchService } from '../../../browser/aiCustomization/customizationMarketplaceWorkbenchService.js';
+import { DEFAULT_PLUGIN_MARKETPLACE } from '../../../common/plugins/marketplaceReference.js';
 
 suite('CustomizationMarketplaceWorkbenchService', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -202,7 +203,7 @@ suite('CustomizationMarketplaceWorkbenchService', () => {
 		await configuration.setUserConfiguration(CustomizationMarketplaceConfiguration.MarketplaceEnabled, true);
 		await configuration.setUserConfiguration(ChatConfiguration.PluginsEnabled, true);
 		const customReference = parseMarketplaceReference('owner/catalog')!;
-		const defaultReference = parseMarketplaceReference('github/awesome-copilot#marketplace')!;
+		const defaultReference = parseMarketplaceReference(DEFAULT_PLUGIN_MARKETPLACE)!;
 		let publicCalls = 0;
 		const pluginCalls: string[] = [];
 		const instantiationService = store.add(new TestInstantiationService());
