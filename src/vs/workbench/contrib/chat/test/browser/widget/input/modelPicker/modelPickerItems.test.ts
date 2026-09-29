@@ -430,7 +430,7 @@ suite('buildModelPickerItems', () => {
 	test('setupRequired shows an explanatory header and a Sign In action instead of auto', () => {
 		const items = callBuild([], { setupRequired: true, showManageModelsInSetupRequired: true, onRequestSetup: () => { } });
 		const actions = getActionItems(items);
-		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'Sign in to use Copilot'));
+		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'Sign in to use FlowLeap'));
 		assert.strictEqual(actions.length, 2);
 		assert.strictEqual(actions[0].item?.id, 'setupRequiredSignIn');
 		assert.strictEqual(actions[0].item?.enabled, true);
@@ -1045,7 +1045,7 @@ suite('buildModelPickerItems', () => {
 		assert.strictEqual(promoted.badge, 'OpenAI Compatible');
 	});
 
-	test('Other Models splits agent-host models into sections by their modelGroup and labels copilotcli as Copilot', () => {
+	test('Other Models splits agent-host models into sections by their modelGroup and labels copilotcli as CLI Agent', () => {
 		// Agent-host models all share one vendor but declare their upstream provider's
 		// vendor id via `modelGroup`; the picker resolves each group's display name from
 		// the vendor registry and renders one section per provider instead of collapsing
@@ -1063,7 +1063,7 @@ suite('buildModelPickerItems', () => {
 		const items = callBuild([auto, cli, openai, hf], { languageModelsService: service });
 		const labelledSeparators = items.filter(i => i.kind === ActionListItemKind.Separator && i.label);
 		// Buckets sorted alphabetically by resolved group display name.
-		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['Copilot', 'Hugging Face', 'OpenAI']);
+		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['CLI Agent', 'Hugging Face', 'OpenAI']);
 	});
 
 	test('Other Models resolves a trusted source label without a synthetic vendor descriptor', () => {
@@ -1084,7 +1084,7 @@ suite('buildModelPickerItems', () => {
 		const items = callBuild([auto, cli, chatgpt], { languageModelsService: service });
 		const labelledSeparators = items.filter(i => i.kind === ActionListItemKind.Separator && i.label);
 
-		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['ChatGPT', 'Copilot']);
+		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['ChatGPT', 'CLI Agent']);
 	});
 
 	test('Other Models respects the configured BYOK group name for agent-host models', () => {
@@ -1104,7 +1104,7 @@ suite('buildModelPickerItems', () => {
 		const items = callBuild([auto, cli, googleWithByokIdentifier], { languageModelsService: service });
 		const labelledSeparators = items.filter(i => i.kind === ActionListItemKind.Separator && i.label);
 
-		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['Copilot', 'GoogleBYOK']);
+		assert.deepStrictEqual(labelledSeparators.map(s => s.label), ['CLI Agent', 'GoogleBYOK']);
 	});
 
 	test('Other Models keeps identically named agent-host BYOK groups from different providers separate', () => {
@@ -1541,8 +1541,8 @@ suite('buildModelPickerItems', () => {
 		const nextSeparatorIndex = items.findIndex((item, index) => index > pinnedSepIndex && item.kind === ActionListItemKind.Separator);
 		const pinnedItems = items.slice(pinnedSepIndex + 1, nextSeparatorIndex);
 		assert.deepStrictEqual(pinnedItems.map(item => ({ provider: item.badge, name: item.label })), [
-			{ provider: 'Copilot', name: 'Alpha' },
-			{ provider: 'Copilot', name: 'Zeta' },
+			{ provider: 'CLI Agent', name: 'Alpha' },
+			{ provider: 'CLI Agent', name: 'Zeta' },
 			{ provider: 'Open Router', name: 'Alpha' },
 			{ provider: 'Open Router', name: 'Zeta' },
 		]);

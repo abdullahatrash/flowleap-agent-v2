@@ -100,7 +100,7 @@ export function buildModelPickerDestinations(
 
 	const builtInVendor = languageModelsService.getVendors().find(vendor => vendor.isDefault);
 	const builtInVendorId = builtInVendor?.vendor ?? COPILOT_VENDOR_ID;
-	const builtInLabel = builtInVendor?.displayName ?? localize('chat.modelPicker.builtInProvider', "GitHub Copilot");
+	const builtInLabel = builtInVendor?.displayName ?? localize('chat.modelPicker.builtInProvider', "FlowLeap");
 	const builtInPlaceholders = placeholders.filter(placeholder => placeholder.vendor === builtInVendorId);
 	const userPlaceholders = placeholders.filter(placeholder => placeholder.vendor !== builtInVendorId);
 

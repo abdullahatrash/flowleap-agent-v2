@@ -784,12 +784,12 @@ export class AgentsHandoffInputTipContribution extends Disposable implements IWo
 		// than a generic "continue in agents" upsell.
 		const useEmptyWorkspaceCopy = emptyWorkspaceEligible && !eligible;
 		const message = this._titleTreatment ?? (useEmptyWorkspaceCopy
-			? localize('chat.agentsHandoff.tip.emptyWorkspace.message', "Copilot isn't available without an open folder")
+			? localize('chat.agentsHandoff.tip.emptyWorkspace.message', "CLI Agent isn't available without an open folder")
 			: localize('chat.agentsHandoff.tip.message', "Continue this session in the Agents Window"));
 		const description = this._descriptionTreatment ?? (useEmptyWorkspaceCopy
-			? localize('chat.agentsHandoff.tip.emptyWorkspace.description', "Open the Agents Window to start a Copilot session.")
+			? localize('chat.agentsHandoff.tip.emptyWorkspace.description', "Open the Agents Window to start a CLI Agent session.")
 			: mode === AgentsHandoffTipMode.Custom
-				? localize('chat.agentsHandoff.tip.description.copilot', "Free with your Copilot plan — get a dedicated, multi-pane view alongside your workspace.")
+				? localize('chat.agentsHandoff.tip.description.copilot', "Free with your FlowLeap plan — get a dedicated, multi-pane view alongside your workspace.")
 				: localize('chat.agentsHandoff.tip.description', "Get a dedicated, multi-pane view alongside your workspace."));
 		const actionLabel = useEmptyWorkspaceCopy
 			? localize('chat.agentsHandoff.tip.action', "Open in Agents Window")

@@ -737,7 +737,7 @@ suite('PromptValidator', () => {
 			const markers = await validate(content, PromptsType.agent);
 			const messages = markers.map(m => m.message);
 			assert.deepStrictEqual(messages, [
-				'Attribute \'handoffs\' is not supported in custom GitHub Copilot agent files. Supported: description, github, infer, mcp-servers, model, name, reasoning-effort, target, tools.',
+				'Attribute \'handoffs\' is not supported in custom FlowLeap agent files. Supported: description, github, infer, mcp-servers, model, name, reasoning-effort, target, tools.',
 			], 'Only handoffs is unsupported for github-copilot target, model and reasoning-effort are supported');
 		});
 
