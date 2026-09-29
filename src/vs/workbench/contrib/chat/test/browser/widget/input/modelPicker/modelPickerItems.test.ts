@@ -12,18 +12,20 @@ import { ActionListItemKind, IActionListItem } from '../../../../../../../../pla
 import { IActionWidgetDropdownAction } from '../../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { StateType } from '../../../../../../../../platform/update/common/update.js';
 import { buildModelPickerItems, getControlModelsForEntitlement, getModelPickerAccessibilityProvider, getModelPickerControlModels } from '../../../../../browser/widget/input/modelPicker/modelPickerItems.js';
+import { IByokNoModelActions } from '../../../../../browser/widget/input/modelPicker/modelPickerItemTypes.js';
 import { filterModelsForSession } from '../../../../../browser/widget/input/chatInputModelUtils.js';
 import { ChatAgentLocation, ChatModeKind } from '../../../../../common/constants.js';
 import { ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelsService, IModelControlEntry, IModelsControlManifest } from '../../../../../common/languageModels.js';
 import { ChatEntitlement, IChatEntitlementService } from '../../../../../../../services/chat/common/chatEntitlementService.js';
 import { languageModelSourcePresentationRegistry } from '../../../../../common/languageModelSourcePresentation.js';
 
-function createStubEntitlementService(opts?: { entitlement?: ChatEntitlement; isInternal?: boolean; anonymous?: boolean }): IChatEntitlementService {
+function createStubEntitlementService(opts?: { entitlement?: ChatEntitlement; isInternal?: boolean; anonymous?: boolean; clientByokEnabled?: boolean }): IChatEntitlementService {
 	return {
 		entitlement: opts?.entitlement ?? ChatEntitlement.Pro,
 		sentiment: { completed: true } as IChatEntitlementService['sentiment'],
 		isInternal: opts?.isInternal ?? false,
 		anonymous: opts?.anonymous ?? false,
+		clientByokEnabled: opts?.clientByokEnabled ?? false,
 	} as IChatEntitlementService;
 }
 
@@ -146,12 +148,15 @@ function callBuild(
 		onRequestSetup?: () => void;
 		onSelect?: (model: ILanguageModelChatMetadataAndIdentifier) => void;
 		entitlementService?: IChatEntitlementService;
+		clientByokEnabled?: boolean;
+		byokNoModelActions?: IByokNoModelActions;
 	} = {},
 ): IActionListItem<IActionWidgetDropdownAction>[] {
 	const onSelect = opts.onSelect ?? (() => { });
 	const entitlementService = opts.entitlementService ?? createStubEntitlementService({
 		entitlement: opts.entitlement ?? ChatEntitlement.Pro,
 		anonymous: opts.anonymous ?? false,
+		clientByokEnabled: opts.clientByokEnabled ?? false,
 	});
 	return buildModelPickerItems({
 		models,
@@ -183,6 +188,7 @@ function callBuild(
 			onRequestTrust: opts.onRequestTrust,
 			onRequestSetup: opts.onRequestSetup,
 		},
+		byokNoModelActions: opts.byokNoModelActions,
 	});
 }
 
@@ -338,6 +344,34 @@ suite('buildModelPickerItems', () => {
 		const noModels = actions.find(a => a.item?.id === 'noModels');
 		assert.ok(noModels, 'expected a no-models entry');
 		assert.strictEqual(noModels!.description, undefined);
+	});
+
+	test('BYOK with no models offers both the sign-in and the add-key path while signed out', () => {
+		const items = callBuild([], { showAutoModel: false, clientByokEnabled: true, byokNoModelActions: { signedOut: true } });
+		const noModels = getActionItems(items).find(a => a.item?.id === 'noModels');
+		assert.deepStrictEqual(
+			{
+				description: (noModels?.description as MarkdownString | undefined)?.value,
+				hover: (noModels?.hover?.content as MarkdownString | undefined)?.value,
+			},
+			{
+				description: '[Sign In](command:flowleap.signIn " ") · [Add Model](command:workbench.action.chat.manage " ")',
+				hover: '[Sign in](command:flowleap.signIn " ") to FlowLeap to use the free Trial models, or [add your AI model](command:workbench.action.chat.manage " ") with your own API key.',
+			});
+	});
+
+	test('BYOK with no models offers only the add-key path while signed in', () => {
+		const items = callBuild([], { showAutoModel: false, clientByokEnabled: true, byokNoModelActions: { signedOut: false } });
+		const noModels = getActionItems(items).find(a => a.item?.id === 'noModels');
+		assert.deepStrictEqual(
+			{
+				description: (noModels?.description as MarkdownString | undefined)?.value,
+				hover: (noModels?.hover?.content as MarkdownString | undefined)?.value,
+			},
+			{
+				description: '[Add Model](command:workbench.action.chat.manage " ")',
+				hover: '[Add your AI model](command:workbench.action.chat.manage " ") with your own API key to start chatting.',
+			});
 	});
 
 	test('showAutoModel=false with available models shows the models, not the empty state', () => {

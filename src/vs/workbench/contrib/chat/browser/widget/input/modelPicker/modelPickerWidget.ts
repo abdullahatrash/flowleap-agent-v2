@@ -24,6 +24,7 @@ import { IActionWidgetService } from '../../../../../../../platform/actionWidget
 import { IActionWidgetDropdownAction } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { AgentHostAllowSignedOutWhenUsableSettingId } from '../../../../../../../platform/agentHost/common/agentService.js';
 import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
 import { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../../../../platform/product/common/productService.js';
@@ -51,6 +52,12 @@ import { IModelPickerProviderPlaceholder } from './modelPickerTabs.js';
 import { getModelPickerUnavailableReason, isAutoModel, isHydraFusionModel, ModelPickerUnavailableReason, modelPickerRequiresSetup, shouldShowCacheBreakHint as computeShouldShowCacheBreakHint } from './modelPickerPresentation.js';
 
 const CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY = 'chat.cacheBreakHintDismissed';
+
+/**
+ * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
+ * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
+ */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
 
 /** Opt-in setting for the tabbed model picker and its model details page. */
 export const TABBED_MODEL_PICKER_SETTING_ID = 'chat.experimentalModelPicker';
@@ -162,6 +169,7 @@ export class ModelPickerWidget extends Disposable {
 		@IStorageService private readonly _storageService: IStorageService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 	) {
 		super();
 		this._configuration = this._instantiationService.createInstance(ModelPickerConfiguration, {
@@ -669,6 +677,7 @@ export class ModelPickerWidget extends Disposable {
 				onRequestTrust: () => { void this._requestWorkspaceTrust(); },
 				onRequestSetup: () => { this._requestSetup(); },
 			},
+			byokNoModelActions: { signedOut: this._contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true },
 		});
 
 		// Collect all hover disposables so they are properly cleaned up when the

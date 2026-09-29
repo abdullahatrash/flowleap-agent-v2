@@ -12,6 +12,7 @@ import { localize } from '../../../../../../../nls.js';
 import { ActionListItemKind, IActionListItem } from '../../../../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetDropdownAction } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { ChatEntitlement } from '../../../../../../services/chat/common/chatEntitlementService.js';
+import { MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
 import { IModelControlEntry, ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier } from '../../../../common/languageModels.js';
 import { buildModelToProviderGroupMap, createModelAction, createModelItem, createPinAction, createUnavailableModelItem, getProviderGroupForModel, getProviderGroupKey, getUnavailableReason, isVersionAtLeast, ProviderGroupKey, requiresNewerVSCode } from './modelPickerItemPrimitives.js';
 import type { IBuildModelPickerItemsOptions } from './modelPickerItemTypes.js';
@@ -23,6 +24,12 @@ export const ModelPickerSection = {
 
 export const RESTRICTED_MODE_TRUST_ACTION_ID = 'restrictedModeTrust';
 export const SETUP_REQUIRED_SIGN_IN_ACTION_ID = 'setupRequiredSignIn';
+
+/**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
 
 function createSyntheticAutoItem(): IActionListItem<IActionWidgetDropdownAction> {
 	return createModelItem({
@@ -102,13 +109,26 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 	if (showAutoModel) {
 		return undefined;
 	}
+	// In FlowLeap's BYOK-only mode the entry carries the ways out of the no-model state;
+	// otherwise, for Copilot Free / Student users, it carries an inline upgrade link.
+	const byokActions = options.chatEntitlementService.clientByokEnabled ? options.byokNoModelActions : undefined;
 	const entitlement = options.chatEntitlementService.entitlement;
-	const canUpgrade = entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU;
-	const description = canUpgrade
-		? new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true })
-		: undefined;
-	const hover = canUpgrade ? new MarkdownString('', { isTrusted: true, supportThemeIcons: true }) : undefined;
-	hover?.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+	const canUpgrade = !byokActions && (entitlement === ChatEntitlement.Free || entitlement === ChatEntitlement.EDU);
+	let description: MarkdownString | undefined;
+	let hover: MarkdownString | undefined;
+	if (byokActions) {
+		description = new MarkdownString(byokActions.signedOut
+			? localize('chat.modelPicker.byokNoModels.linksSignedOut', "[Sign In](command:{0} \" \") · [Add Model](command:{1} \" \")", FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID)
+			: localize('chat.modelPicker.byokNoModels.links', "[Add Model](command:{0} \" \")", MANAGE_CHAT_COMMAND_ID), { isTrusted: true });
+		hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
+		hover.appendMarkdown(byokActions.signedOut
+			? localize('chat.modelPicker.byokNoModels.hoverSignedOut', "[Sign in](command:{0} \" \") to FlowLeap to use the free Trial models, or [add your AI model](command:{1} \" \") with your own API key.", FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID)
+			: localize('chat.modelPicker.byokNoModels.hover', "[Add your AI model](command:{0} \" \") with your own API key to start chatting.", MANAGE_CHAT_COMMAND_ID));
+	} else if (canUpgrade) {
+		description = new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true });
+		hover = new MarkdownString('', { isTrusted: true, supportThemeIcons: true });
+		hover.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+	}
 	return [{
 		item: {
 			id: 'noModels',

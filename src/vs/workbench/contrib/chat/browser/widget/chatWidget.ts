@@ -37,6 +37,7 @@ import { IAccessibilityService } from '../../../../../platform/accessibility/com
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKey, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IAgentHostService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -45,6 +46,7 @@ import { ITextResourceEditorInput } from '../../../../../platform/editor/common/
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { bindContextKey } from '../../../../../platform/observable/common/platformObservableUtils.js';
 import { Link } from '../../../../../platform/opener/browser/link.js';
 import product from '../../../../../platform/product/common/product.js';
@@ -299,6 +301,21 @@ const supportsAllAttachments: Required<Omit<IChatAgentAttachmentCapabilities, 't
 };
 
 const DISCLAIMER = localize('chatDisclaimer', "AI responses may be inaccurate");
+
+/**
+ * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
+ * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
+ */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
+
+/** Set form for {@link IContextKeyService.onDidChangeContext} `affectsSome` checks. */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEYS = new Set([FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
+
+/**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
 
 /** Set on the container when {@link IChatWidgetViewOptions.persistentContentHeight} is, floating the persistent content. */
 export const chatFloatingPersistentContentClass = 'chat-floating-persistent-content';
@@ -631,6 +648,8 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		@IAgentHostNewSessionFolderService private readonly _agentHostNewSessionFolderService: IAgentHostNewSessionFolderService,
 		@IUriIdentityService private readonly _uriIdentityService: IUriIdentityService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
+		@INotificationService private readonly notificationService: INotificationService,
+		@ICommandService private readonly commandService: ICommandService,
 	) {
 		super();
 		this._persistentContentHeight = viewOptions.persistentContentHeight ?? 0;
@@ -1611,6 +1630,25 @@ export class ChatWidget extends Disposable implements IChatWidget {
 	}
 
 	/**
+	 * Whether FlowLeap Patent IDE runs in its BYOK-only mode with no language model connected. A
+	 * chat turn cannot run in this state, so both the empty-state welcome and the send gate in
+	 * {@link _acceptInput} branch on it.
+	 */
+	private isByokWithoutModel(): boolean {
+		return PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false
+			&& this.chatEntitlementService.clientByokEnabled
+			&& !this.chatEntitlementService.hasByokModels;
+	}
+
+	/**
+	 * Whether there is no FlowLeap Session. Signed-out users have a second way out of the no-model
+	 * state (sign in to get the free Trial models) that signed-in users do not (ADR 0005).
+	 */
+	private isFlowLeapSignedOut(): boolean {
+		return this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) !== true;
+	}
+
+	/**
 	 * Renders the welcome view content when needed.
 	 */
 	private renderWelcomeViewContentIfNeeded() {
@@ -1638,14 +1676,22 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				if (this.chatEntitlementService.anonymous && !this.chatEntitlementService.sentiment.completed) {
 					const providers = product.defaultChatAgent.provider;
 					additionalMessage = new MarkdownString(localize({ key: 'settings', comment: ['{Locked="]({2})"}', '{Locked="]({3})"}'] }, "By continuing with {0} Copilot, you agree to {1}'s [Terms]({2}) and [Privacy Statement]({3}).", providers.default.name, providers.default.name, product.defaultChatAgent.termsStatementUrl, product.defaultChatAgent.privacyStatementUrl), { isTrusted: true });
-				} else if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false && this.chatEntitlementService.clientByokEnabled && !this.chatEntitlementService.hasByokModels) {
+				} else if (this.isByokWithoutModel()) {
 					// FlowLeap Patent IDE is BYOK-only: with no model connected a chat turn cannot run,
-					// so the empty state must carry the one-click path to the Manage Language Models editor.
-					additionalMessage = new MarkdownString(localize(
-						'chatWidget.connectModel',
-						"No AI model connected yet. [Add your AI model]({0}) with your own API key to start chatting.",
-						`command:${MANAGE_CHAT_COMMAND_ID}`
-					), { isTrusted: { enabledCommands: [MANAGE_CHAT_COMMAND_ID] } });
+					// so the empty state must carry the one-click paths out. Signed out there are two
+					// (sign in for the free Trial models, or bring an own key); signed in there is one.
+					additionalMessage = this.isFlowLeapSignedOut()
+						? new MarkdownString(localize(
+							'chatWidget.connectModelSignedOut',
+							"No AI model connected yet. [Sign in]({0}) to use the free Trial models, or [add your AI model]({1}) with your own API key.",
+							`command:${FLOWLEAP_SIGN_IN_COMMAND_ID}`,
+							`command:${MANAGE_CHAT_COMMAND_ID}`
+						), { isTrusted: { enabledCommands: [FLOWLEAP_SIGN_IN_COMMAND_ID, MANAGE_CHAT_COMMAND_ID] } })
+						: new MarkdownString(localize(
+							'chatWidget.connectModel',
+							"No AI model connected yet. [Add your AI model]({0}) with your own API key to start chatting.",
+							`command:${MANAGE_CHAT_COMMAND_ID}`
+						), { isTrusted: { enabledCommands: [MANAGE_CHAT_COMMAND_ID] } });
 				} else {
 					additionalMessage = defaultAgent?.metadata.additionalWelcomeMessage;
 				}
@@ -2738,9 +2784,11 @@ export class ChatWidget extends Disposable implements IChatWidget {
 			if (e.affectsSome(foregroundSessionCountContextKeys) && this.isEmpty()) {
 				this.renderGettingStartedTipIfNeeded();
 			}
-			if (e.affectsSome(hasByokModelsContextKeys)) {
+			if (e.affectsSome(hasByokModelsContextKeys) || e.affectsSome(FLOWLEAP_SIGNED_IN_CONTEXT_KEYS)) {
 				// Also refreshes the welcome content: the empty-state "add your AI model" nudge
 				// must appear/disappear as the key flips (this ends in updateChatViewVisibility).
+				// The sign-in key is watched too because the nudge offers the Trial-model path
+				// only while signed out.
 				this.renderWelcomeViewContentIfNeeded();
 			}
 		}));
@@ -3374,6 +3422,37 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		return true;
 	}
 
+	/**
+	 * Tells the user that no language model is connected and offers every way out of that state:
+	 * signing in to FlowLeap for the free Trial models (signed out only) and adding an own API key
+	 * through the Manage Language Models editor (ADR 0005).
+	 */
+	private promptForMissingModel(): void {
+		const addModelChoice = {
+			label: localize('chatWidget.noModel.addModel', "Add Your AI Model"),
+			run: () => { void this.commandService.executeCommand(MANAGE_CHAT_COMMAND_ID); }
+		};
+		if (this.isFlowLeapSignedOut()) {
+			this.notificationService.prompt(
+				Severity.Info,
+				localize('chatWidget.noModel.signedOut', "No AI model connected. Sign in to FlowLeap to use the free Trial models, or add your own API key."),
+				[
+					{
+						label: localize('chatWidget.noModel.signIn', "Sign In"),
+						run: () => { void this.commandService.executeCommand(FLOWLEAP_SIGN_IN_COMMAND_ID); }
+					},
+					addModelChoice
+				]
+			);
+			return;
+		}
+		this.notificationService.prompt(
+			Severity.Info,
+			localize('chatWidget.noModel.signedIn', "No AI model connected. Add your own API key to start chatting."),
+			[addModelChoice]
+		);
+	}
+
 	private async _acceptInput(query: { query: string } | undefined, options: IChatAcceptInputOptions = {}, onDidCreateResponse?: IChatSendRequestOptions['onDidCreateResponse']): Promise<IChatResponseModel | undefined> {
 		if (this.isTranscriptProgressActive) {
 			return undefined;
@@ -3394,6 +3473,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
 
 		if (!this.viewModel) {
 			return;
+		}
+
+		// FlowLeap Patent IDE is BYOK-only: with no model connected the request dies deep in the
+		// extension host with a generic "Language model unavailable" error that names neither way
+		// out. Gate the send here and offer both paths instead. Only user-typed queries are gated
+		// (`query` is set for programmatic sends, edits and queued sends), and the typed text is
+		// left in the input so nothing is lost.
+		if (!query && this.isByokWithoutModel() && !this.input.currentLanguageModel) {
+			this.promptForMissingModel();
+			return undefined;
 		}
 
 		let savedBeforeSend = false;
