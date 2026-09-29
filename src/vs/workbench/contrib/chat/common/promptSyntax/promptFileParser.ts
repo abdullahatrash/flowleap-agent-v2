@@ -69,6 +69,7 @@ interface ParsedHeader {
 export namespace PromptHeaderAttributes {
 	export const name = 'name';
 	export const description = 'description';
+	export const icon = 'icon';
 	export const agent = 'agent';
 	export const mode = 'mode';
 	export const model = 'model';
@@ -168,6 +169,14 @@ export class PromptHeader {
 
 	public get description(): string | undefined {
 		return this.getStringAttribute(PromptHeaderAttributes.description);
+	}
+
+	/**
+	 * Optional icon id (a codicon id such as `search`) shown next to the
+	 * agent in the chat mode picker. When unset, custom agent modes render without an icon.
+	 */
+	public get icon(): string | undefined {
+		return this.getStringAttribute(PromptHeaderAttributes.icon);
 	}
 
 	public get agent(): string | undefined {
