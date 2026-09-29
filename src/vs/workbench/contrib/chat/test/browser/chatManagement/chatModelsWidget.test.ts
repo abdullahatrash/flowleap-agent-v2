@@ -213,7 +213,7 @@ suite('ChatModelsWidget', () => {
 				actions: actions.map(action => action instanceof Separator ? 'separator' : `${action.id}:${action.label}`),
 				ran,
 			}, {
-				actions: ['signIn-github-copilot:GitHub Copilot', 'separator', 'enable-anthropic:Anthropic'],
+				actions: ['signIn-github-copilot:FlowLeap', 'separator', 'enable-anthropic:Anthropic'],
 				ran: ['copilot', 'anthropic'],
 			});
 		});
@@ -228,7 +228,7 @@ suite('ChatModelsWidget', () => {
 
 			assert.deepStrictEqual(
 				actions.map(action => action instanceof Separator ? 'separator' : `${action.id}:${action.label}`),
-				['signIn-github-copilot:GitHub Copilot'],
+				['signIn-github-copilot:FlowLeap'],
 			);
 		});
 
