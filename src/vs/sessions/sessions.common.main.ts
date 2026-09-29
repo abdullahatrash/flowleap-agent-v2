@@ -474,6 +474,8 @@ import './contrib/chat/browser/customizationsDebugLog.contribution.js';
 // FlowLeap: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (kept out);
 // Claude sessions come from the extension host through the Claude provider (PRD 0017 A2).
 import './contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.js';
+// FlowLeap: Local (in-process) sessions; upstream removed the Local harness (PRD 0017 A11).
+import './contrib/providers/localChatSessions/browser/localChatSessions.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
 import './services/sessions/browser/sessionsListModelService.js';
 import './services/sessions/browser/sessionGroupsService.js';
