@@ -773,7 +773,10 @@ export class ToolsListWidget extends Disposable {
 		this._tree.layout(treeHeight, width);
 
 		const galleryOffset = this._galleryContainer.getBoundingClientRect().top - this.element.getBoundingClientRect().top;
-		this._galleryList.layout(Math.max(0, height - galleryOffset), width);
+		// FlowLeap: bound the gallery by the element's rendered height (as the tree above does)
+		// so the last gallery row is not clipped by the padded, overflow-hidden container.
+		const availableHeight = this.element.clientHeight || height;
+		this._galleryList.layout(Math.max(0, availableHeight - galleryOffset), width);
 	}
 
 	/** Enters/leaves marketplace browse mode, swapping the tree for the gallery list. */
