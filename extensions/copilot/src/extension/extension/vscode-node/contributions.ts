@@ -9,7 +9,6 @@ import { PatentAIContribution } from '../../patentai/vscode-node/patentContribut
 import { BYOKContrib } from '../../byok/vscode-node/byokContribution';
 import { ChatDebugFileLoggerContribution } from '../../chat/vscode-node/chatDebugFileLoggerService';
 import { ChatSessionContextContribution } from '../../chatSessionContext/vscode-node/chatSessionContextProvider';
-import { ChatSessionsContrib } from '../../chatSessions/vscode-node/chatSessions';
 import { SessionStoreTracker } from '../../chronicle/vscode-node/sessionStoreTracker';
 import * as sessionSyncContribution from '../../chronicle/vscode-node/sessionSync.contribution';
 import * as chatBlockLanguageContribution from '../../codeBlocks/vscode-node/chatBlockLanguageFeatures.contribution';
@@ -67,7 +66,6 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(ScmContextProviderContribution),
 	asContributionFactory(DiagnosticsContextContribution),
 	asContributionFactory(ChatSessionContextContribution),
-	asContributionFactory(ChatSessionsContrib),
 	asContributionFactory(OTelContrib),
 	asContributionFactory(SessionStoreTracker),
 	sessionSyncContribution,

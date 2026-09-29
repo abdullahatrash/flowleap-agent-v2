@@ -24,7 +24,7 @@ describe('hasByokModel', () => {
 	});
 
 	it('is false for agent pseudo-vendors only', () => {
-		expect(hasByokModel(['copilot', 'flowleap', 'claude-code'])).toBe(false);
+		expect(hasByokModel(['copilot', 'flowleap', 'copilotcli'])).toBe(false);
 	});
 
 	it('is false when no models are present', () => {
