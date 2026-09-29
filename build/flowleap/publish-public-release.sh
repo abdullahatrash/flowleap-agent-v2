@@ -11,7 +11,8 @@
 #
 #   1. Downloads every asset from the source draft release.
 #   2. Sanity-checks the expected artifact set (DMGs + darwin Squirrel zips +
-#      the four signed Windows installers, x64 and arm64). Linux assets (.deb / .rpm / .tar.gz per arch) are
+#      the four signed Windows installers, x64 and arm64, + the Claude SDK
+#      tarballs for darwin and win32, PRD 0018 A7). Linux assets (.deb / .rpm / .tar.gz per arch) are
 #      carried when present but are NOT required — a macOS/Windows-only
 #      release is still publishable.
 #   3. Generates update-metadata.json — the release identity the website
@@ -79,11 +80,18 @@ ls -la
 # blocks publishing a release whose arm64 build actually broke — which is the
 # point of a required set.
 #
+# The Claude SDK tarballs are required for the same platforms: every build of
+# this release has `product.agentSdks.claude` stamped with a URL under THIS tag,
+# so a published release without its tarball leaves Claude unable to start on
+# that platform.
+#
 # The plain win32 zip and every Linux package stay optional.
 missing=0
 for pattern in "*darwin-arm64.dmg" "*darwin-x64.dmg" "*darwin-arm64.zip" "*darwin-x64.zip" \
 	"FlowLeap-Setup-*-x64.exe" "FlowLeap-UserSetup-*-x64.exe" \
-	"FlowLeap-Setup-*-arm64.exe" "FlowLeap-UserSetup-*-arm64.exe"; do
+	"FlowLeap-Setup-*-arm64.exe" "FlowLeap-UserSetup-*-arm64.exe" \
+	"claude-agent-sdk-*-darwin-arm64.tgz" "claude-agent-sdk-*-darwin-x64.tgz" \
+	"claude-agent-sdk-*-win32-x64.tgz" "claude-agent-sdk-*-win32-arm64.tgz"; do
 	if ! compgen -G "$pattern" > /dev/null; then
 		echo "error: expected asset matching '$pattern' not found" >&2
 		missing=1
@@ -102,7 +110,8 @@ fi
 # names must keep the `linux-<arch>.<ext>` suffix.
 linux_found=0
 linux_missing=""
-for pattern in "*linux-x64.deb" "*linux-x64.rpm" "*linux-x64.tar.gz" "*linux-arm64.deb" "*linux-arm64.rpm" "*linux-arm64.tar.gz"; do
+for pattern in "*linux-x64.deb" "*linux-x64.rpm" "*linux-x64.tar.gz" "*linux-arm64.deb" "*linux-arm64.rpm" "*linux-arm64.tar.gz" \
+	"claude-agent-sdk-*-linux-x64.tgz" "claude-agent-sdk-*-linux-arm64.tgz"; do
 	if compgen -G "$pattern" > /dev/null; then
 		linux_found=$((linux_found + 1))
 	else
@@ -113,9 +122,9 @@ if [ "$linux_found" -eq 0 ]; then
 	echo "NOTE: no Linux assets in this release (optional)."
 elif [ -n "$linux_missing" ]; then
 	echo "WARNING: Linux assets are incomplete — missing:$linux_missing"
-	echo "         Expected all six: .deb/.rpm/.tar.gz for linux-x64 and linux-arm64."
+	echo "         Expected all eight: .deb/.rpm/.tar.gz and the Claude SDK .tgz for linux-x64 and linux-arm64."
 else
-	echo "OK: all six Linux assets present (.deb/.rpm/.tar.gz for x64 and arm64)."
+	echo "OK: all eight Linux assets present (.deb/.rpm/.tar.gz and the Claude SDK .tgz for x64 and arm64)."
 fi
 
 # Reminder rather than a hard gate: unsigned installers are indistinguishable
@@ -173,15 +182,21 @@ echo "OK: $DST_REPO latest is $TAG"
 
 echo "==> Verifying the published release carries the update artifacts ..."
 published_assets=$(gh release view "$TAG" --repo "$DST_REPO" --json assets --jq '.assets[].name')
-for needed in "darwin-arm64.zip" "darwin-x64.zip" "update-metadata.json" "SHASUMS256.txt"; do
+for needed in "darwin-arm64.zip" "darwin-x64.zip" "update-metadata.json" "SHASUMS256.txt" \
+	"darwin-arm64.tgz" "darwin-x64.tgz" "win32-x64.tgz" "win32-arm64.tgz"; do
 	if ! grep -qF -- "$needed" <<< "$published_assets"; then
 		echo "error: published release is missing an asset matching '$needed'" >&2
 		exit 1
 	fi
 done
-echo "OK: darwin zips, update-metadata.json and SHASUMS256.txt are published"
+echo "OK: darwin zips, Claude SDK tarballs, update-metadata.json and SHASUMS256.txt are published"
 
 if [ "$CLEAN_OLD" -eq 1 ]; then
+	# Each build downloads its Claude SDK tarball from ITS OWN release tag on
+	# first use (product.agentSdks.claude). Deleting an old release breaks
+	# Claude for every install still on that version with a cold SDK cache,
+	# until the install updates.
+	echo "WARNING: --clean-old removes the Claude SDK tarballs that older installs download on first use."
 	echo "==> Removing all OTHER releases (and their tags) from $DST_REPO ..."
 	gh release list --repo "$DST_REPO" --limit 100 --json tagName --jq '.[].tagName' | while IFS= read -r old; do
 		if [ "$old" != "$TAG" ]; then
