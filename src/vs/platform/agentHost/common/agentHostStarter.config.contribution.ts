@@ -216,7 +216,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[AgentHostSystemProxyEnabledSettingId]: {
 			type: 'boolean',
-			description: nls.localize('chat.agentHost.systemProxy.enabled', "When enabled, Copilot sessions automatically discover and use the operating system's proxy configuration when no proxy environment variable is set."),
+			description: nls.localize('chat.agentHost.systemProxy.enabled', "When enabled, Agent Host sessions automatically discover and use the operating system's proxy configuration when no proxy environment variable is set."),
 			default: true,
 			tags: ['experimental', 'advanced'],
 			experiment: { mode: 'startup' },
@@ -232,7 +232,7 @@ configurationRegistry.registerConfiguration({
 		},
 		[AgentHostCopilotMultiRootEnabledSettingId]: {
 			type: 'boolean',
-			description: nls.localize('chat.agentHost.copilotAgent.multiRootEnabled', "When enabled, Copilot agent-host sessions advertise support for multiple working directories, so a session created in a multi-root workspace can span every workspace folder. Experimental; newly created sessions pick up a change without restarting the agent host."),
+			description: nls.localize('chat.agentHost.copilotAgent.multiRootEnabled', "When enabled, agent-host sessions advertise support for multiple working directories, so a session created in a multi-root workspace can span every workspace folder. Experimental; newly created sessions pick up a change without restarting the agent host."),
 			default: false,
 			// Hidden from the Settings UI while the feature is dogfooded internally.
 			// Still settable via `settings.json`; flip `default` (e.g. to

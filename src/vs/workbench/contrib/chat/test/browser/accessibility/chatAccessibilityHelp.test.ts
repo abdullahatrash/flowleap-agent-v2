@@ -94,7 +94,7 @@ suite('Chat Accessibility Help', () => {
 	test('documents the Copilot tab switch and independent provider navigation', () => {
 		const help = getAccessibilityHelpText('agentView', new MockKeybindingService(), true);
 		assert.deepStrictEqual({
-			switch: help.includes('active Copilot tab has an Auto switch beside the provider name'),
+			switch: help.includes('active provider tab has an Auto switch beside the provider name'),
 			keyboardTargets: help.includes('provider button and switch are separate keyboard targets'),
 			providers: help.includes('provider tabs and search remain available'),
 			restored: help.includes('Turn Auto off to restore the previous manual Copilot model'),

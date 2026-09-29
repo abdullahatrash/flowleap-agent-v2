@@ -206,7 +206,7 @@ suite('InlineChatEditReviewSession', () => {
 			resource: update.resource.toString(),
 			value: update.value,
 		})), [
-			{ resource: targetUri.toString(), value: { value: 'Editor is read-only while Copilot is editing this file.' } },
+			{ resource: targetUri.toString(), value: { value: 'Editor is read-only while FlowLeap is editing this file.' } },
 			{ resource: targetUri.toString(), value: 'reset' },
 		]);
 	});
@@ -219,7 +219,7 @@ suite('InlineChatEditReviewSession', () => {
 		await Promise.resolve();
 
 		assert.deepStrictEqual(readonlyUpdates.map(update => update.value), [
-			{ value: 'Editor is read-only while Copilot is editing this file.' },
+			{ value: 'Editor is read-only while FlowLeap is editing this file.' },
 			'reset',
 		]);
 	});

@@ -276,7 +276,7 @@ export class ResetCopilotHarnessIntroductionAction extends Action2 {
 	constructor() {
 		super({
 			id: ResetCopilotHarnessIntroductionAction.ID,
-			title: localize2('chat.resetCopilotHarnessIntroduction', "Reset Copilot Harness Introduction"),
+			title: localize2('chat.resetCopilotHarnessIntroduction', "Reset Agent Harness Introduction"),
 			category: Categories.Developer,
 			f1: true,
 			precondition: ChatContextKeys.enabled,

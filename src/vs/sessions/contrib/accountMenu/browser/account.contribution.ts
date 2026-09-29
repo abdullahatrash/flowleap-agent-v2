@@ -574,7 +574,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 		const identities = append(panel, $('.sessions-account-titlebar-panel-identities'));
 		if (this.accountName || this.isAccountLoading) {
 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
-				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")
+				'aria-label': localize('copilotAccountSectionLabel', "Account")
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
 			const loadedAvatarUrl = !this.isAccountLoading ? this.loadedAvatarUrl : undefined;
@@ -600,14 +600,14 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 			}));
 			copilotActionBar.push(panelStore.add(new Action(
 				'copilot.manageModels',
-				localize('manageCopilotModels', "Manage Copilot Models"),
+				localize('manageCopilotModels', "Manage Models"),
 				ThemeIcon.asClassName(Codicon.copilot),
 				true,
 				() => this.commandService.executeCommand(MANAGE_CHAT_COMMAND_ID, '@provider:"Copilot"'),
 			)), { icon: true, label: false });
 			copilotActionBar.push(panelStore.add(new Action(
 				'copilot.openAgentCustomizations',
-				localize('openCopilotAgentCustomizations', "Agent Customizations for Copilot"),
+				localize('openCopilotAgentCustomizations', "Agent Customizations"),
 				ThemeIcon.asClassName(Codicon.settingsGear),
 				true,
 				() => this.commandService.executeCommand(AICustomizationManagementCommands.OpenEditor, {
@@ -621,7 +621,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 			this.appendCopilotUsage(copilotAccount, panelStore);
 		} else if (partitioned.signIn) {
 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
-				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")
+				'aria-label': localize('copilotAccountSectionLabel', "Account")
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
 			const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
