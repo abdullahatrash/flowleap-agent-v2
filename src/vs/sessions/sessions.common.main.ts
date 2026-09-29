@@ -501,6 +501,8 @@ import './contrib/customViewTest/browser/customViewTest.contribution.js';
 // Onboarding: the engine + spotlight presentation (from the workbench layer) and
 // the Agents window scenario data.
 import '../workbench/contrib/onboarding/browser/onboarding.contribution.js';
+// FlowLeap keep-out: services of the kept-out github/codeReview/automations contribs that core parts inject (PRD 0017)
+import './contrib/keptOutServices/browser/keptOutServices.contribution.js';
 // FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
 // import '../workbench/contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
 import '../workbench/contrib/codeEditor/browser/diffEditorTryout.contribution.js';
