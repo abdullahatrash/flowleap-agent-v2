@@ -811,7 +811,7 @@ export const platformRootSchema = createSchema({
 	[AgentHostSessionSyncEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.sessionSyncEnabled.title', "Session Sync"),
-		description: localize('agentHost.config.sessionSyncEnabled.description', "Whether remote session sync is enabled for the copilot-sdk CLI."),
+		description: localize('agentHost.config.sessionSyncEnabled.description', "Whether remote session sync is enabled for the agent SDK CLI."),
 		default: false,
 	}),
 	[AgentHostByokModelsEnabledConfigKey]: schemaProperty<boolean>({
