@@ -2,6 +2,8 @@
 
 This document describes the architecture, code structure, and conventions for the OpenTelemetry instrumentation in the Copilot Chat extension. It covers all four agent execution paths.
 
+> **FlowLeap fork:** the Copilot CLI paths (`chatSessions/copilotcli`) and the extension-host Claude Code path (`chatSessions/claude`, `claudeLanguageModelServer.ts`) described below were removed from this extension. Claude sessions run in the agent host process (`src/vs/platform/agentHost`); see ADR 0009.
+
 For user-facing configuration and usage, see [agent_monitoring.md](agent_monitoring.md).
 For a visual data flow diagram, see [otel-data-flow.html](otel-data-flow.html).
 

@@ -274,7 +274,7 @@ The extension uses numerous proposed VS Code APIs for advanced functionality:
 - **GitHub**: Authentication and API access
 - **Azure**: Cloud services and experimentation
 - **OpenAI**: Language model API
-- **Anthropic**: Claude model integration - See **[src/extension/agents/claude/AGENTS.md](../src/extension/agents/claude/AGENTS.md)** for complete Claude Agent SDK integration documentation including architecture, components, and registries
+- **Anthropic**: Claude model integration through BYOK (`src/extension/byok`). Claude Agent sessions run in the core agent host (`src/vs/platform/agentHost`), not in this extension
 - **Telemetry**: Usage analytics and performance monitoring
 
 ## Development Workflow
@@ -287,7 +287,7 @@ The extension uses numerous proposed VS Code APIs for advanced functionality:
 ### Updating Dependencies
 
 **Anthropic SDK Packages:**
-When updating `@anthropic-ai/claude-agent-sdk` or `@anthropic-ai/sdk`, you **MUST** follow the upgrade guide in **[src/extension/agents/claude/AGENTS.md](../src/extension/agents/claude/AGENTS.md#upgrading-anthropic-sdk-packages)**. This includes:
+When updating `@anthropic-ai/sdk`, you **MUST** follow the `anthropic-sdk-upgrader` skill in `.agents/skills/`. This includes:
 1. Reviewing changelogs for breaking changes
 2. Checking compilation errors in key Claude integration files
 3. Running through the testing checklist for core functionality, tools, hooks, and slash commands

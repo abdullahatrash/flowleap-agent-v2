@@ -544,7 +544,7 @@ suite('CustomizationHarnessService', () => {
 
 		test('resolves provider agents with unbacked URIs from metadata without reading the file', async () => {
 			// External harnesses may describe agents with synthetic, session-scoped URIs
-			// (e.g. `claude-code:/agents/...`) that have no file system provider. Resolving
+			// (e.g. `<sessionType>:/agents/...`) that have no file system provider. Resolving
 			// them must not route through the file service (which throws ENOPRO); the agent
 			// is built from the metadata the provider already supplied.
 			const promptsService = new class extends MockPromptsService {

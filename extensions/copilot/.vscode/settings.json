@@ -35,7 +35,6 @@
 		"**/*.egg-info/**/*": true,
 		"src/base/util/*.bpe": true,
 		"src/base/util/tokenizer_*.json": true,
-		"src/extension/chatSessions/vscode-node/test/fixtures/**": true,
 		"src/extension/completions-core/dist": true,
 		"src/extension/prompts/node/test/fixtures/**/*": true,
 		"src/extension/test/node/fixtures/**/*": true,

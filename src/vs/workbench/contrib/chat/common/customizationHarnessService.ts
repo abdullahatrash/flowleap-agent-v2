@@ -668,7 +668,7 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
 		for (const item of items) {
 			if (item.type === PromptsType.agent) {
 				// External harnesses may describe agents with synthetic, session-scoped URIs
-				// (e.g. `claude-code:/agents/...`) that no file system provider backs, so they
+				// (e.g. `<sessionType>:/agents/...`) that no file system provider backs, so they
 				// cannot be read. Only parse the file to enrich the agent when the resource is
 				// readable; otherwise build the agent from the metadata the provider supplied.
 				const promptFile = !this.fileService || this.fileService.hasProvider(item.uri)
