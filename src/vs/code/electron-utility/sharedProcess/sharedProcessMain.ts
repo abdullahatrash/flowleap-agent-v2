@@ -94,6 +94,8 @@ import { InspectProfilingService as V8InspectProfilingService } from '../../../p
 import { IV8InspectProfilingService } from '../../../platform/profiling/common/profiling.js';
 import { IExtensionsScannerService } from '../../../platform/extensionManagement/common/extensionsScannerService.js';
 import { ExtensionsScannerService } from '../../../platform/extensionManagement/node/extensionsScannerService.js';
+import { DEV_CONTAINER_AGENT_HOST_CHANNEL, IDevContainerAgentHostMainService } from '../../../platform/agentHost/common/devContainerAgentHost.js';
+import { DevContainerAgentHostMainService } from '../../../platform/agentHost/node/devContainerAgentHostService.js';
 import { IUserDataProfilesService } from '../../../platform/userDataProfile/common/userDataProfile.js';
 import { IExtensionsProfileScannerService } from '../../../platform/extensionManagement/common/extensionsProfileScannerService.js';
 import { PolicyChannelClient } from '../../../platform/policy/common/policyIpc.js';
@@ -420,7 +422,10 @@ class SharedProcessMain extends Disposable implements IClientConnectionFilter {
 		// Local Git
 		services.set(ILocalGitService, new SyncDescriptor(LocalGitService, undefined, false /* proxied to other processes */));
 
-		// FlowLeap: no SSH / Dev Container / WSL / Tunnel agent host services (PRD 0004, #73)
+		// FlowLeap: no SSH / WSL / Tunnel agent host services (PRD 0004, PRD 0017 keep-out)
+
+		// Dev Container Agent Host
+		services.set(IDevContainerAgentHostMainService, new SyncDescriptor(DevContainerAgentHostMainService, undefined, true));
 
 		return new InstantiationService(services);
 	}
@@ -504,7 +509,11 @@ class SharedProcessMain extends Disposable implements IClientConnectionFilter {
 		const localGitChannel = ProxyChannel.fromService(accessor.get(ILocalGitService), this._store);
 		this.server.registerChannel('localGit', localGitChannel);
 
-		// FlowLeap: no SSH / Dev Container / WSL / Tunnel agent host services (PRD 0004, #73)
+		// FlowLeap: no SSH / WSL / Tunnel agent host services (PRD 0004, PRD 0017 keep-out)
+
+		// Dev Container Agent Host
+		const devContainerAgentHostChannel = ProxyChannel.fromService(accessor.get(IDevContainerAgentHostMainService), this._store);
+		this.server.registerChannel(DEV_CONTAINER_AGENT_HOST_CHANNEL, devContainerAgentHostChannel);
 	}
 
 	private registerErrorHandler(logService: ILogService): void {
