@@ -11,6 +11,7 @@ import { joinPath } from '../../../base/common/resources.js';
 import { isUriComponents, URI, UriComponents } from '../../../base/common/uri.js';
 import { IFileService, IFileStatWithMetadata } from '../../files/common/files.js';
 import { ILogService } from '../../log/common/log.js';
+import { SessionLogContent, toSessionLogMetadata } from './sessionLogContent.js';
 
 export type AhpLogDirection = 'c2s' | 's2c';
 
@@ -32,6 +33,12 @@ export interface IAhpJsonlLoggerOptions {
 	readonly transport: string;
 	readonly maxFileSizeBytes?: number;
 	readonly maxFiles?: number;
+	/**
+	 * How much of each message reaches the file. Defaults to `metadata`: no
+	 * user text, model text, tool input or output, or file content is written.
+	 * `full` restores the upstream full-message log for developers.
+	 */
+	readonly content?: SessionLogContent;
 }
 
 const AHP_LOG_DIR = 'ahp';
@@ -99,7 +106,7 @@ export class AhpJsonlLogger extends Disposable {
 			transport: this._options.transport,
 			...(typeof byteLength === 'number' ? { byteLength } : {}),
 		};
-		const entry = { ...message, _ahpLog: meta };
+		const entry = { ...(this._options.content === 'full' ? message : toSessionLogMetadata(message)), _ahpLog: meta };
 		// Fast path: serialize once. The vast majority of messages are small, so
 		// we only pay a single stringify and use its length to decide whether the
 		// rare oversized-message path below is needed.

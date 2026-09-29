@@ -16,6 +16,7 @@ import { ProxyChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus, RemoteAgentHostEntryType, RemoteAgentHostsEnabledSettingId, getEntryAddress, type IRemoteAgentHostConnectOptions, type IRemoteAgentHostConnectionFactory, type IRemoteAgentHostCreatedConnection, type IRemoteAgentHostEntry } from '../common/remoteAgentHostService.js';
 import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { AhpJsonlLogger } from '../common/ahpJsonlLogger.js';
+import { getSessionLogContent } from '../common/sessionLogContent.js';
 import { AgentHostAhpJsonlLoggingSettingId } from '../common/agentService.js';
 import { AgentHostClientConnectionKind } from '../common/agentHostTelemetry.js';
 import { ReconnectingRelayTransport } from '../common/relayTransport.js';
@@ -91,7 +92,7 @@ export class WSLRelayClientFactory implements IWSLRelayClientFactory {
 			const ahpLoggingEnabled = !!this._configurationService.getValue<boolean>(AgentHostAhpJsonlLoggingSettingId);
 			const createLogger = (activeConnectionId: string) => ahpLoggingEnabled ? this._instantiationService.createInstance(
 				AhpJsonlLogger,
-				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'wsl' },
+				{ logsHome: this._environmentService.logsHome, logId: address, connectionId: activeConnectionId, transport: 'wsl', content: getSessionLogContent(this._configurationService) },
 			) : undefined;
 			return this._instantiationService.createInstance(
 				ReconnectingRelayTransport,

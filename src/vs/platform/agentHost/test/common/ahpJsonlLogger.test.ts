@@ -9,9 +9,11 @@ import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { FileService } from '../../../files/common/fileService.js';
 import { IFileWriteOptions } from '../../../files/common/files.js';
+import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
 import { InMemoryFileSystemProvider } from '../../../files/common/inMemoryFilesystemProvider.js';
 import { NullLogService } from '../../../log/common/log.js';
 import { AhpJsonlLogger, getAhpLogByteLength, isAhpLogFileFor, stringifyAhpLogEntry } from '../../common/ahpJsonlLogger.js';
+import { AgentHostAhpJsonlLoggingIncludeContentSettingId, getSessionLogContent } from '../../common/sessionLogContent.js';
 
 suite('AhpJsonlLogger', () => {
 
@@ -22,7 +24,7 @@ suite('AhpJsonlLogger', () => {
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
 
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket' },
+			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket', content: 'full' },
 			fileService,
 			new NullLogService(),
 		));
@@ -119,7 +121,7 @@ suite('AhpJsonlLogger', () => {
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
 
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'rotating', transport: 'websocket', maxFileSizeBytes: 1, maxFiles: 2 },
+			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'rotating', transport: 'websocket', maxFileSizeBytes: 1, maxFiles: 2, content: 'full' },
 			fileService,
 			new NullLogService(),
 		));
@@ -216,7 +218,7 @@ suite('AhpJsonlLogger', () => {
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
 
 		const logger = store.add(new AhpJsonlLogger(
-			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket' },
+			{ logsHome: URI.file('/logs'), logId: 'logical-host', connectionId: 'conn:1', transport: 'websocket', content: 'full' },
 			fileService,
 			new NullLogService(),
 		));
@@ -289,6 +291,64 @@ suite('AhpJsonlLogger', () => {
 			const payload = { $mid: 1, label: 'not a uri' };
 			const result = JSON.parse(stringifyAhpLogEntry(payload));
 			assert.deepStrictEqual(result, payload);
+		});
+	});
+
+	suite('session content (PRD 0018 A4)', () => {
+
+		const MARKER = 'FLOWLEAP-A4-MARKER-7f3c';
+
+		/** One turn of a session as it crosses the protocol, with the marker in every content field. */
+		function sessionFrames(): object[] {
+			return [
+				{ jsonrpc: '2.0', id: 7, method: 'dispatchAction', params: { channel: 'ahp-session:/s-1', action: { type: 'session/turnStarted', session: 'claude:/s-1', turnId: 't-1', userMessage: { text: `Find prior art for ${MARKER}`, attachments: [{ uri: URI.file(`/work/${MARKER}.pdf`), label: MARKER }] } } } },
+				{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', serverSeq: 3, action: { type: 'session/responsePart', session: 'claude:/s-1', turnId: 't-1', part: { kind: 'markdown', content: `Model says ${MARKER}` } } } },
+				{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', action: { type: 'session/toolCallComplete', session: 'claude:/s-1', toolCallId: 'tc-1', toolName: 'Bash', toolInput: { command: `grep ${MARKER}`, code: `print("${MARKER}")` }, result: { content: [{ type: 'text', text: `output ${MARKER}` }], diff: { before: MARKER, after: `${MARKER}!` } } } } },
+				{ jsonrpc: '2.0', id: 8, result: { title: MARKER, usage: { inputTokens: 1200, outputTokens: 80, durationMs: 950 } } },
+				{ jsonrpc: '2.0', id: 9, error: { code: -32001, message: `Failed on ${MARKER}`, data: { prompt: MARKER } } },
+			];
+		}
+
+		async function writeSession(configuration: TestConfigurationService): Promise<string> {
+			const fileService = store.add(new FileService(new NullLogService()));
+			store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));
+			const logger = store.add(new AhpJsonlLogger(
+				{ logsHome: URI.file('/logs'), logId: 'a4', connectionId: 'a4', transport: 'local', content: getSessionLogContent(configuration) },
+				fileService,
+				new NullLogService(),
+			));
+			for (const frame of sessionFrames()) {
+				logger.log(frame, 's2c');
+			}
+			await logger.flush();
+			return (await fileService.readFile(logger.resource)).value.toString();
+		}
+
+		test('the default policy writes metadata and never the message text', async () => {
+			const content = await writeSession(new TestConfigurationService());
+
+			assert.deepStrictEqual({
+				markerWritten: content.includes(MARKER),
+				entries: content.split('\n').filter(Boolean).map(line => {
+					const { _ahpLog, ...rest } = JSON.parse(line);
+					return rest;
+				}),
+			}, {
+				markerWritten: false,
+				entries: [
+					{ jsonrpc: '2.0', id: 7, method: 'dispatchAction', params: { channel: 'ahp-session:/s-1', action: { type: 'session/turnStarted', session: 'claude:/s-1', turnId: 't-1' } } },
+					{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', serverSeq: 3, action: { type: 'session/responsePart', session: 'claude:/s-1', turnId: 't-1', part: { kind: 'markdown' } } } },
+					{ jsonrpc: '2.0', method: 'action', params: { channel: 'ahp-session:/s-1', action: { type: 'session/toolCallComplete', session: 'claude:/s-1', toolCallId: 'tc-1', toolName: 'Bash', result: { content: [{ type: 'text' }] } } } },
+					{ jsonrpc: '2.0', id: 8, result: { usage: { inputTokens: 1200, outputTokens: 80, durationMs: 950 } } },
+					{ jsonrpc: '2.0', id: 9, error: { code: -32001 } },
+				],
+			});
+		});
+
+		test('the developer setting restores the full message content', async () => {
+			const content = await writeSession(new TestConfigurationService({ [AgentHostAhpJsonlLoggingIncludeContentSettingId]: true }));
+
+			assert.deepStrictEqual(content.split('\n').filter(Boolean).map(line => line.split(MARKER).length - 1), [3, 1, 5, 1, 2]);
 		});
 	});
 });

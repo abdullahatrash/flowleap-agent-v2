@@ -17,6 +17,7 @@ import { buildClaudeToolMeta, getClaudePastTenseMessage, getClaudeToolDisplayNam
 import { claudeToolDenialCode } from './claudeToolDenial.js';
 import { ClaudeToolCallRegistry } from './claudeToolCallRegistry.js';
 import { ToolCallConfirmationReason, ToolCallContributorKind, type StringOrMarkdown } from '../../common/state/protocol/state.js';
+import { toSessionLogMetadata } from '../../common/sessionLogContent.js';
 
 /**
  * Cross-call state for {@link mapSDKMessageToAgentSignals}. One instance
@@ -258,7 +259,10 @@ export function mapSDKMessageToAgentSignals(
 ): AgentSignal[] {
 	if (logService.getLevel() <= LogLevel.Trace) {
 		try {
-			const snippet = JSON.stringify(message, (k, v) => typeof v === 'string' && v.length > 200 ? v.slice(0, 200) + '…' : v);
+			// FlowLeap fork (PRD 0018 A4): metadata only. Upstream logged the first
+			// 200 characters of every string, which put prompts and model text in
+			// the agent host log file (and in exported debug logs).
+			const snippet = JSON.stringify(toSessionLogMetadata(message));
 			logService.trace(`[claudeMapSessionEvents] SDK message type=${message.type}: ${snippet?.slice(0, 2000) ?? '<unserializable>'}`);
 		} catch {
 			logService.trace(`[claudeMapSessionEvents] SDK message type=${message.type} (unserializable)`);

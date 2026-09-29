@@ -21,6 +21,7 @@ import { AgentHostAutoReplyEnabledConfigKey, AgentHostEditAutoApprovePatternsCon
 import '../../../../platform/agentHost/common/agentHostStarter.config.contribution.js';
 import { AgentMergeSettingId } from '../../../../platform/agentHost/common/agentMerge.js';
 import { AgentHostAhpJsonlLoggingSettingId, AgentHostAllowSignedOutWhenUsableSettingId, AgentHostSdkSandboxEnabledSettingId, AgentHostSdkSandboxWindowsEnabledSettingId, CodexPreferAgentHostEditorSettingId } from '../../../../platform/agentHost/common/agentService.js';
+import { AgentHostAhpJsonlLoggingIncludeContentSettingId } from '../../../../platform/agentHost/common/sessionLogContent.js';
 import { AgentHostCopilotModelCapabilityOverridesSettingId, AgentHostCopilotRuntimePathSettingId, AgentHostCopilotSdkLogLevelSettingId, AgentHostCustomTerminalToolEnabledSettingId, AgentHostHydraFusionEnabledSettingId, AgentHostOpus48PromptEnabledSettingId, AgentHostShellToolInitScriptEnabledSettingId, AgentHostToolSearchDeferThresholdSettingId, AgentHostToolSearchEnabledSettingId, CopilotAutoModeTierOverrideSettingId, CopilotClaudeAdvisorEnabledSettingId, CopilotCliConfigKey, CopilotSkillCharBudgetSettingId, CopilotTgrepEnabledSettingId, copilotSdkLogLevelSettingValues, DEFAULT_COPILOT_SKILL_CHAR_BUDGET, normalizeSkillCharBudget } from '../../../../platform/agentHost/common/copilotCliConfig.js';
 import { CopilotSemanticSearchEnabledSettingId } from '../../../../platform/agentHost/common/semanticSearchConstants.js';
 import { ChatMicrosoftAuthenticationEnabledSettingId, DEFAULT_EDIT_AUTO_APPROVE_PATTERNS, mergeChatEditAutoApprovePatterns } from '../../../../platform/chat/common/chatSettings.js';
@@ -1628,8 +1629,14 @@ configurationRegistry.registerConfiguration({
 		},
 		[AgentHostAhpJsonlLoggingSettingId]: {
 			type: 'boolean',
-			description: nls.localize('chat.agentHost.ahpJsonlLogging', "When enabled, logs all AHP transport messages for agent host connections to JSONL files under the window's log directory."),
+			description: nls.localize('chat.agentHost.ahpJsonlLogging', "When enabled, logs all AHP transport messages for agent host connections to JSONL files under the window's log directory. Only metadata is written (identifiers, method names, tool names, token counts and error codes), not session content."),
 			default: product.quality !== 'stable',
+			tags: ['experimental', 'advanced'],
+		},
+		[AgentHostAhpJsonlLoggingIncludeContentSettingId]: {
+			type: 'boolean',
+			markdownDescription: nls.localize('chat.agentHost.ahpJsonlLoggingIncludeContent', "Developer setting. When enabled together with `#{0}#`, the AHP JSONL logs keep the full message content: your prompts, model responses, tool input and output, and file content. Leave this off unless you are debugging the agent host protocol. Exported debug logs then include that content.", AgentHostAhpJsonlLoggingSettingId),
+			default: false,
 			tags: ['experimental', 'advanced'],
 		},
 		[AgentHostAgentDebugLogEnabledSettingId]: {
