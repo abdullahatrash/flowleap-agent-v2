@@ -26,6 +26,7 @@ export const enum ChatFetchResponseType {
 	ExtensionBlocked = 'extensionBlocked',
 	BadRequest = 'badRequest',
 	NotFound = 'notFound',
+	ProviderAuthFailed = 'providerAuthFailed',
 	Failed = 'failed',
 	Unknown = 'unknown',
 	NetworkError = 'networkError',
@@ -65,6 +66,12 @@ export interface IChatFetchErrorPayload {
 	readonly rateLimitKey?: string;
 	readonly isAuto?: boolean;
 	readonly capiError?: { code?: string; message?: string };
+	/** BYOK provider that refused the credential, for `ProviderAuthFailed`. */
+	readonly modelProvider?: string;
+	/** False when no credential reached the provider — our fault, not a bad key. */
+	readonly credentialSent?: boolean;
+	/** Pre-rendered message; present when the failure crossed the `vscode.lm` boundary. */
+	readonly renderedMessage?: string;
 }
 
 /**
@@ -82,6 +89,8 @@ export interface IForwardedChatError {
 const RATE_LIMIT_LEARN_MORE_URL = 'https://aka.ms/github-copilot-rate-limit-error';
 const FILTERED_DOCS_URL = 'https://aka.ms/copilot-chat-filtered-docs';
 const GITHUB_SUPPORT_URL = 'https://support.github.com/contact';
+/** Command the chat error renderer trusts, so the link is clickable there. */
+const MANAGE_MODELS_LINK = 'command:workbench.action.chat.manage';
 
 /**
  * Localized "canceled" message. Mirrors the extension's `CanceledMessage`,
@@ -113,6 +122,39 @@ function secondsToHumanReadableTime(seconds: number): string {
 		return localize('chatError.duration.hoursMinutes', "{0} hours {1} minutes", hours, remainingMinutes);
 	}
 	return localize('chatError.duration.hours', "{0} hours", hours);
+}
+
+/**
+ * Message for a BYOK provider refusing the user's credential. Mirrors
+ * `getProviderAuthFailedMessage` in the Copilot extension's `commonTypes.ts`;
+ * keep the two wordings in step.
+ *
+ * The provider's own text cannot lead: OpenRouter answers an unrecognised key
+ * with "User not found.", which a signed-in user reads as "my account is gone"
+ * — away from the only thing they can fix.
+ */
+function getProviderAuthFailedMessage(fetchError: IChatFetchErrorPayload): string {
+	if (fetchError.renderedMessage) {
+		return fetchError.renderedMessage;
+	}
+
+	// Separate sentences rather than an "the model provider" placeholder: substituting a
+	// generic noun into "Your {0} API key" produces "Your the model provider API key".
+	const provider = fetchError.modelProvider;
+	const headline = fetchError.credentialSent === false
+		? (provider
+			? localize('chatError.providerAuth.noKey', "No API key was sent to {0}. Add or re-enter your key, then try again: [Manage Models]({1})", provider, MANAGE_MODELS_LINK)
+			: localize('chatError.providerAuth.noKeyUnnamed', "No API key was sent to the model provider. Add or re-enter your key, then try again: [Manage Models]({0})", MANAGE_MODELS_LINK))
+		: (provider
+			? localize('chatError.providerAuth.rejected', "Your {0} API key was rejected. Check that the key is valid and still has credit, then try again: [Manage Models]({1})", provider, MANAGE_MODELS_LINK)
+			: localize('chatError.providerAuth.rejectedUnnamed', "Your API key was rejected by the model provider. Check that the key is valid and still has credit, then try again: [Manage Models]({0})", MANAGE_MODELS_LINK));
+
+	const firstLine = (fetchError.reason ?? '').split('\n', 1)[0].trim();
+	if (!firstLine) {
+		return headline;
+	}
+	const truncated = firstLine.length > 200 ? `${firstLine.substring(0, 200)}…` : firstLine;
+	return localize('chatError.providerAuth.withDetail', "{0}\n\nProvider response: {1}", headline, truncated);
 }
 
 function getRateLimitMessage(fetchError: IChatFetchErrorPayload, copilotPlan: string | undefined): string {
@@ -295,6 +337,8 @@ function getChatErrorDetailsInner(fetchError: IChatFetchErrorPayload, copilotPla
 				isQuotaExceeded: true,
 				...(fetchError.capiError?.code && { code: fetchError.capiError.code }),
 			};
+		case ChatFetchResponseType.ProviderAuthFailed:
+			return { message: getProviderAuthFailedMessage(fetchError), level: ChatErrorLevel.Info };
 		case ChatFetchResponseType.BadRequest:
 		case ChatFetchResponseType.Failed:
 			return fetchError.serverRequestId
