@@ -11,6 +11,8 @@ import { disposableLongTimeout } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
+import { ThemeIcon } from '../../../../../base/common/themables.js';
+import { Codicon } from '../../../../../base/common/codicons.js';
 import { autorun, observableFromEvent } from '../../../../../base/common/observable.js';
 import { ServicesAccessor } from '../../../../../editor/browser/editorExtensions.js';
 import { EditorContextKeys } from '../../../../../editor/common/editorContextKeys.js';
@@ -429,7 +431,7 @@ class OpenWorkspaceInAgentsTitleBarWidget extends BaseActionViewItem {
 		container.setAttribute('aria-label', hoverText);
 		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), container, hoverText));
 
-		const icon = append(container, $('span.open-in-agents-titlebar-widget-icon'));
+		const icon = append(container, $(`span.open-in-agents-titlebar-widget-icon${ThemeIcon.asCSSSelector(Codicon.robot)}`));
 		icon.setAttribute('aria-hidden', 'true');
 
 		const labelEl = append(container, $('span.open-in-agents-titlebar-widget-label'));
