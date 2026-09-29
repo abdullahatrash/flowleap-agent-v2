@@ -17,6 +17,10 @@ import { IRequestService } from '../../../request/common/request.js';
 import { IGalleryMcpServer, IMcpServerInput, McpGalleryResolveStatus } from '../../common/mcpManagement.js';
 import { IMcpGalleryManifest, IMcpGalleryManifestService, McpGalleryManifestStatus, McpGalleryResourceType } from '../../common/mcpGalleryManifest.js';
 import { McpGalleryService, UnsupportedMcpGalleryPackageError } from '../../common/mcpGalleryService.js';
+import { McpGalleryManifestService } from '../../common/mcpGalleryManifestService.js';
+import { getMcpGalleryManifestResourceUri } from '../../common/mcpGalleryManifest.js';
+import product from '../../../product/common/product.js';
+import { IProductService } from '../../../product/common/productService.js';
 
 const SERVERS_URL = 'https://registry.test/servers';
 const NAMED_TEMPLATE = 'https://registry.test/servers/{name}';
@@ -532,6 +536,51 @@ suite('McpGalleryService - getMcpServer validation', () => {
 		}, {
 			names: ['io.github.owner/supported'],
 			hasMore: true
+		});
+	});
+});
+
+suite('McpGalleryManifestService - product gallery version', () => {
+
+	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('negotiates the API version the product gallery serves (v0), not the newest one it does not', async () => {
+		// The FlowLeap registry serves the standard v0 API and its v0.1 path is unavailable.
+		const productService: IProductService = {
+			_serviceBrand: undefined,
+			...product,
+			mcpGallery: {
+				serviceUrl: 'https://registry.test/api/mcp',
+				itemWebUrl: 'https://www.flowleap.co/en/marketplace/mcp/{name}',
+				publisherUrl: 'https://www.flowleap.co/en/marketplace',
+				supportUrl: 'https://www.flowleap.co/en/contact',
+				privacyPolicyUrl: 'https://www.flowleap.co/en/privacy',
+				termsOfServiceUrl: 'https://www.flowleap.co/en/terms',
+				reportUrl: 'https://www.flowleap.co/en/contact'
+			}
+		};
+		const requestService: IRequestService = {
+			_serviceBrand: undefined,
+			onDidCompleteRequest: Event.None,
+			request: async options => ({
+				res: { statusCode: options.url?.includes('/v0/servers') ? 200 : 404, headers: {} },
+				stream: bufferToStream(VSBuffer.fromString('')),
+			}),
+			resolveProxy: async () => undefined,
+			lookupAuthorization: async () => undefined,
+			lookupKerberosAuthorization: async () => undefined,
+			loadCertificates: async () => [],
+		};
+		const manifestService = store.add(new McpGalleryManifestService(productService, requestService, new NullLogService()));
+
+		const actual = await manifestService.getMcpGalleryManifest();
+
+		assert.deepStrictEqual({
+			version: actual?.version,
+			serversUrl: actual ? getMcpGalleryManifestResourceUri(actual, McpGalleryResourceType.McpServersQueryService) : undefined,
+		}, {
+			version: 'v0',
+			serversUrl: 'https://registry.test/api/mcp/v0/servers',
 		});
 	});
 });
