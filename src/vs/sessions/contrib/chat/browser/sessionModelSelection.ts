@@ -17,7 +17,7 @@ import { getSelectedModelStorageKey, getStoredSelectedModel, storeSelectedModel 
 import { ChatAgentLocation, ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ILanguageModelChatMetadataAndIdentifier, type IModelConfigurationAccess } from '../../../../workbench/contrib/chat/common/languageModels.js';
 import { IntendedModelSlot } from '../../../../workbench/contrib/chat/common/model/chatModel.js';
-import { IPendingModelSelection, isInConversationModelChoice, ModelSelectionReason, RestoredModelReason } from '../../../../workbench/contrib/chat/common/modelSelection.js';
+import { findRecommendedDefaultModel, IPendingModelSelection, isInConversationModelChoice, ModelSelectionReason, RestoredModelReason } from '../../../../workbench/contrib/chat/common/modelSelection.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ChatModelSource, SessionStatus } from '../../../services/sessions/common/session.js';
 import { ISessionsProvider } from '../../../services/sessions/common/sessionsProvider.js';
@@ -232,7 +232,9 @@ export class SessionModelSelection extends Disposable implements ISessionModelSe
 			getConfiguredModelValue: () => this._configurationService.getValue<string>(ChatConfiguration.DefaultModel),
 			// A session runs whatever its provider published: no mode, nowhere else to show it.
 			isModelSupportedHere: () => true,
-			getDeclaredDefaultModel: models => models.find(model => model.metadata.isDefaultForLocation[ChatAgentLocation.Chat]),
+			// The recommended tier (Sonnet) outranks a provider's own default, the same as Workbench
+			// chat: the agent host's Claude catalog declares Opus first.
+			getDeclaredDefaultModel: models => findRecommendedDefaultModel(models) ?? models.find(model => model.metadata.isDefaultForLocation[ChatAgentLocation.Chat]),
 			getBoundConversationKey: () => this._boundConversationKey,
 			getIntentHolder: () => this._conversation().intent,
 			applyModel: model => this._pushModelToProvider(model),

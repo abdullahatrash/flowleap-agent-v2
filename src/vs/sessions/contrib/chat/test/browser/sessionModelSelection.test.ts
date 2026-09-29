@@ -837,6 +837,45 @@ suite('SessionModelSelection', () => {
 		});
 	});
 
+	test('a fresh draft defaults to the newest Sonnet over the provider\'s declared default', () => {
+		const named = (identifier: string, name: string, isDefault = false): ILanguageModelChatMetadataAndIdentifier => ({
+			...model(identifier),
+			metadata: { ...model(identifier).metadata, name, isDefaultForLocation: isDefault ? { [ChatAgentLocation.Chat]: true } : {} },
+		});
+		const opus = named('claude/opus-1m', 'Claude Opus 4.8 (1M)', true);
+		const olderSonnet = named('claude/sonnet-4-6', 'Claude Sonnet 4.6');
+		const sonnet = named('claude/sonnet-5', 'Claude Sonnet 5');
+		const haiku = named('claude/haiku', 'Claude Haiku 4.5');
+		const select = (remembered?: string, configured?: string) => {
+			const testSession = createSession('provider', SessionStatus.Untitled, undefined, `provider:${remembered}:${configured}`);
+			const provider = disposables.add(createProvider('provider', (identifier, source) => testSession.modelId.set(identifier, undefined, source)));
+			provider.models = [opus, olderSonnet, sonnet, haiku];
+			const storage = disposables.add(new InMemoryStorageService());
+			if (remembered) {
+				storeSelectedModel(storage, ChatAgentLocation.Chat, modelTarget, remembered);
+			}
+			const selection = disposables.add(new SessionModelSelection(
+				observableValue<IActiveSession | undefined>('session', testSession.session),
+				{},
+				createProvidersService([provider]),
+				storage,
+				createConfigurationService(configured),
+				disposables.add(new NullLogService()),
+			));
+			return { current: selection.state.get().currentModel?.identifier, writes: provider.writes };
+		};
+
+		assert.deepStrictEqual({
+			fresh: select(),
+			remembered: select(haiku.identifier),
+			configured: select(undefined, opus.identifier),
+		}, {
+			fresh: { current: sonnet.identifier, writes: [sonnet.identifier] },
+			remembered: { current: haiku.identifier, writes: [haiku.identifier] },
+			configured: { current: opus.identifier, writes: [opus.identifier] },
+		});
+	});
+
 	test('falls back instead of waiting for an inapplicable configured model', () => {
 		const testSession = createSession('provider', SessionStatus.Untitled);
 		const provider = disposables.add(createProvider('provider', (identifier, source) => testSession.modelId.set(identifier, undefined, source)));
