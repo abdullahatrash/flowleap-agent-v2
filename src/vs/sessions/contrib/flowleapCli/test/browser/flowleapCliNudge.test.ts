@@ -10,7 +10,7 @@ import { IFlowLeapCliService } from '../../../../../platform/flowleapCli/common/
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { INotificationHandle, INotificationProgress, INotificationService, IPromptChoice, IPromptOptions, Severity } from '../../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
-import { FlowLeapCliNudge } from '../../browser/flowleapCliNudge.js';
+import { FlowLeapCliNudge, isClaudeSessionType } from '../../browser/flowleapCliNudge.js';
 
 const noopProgress: INotificationProgress = { infinite() { }, total() { }, worked() { }, done() { } };
 
@@ -90,6 +90,13 @@ suite('FlowLeapCliNudge', () => {
 				present: [],
 				failed: [],
 			},
+		);
+	});
+
+	test('fires for agent-host and extension-host Claude sessions only', () => {
+		assert.deepStrictEqual(
+			['claude', 'claude-code', 'codex', 'copilotcli', 'local'].map(type => [type, isClaudeSessionType(type)]),
+			[['claude', true], ['claude-code', true], ['codex', false], ['copilotcli', false], ['local', false]],
 		);
 	});
 });
