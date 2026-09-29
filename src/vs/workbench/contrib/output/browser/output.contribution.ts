@@ -45,6 +45,7 @@ import { hasKey } from '../../../../base/common/types.js';
 import { IDefaultLogLevelsService } from '../../../services/log/common/defaultLogLevels.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { OutputAccessibilityHelp } from './outputAccessibilityHelp.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 const IMPORTED_LOG_ID_PREFIX = 'importedLog.';
 
@@ -88,6 +89,7 @@ Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews
 	canMoveView: true,
 	canToggleVisibility: true,
 	ctorDescriptor: new SyncDescriptor(OutputViewPane),
+	when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the Output view
 	openCommandActionDescriptor: {
 		id: 'workbench.action.output.toggleOutput',
 		mnemonicTitle: nls.localize({ key: 'miToggleOutput', comment: ['&& denotes a mnemonic'] }, "&&Output"),

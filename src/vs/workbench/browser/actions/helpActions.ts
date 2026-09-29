@@ -258,7 +258,8 @@ class OpenLicenseUrlAction extends Action2 {
 			menu: {
 				id: MenuId.MenubarHelpMenu,
 				group: '4_legal',
-				order: 1
+				order: 1,
+				when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide the VS Code license link
 			}
 		});
 	}
