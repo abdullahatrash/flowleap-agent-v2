@@ -23,6 +23,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { IChatSessionRequestHistoryItem } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { isAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
+import { createVSCodeHarnessDescriptor, ICustomizationHarnessService } from '../../../../../workbench/contrib/chat/common/customizationHarnessService.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	id: 'sessions',
@@ -44,6 +45,7 @@ class LocalSessionsProviderContribution extends Disposable implements IWorkbench
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ISessionsProvidersService sessionsProvidersService: ISessionsProvidersService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@ICustomizationHarnessService customizationHarnessService: ICustomizationHarnessService,
 	) {
 		super();
 
@@ -55,6 +57,11 @@ class LocalSessionsProviderContribution extends Disposable implements IWorkbench
 
 		const provider = this._register(instantiationService.createInstance(LocalChatSessionsProvider));
 		this._register(sessionsProvidersService.registerProvider(provider));
+
+		// FlowLeap: upstream removed the Local harness (445ff849bd5); it lives exactly as long as the
+		// Local provider. Registered here, not in the harness service, to keep that service free of a
+		// dependency on sessions management (IChatService -> ... -> harness -> sessions management -> IChatService).
+		this._register(customizationHarnessService.registerExternalHarness(createVSCodeHarnessDescriptor()));
 	}
 }
 
