@@ -230,8 +230,6 @@ import './contrib/speech/browser/speech.contribution.js';
 // Chat
 import './contrib/chat/browser/chat.shared.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
-import './contrib/chat/browser/agentSessions/agentHost/agentHost.contribution.js';
-import './contrib/chat/browser/remoteAgentHost/remoteAgentHost.contribution.js';
 import './contrib/chat/browser/chat.view.contribution.js';
 import './contrib/inlineChat/browser/inlineChat.contribution.js';
 
@@ -282,7 +280,6 @@ import './contrib/sash/browser/sash.contribution.js';
 
 // Git
 import './contrib/git/browser/git.contributions.js';
-import './contrib/github/browser/githubLinkPresentation.contribution.js';
 
 // SCM
 import './contrib/scm/browser/scm.contribution.js';

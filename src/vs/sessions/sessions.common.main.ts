@@ -15,7 +15,6 @@ import '../workbench/browser/workbench.contribution.js';
 import '../workbench/contrib/modernUI/browser/media/notificationsDialogs.css';
 import { agentsPanelBackground } from './common/theme.js';
 import './common/sizes.js';
-import './contrib/providers/remoteAgentHost/browser/connectionDiagnostics.contribution.js';
 
 getColorRegistry().updateDefaultColor(PANEL_BACKGROUND, agentsPanelBackground);
 getColorRegistry().updateDefaultColor(TERMINAL_BACKGROUND_COLOR, agentsPanelBackground);
@@ -471,9 +470,6 @@ import './contrib/chat/browser/chat.contribution.js';
 import './contrib/chat/browser/btwSlashCommand.contribution.js';
 import './contrib/chat/browser/requestOriginProvider.contribution.js';
 import './contrib/chat/browser/sideChatProvider.contribution.js';
-import './contrib/providers/agentHost/browser/exportDebugLogsAction.js';
-import './contrib/providers/agentHost/browser/agentHostSessionConfigPicker.js';
-import './contrib/providers/agentHost/browser/agentHostForkActions.js';
 import './contrib/chat/browser/customizationsDebugLog.contribution.js';
 import './contrib/providers/copilotChatSessions/browser/copilotChatSessions.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
@@ -483,9 +479,7 @@ import './services/sessions/browser/sessionSectionOrderService.js';
 import './services/agentHostFilter/browser/agentHostFilterService.js';
 import './contrib/sessions/browser/customizationsToolbar.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
-import './contrib/codeReview/browser/codeReview.contributions.js';
 import './contrib/files/browser/files.contribution.js';
-import './contrib/github/browser/github.contribution.js';
 import './contrib/applyCommitsToParentRepo/browser/applyChangesToParentRepo.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js'; // view registration disabled; filesystem provider still needed
 import './contrib/configuration/browser/configuration.contribution.js';
@@ -497,10 +491,7 @@ import './contrib/terminal/browser/sessionsTerminalContribution.js';
 import './contrib/chatDebug/browser/chatDebug.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/aquarium/browser/aquarium.contribution.js';
-import './contrib/policyBlocked/browser/policyBlocked.contribution.js';
 import '../workbench/services/policies/browser/managedSettingsUpdate.contribution.js';
-import './contrib/automations/browser/automations.contribution.js';
-import './contrib/remoteSessions/browser/remoteSessions.contribution.js';
 import './contrib/customViewTest/browser/customViewTest.contribution.js';
 
 // Onboarding: the engine + spotlight presentation (from the workbench layer) and
