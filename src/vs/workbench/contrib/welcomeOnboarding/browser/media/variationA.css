@@ -286,12 +286,17 @@
 	height: 152px;
 	border-radius: 0;
 	border: none;
-	background: transparent;
 	box-shadow: none;
-	background-image: url('../../../../browser/media/code-icon.svg');
-	background-repeat: no-repeat;
-	background-position: center center;
-	background-size: 148px;
+	/* FlowLeap brand mark — masked so it recolors to a theme-aware accent and stays visible on light & dark. */
+	background-color: var(--vscode-textLink-foreground, #3b6fed);
+	-webkit-mask-image: url('./flowleap-logo.svg');
+	mask-image: url('./flowleap-logo.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center center;
+	mask-position: center center;
+	-webkit-mask-size: 120px;
+	mask-size: 120px;
 }
 
 .onboarding-a-signin-content {
@@ -503,6 +508,15 @@
 	color: var(--vscode-descriptionForeground);
 }
 
+.onboarding-a-signin-error {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 0;
+	font-size: 13px;
+	color: var(--vscode-errorForeground);
+}
+
 .onboarding-a-provider-mark {
 	display: flex;
 	width: 18px;
@@ -555,6 +569,10 @@
 	min-height: 0;
 	margin: 0 auto;
 	padding: 0;
+}
+
+.onboarding-a-personalize > .onboarding-a-sessions-tip {
+	margin-top: auto;
 }
 
 .onboarding-a-personalize-section {
@@ -774,6 +792,94 @@
 	text-align: center;
 }
 
+/* Agent Sessions step */
+.onboarding-a-sessions {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0 auto;
+	padding: 0;
+}
+
+.onboarding-a-sessions-features {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	flex: 1;
+}
+
+.onboarding-a-sessions-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.onboarding-a-sessions-group-label {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-sessions-grid {
+	display: grid;
+	gap: 10px;
+}
+
+.onboarding-a-sessions-grid-2 {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboarding-a-feature-card {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 14px 16px;
+	border-radius: 8px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	font-family: inherit;
+	text-align: left;
+	color: inherit;
+}
+
+.onboarding-a-feature-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 24px;
+	height: 24px;
+	margin-top: 1px;
+}
+
+.onboarding-a-feature-icon .codicon {
+	font-size: 20px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-feature-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.onboarding-a-feature-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vscode-editor-foreground);
+}
+
+.onboarding-a-feature-desc {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.4;
+}
+
 .onboarding-a-kbd {
 	display: inline-block;
 	padding: 1px 6px;
@@ -786,6 +892,33 @@
 	border-bottom-color: var(--vscode-keybindingLabel-bottomBorder, rgba(68, 68, 68, 0.6));
 	border-radius: 3px;
 	vertical-align: middle;
+}
+
+.onboarding-a-sessions-docs {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-top: auto;
+	padding: 14px 4px 4px 4px;
+}
+
+/* Tip banner */
+.onboarding-a-sessions-tip {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	font-size: 13px;
+}
+
+.onboarding-a-sessions-tip-icon .codicon {
+	font-size: 16px;
+	color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.onboarding-a-sessions-tip-text {
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.5;
 }
 
 /* Sign-in nudge */
@@ -815,6 +948,29 @@
 .onboarding-a-signin-nudge-btn:focus-visible {
 	outline: 2px solid var(--vscode-focusBorder);
 	outline-offset: -2px;
+}
+
+.onboarding-a-doc-link {
+	font-size: 12px;
+	color: var(--vscode-textLink-foreground, #3794ff);
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.onboarding-a-doc-link .codicon {
+	color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.onboarding-a-doc-link:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-doc-link:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+	border-radius: 2px;
 }
 
 /* Sign-in icon row */
@@ -902,7 +1058,8 @@
 	}
 
 	.onboarding-a-signin-brand-icon {
-		background-size: 78px;
+		-webkit-mask-size: 78px;
+		mask-size: 78px;
 	}
 
 	.onboarding-a-signin-content {
@@ -930,11 +1087,16 @@
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
+	.onboarding-a-sessions-grid-2 {
+		grid-template-columns: 1fr;
+	}
+
 	.onboarding-a-ai-pref-cards {
 		grid-template-columns: 1fr;
 	}
 
-	.onboarding-a-personalize {
+	.onboarding-a-personalize,
+	.onboarding-a-sessions {
 		justify-content: flex-start;
 	}
 }
@@ -943,6 +1105,373 @@
 .onboarding-a-keymap-pill .codicon {
 	font-size: 13px;
 	opacity: 0.7;
+}
+
+/* =========================================================================
+ * Step: Role (persona picker) — issue #79
+ * ========================================================================= */
+.onboarding-a-role {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 16px;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0 auto;
+	padding: 0;
+}
+
+.onboarding-a-role-cards {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.onboarding-a-role-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 18px;
+	border-radius: 12px;
+	border: 2px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+	cursor: pointer;
+	transition: border-color 0.15s ease, background 0.12s ease, transform 0.12s ease;
+	outline: none;
+	font-family: inherit;
+	text-align: left;
+	color: inherit;
+}
+
+.onboarding-a-role-card:hover {
+	background: var(--vscode-list-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+	transform: translateY(-1px);
+}
+
+.onboarding-a-role-card:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: -2px;
+}
+
+.onboarding-a-role-card.selected {
+	border-color: var(--vscode-focusBorder);
+	background: color-mix(in srgb, var(--vscode-focusBorder) 8%, var(--vscode-editor-background));
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+}
+
+.onboarding-a-role-card-icon .codicon {
+	font-size: 28px;
+	color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.onboarding-a-role-card-title {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--vscode-editor-foreground);
+}
+
+.onboarding-a-role-card-desc {
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.4;
+}
+
+.onboarding-a-role-skip {
+	align-self: center;
+	background: none;
+	border: none;
+	padding: 4px 8px;
+	font-family: inherit;
+	font-size: 13px;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	border-radius: 4px;
+}
+
+.onboarding-a-role-skip:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-role-skip:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+/* =========================================================================
+ * Step: Trial — issue #79
+ * ========================================================================= */
+.onboarding-a-trial {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 18px;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0 auto;
+}
+
+.onboarding-a-trial-points {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.onboarding-a-trial-point {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	font-size: 14px;
+	color: var(--vscode-editor-foreground);
+}
+
+.onboarding-a-trial-point-icon .codicon {
+	color: var(--vscode-charts-green, #89d185);
+	font-size: 16px;
+}
+
+.onboarding-a-trial-actions {
+	display: flex;
+	justify-content: center;
+}
+
+.onboarding-a-trial-start {
+	min-width: 220px;
+}
+
+.onboarding-a-trial-status,
+.onboarding-a-model-status {
+	min-height: 18px;
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+	text-align: center;
+}
+
+/* =========================================================================
+ * Step: Model — issue #79
+ * ========================================================================= */
+.onboarding-a-model {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 16px;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0 auto;
+}
+
+.onboarding-a-model-rec {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 16px 18px;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+}
+
+.onboarding-a-model-rec-title {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vscode-editor-foreground);
+}
+
+.onboarding-a-model-rec-body {
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.5;
+}
+
+.onboarding-a-model-actions {
+	display: flex;
+	justify-content: center;
+}
+
+.onboarding-a-model-connect {
+	min-width: 220px;
+}
+
+.onboarding-a-model-skip {
+	align-self: center;
+	background: none;
+	border: none;
+	padding: 4px 8px;
+	font-family: inherit;
+	font-size: 13px;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	border-radius: 4px;
+}
+
+.onboarding-a-model-skip:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-model-skip:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+/* Optional "already have data keys" footnote on the Model step */
+.onboarding-a-model-datakeys {
+	align-self: center;
+	max-width: 460px;
+	text-align: center;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-model-datakeys-link {
+	background: none;
+	border: none;
+	padding: 0;
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+}
+
+.onboarding-a-model-datakeys-link:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-model-datakeys-link:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+/* =========================================================================
+ * Step: Finale — run the first investigation (issue #79 P2a)
+ * ========================================================================= */
+.onboarding-a-finale {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 14px;
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	margin: 0 auto;
+}
+
+.onboarding-a-finale-prompt-label {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-a-finale-prompt {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 16px 18px;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+}
+
+.onboarding-a-finale-prompt-icon .codicon {
+	font-size: 18px;
+	color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.onboarding-a-finale-prompt-text {
+	margin: 0;
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--vscode-editor-foreground);
+}
+
+.onboarding-a-finale-actions {
+	display: flex;
+	justify-content: center;
+}
+
+.onboarding-a-finale-copy {
+	min-width: 240px;
+}
+
+.onboarding-a-finale-copy.copied {
+	background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+	color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+}
+
+.onboarding-a-finale-openrow {
+	min-height: 18px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	text-align: center;
+}
+
+.onboarding-a-finale-openchat {
+	background: none;
+	border: none;
+	padding: 0;
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+}
+
+.onboarding-a-finale-openchat:hover {
+	text-decoration: underline;
+}
+
+.onboarding-a-finale-openchat:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+/* =========================================================================
+ * Minimize / restore — hide the overlay while a step's workbench UI is open
+ * ========================================================================= */
+.onboarding-a-overlay.minimized {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.onboarding-a-resume {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 10001;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+	border-radius: 999px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.onboarding-a-resume:hover {
+	background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+.onboarding-a-resume:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.onboarding-a-resume-icon .codicon {
+	font-size: 14px;
 }
 
 @media (prefers-reduced-motion: reduce) {

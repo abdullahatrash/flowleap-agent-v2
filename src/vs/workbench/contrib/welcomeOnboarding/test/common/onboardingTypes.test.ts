@@ -5,7 +5,142 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { GheParseResultKind, parseGheInstanceInput } from '../../common/onboardingTypes.js';
+import {
+	GheParseResultKind,
+	parseGheInstanceInput,
+	computeVisibleSteps,
+	decideTrialPoll,
+	roleToFirstInvestigation,
+	ONBOARDING_STEPS,
+	OnboardingStepId,
+	OnboardingRole,
+	TRIAL_POLL_TIMEOUT_MS,
+} from '../../common/onboardingTypes.js';
+
+suite('onboarding step ordering + visibility', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('canonical order is Role → See it work → Sign in → Trial → Model → Finale', () => {
+		assert.deepStrictEqual([...ONBOARDING_STEPS], [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Trial,
+			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
+		]);
+	});
+
+	test('the deleted Personalize step is not in the flow', () => {
+		assert.ok(!ONBOARDING_STEPS.includes(OnboardingStepId.Personalize));
+	});
+
+	test('the Finale step is the last step and always visible', () => {
+		assert.strictEqual(ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1], OnboardingStepId.Finale);
+		for (const signedIn of [true, false]) {
+			for (const hasAccess of [true, false]) {
+				const visible = computeVisibleSteps({ signedIn, hasAccess });
+				assert.strictEqual(visible[visible.length - 1], OnboardingStepId.Finale, `signedIn=${signedIn} hasAccess=${hasAccess}`);
+			}
+		}
+	});
+
+	test('signed-in users without access see the Trial step', () => {
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true, hasAccess: false }), [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Trial,
+			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
+		]);
+	});
+
+	test('signed-out users skip the Trial step regardless of access', () => {
+		const withoutTrial = [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
+		];
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: false }), withoutTrial);
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: false, hasAccess: true }), withoutTrial);
+	});
+
+	test('signed-in users who already have access skip the Trial step', () => {
+		assert.deepStrictEqual(computeVisibleSteps({ signedIn: true, hasAccess: true }), [
+			OnboardingStepId.Role,
+			OnboardingStepId.AgentSessions,
+			OnboardingStepId.SignIn,
+			OnboardingStepId.Model,
+			OnboardingStepId.Finale,
+		]);
+	});
+
+	test('the Trial step appears only for the signed-in-without-access quadrant', () => {
+		for (const signedIn of [true, false]) {
+			for (const hasAccess of [true, false]) {
+				const includesTrial = computeVisibleSteps({ signedIn, hasAccess }).includes(OnboardingStepId.Trial);
+				assert.strictEqual(includesTrial, signedIn && !hasAccess, `signedIn=${signedIn} hasAccess=${hasAccess}`);
+			}
+		}
+	});
+
+	test('visible steps preserve canonical relative order', () => {
+		for (const signedIn of [true, false]) {
+			for (const hasAccess of [true, false]) {
+				const visible = computeVisibleSteps({ signedIn, hasAccess });
+				const canonicalIndices = visible.map(s => ONBOARDING_STEPS.indexOf(s));
+				const sorted = [...canonicalIndices].sort((a, b) => a - b);
+				assert.deepStrictEqual(canonicalIndices, sorted);
+			}
+		}
+	});
+});
+
+suite('roleToFirstInvestigation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('every role (and no role) maps to a non-empty prompt', () => {
+		for (const role of [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder, undefined]) {
+			assert.ok(roleToFirstInvestigation(role).trim().length > 0, `role=${role}`);
+		}
+	});
+
+	test('distinct roles get distinct prompts', () => {
+		const prompts = [OnboardingRole.PatentAttorney, OnboardingRole.IpAnalyst, OnboardingRole.Researcher, OnboardingRole.Founder]
+			.map(r => roleToFirstInvestigation(r));
+		assert.strictEqual(new Set(prompts).size, prompts.length);
+	});
+
+	test('an unknown role falls back to the generic prompt', () => {
+		assert.strictEqual(roleToFirstInvestigation(undefined), roleToFirstInvestigation('nonsense' as unknown as OnboardingRole));
+	});
+});
+
+suite('decideTrialPoll', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('advances the instant access is active', () => {
+		assert.strictEqual(decideTrialPoll('active', 0), 'advance');
+		assert.strictEqual(decideTrialPoll('active', TRIAL_POLL_TIMEOUT_MS + 1), 'advance');
+	});
+
+	test('keeps polling while inactive and within the time budget', () => {
+		assert.strictEqual(decideTrialPoll('inactive', 0), 'continue');
+		assert.strictEqual(decideTrialPoll('inactive', TRIAL_POLL_TIMEOUT_MS - 1), 'continue');
+	});
+
+	test('treats an inconclusive check as keep-waiting', () => {
+		assert.strictEqual(decideTrialPoll('unknown', 1_000), 'continue');
+	});
+
+	test('times out once the budget is spent without access', () => {
+		assert.strictEqual(decideTrialPoll('inactive', TRIAL_POLL_TIMEOUT_MS), 'timeout');
+		assert.strictEqual(decideTrialPoll('unknown', TRIAL_POLL_TIMEOUT_MS), 'timeout');
+	});
+});
 
 suite('parseGheInstanceInput', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

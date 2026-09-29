@@ -243,6 +243,7 @@ import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
 
 // FlowLeap (Patent)
 import './contrib/patent/browser/patentAuth.contribution.js';
+import './contrib/patent/browser/patentWalkthrough.contribution.js';
 
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';
@@ -403,7 +404,8 @@ import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
 
 // Onboarding (scenario engine)
 import './contrib/onboarding/browser/onboarding.contribution.js';
-import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
+// FlowLeap keep-out: the model picker tryout offers GitHub Copilot chat setup and Copilot billing copy (PRD 0017 B1)
+// import './contrib/chat/browser/onboarding/modelPickerTryout.contribution.js';
 import './contrib/codeEditor/browser/diffEditorTryout.contribution.js';
 
 // Call Hierarchy
