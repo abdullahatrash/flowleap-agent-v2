@@ -16,7 +16,6 @@ import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
-import { CHAT_SETUP_ACTION_ID } from '../../../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { ChatPetAccessoryId, ChatPetAccessoryIds, ChatPetAchievementId, ChatPetAchievementIds } from '../../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
 import { ChatPetVariant, IChatPetService } from '../../../../../workbench/contrib/chat/browser/chatPetService.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -27,16 +26,16 @@ suite('Sessions - Account Menu', () => {
 
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('labels the signed-out Copilot account action', () => {
+	test('labels the signed-out account action', () => {
 		const signIn = MenuRegistry.getMenuItems(Menus.AccountMenu)
 			.filter(isIMenuItem)
 			.find(item => item.command.id === 'workbench.action.agenticSignIn');
 
 		assert.ok(signIn);
-		assert.strictEqual(typeof signIn.command.title === 'string' ? signIn.command.title : signIn.command.title.value, 'Sign in to use GitHub Copilot');
+		assert.strictEqual(typeof signIn.command.title === 'string' ? signIn.command.title : signIn.command.title.value, 'Sign In');
 	});
 
-	test('uses the shared Chat setup flow for Copilot sign-in', async () => {
+	test('uses the FlowLeap sign-in flow', async () => {
 		const executedCommands: string[] = [];
 		const command = CommandsRegistry.getCommand('workbench.action.agenticSignIn');
 		assert.ok(command);
@@ -50,7 +49,7 @@ suite('Sessions - Account Menu', () => {
 
 		await command.handler(accessor);
 
-		assert.deepStrictEqual(executedCommands, [CHAT_SETUP_ACTION_ID]);
+		assert.deepStrictEqual(executedCommands, ['flowleap.signIn']);
 	});
 
 	test('omits the redundant signed-out summary', () => {

@@ -24,15 +24,31 @@ export interface IResolvedAccountInfo {
 }
 
 /**
- * Resolves the current account info by trying the default account service
- * first, then falling back to raw GitHub sessions from the authentication
- * service. The fallback covers the window between session creation and
+ * Resolves the current account info. FlowLeap: reads the `flowleap`
+ * authentication provider first, because the default account service and the
+ * GitHub sessions are empty in this product by design. Then tries the default
+ * account service, then raw GitHub sessions from the authentication service.
+ * The GitHub fallback covers the window between session creation and
  * {@link IDefaultAccountService} initialization.
  */
 export async function resolveAccountInfo(
 	defaultAccountService: IDefaultAccountService,
 	authenticationService: IAuthenticationService,
 ): Promise<IResolvedAccountInfo | undefined> {
+	try {
+		const flowLeapSessions = await authenticationService.getSessions('flowleap');
+		if (flowLeapSessions.length > 0) {
+			return {
+				accountName: flowLeapSessions[0].account.label,
+				accountProviderId: 'flowleap',
+				accountProviderLabel: 'FlowLeap',
+				accountIcon: flowLeapSessions[0].account.icon,
+			};
+		}
+	} catch {
+		// Provider not available yet (extension still activating)
+	}
+
 	const account = await defaultAccountService.getDefaultAccount();
 	if (account) {
 		return {
@@ -201,10 +217,10 @@ function getCopilotPresentation(
 			source: 'copilot',
 			kind: 'warning',
 			icon: Codicon.account,
-			label: localize('copilotUnavailable', "Copilot Unavailable"),
+			label: localize('copilotUnavailable', "FlowLeap Unavailable"),
 			ariaLabel: sentiment.untrusted
-				? localize('copilotUnavailableUntrustedAria', "GitHub Copilot is unavailable in untrusted workspaces")
-				: localize('copilotUnavailableDisabledAria', "GitHub Copilot is disabled"),
+				? localize('copilotUnavailableUntrustedAria', "FlowLeap is unavailable in untrusted workspaces")
+				: localize('copilotUnavailableDisabledAria', "FlowLeap is disabled"),
 		};
 	}
 
@@ -230,7 +246,7 @@ function getCopilotPresentation(
 			label: localize('copilotTokensRemaining', "Tokens Remaining"),
 			badge: `${remainingPercent}%`,
 			dotBadge: remainingPercent <= 10 ? 'error' : 'warning',
-			ariaLabel: localize('copilotTokensRemainingAria', "{0}% GitHub Copilot tokens remaining", remainingPercent),
+			ariaLabel: localize('copilotTokensRemainingAria', "{0}% FlowLeap tokens remaining", remainingPercent),
 		};
 	}
 
@@ -254,12 +270,12 @@ function getLowestPositivePercent(...quotas: Array<IQuotaSnapshot | undefined>):
 
 function getQuotaReachedAriaLabel(chatQuotaExceeded: boolean, completionsQuotaExceeded: boolean): string {
 	if (chatQuotaExceeded && completionsQuotaExceeded) {
-		return localize('copilotAllQuotaReachedAria', "GitHub Copilot chat and inline suggestion quota reached");
+		return localize('copilotAllQuotaReachedAria', "FlowLeap chat and inline suggestion quota reached");
 	}
 
 	if (chatQuotaExceeded) {
-		return localize('copilotChatQuotaReachedAria', "GitHub Copilot chat quota reached");
+		return localize('copilotChatQuotaReachedAria', "FlowLeap chat quota reached");
 	}
 
-	return localize('copilotCompletionsQuotaReachedAria', "GitHub Copilot inline suggestion quota reached");
+	return localize('copilotCompletionsQuotaReachedAria', "FlowLeap inline suggestion quota reached");
 }

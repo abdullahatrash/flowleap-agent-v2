@@ -39,8 +39,6 @@ import { getAccountProfileImageUrl, getAccountTitleBarBadgeKey, getAccountTitleB
 import { observeAllowSignedOutWhenUsable } from '../../../browser/sessionsAuthGate.js';
 import { IsPhoneLayoutContext, SessionsWelcomeVisibleContext } from '../../../common/contextkeys.js';
 import { IsAuxiliaryWindowContext } from '../../../../workbench/common/contextkeys.js';
-import { IAuthenticationAccessService } from '../../../../workbench/services/authentication/browser/authenticationAccessService.js';
-import { IAuthenticationUsageService } from '../../../../workbench/services/authentication/browser/authenticationUsageService.js';
 import { ACCOUNTS_AVATAR_SETTING, IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IChatDashboardService } from '../../../browser/chatDashboardService.js';
@@ -56,7 +54,6 @@ import { language } from '../../../../base/common/platform.js';
 import { AgentHostCodexAgentEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { ICodexAccountRateLimitInfo } from '../../../../platform/agentHost/common/codexAccount.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
-import { CHAT_SETUP_ACTION_ID } from '../../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { SessionsChatPetAchievementBadges } from './chatPetAchievementBadges.js';
 import { CHAT_PET_OPEN_ACHIEVEMENTS_COMMAND_ID } from '../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
@@ -87,23 +84,28 @@ registerUpdateTitleBarMenuPlacement(Menus.TitleBarLeftLayout, {
 	),
 });
 
+// FlowLeap: auth state context key, owned by the FlowLeap extension (ADR 0003).
+// Referenced by string so core never becomes a second owner of it.
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
+
 // Sign In (shown when signed out)
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: AGENTIC_SIGN_IN_COMMAND_ID,
-			title: localize2('signIn', "Sign in to use GitHub Copilot"),
+			title: localize2('signIn', "Sign In"),
 			icon: Codicon.signIn,
 			menu: {
 				id: AccountMenu,
-				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
+				when: ContextKeyExpr.notEquals(FLOWLEAP_SIGNED_IN_CONTEXT_KEY, true),
 				group: '1_account',
 				order: 1,
 			}
 		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand(CHAT_SETUP_ACTION_ID);
+		// `flowleap.signIn` lives in the FlowLeap extension and owns the whole Clerk flow (ADR 0003).
+		await accessor.get(ICommandService).executeCommand('flowleap.signIn');
 	}
 });
 
@@ -116,7 +118,7 @@ registerAction2(class extends Action2 {
 			icon: Codicon.signOut,
 			menu: {
 				id: AccountMenu,
-				when: ContextKeyExpr.equals('defaultAccountStatus', 'available'),
+				when: ContextKeyExpr.equals(FLOWLEAP_SIGNED_IN_CONTEXT_KEY, true),
 				group: '1_account',
 				order: 1,
 			}
@@ -126,19 +128,15 @@ registerAction2(class extends Action2 {
 		const defaultAccountService = accessor.get(IDefaultAccountService);
 		const dialogService = accessor.get(IDialogService);
 		const authenticationService = accessor.get(IAuthenticationService);
-		const authenticationUsageService = accessor.get(IAuthenticationUsageService);
-		const authenticationAccessService = accessor.get(IAuthenticationAccessService);
-		const defaultAccount = await defaultAccountService.getDefaultAccount();
-		if (!defaultAccount) {
-			return;
-		}
+		const commandService = accessor.get(ICommandService);
 
-		const providerId = defaultAccount.authenticationProvider.id;
-		const accountLabel = defaultAccount.accountName;
+		const account = await resolveAccountInfo(defaultAccountService, authenticationService);
 		const { confirmed } = await dialogService.confirm({
 			type: Severity.Info,
 			message: localize('agenticSignOutMessage', "Sign out of the Agents window?"),
-			detail: localize('agenticSignOutDetail', "This will sign out '{0}' from the Agents window.", accountLabel),
+			detail: account
+				? localize('agenticSignOutDetail', "This will sign out '{0}' from the Agents window.", account.accountName)
+				: localize('agenticSignOutDetailGeneric', "This will sign out your account from the Agents window."),
 			primaryButton: localize({ key: 'agenticSignOutButton', comment: ['&& denotes a mnemonic'] }, "&&Sign Out")
 		});
 
@@ -146,11 +144,9 @@ registerAction2(class extends Action2 {
 			return;
 		}
 
-		const allSessions = await authenticationService.getSessions(providerId);
-		const sessions = allSessions.filter(session => session.account.label === accountLabel);
-		await Promise.all(sessions.map(session => authenticationService.removeSession(providerId, session.id)));
-		authenticationUsageService.removeAccountUsage(providerId, accountLabel);
-		authenticationAccessService.removeAllowedExtensions(providerId, accountLabel);
+		// FlowLeap: the FlowLeap provider owns sign-out (clears the stored token
+		// and fires the session change that refreshes this widget).
+		await commandService.executeCommand('patent-ai.signOut');
 	}
 });
 
@@ -969,6 +965,11 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 	}
 
 	private shouldShowCopilotDashboardHover(): boolean {
+		// FlowLeap: the dashboard renders the Copilot entitlement state, which
+		// never resolves for a FlowLeap account; it would show its signed-out CTA.
+		if (this.accountProviderId === 'flowleap') {
+			return false;
+		}
 		return !this.chatEntitlementService.sentiment.hidden && !!this.accountName;
 	}
 
