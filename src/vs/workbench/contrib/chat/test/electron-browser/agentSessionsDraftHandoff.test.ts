@@ -1257,7 +1257,7 @@ suite('Agents Window draft handoff and parallel invitation', () => {
 			action: h.notification?.actions[0]?.label,
 		}, {
 			id: 'chat.agentsHandoff.openInAgentsWindow',
-			title: 'Copilot isn\'t available without an open folder',
+			title: 'CLI Agent isn\'t available without an open folder',
 			action: 'Open in Agents Window',
 		});
 	});
@@ -1682,8 +1682,8 @@ suite('Agents Window draft handoff and parallel invitation', () => {
 
 		for (const context of [
 			{ name: 'default', mode: 'default', emptyWorkspace: false, title: defaultHandoffTitle, description: defaultHandoffDescription, action: 'Continue in Agents Window' },
-			{ name: 'custom', mode: 'custom', emptyWorkspace: false, title: defaultHandoffTitle, description: 'Free with your Copilot plan \u2014 get a dedicated, multi-pane view alongside your workspace.', action: 'Give your agent more room?' },
-			{ name: 'empty workspace', mode: 'default', emptyWorkspace: true, title: 'Copilot isn\'t available without an open folder', description: 'Open the Agents Window to start a Copilot session.', action: 'Open in Agents Window' },
+			{ name: 'custom', mode: 'custom', emptyWorkspace: false, title: defaultHandoffTitle, description: 'Free with your FlowLeap plan \u2014 get a dedicated, multi-pane view alongside your workspace.', action: 'Give your agent more room?' },
+			{ name: 'empty workspace', mode: 'default', emptyWorkspace: true, title: 'CLI Agent isn\'t available without an open folder', description: 'Open the Agents Window to start a CLI Agent session.', action: 'Open in Agents Window' },
 		]) {
 			for (const treatment of [
 				{ name: 'unassigned copy', title: undefined, description: undefined },

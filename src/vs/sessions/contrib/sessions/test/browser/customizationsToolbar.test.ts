@@ -16,6 +16,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IAICustomizationItemsModel } from '../../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationItemsModel.js';
+import { getStaticReadOnlyToolSets } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.js';
 import { IAgentHostToolSetEnablementService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
 import { ICustomizationHarnessService, IHarnessDescriptor } from '../../../../../workbench/contrib/chat/common/customizationHarnessService.js';
 import { ICustomizationMigrationHint, ICustomizationMigrationService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/customizationMigrationService.js';
@@ -25,6 +26,11 @@ import { IActiveSession } from '../../../../services/sessions/common/sessionsMan
 import { IAICustomizationMcpServerCountService } from '../../browser/customizationMcpServerCount.js';
 import { CustomizationLinkViewItem, readCustomizationCount } from '../../browser/customizationsToolbar.contribution.js';
 import { CustomizationsNavigationState } from '../../browser/customizationsNavigationState.js';
+
+/** The Tools count includes the injected read-only CLI Agent reference tools (PRD 0016 #147: badge equals the rendered list). */
+function referenceToolCount(): number {
+	return getStaticReadOnlyToolSets().reduce((total, toolSet) => total + Array.from(toolSet.getTools()).length, 0);
+}
 
 suite('Customizations toolbar', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
@@ -65,7 +71,7 @@ suite('Customizations toolbar', () => {
 			enablementService,
 		)).get();
 
-		assert.strictEqual(count, 1);
+		assert.strictEqual(count, 1 + referenceToolCount());
 	});
 
 	test('tracks the active customization total and migration availability', async () => {
@@ -133,7 +139,7 @@ suite('Customizations toolbar', () => {
 			},
 		}, {
 			enabledState: {
-				totalCount: 9,
+				totalCount: 9 + referenceToolCount(),
 				migrationAvailable: true,
 			},
 			disabledState: {

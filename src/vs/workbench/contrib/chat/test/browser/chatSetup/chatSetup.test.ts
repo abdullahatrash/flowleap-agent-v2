@@ -46,7 +46,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
 		);
 		const { redirectHost, vscodeUri } = parseRedirectUrl(result);
 		assert.strictEqual(redirectHost, 'vscode.dev');
-		assert.strictEqual(vscodeUri, 'vscode://GitHub.copilot-chat/upgrade-success');
+		assert.strictEqual(vscodeUri, 'vscode://flowleap.patent-ai/upgrade-success');
 	});
 
 	test('insider quality uses insiders.vscode.dev host', () => {
@@ -57,7 +57,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
 		);
 		const { redirectHost, vscodeUri } = parseRedirectUrl(result);
 		assert.strictEqual(redirectHost, 'insiders.vscode.dev');
-		assert.strictEqual(vscodeUri, 'vscode-insiders://GitHub.copilot-chat/upgrade-success');
+		assert.strictEqual(vscodeUri, 'vscode-insiders://flowleap.patent-ai/upgrade-success');
 	});
 
 	test('undefined quality defaults to insiders.vscode.dev host', () => {
@@ -68,7 +68,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
 		);
 		const { redirectHost, vscodeUri } = parseRedirectUrl(result);
 		assert.strictEqual(redirectHost, 'insiders.vscode.dev');
-		assert.strictEqual(vscodeUri, 'code-oss://GitHub.copilot-chat/upgrade-success');
+		assert.strictEqual(vscodeUri, 'code-oss://flowleap.patent-ai/upgrade-success');
 	});
 
 	test('appends with & when base URL already has query params', () => {
@@ -97,7 +97,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
 		);
 		assert.ok(result.startsWith('https://github.example.com/github-copilot/upgrade?utm_source=vscode&return_to='));
 		const { vscodeUri } = parseRedirectUrl(result);
-		assert.strictEqual(vscodeUri, 'vscode://GitHub.copilot-chat/upgrade-success');
+		assert.strictEqual(vscodeUri, 'vscode://flowleap.patent-ai/upgrade-success');
 	});
 });
 
@@ -141,7 +141,7 @@ suite('Chat setup dialog presentation', () => {
 				strategy: ChatSetupStrategy.Canceled,
 				classes: ['link-button'],
 			},
-			footer: 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub Copilot may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these [settings](https://example.com/settings) anytime.',
+			footer: 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these [settings](https://example.com/settings) anytime.',
 		});
 	});
 
@@ -153,7 +153,7 @@ suite('Chat setup dialog presentation', () => {
 			publicCodeMatchesUrl: 'https://example.com/public-code',
 		});
 
-		assert.strictEqual(footer, 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub Copilot may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these settings anytime.');
+		assert.strictEqual(footer, 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these settings anytime.');
 	});
 
 	test('places Microsoft after the other providers and before the signed-out continuation', () => {

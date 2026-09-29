@@ -373,8 +373,8 @@ suite('SessionTypePickerActionItem', () => {
 			checked: false,
 			enabled: false,
 			description: '[Sign in](command:workbench.action.chat.triggerSetup)',
-			ariaDescription: 'Sign in. Sign in to GitHub Copilot to use this agent.',
-			hover: '[Sign in to GitHub Copilot](command:workbench.action.chat.triggerSetup) to use this agent.',
+			ariaDescription: 'Sign in. Sign in to FlowLeap to use this agent.',
+			hover: '[Sign in to FlowLeap](command:workbench.action.chat.triggerSetup) to use this agent.',
 		});
 	});
 });
