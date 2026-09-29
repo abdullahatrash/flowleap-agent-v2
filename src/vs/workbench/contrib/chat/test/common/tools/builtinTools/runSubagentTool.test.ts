@@ -333,6 +333,41 @@ suite('RunSubagentTool', () => {
 				modelName: undefined,
 			});
 		});
+
+		test('reads a custom agent name as a readable display name', async () => {
+			const tool = createTool({
+				customAgents: [{
+					id: 'file:///test/patent-search.md',
+					uri: URI.parse('file:///test/patent-search.md'),
+					name: 'patent-search',
+					description: 'Finds prior art',
+					agentInstructions: { content: 'Patent search body', toolReferences: [] },
+					source: { storage: PromptsStorage.local },
+					target: Target.Undefined,
+					visibility: { userInvocable: true, agentInvocable: true },
+					enabled: true
+				}]
+			});
+
+			const result = await tool.prepareToolInvocation(
+				{
+					parameters: { prompt: 'Find prior art', description: 'Search for prior art', agentName: 'patent-search' },
+					toolCallId: 'test-call-display-name',
+					chatSessionResource: URI.parse('test://session'),
+				},
+				CancellationToken.None
+			);
+
+			assert.deepStrictEqual(result?.toolSpecificData, {
+				kind: 'subagent',
+				description: 'Search for prior art',
+				agentDisplayName: 'Patent Search',
+				agentName: 'patent-search',
+				prompt: 'Find prior art',
+				modelId: undefined,
+				modelName: undefined,
+			});
+		});
 	});
 
 	suite('getToolData', () => {

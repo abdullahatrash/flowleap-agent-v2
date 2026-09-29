@@ -691,11 +691,13 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
 		const resolved = await this.resolveSubagentModel(subagent, context.modelId, args.model, currentModeInstructions, requestedAgentName ? undefined : callingSubagent?.model);
 		this._resolvedModels.set(context.toolCallId, resolved);
 
+		const agentDisplayName = subagentDisplayName(subagent?.name);
 		return {
 			invocationMessage: args.description,
 			toolSpecificData: {
 				kind: 'subagent',
 				description: args.description,
+				...(agentDisplayName ? { agentDisplayName } : {}),
 				agentName: subagent?.name ?? requestedAgentName ?? currentModeInstructions?.name,
 				prompt: args.prompt,
 				modelId: resolved.modeModelId,
@@ -728,4 +730,19 @@ export class RunSubagentTool extends Disposable implements IToolImpl {
 			throw new Error(`Requested agent '${subAgentName}' is not allowed by the current agent.`);
 		}
 	}
+}
+
+/**
+ * A human-readable label for a subagent type: a custom agent named `patent-search` titles the
+ * subagent header `Patent Search`. Returns `undefined` when the label would equal the raw name,
+ * so the header falls back to the agent name. The extension host keeps its own copy of this,
+ * because core and the extension host cannot share code.
+ */
+function subagentDisplayName(agentName: string | undefined): string | undefined {
+	const words = agentName?.trim().split(/[-_\s]+/).filter(word => word.length > 0);
+	if (!words?.length) {
+		return undefined;
+	}
+	const displayName = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+	return displayName !== agentName ? displayName : undefined;
 }
