@@ -73,6 +73,9 @@ import { IAuthenticationService } from '../../../../workbench/services/authentic
 import { HiddenItemStrategy, MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityVerbositySettingId } from '../../../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
+import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
+import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { getSessionWorkflowTemplates } from '../common/sessionWorkflowTemplates.js';
 
 // #region --- New Chat Widget ---
 
@@ -174,6 +177,7 @@ export class NewChatWidget extends Disposable {
 		@INewSessionComposerService private readonly newSessionComposerService: INewSessionComposerService,
 		@ICommandService private readonly commandService: ICommandService,
 		@INotificationService private readonly notificationService: INotificationService,
+		@IHoverService private readonly hoverService: IHoverService,
 	) {
 		super();
 		this._register(this._pendingPreferredUpgrade);
@@ -603,6 +607,7 @@ export class NewChatWidget extends Disposable {
 
 		this._renderFeedbackBanner(chatWidgetContent);
 		this._newChatInput.render(chatWidgetContent, parent);
+		this._renderWorkflowTemplates(chatWidgetContent);
 		this._register(autorun(reader => {
 			const useExperimentalLayout = this._useExperimentalComposerLayout.read(reader);
 			const isQuickChat = this._isQuickChatComposer.read(reader);
@@ -1260,6 +1265,27 @@ export class NewChatWidget extends Disposable {
 				? this._workspaceRepositoryControlsHost ?? workspaceTrigger
 				: workspaceTrigger;
 			insertionAnchor?.after(sessionTypePicker);
+		}
+	}
+
+	/**
+	 * FlowLeap: renders the patent workflow starter chips below the composer
+	 * input. Picking one seeds the input with the template's prompt (editable,
+	 * not auto-sent). The resulting session is an ordinary session of the type
+	 * the picker has selected; templates add no session type.
+	 */
+	private _renderWorkflowTemplates(container: HTMLElement): void {
+		const templates = getSessionWorkflowTemplates();
+		if (templates.length === 0) {
+			return;
+		}
+		const row = dom.append(container, dom.$('.new-session-workflow-templates'));
+		for (const template of templates) {
+			const chip = dom.append(row, dom.$('button.new-session-workflow-template-chip'));
+			dom.append(chip, dom.$('span.codicon.codicon-search'));
+			dom.append(chip, dom.$('span.new-session-workflow-template-chip-label', undefined, template.label));
+			this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), chip, template.description));
+			this._register(dom.addDisposableListener(chip, dom.EventType.CLICK, () => this._newChatInput.prefillInput(template.prompt)));
 		}
 	}
 
