@@ -39,7 +39,7 @@ import { IContextMenuService, IContextViewService } from '../../../../../platfor
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Delayer } from '../../../../../base/common/async.js';
 import { Action, IAction, Separator } from '../../../../../base/common/actions.js';
-import { ConfigureModelAccessAction, DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, getContextMenuActions, RestartServerAction, ShowSamplingRequestsAction, ShowServerOutputAction, StartServerAction, StopServerAction } from '../../../../contrib/mcp/browser/mcpServerActions.js';
+import { ConfigureModelAccessAction, DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, getContextMenuActions, McpServerAction, RestartServerAction, ShowSamplingRequestsAction, ShowServerOutputAction, StartServerAction, StopServerAction } from '../../../../contrib/mcp/browser/mcpServerActions.js';
 import { LocalMcpServerScope } from '../../../../services/mcp/common/mcpWorkbenchManagementService.js';
 import { IAgentPlugin, IAgentPluginService } from '../../common/plugins/agentPluginService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -1479,9 +1479,13 @@ export function getServerItemContextMenuActions(menuActionGroups: readonly (read
 		actions.push(activeSessionLifecycleAction, new Separator());
 	}
 	for (const menuActions of menuActionGroups) {
+		// FlowLeap: an McpServerAction hides itself when it does not apply to the server's
+		// state (e.g. Start Server while running); showing it anyway offers a disabled entry
+		// that silently does nothing when clicked.
+		const applicableMenuActions = menuActions.filter(action => !(action instanceof McpServerAction) || !action.hidden);
 		const visibleMenuActions = hasActiveSession
-			? menuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action))
-			: menuActions;
+			? applicableMenuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action))
+			: applicableMenuActions;
 		actions.push(...visibleMenuActions);
 		if (hasActiveSession && menuActions.some(isLocalMcpServerEnablementAction)) {
 			actions.push(...agentHostEnablementActions);
