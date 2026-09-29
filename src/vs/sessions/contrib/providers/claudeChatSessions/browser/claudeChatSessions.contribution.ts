@@ -8,6 +8,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ClaudeChatSessionsProvider } from './claudeChatSessionsProvider.js';
+import './claudeChatSessionsActions.js';
 
 /**
  * FlowLeap: registers the extension-host Claude sessions provider, the only
