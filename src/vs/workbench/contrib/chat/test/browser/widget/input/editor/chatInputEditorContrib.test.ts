@@ -10,7 +10,8 @@ import { Range } from '../../../../../../../../editor/common/core/range.js';
 import { withTestCodeEditor } from '../../../../../../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidget } from '../../../../../browser/chat.js';
 import { ChatWidget } from '../../../../../browser/widget/chatWidget.js';
-import '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
+import { getPatentModeInputPlaceholder } from '../../../../../browser/widget/input/editor/chatInputEditorContrib.js';
+import { ChatModeKind } from '../../../../../common/constants.js';
 
 suite('ChatTokenDeleter', () => {
 
@@ -103,5 +104,23 @@ suite('ChatTokenDeleter', () => {
 				store.dispose();
 			}
 		});
+	});
+});
+
+suite('getPatentModeInputPlaceholder', () => {
+
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('returns the patent-voice placeholder per mode in patent mode and undefined otherwise', () => {
+		const modes = [ChatModeKind.Agent, ChatModeKind.Ask, ChatModeKind.Edit];
+		assert.deepStrictEqual(
+			{
+				patent: modes.map(mode => getPatentModeInputPlaceholder(mode, true)),
+				upstream: modes.map(mode => getPatentModeInputPlaceholder(mode, false)),
+			},
+			{
+				patent: ['Describe a patent research task', 'Ask about patents, claims, or prior art', 'Describe the document changes to make'],
+				upstream: [undefined, undefined, undefined],
+			});
 	});
 });
