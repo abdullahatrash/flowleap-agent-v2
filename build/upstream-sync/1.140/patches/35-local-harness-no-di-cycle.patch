@@ -1,0 +1,141 @@
+diff --git a/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts b/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
+index d416f8a937b..4d2a16b40df 100644
+--- a/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
++++ b/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
+@@ -3,17 +3,10 @@
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
+-import { DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+-import { CustomizationHarnessServiceBase, createVSCodeHarnessDescriptor, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
++import { IDisposable } from '../../../../base/common/lifecycle.js';
++import { CustomizationHarnessServiceBase, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
+ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+ import { IFileService } from '../../../../platform/files/common/files.js';
+-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+-
+-/**
+- * FlowLeap: the session type of the Local sessions provider. The Local harness
+- * is registered while a provider offers it (upstream removed the Local harness).
+- */
+-const LOCAL_HARNESS_SESSION_TYPE = 'local';
+ 
+ /**
+  * Sessions-window override of the customization harness service.
+@@ -22,32 +15,11 @@ const LOCAL_HARNESS_SESSION_TYPE = 'local';
+  */
+ export class SessionsCustomizationHarnessService extends CustomizationHarnessServiceBase {
+ 
+-	private readonly _store = new DisposableStore();
+-	private readonly _localHarnessRegistration = this._store.add(new MutableDisposable());
+-
+ 	constructor(
+ 		@IPromptsService promptsService: IPromptsService,
+-		@ISessionsManagementService sessionsManagementService: ISessionsManagementService,
+ 		@IFileService fileService: IFileService,
+ 	) {
+ 		super([], '', promptsService, fileService);
+-
+-		const localHarness = createVSCodeHarnessDescriptor();
+-		const sync = () => {
+-			const enabled = sessionsManagementService.getAllSessionTypes().some(type => type.id === LOCAL_HARNESS_SESSION_TYPE);
+-			if (enabled && !this._localHarnessRegistration.value) {
+-				this._localHarnessRegistration.value = this.registerExternalHarness(localHarness);
+-			} else if (!enabled) {
+-				this._localHarnessRegistration.clear();
+-			}
+-		};
+-		this._store.add(sessionsManagementService.onDidChangeSessionTypes(sync));
+-		sync();
+-	}
+-
+-	override dispose(): void {
+-		this._store.dispose();
+-		super.dispose();
+ 	}
+ 
+ 	override registerExternalHarness(descriptor: IHarnessDescriptor): IDisposable {
+diff --git a/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts b/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
+index f54f780890e..f89e275a506 100644
+--- a/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
++++ b/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
+@@ -11,8 +11,6 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
+ import { SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+ import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+ import { IFileService } from '../../../../../platform/files/common/files.js';
+-import { ISessionType, SessionTypeAuthRequirement } from '../../../../services/sessions/common/session.js';
+-import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+ import { SessionsCustomizationHarnessService } from '../../browser/customizationHarnessService.js';
+ 
+ suite('SessionsCustomizationHarnessService', () => {
+@@ -25,19 +23,8 @@ suite('SessionsCustomizationHarnessService', () => {
+ 		}();
+ 	}
+ 
+-	function createFileService(): IFileService {
+-		return new class extends mock<IFileService>() { }();
+-	}
+-
+-	function createSessionsManagementService(sessionTypes: ISessionType[] = []): ISessionsManagementService {
+-		return new class extends mock<ISessionsManagementService>() {
+-			override readonly onDidChangeSessionTypes = Event.None;
+-			override getAllSessionTypes() { return sessionTypes; }
+-		}();
+-	}
+-
+-	test('does not register the Local harness without a Local session type', () => {
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService(), createFileService()));
++	test('does not register the Local harness', () => {
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), new class extends mock<IFileService>() { }()));
+ 
+ 		assert.deepStrictEqual({
+ 			availableHarnesses: service.availableHarnesses.get().map(harness => harness.id),
+@@ -48,15 +35,8 @@ suite('SessionsCustomizationHarnessService', () => {
+ 		});
+ 	});
+ 
+-	test('registers the Local harness while a provider offers the Local session type', () => {
+-		const localType: ISessionType = { id: 'local', label: 'Local', icon: Codicon.vm, authRequirement: SessionTypeAuthRequirement.None };
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService([localType]), createFileService()));
+-
+-		assert.deepStrictEqual(service.availableHarnesses.get().map(harness => harness.id), [SessionType.Local]);
+-	});
+-
+ 	test('activates the first provider harness', () => {
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService(), createFileService()));
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), new class extends mock<IFileService>() { }()));
+ 		disposables.add(service.registerExternalHarness({
+ 			id: 'copilotcli',
+ 			label: 'Copilot CLI',
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
+index edda1004931..c202c5cb304 100644
+--- a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
+@@ -23,6 +23,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
+ import { IChatSessionRequestHistoryItem } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+ import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
+ import { isAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
++import { createVSCodeHarnessDescriptor, ICustomizationHarnessService } from '../../../../../workbench/contrib/chat/common/customizationHarnessService.js';
+ 
+ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+ 	id: 'sessions',
+@@ -44,6 +45,7 @@ class LocalSessionsProviderContribution extends Disposable implements IWorkbench
+ 		@IInstantiationService instantiationService: IInstantiationService,
+ 		@ISessionsProvidersService sessionsProvidersService: ISessionsProvidersService,
+ 		@IConfigurationService configurationService: IConfigurationService,
++		@ICustomizationHarnessService customizationHarnessService: ICustomizationHarnessService,
+ 	) {
+ 		super();
+ 
+@@ -55,6 +57,11 @@ class LocalSessionsProviderContribution extends Disposable implements IWorkbench
+ 
+ 		const provider = this._register(instantiationService.createInstance(LocalChatSessionsProvider));
+ 		this._register(sessionsProvidersService.registerProvider(provider));
++
++		// FlowLeap: upstream removed the Local harness (445ff849bd5); it lives exactly as long as the
++		// Local provider. Registered here, not in the harness service, to keep that service free of a
++		// dependency on sessions management (IChatService -> ... -> harness -> sessions management -> IChatService).
++		this._register(customizationHarnessService.registerExternalHarness(createVSCodeHarnessDescriptor()));
+ 	}
+ }
+ 

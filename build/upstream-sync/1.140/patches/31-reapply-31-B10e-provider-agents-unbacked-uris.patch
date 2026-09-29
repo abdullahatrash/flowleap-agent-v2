@@ -1,0 +1,113 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts
+index acc5af9624e..53a87859769 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/customizationHarnessService.ts
+@@ -13,6 +13,7 @@ import {
+ import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
+ import { SessionType } from '../../common/chatSessionsService.js';
+ import { URI } from '../../../../../base/common/uri.js';
++import { IFileService } from '../../../../../platform/files/common/files.js';
+ 
+ /**
+  * Core implementation of the customization harness service.
+@@ -23,11 +24,13 @@ import { URI } from '../../../../../base/common/uri.js';
+ class CustomizationHarnessService extends CustomizationHarnessServiceBase {
+ 	constructor(
+ 		@IPromptsService promptsService: IPromptsService,
++		@IFileService fileService: IFileService,
+ 	) {
+ 		super(
+ 			[createVSCodeHarnessDescriptor()],
+ 			SessionType.Local,
+ 			promptsService,
++			fileService,
+ 		);
+ 	}
+ 
+diff --git a/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts b/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts
+index f71aaf3290b..fa1a978dda2 100644
+--- a/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts
++++ b/src/vs/workbench/contrib/chat/common/customizationHarnessService.ts
+@@ -11,8 +11,10 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
+ import { URI } from '../../../../base/common/uri.js';
+ import { localize } from '../../../../nls.js';
+ import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
++import { IFileService } from '../../../../platform/files/common/files.js';
+ import { AICustomizationManagementSection, AICustomizationSource, BUILTIN_STORAGE } from './aiCustomizationWorkspaceService.js';
+ import { PromptsType } from './promptSyntax/promptTypes.js';
++import { PromptFileParser } from './promptSyntax/promptFileParser.js';
+ import { AGENT_MD_FILENAME } from './promptSyntax/config/promptFileLocations.js';
+ import { IAgentSource, IChatPromptSlashCommand, ICustomAgent, IPromptsService, IResolvedChatPromptSlashCommand, matchesSessionType, PromptsStorage } from './promptSyntax/service/promptsService.js';
+ import { CancellationToken } from '../../../../base/common/cancellation.js';
+@@ -508,6 +510,7 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
+ 		staticHarnesses: readonly IHarnessDescriptor[],
+ 		defaultHarness: string,
+ 		private readonly promptsService: IPromptsService,
++		private readonly fileService?: IFileService,
+ 	) {
+ 		this._staticHarnesses = staticHarnesses;
+ 		this.promptsService = promptsService;
+@@ -664,7 +667,13 @@ export class CustomizationHarnessServiceBase implements ICustomizationHarnessSer
+ 		const result: ICustomAgent[] = [];
+ 		for (const item of items) {
+ 			if (item.type === PromptsType.agent) {
+-				const promptFile = await this.promptsService.parseNew(item.uri, token);
++				// External harnesses may describe agents with synthetic, session-scoped URIs
++				// (e.g. `claude-code:/agents/...`) that no file system provider backs, so they
++				// cannot be read. Only parse the file to enrich the agent when the resource is
++				// readable; otherwise build the agent from the metadata the provider supplied.
++				const promptFile = !this.fileService || this.fileService.hasProvider(item.uri)
++					? await this.promptsService.parseNew(item.uri, token)
++					: new PromptFileParser().parse(item.uri, '');
+ 				const extra = {
+ 					name: item.name,
+ 					description: item.description,
+diff --git a/src/vs/workbench/contrib/chat/test/common/customizationHarnessService.test.ts b/src/vs/workbench/contrib/chat/test/common/customizationHarnessService.test.ts
+index cd096cf2450..b5ba37f45c5 100644
+--- a/src/vs/workbench/contrib/chat/test/common/customizationHarnessService.test.ts
++++ b/src/vs/workbench/contrib/chat/test/common/customizationHarnessService.test.ts
+@@ -17,6 +17,7 @@ import { PromptsType, Target } from '../../common/promptSyntax/promptTypes.js';
+ import { ICustomAgent, IPromptsService, PromptsStorage } from '../../common/promptSyntax/service/promptsService.js';
+ import { SessionType } from '../../common/chatSessionsService.js';
+ import { MockPromptsService } from './promptSyntax/service/mockPromptsService.js';
++import { TestFileService } from '../../../../test/common/workbenchTestServices.js';
+ 
+ suite('CustomizationHarnessService', () => {
+ 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+@@ -540,6 +541,36 @@ suite('CustomizationHarnessService', () => {
+ 				assert.deepStrictEqual(agents.map(agent => [agent.name, agent.enabled]), [['selected', true], ['not-selected', false]]);
+ 			}
+ 		});
++
++		test('resolves provider agents with unbacked URIs from metadata without reading the file', async () => {
++			// External harnesses may describe agents with synthetic, session-scoped URIs
++			// (e.g. `claude-code:/agents/...`) that have no file system provider. Resolving
++			// them must not route through the file service (which throws ENOPRO); the agent
++			// is built from the metadata the provider already supplied.
++			const promptsService = new class extends MockPromptsService {
++				override parseNew(): Promise<never> {
++					throw new Error('parseNew must not be called for provider agents without a file system provider');
++				}
++			}();
++
++			const emitter = new Emitter<void>();
++			store.add(emitter);
++			const service = new CustomizationHarnessServiceBase([{
++				id: testSessionType1,
++				label: 'Test Extension',
++				icon: ThemeIcon.fromId('extensions'),
++				itemProvider: {
++					onDidChange: emitter.event,
++					provideChatSessionCustomizations: async (_sessionResource: URI, _token: CancellationToken): Promise<ICustomizationItem[]> => [
++						{ uri: URI.parse('test-session-type1:/agents/.github:Agents Window Developer'), type: PromptsType.agent, source: 'local', name: 'Agents Window Developer', enabled: true, extensionId: undefined, pluginUri: undefined, userInvocable: undefined },
++					],
++				},
++			}], testSessionType1, promptsService, new TestFileService());
++			store.add(service);
++
++			const agents = await service.getCustomAgents(testSessionResource1, CancellationToken.None);
++			assert.deepStrictEqual(agents.map(agent => [agent.name, agent.enabled]), [['Agents Window Developer', true]]);
++		});
+ 	});
+ 
+ });

@@ -1,0 +1,2396 @@
+diff --git a/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts b/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
+index 8e8d683390c..a0e920635c4 100644
+--- a/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
++++ b/src/vs/sessions/contrib/chat/browser/customizationHarnessService.ts
+@@ -3,9 +3,16 @@
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
+-import { IDisposable } from '../../../../base/common/lifecycle.js';
+-import { CustomizationHarnessServiceBase, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
++import { DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
++import { CustomizationHarnessServiceBase, createVSCodeHarnessDescriptor, IHarnessDescriptor } from '../../../../workbench/contrib/chat/common/customizationHarnessService.js';
+ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
++import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
++
++/**
++ * FlowLeap: the session type of the Local sessions provider. The Local harness
++ * is registered while a provider offers it (upstream removed the Local harness).
++ */
++const LOCAL_HARNESS_SESSION_TYPE = 'local';
+ 
+ /**
+  * Sessions-window override of the customization harness service.
+@@ -14,10 +21,31 @@ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promp
+  */
+ export class SessionsCustomizationHarnessService extends CustomizationHarnessServiceBase {
+ 
++	private readonly _store = new DisposableStore();
++	private readonly _localHarnessRegistration = this._store.add(new MutableDisposable());
++
+ 	constructor(
+ 		@IPromptsService promptsService: IPromptsService,
++		@ISessionsManagementService sessionsManagementService: ISessionsManagementService,
+ 	) {
+ 		super([], '', promptsService);
++
++		const localHarness = createVSCodeHarnessDescriptor();
++		const sync = () => {
++			const enabled = sessionsManagementService.getAllSessionTypes().some(type => type.id === LOCAL_HARNESS_SESSION_TYPE);
++			if (enabled && !this._localHarnessRegistration.value) {
++				this._localHarnessRegistration.value = this.registerExternalHarness(localHarness);
++			} else if (!enabled) {
++				this._localHarnessRegistration.clear();
++			}
++		};
++		this._store.add(sessionsManagementService.onDidChangeSessionTypes(sync));
++		sync();
++	}
++
++	override dispose(): void {
++		this._store.dispose();
++		super.dispose();
+ 	}
+ 
+ 	override registerExternalHarness(descriptor: IHarnessDescriptor): IDisposable {
+diff --git a/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts b/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
+index ba8baea83c2..a4724a28cb7 100644
+--- a/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
++++ b/src/vs/sessions/contrib/chat/test/browser/customizationHarnessService.test.ts
+@@ -10,6 +10,8 @@ import { mock } from '../../../../../base/test/common/mock.js';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+ import { SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
+ import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
++import { ISessionType, SessionTypeAuthRequirement } from '../../../../services/sessions/common/session.js';
++import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+ import { SessionsCustomizationHarnessService } from '../../browser/customizationHarnessService.js';
+ 
+ suite('SessionsCustomizationHarnessService', () => {
+@@ -22,8 +24,15 @@ suite('SessionsCustomizationHarnessService', () => {
+ 		}();
+ 	}
+ 
+-	test('does not register the Local harness', () => {
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService()));
++	function createSessionsManagementService(sessionTypes: ISessionType[] = []): ISessionsManagementService {
++		return new class extends mock<ISessionsManagementService>() {
++			override readonly onDidChangeSessionTypes = Event.None;
++			override getAllSessionTypes() { return sessionTypes; }
++		}();
++	}
++
++	test('does not register the Local harness without a Local session type', () => {
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService()));
+ 
+ 		assert.deepStrictEqual({
+ 			availableHarnesses: service.availableHarnesses.get().map(harness => harness.id),
+@@ -34,8 +43,15 @@ suite('SessionsCustomizationHarnessService', () => {
+ 		});
+ 	});
+ 
++	test('registers the Local harness while a provider offers the Local session type', () => {
++		const localType: ISessionType = { id: 'local', label: 'Local', icon: Codicon.vm, authRequirement: SessionTypeAuthRequirement.None };
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService([localType])));
++
++		assert.deepStrictEqual(service.availableHarnesses.get().map(harness => harness.id), [SessionType.Local]);
++	});
++
+ 	test('activates the first provider harness', () => {
+-		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService()));
++		const service = disposables.add(new SessionsCustomizationHarnessService(createPromptsService(), createSessionsManagementService()));
+ 		disposables.add(service.registerExternalHarness({
+ 			id: 'copilotcli',
+ 			label: 'Copilot CLI',
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/LOCAL_CHAT_SESSIONS_PROVIDER.md b/src/vs/sessions/contrib/providers/localChatSessions/LOCAL_CHAT_SESSIONS_PROVIDER.md
+new file mode 100644
+index 00000000000..370951fc72a
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/localChatSessions/LOCAL_CHAT_SESSIONS_PROVIDER.md
+@@ -0,0 +1,150 @@
++# LocalChatSessionsProvider — Local In-Process Chat Sessions
++
++**File:** `src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts`
++
++The local sessions provider, registered with ID `'local-chat'`. Wraps local in-process VS Code chat sessions (created via `IChatService.startNewLocalSession()`) into the extensible sessions provider model. Owns its own session list — does not rely on the chat history APIs at runtime.
++
++## Identity
++
++| Property | Value |
++|----------|-------|
++| `id` | `'local-chat'` |
++| `label` | `'Local Chat'` |
++| `icon` | `Codicon.vm` |
++| `sessionTypes` | `[LocalSessionType]` (static — provider is only registered when `sessions.chat.localAgent.enabled` is true at startup) |
++| `supportsLocalWorkspaces` | `true` |
++| `browseActions` | `[]` (uses the workspace picker's built-in folder browser) |
++
++`LocalSessionType` is defined as:
++
++```typescript
++{ id: 'local', label: 'Local', icon: Codicon.vm }
++```
++
++## Registration
++
++Registration is gated by the `sessions.chat.localAgent.enabled` setting, read once at workbench startup in `localChatSessions.contribution.ts`. If the setting is `false`, the provider is not created or registered at all. **Toggling the setting requires a window reload to take effect** — the provider does not listen for runtime configuration changes.
++
++## Architecture
++
++### Single `LocalSession` class
++
++Local sessions are represented by a single `LocalSession` class with two construction paths controlled by a `detail: IChatDetail | undefined` constructor parameter:
++
++- **`detail === undefined`** → new session: creates a fresh chat model via `IChatService.startNewLocalSession(ChatAgentLocation.Chat)`, resolves git state for the workspace via `IGitService`, and retains the model reference for the session's lifetime.
++- **`detail !== undefined`** → restored session: built from a persisted `IChatDetail` snapshot. Does not own a chat model reference; the model is loaded on demand via `IChatService.acquireOrLoadSession` when the user opens the session.
++
++The class exposes the standard `ISession` observable surface plus pre-send configuration (`setModelId`, `setMode`, `setPermissionLevel`, `setTitle`, `setStatus`, `setArchived`) and `trackModel(model, onChange)` for reactive status binding.
++
++### Provider state
++
++- **`_currentNewSession: MutableDisposable<LocalSession>`** — holds the session being composed before its first `sendRequest`.
++- **`_sessionCache: Map<string, LocalSession>`** — keyed by resource URI string. Populated when a session is sent for the first time or when persisted sessions are loaded on startup.
++
++A `LocalSession` moves from `_currentNewSession` → `_sessionCache` when `sendRequest` succeeds. The resource never changes — the same `LocalSession` instance is kept.
++
++### Persistence
++
++Local sessions are persisted in `IStorageService` profile-scoped, machine-target storage under the key `sessions.localChat.sessions`. Each entry is an `IStoredLocalSession`:
++
++```typescript
++interface IStoredLocalSession {
++	readonly uri: UriComponents;
++	readonly title: string;
++	readonly createdAt: number;
++	readonly lastMessageDate: number;
++	readonly workingDirectory: UriComponents; // mandatory
++	readonly archived?: boolean;
++	readonly parentUri?: UriComponents; // primary chat's URI for child chats
++}
++```
++
++- **Add** (`_addStoredSession`) — called after the first `sendRequest`. Refuses to persist if no working directory is available.
++- **Update** (`_updateStoredSession`) — called on rename, archive, response-completion, or `onDidSubmitRequest`-driven sync.
++- **Remove** (`_removeStoredSession`) — called from `deleteSession`.
++- **Load** (`_loadPersistedSessions`) — on provider construction; reads stored entries and creates `LocalSession` instances from them.
++
++Storage is self-contained: no `IChatService` calls are needed to list sessions, since title and timing are stored inline.
++
++### One-time migration
++
++On first run, `_migrateFromHistory()` reads `IChatService.getLocalSessionHistory()` once, imports each session with a working directory into our storage (skipping anything already stored), and sets the `sessions.localChat.migrated` flag. This brings forward existing local chat history when users upgrade.
++
++### Live model tracking
++
++When `onDidSubmitRequest` fires for a session in `_sessionCache`, `_syncSessionFromModel` calls `LocalSession.trackModel(model, onChange)`:
++
++- Subscribes to `model.requestInProgress` via `autorun`
++- Maps `true` → `SessionStatus.InProgress`, `false` → `SessionStatus.Completed`
++- Calls `onChange()` so the provider updates title, timing, persisted storage, and fires `onDidChangeSessions`
++
++A `MutableDisposable` on `LocalSession` ensures repeated `trackModel` calls don't accumulate listeners.
++
++## Lifecycle Flow
++
++### Creating a new session
++
++```
++1. User selects a folder in the workspace picker → createNewSession(folderUri, 'local')
++   → resolveWorkspace produces ISessionWorkspace
++   → LocalSession constructed with detail=undefined
++   → startNewLocalSession() creates chat model, resource is captured
++   → git state resolution scheduled
++   → _currentNewSession.value = session
++   → returns ISession
++
++2. User types a message → sendRequest(sessionId, chatResource, options)
++   → Sets title from first line of query, status InProgress
++   → Builds IChatSendRequestOptions (mode, model, permissions, attachedContext)
++   → _updateChatSessionState applies model/mode/permission to chat model
++   → chatService.sendRequest(chatResource, query, options)
++   → On success: session moves to _sessionCache, _currentNewSession cleared,
++     _addStoredSession persists the URI + metadata
++   → responseCompletePromise updates status to Completed and syncs from model
++```
++
++### Restoring sessions on startup
++
++```
++1. Provider constructor runs
++2. _migrateFromHistory (idempotent) imports any pre-existing local chat history
++3. _loadPersistedSessions reads IStoredLocalSession[] and creates LocalSession
++   instances directly from stored metadata — no chat models loaded yet
++4. Sessions appear in getSessions(); chat model is loaded lazily by the
++   chat view pane when the user clicks a session
++```
++
++### Actions
++
++- **`archiveSession` / `unarchiveSession`** — toggles `isArchived` on the cached session and persists.
++- **`deleteSession`** — calls `chatService.removeHistoryEntry()`, removes from cache, removes from storage.
++- **`renameChat`** — calls `chatService.setSessionTitle()`, updates session title, persists.
++- **`setModel`** — only meaningful for the current new session before send; updates pre-send model id.
++- **`createNewChat`** — for the current new session, returns the already-prepared `IChat` and updates `mainChat`. For an existing committed session, creates a subsequent (child) chat linked to the primary via `parentResource`.
++- **`deleteChat`** — removes a single child chat from a multi-chat session after a confirmation dialog; deleting the primary (or the last remaining chat) removes the whole session. An unknown/stale chat URI is a no-op.
++
++Local sessions advertise `capabilities.supportsDelete`, so the shared sessions-list **"Delete..."** action (contributed by the sessions workbench, gated on `SessionSupportsDeleteContext`) confirms and then calls `ISessionsManagementService.deleteSessions` (routing to `deleteSession`/`deleteSessions` above). There is no provider-specific delete action.
++
++## Multi-Chat Support
++
++A local session may host multiple chats. The hierarchy is stored entirely in the provider's own metadata — there is no setting and multi-chat is always enabled.
++
++- Each `LocalSession` has an optional `parentResource`. A session with no `parentResource` is a **primary** chat; one with a `parentResource` pointing at the primary's resource is a **child** chat.
++- The parent→child link is persisted via `IStoredLocalSession.parentUri` so the hierarchy survives reloads.
++- `getSessions()` surfaces only primary chats; children are aggregated into their primary's group. `_buildGroupISession` wraps a primary plus its children into a single `ISession` whose `chats` observable re-derives on group-membership changes, and whose `status`/`updatedAt`/`isRead`/`lastTurnEnd` are aggregated across the group. Such sessions report `capabilities.supportsMultipleChats: true`.
++- The management service sends subsequent messages with the group (primary) `sessionId` and the child's chat resource; `sendRequest` routes these to `_sendChildChat`. A child is added to the cache immediately on `createNewChat` but only persisted once its first send succeeds; a rejected/unsent child is rolled back.
++- On load, a child whose `parentUri` is not present in storage is promoted to a primary (non-destructive orphan handling).
++
++## Picker Contributions
++
++`localChatSessionsActions.ts` registers upstream's shared `ModePicker` and `PermissionPicker` widgets for sessions whose `SessionTypeContext` is `'local'` and whose provider is `'local-chat'`. They read and change the session through `LocalChatSessionsProvider.getSessionConfiguration()`. Upstream removed the Local harness (445ff849bd5); FlowLeap keeps it (PRD 0017 A11), including the Local customization harness in `contrib/chat/browser/customizationHarnessService.ts`.
++
++The model picker is contributed by the sessions core (`contrib/chat/browser/modelPicker.ts`), not by this provider. It reads models via `ISessionsProvider.getModelsSnapshot`; for local sessions this returns general-purpose registered language models (those without a `targetChatSessionType` that are user-selectable). This provider's `getModelPickerOptions` returns `showManageModelsAction: true`, so the core picker surfaces the **Manage Models** action for local sessions.
++
++## Differences from `ClaudeChatSessionsProvider`
++
++- **No `IAgentSessionsService` dependency.** Uses `IChatService` directly.
++- **No untitled→committed URI swap.** Local session resources never change.
++- **Multi-chat hierarchy stored in provider metadata.** A local session may host multiple chats; the parent→child link is persisted via `IStoredLocalSession.parentUri` (see Multi-Chat Support above).
++- **Self-managed session list.** Storage owns the source of truth, not the chat history.
++- **No worktree / branch / isolation.** Local sessions run in-process against the workspace folder as-is.
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
+new file mode 100644
+index 00000000000..edda1004931
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessions.contribution.ts
+@@ -0,0 +1,135 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
++import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
++import { Disposable, IDisposable } from '../../../../../base/common/lifecycle.js';
++import { LocalChatSessionsProvider, LOCAL_SESSION_ENABLED_SETTING } from './localChatSessionsProvider.js';
++import './localChatSessionsActions.js';
++import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
++import { Registry } from '../../../../../platform/registry/common/platform.js';
++import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from '../../../../../platform/configuration/common/configurationRegistry.js';
++import { localize } from '../../../../../nls.js';
++import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
++import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
++import { ForkConversationAction } from '../../../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
++import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
++import { URI } from '../../../../../base/common/uri.js';
++import { ILogService } from '../../../../../platform/log/common/log.js';
++import { raceTimeout } from '../../../../../base/common/async.js';
++import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
++import { IChatSessionRequestHistoryItem } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
++import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
++import { isAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
++
++Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
++	id: 'sessions',
++	properties: {
++		[LOCAL_SESSION_ENABLED_SETTING]: {
++			type: 'boolean',
++			default: true,
++			tags: ['experimental'],
++			experiment: { mode: 'startup' },
++			description: localize('sessions.chat.localAgent.enabled', "Enable Local VS Code chat sessions in the Agents Window. Reload the window for changes to take effect."),
++		},
++	},
++});
++
++class LocalSessionsProviderContribution extends Disposable implements IWorkbenchContribution {
++	static readonly ID = 'sessions.localSessionsProvider';
++
++	constructor(
++		@IInstantiationService instantiationService: IInstantiationService,
++		@ISessionsProvidersService sessionsProvidersService: ISessionsProvidersService,
++		@IConfigurationService configurationService: IConfigurationService,
++	) {
++		super();
++
++		// Only register the provider when enabled. The setting is read once
++		// at startup; toggling it requires a window reload.
++		if (!configurationService.getValue<boolean>(LOCAL_SESSION_ENABLED_SETTING)) {
++			return;
++		}
++
++		const provider = this._register(instantiationService.createInstance(LocalChatSessionsProvider));
++		this._register(sessionsProvidersService.registerProvider(provider));
++	}
++}
++
++registerWorkbenchContribution2(LocalSessionsProviderContribution.ID, LocalSessionsProviderContribution, WorkbenchPhase.AfterRestored);
++
++registerAction2(class extends ForkConversationAction {
++	protected override async _tryForkAsChat(instantiationService: IInstantiationService, sourceSessionResource: URI, request: IChatSessionRequestHistoryItem | undefined): Promise<boolean> {
++		return instantiationService.invokeFunction(async accessor => {
++			const sessionsManagementService = accessor.get(ISessionsManagementService);
++			const sessionsService = accessor.get(ISessionsService);
++			const chatService = accessor.get(IChatService);
++			const logService = accessor.get(ILogService);
++
++			const session = sessionsManagementService.getSession(sourceSessionResource)
++				?? sessionsManagementService.getSessions().find(s => s.chats.get().some(c => c.resource.toString() === sourceSessionResource.toString()));
++			if (!session?.capabilities.get().supportsMultipleChats || !isAgentHostProviderId(session.providerId)) {
++				return false;
++			}
++
++			const requests = chatService.getSession(sourceSessionResource)?.getRequests();
++			let turnId: string | undefined;
++			if (request) {
++				const requestIdx = requests?.findIndex(r => r.id === request.id) ?? -1;
++				if (requestIdx <= 0) {
++					return false;
++				}
++				turnId = requests![requestIdx - 1].id;
++			} else {
++				turnId = requests?.at(-1)?.id;
++			}
++			if (!turnId) {
++				return false;
++			}
++
++			const newChat = await sessionsManagementService.forkChatInSession(session, sourceSessionResource, turnId);
++			await sessionsService.openChat(session, newChat.resource);
++			logService.trace(`[LocalChatSessions] Forked conversation into new chat ${newChat.resource.toString()} in session ${session.sessionId}`);
++			return true;
++		});
++	}
++
++	protected override _openForkedSession(instantiationService: IInstantiationService, parentSessionResource: URI, forkedSessionResource: URI): Promise<void> {
++		return instantiationService.invokeFunction(async accessor => {
++			const sessionsManagementService = accessor.get(ISessionsManagementService);
++			const sessionsService = accessor.get(ISessionsService);
++			const logService = accessor.get(ILogService);
++
++			const parentSession = sessionsManagementService.getSession(parentSessionResource);
++			if (!parentSession) {
++				logService.error(`Parent session ${parentSessionResource.toString()} not found when forking conversation`);
++				return super._openForkedSession(instantiationService, parentSessionResource, forkedSessionResource);
++			}
++
++			// Wait for the forked session to appear, but bound the wait so a
++			// missing session does not hang forever. Applies to local and
++			// contributed (agent-host) sessions alike — both surface via
++			// `sessionsManagementService` in the Agents window.
++			if (!sessionsManagementService.getSession(forkedSessionResource)) {
++				let listener: IDisposable | undefined;
++				const appeared = await raceTimeout(new Promise<boolean>(resolve => {
++					listener = sessionsManagementService.onDidChangeSessions(() => {
++						if (sessionsManagementService.getSession(forkedSessionResource)) {
++							resolve(true);
++						}
++					});
++				}), 30_000);
++				listener?.dispose();
++
++				if (!appeared) {
++					logService.error(`Forked session ${forkedSessionResource.toString()} did not appear within timeout`);
++					return;
++				}
++			}
++			await sessionsService.openSession(forkedSessionResource);
++
++		});
++	}
++});
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts
+new file mode 100644
+index 00000000000..ed726486571
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsActions.ts
+@@ -0,0 +1,150 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { BaseActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
++import { Disposable, DisposableStore, IDisposable } from '../../../../../base/common/lifecycle.js';
++import { derived, IObservable } from '../../../../../base/common/observable.js';
++import { localize2 } from '../../../../../nls.js';
++import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
++import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
++import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
++import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
++import { ChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
++import { Menus } from '../../../../browser/menus.js';
++import { SessionProviderIdContext, SessionTypeContext } from '../../../../common/contextkeys.js';
++import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
++import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
++import { ISession } from '../../../../services/sessions/common/session.js';
++import { IActiveSession } from '../../../../services/sessions/common/sessionsManagement.js';
++import { ModePicker, ScopedModePickerModelCache } from '../../copilotChatSessions/browser/modePicker.js';
++import { IPermissionLevelMeta, IPermissionPickerDelegate, PermissionPicker } from '../../copilotChatSessions/browser/permissionPicker.js';
++import { ILocalSessionConfiguration, LOCAL_PROVIDER_ID, LocalChatSessionsProvider, LocalSessionType } from './localChatSessionsProvider.js';
++
++/*
++ * FlowLeap: the mode and permission pickers of the new-session composer for
++ * Local sessions. Upstream removed the Local harness (445ff849bd5) and with it
++ * these registrations; the pickers themselves are upstream's shared widgets.
++ */
++
++const IsActiveLocalSession = ContextKeyExpr.and(
++	ContextKeyExpr.equals(SessionTypeContext.key, LocalSessionType.id),
++	ContextKeyExpr.equals(SessionProviderIdContext.key, LOCAL_PROVIDER_ID),
++);
++
++const LOCAL_MODE_PICKER_ID = 'sessions.local.modePicker';
++const LOCAL_PERMISSION_PICKER_ID = 'sessions.local.permissionPicker';
++
++registerAction2(class extends Action2 {
++	constructor() {
++		super({
++			id: LOCAL_MODE_PICKER_ID,
++			title: localize2('localModePicker', "Mode"),
++			f1: false,
++			menu: [{ id: Menus.NewSessionConfig, group: 'navigation', order: 0, when: IsActiveLocalSession }],
++		});
++	}
++	override async run(): Promise<void> { /* handled by the action view item */ }
++});
++
++registerAction2(class extends Action2 {
++	constructor() {
++		super({
++			id: LOCAL_PERMISSION_PICKER_ID,
++			title: localize2('localPermissionPicker', "Permissions"),
++			f1: false,
++			menu: [{ id: Menus.NewSessionControl, group: 'navigation', order: 1, when: IsActiveLocalSession }],
++		});
++	}
++	override async run(): Promise<void> { /* handled by the action view item */ }
++});
++
++/**
++ * Wraps a standalone picker widget as a {@link BaseActionViewItem} so a
++ * {@link MenuWorkbenchToolBar} can render it.
++ */
++class PickerActionViewItem extends BaseActionViewItem {
++	constructor(private readonly picker: { render(container: HTMLElement): void; dispose(): void }, disposable?: IDisposable) {
++		super(undefined, { id: '', label: '', enabled: true, class: undefined, tooltip: '', run: () => { } });
++		if (disposable) {
++			this._register(disposable);
++		}
++	}
++
++	override render(container: HTMLElement): void {
++		this.picker.render(container);
++	}
++
++	override dispose(): void {
++		this.picker.dispose();
++		super.dispose();
++	}
++}
++
++/** Reads and changes the permission level of the active Local session. */
++class LocalPermissionPickerDelegate implements IPermissionPickerDelegate {
++
++	readonly currentPermissionLevel: IObservable<ChatPermissionLevel | undefined>;
++
++	constructor(
++		private readonly _session: IObservable<IActiveSession | undefined>,
++		private readonly _sessionsProvidersService: ISessionsProvidersService,
++	) {
++		this.currentPermissionLevel = derived(reader => this._configuration(this._session.read(reader))?.permissionLevel.read(reader));
++	}
++
++	getPermissionLevelMeta(_level: ChatPermissionLevel, meta: IPermissionLevelMeta): IPermissionLevelMeta {
++		return meta;
++	}
++
++	setPermissionLevel(level: ChatPermissionLevel): void {
++		this._configuration(this._session.get())?.setPermissionLevel(level);
++	}
++
++	private _configuration(session: ISession | undefined): ILocalSessionConfiguration | undefined {
++		const provider = session ? this._sessionsProvidersService.getProvider(session.providerId) : undefined;
++		return session && provider instanceof LocalChatSessionsProvider ? provider.getSessionConfiguration(session.sessionId) : undefined;
++	}
++}
++
++class LocalPickerActionViewItemContribution extends Disposable implements IWorkbenchContribution {
++	static readonly ID = 'sessions.localPickerActionViewItems';
++
++	constructor(
++		@IActionViewItemService actionViewItemService: IActionViewItemService,
++		@ISessionsProvidersService sessionsProvidersService: ISessionsProvidersService,
++	) {
++		super();
++		const modePickerModels = this._register(new ScopedModePickerModelCache(session => session.providerId === LOCAL_PROVIDER_ID));
++
++		this._register(actionViewItemService.register(
++			Menus.NewSessionConfig, LOCAL_MODE_PICKER_ID,
++			(_action, _options, scopedInstantiationService) => {
++				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
++				const store = new DisposableStore();
++				const modePickerModel = store.add(modePickerModels.acquire(session, scopedInstantiationService));
++				const picker = scopedInstantiationService.createInstance(ModePicker, modePickerModel.model, session);
++				store.add(picker.onDidSelect(mode => {
++					const active = session.get();
++					const provider = active ? sessionsProvidersService.getProvider(active.providerId) : undefined;
++					if (active && provider instanceof LocalChatSessionsProvider) {
++						provider.getSessionConfiguration(active.sessionId)?.setMode(mode);
++					}
++				}));
++				return new PickerActionViewItem(picker, store);
++			},
++		));
++
++		this._register(actionViewItemService.register(
++			Menus.NewSessionControl, LOCAL_PERMISSION_PICKER_ID,
++			(_action, _options, scopedInstantiationService) => {
++				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
++				const delegate = new LocalPermissionPickerDelegate(session, sessionsProvidersService);
++				return new PickerActionViewItem(scopedInstantiationService.createInstance(PermissionPicker, delegate));
++			},
++		));
++	}
++}
++
++registerWorkbenchContribution2(LocalPickerActionViewItemContribution.ID, LocalPickerActionViewItemContribution, WorkbenchPhase.AfterRestored);
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts
+new file mode 100644
+index 00000000000..f6765fb9505
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/localChatSessions/browser/localChatSessionsProvider.ts
+@@ -0,0 +1,1285 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { Emitter, Event } from '../../../../../base/common/event.js';
++import { Codicon } from '../../../../../base/common/codicons.js';
++import { Disposable, DisposableMap, MutableDisposable } from '../../../../../base/common/lifecycle.js';
++import { Schemas } from '../../../../../base/common/network.js';
++import { autorun, constObservable, IObservable, IReader, ISettableObservable, observableFromEvent, observableValue, transaction } from '../../../../../base/common/observable.js';
++import { ThemeIcon } from '../../../../../base/common/themables.js';
++import { URI, UriComponents } from '../../../../../base/common/uri.js';
++import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
++import { IChatService, IChatSendRequestOptions, IChatDetail, convertLegacyChatSessionTiming } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
++import { IChatSessionFileChange2, IChatSessionProviderOptionItem, SessionType } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
++import { ISession, IChat, ISessionGitRepository, ISessionFolder, ISessionWorkspace, SessionStatus, ISessionType, ISessionFileChange, toSessionId, SESSION_WORKSPACE_GROUP_LOCAL, IChatCheckpoints, ChatInteractivity, ChatModelSource, ISideChatSelection, SessionTypeAuthRequirement } from '../../../../services/sessions/common/session.js';
++import { ChatAgentLocation, ChatConfiguration, ChatModeKind, ChatPermissionLevel, isChatPermissionLevel } from '../../../../../workbench/contrib/chat/common/constants.js';
++import { basename, dirname, isEqual } from '../../../../../base/common/resources.js';
++import { IDeleteChatOptions, ISendRequestOptions, ISessionChangeEvent, ISessionModelPickerOptions, ISessionModelsSnapshot, ISessionsProvider, ISessionsProviderCreateSessionOptions } from '../../../../services/sessions/common/sessionsProvider.js';
++import { isBuiltinChatMode, IChatMode } from '../../../../../workbench/contrib/chat/common/chatModes.js';
++import { IChatModel } from '../../../../../workbench/contrib/chat/common/model/chatModel.js';
++import { IGitService } from '../../../../../workbench/contrib/git/common/gitService.js';
++import { localize } from '../../../../../nls.js';
++import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
++import { ILabelService } from '../../../../../platform/label/common/label.js';
++import { ILogService } from '../../../../../platform/log/common/log.js';
++import { IFileService } from '../../../../../platform/files/common/files.js';
++import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
++import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
++import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
++import { getRegisteredLanguageModels, resolveModelIdentifierFromLanguageModels } from '../../../../../workbench/contrib/chat/common/modelSelection.js';
++import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
++import { createLocalChangesets } from '../../claudeChatSessions/browser/localChangesets.js';
++import { IMarkdownString } from '../../../../../base/common/htmlContent.js';
++import { CancellationToken } from '../../../../../base/common/cancellation.js';
++
++/** Local session type — in-process VS Code chat, no background agent or worktree. */
++export const LocalSessionType: ISessionType = {
++	id: 'local',
++	label: localize('localSession', "Local"),
++	icon: Codicon.vm,
++	authRequirement: SessionTypeAuthRequirement.None,
++};
++
++/** Setting key controlling whether Local VS Code chat sessions are available in the Agents app. */
++export const LOCAL_SESSION_ENABLED_SETTING = 'sessions.chat.localAgent.enabled';
++
++export const LOCAL_PROVIDER_ID = 'local-chat';
++const STORAGE_KEY_SESSIONS = 'sessions.localChat.sessions';
++const STORAGE_KEY_MIGRATED = 'sessions.localChat.migrated';
++
++interface IStoredLocalSession {
++	readonly uri: UriComponents;
++	readonly title: string;
++	readonly createdAt: number;
++	readonly lastMessageDate: number;
++	readonly workingDirectory: UriComponents;
++	readonly archived?: boolean;
++	/**
++	 * Resource of the primary (parent) chat when this entry is a subsequent
++	 * chat in a multi-chat session. `undefined`/absent for primary chats.
++	 * This is how the chat hierarchy is persisted in the provider metadata.
++	 */
++	readonly parentUri?: UriComponents;
++}
++
++/**
++ * The pre-send configuration of a local session that the new-session mode and
++ * permission pickers read and change.
++ */
++export interface ILocalSessionConfiguration {
++	readonly permissionLevel: IObservable<ChatPermissionLevel>;
++	setPermissionLevel(level: ChatPermissionLevel): void;
++	setMode(mode: IChatMode | undefined): void;
++}
++
++/**
++ * Builds an {@link IChat} snapshot from a {@link LocalSession}. The chat's
++ * changesets are the git-backed local changesets of its workspace.
++ */
++function buildChat(session: LocalSession, instantiationService: IInstantiationService): IChat {
++	const chat = {
++		resource: session.resource,
++		createdAt: session.createdAt,
++		workspace: session.workspace,
++		modelSource: session.modelSource,
++		interactivity: constObservable(ChatInteractivity.Full),
++		title: session.title,
++		updatedAt: session.updatedAt,
++		status: session.status,
++		changes: session.changes,
++		checkpoints: session.checkpoints,
++		modelId: session.modelId,
++		mode: session.mode,
++		isArchived: session.isArchived,
++		isRead: session.isRead,
++		description: session.description,
++		lastTurnEnd: session.lastTurnEnd,
++	};
++	return { ...chat, changesets: createLocalChangesets(session.workspace, constObservable([chat]), instantiationService) };
++}
++
++/**
++ * A local chat session. Manages observable state and provides mutation
++ * methods used by the provider.
++ *
++ * Constructed in two ways:
++ * - **New session** (`detail` is `undefined`): creates a fresh chat model
++ *   through {@link IChatService.startNewLocalSession} and resolves git state.
++ * - **History session** (`detail` is provided): restores from a persisted
++ *   {@link IChatDetail} without owning a chat model reference.
++ */
++class LocalSession extends Disposable {
++
++	readonly resource: URI;
++	readonly sessionId: string;
++	readonly providerId: string;
++	readonly sessionType = SessionType.Local;
++	readonly icon: ThemeIcon;
++	readonly createdAt: Date;
++
++	/**
++	 * Resource of the primary (parent) chat when this session is a subsequent
++	 * chat in a multi-chat group. `undefined` for primary chats.
++	 */
++	private _parentResource: URI | undefined;
++	get parentResource(): URI | undefined { return this._parentResource; }
++	setParentResource(resource: URI | undefined): void { this._parentResource = resource; }
++
++	private readonly _title = observableValue(this, '');
++	readonly title: IObservable<string> = this._title;
++
++	private readonly _updatedAt = observableValue(this, new Date());
++	readonly updatedAt: IObservable<Date> = this._updatedAt;
++
++	private readonly _status = observableValue(this, SessionStatus.Untitled);
++	readonly status: IObservable<SessionStatus> = this._status;
++
++	private readonly _permissionLevel = observableValue(this, ChatPermissionLevel.Default);
++	readonly permissionLevel: IObservable<ChatPermissionLevel> = this._permissionLevel;
++
++	private readonly _workspaceData = observableValue<ISessionWorkspace | undefined>(this, undefined);
++	readonly workspace: IObservable<ISessionWorkspace | undefined> = this._workspaceData;
++
++	readonly checkpoints: IObservable<IChatCheckpoints | undefined> = constObservable(undefined);
++
++	private readonly _changes = observableValue<readonly ISessionFileChange[]>(this, []);
++	readonly changes: IObservable<readonly ISessionFileChange[]> = this._changes;
++
++	private readonly _modelIdObservable = observableValue<string | undefined>(this, undefined);
++	readonly modelId: IObservable<string | undefined> = this._modelIdObservable;
++
++	private readonly _modelSource = observableValue<ChatModelSource | undefined>(this, undefined);
++	readonly modelSource: IObservable<ChatModelSource | undefined> = this._modelSource;
++
++	private readonly _modeObservable = observableValue<{ readonly id: string; readonly kind: string } | undefined>(this, undefined);
++	readonly mode: IObservable<{ readonly id: string; readonly kind: string } | undefined> = this._modeObservable;
++
++	readonly loading: IObservable<boolean> = constObservable(false);
++
++	private readonly _isArchived = observableValue(this, false);
++	readonly isArchived: IObservable<boolean> = this._isArchived;
++	readonly isRead: IObservable<boolean> = constObservable(true);
++	readonly description: IObservable<IMarkdownString | undefined> = constObservable(undefined);
++
++	private readonly _lastTurnEnd = observableValue<Date | undefined>(this, undefined);
++	readonly lastTurnEnd: IObservable<Date | undefined> = this._lastTurnEnd;
++
++	readonly mainChat: ISettableObservable<IChat>;
++
++	// -- Pre-send configuration --
++
++	private _modelId: string | undefined;
++	private _mode: IChatMode | undefined;
++
++	readonly selectedOptions = new Map<string, IChatSessionProviderOptionItem>();
++
++	get selectedModelId(): string | undefined { return this._modelId; }
++	get chatMode(): IChatMode | undefined { return this._mode; }
++
++	/**
++	 * Creates a session from persisted chat history.
++	 */
++	static fromHistory(
++		detail: IChatDetail,
++		providerId: string,
++		workspace: ISessionWorkspace | undefined,
++		instantiationService: IInstantiationService,
++	): LocalSession {
++		return instantiationService.createInstance(LocalSession, detail, workspace, providerId);
++	}
++
++	constructor(
++		detail: IChatDetail | undefined,
++		workspace: ISessionWorkspace | undefined,
++		providerId: string,
++		@IGitService private readonly gitService: IGitService,
++		@IChatService private readonly chatService: IChatService,
++		@IFileService private readonly fileService: IFileService,
++		@IInstantiationService instantiationService: IInstantiationService,
++	) {
++		super();
++
++		this.providerId = providerId;
++		this.icon = LocalSessionType.icon;
++
++		if (detail) {
++			// History session — restore from persisted data
++			const timing = convertLegacyChatSessionTiming(detail.timing);
++			this.resource = detail.sessionResource;
++			this.createdAt = new Date(timing.created);
++
++			const lastUpdate = detail.lastMessageDate || timing.lastRequestEnded || timing.lastRequestStarted || timing.created;
++			this._title.set(detail.title, undefined);
++			this._updatedAt.set(new Date(lastUpdate), undefined);
++			this._status.set(detail.isActive ? SessionStatus.InProgress : SessionStatus.Completed, undefined);
++			this._lastTurnEnd.set(timing.lastRequestEnded ? new Date(timing.lastRequestEnded) : undefined, undefined);
++
++			if (workspace) {
++				this._workspaceData.set(workspace, undefined);
++			}
++		} else {
++			// New session — create a fresh chat model
++			const modelRef = this._register(this.chatService.startNewLocalSession(
++				ChatAgentLocation.Chat,
++				{ debugOwner: 'LocalChatSessionsProvider#createNewSession' },
++			));
++			if (workspace && workspace.folders.length > 0) {
++				modelRef.object.setWorkingDirectory(workspace.folders[0]?.root);
++			}
++			this.resource = modelRef.object.sessionResource;
++			this.createdAt = new Date();
++
++			if (workspace) {
++				this._workspaceData.set(workspace, undefined);
++				this._resolveGitState(workspace);
++			}
++		}
++
++		this.sessionId = toSessionId(providerId, this.resource);
++		this.mainChat = observableValue<IChat>(this, buildChat(this, instantiationService));
++	}
++
++	private async _resolveGitState(workspace: ISessionWorkspace): Promise<void> {
++		const repoUri = workspace.folders[0]?.root;
++		if (!repoUri) {
++			return;
++		}
++
++		try {
++			const repo = await this.gitService.openRepository(repoUri);
++			if (!repo) {
++				return;
++			}
++
++			const folder = workspace.folders[0];
++			const baseGitRepo: ISessionGitRepository = folder.gitRepository ?? {
++				uri: folder.root,
++				workTreeUri: undefined,
++				baseBranchName: undefined,
++				gitHubInfo: constObservable(undefined),
++			};
++
++			// Monotonically increasing version used to discard stale diff results.
++			let diffVersion = 0;
++
++			this._register(autorun((reader) => {
++				const state = repo.state.read(reader);
++				const head = state.HEAD;
++				const branchName = head?.commit ? head.name : undefined;
++				const upstreamBranchName = head?.upstream
++					? `${head.upstream.remote}/${head.upstream.name}`
++					: undefined;
++				const uncommittedChanges = state.workingTreeChanges.length + state.untrackedChanges.length + state.indexChanges.length;
++
++				this._workspaceData.set({
++					...workspace,
++					folders: [{
++						...folder,
++						gitRepository: {
++							...baseGitRepo,
++							branchName,
++							upstreamBranchName,
++							uncommittedChanges,
++						},
++					}],
++				}, undefined);
++
++				const allStateChanges = [...state.workingTreeChanges, ...state.untrackedChanges, ...state.indexChanges];
++
++				const version = ++diffVersion;
++				repo.diffBetweenWithStats2('HEAD').then(async diffChanges => {
++					if (this._store.isDisposed || version !== diffVersion) {
++						return;
++					}
++					const trackedUris = new Set(diffChanges.map(el => el.uri.toString()));
++					const changes: IChatSessionFileChange2[] = diffChanges.map(el => ({
++						uri: el.uri,
++						originalUri: el.originalUri,
++						modifiedUri: el.modifiedUri ?? el.uri,
++						insertions: el.insertions,
++						deletions: el.deletions,
++					}));
++					const untrackedFiles = allStateChanges.filter(el => !trackedUris.has(el.uri.toString()));
++					const lineCountPromises = untrackedFiles.map(async el => {
++						let insertions = 0;
++						try {
++							const stat = await this.fileService.stat(el.uri);
++							if (!stat.isDirectory) {
++								const content = await this.fileService.readFile(el.uri);
++								const text = content.value.toString();
++								insertions = text.length > 0 ? text.split('\n').length : 0;
++							}
++						} catch {
++							// File may have been deleted between state snapshot and read
++						}
++						return {
++							uri: el.uri,
++							originalUri: undefined,
++							modifiedUri: el.modifiedUri ?? el.uri,
++							insertions,
++							deletions: 0,
++						} satisfies IChatSessionFileChange2;
++					});
++					const untrackedChanges = await Promise.all(lineCountPromises);
++					if (this._store.isDisposed || version !== diffVersion) {
++						return;
++					}
++					changes.push(...untrackedChanges);
++					this._changes.set(changes, undefined);
++				}, () => {
++					if (this._store.isDisposed || version !== diffVersion) {
++						return;
++					}
++					this._changes.set(allStateChanges.map<IChatSessionFileChange2>(el => ({
++						uri: el.uri,
++						originalUri: el.originalUri,
++						modifiedUri: el.modifiedUri ?? el.uri,
++						insertions: 0,
++						deletions: 0,
++					})), undefined);
++				});
++			}));
++		} catch {
++			// No git repository available — workspace stays as-is
++		}
++	}
++
++	setPermissionLevel(level: ChatPermissionLevel): void {
++		this._permissionLevel.set(level, undefined);
++	}
++
++	setModelId(modelId: string | undefined, source: ChatModelSource = ChatModelSource.Chosen): void {
++		this._modelId = modelId;
++		transaction(tx => {
++			this._modelSource.set(modelId ? source : undefined, tx);
++			this._modelIdObservable.set(modelId, tx);
++		});
++	}
++
++	setTitle(title: string): void {
++		this._title.set(title, undefined);
++	}
++
++	setUpdatedAt(date: Date): void {
++		this._updatedAt.set(date, undefined);
++	}
++
++	setStatus(status: SessionStatus): void {
++		this._status.set(status, undefined);
++	}
++
++	setArchived(archived: boolean): void {
++		this._isArchived.set(archived, undefined);
++	}
++
++	private readonly _modelTracker = this._register(new MutableDisposable());
++
++	/**
++	 * Subscribe to live updates from the given chat model. Subsequent calls
++	 * replace any prior subscription. Disposed automatically with the session.
++	 */
++	trackModel(model: IChatModel, onChange: () => void): void {
++		this._modelTracker.value = autorun(reader => {
++			const inProgress = model.requestInProgress.read(reader);
++			this._status.set(inProgress ? SessionStatus.InProgress : SessionStatus.Completed, undefined);
++			onChange();
++		});
++	}
++
++	setMode(mode: IChatMode | undefined): void {
++		this._mode = mode;
++		if (mode) {
++			this._modeObservable.set({ id: mode.id, kind: mode.kind }, undefined);
++		} else {
++			this._modeObservable.set(undefined, undefined);
++		}
++	}
++
++	/**
++	 * Update this session from a persisted history detail.
++	 */
++	updateFromHistory(detail: IChatDetail): void {
++		const timing = convertLegacyChatSessionTiming(detail.timing);
++		const lastUpdate = detail.lastMessageDate || timing.lastRequestEnded || timing.lastRequestStarted || timing.created;
++		transaction(tx => {
++			this._title.set(detail.title, tx);
++			this._updatedAt.set(new Date(lastUpdate), tx);
++			this._status.set(detail.isActive ? SessionStatus.InProgress : SessionStatus.Completed, tx);
++			this._lastTurnEnd.set(timing.lastRequestEnded ? new Date(timing.lastRequestEnded) : undefined, tx);
++		});
++	}
++}
++
++/**
++ * Sessions provider that wraps local in-process chat sessions
++ * (using {@link IChatService} directly) into the {@link ISessionsProvider} interface.
++ */
++export class LocalChatSessionsProvider extends Disposable implements ISessionsProvider {
++
++	readonly id = LOCAL_PROVIDER_ID;
++	readonly label = localize('localChatSessionsProvider', "FlowLeap Chat");
++	readonly icon = Codicon.vm;
++	readonly order = 0;
++	readonly browseActions: readonly [] = [];
++	readonly supportsLocalWorkspaces = true;
++
++	readonly sessionTypes: readonly ISessionType[] = [LocalSessionType];
++	readonly onDidChangeSessionTypes: Event<void> = Event.None;
++
++	private readonly _onDidChangeSessions = this._register(new Emitter<ISessionChangeEvent>());
++	readonly onDidChangeSessions: Event<ISessionChangeEvent> = this._onDidChangeSessions.event;
++
++	/** Cache of sessions, keyed by resource URI string. Holds every chat (primary and children). */
++	private readonly _sessionCache = new Map<string, LocalSession>();
++
++	/** Aggregated multi-chat session wrappers, keyed by group (primary) session id. */
++	private readonly _sessionGroupCache = new Map<string, ISession>();
++
++	/** Fires when the set of chats in a group changes (chat added or removed). */
++	private readonly _onDidChangeGroupMembership = this._register(new Emitter<{ readonly groupKey: string }>());
++
++	private readonly _newSessions = this._register(new DisposableMap<string, LocalSession>());
++
++	constructor(
++		@IChatService private readonly chatService: IChatService,
++		@IInstantiationService private readonly instantiationService: IInstantiationService,
++		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
++		@ILanguageModelToolsService private readonly toolsService: ILanguageModelToolsService,
++		@IConfigurationService private readonly configurationService: IConfigurationService,
++		@ILabelService private readonly labelService: ILabelService,
++		@ILogService private readonly logService: ILogService,
++		@IStorageService private readonly storageService: IStorageService,
++		@IDialogService private readonly dialogService: IDialogService,
++	) {
++		super();
++
++		// Track requests on our sessions to update last message date,
++		// title, and persisted metadata when the chat widget sends
++		// subsequent messages directly (not via our sendRequest).
++		this._register(this.chatService.onDidSubmitRequest(e => {
++			const session = this._sessionCache.get(e.chatSessionResource.toString());
++			if (session) {
++				this._syncSessionFromModel(session);
++			}
++		}));
++
++		// One-time migration: import existing local chat history into our storage
++		this._migrateFromHistory().finally(() => {
++			// Load persisted local sessions on initialization
++			this._loadPersistedSessions();
++		});
++	}
++
++	/**
++	 * One-time migration that imports existing local chat sessions from
++	 * {@link IChatService.getLocalSessionHistory} into our own persisted
++	 * storage. Only sessions with a working directory are migrated, since
++	 * a working directory is mandatory for {@link LocalSession}. Sessions
++	 * that are already in our storage are skipped.
++	 */
++	private async _migrateFromHistory(): Promise<void> {
++		if (this.storageService.getBoolean(STORAGE_KEY_MIGRATED, StorageScope.PROFILE, false)) {
++			return;
++		}
++
++		try {
++			const history = await this.chatService.getLocalSessionHistory();
++			const sessions = this._readStoredSessions();
++			const existingKeys = new Set(sessions.map(s => URI.revive(s.uri).toString()));
++			let changed = false;
++
++			for (const detail of history) {
++				if (!detail.workingDirectory) {
++					continue;
++				}
++				const key = detail.sessionResource.toString();
++				if (existingKeys.has(key)) {
++					continue;
++				}
++				const timing = convertLegacyChatSessionTiming(detail.timing);
++				const lastUpdate = detail.lastMessageDate || timing.lastRequestEnded || timing.lastRequestStarted || timing.created;
++				sessions.push({
++					uri: detail.sessionResource.toJSON(),
++					title: detail.title,
++					createdAt: timing.created,
++					lastMessageDate: lastUpdate,
++					workingDirectory: detail.workingDirectory.toJSON(),
++				});
++				changed = true;
++			}
++
++			if (changed) {
++				this._writeStoredSessions(sessions);
++			}
++			this.storageService.store(STORAGE_KEY_MIGRATED, true, StorageScope.PROFILE, StorageTarget.MACHINE);
++		} catch (e) {
++			this.logService.error('[LocalChatSessionsProvider] Failed to migrate local chat history', e);
++			// Do not mark migration complete on failure so it can be retried next time.
++		}
++	}
++
++	/**
++	 * Reads current title/timing from the live chat model, updates the
++	 * cached session, persists changes, and sets up reactive tracking
++	 * so subsequent status changes propagate automatically.
++	 */
++	private _syncSessionFromModel(session: LocalSession): void {
++		const model = this.chatService.getSession(session.resource);
++		if (!model) {
++			return;
++		}
++		session.trackModel(model, () => {
++			const timing = model.timing;
++			const lastUpdate = timing.lastRequestEnded ?? timing.lastRequestStarted ?? timing.created;
++			session.setTitle(model.title);
++			session.setUpdatedAt(new Date(lastUpdate));
++			this._updateStoredSession(session);
++			this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(session)] });
++		});
++	}
++
++	/** Returns the configuration of a session for the new-session pickers. */
++	getSessionConfiguration(sessionId: string): ILocalSessionConfiguration | undefined {
++		return this._findSession(sessionId);
++	}
++
++	// -- Session types --
++
++	getSessionTypes(_workspaceUri: URI): ISessionType[] {
++		return [LocalSessionType];
++	}
++
++	// -- Sessions --
++
++	getSessions(): ISession[] {
++		// Only primary chats surface as sessions; children are aggregated into
++		// their primary's group.
++		const sessions: ISession[] = [];
++		for (const session of this._sessionCache.values()) {
++			if (session.parentResource) {
++				continue;
++			}
++			sessions.push(this._toISession(session));
++		}
++		return sessions;
++	}
++
++	/**
++	 * Loads sessions from our own persisted storage. No calls to
++	 * {@link IChatService} are needed — all metadata is stored inline.
++	 *
++	 * All chats are loaded into the cache first so that the chat hierarchy
++	 * (children referencing their primary via `parentUri`) can be resolved.
++	 * A child whose primary is missing from storage is treated as a primary
++	 * (its `parentResource` is left unset) so it is never lost.
++	 */
++	private _loadPersistedSessions(): void {
++		const storedSessions = this._readStoredSessions();
++		if (storedSessions.length === 0) {
++			return;
++		}
++
++		const storedKeys = new Set(storedSessions.map(s => URI.revive(s.uri).toString()));
++		const loaded: LocalSession[] = [];
++
++		for (const stored of storedSessions) {
++			const uri = URI.revive(stored.uri);
++			const key = uri.toString();
++			if (this._sessionCache.has(key)) {
++				continue;
++			}
++
++			const workingDirectory = URI.revive(stored.workingDirectory);
++			const detail: IChatDetail = {
++				sessionResource: uri,
++				title: stored.title,
++				lastMessageDate: stored.lastMessageDate,
++				timing: { created: stored.createdAt, lastRequestStarted: undefined, lastRequestEnded: stored.lastMessageDate },
++				isActive: false,
++				lastResponseState: 0 /* ResponseModelState.Complete */,
++				workingDirectory,
++			};
++
++			const workspace = this.resolveWorkspace(workingDirectory);
++			const session = LocalSession.fromHistory(detail, this.id, workspace, this.instantiationService);
++			if (stored.archived) {
++				session.setArchived(true);
++			}
++			// Only honour the parent link when the primary is also present in
++			// storage; otherwise promote this orphan child to a primary.
++			if (stored.parentUri) {
++				const parentUri = URI.revive(stored.parentUri);
++				if (storedKeys.has(parentUri.toString())) {
++					session.setParentResource(parentUri);
++				}
++			}
++			this._sessionCache.set(key, session);
++			loaded.push(session);
++		}
++
++		// Fire `added` only for sessions that surface in `getSessions()`.
++		const added: ISession[] = [];
++		for (const session of loaded) {
++			if (session.parentResource) {
++				continue;
++			}
++			added.push(this._toISession(session));
++		}
++
++		if (added.length > 0) {
++			this._onDidChangeSessions.fire({ added, removed: [], changed: [] });
++		}
++	}
++
++	// -- Storage helpers --
++
++	private _readStoredSessions(): IStoredLocalSession[] {
++		const raw = this.storageService.get(STORAGE_KEY_SESSIONS, StorageScope.PROFILE);
++		if (!raw) {
++			return [];
++		}
++		try {
++			const parsed = JSON.parse(raw);
++			return Array.isArray(parsed) ? parsed : [];
++		} catch {
++			return [];
++		}
++	}
++
++	private _addStoredSession(session: LocalSession): void {
++		const sessions = this._readStoredSessions();
++		const key = session.resource.toString();
++		if (sessions.some(s => URI.revive(s.uri).toString() === key)) {
++			return;
++		}
++		const workingDirectory = session.workspace.get()?.folders[0]?.root;
++		if (!workingDirectory) {
++			this.logService.warn(`[LocalChatSessionsProvider] Cannot persist session ${key} — no working directory`);
++			return;
++		}
++		sessions.push({
++			uri: session.resource.toJSON(),
++			title: session.title.get(),
++			createdAt: session.createdAt.getTime(),
++			lastMessageDate: session.updatedAt.get().getTime(),
++			workingDirectory: workingDirectory.toJSON(),
++			parentUri: session.parentResource?.toJSON(),
++		});
++		this._writeStoredSessions(sessions);
++	}
++
++	private _updateStoredSession(session: LocalSession): void {
++		const sessions = this._readStoredSessions();
++		const key = session.resource.toString();
++		const idx = sessions.findIndex(s => URI.revive(s.uri).toString() === key);
++		if (idx >= 0) {
++			sessions[idx] = {
++				...sessions[idx],
++				title: session.title.get(),
++				lastMessageDate: session.updatedAt.get().getTime(),
++				archived: session.isArchived.get(),
++			};
++			this._writeStoredSessions(sessions);
++		}
++	}
++
++	private _removeStoredSession(resource: URI): void {
++		const sessions = this._readStoredSessions();
++		const key = resource.toString();
++		const filtered = sessions.filter(s => URI.revive(s.uri).toString() !== key);
++		if (filtered.length !== sessions.length) {
++			this._writeStoredSessions(filtered);
++		}
++	}
++
++	private _writeStoredSessions(sessions: IStoredLocalSession[]): void {
++		this.storageService.store(
++			STORAGE_KEY_SESSIONS,
++			JSON.stringify(sessions),
++			StorageScope.PROFILE,
++			StorageTarget.MACHINE,
++		);
++	}
++
++	// -- Workspace --
++
++	resolveWorkspace(uri: URI): ISessionWorkspace | undefined {
++		if (uri.scheme !== Schemas.file) {
++			return undefined;
++		}
++		const folder: ISessionFolder = {
++			root: uri,
++			workingDirectory: uri,
++			name: basename(uri),
++			description: undefined,
++			gitRepository: undefined,
++		};
++		return {
++			uri,
++			label: basename(uri),
++			description: this.labelService.getUriLabel(dirname(uri), { relative: false }),
++			group: SESSION_WORKSPACE_GROUP_LOCAL,
++			icon: Codicon.folder,
++			folders: [folder],
++			requiresWorkspaceTrust: true,
++			isVirtualWorkspace: false,
++		};
++	}
++
++	// -- Session Lifecycle --
++
++	createNewSession(workspaceUri: URI, sessionTypeId: string): ISession {
++		if (sessionTypeId !== LocalSessionType.id) {
++			throw new Error(`Unsupported session type '${sessionTypeId}' for local provider`);
++		}
++
++		const workspace = this.resolveWorkspace(workspaceUri);
++		if (!workspace) {
++			throw new Error(`Cannot resolve workspace for URI: ${workspaceUri.toString()}`);
++		}
++
++		const session = this.instantiationService.createInstance(LocalSession, undefined, workspace, this.id);
++		session.setPermissionLevel(this._defaultPermissionLevel());
++		this._newSessions.set(session.sessionId, session);
++		return this._toISession(session);
++	}
++
++	deleteNewSession(sessionId: string): void {
++		if (this._newSessions.has(sessionId)) {
++			this._newSessions.deleteAndDispose(sessionId);
++		}
++	}
++
++	get onDidChangeModels(): Event<void> {
++		return Event.signal(this.languageModelsService.onDidChangeLanguageModels);
++	}
++
++	getModelsSnapshot(_sessionId: string, desiredModelId?: string): ISessionModelsSnapshot {
++		// Local (in-process VS Code chat) sessions use general-purpose models
++		// (those without a `targetChatSessionType`) that are user-selectable —
++		// no extension registers models specifically targeting the 'local'
++		// session type.
++		const allModels = getRegisteredLanguageModels(this.languageModelsService);
++		const models = allModels.filter(model => !model.metadata.targetChatSessionType && model.metadata.isUserSelectable);
++		return {
++			models,
++			desiredModelResolution: resolveModelIdentifierFromLanguageModels(models, desiredModelId, this.languageModelsService, allModels),
++			modelTarget: undefined,
++		};
++	}
++
++	getModelPickerOptions(_sessionId: string): ISessionModelPickerOptions {
++		// Local (in-process VS Code chat) sessions offer the "Manage Models"
++		// action so users can configure the general-purpose model set.
++		return {
++			useGroupedModelPicker: true,
++			showFeatured: true,
++			showUnavailableFeatured: false,
++			showManageModelsAction: true,
++		};
++	}
++
++	setModel(sessionId: string, _chatResource: URI, modelId: string, source: ChatModelSource): void {
++		const newSession = this._newSessions.get(sessionId);
++		if (newSession) {
++			newSession.setModelId(modelId, source);
++		}
++	}
++
++	// -- Session Actions --
++
++	async archiveSession(sessionId: string): Promise<void> {
++		const session = this._findSession(sessionId);
++		if (session) {
++			session.setArchived(true);
++			this._updateStoredSession(session);
++			this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(session)] });
++		}
++	}
++
++	async unarchiveSession(sessionId: string): Promise<void> {
++		const session = this._findSession(sessionId);
++		if (session) {
++			session.setArchived(false);
++			this._updateStoredSession(session);
++			this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(session)] });
++		}
++	}
++
++	async deleteSession(sessionId: string): Promise<void> {
++		const session = this._findSession(sessionId);
++		if (!session) {
++			return;
++		}
++
++		// Resolve the group: deleting a session removes its primary chat and
++		// all child chats. If a child id was passed, resolve to its primary.
++		const primary = this._resolvePrimary(session);
++		const group = this._getGroupChats(primary);
++
++		const groupISession = this._toISession(primary);
++
++		for (const chat of group) {
++			await this.chatService.removeHistoryEntry(chat.resource);
++			this._sessionCache.delete(chat.resource.toString());
++			this._removeStoredSession(chat.resource);
++			chat.dispose();
++		}
++
++		this._sessionGroupCache.delete(primary.sessionId);
++		if (this._newSessions.has(sessionId)) {
++			this._newSessions.deleteAndDispose(sessionId);
++		}
++		this._onDidChangeSessions.fire({ added: [], removed: [groupISession], changed: [] });
++	}
++
++	async deleteSessions(sessionIds: readonly string[]): Promise<void> {
++		for (const sessionId of sessionIds) {
++			await this.deleteSession(sessionId);
++		}
++	}
++
++	async deleteChat(sessionId: string, chatUri: URI, options?: IDeleteChatOptions): Promise<boolean> {
++		const primary = this._findSession(sessionId);
++		if (!primary || primary.parentResource) {
++			return false;
++		}
++
++		const group = this._getGroupChats(primary);
++		const target = group.find(chat => isEqual(chat.resource, chatUri));
++
++		// Unknown chat (e.g. a stale or incorrect URI): do nothing rather than
++		// risk wiping the whole session.
++		if (!target) {
++			return false;
++		}
++
++		// Deleting the only chat or the primary chat removes the whole session
++		// (and any children).
++		if (group.length <= 1 || isEqual(target.resource, primary.resource)) {
++			await this.deleteSession(sessionId);
++			return true;
++		}
++
++		// Confirm before deleting a sub chat from a multi-chat session, unless the
++		// caller opted out (e.g. discarding a transient untitled draft).
++		if (!options?.skipConfirmation) {
++			const confirmed = await this.dialogService.confirm({
++				message: localize('deleteChat.confirm', "Are you sure you want to delete this chat?"),
++				detail: localize('deleteChat.detail', "This action cannot be undone."),
++				primaryButton: localize('deleteChat.delete', "Delete")
++			});
++			if (!confirmed.confirmed) {
++				return false;
++			}
++		}
++
++		await this.chatService.removeHistoryEntry(target.resource);
++		this._sessionCache.delete(target.resource.toString());
++		this._removeStoredSession(target.resource);
++		target.dispose();
++
++		this._onDidChangeGroupMembership.fire({ groupKey: primary.sessionId });
++		this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(primary)] });
++		return true;
++	}
++
++	async forkChat(sessionId: string, _sourceChat: URI, _turnId: string): Promise<IChat> {
++		throw new Error(`Session '${sessionId}' does not support forking into a chat`);
++	}
++
++	async createSideChat(sessionId: string, _sourceChat: URI, _turnId: string, _selection?: ISideChatSelection): Promise<IChat> {
++		throw new Error(`Session '${sessionId}' does not support side chats`);
++	}
++
++	createQuickChat(_sessionTypeId: string, _options?: ISessionsProviderCreateSessionOptions): ISession {
++		throw new Error('LocalChatSessionsProvider does not support quick chats');
++	}
++
++	async setSessionReadState(_sessionId: string, _isRead: boolean): Promise<void> {
++		// Local sessions are always read: the chat runs in this window.
++	}
++
++	async renameChat(_sessionId: string, chatUri: URI, title: string): Promise<void> {
++		this.chatService.setSessionTitle(chatUri, title);
++		const session = this._findSessionByResource(chatUri);
++		if (session) {
++			session.setTitle(title);
++			this._updateStoredSession(session);
++			this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(session)] });
++		}
++	}
++
++	async renameSession(sessionId: string, title: string): Promise<void> {
++		const session = this._findSession(sessionId);
++		if (session) {
++			await this.renameChat(sessionId, session.resource, title);
++		}
++	}
++
++	async createNewChat(sessionId: string, _prompt?: string): Promise<IChat> {
++		const currentNewSession = this._newSessions.get(sessionId);
++		if (currentNewSession) {
++			return currentNewSession.mainChat.get();
++		}
++
++		const primary = this._findSession(sessionId);
++		if (primary && !primary.parentResource) {
++			return this._createNewSubsequentChat(primary);
++		}
++
++		throw new Error(`Session '${sessionId}' not found or is not the current new session`);
++	}
++
++	/**
++	 * Creates a subsequent chat within an existing multi-chat session. The new
++	 * chat is linked to the primary chat via {@link LocalSession.parentResource}
++	 * and added to the cache so it appears in the session's `chats` group. It is
++	 * not persisted until its first {@link sendRequest} succeeds.
++	 */
++	private _createNewSubsequentChat(primary: LocalSession): IChat {
++		const workspace = primary.workspace.get();
++		if (!workspace) {
++			throw new Error('Cannot create a new chat — primary session has no workspace');
++		}
++
++		const child = this.instantiationService.createInstance(LocalSession, undefined, workspace, this.id);
++		child.setParentResource(primary.resource);
++		child.setPermissionLevel(this._defaultPermissionLevel());
++		child.setModelId(primary.modelId.get());
++		child.setTitle(localize('newChat', "New Chat"));
++
++		this._sessionCache.set(child.resource.toString(), child);
++		this._onDidChangeGroupMembership.fire({ groupKey: primary.sessionId });
++		this._onDidChangeSessions.fire({ added: [], removed: [], changed: [this._toISession(primary)] });
++
++		return child.mainChat.get();
++	}
++
++	// -- Send Request --
++
++	async sendRequest(sessionId: string, chatResource: URI, options: ISendRequestOptions): Promise<ISession> {
++		// First chat of a brand-new session.
++		const newSession = this._newSessions.get(sessionId);
++		if (newSession) {
++			if (chatResource.toString() !== newSession.resource.toString()) {
++				throw new Error(`Chat resource ${chatResource.toString()} does not match session resource ${newSession.resource.toString()}`);
++			}
++			return this._sendFirstChat(newSession, chatResource, options);
++		}
++
++		// Subsequent chat in an existing multi-chat session. The management
++		// service sends with the group (primary) session id and the child's
++		// chat resource.
++		const primary = this._findSession(sessionId);
++		const child = this._sessionCache.get(chatResource.toString());
++		if (primary && !primary.parentResource && child && child.parentResource && isEqual(child.parentResource, primary.resource)) {
++			return this._sendChildChat(primary, child, chatResource, options);
++		}
++
++		throw new Error(`Session '${sessionId}' not found`);
++	}
++
++	private async _sendFirstChat(newSession: LocalSession, chatResource: URI, options: ISendRequestOptions): Promise<ISession> {
++		newSession.setTitle(options.query.split('\n')[0].substring(0, 100) || localize('newSession', "New Session"));
++		newSession.setStatus(SessionStatus.InProgress);
++
++		const newISession = this._toISession(newSession);
++		this._onDidChangeSessions.fire({ added: [newISession], removed: [], changed: [] });
++
++		this.logService.debug(`[LocalChatSessionsProvider] Sending request for session ${newSession.sessionId}`);
++
++		const result = await this._dispatchSend(newSession, chatResource, options);
++		if (result.kind === 'rejected') {
++			this._newSessions.deleteAndLeak(newSession.sessionId);
++			this._sessionGroupCache.delete(newSession.sessionId);
++			this._onDidChangeSessions.fire({ added: [], removed: [newISession], changed: [] });
++			newSession.dispose();
++			throw new Error(`[LocalChatSessionsProvider] sendRequest rejected: ${result.reason}`);
++		}
++
++		// Put the new session into the cache and persist its URI.
++		this._sessionCache.set(newSession.resource.toString(), newSession);
++		this._addStoredSession(newSession);
++		this._newSessions.deleteAndLeak(newSession.sessionId);
++
++		// Track response completion to update session status and persist title
++		if (result.kind === 'sent') {
++			result.data.responseCompletePromise.then(() => {
++				newSession.setStatus(SessionStatus.Completed);
++				this._syncSessionFromModel(newSession);
++			}, error => {
++				// Response failed — still mark session completed so it doesn't appear stuck.
++				this.logService.error(`[LocalChatSessionsProvider] Response failed for session ${newSession.sessionId}:`, error);
++				newSession.setStatus(SessionStatus.Completed);
++				this._updateStoredSession(newSession);
++				this._onDidChangeSessions.fire({ added: [], removed: [], changed: [newISession] });
++			});
++		}
++
++		this._onDidChangeSessions.fire({ added: [], removed: [], changed: [newISession] });
++		return newISession;
++	}
++
++	private async _sendChildChat(primary: LocalSession, child: LocalSession, chatResource: URI, options: ISendRequestOptions): Promise<ISession> {
++		child.setTitle(options.query.split('\n')[0].substring(0, 100) || localize('newChat', "New Chat"));
++		child.setStatus(SessionStatus.InProgress);
++
++		const groupISession = this._toISession(primary);
++		this._onDidChangeSessions.fire({ added: [], removed: [], changed: [groupISession] });
++
++		this.logService.debug(`[LocalChatSessionsProvider] Sending request for chat ${child.sessionId} in session ${primary.sessionId}`);
++
++		const result = await this._dispatchSend(child, chatResource, options);
++		if (result.kind === 'rejected') {
++			// Roll back the unsent child so it does not linger in the group.
++			this._sessionCache.delete(child.resource.toString());
++			this._onDidChangeGroupMembership.fire({ groupKey: primary.sessionId });
++			this._onDidChangeSessions.fire({ added: [], removed: [], changed: [groupISession] });
++			child.dispose();
++			throw new Error(`[LocalChatSessionsProvider] sendRequest rejected: ${result.reason}`);
++		}
++
++		// Persist the now-committed child chat with its parent link.
++		this._addStoredSession(child);
++
++		if (result.kind === 'sent') {
++			result.data.responseCompletePromise.then(() => {
++				child.setStatus(SessionStatus.Completed);
++				this._syncSessionFromModel(child);
++			}, error => {
++				this.logService.error(`[LocalChatSessionsProvider] Response failed for chat ${child.sessionId}:`, error);
++				child.setStatus(SessionStatus.Completed);
++				this._updateStoredSession(child);
++				this._onDidChangeSessions.fire({ added: [], removed: [], changed: [groupISession] });
++			});
++		}
++
++		this._onDidChangeSessions.fire({ added: [], removed: [], changed: [groupISession] });
++		return groupISession;
++	}
++
++	/**
++	 * Applies pre-send configuration to the chat model and dispatches the
++	 * request to {@link IChatService}. Returns the raw send result; commit and
++	 * rollback bookkeeping is left to the caller.
++	 */
++	private async _dispatchSend(session: LocalSession, chatResource: URI, options: ISendRequestOptions): ReturnType<IChatService['sendRequest']> {
++		const { query, attachedContext } = options;
++
++		// Resolve mode
++		const modeKind = session.chatMode?.kind ?? ChatModeKind.Agent;
++		const modeIsBuiltin = session.chatMode ? isBuiltinChatMode(session.chatMode) : true;
++
++		const rawModeInstructions = session.chatMode?.modeInstructions?.get();
++		const modeInstructions = rawModeInstructions ? {
++			name: session.chatMode!.name.get(),
++			content: rawModeInstructions.content,
++			toolReferences: this.toolsService.toToolReferences(rawModeInstructions.toolReferences),
++			metadata: rawModeInstructions.metadata,
++		} : undefined;
++
++		const permissionLevel = session.permissionLevel.get();
++
++		const sendOptions: IChatSendRequestOptions = {
++			location: ChatAgentLocation.Chat,
++			userSelectedModelId: session.selectedModelId,
++			modeInfo: {
++				kind: modeKind,
++				isBuiltin: modeIsBuiltin,
++				modeInstructions,
++				telemetryModeId: modeIsBuiltin ? modeKind : 'custom',
++				applyCodeBlockSuggestionId: undefined,
++				permissionLevel,
++			},
++			attachedContext,
++		};
++
++		// Set model/mode/permission state on the chat model before sending
++		const modelRef = await this._updateChatSessionState(chatResource, session);
++		try {
++			return await this.chatService.sendRequest(chatResource, query, sendOptions);
++		} finally {
++			modelRef?.dispose();
++		}
++	}
++
++	// -- Private helpers --
++
++	override dispose(): void {
++		for (const session of this._sessionCache.values()) {
++			session.dispose();
++		}
++		this._sessionCache.clear();
++		this._sessionGroupCache.clear();
++		super.dispose();
++	}
++
++	/**
++	 * Resolves the initial permission level for a brand-new session from
++	 * `chat.permissions.default`, clamped to `Default` when enterprise policy
++	 * disables global auto-approval.
++	 */
++	private _defaultPermissionLevel(): ChatPermissionLevel {
++		const policyRestricted = this.configurationService.inspect<boolean>(ChatConfiguration.GlobalAutoApprove).policyValue === false;
++		if (policyRestricted) {
++			return ChatPermissionLevel.Default;
++		}
++		const level = this.configurationService.getValue<string>(ChatConfiguration.DefaultPermissionLevel);
++		return isChatPermissionLevel(level) ? level : ChatPermissionLevel.Default;
++	}
++
++	/**
++	 * Updates the chat model state (model, mode, permission level) before sending.
++	 */
++	private async _updateChatSessionState(resource: URI, session: LocalSession): Promise<{ dispose(): void } | undefined> {
++		const modelRef = await this.chatService.acquireOrLoadSession(resource, ChatAgentLocation.Chat, CancellationToken.None);
++		if (!modelRef) {
++			return undefined;
++		}
++		const model = modelRef.object;
++		if (session.selectedModelId) {
++			const languageModel = this.languageModelsService.lookupLanguageModel(session.selectedModelId);
++			if (languageModel) {
++				model.inputModel.setState({ selectedModel: { identifier: session.selectedModelId, metadata: languageModel } });
++			}
++		}
++		if (session.chatMode) {
++			model.inputModel.setState({ mode: { id: session.chatMode.id, kind: session.chatMode.kind } });
++		}
++		const permissionLevel = session.permissionLevel.get();
++		if (permissionLevel) {
++			model.inputModel.setState({ permissionLevel });
++		}
++		return modelRef;
++	}
++
++	private _findSession(sessionId: string): LocalSession | undefined {
++		const newSession = this._newSessions.get(sessionId);
++		if (newSession) {
++			return newSession;
++		}
++		for (const session of this._sessionCache.values()) {
++			if (session.sessionId === sessionId) {
++				return session;
++			}
++		}
++		return undefined;
++	}
++
++	private _findSessionByResource(resource: URI): LocalSession | undefined {
++		const cached = this._sessionCache.get(resource.toString());
++		if (cached) {
++			return cached;
++		}
++		for (const session of this._newSessions.values()) {
++			if (session.resource.toString() === resource.toString()) {
++				return session;
++			}
++		}
++		return undefined;
++	}
++
++	/** Resolves the primary (parent) chat of a session's group. */
++	private _resolvePrimary(session: LocalSession): LocalSession {
++		if (session.parentResource) {
++			return this._sessionCache.get(session.parentResource.toString()) ?? session;
++		}
++		return session;
++	}
++
++	/** Returns the primary chat followed by its children, ordered by creation time. */
++	private _getGroupChats(primary: LocalSession): LocalSession[] {
++		const children: LocalSession[] = [];
++		for (const session of this._sessionCache.values()) {
++			if (session.parentResource && isEqual(session.parentResource, primary.resource)) {
++				children.push(session);
++			}
++		}
++		children.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
++		return [primary, ...children];
++	}
++
++	private _toISession(session: LocalSession): ISession {
++		const primary = this._resolvePrimary(session);
++
++		const cached = this._sessionGroupCache.get(primary.sessionId);
++		if (cached) {
++			return cached;
++		}
++
++		const groupISession = this._buildGroupISession(primary);
++		this._sessionGroupCache.set(primary.sessionId, groupISession);
++		return groupISession;
++	}
++
++	/**
++	 * Wraps a primary {@link LocalSession} and its child chats into an
++	 * aggregated {@link ISession}. The `chats` observable re-derives whenever
++	 * group membership changes; per-chat state flows through each chat's own
++	 * observables captured by {@link buildChat}.
++	 */
++	private _buildGroupISession(primary: LocalSession): ISession {
++		const groupKey = primary.sessionId;
++
++		const chatsObs: IObservable<readonly IChat[]> = observableFromEvent(
++			this,
++			Event.filter(this._onDidChangeGroupMembership.event, e => e.groupKey === groupKey),
++			() => this._getGroupChats(primary).map(chat => chat.mainChat.get()),
++		);
++
++		return {
++			sessionId: primary.sessionId,
++			resource: primary.resource,
++			providerId: primary.providerId,
++			sessionType: primary.sessionType,
++			icon: primary.icon,
++			createdAt: primary.createdAt,
++			workspace: primary.workspace,
++			title: primary.title,
++			updatedAt: chatsObs.map((chats, reader) => this._latestDate(chats, c => c.updatedAt.read(reader)) ?? primary.updatedAt.read(reader)),
++			status: chatsObs.map((chats, reader) => this._aggregateStatus(chats, reader)),
++			modelId: primary.modelId,
++			mode: primary.mode,
++			loading: primary.loading,
++			isArchived: primary.isArchived,
++			isRead: chatsObs.map((chats, reader) => chats.every(c => c.isRead.read(reader))),
++			description: primary.description,
++			lastTurnEnd: chatsObs.map((chats, reader) => this._latestDate(chats, c => c.lastTurnEnd.read(reader))),
++			chats: chatsObs,
++			mainChat: primary.mainChat,
++			capabilities: constObservable({
++				supportsMultipleChats: true,
++				supportsRename: true,
++				supportsDelete: true,
++			}),
++		};
++	}
++
++	private _latestDate(chats: readonly IChat[], getter: (chat: IChat) => Date | undefined): Date | undefined {
++		let latest: Date | undefined;
++		for (const chat of chats) {
++			const date = getter(chat);
++			if (date && (!latest || date > latest)) {
++				latest = date;
++			}
++		}
++		return latest;
++	}
++
++	private _aggregateStatus(chats: readonly IChat[], reader: IReader): SessionStatus {
++		for (const chat of chats) {
++			if (chat.status.read(reader) === SessionStatus.NeedsInput) {
++				return SessionStatus.NeedsInput;
++			}
++		}
++		for (const chat of chats) {
++			if (chat.status.read(reader) === SessionStatus.InProgress) {
++				return SessionStatus.InProgress;
++			}
++		}
++		return chats[0].status.read(reader);
++	}
++}
+diff --git a/src/vs/sessions/contrib/providers/localChatSessions/test/browser/localChatSessionsProvider.test.ts b/src/vs/sessions/contrib/providers/localChatSessions/test/browser/localChatSessionsProvider.test.ts
+new file mode 100644
+index 00000000000..ec6ad3f408e
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/localChatSessions/test/browser/localChatSessionsProvider.test.ts
+@@ -0,0 +1,530 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import assert from 'assert';
++import { Emitter, Event } from '../../../../../../base/common/event.js';
++import { Disposable, DisposableStore } from '../../../../../../base/common/lifecycle.js';
++import { IObservable, observableValue } from '../../../../../../base/common/observable.js';
++import { URI, UriComponents } from '../../../../../../base/common/uri.js';
++import { mock } from '../../../../../../base/test/common/mock.js';
++import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
++import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
++import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
++import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
++import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
++import { TestInstantiationService } from '../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
++import { ILabelService } from '../../../../../../platform/label/common/label.js';
++import { ILogService, NullLogService } from '../../../../../../platform/log/common/log.js';
++import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
++import { TestStorageService } from '../../../../../../workbench/test/common/workbenchTestServices.js';
++import { ChatAgentLocation } from '../../../../../../workbench/contrib/chat/common/constants.js';
++import { IChatModel } from '../../../../../../workbench/contrib/chat/common/model/chatModel.js';
++import { IChatModelReference, IChatService, IChatSessionStartOptions, IChatSessionTiming } from '../../../../../../workbench/contrib/chat/common/chatService/chatService.js';
++import { ILanguageModelsService } from '../../../../../../workbench/contrib/chat/common/languageModels.js';
++import { ILanguageModelToolsService } from '../../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
++import { IGitService } from '../../../../../../workbench/contrib/git/common/gitService.js';
++import { IFileService } from '../../../../../../platform/files/common/files.js';
++import { ISession, SessionStatus } from '../../../../../services/sessions/common/session.js';
++import { LocalChatSessionsProvider, LocalSessionType, LOCAL_SESSION_ENABLED_SETTING } from '../../browser/localChatSessionsProvider.js';
++
++// ---- Mock chat service ----------------------------------------------------
++
++function createMockModel(sessionResource: URI, opts?: { title?: string; requestInProgress?: IObservable<boolean>; timing?: IChatSessionTiming }): IChatModel {
++	let workingDirectory: URI | undefined;
++	const requestInProgress = opts?.requestInProgress ?? observableValue<boolean>('requestInProgress', false);
++	const timing: IChatSessionTiming = opts?.timing ?? { created: 1_000, lastRequestStarted: undefined, lastRequestEnded: undefined };
++	return new class extends mock<IChatModel>() {
++		override readonly sessionResource = sessionResource;
++		override readonly title = opts?.title ?? 'Test Session';
++		override readonly timing = timing;
++		override readonly requestInProgress = requestInProgress;
++		override get workingDirectory() { return workingDirectory; }
++		override setWorkingDirectory(uri: URI | undefined): void { workingDirectory = uri; }
++	}();
++}
++
++class MockChatService extends Disposable {
++	private readonly _models = new Map<string, IChatModel>();
++	private _counter = 0;
++
++	readonly sendRequestCalls: { resource: URI; query: string }[] = [];
++
++	/** When a query matches an entry here, sendRequest reports a rejection. */
++	readonly rejectQueries = new Set<string>();
++
++	private readonly _onDidDisposeSession = this._register(new Emitter<{ readonly sessionResources: readonly URI[]; readonly reason: 'cleared' }>());
++	readonly onDidDisposeSession = this._onDidDisposeSession.event;
++
++	private readonly _onDidSubmitRequest = this._register(new Emitter<{ readonly chatSessionResource: URI }>());
++	readonly onDidSubmitRequest = this._onDidSubmitRequest.event;
++
++	startNewLocalSession(_location: ChatAgentLocation, _options?: IChatSessionStartOptions): IChatModelReference {
++		const resource = URI.parse(`vscode-local-chat://chat/${++this._counter}`);
++		const model = createMockModel(resource);
++		this._models.set(resource.toString(), model);
++		return { object: model, dispose: () => { } };
++	}
++
++	getSession(resource: URI): IChatModel | undefined {
++		return this._models.get(resource.toString());
++	}
++
++	registerModel(model: IChatModel): void {
++		this._models.set(model.sessionResource.toString(), model);
++	}
++
++	async acquireOrLoadSession(): Promise<IChatModelReference | undefined> {
++		return undefined;
++	}
++
++	async sendRequest(resource: URI, query: string) {
++		this.sendRequestCalls.push({ resource, query });
++		if (this.rejectQueries.has(query)) {
++			return { kind: 'rejected', reason: 'test-rejected' };
++		}
++		return { kind: 'sent', data: { responseCompletePromise: Promise.resolve(), responseCreatedPromise: Promise.resolve({}) } };
++	}
++
++	async getLocalSessionHistory() { return []; }
++	async removeHistoryEntry(_resource: URI): Promise<void> { }
++	setSessionTitle(_resource: URI, _title: string): void { }
++
++	fireSubmitRequest(resource: URI): void {
++		this._onDidSubmitRequest.fire({ chatSessionResource: resource });
++	}
++}
++
++// ---- Test fixture ----------------------------------------------------------
++
++interface ITestFixture {
++	instantiationService: TestInstantiationService;
++	chatService: MockChatService;
++	storage: TestStorageService;
++	config: TestConfigurationService;
++	dialog: { confirmResult: boolean; confirmCount: number };
++}
++
++function createFixture(store: DisposableStore): ITestFixture {
++	const instantiationService = store.add(new TestInstantiationService());
++	const chatService = store.add(new MockChatService());
++	const storage = store.add(new TestStorageService());
++	const config = new TestConfigurationService();
++	config.setUserConfiguration(LOCAL_SESSION_ENABLED_SETTING, true);
++
++	const dialog = { confirmResult: true, confirmCount: 0 };
++
++	instantiationService.stub(IChatService, chatService as unknown as IChatService);
++	instantiationService.stub(IStorageService, storage);
++	instantiationService.stub(IConfigurationService, config);
++	instantiationService.stub(ILogService, new NullLogService());
++	instantiationService.stub(IDialogService, new class extends mock<IDialogService>() {
++		override async confirm() { dialog.confirmCount++; return { confirmed: dialog.confirmResult }; }
++	}());
++	instantiationService.stub(ILabelService, new class extends mock<ILabelService>() {
++		override getUriLabel(uri: URI): string { return uri.fsPath; }
++	}());
++	instantiationService.stub(ILanguageModelsService, new class extends mock<ILanguageModelsService>() { }());
++	instantiationService.stub(ILanguageModelToolsService, new class extends mock<ILanguageModelToolsService>() { }());
++	instantiationService.stub(IGitService, new class extends mock<IGitService>() {
++		override async openRepository() { return undefined; }
++	}());
++	instantiationService.stub(IFileService, new class extends mock<IFileService>() { }());
++	instantiationService.stub(IInstantiationService, instantiationService);
++	return { instantiationService, chatService, storage, config, dialog };
++}
++
++const TEST_FOLDER = URI.file('/test/folder');
++
++/** Storage key used by the provider to persist the session list. */
++const STORAGE_KEY_SESSIONS = 'sessions.localChat.sessions';
++
++interface IReadStoredSession {
++	readonly uri: UriComponents;
++	readonly parentUri?: UriComponents;
++}
++
++function readStoredSessions(storage: TestStorageService): IReadStoredSession[] {
++	const raw = storage.get(STORAGE_KEY_SESSIONS, StorageScope.PROFILE);
++	return raw ? JSON.parse(raw) as IReadStoredSession[] : [];
++}
++
++async function commitNewSession(provider: LocalChatSessionsProvider): Promise<ISession> {
++	const newSession = provider.createNewSession(TEST_FOLDER, LocalSessionType.id);
++	const chat = await provider.createNewChat(newSession.sessionId);
++	await provider.sendRequest(newSession.sessionId, chat.resource, { query: 'hello' });
++	return newSession;
++}
++
++/** Adds and sends a subsequent chat to an already-committed multi-chat session. */
++async function addChat(provider: LocalChatSessionsProvider, session: ISession, query = 'second'): Promise<URI> {
++	const chat = await provider.createNewChat(session.sessionId);
++	await provider.sendRequest(session.sessionId, chat.resource, { query });
++	return chat.resource;
++}
++
++// ---- Suite ----------------------------------------------------------------
++
++suite('LocalChatSessionsProvider', () => {
++	const leaks = ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('declares Local session type', () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		assert.deepStrictEqual(provider.sessionTypes.map(t => t.id), [LocalSessionType.id]);
++	});
++
++	test('resolveWorkspace handles only file uris', () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		assert.strictEqual(provider.resolveWorkspace(URI.parse('http://example.com')), undefined);
++
++		const ws = provider.resolveWorkspace(TEST_FOLDER);
++		assert.ok(ws);
++		assert.strictEqual(ws!.folders[0].root.toString(), TEST_FOLDER.toString());
++	});
++
++	test('createNewSession returns a session but does not show in getSessions until first send', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const newSession = provider.createNewSession(TEST_FOLDER, LocalSessionType.id);
++		assert.strictEqual(newSession.providerId, provider.id);
++		assert.strictEqual(provider.getSessions().length, 0);
++
++		const chat = await provider.createNewChat(newSession.sessionId);
++		await provider.sendRequest(newSession.sessionId, chat.resource, { query: 'hi' });
++		assert.strictEqual(provider.getSessions().length, 1);
++	});
++
++	test('createNewSession rejects unknown session types', () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		assert.throws(() => provider.createNewSession(TEST_FOLDER, 'bogus'));
++	});
++
++	test('persists committed sessions and restores them on next provider instance', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		const session = await commitNewSession(provider);
++
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		await Event.toPromise(provider2.onDidChangeSessions);
++		const restored = provider2.getSessions();
++		assert.strictEqual(restored.length, 1);
++		assert.strictEqual(restored[0].resource.toString(), session.resource.toString());
++	});
++
++	test('deleteSession removes session from cache and storage', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		const session = await commitNewSession(provider);
++
++		await provider.deleteSession(session.sessionId);
++		assert.strictEqual(provider.getSessions().length, 0);
++
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		// Wait one microtask tick for the async migration/load to complete (no event fires when empty)
++		await Promise.resolve();
++		await Promise.resolve();
++		assert.strictEqual(provider2.getSessions().length, 0);
++	});
++
++	test('archiveSession and unarchiveSession toggle isArchived and persist', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		const session = await commitNewSession(provider);
++
++		await provider.archiveSession(session.sessionId);
++		assert.strictEqual(provider.getSessions()[0].isArchived.get(), true);
++
++		await provider.unarchiveSession(session.sessionId);
++		assert.strictEqual(provider.getSessions()[0].isArchived.get(), false);
++
++		await provider.archiveSession(session.sessionId);
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		await Event.toPromise(provider2.onDidChangeSessions);
++		assert.strictEqual(provider2.getSessions()[0].isArchived.get(), true);
++	});
++
++	test('renameChat updates session title and persists it', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		const session = await commitNewSession(provider);
++
++		await provider.renameChat(session.sessionId, session.resource, 'Custom Title');
++		assert.strictEqual(provider.getSessions()[0].title.get(), 'Custom Title');
++
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		await Event.toPromise(provider2.onDidChangeSessions);
++		assert.strictEqual(provider2.getSessions()[0].title.get(), 'Custom Title');
++	});
++
++	test('status follows model.requestInProgress after a submit event', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, chatService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		const session = await commitNewSession(provider);
++
++		// Replace the registered model with a controllable one for tracking
++		const inProgress = observableValue<boolean>('inProgress', false);
++		chatService.registerModel(createMockModel(session.resource, { requestInProgress: inProgress }));
++
++		chatService.fireSubmitRequest(session.resource);
++		assert.strictEqual(provider.getSessions()[0].status.get(), SessionStatus.Completed);
++
++		inProgress.set(true, undefined);
++		assert.strictEqual(provider.getSessions()[0].status.get(), SessionStatus.InProgress);
++
++		inProgress.set(false, undefined);
++		assert.strictEqual(provider.getSessions()[0].status.get(), SessionStatus.Completed);
++	});
++
++	test('Event.None and exports remain stable', () => {
++		assert.strictEqual(LocalSessionType.id, 'local');
++		assert.strictEqual(LOCAL_SESSION_ENABLED_SETTING, 'sessions.chat.localAgent.enabled');
++		assert.ok(Event.None);
++	});
++
++	// ---- Multi-chat ---------------------------------------------------------
++
++	test('committed sessions advertise supportsMultipleChats', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		assert.strictEqual(session.capabilities.get().supportsMultipleChats, true);
++		assert.strictEqual(session.chats.get().length, 1);
++	});
++
++	test('createNewChat adds a second chat to an existing session', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		await addChat(provider, session);
++
++		// Still one session (the group), now with two chats.
++		assert.strictEqual(provider.getSessions().length, 1);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++	});
++
++	test('persists the chat hierarchy and restores it grouped', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		const session = await commitNewSession(provider);
++		await addChat(provider, session);
++
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		await Event.toPromise(provider2.onDidChangeSessions);
++
++		const restored = provider2.getSessions();
++		assert.strictEqual(restored.length, 1);
++		assert.strictEqual(restored[0].resource.toString(), session.resource.toString());
++		assert.strictEqual(restored[0].chats.get().length, 2);
++	});
++
++	test('deleteChat removes a child chat but keeps the session after confirmation', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, dialog } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++
++		await provider.deleteChat(session.sessionId, childResource);
++		assert.strictEqual(dialog.confirmCount, 1);
++		assert.strictEqual(provider.getSessions().length, 1);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 1);
++	});
++
++	test('deleteChat keeps the child chat when the confirmation is cancelled', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, dialog } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++
++		dialog.confirmResult = false;
++		await provider.deleteChat(session.sessionId, childResource);
++		assert.strictEqual(dialog.confirmCount, 1);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++	});
++
++	test('deleteChat with skipConfirmation deletes without showing the dialog', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, dialog } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++
++		const deleted = await provider.deleteChat(session.sessionId, childResource, { skipConfirmation: true });
++		assert.strictEqual(deleted, true);
++		assert.strictEqual(dialog.confirmCount, 0);
++		assert.strictEqual(provider.getSessions().length, 1);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 1);
++	});
++
++	test('deleteChat returns false when the confirmation is cancelled', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, dialog } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++
++		dialog.confirmResult = false;
++		const deleted = await provider.deleteChat(session.sessionId, childResource);
++		assert.strictEqual(deleted, false);
++	});
++
++	test('deleteChat with an unknown chat URI is a no-op', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		await addChat(provider, session);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++
++		// A stale/incorrect chat URI must not wipe the whole session.
++		await provider.deleteChat(session.sessionId, URI.parse('vscode-local-chat://chat/does-not-exist'));
++		assert.strictEqual(provider.getSessions().length, 1);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++	});
++
++	test('deleteSession removes the primary chat and all children', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		await addChat(provider, session);
++
++		await provider.deleteSession(session.sessionId);
++		assert.strictEqual(provider.getSessions().length, 0);
++
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		await Promise.resolve();
++		await Promise.resolve();
++		assert.strictEqual(provider2.getSessions().length, 0);
++	});
++
++	test('a rejected subsequent chat send is rolled back', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, chatService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		chatService.rejectQueries.add('boom');
++
++		const chat = await provider.createNewChat(session.sessionId);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 2);
++
++		await assert.rejects(provider.sendRequest(session.sessionId, chat.resource, { query: 'boom' }));
++
++		// The unsent child is rolled back, leaving a single chat.
++		assert.strictEqual(provider.getSessions().length, 1);
++		assert.strictEqual(provider.getSessions()[0].chats.get().length, 1);
++	});
++
++	test('persists the parent link in the child chat metadata', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, storage } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++
++		const stored = readStoredSessions(storage);
++		const primaryEntry = stored.find(s => URI.revive(s.uri).toString() === session.resource.toString());
++		const childEntry = stored.find(s => URI.revive(s.uri).toString() === childResource.toString());
++
++		assert.strictEqual(primaryEntry?.parentUri, undefined);
++		assert.ok(childEntry?.parentUri);
++		assert.strictEqual(URI.revive(childEntry.parentUri!).toString(), session.resource.toString());
++	});
++
++	test('promotes an orphaned child to a primary when its parent is missing', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, storage } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++
++		// Simulate corrupted/partial storage where the primary entry is gone.
++		const withoutPrimary = readStoredSessions(storage).filter(s => URI.revive(s.uri).toString() !== session.resource.toString());
++		storage.store(STORAGE_KEY_SESSIONS, JSON.stringify(withoutPrimary), StorageScope.PROFILE, StorageTarget.MACHINE);
++
++		const provider2 = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++		await Event.toPromise(provider2.onDidChangeSessions);
++
++		// The orphan surfaces as its own single-chat primary session rather than disappearing.
++		const sessions = provider2.getSessions();
++		assert.strictEqual(sessions.length, 1);
++		assert.strictEqual(sessions[0].resource.toString(), childResource.toString());
++		assert.strictEqual(sessions[0].chats.get().length, 1);
++	});
++
++	test('deleteChat on the primary chat deletes the whole session', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		await addChat(provider, session);
++
++		await provider.deleteChat(session.sessionId, session.resource);
++		assert.strictEqual(provider.getSessions().length, 0);
++	});
++
++	test('group status aggregates across child chats', async () => {
++		const store = leaks.add(new DisposableStore());
++		const { instantiationService, chatService } = createFixture(store);
++		const provider = store.add(instantiationService.createInstance(LocalChatSessionsProvider));
++
++		const session = await commitNewSession(provider);
++		const childResource = await addChat(provider, session);
++
++		// Drive the child chat's request state; the group must reflect it.
++		const childInProgress = observableValue<boolean>('childInProgress', false);
++		chatService.registerModel(createMockModel(childResource, { requestInProgress: childInProgress }));
++		chatService.fireSubmitRequest(childResource);
++
++		const group = provider.getSessions()[0];
++		assert.strictEqual(group.status.get(), SessionStatus.Completed);
++
++		childInProgress.set(true, undefined);
++		assert.strictEqual(group.status.get(), SessionStatus.InProgress);
++
++		childInProgress.set(false, undefined);
++		assert.strictEqual(group.status.get(), SessionStatus.Completed);
++	});
++});
+diff --git a/src/vs/sessions/sessions.common.main.ts b/src/vs/sessions/sessions.common.main.ts
+index a376464b452..31f390198d7 100644
+--- a/src/vs/sessions/sessions.common.main.ts
++++ b/src/vs/sessions/sessions.common.main.ts
+@@ -474,6 +474,8 @@ import './contrib/chat/browser/customizationsDebugLog.contribution.js';
+ // FlowLeap: the Copilot Cloud / Sandbox provider needs GitHub sign-in and the GitHub service (kept out);
+ // Claude sessions come from the extension host through the Claude provider (PRD 0017 A2).
+ import './contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.js';
++// FlowLeap: Local (in-process) sessions; upstream removed the Local harness (PRD 0017 A11).
++import './contrib/providers/localChatSessions/browser/localChatSessions.contribution.js';
+ import './contrib/sessions/browser/sessions.contribution.js';
+ import './services/sessions/browser/sessionsListModelService.js';
+ import './services/sessions/browser/sessionGroupsService.js';

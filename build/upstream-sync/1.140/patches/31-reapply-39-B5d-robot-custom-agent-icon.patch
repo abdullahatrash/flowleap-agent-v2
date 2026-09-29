@@ -1,0 +1,13 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationIcons.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationIcons.ts
+index ca9303d4d20..4b66265e293 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationIcons.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/aiCustomizationIcons.ts
+@@ -17,7 +17,7 @@ export const aiCustomizationViewIcon = registerIcon('ai-customization-view-icon'
+ /**
+  * Icon for custom agents.
+  */
+-export const agentIcon = registerIcon('ai-customization-agent', Codicon.agent, localize('aiCustomizationAgentIcon', "Icon for custom agents."));
++export const agentIcon = registerIcon('ai-customization-agent', Codicon.robot, localize('aiCustomizationAgentIcon', "Icon for custom agents."));
+ 
+ /**
+  * Icon for skills.

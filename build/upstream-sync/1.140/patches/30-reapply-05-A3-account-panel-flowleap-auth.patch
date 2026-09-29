@@ -1,0 +1,372 @@
+diff --git a/src/vs/sessions/browser/accountTitleBarState.ts b/src/vs/sessions/browser/accountTitleBarState.ts
+index e16c6aba37e..ca0c8e2ca31 100644
+--- a/src/vs/sessions/browser/accountTitleBarState.ts
++++ b/src/vs/sessions/browser/accountTitleBarState.ts
+@@ -24,15 +24,31 @@ export interface IResolvedAccountInfo {
+ }
+ 
+ /**
+- * Resolves the current account info by trying the default account service
+- * first, then falling back to raw GitHub sessions from the authentication
+- * service. The fallback covers the window between session creation and
++ * Resolves the current account info. FlowLeap: reads the `flowleap`
++ * authentication provider first, because the default account service and the
++ * GitHub sessions are empty in this product by design. Then tries the default
++ * account service, then raw GitHub sessions from the authentication service.
++ * The GitHub fallback covers the window between session creation and
+  * {@link IDefaultAccountService} initialization.
+  */
+ export async function resolveAccountInfo(
+ 	defaultAccountService: IDefaultAccountService,
+ 	authenticationService: IAuthenticationService,
+ ): Promise<IResolvedAccountInfo | undefined> {
++	try {
++		const flowLeapSessions = await authenticationService.getSessions('flowleap');
++		if (flowLeapSessions.length > 0) {
++			return {
++				accountName: flowLeapSessions[0].account.label,
++				accountProviderId: 'flowleap',
++				accountProviderLabel: 'FlowLeap',
++				accountIcon: flowLeapSessions[0].account.icon,
++			};
++		}
++	} catch {
++		// Provider not available yet (extension still activating)
++	}
++
+ 	const account = await defaultAccountService.getDefaultAccount();
+ 	if (account) {
+ 		return {
+@@ -201,10 +217,10 @@ function getCopilotPresentation(
+ 			source: 'copilot',
+ 			kind: 'warning',
+ 			icon: Codicon.account,
+-			label: localize('copilotUnavailable', "Copilot Unavailable"),
++			label: localize('copilotUnavailable', "FlowLeap Unavailable"),
+ 			ariaLabel: sentiment.untrusted
+-				? localize('copilotUnavailableUntrustedAria', "GitHub Copilot is unavailable in untrusted workspaces")
+-				: localize('copilotUnavailableDisabledAria', "GitHub Copilot is disabled"),
++				? localize('copilotUnavailableUntrustedAria', "FlowLeap is unavailable in untrusted workspaces")
++				: localize('copilotUnavailableDisabledAria', "FlowLeap is disabled"),
+ 		};
+ 	}
+ 
+@@ -230,7 +246,7 @@ function getCopilotPresentation(
+ 			label: localize('copilotTokensRemaining', "Tokens Remaining"),
+ 			badge: `${remainingPercent}%`,
+ 			dotBadge: remainingPercent <= 10 ? 'error' : 'warning',
+-			ariaLabel: localize('copilotTokensRemainingAria', "{0}% GitHub Copilot tokens remaining", remainingPercent),
++			ariaLabel: localize('copilotTokensRemainingAria', "{0}% FlowLeap tokens remaining", remainingPercent),
+ 		};
+ 	}
+ 
+@@ -254,12 +270,12 @@ function getLowestPositivePercent(...quotas: Array<IQuotaSnapshot | undefined>):
+ 
+ function getQuotaReachedAriaLabel(chatQuotaExceeded: boolean, completionsQuotaExceeded: boolean): string {
+ 	if (chatQuotaExceeded && completionsQuotaExceeded) {
+-		return localize('copilotAllQuotaReachedAria', "GitHub Copilot chat and inline suggestion quota reached");
++		return localize('copilotAllQuotaReachedAria', "FlowLeap chat and inline suggestion quota reached");
+ 	}
+ 
+ 	if (chatQuotaExceeded) {
+-		return localize('copilotChatQuotaReachedAria', "GitHub Copilot chat quota reached");
++		return localize('copilotChatQuotaReachedAria', "FlowLeap chat quota reached");
+ 	}
+ 
+-	return localize('copilotCompletionsQuotaReachedAria', "GitHub Copilot inline suggestion quota reached");
++	return localize('copilotCompletionsQuotaReachedAria', "FlowLeap inline suggestion quota reached");
+ }
+diff --git a/src/vs/sessions/browser/actions/vscodeActions.ts b/src/vs/sessions/browser/actions/vscodeActions.ts
+index 4b53a4ef812..ef294096aa0 100644
+--- a/src/vs/sessions/browser/actions/vscodeActions.ts
++++ b/src/vs/sessions/browser/actions/vscodeActions.ts
+@@ -34,7 +34,7 @@ export class OpenInVSCodeAction extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: OpenInVSCodeAction.ID,
+-			title: localize2('openInVSCode', 'Open in Editor'),
++			title: localize2('openInVSCode', 'Open in Patent Workspace'),
+ 			icon: Codicon.vscodeInsiders,
+ 			precondition: ContextKeyExpr.and(IsAuxiliaryWindowContext.toNegated(), SessionsWelcomeVisibleContext.toNegated()),
+ 			menu: [{
+diff --git a/src/vs/sessions/browser/media/openInVSCode.css b/src/vs/sessions/browser/media/openInVSCode.css
+index 5d89e0be650..7a048da0800 100644
+--- a/src/vs/sessions/browser/media/openInVSCode.css
++++ b/src/vs/sessions/browser/media/openInVSCode.css
+@@ -23,39 +23,21 @@
+ 	width: 16px;
+ 	height: 16px;
+ 	flex: 0 0 auto;
+-	/* Dev fallback: the VS Code shield logo bundled in the sessions media folder.
+-	 * In production builds the distro mixin overwrites
+-	 * vs/workbench/browser/media/code-icon.svg with the quality-branded icon;
+-	 * the per-quality rules below then take precedence. */
+-	background-image: url('./vscode-icon.svg');
+-	background-repeat: no-repeat;
+-	background-position: center center;
+-	background-size: contain;
+-	filter: grayscale(1);
+-}
+-
+-/* In production builds vscode-distro overlays vs/workbench/browser/media/code-icon.svg
+- * with the quality-specific branded VS Code icon. Use it whenever the product quality is
+- * known (the data-product-quality attribute is only set in non-dev builds). */
+-.monaco-workbench .open-in-vscode-titlebar-widget[data-product-quality="stable"] > .open-in-vscode-titlebar-widget-icon,
+-.monaco-workbench .open-in-vscode-titlebar-widget[data-product-quality="insider"] > .open-in-vscode-titlebar-widget-icon,
+-.monaco-workbench .open-in-vscode-titlebar-widget[data-product-quality="exploration"] > .open-in-vscode-titlebar-widget-icon {
+-	background-image: url('../../../workbench/browser/media/code-icon.svg');
+-}
+-
+-.monaco-enable-motion .monaco-workbench .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon,
+-.monaco-workbench.monaco-enable-motion .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon {
+-	transition: filter 160ms ease;
+-}
+-
+-.monaco-reduce-motion .monaco-workbench .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon,
+-.monaco-workbench.monaco-reduce-motion .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-icon {
+-	transition-duration: 0ms !important;
++	/* FlowLeap brand mark, masked so it takes the title bar foreground on any theme. */
++	background-color: var(--vscode-titleBar-activeForeground);
++	-webkit-mask-image: url('./flowleap-logo.svg');
++	mask-image: url('./flowleap-logo.svg');
++	-webkit-mask-repeat: no-repeat;
++	mask-repeat: no-repeat;
++	-webkit-mask-position: center center;
++	mask-position: center center;
++	-webkit-mask-size: contain;
++	mask-size: contain;
+ }
+ 
+ .monaco-workbench .open-in-vscode-titlebar-widget:hover > .open-in-vscode-titlebar-widget-icon,
+ .monaco-workbench .open-in-vscode-titlebar-widget:focus-visible > .open-in-vscode-titlebar-widget-icon {
+-	filter: none;
++	background-color: var(--vscode-textLink-foreground, #3b6fed);
+ }
+ 
+ .monaco-workbench .open-in-vscode-titlebar-widget > .open-in-vscode-titlebar-widget-label {
+diff --git a/src/vs/sessions/browser/widget/openInVSCodeWidget.ts b/src/vs/sessions/browser/widget/openInVSCodeWidget.ts
+index 5d7e07a0833..8a17bfe832a 100644
+--- a/src/vs/sessions/browser/widget/openInVSCodeWidget.ts
++++ b/src/vs/sessions/browser/widget/openInVSCodeWidget.ts
+@@ -44,7 +44,7 @@ export class OpenInVSCodeTitleBarWidget extends BaseActionViewItem {
+ 		}
+ 
+ 		const label = this.action.label;
+-		const hoverText = this.keybindingService.appendKeybinding(localize('openInVSCodeHover', "Open in VS Code Editor Window"), this.keybindingCommandId);
++		const hoverText = this.keybindingService.appendKeybinding(localize('openInVSCodeHover', "Open in Patent Workspace"), this.keybindingCommandId);
+ 		container.setAttribute('aria-label', hoverText);
+ 		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('element'), container, hoverText));
+ 
+diff --git a/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts b/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts
+index 91af5a47289..027b95d0625 100644
+--- a/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts
++++ b/src/vs/sessions/contrib/accountMenu/browser/account.contribution.ts
+@@ -39,8 +39,6 @@ import { getAccountProfileImageUrl, getAccountTitleBarBadgeKey, getAccountTitleB
+ import { observeAllowSignedOutWhenUsable } from '../../../browser/sessionsAuthGate.js';
+ import { IsPhoneLayoutContext, SessionsWelcomeVisibleContext } from '../../../common/contextkeys.js';
+ import { IsAuxiliaryWindowContext } from '../../../../workbench/common/contextkeys.js';
+-import { IAuthenticationAccessService } from '../../../../workbench/services/authentication/browser/authenticationAccessService.js';
+-import { IAuthenticationUsageService } from '../../../../workbench/services/authentication/browser/authenticationUsageService.js';
+ import { ACCOUNTS_AVATAR_SETTING, IAuthenticationService } from '../../../../workbench/services/authentication/common/authentication.js';
+ import { URI } from '../../../../base/common/uri.js';
+ import { IChatDashboardService } from '../../../browser/chatDashboardService.js';
+@@ -56,7 +54,6 @@ import { language } from '../../../../base/common/platform.js';
+ import { AgentHostCodexAgentEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
+ import { ICodexAccountRateLimitInfo } from '../../../../platform/agentHost/common/codexAccount.js';
+ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+-import { CHAT_SETUP_ACTION_ID } from '../../../../workbench/contrib/chat/browser/actions/chatActions.js';
+ import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
+ import { SessionsChatPetAchievementBadges } from './chatPetAchievementBadges.js';
+ import { CHAT_PET_OPEN_ACHIEVEMENTS_COMMAND_ID } from '../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
+@@ -87,23 +84,28 @@ registerUpdateTitleBarMenuPlacement(Menus.TitleBarLeftLayout, {
+ 	),
+ });
+ 
++// FlowLeap: auth state context key, owned by the FlowLeap extension (ADR 0003).
++// Referenced by string so core never becomes a second owner of it.
++const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
++
+ // Sign In (shown when signed out)
+ registerAction2(class extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: AGENTIC_SIGN_IN_COMMAND_ID,
+-			title: localize2('signIn', "Sign in to use GitHub Copilot"),
++			title: localize2('signIn', "Sign In"),
+ 			icon: Codicon.signIn,
+ 			menu: {
+ 				id: AccountMenu,
+-				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
++				when: ContextKeyExpr.notEquals(FLOWLEAP_SIGNED_IN_CONTEXT_KEY, true),
+ 				group: '1_account',
+ 				order: 1,
+ 			}
+ 		});
+ 	}
+ 	async run(accessor: ServicesAccessor): Promise<void> {
+-		await accessor.get(ICommandService).executeCommand(CHAT_SETUP_ACTION_ID);
++		// `flowleap.signIn` lives in the FlowLeap extension and owns the whole Clerk flow (ADR 0003).
++		await accessor.get(ICommandService).executeCommand('flowleap.signIn');
+ 	}
+ });
+ 
+@@ -116,7 +118,7 @@ registerAction2(class extends Action2 {
+ 			icon: Codicon.signOut,
+ 			menu: {
+ 				id: AccountMenu,
+-				when: ContextKeyExpr.equals('defaultAccountStatus', 'available'),
++				when: ContextKeyExpr.equals(FLOWLEAP_SIGNED_IN_CONTEXT_KEY, true),
+ 				group: '1_account',
+ 				order: 1,
+ 			}
+@@ -126,19 +128,15 @@ registerAction2(class extends Action2 {
+ 		const defaultAccountService = accessor.get(IDefaultAccountService);
+ 		const dialogService = accessor.get(IDialogService);
+ 		const authenticationService = accessor.get(IAuthenticationService);
+-		const authenticationUsageService = accessor.get(IAuthenticationUsageService);
+-		const authenticationAccessService = accessor.get(IAuthenticationAccessService);
+-		const defaultAccount = await defaultAccountService.getDefaultAccount();
+-		if (!defaultAccount) {
+-			return;
+-		}
++		const commandService = accessor.get(ICommandService);
+ 
+-		const providerId = defaultAccount.authenticationProvider.id;
+-		const accountLabel = defaultAccount.accountName;
++		const account = await resolveAccountInfo(defaultAccountService, authenticationService);
+ 		const { confirmed } = await dialogService.confirm({
+ 			type: Severity.Info,
+ 			message: localize('agenticSignOutMessage', "Sign out of the Agents window?"),
+-			detail: localize('agenticSignOutDetail', "This will sign out '{0}' from the Agents window.", accountLabel),
++			detail: account
++				? localize('agenticSignOutDetail', "This will sign out '{0}' from the Agents window.", account.accountName)
++				: localize('agenticSignOutDetailGeneric', "This will sign out your account from the Agents window."),
+ 			primaryButton: localize({ key: 'agenticSignOutButton', comment: ['&& denotes a mnemonic'] }, "&&Sign Out")
+ 		});
+ 
+@@ -146,11 +144,9 @@ registerAction2(class extends Action2 {
+ 			return;
+ 		}
+ 
+-		const allSessions = await authenticationService.getSessions(providerId);
+-		const sessions = allSessions.filter(session => session.account.label === accountLabel);
+-		await Promise.all(sessions.map(session => authenticationService.removeSession(providerId, session.id)));
+-		authenticationUsageService.removeAccountUsage(providerId, accountLabel);
+-		authenticationAccessService.removeAllowedExtensions(providerId, accountLabel);
++		// FlowLeap: the FlowLeap provider owns sign-out (clears the stored token
++		// and fires the session change that refreshes this widget).
++		await commandService.executeCommand('patent-ai.signOut');
+ 	}
+ });
+ 
+@@ -969,6 +965,11 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
+ 	}
+ 
+ 	private shouldShowCopilotDashboardHover(): boolean {
++		// FlowLeap: the dashboard renders the Copilot entitlement state, which
++		// never resolves for a FlowLeap account; it would show its signed-out CTA.
++		if (this.accountProviderId === 'flowleap') {
++			return false;
++		}
+ 		return !this.chatEntitlementService.sentiment.hidden && !!this.accountName;
+ 	}
+ 
+diff --git a/src/vs/sessions/contrib/accountMenu/test/browser/account.contribution.test.ts b/src/vs/sessions/contrib/accountMenu/test/browser/account.contribution.test.ts
+index 6cfc62945bb..22684472fdf 100644
+--- a/src/vs/sessions/contrib/accountMenu/test/browser/account.contribution.test.ts
++++ b/src/vs/sessions/contrib/accountMenu/test/browser/account.contribution.test.ts
+@@ -16,7 +16,6 @@ import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
+ import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+ import { NullLogService } from '../../../../../platform/log/common/log.js';
+ import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
+-import { CHAT_SETUP_ACTION_ID } from '../../../../../workbench/contrib/chat/browser/actions/chatActions.js';
+ import { ChatPetAccessoryId, ChatPetAccessoryIds, ChatPetAchievementId, ChatPetAchievementIds } from '../../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
+ import { ChatPetVariant, IChatPetService } from '../../../../../workbench/contrib/chat/browser/chatPetService.js';
+ import { Menus } from '../../../../browser/menus.js';
+@@ -27,16 +26,16 @@ suite('Sessions - Account Menu', () => {
+ 
+ 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+ 
+-	test('labels the signed-out Copilot account action', () => {
++	test('labels the signed-out account action', () => {
+ 		const signIn = MenuRegistry.getMenuItems(Menus.AccountMenu)
+ 			.filter(isIMenuItem)
+ 			.find(item => item.command.id === 'workbench.action.agenticSignIn');
+ 
+ 		assert.ok(signIn);
+-		assert.strictEqual(typeof signIn.command.title === 'string' ? signIn.command.title : signIn.command.title.value, 'Sign in to use GitHub Copilot');
++		assert.strictEqual(typeof signIn.command.title === 'string' ? signIn.command.title : signIn.command.title.value, 'Sign In');
+ 	});
+ 
+-	test('uses the shared Chat setup flow for Copilot sign-in', async () => {
++	test('uses the FlowLeap sign-in flow', async () => {
+ 		const executedCommands: string[] = [];
+ 		const command = CommandsRegistry.getCommand('workbench.action.agenticSignIn');
+ 		assert.ok(command);
+@@ -50,7 +49,7 @@ suite('Sessions - Account Menu', () => {
+ 
+ 		await command.handler(accessor);
+ 
+-		assert.deepStrictEqual(executedCommands, [CHAT_SETUP_ACTION_ID]);
++		assert.deepStrictEqual(executedCommands, ['flowleap.signIn']);
+ 	});
+ 
+ 	test('omits the redundant signed-out summary', () => {
+diff --git a/src/vs/sessions/contrib/accountMenu/test/browser/accountTitleBarState.test.ts b/src/vs/sessions/contrib/accountMenu/test/browser/accountTitleBarState.test.ts
+index 466e84d43e8..80339abdb8d 100644
+--- a/src/vs/sessions/contrib/accountMenu/test/browser/accountTitleBarState.test.ts
++++ b/src/vs/sessions/contrib/accountMenu/test/browser/accountTitleBarState.test.ts
+@@ -219,8 +219,8 @@ suite('Sessions - Account Title Bar State', () => {
+ 			}
+ 		};
+ 		const authenticationService = new class extends mock<IAuthenticationService>() {
+-			override async getSessions(): Promise<ReadonlyArray<AuthenticationSession>> {
+-				return sessions;
++			override async getSessions(providerId: string): Promise<ReadonlyArray<AuthenticationSession>> {
++				return providerId === 'github' ? sessions : [];
+ 			}
+ 		};
+ 
+@@ -234,4 +234,29 @@ suite('Sessions - Account Title Bar State', () => {
+ 			}
+ 		);
+ 	});
++
++	test('resolves a FlowLeap session before the default account', async () => {
++		const defaultAccountService = new class extends mock<IDefaultAccountService>() {
++			override async getDefaultAccount(): Promise<IDefaultAccount | null> {
++				return null;
++			}
++		};
++		const authenticationService = new class extends mock<IAuthenticationService>() {
++			override async getSessions(providerId: string): Promise<ReadonlyArray<AuthenticationSession>> {
++				return providerId === 'flowleap'
++					? [{ id: 'flowleap-session', accessToken: 'token', scopes: [], account: { id: 'user', label: 'jane@example.com' } }]
++					: [];
++			}
++		};
++
++		assert.deepStrictEqual(
++			await resolveAccountInfo(defaultAccountService, authenticationService),
++			{
++				accountName: 'jane@example.com',
++				accountProviderId: 'flowleap',
++				accountProviderLabel: 'FlowLeap',
++				accountIcon: undefined,
++			}
++		);
++	});
+ });
+diff --git a/src/vs/sessions/electron-browser/actions/vscodeActions.ts b/src/vs/sessions/electron-browser/actions/vscodeActions.ts
+index d7341d9df42..e69c19a5873 100644
+--- a/src/vs/sessions/electron-browser/actions/vscodeActions.ts
++++ b/src/vs/sessions/electron-browser/actions/vscodeActions.ts
+@@ -40,7 +40,7 @@ export class OpenSessionInVSCodeAction extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: OpenSessionInVSCodeAction.ID,
+-			title: localize2('openInVSCode', 'Open in Editor'),
++			title: localize2('openInVSCode', 'Open in Patent Workspace'),
+ 			icon: Codicon.vscodeInsiders,
+ 			precondition: ContextKeyExpr.and(IsAuxiliaryWindowContext.toNegated(), SessionsWelcomeVisibleContext.toNegated()),
+ 			menu: [{

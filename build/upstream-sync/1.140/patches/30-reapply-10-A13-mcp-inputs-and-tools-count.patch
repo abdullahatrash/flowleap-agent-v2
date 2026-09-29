@@ -1,0 +1,118 @@
+diff --git a/src/vs/sessions/AI_CUSTOMIZATIONS.md b/src/vs/sessions/AI_CUSTOMIZATIONS.md
+index 8fb48047236..d03dfb26a03 100644
+--- a/src/vs/sessions/AI_CUSTOMIZATIONS.md
++++ b/src/vs/sessions/AI_CUSTOMIZATIONS.md
+@@ -97,6 +97,8 @@ source providers
+ 
+ Section counts and rendered rows consume the same filtered model so hidden or disabled sources cannot appear in one surface but not the other.
+ 
++The Tools count follows the same rule: the Tools section, the sidebar shortcut and the overview all count `getCustomizationToolSets(toolsService, reader)` (in `workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.ts`), which keeps running MCP server groups, so the sidebar "Tools N" total equals what the section renders.
++
+ Prompt-based items use the prompts service adapter. MCP servers, tools, plugins, and external harness items use their owning providers directly when their data does not fit the prompt-file contract.
+ 
+ Host-published MCP items retain the runtime-reported configuration source through typed metadata and the shared item contract, independently of lifecycle state or the availability of a local configuration definition.
+diff --git a/src/vs/sessions/contrib/aiCustomizationTreeView/browser/aiCustomizationOverviewView.ts b/src/vs/sessions/contrib/aiCustomizationTreeView/browser/aiCustomizationOverviewView.ts
+index a60aa902896..745711a3975 100644
+--- a/src/vs/sessions/contrib/aiCustomizationTreeView/browser/aiCustomizationOverviewView.ts
++++ b/src/vs/sessions/contrib/aiCustomizationTreeView/browser/aiCustomizationOverviewView.ts
+@@ -32,6 +32,7 @@ import { IMcpService } from '../../../../workbench/contrib/mcp/common/mcpTypes.j
+ import { IAgentPluginService } from '../../../../workbench/contrib/chat/common/plugins/agentPluginService.js';
+ import { ILanguageModelToolsService } from '../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+ import { AGENT_HOST_COPILOT_CLI_SESSION_TYPE, countEnabledCustomizationTools, IAgentHostToolSetEnablementService } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
++import { getCustomizationToolSets } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.js';
+ 
+ const $ = DOM.$;
+ 
+@@ -227,7 +228,7 @@ export class AICustomizationOverviewView extends ViewPane {
+ 		if (toolsSection) {
+ 			this._register(autorun(reader => {
+ 				const state = this.toolEnablementService.observe(AGENT_HOST_COPILOT_CLI_SESSION_TYPE).read(reader);
+-				const toolSets = this.languageModelToolsService.toolSets.read(reader);
++				const toolSets = getCustomizationToolSets(this.languageModelToolsService, reader);
+ 				toolsSection.count = countEnabledCustomizationTools(toolSets, state, reader);
+ 				this.updateCountElements();
+ 			}));
+diff --git a/src/vs/sessions/contrib/sessions/browser/customizationsToolbar.contribution.ts b/src/vs/sessions/contrib/sessions/browser/customizationsToolbar.contribution.ts
+index 1cecac4f590..772e1363c40 100644
+--- a/src/vs/sessions/contrib/sessions/browser/customizationsToolbar.contribution.ts
++++ b/src/vs/sessions/contrib/sessions/browser/customizationsToolbar.contribution.ts
+@@ -36,6 +36,7 @@ import { ISessionsService } from '../../../services/sessions/browser/sessionsSer
+ import { SessionType } from '../../../../workbench/contrib/chat/common/chatSessionsService.js';
+ import { IAICustomizationMcpServerCountService } from './customizationMcpServerCount.js';
+ import { OPEN_AI_CUSTOMIZATIONS_COMMAND_ID } from './customizationsConstants.js';
++import { getCustomizationToolSets } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.js';
+ 
+ export interface ICustomizationItemConfig {
+ 	readonly id: string;
+@@ -86,7 +87,7 @@ export function readCustomizationCount(
+ 	}
+ 	if (config.isTools) {
+ 		const state = toolEnablementService.observe(AGENT_HOST_COPILOT_CLI_SESSION_TYPE).read(reader);
+-		return countEnabledCustomizationTools(toolsService.toolSets.read(reader), state, reader);
++		return countEnabledCustomizationTools(getCustomizationToolSets(toolsService, reader), state, reader);
+ 	}
+ 	return 0;
+ }
+diff --git a/src/vs/sessions/services/configuration/browser/configurationService.ts b/src/vs/sessions/services/configuration/browser/configurationService.ts
+index ce9c0355a28..99205ecd39a 100644
+--- a/src/vs/sessions/services/configuration/browser/configurationService.ts
++++ b/src/vs/sessions/services/configuration/browser/configurationService.ts
+@@ -119,7 +119,12 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
+ 		await this.defaultConfiguration.initialize();
+ 		const [, userModel] = await Promise.all([
+ 			this.policyConfiguration.initialize(),
+-			this.userConfiguration.initialize(),
++			// FlowLeap: `reload()` (not `initialize()`) so the profile's standalone
++			// tasks.json and mcp.json are parsed and watched from the start. mcp.json
++			// carries the `inputs` that `${input:...}` variables in MCP server env
++			// resolve against; without it, starting a gallery-installed server in
++			// this window throws "Variable '...' must be defined in an 'inputs' section".
++			this.userConfiguration.reload(),
+ 			this.workspaceConfiguration.initialize(workspaceIdentifier, true),
+ 		]);
+ 		this.workspaceConfiguration.reparseWorkspaceSettings({ exclude: [...this.agentsWindowReadOnlyKeys] });
+@@ -287,7 +292,9 @@ export class ConfigurationService extends Disposable implements IWorkbenchConfig
+ 			return;
+ 		}
+ 
+-		const userModel = await this.userConfiguration.initialize();
++		// FlowLeap: `reload()` re-reads settings.json plus the standalone tasks.json
++		// and mcp.json; `initialize()` would drop the mcp `inputs` section.
++		const userModel = await this.userConfiguration.reload();
+ 		const previousData = this._configuration.toData();
+ 		const change = this._configuration.compareAndUpdateLocalUserConfiguration(userModel);
+ 
+diff --git a/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts b/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts
+index c32055c375f..c755ef50ee8 100644
+--- a/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts
++++ b/src/vs/sessions/services/configuration/test/browser/configurationService.test.ts
+@@ -683,4 +683,29 @@ suite('Sessions ConfigurationService', () => {
+ 	}));
+ 
+ 	// #endregion
++
++	// #region MCP standalone configuration (inputs resolution)
++
++	test('mcp.json inputs are loaded on reload so ${input:} variables can resolve', () => runWithFakedTimers<void>({ useFakeTimers: true }, async () => {
++		// Shape written by the gallery installer: a server whose env references an
++		// `${input:...}` variable, plus the `inputs` section the resolver reads.
++		const mcpConfigWithInputs = {
++			servers: {
++				'co.flowleap/flowleap': {
++					type: 'stdio',
++					command: 'npx',
++					args: ['flowleap', 'mcp'],
++					env: { FLOWLEAP_API_KEY: '${input:FLOWLEAP_API_KEY}' }
++				}
++			},
++			inputs: [
++				{ id: 'FLOWLEAP_API_KEY', type: 'promptString', password: true, description: 'FlowLeap API key' }
++			]
++		};
++		await fileService.writeFile(userDataProfileService.currentProfile.mcpResource, VSBuffer.fromString(JSON.stringify(mcpConfigWithInputs)));
++		await testObject.reloadConfiguration();
++		assert.deepStrictEqual(testObject.inspect('mcp').userValue, mcpConfigWithInputs);
++	}));
++
++	// #endregion
+ });

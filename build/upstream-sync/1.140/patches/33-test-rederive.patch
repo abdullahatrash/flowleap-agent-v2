@@ -1,0 +1,139 @@
+diff --git a/src/vs/sessions/contrib/sessions/test/browser/customizationsToolbar.test.ts b/src/vs/sessions/contrib/sessions/test/browser/customizationsToolbar.test.ts
+index e6809f2503e..74ff5772abb 100644
+--- a/src/vs/sessions/contrib/sessions/test/browser/customizationsToolbar.test.ts
++++ b/src/vs/sessions/contrib/sessions/test/browser/customizationsToolbar.test.ts
+@@ -16,6 +16,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
+ import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+ import { ILogService } from '../../../../../platform/log/common/log.js';
+ import { IAICustomizationItemsModel } from '../../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationItemsModel.js';
++import { getStaticReadOnlyToolSets } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostCustomizationToolSets.js';
+ import { IAgentHostToolSetEnablementService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostToolSetEnablementService.js';
+ import { ICustomizationHarnessService, IHarnessDescriptor } from '../../../../../workbench/contrib/chat/common/customizationHarnessService.js';
+ import { ICustomizationMigrationHint, ICustomizationMigrationService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/customizationMigrationService.js';
+@@ -26,6 +27,11 @@ import { IAICustomizationMcpServerCountService } from '../../browser/customizati
+ import { CustomizationLinkViewItem, readCustomizationCount } from '../../browser/customizationsToolbar.contribution.js';
+ import { CustomizationsNavigationState } from '../../browser/customizationsNavigationState.js';
+ 
++/** The Tools count includes the injected read-only CLI Agent reference tools (PRD 0016 #147: badge equals the rendered list). */
++function referenceToolCount(): number {
++	return getStaticReadOnlyToolSets().reduce((total, toolSet) => total + Array.from(toolSet.getTools()).length, 0);
++}
++
+ suite('Customizations toolbar', () => {
+ 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+ 
+@@ -65,7 +71,7 @@ suite('Customizations toolbar', () => {
+ 			enablementService,
+ 		)).get();
+ 
+-		assert.strictEqual(count, 1);
++		assert.strictEqual(count, 1 + referenceToolCount());
+ 	});
+ 
+ 	test('tracks the active customization total and migration availability', async () => {
+@@ -133,7 +139,7 @@ suite('Customizations toolbar', () => {
+ 			},
+ 		}, {
+ 			enabledState: {
+-				totalCount: 9,
++				totalCount: 9 + referenceToolCount(),
+ 				migrationAvailable: true,
+ 			},
+ 			disabledState: {
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetup.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetup.test.ts
+index 93a21fa619b..9febc5632b0 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetup.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatSetup/chatSetup.test.ts
+@@ -46,7 +46,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
+ 		);
+ 		const { redirectHost, vscodeUri } = parseRedirectUrl(result);
+ 		assert.strictEqual(redirectHost, 'vscode.dev');
+-		assert.strictEqual(vscodeUri, 'vscode://GitHub.copilot-chat/upgrade-success');
++		assert.strictEqual(vscodeUri, 'vscode://flowleap.patent-ai/upgrade-success');
+ 	});
+ 
+ 	test('insider quality uses insiders.vscode.dev host', () => {
+@@ -57,7 +57,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
+ 		);
+ 		const { redirectHost, vscodeUri } = parseRedirectUrl(result);
+ 		assert.strictEqual(redirectHost, 'insiders.vscode.dev');
+-		assert.strictEqual(vscodeUri, 'vscode-insiders://GitHub.copilot-chat/upgrade-success');
++		assert.strictEqual(vscodeUri, 'vscode-insiders://flowleap.patent-ai/upgrade-success');
+ 	});
+ 
+ 	test('undefined quality defaults to insiders.vscode.dev host', () => {
+@@ -68,7 +68,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
+ 		);
+ 		const { redirectHost, vscodeUri } = parseRedirectUrl(result);
+ 		assert.strictEqual(redirectHost, 'insiders.vscode.dev');
+-		assert.strictEqual(vscodeUri, 'code-oss://GitHub.copilot-chat/upgrade-success');
++		assert.strictEqual(vscodeUri, 'code-oss://flowleap.patent-ai/upgrade-success');
+ 	});
+ 
+ 	test('appends with & when base URL already has query params', () => {
+@@ -97,7 +97,7 @@ suite('buildUpgradeUrlWithRedirect', () => {
+ 		);
+ 		assert.ok(result.startsWith('https://github.example.com/github-copilot/upgrade?utm_source=vscode&return_to='));
+ 		const { vscodeUri } = parseRedirectUrl(result);
+-		assert.strictEqual(vscodeUri, 'vscode://GitHub.copilot-chat/upgrade-success');
++		assert.strictEqual(vscodeUri, 'vscode://flowleap.patent-ai/upgrade-success');
+ 	});
+ });
+ 
+@@ -141,7 +141,7 @@ suite('Chat setup dialog presentation', () => {
+ 				strategy: ChatSetupStrategy.Canceled,
+ 				classes: ['link-button'],
+ 			},
+-			footer: 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub Copilot may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these [settings](https://example.com/settings) anytime.',
++			footer: 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these [settings](https://example.com/settings) anytime.',
+ 		});
+ 	});
+ 
+@@ -153,7 +153,7 @@ suite('Chat setup dialog presentation', () => {
+ 			publicCodeMatchesUrl: 'https://example.com/public-code',
+ 		});
+ 
+-		assert.strictEqual(footer, 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub Copilot may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these settings anytime.');
++		assert.strictEqual(footer, 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these settings anytime.');
+ 	});
+ 
+ 	test('places Microsoft after the other providers and before the signed-out continuation', () => {
+diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/sessionTargetPickerActionItem.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/sessionTargetPickerActionItem.test.ts
+index 58515d8c2c5..1773e917a4c 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/widget/input/sessionTargetPickerActionItem.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/sessionTargetPickerActionItem.test.ts
+@@ -373,8 +373,8 @@ suite('SessionTypePickerActionItem', () => {
+ 			checked: false,
+ 			enabled: false,
+ 			description: '[Sign in](command:workbench.action.chat.triggerSetup)',
+-			ariaDescription: 'Sign in. Sign in to GitHub Copilot to use this agent.',
+-			hover: '[Sign in to GitHub Copilot](command:workbench.action.chat.triggerSetup) to use this agent.',
++			ariaDescription: 'Sign in. Sign in to FlowLeap to use this agent.',
++			hover: '[Sign in to FlowLeap](command:workbench.action.chat.triggerSetup) to use this agent.',
+ 		});
+ 	});
+ });
+diff --git a/src/vs/workbench/contrib/chat/test/electron-browser/agentSessionsDraftHandoff.test.ts b/src/vs/workbench/contrib/chat/test/electron-browser/agentSessionsDraftHandoff.test.ts
+index 5df73910b9b..15338448c4a 100644
+--- a/src/vs/workbench/contrib/chat/test/electron-browser/agentSessionsDraftHandoff.test.ts
++++ b/src/vs/workbench/contrib/chat/test/electron-browser/agentSessionsDraftHandoff.test.ts
+@@ -1257,7 +1257,7 @@ suite('Agents Window draft handoff and parallel invitation', () => {
+ 			action: h.notification?.actions[0]?.label,
+ 		}, {
+ 			id: 'chat.agentsHandoff.openInAgentsWindow',
+-			title: 'Copilot isn\'t available without an open folder',
++			title: 'CLI Agent isn\'t available without an open folder',
+ 			action: 'Open in Agents Window',
+ 		});
+ 	});
+@@ -1682,8 +1682,8 @@ suite('Agents Window draft handoff and parallel invitation', () => {
+ 
+ 		for (const context of [
+ 			{ name: 'default', mode: 'default', emptyWorkspace: false, title: defaultHandoffTitle, description: defaultHandoffDescription, action: 'Continue in Agents Window' },
+-			{ name: 'custom', mode: 'custom', emptyWorkspace: false, title: defaultHandoffTitle, description: 'Free with your Copilot plan \u2014 get a dedicated, multi-pane view alongside your workspace.', action: 'Give your agent more room?' },
+-			{ name: 'empty workspace', mode: 'default', emptyWorkspace: true, title: 'Copilot isn\'t available without an open folder', description: 'Open the Agents Window to start a Copilot session.', action: 'Open in Agents Window' },
++			{ name: 'custom', mode: 'custom', emptyWorkspace: false, title: defaultHandoffTitle, description: 'Free with your FlowLeap plan \u2014 get a dedicated, multi-pane view alongside your workspace.', action: 'Give your agent more room?' },
++			{ name: 'empty workspace', mode: 'default', emptyWorkspace: true, title: 'CLI Agent isn\'t available without an open folder', description: 'Open the Agents Window to start a CLI Agent session.', action: 'Open in Agents Window' },
+ 		]) {
+ 			for (const treatment of [
+ 				{ name: 'unassigned copy', title: undefined, description: undefined },

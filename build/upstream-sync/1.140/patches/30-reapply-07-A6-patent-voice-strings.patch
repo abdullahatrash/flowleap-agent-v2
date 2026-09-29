@@ -1,0 +1,107 @@
+diff --git a/src/vs/platform/agentHost/common/agentHostSchema.ts b/src/vs/platform/agentHost/common/agentHostSchema.ts
+index 2a713cfd2ed..d7abd4b6f86 100644
+--- a/src/vs/platform/agentHost/common/agentHostSchema.ts
++++ b/src/vs/platform/agentHost/common/agentHostSchema.ts
+@@ -811,7 +811,7 @@ export const platformRootSchema = createSchema({
+ 	[AgentHostSessionSyncEnabledConfigKey]: schemaProperty<boolean>({
+ 		type: 'boolean',
+ 		title: localize('agentHost.config.sessionSyncEnabled.title', "Session Sync"),
+-		description: localize('agentHost.config.sessionSyncEnabled.description', "Whether remote session sync is enabled for the copilot-sdk CLI."),
++		description: localize('agentHost.config.sessionSyncEnabled.description', "Whether remote session sync is enabled for the agent SDK CLI."),
+ 		default: false,
+ 	}),
+ 	[AgentHostByokModelsEnabledConfigKey]: schemaProperty<boolean>({
+diff --git a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+index 41d798d14f3..9af24c2756f 100644
+--- a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
++++ b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+@@ -271,7 +271,7 @@ configurationRegistry.registerConfiguration({
+ 				localization: {
+ 					description: {
+ 						key: 'chat.agentHost.claudeAgent.enabled.policy',
+-						value: nls.localize('chat.agentHost.claudeAgent.enabled.policy', "Enable Claude Agent sessions in VS Code. Start and resume agentic coding sessions powered by Anthropic Claude Agent SDK directly in the editor. Uses your existing Copilot subscription."),
++						value: nls.localize('chat.agentHost.claudeAgent.enabled.policy', "Enable Claude Agent sessions in VS Code. Start and resume agentic coding sessions powered by Anthropic Claude Agent SDK directly in the editor. Uses your existing FlowLeap subscription."),
+ 					}
+ 				}
+ 			},
+@@ -334,7 +334,7 @@ configurationRegistry.registerConfiguration({
+ 		},
+ 		[AgentHostOTelEnabledSettingId]: {
+ 			type: 'boolean',
+-			markdownDescription: nls.localize('chat.agentHost.otel.enabled', "When enabled, the agent host emits OpenTelemetry traces from the Copilot SDK. Configurable in user settings only. Either configure `#chat.agentHost.otel.otlpEndpoint#` to ship traces to an external collector or enable `#chat.agentHost.otel.dbSpanExporter.enabled#` to capture them locally."),
++			markdownDescription: nls.localize('chat.agentHost.otel.enabled', "When enabled, the agent host emits OpenTelemetry traces from the agent SDK. Configurable in user settings only. Either configure `#chat.agentHost.otel.otlpEndpoint#` to ship traces to an external collector or enable `#chat.agentHost.otel.dbSpanExporter.enabled#` to capture them locally."),
+ 			default: false,
+ 			scope: ConfigurationScope.APPLICATION,
+ 			tags: ['experimental', 'advanced'],
+@@ -359,7 +359,7 @@ configurationRegistry.registerConfiguration({
+ 		[AgentHostOTelExporterTypeSettingId]: {
+ 			type: 'string',
+ 			enum: ['otlp-http', 'otlp-grpc', 'console', 'file'],
+-			markdownDescription: nls.localize('chat.agentHost.otel.exporterType', "Exporter backend used by the Copilot SDK when `#chat.agentHost.otel.enabled#` is on. Configurable in user settings only. `otlp-grpc` is downgraded to `otlp-http` transparently in the CLI runtime."),
++			markdownDescription: nls.localize('chat.agentHost.otel.exporterType', "Exporter backend used by the agent SDK when `#chat.agentHost.otel.enabled#` is on. Configurable in user settings only. `otlp-grpc` is downgraded to `otlp-http` transparently in the CLI runtime."),
+ 			default: 'otlp-http',
+ 			scope: ConfigurationScope.APPLICATION,
+ 			tags: ['experimental', 'advanced'],
+diff --git a/src/vs/sessions/browser/sessionsSetUpService.ts b/src/vs/sessions/browser/sessionsSetUpService.ts
+index 9a45df705c7..f4b14e3b327 100644
+--- a/src/vs/sessions/browser/sessionsSetUpService.ts
++++ b/src/vs/sessions/browser/sessionsSetUpService.ts
+@@ -624,7 +624,7 @@ class SessionsSetUpWidget extends Disposable {
+ 			createWorkbenchDialogOptions({
+ 				type: 'none',
+ 				extraClasses: ['chat-setup-dialog', 'sessions-welcome-dialog', 'sessions-main-welcome-dialog'],
+-				detail: localize('sessions.welcome.detail', "Your AI-powered coding experience where agents explore, build, and iterate with you."),
++				detail: localize('sessions.welcome.detail', "Your AI-powered patent workspace where agents research, analyze, and draft with you."),
+ 				icon: Codicon.agent,
+ 				alignment: DialogContentsAlignment.Vertical,
+ 				cancelId: 1,
+diff --git a/src/vs/sessions/contrib/chat/browser/newChatInput.ts b/src/vs/sessions/contrib/chat/browser/newChatInput.ts
+index 793e1c5594a..c24b1e74798 100644
+--- a/src/vs/sessions/contrib/chat/browser/newChatInput.ts
++++ b/src/vs/sessions/contrib/chat/browser/newChatInput.ts
+@@ -374,26 +374,27 @@ export interface INewChatInputSendRequest {
+ }
+ 
+ /**
+- * Randomized, friendly placeholders shown in the new-session chat input
+- * to add a bit of personality. One is picked per widget instance, avoiding
+- * an immediate repeat of the previous pick.
++ * Randomized placeholders shown in the new-session chat input. FlowLeap: they
++ * lead with patent-research framings (prior art, freedom-to-operate, claim
++ * analysis) to signal what the product is for, while keeping a few open-ended
++ * research prompts. One is picked per widget instance, avoiding an immediate
++ * repeat of the previous pick.
+  */
+ const RANDOM_PLACEHOLDERS = [
+-	localize('sessionsChatInput.placeholder.whatAreYouBuilding', "What are you building?"),
+-	localize('sessionsChatInput.placeholder.whatWillYouShipToday', "What will you ship today?"),
+-	localize('sessionsChatInput.placeholder.describeWhatYouWantToBuild', "Describe what you want to build"),
+-	localize('sessionsChatInput.placeholder.whatsYourNextMilestone', "What's your next milestone?"),
+-	localize('sessionsChatInput.placeholder.whatAreYouTryingToAchieve', "What are you trying to achieve?"),
+-	localize('sessionsChatInput.placeholder.pitchYourIdea', "Pitch your idea"),
+-	localize('sessionsChatInput.placeholder.whatsTheGoal', "What's the goal?"),
+-	localize('sessionsChatInput.placeholder.whatWillYouCreate', "What will you create?"),
+-	localize('sessionsChatInput.placeholder.whatFeatureAreYouDreamingUp', "What feature are you dreaming up?"),
+-	localize('sessionsChatInput.placeholder.describeTheOutcome', "Describe the outcome you want"),
+-	localize('sessionsChatInput.placeholder.whatProblemAreYouSolving', "What problem are you solving?"),
+-	localize('sessionsChatInput.placeholder.whatsNextOnYourRoadmap', "What's next on your roadmap?"),
+-	localize('sessionsChatInput.placeholder.whatWouldYouLikeToAutomate', "What would you like to automate?"),
+-	localize('sessionsChatInput.placeholder.whatWillYouLaunch', "What will you launch?"),
+-	localize('sessionsChatInput.placeholder.describeYourMission', "Describe your mission"),
++	localize('sessionsChatInput.placeholder.searchPriorArt', "Search prior art for…"),
++	localize('sessionsChatInput.placeholder.runFreedomToOperate', "Run a freedom-to-operate check on…"),
++	localize('sessionsChatInput.placeholder.analyzeTheClaims', "Analyze the claims of a patent…"),
++	localize('sessionsChatInput.placeholder.mapThePatentLandscape', "Map the patent landscape for…"),
++	localize('sessionsChatInput.placeholder.findInvalidatingReferences', "Find references that challenge novelty…"),
++	localize('sessionsChatInput.placeholder.assessPatentability', "Assess the patentability of an idea…"),
++	localize('sessionsChatInput.placeholder.compareTwoPatents', "Compare the claims of two patents…"),
++	localize('sessionsChatInput.placeholder.summarizeProsecutionHistory', "Summarize a patent's prosecution history…"),
++	localize('sessionsChatInput.placeholder.findForwardCitations', "Find who cites a patent…"),
++	localize('sessionsChatInput.placeholder.reviewSpecificationForPriorArt', "Review a specification against prior art…"),
++	localize('sessionsChatInput.placeholder.searchAcademicLiterature', "Search the academic literature for…"),
++	localize('sessionsChatInput.placeholder.whatAreYouResearching', "What are you researching?"),
++	localize('sessionsChatInput.placeholder.whatPatentQuestion', "What patent question can I help with?"),
++	localize('sessionsChatInput.placeholder.describeWhatToAnalyze', "Describe what you want to analyze"),
+ ];
+ 
+ let lastPlaceholderIndex = -1;

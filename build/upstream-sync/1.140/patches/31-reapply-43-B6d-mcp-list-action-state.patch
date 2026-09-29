@@ -1,0 +1,67 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
+index e594233cf20..65f04e22622 100644
+--- a/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/aiCustomization/mcpListWidget.ts
+@@ -39,7 +39,7 @@ import { IContextMenuService, IContextViewService } from '../../../../../platfor
+ import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+ import { Delayer } from '../../../../../base/common/async.js';
+ import { Action, IAction, Separator } from '../../../../../base/common/actions.js';
+-import { ConfigureModelAccessAction, DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, getContextMenuActions, RestartServerAction, ShowSamplingRequestsAction, ShowServerOutputAction, StartServerAction, StopServerAction } from '../../../../contrib/mcp/browser/mcpServerActions.js';
++import { ConfigureModelAccessAction, DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, getContextMenuActions, McpServerAction, RestartServerAction, ShowSamplingRequestsAction, ShowServerOutputAction, StartServerAction, StopServerAction } from '../../../../contrib/mcp/browser/mcpServerActions.js';
+ import { LocalMcpServerScope } from '../../../../services/mcp/common/mcpWorkbenchManagementService.js';
+ import { IAgentPlugin, IAgentPluginService } from '../../common/plugins/agentPluginService.js';
+ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+@@ -1479,9 +1479,13 @@ export function getServerItemContextMenuActions(menuActionGroups: readonly (read
+ 		actions.push(activeSessionLifecycleAction, new Separator());
+ 	}
+ 	for (const menuActions of menuActionGroups) {
++		// FlowLeap: an McpServerAction hides itself when it does not apply to the server's
++		// state (e.g. Start Server while running); showing it anyway offers a disabled entry
++		// that silently does nothing when clicked.
++		const applicableMenuActions = menuActions.filter(action => !(action instanceof McpServerAction) || !action.hidden);
+ 		const visibleMenuActions = hasActiveSession
+-			? menuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action))
+-			: menuActions;
++			? applicableMenuActions.filter(action => !shouldHideLocalActionForActiveSessionServer(action))
++			: applicableMenuActions;
+ 		actions.push(...visibleMenuActions);
+ 		if (hasActiveSession && menuActions.some(isLocalMcpServerEnablementAction)) {
+ 			actions.push(...agentHostEnablementActions);
+diff --git a/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts b/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts
+index 0ea27a6aa2f..770d1fc007a 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/aiCustomization/mcpListWidget.test.ts
+@@ -37,7 +37,7 @@ import { CustomizationMcpServerCompatibilityKind, ICustomizationHarnessService }
+ import { IAgentHostCustomizationService } from '../../../browser/agentSessions/agentHost/agentHostCustomizationService.js';
+ import { IAgentPluginService } from '../../../common/plugins/agentPluginService.js';
+ import { IMcpServer, IMcpService, IMcpWorkbenchService, IMcpSamplingService, IWorkbenchMcpServer, MCP_PLUGIN_COLLECTION_ID_PREFIX, McpCollectionDefinition, McpCollectionProvenance, McpConnectionState, McpServerInstallState, McpServerTransportType } from '../../../../mcp/common/mcpTypes.js';
+-import { DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction } from '../../../../mcp/browser/mcpServerActions.js';
++import { DisableMcpServerForWorkspaceAction, DisableMcpServerGloballyAction, EnableMcpServerForWorkspaceAction, EnableMcpServerGloballyAction, McpServerAction } from '../../../../mcp/browser/mcpServerActions.js';
+ import {
+ 	AgentHostMcpServer,
+ 	authenticateMcpServer,
+@@ -1097,6 +1097,24 @@ suite('mcpListWidget', () => {
+ 			]);
+ 		});
+ 
++		test('drops MCP server actions that hide themselves for the current state', () => {
++			class TestServerAction extends McpServerAction {
++				constructor(label: string, hidden: boolean) {
++					super(`test.${label}`, label);
++					this.hidden = hidden;
++				}
++				update(): void { }
++			}
++			const localActions = trackActions(disposables, [
++				new TestServerAction('Start Server', true),
++				new TestServerAction('Stop Server', false),
++				new Action('unrelated', 'Unrelated'),
++			]);
++			const actions = getServerItemContextMenuActions([localActions], undefined, undefined, []);
++
++			assert.deepStrictEqual(actions.filter(action => !(action instanceof Separator)).map(action => action.label), ['Stop Server', 'Unrelated']);
++		});
++
+ 		test('keeps the VS Code-owned enablement set without an active agent-host session', () => {
+ 			const localActions = trackActions(disposables, [
+ 				new Action(EnableMcpServerGloballyAction.ID, 'Enable'),

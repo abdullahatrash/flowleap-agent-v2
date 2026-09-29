@@ -1,0 +1,529 @@
+diff --git a/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.ts b/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.ts
+index 0a09b98c17a..d3ebd87ddc4 100644
+--- a/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.ts
++++ b/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessions.contribution.ts
+@@ -8,6 +8,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
+ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
+ import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
+ import { ClaudeChatSessionsProvider } from './claudeChatSessionsProvider.js';
++import './claudeChatSessionsActions.js';
+ 
+ /**
+  * FlowLeap: registers the extension-host Claude sessions provider, the only
+diff --git a/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessionsActions.ts b/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessionsActions.ts
+new file mode 100644
+index 00000000000..f8dba4bb856
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudeChatSessionsActions.ts
+@@ -0,0 +1,83 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { BaseActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
++import { Disposable } from '../../../../../base/common/lifecycle.js';
++import { localize2 } from '../../../../../nls.js';
++import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
++import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
++import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
++import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
++import { Menus } from '../../../../browser/menus.js';
++import { SessionProviderIdContext, SessionTypeContext } from '../../../../common/contextkeys.js';
++import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
++import { ClaudePermissionModePicker } from './claudePermissionModePicker.js';
++import { CLAUDE_CODE_SESSION_TYPE_ID, CLAUDE_PROVIDER_ID } from './claudeChatSessionsProvider.js';
++
++/*
++ * FlowLeap: the Claude permission mode picker in the new-session composer.
++ * Upstream has no picker for the extension-host Claude permission modes
++ * (Ask Before Edits, Edit Automatically, Plan Mode, ...).
++ */
++
++const CLAUDE_PERMISSION_MODE_PICKER_ID = 'sessions.claude.permissionModePicker';
++
++registerAction2(class extends Action2 {
++	constructor() {
++		super({
++			id: CLAUDE_PERMISSION_MODE_PICKER_ID,
++			title: localize2('claudePermissionModePicker', "Permission Mode"),
++			f1: false,
++			menu: [{
++				id: Menus.NewSessionControl,
++				group: 'navigation',
++				order: 1,
++				when: ContextKeyExpr.and(
++					ContextKeyExpr.equals(SessionTypeContext.key, CLAUDE_CODE_SESSION_TYPE_ID),
++					ContextKeyExpr.equals(SessionProviderIdContext.key, CLAUDE_PROVIDER_ID),
++				),
++			}],
++		});
++	}
++	override async run(): Promise<void> { /* handled by the action view item */ }
++});
++
++/**
++ * Wraps a standalone picker widget as a {@link BaseActionViewItem} so a
++ * {@link MenuWorkbenchToolBar} can render it.
++ */
++class PickerActionViewItem extends BaseActionViewItem {
++	constructor(private readonly picker: { render(container: HTMLElement): void; dispose(): void }) {
++		super(undefined, { id: '', label: '', enabled: true, class: undefined, tooltip: '', run: () => { } });
++	}
++
++	override render(container: HTMLElement): void {
++		this.picker.render(container);
++	}
++
++	override dispose(): void {
++		this.picker.dispose();
++		super.dispose();
++	}
++}
++
++class ClaudePickerActionViewItemContribution extends Disposable implements IWorkbenchContribution {
++	static readonly ID = 'sessions.claudePickerActionViewItems';
++
++	constructor(
++		@IActionViewItemService actionViewItemService: IActionViewItemService,
++	) {
++		super();
++		this._register(actionViewItemService.register(
++			Menus.NewSessionControl, CLAUDE_PERMISSION_MODE_PICKER_ID,
++			(_action, _options, scopedInstantiationService) => {
++				const { session } = scopedInstantiationService.invokeFunction(accessor => accessor.get(ISessionContext));
++				return new PickerActionViewItem(scopedInstantiationService.createInstance(ClaudePermissionModePicker, session));
++			},
++		));
++	}
++}
++
++registerWorkbenchContribution2(ClaudePickerActionViewItemContribution.ID, ClaudePickerActionViewItemContribution, WorkbenchPhase.AfterRestored);
+diff --git a/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudePermissionModePicker.ts b/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudePermissionModePicker.ts
+new file mode 100644
+index 00000000000..cbe4c4e4c15
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/claudeChatSessions/browser/claudePermissionModePicker.ts
+@@ -0,0 +1,209 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as dom from '../../../../../base/browser/dom.js';
++import { Gesture, EventType as TouchEventType } from '../../../../../base/browser/touch.js';
++import { renderIcon } from '../../../../../base/browser/ui/iconLabel/iconLabels.js';
++import { Codicon } from '../../../../../base/common/codicons.js';
++import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
++import { IObservable } from '../../../../../base/common/observable.js';
++import { ThemeIcon } from '../../../../../base/common/themables.js';
++import { localize } from '../../../../../nls.js';
++import { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
++import { ActionListItemKind, IActionListDelegate, IActionListItem, IActionListOptions } from '../../../../../platform/actionWidget/browser/actionList.js';
++import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
++import { observableConfigValue } from '../../../../../platform/observable/common/platformObservableUtils.js';
++import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
++import { IActiveSession } from '../../../../services/sessions/common/sessionsManagement.js';
++import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
++import { CLAUDE_PERMISSION_MODE_OPTION_ID, ClaudeChatSessionsProvider } from './claudeChatSessionsProvider.js';
++import { reportNewChatPickerClosed } from '../../../chat/browser/newChatPickerTelemetry.js';
++
++const ALLOW_AUTO_PERMISSIONS_SETTING = 'github.copilot.chat.claudeAgent.allowAutoPermissions';
++const ALLOW_BYPASS_PERMISSIONS_SETTING = 'github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions';
++
++interface IClaudePermissionModeItem {
++	readonly id: string;
++	readonly label: string;
++	readonly description: string;
++	readonly icon: ThemeIcon;
++}
++
++const permissionModes: IClaudePermissionModeItem[] = [
++	{
++		id: 'default',
++		label: localize('claude.permissionMode.default', "Ask Before Edits"),
++		description: localize('claude.permissionMode.default.description', "Claude asks for approval before making changes"),
++		icon: Codicon.shield,
++	},
++	{
++		id: 'acceptEdits',
++		label: localize('claude.permissionMode.acceptEdits', "Edit Automatically"),
++		description: localize('claude.permissionMode.acceptEdits.description', "Claude edits files without asking"),
++		icon: Codicon.edit,
++	},
++	{
++		id: 'plan',
++		label: localize('claude.permissionMode.plan', "Plan Mode"),
++		description: localize('claude.permissionMode.plan.description', "Claude creates a plan before making changes"),
++		icon: Codicon.lightbulb,
++	},
++];
++
++const autoPermissionMode: IClaudePermissionModeItem = {
++	id: 'auto',
++	label: localize('claude.permissionMode.auto', "Auto"),
++	description: localize('claude.permissionMode.auto.description', "A model classifier approves or denies tool operations automatically"),
++	icon: Codicon.sparkle,
++};
++
++const bypassPermissionMode: IClaudePermissionModeItem = {
++	id: 'bypassPermissions',
++	label: localize('claude.permissionMode.bypass', "Bypass Permissions"),
++	description: localize('claude.permissionMode.bypass.description', "All tools run without any confirmation"),
++	icon: Codicon.warning,
++};
++
++export class ClaudePermissionModePicker extends Disposable {
++
++	private _currentModeId = 'acceptEdits';
++	private readonly _autoPermissionsEnabled: IObservable<boolean>;
++	private readonly _bypassPermissionsEnabled: IObservable<boolean>;
++	private _triggerElement: HTMLElement | undefined;
++	private readonly _renderDisposables = this._register(new DisposableStore());
++
++	constructor(
++		private readonly _session: IObservable<IActiveSession | undefined>,
++		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
++		@ISessionsProvidersService private readonly sessionsProvidersService: ISessionsProvidersService,
++		@IConfigurationService configurationService: IConfigurationService,
++		@ITelemetryService private readonly telemetryService: ITelemetryService,
++	) {
++		super();
++		this._autoPermissionsEnabled = observableConfigValue<boolean>(ALLOW_AUTO_PERMISSIONS_SETTING, false, configurationService);
++		this._bypassPermissionsEnabled = observableConfigValue<boolean>(ALLOW_BYPASS_PERMISSIONS_SETTING, false, configurationService);
++	}
++
++	render(container: HTMLElement): HTMLElement {
++		this._renderDisposables.clear();
++
++		const slot = dom.append(container, dom.$('.sessions-chat-picker-slot.sessions-chat-permission-picker'));
++		this._renderDisposables.add({ dispose: () => slot.remove() });
++
++		const trigger = dom.append(slot, dom.$('a.action-label'));
++		trigger.tabIndex = 0;
++		trigger.role = 'button';
++		this._triggerElement = trigger;
++
++		this._updateTriggerLabel(trigger);
++
++		this._renderDisposables.add(Gesture.addTarget(trigger));
++		for (const eventType of [dom.EventType.CLICK, TouchEventType.Tap]) {
++			this._renderDisposables.add(dom.addDisposableListener(trigger, eventType, (e) => {
++				dom.EventHelper.stop(e, true);
++				this._showPicker();
++			}));
++		}
++
++		this._renderDisposables.add(dom.addDisposableListener(trigger, dom.EventType.KEY_DOWN, (e) => {
++			if (e.key === 'Enter' || e.key === ' ') {
++				dom.EventHelper.stop(e, true);
++				this._showPicker();
++			}
++		}));
++
++		return slot;
++	}
++
++	private _showPicker(): void {
++		if (!this._triggerElement || this.actionWidgetService.isVisible) {
++			return;
++		}
++
++		const autoAvailable = this._autoPermissionsEnabled.get();
++		const bypassAvailable = this._bypassPermissionsEnabled.get();
++		const availableModes = [...permissionModes];
++		if (autoAvailable) {
++			availableModes.push(autoPermissionMode);
++		}
++		if (bypassAvailable) {
++			availableModes.push(bypassPermissionMode);
++		}
++		const items: IActionListItem<IClaudePermissionModeItem>[] = availableModes.map(mode => ({
++			kind: ActionListItemKind.Action,
++			group: { kind: ActionListItemKind.Header, title: '', icon: mode.icon },
++			item: mode,
++			label: mode.label,
++			detail: mode.description,
++			disabled: false,
++		}));
++
++		const triggerElement = this._triggerElement;
++		const delegate: IActionListDelegate<IClaudePermissionModeItem> = {
++			onSelect: (item) => {
++				this.actionWidgetService.hide();
++				this._selectMode(item);
++			},
++			onHide: () => { triggerElement.focus(); },
++		};
++
++		const listOptions: IActionListOptions = { minWidth: 255 };
++		this.actionWidgetService.show<IClaudePermissionModeItem>(
++			'claudePermissionModePicker',
++			false,
++			items,
++			delegate,
++			this._triggerElement,
++			undefined,
++			[],
++			{
++				getWidgetAriaLabel: () => localize('claudePermissionModePicker.ariaLabel', "Permission Mode"),
++			},
++			listOptions,
++		);
++	}
++
++	private _selectMode(mode: IClaudePermissionModeItem): void {
++		const beforeId = this._currentModeId;
++		const beforeLabel = [...permissionModes, autoPermissionMode, bypassPermissionMode].find(m => m.id === beforeId)?.label;
++		reportNewChatPickerClosed(this.telemetryService, {
++			id: 'NewChatClaudePermissionModePicker',
++			name: 'NewChatClaudePermissionModePicker',
++			optionIdBefore: beforeId,
++			optionIdAfter: mode.id,
++			optionLabelBefore: beforeLabel,
++			optionLabelAfter: mode.label,
++			isPII: false,
++		});
++
++		this._currentModeId = mode.id;
++		this._updateTriggerLabel(this._triggerElement);
++
++		const session = this._session.get();
++		if (!session) {
++			return;
++		}
++		const provider = this.sessionsProvidersService.getProvider(session.providerId);
++		if (provider instanceof ClaudeChatSessionsProvider) {
++			provider.getSession(session.sessionId)?.setOption(CLAUDE_PERMISSION_MODE_OPTION_ID, { id: mode.id, name: mode.label });
++		}
++	}
++
++	private _updateTriggerLabel(trigger: HTMLElement | undefined): void {
++		if (!trigger) {
++			return;
++		}
++
++		dom.clearNode(trigger);
++		const currentMode = [...permissionModes, autoPermissionMode, bypassPermissionMode].find(m => m.id === this._currentModeId) ?? permissionModes[1];
++
++		dom.append(trigger, renderIcon(currentMode.icon));
++		const labelSpan = dom.append(trigger, dom.$('span.sessions-chat-dropdown-label'));
++		labelSpan.textContent = currentMode.label;
++		dom.append(trigger, renderIcon(Codicon.chevronDown));
++
++		trigger.ariaLabel = localize('claudePermissionModePicker.triggerAriaLabel', "Pick Permission Mode, {0}", currentMode.label);
++	}
++}
+diff --git a/src/vs/sessions/contrib/providers/claudeChatSessions/test/browser/claudePermissionModePicker.test.ts b/src/vs/sessions/contrib/providers/claudeChatSessions/test/browser/claudePermissionModePicker.test.ts
+new file mode 100644
+index 00000000000..1d8f77333a1
+--- /dev/null
++++ b/src/vs/sessions/contrib/providers/claudeChatSessions/test/browser/claudePermissionModePicker.test.ts
+@@ -0,0 +1,207 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import assert from 'assert';
++import { Event } from '../../../../../../base/common/event.js';
++import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
++import { observableValue } from '../../../../../../base/common/observable.js';
++import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
++import { IActionWidgetService } from '../../../../../../platform/actionWidget/browser/actionWidget.js';
++import { IActionListItem } from '../../../../../../platform/actionWidget/browser/actionList.js';
++import { TestInstantiationService } from '../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
++import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
++import { NullTelemetryService } from '../../../../../../platform/telemetry/common/telemetryUtils.js';
++import { ISessionsProvidersService } from '../../../../../services/sessions/browser/sessionsProvidersService.js';
++import { IActiveSession, ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
++import { ClaudeChatSessionsProvider, IClaudeChatSession } from '../../browser/claudeChatSessionsProvider.js';
++import { ClaudePermissionModePicker } from '../../browser/claudePermissionModePicker.js';
++import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
++import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
++
++interface IPermissionModeItem {
++	readonly id: string;
++	readonly label: string;
++}
++
++function showPicker(container: HTMLElement): void {
++	const trigger = container.querySelector<HTMLElement>('a.action-label');
++	assert.ok(trigger);
++	trigger.click();
++}
++
++function createPicker(
++	disposables: DisposableStore,
++	opts?: {
++		setOptionSpy?: (optionId: string, value: { id: string; name: string }) => void;
++		hasActiveSession?: boolean;
++		configValues?: Record<string, unknown>;
++	},
++): { picker: ClaudePermissionModePicker; actionWidgetItems: IActionListItem<IPermissionModeItem>[]; onSelect: (item: IPermissionModeItem) => void } {
++	const instantiationService = disposables.add(new TestInstantiationService());
++	const actionWidgetItems: IActionListItem<IPermissionModeItem>[] = [];
++	let capturedOnSelect: ((item: IPermissionModeItem) => void) | undefined;
++
++	const setOptionSpy = opts?.setOptionSpy ?? (() => { });
++	const hasActiveSession = opts?.hasActiveSession ?? true;
++
++	const activeSession = hasActiveSession ? {
++		providerId: 'default-copilot',
++		sessionId: 'session-id',
++		loading: observableValue('loading', false),
++	} as unknown as IActiveSession : undefined;
++
++	const mockSession: Partial<IClaudeChatSession> = {
++		setOption: setOptionSpy as IClaudeChatSession['setOption'],
++	};
++
++	const provider = Object.assign(Object.create(ClaudeChatSessionsProvider.prototype), {
++		getSession: () => mockSession,
++	});
++
++	instantiationService.stub(IActionWidgetService, {
++		isVisible: false,
++		hide: () => { },
++		show: <T>(_id: string, _supportsPreview: boolean, items: IActionListItem<T>[], delegate: { onSelect: (item: T) => void }) => {
++			actionWidgetItems.splice(0, actionWidgetItems.length, ...(items as IActionListItem<IPermissionModeItem>[]));
++			capturedOnSelect = delegate.onSelect as (item: IPermissionModeItem) => void;
++		},
++	});
++	const sessionObs = observableValue<IActiveSession | undefined>('activeSession', activeSession);
++	instantiationService.stub(ISessionsManagementService, {
++		activeSession: sessionObs,
++	} as unknown as ISessionsManagementService);
++	instantiationService.stub(ISessionsProvidersService, {
++		onDidChangeProviders: Event.None,
++		getProviders: () => [],
++		getProvider: () => provider,
++	} as unknown as ISessionsProvidersService);
++	instantiationService.stub(ITelemetryService, NullTelemetryService);
++	const configService = new TestConfigurationService();
++	for (const [key, value] of Object.entries(opts?.configValues ?? {})) {
++		configService.setUserConfiguration(key, value);
++	}
++	instantiationService.stub(IConfigurationService, configService);
++
++	const picker = disposables.add(instantiationService.createInstance(ClaudePermissionModePicker, sessionObs));
++
++	return {
++		picker,
++		actionWidgetItems,
++		get onSelect() { return capturedOnSelect!; },
++	};
++}
++
++suite('ClaudePermissionModePicker', () => {
++	const disposables = new DisposableStore();
++
++	teardown(() => {
++		disposables.clear();
++	});
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('shows all three permission modes', () => {
++		const { picker, actionWidgetItems } = createPicker(disposables);
++		const container = document.createElement('div');
++		picker.render(container);
++		showPicker(container);
++
++		assert.deepStrictEqual(
++			actionWidgetItems.map(item => ({ id: item.item?.id, label: item.label })),
++			[
++				{ id: 'default', label: 'Ask Before Edits' },
++				{ id: 'acceptEdits', label: 'Edit Automatically' },
++				{ id: 'plan', label: 'Plan Mode' },
++			],
++		);
++	});
++
++	test('selecting a mode updates the trigger label', () => {
++		const result = createPicker(disposables);
++		const container = document.createElement('div');
++		result.picker.render(container);
++		showPicker(container);
++
++		result.onSelect({ id: 'plan', label: 'Plan Mode' } as IPermissionModeItem);
++
++		const labelSpan = container.querySelector<HTMLElement>('span.sessions-chat-dropdown-label');
++		assert.ok(labelSpan);
++		assert.strictEqual(labelSpan.textContent, 'Plan Mode');
++	});
++
++	test('selecting a mode calls setOption on the session', () => {
++		const calls: { optionId: string; value: { id: string; name: string } }[] = [];
++		const result = createPicker(disposables, {
++			setOptionSpy: (optionId, value) => calls.push({ optionId, value }),
++		});
++		const container = document.createElement('div');
++		result.picker.render(container);
++		showPicker(container);
++
++		result.onSelect({ id: 'default', label: 'Ask Before Edits' } as IPermissionModeItem);
++
++		assert.deepStrictEqual(calls, [{
++			optionId: 'permissionMode',
++			value: { id: 'default', name: 'Ask Before Edits' },
++		}]);
++	});
++
++	test('selecting a mode does not throw when no active session', () => {
++		const result = createPicker(disposables, { hasActiveSession: false });
++		const container = document.createElement('div');
++		result.picker.render(container);
++		showPicker(container);
++
++		assert.doesNotThrow(() => result.onSelect({ id: 'plan', label: 'Plan Mode' } as IPermissionModeItem));
++	});
++
++	test('trigger has correct aria label', () => {
++		const { picker } = createPicker(disposables);
++		const container = document.createElement('div');
++		picker.render(container);
++
++		const trigger = container.querySelector<HTMLElement>('a.action-label');
++		assert.ok(trigger);
++		// Default mode is 'acceptEdits' → "Edit Automatically"
++		assert.ok(trigger.ariaLabel?.includes('Edit Automatically'));
++	});
++
++	test('shows bypass permissions option when setting is enabled', () => {
++		const { picker, actionWidgetItems } = createPicker(disposables, {
++			configValues: { 'github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions': true },
++		});
++		const container = document.createElement('div');
++		picker.render(container);
++		showPicker(container);
++
++		assert.deepStrictEqual(
++			actionWidgetItems.map(item => ({ id: item.item?.id, label: item.label })),
++			[
++				{ id: 'default', label: 'Ask Before Edits' },
++				{ id: 'acceptEdits', label: 'Edit Automatically' },
++				{ id: 'plan', label: 'Plan Mode' },
++				{ id: 'bypassPermissions', label: 'Bypass Permissions' },
++			],
++		);
++	});
++
++	test('selecting bypass permissions writes expected permissionMode option', () => {
++		const calls: { optionId: string; value: { id: string; name: string } }[] = [];
++		const result = createPicker(disposables, {
++			configValues: { 'github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions': true },
++			setOptionSpy: (optionId, value) => calls.push({ optionId, value }),
++		});
++		const container = document.createElement('div');
++		result.picker.render(container);
++		showPicker(container);
++
++		result.onSelect({ id: 'bypassPermissions', label: 'Bypass Permissions' } as IPermissionModeItem);
++
++		assert.deepStrictEqual(calls, [{
++			optionId: 'permissionMode',
++			value: { id: 'bypassPermissions', name: 'Bypass Permissions' },
++		}]);
++	});
++});

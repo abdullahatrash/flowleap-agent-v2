@@ -1,0 +1,104 @@
+diff --git a/src/vs/workbench/browser/actions/helpActions.ts b/src/vs/workbench/browser/actions/helpActions.ts
+index 71002a5e9d9..31c9be0e7af 100644
+--- a/src/vs/workbench/browser/actions/helpActions.ts
++++ b/src/vs/workbench/browser/actions/helpActions.ts
+@@ -258,7 +258,8 @@ class OpenLicenseUrlAction extends Action2 {
+ 			menu: {
+ 				id: MenuId.MenubarHelpMenu,
+ 				group: '4_legal',
+-				order: 1
++				order: 1,
++				when: PatentIdeContextKeys.Mode.toNegated() // FlowLeap Patent IDE: hide the VS Code license link
+ 			}
+ 		});
+ 	}
+diff --git a/src/vs/workbench/common/views.ts b/src/vs/workbench/common/views.ts
+index 236e55696b1..b4d2af02d37 100644
+--- a/src/vs/workbench/common/views.ts
++++ b/src/vs/workbench/common/views.ts
+@@ -56,6 +56,11 @@ type OpenCommandActionDescriptor = {
+ 	readonly mnemonicTitle?: string;
+ 	readonly order?: number;
+ 	readonly keybindings?: IKeybindings & { when?: ContextKeyExpression };
++	/**
++	 * Additional condition for showing the container's entry in the View menu,
++	 * composed with the container's enablement context key.
++	 */
++	readonly when?: ContextKeyExpression;
+ };
+ 
+ /**
+diff --git a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+index f2dc5c1d358..ac846261fea 100644
+--- a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
++++ b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+@@ -121,6 +121,7 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
+ 			id: VIEWLET_ID,
+ 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
+ 			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX, when: PatentIdeContextKeys.Mode.toNegated() },
++			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the View menu entry
+ 			order: 4,
+ 		},
+ 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),
+diff --git a/src/vs/workbench/contrib/issue/common/issue.contribution.ts b/src/vs/workbench/contrib/issue/common/issue.contribution.ts
+index 0c1effb4b15..33aa93ddd68 100644
+--- a/src/vs/workbench/contrib/issue/common/issue.contribution.ts
++++ b/src/vs/workbench/contrib/issue/common/issue.contribution.ts
+@@ -14,6 +14,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
+ import { IProductService } from '../../../../platform/product/common/productService.js';
+ import { IWorkbenchContribution } from '../../../common/contributions.js';
+ import { IssueReporterData, IWorkbenchIssueService } from './issue.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const OpenIssueReporterActionId = 'workbench.action.openIssueReporter';
+ const OpenIssueReporterApiId = 'vscode.openIssueReporter';
+@@ -126,6 +127,7 @@ export class BaseIssueContribution extends Disposable implements IWorkbenchContr
+ 				id: OpenIssueReporterActionId,
+ 				title: localize({ key: 'miReportIssue', comment: ['&& denotes a mnemonic', 'Translate this to "Report Issue in English" in all languages please!'] }, "Report &&Issue")
+ 			},
++			when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the Microsoft issue reporter
+ 			order: 3
+ 		}));
+ 	}
+diff --git a/src/vs/workbench/contrib/output/browser/output.contribution.ts b/src/vs/workbench/contrib/output/browser/output.contribution.ts
+index 023eae28eca..75d6255c170 100644
+--- a/src/vs/workbench/contrib/output/browser/output.contribution.ts
++++ b/src/vs/workbench/contrib/output/browser/output.contribution.ts
+@@ -45,6 +45,7 @@ import { hasKey } from '../../../../base/common/types.js';
+ import { IDefaultLogLevelsService } from '../../../services/log/common/defaultLogLevels.js';
+ import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+ import { OutputAccessibilityHelp } from './outputAccessibilityHelp.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const IMPORTED_LOG_ID_PREFIX = 'importedLog.';
+ 
+@@ -88,6 +89,7 @@ Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews
+ 	canMoveView: true,
+ 	canToggleVisibility: true,
+ 	ctorDescriptor: new SyncDescriptor(OutputViewPane),
++	when: PatentIdeContextKeys.Mode.toNegated(), // FlowLeap Patent IDE: hide the Output view
+ 	openCommandActionDescriptor: {
+ 		id: 'workbench.action.output.toggleOutput',
+ 		mnemonicTitle: nls.localize({ key: 'miToggleOutput', comment: ['&& denotes a mnemonic'] }, "&&Output"),
+diff --git a/src/vs/workbench/services/views/browser/viewsService.ts b/src/vs/workbench/services/views/browser/viewsService.ts
+index 69c6c0c252a..40b5937eeff 100644
+--- a/src/vs/workbench/services/views/browser/viewsService.ts
++++ b/src/vs/workbench/services/views/browser/viewsService.ts
+@@ -401,7 +401,7 @@ export class ViewsService extends Disposable implements IViewsService {
+ 	private registerOpenViewContainerAction(viewContainer: ViewContainer): IDisposable {
+ 		const disposables = new DisposableStore();
+ 		if (viewContainer.openCommandActionDescriptor) {
+-			const { id, mnemonicTitle, keybindings, order } = viewContainer.openCommandActionDescriptor ?? { id: viewContainer.id };
++			const { id, mnemonicTitle, keybindings, order, when } = viewContainer.openCommandActionDescriptor ?? { id: viewContainer.id };
+ 			const title = viewContainer.openCommandActionDescriptor.title ?? viewContainer.title;
+ 			const that = this;
+ 			disposables.add(registerAction2(class OpenViewContainerAction extends Action2 {
+@@ -460,7 +460,7 @@ export class ViewsService extends Disposable implements IViewsService {
+ 						title: mnemonicTitle,
+ 					},
+ 					group: defaultLocation === ViewContainerLocation.Sidebar ? '3_sidebar' : defaultLocation === ViewContainerLocation.AuxiliaryBar ? '4_auxbar' : '5_panel',
+-					when: ContextKeyExpr.has(getEnabledViewContainerContextKey(viewContainer.id)),
++					when: ContextKeyExpr.and(ContextKeyExpr.has(getEnabledViewContainerContextKey(viewContainer.id)), when),
+ 					order: order ?? Number.MAX_VALUE
+ 				}));
+ 			}

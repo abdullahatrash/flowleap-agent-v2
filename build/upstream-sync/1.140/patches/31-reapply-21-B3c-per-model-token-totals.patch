@@ -1,0 +1,40 @@
+diff --git a/src/vs/workbench/api/browser/mainThreadChatAgents2.ts b/src/vs/workbench/api/browser/mainThreadChatAgents2.ts
+index 4a887e5c892..7ddbc3505be 100644
+--- a/src/vs/workbench/api/browser/mainThreadChatAgents2.ts
++++ b/src/vs/workbench/api/browser/mainThreadChatAgents2.ts
+@@ -542,7 +542,8 @@ export class MainThreadChatAgents2 extends Disposable implements MainThreadChatA
+ 						completionTokens: progress.completionTokens,
+ 						outputBuffer: progress.outputBuffer,
+ 						copilotCredits: progress.copilotCredits,
+-						promptTokenDetails: progress.promptTokenDetails
++						promptTokenDetails: progress.promptTokenDetails,
++						modelTotals: progress.modelTotals
+ 					});
+ 				} else {
+ 					// Non-subagent request with no response model: unexpected. Drop the
+diff --git a/src/vs/workbench/api/common/extHost.protocol.ts b/src/vs/workbench/api/common/extHost.protocol.ts
+index e0e0e28858e..5eafd5fe444 100644
+--- a/src/vs/workbench/api/common/extHost.protocol.ts
++++ b/src/vs/workbench/api/common/extHost.protocol.ts
+@@ -2789,6 +2789,7 @@ export interface IChatUsageDto {
+ 	outputBuffer?: number;
+ 	copilotCredits?: number;
+ 	promptTokenDetails?: readonly { category: string; label: string; percentageOfPrompt: number }[];
++	modelTotals?: readonly { model: string; inputTokens: number; cachedTokens: number; outputTokens: number }[];
+ }
+ 
+ export interface IQuotaSnapshotDto {
+diff --git a/src/vs/workbench/api/common/extHostChatAgents2.ts b/src/vs/workbench/api/common/extHostChatAgents2.ts
+index 338aa2b9902..e3a2c241516 100644
+--- a/src/vs/workbench/api/common/extHostChatAgents2.ts
++++ b/src/vs/workbench/api/common/extHostChatAgents2.ts
+@@ -465,7 +465,8 @@ export class ChatAgentResponseStream {
+ 						completionTokens: usage.completionTokens,
+ 						outputBuffer: usage.outputBuffer,
+ 						copilotCredits: usage.copilotCredits,
+-						promptTokenDetails: usage.promptTokenDetails
++						promptTokenDetails: usage.promptTokenDetails,
++						modelTotals: usage.modelTotals
+ 					};
+ 					_report(dto);
+ 					return this;

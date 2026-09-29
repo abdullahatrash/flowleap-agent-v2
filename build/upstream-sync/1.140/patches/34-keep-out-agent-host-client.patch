@@ -1,0 +1,46 @@
+diff --git a/src/vs/sessions/sessions.desktop.main.ts b/src/vs/sessions/sessions.desktop.main.ts
+index 4de0306741b..e50c96bf50b 100644
+--- a/src/vs/sessions/sessions.desktop.main.ts
++++ b/src/vs/sessions/sessions.desktop.main.ts
+@@ -114,7 +114,7 @@ import { RemoteAgentHostLocationPreferenceService } from '../platform/agentHost/
+ import { ISSHHostKeyTrustService } from '../platform/agentHost/common/sshHostKeyTrust.js';
+ import { SSHHostKeyTrustService } from '../platform/agentHost/browser/sshHostKeyTrustService.js';
+ import { IAgentHostService } from '../platform/agentHost/common/agentService.js';
+-import { NullAgentHostService } from '../platform/agentHost/browser/nullAgentHostService.js';
++import { EditorRemoteAgentHostServiceClient } from '../workbench/services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
+ import { ISSHRemoteAgentHostService } from '../platform/agentHost/common/sshRemoteAgentHost.js';
+ import { NullSSHRemoteAgentHostService } from '../platform/agentHost/browser/nullSshRemoteAgentHostService.js';
+ import { IWSLRemoteAgentHostService } from '../platform/agentHost/common/wslRemoteAgentHost.js';
+@@ -132,8 +132,9 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
+ registerSingleton(IPluginGitService, NativePluginGitCommandService, InstantiationType.Delayed);
+ registerSingleton(IRemoteAgentHostService, AgentsWindowRemoteAgentHostService, InstantiationType.Delayed);
+ registerSingleton(IRemoteAgentHostLocationPreferenceService, RemoteAgentHostLocationPreferenceService, InstantiationType.Delayed);
+-// FlowLeap: no agent host process and no SSH/WSL agent host transports (PRD 0004, PRD 0017 keep-out)
+-registerSingleton(IAgentHostService, NullAgentHostService, InstantiationType.Delayed);
++// FlowLeap: no agent host process and no SSH/WSL agent host transports (PRD 0004, PRD 0017 keep-out).
++// IAgentHostService is the remote client (inert without a remote), as at 810ad70ca59; the null service throws on use.
++registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
+ registerSingleton(ISSHRemoteAgentHostService, NullSSHRemoteAgentHostService, InstantiationType.Delayed);
+ registerSingleton(IWSLRemoteAgentHostService, NullWSLRemoteAgentHostService, InstantiationType.Delayed);
+ registerSingleton(ISSHHostKeyTrustService, SSHHostKeyTrustService, InstantiationType.Delayed);
+diff --git a/src/vs/workbench/workbench.desktop.main.ts b/src/vs/workbench/workbench.desktop.main.ts
+index 5324c5f58cb..19d209e23a4 100644
+--- a/src/vs/workbench/workbench.desktop.main.ts
++++ b/src/vs/workbench/workbench.desktop.main.ts
+@@ -103,12 +103,13 @@ import './services/power/electron-browser/powerService.js';
+ import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+ import { IUserDataInitializationService, UserDataInitializationService } from './services/userData/browser/userDataInit.js';
+ import { IAgentHostService } from '../platform/agentHost/common/agentService.js';
+-import { NullAgentHostService } from '../platform/agentHost/browser/nullAgentHostService.js';
++import { EditorRemoteAgentHostServiceClient } from './services/agentHost/browser/editorRemoteAgentHostServiceClient.js';
+ import { SyncDescriptor } from '../platform/instantiation/common/descriptors.js';
+ 
+ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataInitializationService, [[]], true));
+-// FlowLeap: no agent host process (PRD 0004, PRD 0017 keep-out)
+-registerSingleton(IAgentHostService, NullAgentHostService, InstantiationType.Delayed);
++// FlowLeap: no agent host process (PRD 0004, PRD 0017 keep-out); the remote client stays inert without a remote.
++// The browser null service throws on use and breaks the chat view.
++registerSingleton(IAgentHostService, EditorRemoteAgentHostServiceClient, InstantiationType.Delayed);
+ 
+ 
+ //#endregion

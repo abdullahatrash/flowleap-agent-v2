@@ -1,0 +1,1125 @@
+diff --git a/src/vs/workbench/browser/actions/helpActions.ts b/src/vs/workbench/browser/actions/helpActions.ts
+index 8251c4a4292..71002a5e9d9 100644
+--- a/src/vs/workbench/browser/actions/helpActions.ts
++++ b/src/vs/workbench/browser/actions/helpActions.ts
+@@ -18,6 +18,7 @@ import { Categories } from '../../../platform/action/common/actionCommonCategori
+ import { ICommandService } from '../../../platform/commands/common/commands.js';
+ import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+ import { IsSessionsWindowContext } from '../../common/contextkeys.js';
++import { PatentIdeContextKeys } from '../../common/patent/patentIdeContextKeys.js';
+ 
+ class KeybindingsReferenceAction extends Action2 {
+ 
+@@ -344,7 +345,7 @@ class AskVSCodeCopilot extends Action2 {
+ 			title: localize2('askVScode', 'Ask @vscode'),
+ 			category: Categories.Help,
+ 			f1: true,
+-			precondition: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate())
++			precondition: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated())
+ 		});
+ 	}
+ 
+@@ -362,7 +363,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarHelpMenu, {
+ 	},
+ 	order: 7,
+ 	group: '1_welcome',
+-	when: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate())
++	when: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated())
+ });
+ 
+ // --- Actions Registration
+diff --git a/src/vs/workbench/browser/contextkeys.ts b/src/vs/workbench/browser/contextkeys.ts
+index fe55713cedc..bc7bc8c4754 100644
+--- a/src/vs/workbench/browser/contextkeys.ts
++++ b/src/vs/workbench/browser/contextkeys.ts
+@@ -22,6 +22,7 @@ import { getTitleBarStyle } from '../../platform/window/common/window.js';
+ import { mainWindow } from '../../base/browser/window.js';
+ import { isFullscreen, onDidChangeFullscreen } from '../../base/browser/browser.js';
+ import { IEditorService } from '../services/editor/common/editorService.js';
++import { PatentIdeContextKeys } from '../common/patent/patentIdeContextKeys.js';
+ 
+ export class WorkbenchContextKeysHandler extends Disposable {
+ 
+@@ -47,6 +48,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
+ 	private virtualWorkspaceContext: IContextKey<string>;
+ 	private temporaryWorkspaceContext: IContextKey<boolean>;
+ 	private isSessionsWindowContext: IContextKey<boolean>;
++	private patentIdeModeContext: IContextKey<boolean>;
+ 	private inAutomationContext: IContextKey<boolean>;
+ 
+ 	private inZenModeContext: IContextKey<boolean>;
+@@ -96,6 +98,10 @@ export class WorkbenchContextKeysHandler extends Disposable {
+ 		this.temporaryWorkspaceContext = TemporaryWorkspaceContext.bindTo(this.contextKeyService);
+ 		this.isSessionsWindowContext = IsSessionsWindowContext.bindTo(this.contextKeyService);
+ 		this.isSessionsWindowContext.set(this.environmentService.isSessionsWindow);
++
++		// FlowLeap: Patent IDE mode hides developer-focused UI
++		this.patentIdeModeContext = PatentIdeContextKeys.Mode.bindTo(this.contextKeyService);
++		this.patentIdeModeContext.set(true);
+ 		this.updateWorkspaceContextKeys();
+ 
+ 		// Capabilities
+diff --git a/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts b/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts
+index 4c547b3e523..db8fdfd5a4c 100644
+--- a/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts
++++ b/src/vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry.ts
+@@ -34,6 +34,7 @@ import { IWorkbenchLayoutService, Parts } from '../../../../services/layout/brow
+ import { ChatStatusPromo } from './chatStatusPromo.js';
+ import { ILifecycleService, LifecyclePhase } from '../../../../services/lifecycle/common/lifecycle.js';
+ import { onUnexpectedError } from '../../../../../base/common/errors.js';
++import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
+ 
+ /**
+  * Tracks whether Copilot is currently blocked by a reached quota limit, has
+@@ -182,6 +183,11 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
+ 			}
+ 		};
+ 
++		// FlowLeap Patent IDE: no Copilot status bar entry in Patent IDE mode
++		if (PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false) {
++			return;
++		}
++
+ 		this.update();
+ 
+ 		this.registerListeners();
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+index 50a23aa16fd..c8780cfa59c 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/chatWidget.ts
+@@ -22,6 +22,7 @@ import { Disposable, DisposableStore, IDisposable, MutableDisposable, thenIfNotD
+ import { ResourceSet } from '../../../../../base/common/map.js';
+ import { Schemas } from '../../../../../base/common/network.js';
+ import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
++import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
+ import { filter } from '../../../../../base/common/objects.js';
+ import { autorun, derived, IObservable, observableFromEvent, observableValue } from '../../../../../base/common/observable.js';
+ import { extUri, isEqual } from '../../../../../base/common/resources.js';
+@@ -1829,7 +1830,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
+ 		}
+ 
+ 		let title: string;
+-		if (this.input.currentModeKind === ChatModeKind.Ask) {
++		// FlowLeap Patent IDE: patent-specific titles
++		if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false) {
++			if (this.input.currentModeKind === ChatModeKind.Ask) {
++				title = localize('patentChatDescription', "Ask about patents");
++			} else if (this.input.currentModeKind === ChatModeKind.Edit) {
++				title = localize('patentEditsTitle', "Edit documents");
++			} else {
++				title = localize('patentAgentTitle', "Patent Analysis Agent");
++			}
++		} else if (this.input.currentModeKind === ChatModeKind.Ask) {
+ 			title = localize('chatDescription', "Ask about your code");
+ 		} else if (this.input.currentModeKind === ChatModeKind.Edit) {
+ 			title = localize('editsTitle', "Edit in context");
+diff --git a/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts b/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts
+index 81eb21366a9..3e7c4d17241 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/chatStatusEntry.test.ts
+@@ -19,6 +19,7 @@ import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, ToggleTool
+ import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+ import { TestLifecycleService } from '../../../../test/common/workbenchTestServices.js';
+ import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
++import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
+ import { ChatQuotaResumeState, ChatStatusBarEntry, computeQuotaResumeState } from '../../browser/chatStatus/chatStatusEntry.js';
+ import { IChatStatusItemService } from '../../browser/chatStatus/chatStatusItemService.js';
+ import { ChatStatusPromo } from '../../browser/chatStatus/chatStatusPromo.js';
+@@ -180,6 +181,8 @@ suite('ChatStatusBarEntry', () => {
+ 		UpdateTitleBarChatInProgressContext.bindTo(contextKeyService).set(opts.updateTitleBarChatInProgress ?? false);
+ 		contextKeyService.createKey<boolean>('inDebugMode', false).set(opts.inDebugMode ?? false);
+ 		InEditorZenModeContext.bindTo(contextKeyService).set(opts.inZenMode ?? false);
++		// The entry hides itself in Patent IDE mode (the product default); these tests exercise the entry, so opt out.
++		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
+ 
+ 		const storageService = instantiationService.get(IStorageService);
+ 		if (opts.persisted) {
+diff --git a/src/vs/workbench/contrib/debug/browser/breakpointsView.ts b/src/vs/workbench/contrib/debug/browser/breakpointsView.ts
+index d6dec6a1cf0..5b603c97a77 100644
+--- a/src/vs/workbench/contrib/debug/browser/breakpointsView.ts
++++ b/src/vs/workbench/contrib/debug/browser/breakpointsView.ts
+@@ -61,6 +61,7 @@ import * as icons from './debugIcons.js';
+ import { DisassemblyView } from './disassemblyView.js';
+ import { equals } from '../../../../base/common/arrays.js';
+ import { hasKey } from '../../../../base/common/types.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const $ = dom.$;
+ 
+@@ -1954,6 +1955,7 @@ registerAction2(class extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: 'workbench.debug.viewlet.action.addFunctionBreakpointAction',
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			title: {
+ 				...localize2('addFunctionBreakpoint', "Add Function Breakpoint"),
+ 				mnemonicTitle: localize({ key: 'miFunctionBreakpoint', comment: ['&& denotes a mnemonic'] }, "&&Function Breakpoint..."),
+@@ -2110,6 +2112,7 @@ registerAction2(class extends MemoryBreakpointAction {
+ 	constructor() {
+ 		super({
+ 			id: 'workbench.debug.viewlet.action.addDataBreakpointOnAddress',
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			title: {
+ 				...localize2('addDataBreakpointOnAddress', "Add Data Breakpoint at Address"),
+ 				mnemonicTitle: localize({ key: 'miDataBreakpoint', comment: ['&& denotes a mnemonic'] }, "&&Data Breakpoint..."),
+@@ -2150,6 +2153,7 @@ registerAction2(class extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: 'workbench.debug.viewlet.action.toggleBreakpointsActivatedAction',
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			title: localize2('activateBreakpoints', 'Toggle Activate Breakpoints'),
+ 			f1: true,
+ 			icon: icons.breakpointsActivate,
+@@ -2206,6 +2210,7 @@ registerAction2(class extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: 'workbench.debug.viewlet.action.removeAllBreakpoints',
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			title: {
+ 				...localize2('removeAllBreakpoints', "Remove All Breakpoints"),
+ 				mnemonicTitle: localize({ key: 'miRemoveAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "Remove &&All Breakpoints"),
+@@ -2249,7 +2254,7 @@ registerAction2(class extends Action2 {
+ 				mnemonicTitle: localize({ key: 'miEnableAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "&&Enable All Breakpoints"),
+ 			},
+ 			f1: true,
+-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
++			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
+ 			menu: [{
+ 				id: MenuId.DebugBreakpointsContext,
+ 				group: 'z_commands',
+@@ -2279,7 +2284,7 @@ registerAction2(class extends Action2 {
+ 				mnemonicTitle: localize({ key: 'miDisableAllBreakpoints', comment: ['&& denotes a mnemonic'] }, "Disable A&&ll Breakpoints"),
+ 			},
+ 			f1: true,
+-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
++			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
+ 			menu: [{
+ 				id: MenuId.DebugBreakpointsContext,
+ 				group: 'z_commands',
+@@ -2306,7 +2311,7 @@ registerAction2(class extends Action2 {
+ 			id: 'workbench.debug.viewlet.action.reapplyBreakpointsAction',
+ 			title: localize2('reapplyAllBreakpoints', 'Reapply All Breakpoints'),
+ 			f1: true,
+-			precondition: CONTEXT_IN_DEBUG_MODE,
++			precondition: ContextKeyExpr.and(CONTEXT_IN_DEBUG_MODE, PatentIdeContextKeys.Mode.toNegated()),
+ 			menu: [{
+ 				id: MenuId.DebugBreakpointsContext,
+ 				group: 'z_commands',
+diff --git a/src/vs/workbench/contrib/debug/browser/debug.contribution.ts b/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+index 6a10c81e6be..f06f36f0923 100644
+--- a/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
++++ b/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+@@ -66,6 +66,7 @@ import { DebugChatContextContribution } from './debugChatIntegration.js';
+ 
+ // Register services
+ import './debug.service.contribution.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const debugCategory = nls.localize('debugCategory', "Debug");
+ registerColors();
+@@ -112,7 +113,7 @@ registerEditorContribution(EDITOR_CONTRIBUTION_ID, DebugEditorContribution, Edit
+ 
+ const registerDebugCommandPaletteItem = (id: string, title: ICommandActionTitle, when?: ContextKeyExpression, precondition?: ContextKeyExpression) => {
+ 	MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
+-		when: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, when),
++		when: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated(), when),
+ 		group: debugCategory,
+ 		command: {
+ 			id,
+@@ -254,7 +255,7 @@ if (isMacintosh) {
+ 
+ // Editor Title Menu's "Run/Debug" dropdown item
+ 
+-MenuRegistry.appendMenuItem(MenuId.EditorTitle, { submenu: MenuId.EditorTitleRun, isSplitButton: { togglePrimaryAction: true }, title: nls.localize2('run', "Run or Debug..."), icon: icons.debugRun, group: 'navigation', order: -1 });
++MenuRegistry.appendMenuItem(MenuId.EditorTitle, { submenu: MenuId.EditorTitleRun, isSplitButton: { togglePrimaryAction: true }, title: nls.localize2('run', "Run or Debug..."), icon: icons.debugRun, group: 'navigation', order: -1, when: PatentIdeContextKeys.Mode.toNegated() });
+ 
+ // Debug menu
+ 
+@@ -265,7 +266,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
+ 		mnemonicTitle: nls.localize({ key: 'mRun', comment: ['&& denotes a mnemonic'] }, "&&Run")
+ 	},
+ 	order: 6,
+-	when: IsSessionsWindowContext.negate()
++	when: ContextKeyExpr.and(IsSessionsWindowContext.negate(), PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: hide the Run menu
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
+@@ -439,7 +440,7 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
+ 	containerIcon: icons.debugConsoleViewIcon,
+ 	canToggleVisibility: true,
+ 	canMoveView: true,
+-	when: CONTEXT_DEBUGGERS_AVAILABLE,
++	when: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: hide the Debug Console
+ 	ctorDescriptor: new SyncDescriptor(Repl),
+ 	openCommandActionDescriptor: {
+ 		id: 'workbench.debug.action.toggleRepl',
+@@ -467,12 +468,13 @@ const viewContainer = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewCo
+ 
+ // Register default debug views
+ const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
+-viewsRegistry.registerViews([{ id: VARIABLES_VIEW_ID, name: nls.localize2('variables', "Variables"), containerIcon: icons.variablesViewIcon, ctorDescriptor: new SyncDescriptor(VariablesView), order: 10, weight: 40, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusVariablesView' }, when: CONTEXT_DEBUG_UX.isEqualTo('default') }], viewContainer);
+-viewsRegistry.registerViews([{ id: WATCH_VIEW_ID, name: nls.localize2('watch', "Watch"), containerIcon: icons.watchViewIcon, ctorDescriptor: new SyncDescriptor(WatchExpressionsView), order: 20, weight: 10, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusWatchView' }, when: CONTEXT_DEBUG_UX.isEqualTo('default') }], viewContainer);
+-viewsRegistry.registerViews([{ id: CALLSTACK_VIEW_ID, name: nls.localize2('callStack', "Call Stack"), containerIcon: icons.callStackViewIcon, ctorDescriptor: new SyncDescriptor(CallStackView), order: 30, weight: 30, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusCallStackView' }, when: CONTEXT_DEBUG_UX.isEqualTo('default') }], viewContainer);
+-viewsRegistry.registerViews([{ id: BREAKPOINTS_VIEW_ID, name: nls.localize2('breakpoints', "Breakpoints"), containerIcon: icons.breakpointsViewIcon, ctorDescriptor: new SyncDescriptor(BreakpointsView), order: 40, weight: 20, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusBreakpointsView' }, when: ContextKeyExpr.or(CONTEXT_BREAKPOINTS_EXIST, CONTEXT_DEBUG_UX.isEqualTo('default'), CONTEXT_HAS_DEBUGGED) }], viewContainer);
+-viewsRegistry.registerViews([{ id: WelcomeView.ID, name: WelcomeView.LABEL, containerIcon: icons.runViewIcon, ctorDescriptor: new SyncDescriptor(WelcomeView), order: 1, weight: 40, canToggleVisibility: true, when: CONTEXT_DEBUG_UX.isEqualTo('simple') }], viewContainer);
+-viewsRegistry.registerViews([{ id: LOADED_SCRIPTS_VIEW_ID, name: nls.localize2('loadedScripts', "Loaded Scripts"), containerIcon: icons.loadedScriptsViewIcon, ctorDescriptor: new SyncDescriptor(LoadedScriptsView), order: 35, weight: 5, canToggleVisibility: true, canMoveView: true, collapsed: true, when: ContextKeyExpr.and(CONTEXT_LOADED_SCRIPTS_SUPPORTED, CONTEXT_DEBUG_UX.isEqualTo('default')) }], viewContainer);
++const patentIdeHidden = PatentIdeContextKeys.Mode.toNegated(); // FlowLeap Patent IDE: hide the Run and Debug views
++viewsRegistry.registerViews([{ id: VARIABLES_VIEW_ID, name: nls.localize2('variables', "Variables"), containerIcon: icons.variablesViewIcon, ctorDescriptor: new SyncDescriptor(VariablesView), order: 10, weight: 40, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusVariablesView' }, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
++viewsRegistry.registerViews([{ id: WATCH_VIEW_ID, name: nls.localize2('watch', "Watch"), containerIcon: icons.watchViewIcon, ctorDescriptor: new SyncDescriptor(WatchExpressionsView), order: 20, weight: 10, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusWatchView' }, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
++viewsRegistry.registerViews([{ id: CALLSTACK_VIEW_ID, name: nls.localize2('callStack', "Call Stack"), containerIcon: icons.callStackViewIcon, ctorDescriptor: new SyncDescriptor(CallStackView), order: 30, weight: 30, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusCallStackView' }, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('default'), patentIdeHidden) }], viewContainer);
++viewsRegistry.registerViews([{ id: BREAKPOINTS_VIEW_ID, name: nls.localize2('breakpoints', "Breakpoints"), containerIcon: icons.breakpointsViewIcon, ctorDescriptor: new SyncDescriptor(BreakpointsView), order: 40, weight: 20, canToggleVisibility: true, canMoveView: true, focusCommand: { id: 'workbench.debug.action.focusBreakpointsView' }, when: ContextKeyExpr.and(ContextKeyExpr.or(CONTEXT_BREAKPOINTS_EXIST, CONTEXT_DEBUG_UX.isEqualTo('default'), CONTEXT_HAS_DEBUGGED), patentIdeHidden) }], viewContainer);
++viewsRegistry.registerViews([{ id: WelcomeView.ID, name: WelcomeView.LABEL, containerIcon: icons.runViewIcon, ctorDescriptor: new SyncDescriptor(WelcomeView), order: 1, weight: 40, canToggleVisibility: true, when: ContextKeyExpr.and(CONTEXT_DEBUG_UX.isEqualTo('simple'), patentIdeHidden) }], viewContainer);
++viewsRegistry.registerViews([{ id: LOADED_SCRIPTS_VIEW_ID, name: nls.localize2('loadedScripts', "Loaded Scripts"), containerIcon: icons.loadedScriptsViewIcon, ctorDescriptor: new SyncDescriptor(LoadedScriptsView), order: 35, weight: 5, canToggleVisibility: true, canMoveView: true, collapsed: true, when: ContextKeyExpr.and(ContextKeyExpr.and(CONTEXT_LOADED_SCRIPTS_SUPPORTED, CONTEXT_DEBUG_UX.isEqualTo('default')), patentIdeHidden) }], viewContainer);
+ 
+ // Register disassembly view
+ 
+diff --git a/src/vs/workbench/contrib/debug/browser/debugCommands.ts b/src/vs/workbench/contrib/debug/browser/debugCommands.ts
+index 18210209161..9022515d0ca 100644
+--- a/src/vs/workbench/contrib/debug/browser/debugCommands.ts
++++ b/src/vs/workbench/contrib/debug/browser/debugCommands.ts
+@@ -42,6 +42,7 @@ import { saveAllBeforeDebugStart, resolveChildSession } from '../common/debugUti
+ import { showLoadedScriptMenu } from '../common/loadedScriptsPicker.js';
+ import { openBreakpointSource } from './breakpointsView.js';
+ import { showDebugSessionMenu } from './debugSessionPicker.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ export const ADD_CONFIGURATION_ID = 'debug.addConfiguration';
+ export const COPY_ADDRESS_ID = 'editor.debug.action.copyAddress';
+@@ -988,6 +989,7 @@ registerAction2(class AddConfigurationAction extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: ADD_CONFIGURATION_ID,
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			title: nls.localize2('addConfiguration', "Add Configuration..."),
+ 			category: DEBUG_COMMAND_CATEGORY,
+ 			f1: true,
+@@ -1084,7 +1086,7 @@ registerAction2(class ToggleExceptionBreakpointsAction extends Action2 {
+ 			title: nls.localize2('toggleExceptionBreakpoints', "Toggle Exception Breakpoints"),
+ 			category: DEBUG_COMMAND_CATEGORY,
+ 			f1: true,
+-			precondition: CONTEXT_DEBUGGERS_AVAILABLE
++			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated())
+ 		});
+ 	}
+ 
+diff --git a/src/vs/workbench/contrib/debug/browser/debugEditorActions.ts b/src/vs/workbench/contrib/debug/browser/debugEditorActions.ts
+index 3e67ae929f4..e32f343c59e 100644
+--- a/src/vs/workbench/contrib/debug/browser/debugEditorActions.ts
++++ b/src/vs/workbench/contrib/debug/browser/debugEditorActions.ts
+@@ -33,6 +33,7 @@ import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
+ import { IEditorService } from '../../../services/editor/common/editorService.js';
+ import { IViewsService } from '../../../services/views/common/viewsService.js';
+ import { TOGGLE_BREAKPOINT_ID } from '../../../../workbench/contrib/debug/browser/debugCommands.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ class ToggleBreakpointAction extends Action2 {
+ 	constructor() {
+@@ -44,7 +45,7 @@ class ToggleBreakpointAction extends Action2 {
+ 			},
+ 			category: nls.localize2('debugCategory', "Debug"),
+ 			f1: true,
+-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
++			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
+ 			keybinding: {
+ 				when: ContextKeyExpr.or(EditorContextKeys.editorTextFocus, CONTEXT_DISASSEMBLY_VIEW_FOCUS),
+ 				primary: KeyCode.F9,
+@@ -275,6 +276,7 @@ class ToggleDisassemblyViewSourceCodeAction extends Action2 {
+ 	constructor() {
+ 		super({
+ 			id: ToggleDisassemblyViewSourceCodeAction.ID,
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			title: {
+ 				...nls.localize2('toggleDisassemblyViewSourceCode', "Toggle Source Code in Disassembly View"),
+ 				mnemonicTitle: nls.localize({ key: 'mitogglesource', comment: ['&& denotes a mnemonic'] }, "&&ToggleSource"),
+diff --git a/src/vs/workbench/contrib/debug/browser/debugStatus.ts b/src/vs/workbench/contrib/debug/browser/debugStatus.ts
+index c98e63ab7b7..52938ebd432 100644
+--- a/src/vs/workbench/contrib/debug/browser/debugStatus.ts
++++ b/src/vs/workbench/contrib/debug/browser/debugStatus.ts
+@@ -9,6 +9,8 @@ import { IDebugService, State, IDebugConfiguration } from '../common/debug.js';
+ import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+ import { IStatusbarEntry, IStatusbarService, StatusbarAlignment, IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
+ import { IWorkbenchContribution } from '../../../common/contributions.js';
++import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ export class DebugStatusContribution implements IWorkbenchContribution {
+ 
+@@ -19,9 +21,15 @@ export class DebugStatusContribution implements IWorkbenchContribution {
+ 	constructor(
+ 		@IStatusbarService private readonly statusBarService: IStatusbarService,
+ 		@IDebugService private readonly debugService: IDebugService,
+-		@IConfigurationService configurationService: IConfigurationService
++		@IConfigurationService configurationService: IConfigurationService,
++		@IContextKeyService contextKeyService: IContextKeyService
+ 	) {
+ 
++		// FlowLeap Patent IDE: no debug status bar entry in Patent IDE mode
++		if (PatentIdeContextKeys.Mode.getValue(contextKeyService) !== false) {
++			return;
++		}
++
+ 		const addStatusBarEntry = () => {
+ 			this.entryAccessor = this.statusBarService.addEntry(this.entry, 'status.debug', StatusbarAlignment.LEFT, 30 /* Low Priority */);
+ 		};
+diff --git a/src/vs/workbench/contrib/debug/browser/debugViewlet.ts b/src/vs/workbench/contrib/debug/browser/debugViewlet.ts
+index 10b8d244b2e..012e43b477c 100644
+--- a/src/vs/workbench/contrib/debug/browser/debugViewlet.ts
++++ b/src/vs/workbench/contrib/debug/browser/debugViewlet.ts
+@@ -36,6 +36,7 @@ import { IWorkbenchLayoutService } from '../../../services/layout/browser/layout
+ import { IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+ import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+ import { ILogService } from '../../../../platform/log/common/log.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ export class DebugViewPaneContainer extends ViewPaneContainer {
+ 
+@@ -205,7 +206,7 @@ registerAction2(class extends Action2 {
+ 			},
+ 			f1: true,
+ 			icon: debugConfigure,
+-			precondition: CONTEXT_DEBUG_UX.notEqualsTo('simple'),
++			precondition: ContextKeyExpr.and(CONTEXT_DEBUG_UX.notEqualsTo('simple'), PatentIdeContextKeys.Mode.toNegated()),
+ 			menu: [{
+ 				id: MenuId.ViewContainerTitle,
+ 				group: 'navigation',
+diff --git a/src/vs/workbench/contrib/debug/browser/repl.ts b/src/vs/workbench/contrib/debug/browser/repl.ts
+index 71605eddcf4..31d22e31520 100644
+--- a/src/vs/workbench/contrib/debug/browser/repl.ts
++++ b/src/vs/workbench/contrib/debug/browser/repl.ts
+@@ -78,6 +78,7 @@ import { debugConsoleClearAll, debugConsoleEvaluationPrompt } from './debugIcons
+ import './media/repl.css';
+ import { ReplFilter } from './replFilter.js';
+ import { ReplAccessibilityProvider, ReplDataSource, ReplDelegate, ReplEvaluationInputsRenderer, ReplEvaluationResultsRenderer, ReplGroupRenderer, ReplOutputElementRenderer, ReplRawObjectsRenderer, ReplVariablesRenderer } from './replViewer.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const $ = dom.$;
+ 
+@@ -1067,6 +1068,7 @@ registerAction2(class extends ViewAction<Repl> {
+ 	constructor() {
+ 		super({
+ 			id: 'workbench.debug.panel.action.clearReplAction',
++			precondition: PatentIdeContextKeys.Mode.toNegated(),
+ 			viewId: REPL_VIEW_ID,
+ 			title: localize2('clearRepl', 'Clear Console'),
+ 			metadata: {
+diff --git a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+index b06c588bd0e..f2dc5c1d358 100644
+--- a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
++++ b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+@@ -87,6 +87,7 @@ import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, Extensions
+ import { ExtensionsWorkbenchService } from './extensionsWorkbenchService.js';
+ import './media/extensionManagement.css';
+ import { UnsupportedExtensionsMigrationContrib } from './unsupportedExtensionsMigrationContribution.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ // Singletons
+ registerSingleton(IExtensionsWorkbenchService, ExtensionsWorkbenchService, InstantiationType.Eager /* Auto updates extensions */);
+@@ -119,7 +120,7 @@ export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainer
+ 		openCommandActionDescriptor: {
+ 			id: VIEWLET_ID,
+ 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
+-			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX },
++			keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyX, when: PatentIdeContextKeys.Mode.toNegated() },
+ 			order: 4,
+ 		},
+ 		ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer),
+diff --git a/src/vs/workbench/contrib/outline/browser/outline.contribution.ts b/src/vs/workbench/contrib/outline/browser/outline.contribution.ts
+index bb8dd6560d4..43b34e0b48f 100644
+--- a/src/vs/workbench/contrib/outline/browser/outline.contribution.ts
++++ b/src/vs/workbench/contrib/outline/browser/outline.contribution.ts
+@@ -18,6 +18,7 @@ import { IOutlinePane } from './outline.js';
+ // --- actions
+ 
+ import './outlineActions.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ // --- view
+ 
+@@ -34,7 +35,8 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([{
+ 	collapsed: true,
+ 	order: 2,
+ 	weight: 30,
+-	focusCommand: { id: 'outline.focus' }
++	focusCommand: { id: 'outline.focus' },
++	when: PatentIdeContextKeys.Mode.toNegated()
+ }], VIEW_CONTAINER);
+ 
+ // --- configurations
+diff --git a/src/vs/workbench/contrib/remote/browser/tunnelView.ts b/src/vs/workbench/contrib/remote/browser/tunnelView.ts
+index 41045b7aca0..536818d3b54 100644
+--- a/src/vs/workbench/contrib/remote/browser/tunnelView.ts
++++ b/src/vs/workbench/contrib/remote/browser/tunnelView.ts
+@@ -57,6 +57,7 @@ import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform
+ import { Attributes, CandidatePort, Tunnel, TunnelCloseReason, TunnelModel, TunnelSource, forwardedPortsViewEnabled, makeAddress, mapHasAddressLocalhostOrAllInterfaces, parseAddress } from '../../../services/remote/common/tunnelModel.js';
+ import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
+ import { IHoverService } from '../../../../platform/hover/browser/hover.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ export const openPreviewEnabledContext = new RawContextKey<boolean>('openPreviewEnabled', false);
+ 
+@@ -1107,6 +1108,7 @@ export class TunnelPanelDescriptor implements IViewDescriptor {
+ 	readonly remoteAuthority?: string | string[];
+ 	readonly canMoveView = true;
+ 	readonly containerIcon = portsViewIcon;
++	readonly when = PatentIdeContextKeys.Mode.toNegated(); // FlowLeap Patent IDE: hide the Ports view
+ 
+ 	constructor(viewModel: ITunnelViewModel, environmentService: IWorkbenchEnvironmentService) {
+ 		this.ctorDescriptor = new SyncDescriptor(TunnelPanel, [viewModel]);
+diff --git a/src/vs/workbench/contrib/scm/browser/scm.contribution.ts b/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
+index 22920b5f2d1..9c7d366436e 100644
+--- a/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
++++ b/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
+@@ -43,6 +43,7 @@ import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
+ import { CHAT_SETUP_SUPPORT_ANONYMOUS_ACTION_ID } from '../../chat/browser/actions/chatActions.js';
+ import { SCMInputContextKeys } from './scmInput.js';
+ import product from '../../../../platform/product/common/product.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ ModesRegistry.registerLanguage({
+ 	id: 'scminput',
+@@ -98,7 +99,7 @@ viewsRegistry.registerViews([{
+ 	canMoveView: true,
+ 	weight: 20,
+ 	order: 0,
+-	when: ContextKeyExpr.and(ContextKeyExpr.has('scm.providerCount'), ContextKeyExpr.notEquals('scm.providerCount', 0)),
++	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), ContextKeyExpr.has('scm.providerCount'), ContextKeyExpr.notEquals('scm.providerCount', 0)),
+ 	// readonly when = ContextKeyExpr.or(ContextKeyExpr.equals('config.scm.alwaysShowProviders', true), ContextKeyExpr.and(ContextKeyExpr.notEquals('scm.providerCount', 0), ContextKeyExpr.notEquals('scm.providerCount', 1)));
+ 	containerIcon: sourceControlViewIcon
+ }], viewContainer);
+@@ -113,6 +114,7 @@ viewsRegistry.registerViews([{
+ 	canMoveView: true,
+ 	weight: 40,
+ 	order: 1,
++	when: PatentIdeContextKeys.Mode.toNegated(),
+ 	containerIcon: sourceControlViewIcon,
+ 	openCommandActionDescriptor: {
+ 		id: viewContainer.id,
+@@ -138,6 +140,7 @@ viewsRegistry.registerViews([{
+ 	weight: 40,
+ 	order: 2,
+ 	when: ContextKeyExpr.and(
++		PatentIdeContextKeys.Mode.toNegated(),
+ 		ContextKeyExpr.has('scm.historyProviderCount'),
+ 		ContextKeyExpr.notEquals('scm.historyProviderCount', 0),
+ 	),
+diff --git a/src/vs/workbench/contrib/snippets/browser/commands/configureSnippets.ts b/src/vs/workbench/contrib/snippets/browser/commands/configureSnippets.ts
+index 115c37ad91e..3ce55cd68da 100644
+--- a/src/vs/workbench/contrib/snippets/browser/commands/configureSnippets.ts
++++ b/src/vs/workbench/contrib/snippets/browser/commands/configureSnippets.ts
+@@ -7,27 +7,28 @@ import { isValidBasename } from '../../../../../base/common/extpath.js';
+ import { extname } from '../../../../../base/common/path.js';
+ import { basename, joinPath } from '../../../../../base/common/resources.js';
+ import { URI } from '../../../../../base/common/uri.js';
+-import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+-import { getIconClassesForLanguageId } from '../../../../../editor/common/services/getIconClasses.js';
+ import * as nls from '../../../../../nls.js';
+ import { MenuId } from '../../../../../platform/actions/common/actions.js';
+ import { IFileService } from '../../../../../platform/files/common/files.js';
+ import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+-import { ILabelService } from '../../../../../platform/label/common/label.js';
+ import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+ import { IQuickInputService, IQuickPickItem, QuickPickInput } from '../../../../../platform/quickinput/common/quickInput.js';
+ import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+ import { SnippetsAction } from './abstractSnippetsActions.js';
+-import { ISnippetsService } from '../snippets.js';
+-import { SnippetSource } from '../snippetsFile.js';
+-import { IEditorService } from '../../../../services/editor/common/editorService.js';
++import { Snippet, SnippetSource } from '../snippetsFile.js';
+ import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
+ import { IUserDataProfileService } from '../../../../services/userDataProfile/common/userDataProfile.js';
++import { patentPromptCategories, PromptCategory, PromptTemplate } from '../../../../common/patent/patentPromptTemplates.js';
++import { IEditorService } from '../../../../services/editor/common/editorService.js';
++import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
++import { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+ 
+-namespace ISnippetPick {
+-	export function is(thing: object | undefined): thing is ISnippetPick {
+-		return !!thing && URI.isUri((<ISnippetPick>thing).filepath);
+-	}
++interface ICategoryPick extends IQuickPickItem {
++	category: PromptCategory;
++}
++
++interface ITemplatePick extends IQuickPickItem {
++	template: PromptTemplate;
+ }
+ 
+ interface ISnippetPick extends IQuickPickItem {
+@@ -35,115 +36,6 @@ interface ISnippetPick extends IQuickPickItem {
+ 	hint?: true;
+ }
+ 
+-async function computePicks(snippetService: ISnippetsService, userDataProfileService: IUserDataProfileService, languageService: ILanguageService, labelService: ILabelService, activeLanguageId: string | undefined) {
+-
+-	const existing: ISnippetPick[] = [];
+-	const future: ISnippetPick[] = [];
+-
+-	const seen = new Set<string>();
+-	const added = new Map<string, { snippet: ISnippetPick; detail: string }>();
+-
+-	for (const file of await snippetService.getSnippetFiles()) {
+-
+-		if (file.source === SnippetSource.Extension) {
+-			// skip extension snippets
+-			continue;
+-		}
+-
+-		if (file.isGlobalSnippets) {
+-
+-			await file.load();
+-
+-			// list scopes for global snippets
+-			const names = new Set<string>();
+-			let source: string | undefined;
+-
+-			outer: for (const snippet of file.data) {
+-				if (!source) {
+-					source = snippet.source;
+-				}
+-
+-				for (const scope of snippet.scopes) {
+-					const name = languageService.getLanguageName(scope);
+-					if (name) {
+-						if (names.size >= 4) {
+-							names.add(`${name}...`);
+-							break outer;
+-						} else {
+-							names.add(name);
+-						}
+-					}
+-				}
+-			}
+-
+-			const snippet: ISnippetPick = {
+-				label: basename(file.location),
+-				filepath: file.location,
+-				description: names.size === 0
+-					? nls.localize('global.scope', "(global)")
+-					: nls.localize('global.1', "({0})", [...names].join(', '))
+-			};
+-			existing.push(snippet);
+-
+-			if (!source) {
+-				continue;
+-			}
+-
+-			const detail = nls.localize('detail.label', "({0}) {1}", source, labelService.getUriLabel(file.location, { relative: true }));
+-			const lastItem = added.get(basename(file.location));
+-			if (lastItem) {
+-				snippet.detail = detail;
+-				lastItem.snippet.detail = lastItem.detail;
+-			}
+-			added.set(basename(file.location), { snippet, detail });
+-
+-		} else {
+-			// language snippet
+-			const mode = basename(file.location).replace(/\.json$/, '');
+-			existing.push({
+-				label: basename(file.location),
+-				description: `(${languageService.getLanguageName(mode) ?? mode})`,
+-				filepath: file.location
+-			});
+-			seen.add(mode);
+-		}
+-	}
+-
+-	const dir = userDataProfileService.currentProfile.snippetsHome;
+-	for (const languageId of languageService.getRegisteredLanguageIds()) {
+-		const label = languageService.getLanguageName(languageId);
+-		if (label && !seen.has(languageId)) {
+-			future.push({
+-				label: label,
+-				description: `(${languageId})`,
+-				filepath: joinPath(dir, `${languageId}.json`),
+-				hint: true,
+-				iconClasses: getIconClassesForLanguageId(languageId)
+-			});
+-		}
+-	}
+-
+-	existing.sort((a, b) => {
+-		const a_ext = extname(a.filepath.path);
+-		const b_ext = extname(b.filepath.path);
+-		if (a_ext === b_ext) {
+-			return a.label.localeCompare(b.label);
+-		} else if (a_ext === '.code-snippets') {
+-			return -1;
+-		} else {
+-			return 1;
+-		}
+-	});
+-
+-	future.sort((a, b) => {
+-		return a.label.localeCompare(b.label);
+-	});
+-
+-	promoteActiveLanguage(existing, future, activeLanguageId);
+-
+-	return { existing, future };
+-}
+-
+ // Move the active editor's language to the front of each group and mark it as detected.
+ export function promoteActiveLanguage(existing: ISnippetPick[], future: ISnippetPick[], activeLanguageId: string | undefined): void {
+ 	if (!activeLanguageId) {
+@@ -178,7 +70,7 @@ async function createSnippetFile(scope: string, defaultPath: URI, quickInputServ
+ 	await fileService.createFolder(defaultPath);
+ 
+ 	const input = await quickInputService.input({
+-		placeHolder: nls.localize('name', "Type snippet file name"),
++		placeHolder: nls.localize('name', "Type template file name"),
+ 		async validateInput(input) {
+ 			if (!input) {
+ 				return nls.localize('bad_name1', "Invalid file name");
+@@ -201,31 +93,20 @@ async function createSnippetFile(scope: string, defaultPath: URI, quickInputServ
+ 
+ 	await textFileService.write(resource, [
+ 		'{',
+-		'\t// Place your ' + scope + ' snippets here. Each snippet is defined under a snippet name and has a scope, prefix, body and ',
+-		'\t// description. Add comma separated ids of the languages where the snippet is applicable in the scope field. If scope ',
+-		'\t// is left empty or omitted, the snippet gets applied to all languages. The prefix is what is ',
+-		'\t// used to trigger the snippet and the body will be expanded and inserted. Possible variables are: ',
++		'\t// Place your ' + scope + ' prompt templates here. Each template is defined under a name and has a scope, prefix, body and ',
++		'\t// description. Add comma separated ids of the languages where the template is applicable in the scope field. If scope ',
++		'\t// is left empty or omitted, the template gets applied to all languages. The prefix is what is ',
++		'\t// used to trigger the template and the body will be expanded and inserted. Possible variables are: ',
+ 		'\t// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. ',
+ 		'\t// Placeholders with the same ids are connected.',
+ 		'\t// Example:',
+-		'\t// "Print to console": {',
+-		'\t// \t"scope": "javascript,typescript",',
+-		'\t// \t"prefix": "log",',
++		'\t// "Prior Art Search": {',
++		'\t// \t"prefix": "search",',
+ 		'\t// \t"body": [',
+-		'\t// \t\t"console.log(\'$1\');",',
++		'\t// \t\t"<task>Search for prior art related to $1</task>",',
+ 		'\t// \t\t"$2"',
+ 		'\t// \t],',
+-		'\t// \t"description": "Log output to console"',
+-		'\t// }',
+-		'\t//',
+-		'\t// You can also restrict snippets to specific files using include/exclude patterns:',
+-		'\t// "Test snippet": {',
+-		'\t// \t"scope": "javascript,typescript",',
+-		'\t// \t"prefix": "test",',
+-		'\t// \t"body": "test(\'$1\', () => {\\n\\t$0\\n});",',
+-		'\t// \t"include": ["**/*.test.ts", "*.spec.ts"],',
+-		'\t// \t"exclude": ["**/temp/*.ts"],',
+-		'\t// \t"description": "Insert test block"',
++		'\t// \t"description": "Basic prior art search prompt"',
+ 		'\t// }',
+ 		'}'
+ 	].join('\n'));
+@@ -234,47 +115,14 @@ async function createSnippetFile(scope: string, defaultPath: URI, quickInputServ
+ 	return undefined;
+ }
+ 
+-async function createLanguageSnippetFile(pick: ISnippetPick, fileService: IFileService, textFileService: ITextFileService) {
+-	if (await fileService.exists(pick.filepath)) {
+-		return;
+-	}
+-	const contents = [
+-		'{',
+-		'\t// Place your snippets for ' + pick.label + ' here. Each snippet is defined under a snippet name and has a prefix, body and ',
+-		'\t// description. The prefix is what is used to trigger the snippet and the body will be expanded and inserted. Possible variables are:',
+-		'\t// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. Placeholders with the ',
+-		'\t// same ids are connected.',
+-		'\t// Example:',
+-		'\t// "Print to console": {',
+-		'\t// \t"prefix": "log",',
+-		'\t// \t"body": [',
+-		'\t// \t\t"console.log(\'$1\');",',
+-		'\t// \t\t"$2"',
+-		'\t// \t],',
+-		'\t// \t"description": "Log output to console"',
+-		'\t// }',
+-		'\t//',
+-		'\t// You can also restrict snippets to specific files using include/exclude patterns:',
+-		'\t// "Test snippet": {',
+-		'\t// \t"prefix": "test",',
+-		'\t// \t"body": "test(\'$1\', () => {\\n\\t$0\\n});",',
+-		'\t// \t"include": ["**/*.test.ts", "*.spec.ts"],',
+-		'\t// \t"exclude": ["**/temp/*.ts"],',
+-		'\t// \t"description": "Insert test block"',
+-		'\t// }',
+-		'}'
+-	].join('\n');
+-	await textFileService.write(pick.filepath, contents);
+-}
+-
+ export class ConfigureSnippetsAction extends SnippetsAction {
+ 	constructor() {
+ 		super({
+ 			id: 'workbench.action.openSnippets',
+-			title: nls.localize2('openSnippet.label', "Configure Snippets"),
++			title: nls.localize2('openSnippet.label', "Configure Prompt Templates"),
+ 			shortTitle: {
+-				...nls.localize2('userSnippets', "Snippets"),
+-				mnemonicTitle: nls.localize({ key: 'miOpenSnippets', comment: ['&& denotes a mnemonic'] }, "&&Snippets"),
++				...nls.localize2('userSnippets', "Prompt Templates"),
++				mnemonicTitle: nls.localize({ key: 'miOpenSnippets', comment: ['&& denotes a mnemonic'] }, "&&Prompt Templates"),
+ 			},
+ 			f1: true,
+ 			menu: [
+@@ -286,24 +134,32 @@ export class ConfigureSnippetsAction extends SnippetsAction {
+ 
+ 	async run(accessor: ServicesAccessor): Promise<any> {
+ 
+-		const snippetService = accessor.get(ISnippetsService);
+ 		const quickInputService = accessor.get(IQuickInputService);
+ 		const opener = accessor.get(IOpenerService);
+-		const languageService = accessor.get(ILanguageService);
+-		const editorService = accessor.get(IEditorService);
+ 		const userDataProfileService = accessor.get(IUserDataProfileService);
+ 		const workspaceService = accessor.get(IWorkspaceContextService);
+ 		const fileService = accessor.get(IFileService);
+ 		const textFileService = accessor.get(ITextFileService);
+-		const labelService = accessor.get(ILabelService);
++		const editorService = accessor.get(IEditorService);
+ 
+-		const picks = await computePicks(snippetService, userDataProfileService, languageService, labelService, editorService.activeTextEditorLanguageId);
+-		const existing: QuickPickInput[] = picks.existing;
++		// Build category picks
++		const categoryPicks: QuickPickInput<ICategoryPick>[] = [
++			{ type: 'separator', label: nls.localize('group.categories', "Patent Prompt Template Categories") }
++		];
++
++		for (const category of patentPromptCategories) {
++			categoryPicks.push({
++				label: `$(${category.icon.id}) ${category.label}`,
++				description: category.description,
++				category
++			} satisfies ICategoryPick);
++		}
+ 
++		// Add custom template file options
+ 		type SnippetPick = IQuickPickItem & { uri: URI } & { scope: string };
+ 		const globalSnippetPicks: SnippetPick[] = [{
+ 			scope: nls.localize('new.global_scope', 'global'),
+-			label: nls.localize('new.global', "New Global Snippets file..."),
++			label: nls.localize('new.global', "New Global Prompt Template file..."),
+ 			uri: userDataProfileService.currentProfile.snippetsHome
+ 		}];
+ 
+@@ -311,33 +167,80 @@ export class ConfigureSnippetsAction extends SnippetsAction {
+ 		for (const folder of workspaceService.getWorkspace().folders) {
+ 			workspaceSnippetPicks.push({
+ 				scope: nls.localize('new.workspace_scope', "{0} workspace", folder.name),
+-				label: nls.localize('new.folder', "New Snippets file for '{0}'...", folder.name),
++				label: nls.localize('new.folder', "New Prompt Template file for '{0}'...", folder.name),
+ 				uri: folder.toResource('.vscode')
+ 			});
+ 		}
+ 
+-		if (existing.length > 0) {
+-			existing.unshift({ type: 'separator', label: nls.localize('group.global', "Existing Snippets") });
+-			existing.push({ type: 'separator', label: nls.localize('new.global.sep', "New Snippets") });
+-		} else {
+-			existing.push({ type: 'separator', label: nls.localize('new.global.sep', "New Snippets") });
++		const customPicks: QuickPickInput[] = [
++			{ type: 'separator', label: nls.localize('new.global.sep', "Custom Templates") },
++			...globalSnippetPicks,
++			...workspaceSnippetPicks
++		];
++
++		const pick = await quickInputService.pick(
++			([] as QuickPickInput[]).concat(categoryPicks, customPicks),
++			{
++				placeHolder: nls.localize('openSnippet.pickLanguage', "Select Prompt Template Category"),
++				matchOnDescription: true
++			}
++		);
++
++		if (!pick) {
++			return;
++		}
++
++		// Handle custom template file creation
++		if (globalSnippetPicks.indexOf(pick as SnippetPick) >= 0 || workspaceSnippetPicks.indexOf(pick as SnippetPick) >= 0) {
++			return createSnippetFile((pick as SnippetPick).scope, (pick as SnippetPick).uri, quickInputService, fileService, textFileService, opener);
++		}
++
++		// Handle category selection — show templates within the category
++		const categoryPick = pick as ICategoryPick;
++		if (!categoryPick.category) {
++			return;
+ 		}
+ 
+-		const pick = await quickInputService.pick(([] as QuickPickInput[]).concat(existing, globalSnippetPicks, workspaceSnippetPicks, picks.future), {
+-			placeHolder: nls.localize('openSnippet.pickLanguage', "Select Snippets File or Create Snippets"),
+-			matchOnDescription: true
++		const templatePicks: QuickPickInput<ITemplatePick>[] = categoryPick.category.templates.map(template => ({
++			label: template.name,
++			description: template.prefix,
++			detail: template.description,
++			template
++		} satisfies ITemplatePick));
++
++		const templateChoice = await quickInputService.pick(templatePicks, {
++			placeHolder: nls.localize('pickTemplate', "Select a prompt template to insert"),
++			matchOnDetail: true
+ 		});
+ 
+-		if (globalSnippetPicks.indexOf(pick as SnippetPick) >= 0) {
+-			return createSnippetFile((pick as SnippetPick).scope, (pick as SnippetPick).uri, quickInputService, fileService, textFileService, opener);
+-		} else if (workspaceSnippetPicks.indexOf(pick as SnippetPick) >= 0) {
+-			return createSnippetFile((pick as SnippetPick).scope, (pick as SnippetPick).uri, quickInputService, fileService, textFileService, opener);
+-		} else if (ISnippetPick.is(pick)) {
+-			if (pick.hint) {
+-				await createLanguageSnippetFile(pick, fileService, textFileService);
+-			}
+-			return opener.open(pick.filepath);
++		if (!templateChoice || !(templateChoice as ITemplatePick).template) {
++			return;
+ 		}
+ 
++		const template = (templateChoice as ITemplatePick).template;
++		const snippetBody = template.body.join('\n');
++		const snippetObj = new Snippet(
++			false,
++			[],
++			template.name,
++			template.prefix,
++			template.description,
++			snippetBody,
++			'',
++			SnippetSource.User,
++			`patent-template/${template.prefix}`
++		);
++
++		// If no active text editor, open a new untitled editor first
++		let codeEditor = editorService.activeTextEditorControl as ICodeEditor | undefined;
++		if (!codeEditor || !SnippetController2.get(codeEditor)) {
++			const input = await editorService.openEditor({ resource: undefined });
++			codeEditor = input?.getControl() as ICodeEditor | undefined;
++		}
++
++		if (codeEditor) {
++			codeEditor.focus();
++			SnippetController2.get(codeEditor)?.insert(snippetObj.codeSnippet, {});
++		}
+ 	}
+ }
+diff --git a/src/vs/workbench/contrib/testing/browser/testing.contribution.ts b/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
+index d38d7328456..8e1cd448c8e 100644
+--- a/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
++++ b/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
+@@ -49,6 +49,7 @@ import { TestingExplorerView } from './testingExplorerView.js';
+ import { CloseTestPeek, CollapsePeekStack, GoToNextMessageAction, GoToPreviousMessageAction, OpenMessageInEditorAction, TestingOutputPeekController, TestingPeekOpener, TestResultsView, ToggleTestingPeekHistory } from './testingOutputPeek.js';
+ import { TestingProgressTrigger } from './testingProgressUiService.js';
+ import { TestingViewPaneContainer } from './testingViewPaneContainer.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ registerSingleton(ITestService, TestService, InstantiationType.Delayed);
+ registerSingleton(ITestResultStorage, TestResultStorage, InstantiationType.Delayed);
+@@ -96,7 +97,7 @@ viewsRegistry.registerViews([{
+ 	containerIcon: testingResultsIcon,
+ 	canToggleVisibility: false,
+ 	canMoveView: true,
+-	when: TestingContextKeys.hasAnyResults.isEqualTo(true),
++	when: ContextKeyExpr.and(TestingContextKeys.hasAnyResults.isEqualTo(true), PatentIdeContextKeys.Mode.toNegated()),
+ 	ctorDescriptor: new SyncDescriptor(TestResultsView),
+ }], testResultsViewContainer);
+ 
+@@ -118,7 +119,7 @@ viewsRegistry.registerViews([{
+ 	weight: 80,
+ 	order: -999,
+ 	containerIcon: testingViewIcon,
+-	when: ContextKeyExpr.greater(TestingContextKeys.providerCount.key, 0),
++	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), ContextKeyExpr.greater(TestingContextKeys.providerCount.key, 0)),
+ }, {
+ 	id: Testing.CoverageViewId,
+ 	name: localize2('testCoverage', "Test Coverage"),
+@@ -128,7 +129,7 @@ viewsRegistry.registerViews([{
+ 	weight: 80,
+ 	order: -998,
+ 	containerIcon: testingViewIcon,
+-	when: TestingContextKeys.isTestCoverageOpen,
++	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), TestingContextKeys.isTestCoverageOpen),
+ }], viewContainer);
+ 
+ allTestActions.forEach(registerAction2);
+diff --git a/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts b/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts
+index 64c6b1a52f0..bec540d30c3 100644
+--- a/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts
++++ b/src/vs/workbench/contrib/timeline/browser/timeline.contribution.ts
+@@ -21,6 +21,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
+ import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
+ import { ILocalizedString } from '../../../../platform/action/common/action.js';
+ import { URI } from '../../../../base/common/uri.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const timelineViewIcon = registerIcon('timeline-view-icon', Codicon.history, localize('timelineViewIcon', 'View icon of the timeline view.'));
+ const timelineOpenIcon = registerIcon('timeline-open', Codicon.history, localize('timelineOpenIcon', 'Icon for the open timeline action.'));
+@@ -36,7 +37,7 @@ export class TimelinePaneDescriptor implements IViewDescriptor {
+ 	readonly canToggleVisibility = true;
+ 	readonly hideByDefault = false;
+ 	readonly canMoveView = true;
+-	readonly when = TimelineHasProviderContext;
++	readonly when = ContextKeyExpr.and(TimelineHasProviderContext, PatentIdeContextKeys.Mode.toNegated());
+ 
+ 	focusCommand = { id: 'timeline.focus' };
+ }
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
+index 322ec1ab4f6..0c5a8e8efad 100644
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
+@@ -76,6 +76,7 @@ import { AccessibilityVerbositySettingId } from '../../accessibility/browser/acc
+ import { AccessibleViewAction } from '../../accessibility/browser/accessibleViewActions.js';
+ import { KeybindingLabel } from '../../../../base/browser/ui/keybindingLabel/keybindingLabel.js';
+ import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ const SLIDE_TRANSITION_TIME_MS = 250;
+ const configurationKey = 'workbench.startupEditor';
+@@ -925,9 +926,14 @@ export class GettingStartedPage extends EditorPane {
+ 			onShowOnStartupChanged();
+ 		}));
+ 
++		// FlowLeap Patent IDE: patent-focused subtitle in patent mode
++		const subtitle = this.contextService.contextMatchesRules(PatentIdeContextKeys.Mode)
++			? localize({ key: 'gettingStarted.patentSubtitle', comment: ['Shown as subtitle on the Welcome page in patent mode.'] }, "AI-powered patent analysis")
++			: localize({ key: 'gettingStarted.editingEvolved', comment: ['Shown as subtitle on the Welcome page.'] }, "Editing evolved");
++
+ 		const header = $('.header', {},
+ 			$('h1.product-name.caption', {}, this.productService.nameLong),
+-			$('p.subtitle.description', {}, localize({ key: 'gettingStarted.editingEvolved', comment: ['Shown as subtitle on the Welcome page.'] }, "Editing evolved"))
++			$('p.subtitle.description', {}, subtitle)
+ 		);
+ 
+ 		const leftColumn = $('.categories-column.categories-column-left', {},);
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts
+index ac89ae8e931..52eaeb73b55 100644
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService.ts
+@@ -38,6 +38,7 @@ import { IWorkbenchLayoutService, Parts } from '../../../services/layout/browser
+ import { extensionDefaultIcon } from '../../../services/extensionManagement/common/extensionsIcons.js';
+ import { IEditorService } from '../../../services/editor/common/editorService.js';
+ import { GettingStartedInput } from './gettingStartedInput.js';
++import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
+ 
+ export const HasMultipleNewFileEntries = new RawContextKey<boolean>('hasMultipleNewFileEntries', false);
+ 
+@@ -331,8 +332,11 @@ export class WalkthroughsService extends Disposable implements IWalkthroughsServ
+ 				new Promise<string | undefined>(resolve => setTimeout(() => resolve(walkthrough.when), 5000))
+ 			]);
+ 
++			// FlowLeap Patent IDE: extension walkthroughs do not auto-open in patent mode
++			const whenWithPatentIdeFilter = ContextKeyExpr.and(ContextKeyExpr.deserialize(override ?? walkthrough.when) ?? ContextKeyExpr.true(), PatentIdeContextKeys.Mode.toNegated()) ?? ContextKeyExpr.true();
++
+ 			if (this.sessionInstalledExtensions.has(extension.identifier.value.toLowerCase())
+-				&& this.contextService.contextMatchesRules(ContextKeyExpr.deserialize(override ?? walkthrough.when) ?? ContextKeyExpr.true())
++				&& this.contextService.contextMatchesRules(whenWithPatentIdeFilter)
+ 			) {
+ 				this.sessionInstalledExtensions.delete(extension.identifier.value.toLowerCase());
+ 				if (index < sectionToOpenIndex && isNewlyInstalled) {
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts b/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
+index 168a3d01b40..a7c9ec4c904 100644
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
+@@ -170,7 +170,7 @@ export const startEntries: GettingStartedStartEntryContent = [
+ 		id: 'topLevelGitClone',
+ 		title: localize('gettingStarted.topLevelGitClone.title', "Clone Git Repository..."),
+ 		description: localize('gettingStarted.topLevelGitClone.description', "Clone a remote repository to a local folder"),
+-		when: 'config.git.enabled && !git.missing',
++		when: 'config.git.enabled && !git.missing && !patentIdeMode',
+ 		icon: Codicon.sourceControl,
+ 		content: {
+ 			type: 'startEntry',
+@@ -181,7 +181,7 @@ export const startEntries: GettingStartedStartEntryContent = [
+ 		id: 'topLevelGitOpen',
+ 		title: localize('gettingStarted.topLevelGitOpen.title', "Open Repository..."),
+ 		description: localize('gettingStarted.topLevelGitOpen.description', "Connect to a remote repository or pull request to browse, search, edit, and commit"),
+-		when: 'workspacePlatform == \'webworker\'',
++		when: 'workspacePlatform == \'webworker\' && !patentIdeMode',
+ 		icon: Codicon.sourceControl,
+ 		content: {
+ 			type: 'startEntry',
+@@ -192,7 +192,7 @@ export const startEntries: GettingStartedStartEntryContent = [
+ 		id: 'topLevelRemoteOpen',
+ 		title: localize('gettingStarted.topLevelRemoteOpen.title', "Connect to..."),
+ 		description: localize('gettingStarted.topLevelRemoteOpen.description', "Connect to remote development workspaces."),
+-		when: '!isWeb',
++		when: '!isWeb && !patentIdeMode',
+ 		icon: Codicon.remote,
+ 		content: {
+ 			type: 'startEntry',
+@@ -203,7 +203,7 @@ export const startEntries: GettingStartedStartEntryContent = [
+ 		id: 'topLevelOpenTunnel',
+ 		title: localize('gettingStarted.topLevelOpenTunnel.title', "Open Tunnel..."),
+ 		description: localize('gettingStarted.topLevelOpenTunnel.description', "Connect to a remote machine through a Tunnel"),
+-		when: 'isWeb && showRemoteStartEntryInWeb',
++		when: 'isWeb && showRemoteStartEntryInWeb && !patentIdeMode',
+ 		icon: Codicon.remote,
+ 		content: {
+ 			type: 'startEntry',
+@@ -215,12 +215,24 @@ export const startEntries: GettingStartedStartEntryContent = [
+ 		title: localize('gettingStarted.newWorkspaceChat.title', "Generate New Workspace..."),
+ 		description: localize('gettingStarted.newWorkspaceChat.description', "Chat to create a new workspace"),
+ 		icon: Codicon.chatSparkle,
+-		when: '!isWeb && !chatSetupHidden && !chatSetupDisabledInWorkspace',
++		when: '!isWeb && !chatSetupHidden && !chatSetupDisabledInWorkspace && !patentIdeMode',
+ 		content: {
+ 			type: 'startEntry',
+ 			command: 'command:welcome.newWorkspaceChat',
+ 		}
+ 	},
++	// Patent IDE start entries
++	{
++		id: 'patentSearchPriorArt',
++		title: localize('gettingStarted.patentSearchPriorArt.title', "Search Prior Art..."),
++		description: localize('gettingStarted.patentSearchPriorArt.description', "Search patent databases for prior art references"),
++		icon: Codicon.search,
++		when: 'patentIdeMode',
++		content: {
++			type: 'startEntry',
++			command: 'command:flowleap.searchPriorArt',
++		}
++	},
+ ];
+ 
+ const Button = (title: string, href: string) => `[${title}](${href})`;
+@@ -242,7 +254,7 @@ function createCopilotSetupStep(id: string, button: string, when: string, includ
+ 		id,
+ 		title: CopilotStepTitle,
+ 		description,
+-		when: `${when} && !chatSetupHidden && !chatSetupDisabledInWorkspace`,
++		when: `${when} && !chatSetupHidden && !chatSetupDisabledInWorkspace && !patentIdeMode`,
+ 		media: {
+ 			type: 'svg', altText: 'VS Code Copilot multi file edits', path: 'multi-file-edits.svg'
+ 		},
+@@ -256,7 +268,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+ 		description: localize('gettingStarted.setup.description', "Customize your editor, learn the basics, and start coding"),
+ 		isFeatured: true,
+ 		icon: setupIcon,
+-		when: '!isWeb',
++		when: '!isWeb && !patentIdeMode',
+ 		walkthroughPageTitle: localize('gettingStarted.setup.walkthroughPageTitle', 'Setup VS Code'),
+ 		next: 'Beginner',
+ 		content: {
+@@ -292,7 +304,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+ 		description: localize('gettingStarted.setupWeb.description', "Customize your editor, learn the basics, and start coding"),
+ 		isFeatured: true,
+ 		icon: setupIcon,
+-		when: 'isWeb',
++		when: 'isWeb && !patentIdeMode',
+ 		next: 'Beginner',
+ 		walkthroughPageTitle: localize('gettingStarted.setupWeb.walkthroughPageTitle', 'Setup VS Code Web'),
+ 		content: {
+@@ -483,6 +495,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+ 		isFeatured: false,
+ 		title: localize('gettingStarted.beginner.title', "Learn the Fundamentals"),
+ 		icon: beginnerIcon,
++		when: '!patentIdeMode',
+ 		description: localize('gettingStarted.beginner.description', "Get an overview of the most essential features"),
+ 		walkthroughPageTitle: localize('gettingStarted.beginner.walkthroughPageTitle', 'Essential Features'),
+ 		content: {
+@@ -600,7 +613,7 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+ 		description: '',
+ 		icon: setupIcon,
+ 		isFeatured: false,
+-		when: `config.${NotebookSetting.openGettingStarted} && userHasOpenedNotebook`,
++		when: `config.${NotebookSetting.openGettingStarted} && userHasOpenedNotebook && !patentIdeMode`,
+ 		walkthroughPageTitle: localize('gettingStarted.notebook.walkthroughPageTitle', 'Notebooks'),
+ 		content: {
+ 			type: 'steps',
