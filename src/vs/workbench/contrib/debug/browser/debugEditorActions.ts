@@ -33,6 +33,7 @@ import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TOGGLE_BREAKPOINT_ID } from '../../../../workbench/contrib/debug/browser/debugCommands.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 class ToggleBreakpointAction extends Action2 {
 	constructor() {
@@ -44,7 +45,7 @@ class ToggleBreakpointAction extends Action2 {
 			},
 			category: nls.localize2('debugCategory', "Debug"),
 			f1: true,
-			precondition: CONTEXT_DEBUGGERS_AVAILABLE,
+			precondition: ContextKeyExpr.and(CONTEXT_DEBUGGERS_AVAILABLE, PatentIdeContextKeys.Mode.toNegated()),
 			keybinding: {
 				when: ContextKeyExpr.or(EditorContextKeys.editorTextFocus, CONTEXT_DISASSEMBLY_VIEW_FOCUS),
 				primary: KeyCode.F9,
@@ -275,6 +276,7 @@ class ToggleDisassemblyViewSourceCodeAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleDisassemblyViewSourceCodeAction.ID,
+			precondition: PatentIdeContextKeys.Mode.toNegated(),
 			title: {
 				...nls.localize2('toggleDisassemblyViewSourceCode', "Toggle Source Code in Disassembly View"),
 				mnemonicTitle: nls.localize({ key: 'mitogglesource', comment: ['&& denotes a mnemonic'] }, "&&ToggleSource"),

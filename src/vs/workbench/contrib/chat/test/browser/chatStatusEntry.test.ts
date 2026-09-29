@@ -19,6 +19,7 @@ import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, ToggleTool
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { TestLifecycleService } from '../../../../test/common/workbenchTestServices.js';
 import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { ChatQuotaResumeState, ChatStatusBarEntry, computeQuotaResumeState } from '../../browser/chatStatus/chatStatusEntry.js';
 import { IChatStatusItemService } from '../../browser/chatStatus/chatStatusItemService.js';
 import { ChatStatusPromo } from '../../browser/chatStatus/chatStatusPromo.js';
@@ -180,6 +181,8 @@ suite('ChatStatusBarEntry', () => {
 		UpdateTitleBarChatInProgressContext.bindTo(contextKeyService).set(opts.updateTitleBarChatInProgress ?? false);
 		contextKeyService.createKey<boolean>('inDebugMode', false).set(opts.inDebugMode ?? false);
 		InEditorZenModeContext.bindTo(contextKeyService).set(opts.inZenMode ?? false);
+		// The entry hides itself in Patent IDE mode (the product default); these tests exercise the entry, so opt out.
+		PatentIdeContextKeys.Mode.bindTo(contextKeyService).set(false);
 
 		const storageService = instantiationService.get(IStorageService);
 		if (opts.persisted) {

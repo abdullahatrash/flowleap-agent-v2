@@ -49,6 +49,7 @@ import { TestingExplorerView } from './testingExplorerView.js';
 import { CloseTestPeek, CollapsePeekStack, GoToNextMessageAction, GoToPreviousMessageAction, OpenMessageInEditorAction, TestingOutputPeekController, TestingPeekOpener, TestResultsView, ToggleTestingPeekHistory } from './testingOutputPeek.js';
 import { TestingProgressTrigger } from './testingProgressUiService.js';
 import { TestingViewPaneContainer } from './testingViewPaneContainer.js';
+import { PatentIdeContextKeys } from '../../../common/patent/patentIdeContextKeys.js';
 
 registerSingleton(ITestService, TestService, InstantiationType.Delayed);
 registerSingleton(ITestResultStorage, TestResultStorage, InstantiationType.Delayed);
@@ -96,7 +97,7 @@ viewsRegistry.registerViews([{
 	containerIcon: testingResultsIcon,
 	canToggleVisibility: false,
 	canMoveView: true,
-	when: TestingContextKeys.hasAnyResults.isEqualTo(true),
+	when: ContextKeyExpr.and(TestingContextKeys.hasAnyResults.isEqualTo(true), PatentIdeContextKeys.Mode.toNegated()),
 	ctorDescriptor: new SyncDescriptor(TestResultsView),
 }], testResultsViewContainer);
 
@@ -118,7 +119,7 @@ viewsRegistry.registerViews([{
 	weight: 80,
 	order: -999,
 	containerIcon: testingViewIcon,
-	when: ContextKeyExpr.greater(TestingContextKeys.providerCount.key, 0),
+	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), ContextKeyExpr.greater(TestingContextKeys.providerCount.key, 0)),
 }, {
 	id: Testing.CoverageViewId,
 	name: localize2('testCoverage', "Test Coverage"),
@@ -128,7 +129,7 @@ viewsRegistry.registerViews([{
 	weight: 80,
 	order: -998,
 	containerIcon: testingViewIcon,
-	when: TestingContextKeys.isTestCoverageOpen,
+	when: ContextKeyExpr.and(PatentIdeContextKeys.Mode.toNegated(), TestingContextKeys.isTestCoverageOpen),
 }], viewContainer);
 
 allTestActions.forEach(registerAction2);

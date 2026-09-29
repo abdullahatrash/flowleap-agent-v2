@@ -22,6 +22,7 @@ import { Disposable, DisposableStore, IDisposable, MutableDisposable, thenIfNotD
 import { ResourceSet } from '../../../../../base/common/map.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
 import { filter } from '../../../../../base/common/objects.js';
 import { autorun, derived, IObservable, observableFromEvent, observableValue } from '../../../../../base/common/observable.js';
 import { extUri, isEqual } from '../../../../../base/common/resources.js';
@@ -1829,7 +1830,16 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		}
 
 		let title: string;
-		if (this.input.currentModeKind === ChatModeKind.Ask) {
+		// FlowLeap Patent IDE: patent-specific titles
+		if (PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false) {
+			if (this.input.currentModeKind === ChatModeKind.Ask) {
+				title = localize('patentChatDescription', "Ask about patents");
+			} else if (this.input.currentModeKind === ChatModeKind.Edit) {
+				title = localize('patentEditsTitle', "Edit documents");
+			} else {
+				title = localize('patentAgentTitle', "Patent Analysis Agent");
+			}
+		} else if (this.input.currentModeKind === ChatModeKind.Ask) {
 			title = localize('chatDescription', "Ask about your code");
 		} else if (this.input.currentModeKind === ChatModeKind.Edit) {
 			title = localize('editsTitle', "Edit in context");
