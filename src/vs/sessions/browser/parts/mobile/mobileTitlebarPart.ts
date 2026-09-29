@@ -517,8 +517,10 @@ export class MobileTitlebarPart extends Disposable {
 		// pending), the dashboard shows a "Set up Copilot" prompt that
 		// doesn't apply in the agents app.
 		const entitlement = this.chatEntitlementService.entitlement;
+		// FlowLeap: never for a FlowLeap account, whose Copilot entitlement never resolves.
 		const showDashboard = !this.chatEntitlementService.sentiment.hidden
 			&& !!this.accountName
+			&& this.accountProviderId !== 'flowleap'
 			&& entitlement !== ChatEntitlement.Unknown
 			&& entitlement !== ChatEntitlement.Available;
 		if (showDashboard) {

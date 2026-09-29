@@ -70,3 +70,21 @@
 .chat-setup-dialog.sessions-welcome-dialog .chat-setup-dialog-footer > .sessions-sign-in-dialog-action.monaco-text-button:focus-visible {
 	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
 }
+
+/* FlowLeap: the welcome dialogs show the FlowLeap brand mark instead of the generic agent codicon, masked so it takes a theme-aware accent. */
+.chat-setup-dialog.sessions-welcome-dialog .dialog-message-row > .dialog-icon.codicon::before {
+	content: none;
+}
+
+.chat-setup-dialog.sessions-welcome-dialog .dialog-message-row > .dialog-icon.codicon {
+	width: 64px; /* the removed glyph provided the intrinsic width */
+	background-color: var(--vscode-textLink-foreground, #3b6fed);
+	-webkit-mask-image: url('./flowleap-logo.svg');
+	mask-image: url('./flowleap-logo.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center center;
+	mask-position: center center;
+	-webkit-mask-size: 56px;
+	mask-size: 56px;
+}

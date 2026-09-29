@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { $ } from '../../../../base/browser/dom.js';
-import { VSCODE_LOGO_PATH } from './vscodeLogoPath.js';
+import { FLOWLEAP_LOGO_PATHS, FLOWLEAP_LOGO_VIEWBOX } from './flowleapLogoPath.js';
 
 /**
  * VS Code logo "fish" used by the Agents window aquarium. Each fish is a small
@@ -177,8 +177,8 @@ export class Fish {
 const NUM_BODY_STRIPS = 8;
 
 /** The body's bounding range in the original logo's user units. */
-const BODY_X_START = 5;
-const BODY_X_END = 90;
+const BODY_X_START = 4.5;
+const BODY_X_END = 91.5;
 
 /**
  * Lazily-built shared SVG element holding both the strip clipPath defs AND
@@ -214,7 +214,7 @@ function ensureSharedDefs(targetDocument: Document): void {
 
 	// All strips reference this symbol via `<use href="#agents-aquarium-fish-logo">`,
 	// so the path data is parsed exactly ONCE per session instead of FISH_COUNT * NUM_STRIPS.
-	container.appendChild(createVSCodeLogoSymbol());
+	container.appendChild(createFlowLeapLogoSymbol());
 
 	const defs = $.SVG<SVGDefsElement>('defs');
 	for (let i = 0; i < NUM_BODY_STRIPS; i++) {
@@ -236,17 +236,21 @@ function ensureSharedDefs(targetDocument: Document): void {
 	sharedDefsByDocument.set(targetDocument, container);
 }
 
-function createVSCodeLogoSymbol(): SVGSymbolElement {
+function createFlowLeapLogoSymbol(): SVGSymbolElement {
 	const symbol = $.SVG<SVGSymbolElement>('symbol');
 	symbol.setAttribute('id', SHARED_LOGO_SYMBOL_ID);
-	symbol.setAttribute('viewBox', '0 0 96 96');
+	// FlowLeap: the symbol's viewBox scales the brand-mark coordinate space
+	// into the 96x96 fish space of the referencing `<use>` elements.
+	symbol.setAttribute('viewBox', FLOWLEAP_LOGO_VIEWBOX);
 	symbol.setAttribute('overflow', 'visible');
 
-	const logoPath = $.SVG<SVGPathElement>('path');
-	logoPath.setAttribute('d', VSCODE_LOGO_PATH);
-	logoPath.setAttribute('fill', 'currentColor');
-	logoPath.setAttribute('fill-rule', 'evenodd');
-	symbol.appendChild(logoPath);
+	for (const pathData of FLOWLEAP_LOGO_PATHS) {
+		const logoPath = $.SVG<SVGPathElement>('path');
+		logoPath.setAttribute('d', pathData);
+		logoPath.setAttribute('fill', 'currentColor');
+		logoPath.setAttribute('fill-rule', 'evenodd');
+		symbol.appendChild(logoPath);
+	}
 
 	return symbol;
 }
