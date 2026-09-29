@@ -58,6 +58,9 @@ suite('claudeTransportMode', () => {
 			// An API key reports through `apiKeySource` and leaves `tokenSource`
 			// at its `'none'` sentinel, so testing `tokenSource` alone misses it.
 			['api key', { tokenSource: 'none', apiKeySource: 'ANTHROPIC_API_KEY', apiProvider: 'firstParty' }, true],
+			// FlowLeap: a keychain `claude login` (claude.ai subscription) with SDK
+			// 0.3.281 reports only the subscription, no credential fields.
+			['claude.ai keychain login', { apiProvider: 'firstParty', subscriptionType: 'Claude Max' }, true],
 			// The rows a later "simplification" silently breaks: for third-party
 			// backends the SDK documents the credential fields as absent, because
 			// auth is external (AWS creds, gcloud ADC).

@@ -231,6 +231,25 @@ export const AgentHostClaudeAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_CLAUDE_AGENT
  */
 export const AgentHostCodexAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_CODEX_AGENT_ENABLED';
 
+/**
+ * FlowLeap: environment variable that re-enables the GitHub Copilot agent
+ * provider inside the agent host. Accepts the same values as
+ * {@link isAgentEnabled}; absent means **off**. No starter forwards it and no
+ * setting backs it, so only a developer who sets it by hand gets the Copilot
+ * agent. With it off the agent host never spawns `copilot-runtime`, never asks
+ * for a GitHub token for it, and Claude is the default agent (ADR 0009, PRD
+ * 0018 A3). The Copilot agent files stay in the tree (neutralize, not delete).
+ */
+export const AgentHostCopilotAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED';
+
+/**
+ * FlowLeap: whether the agent host registers the GitHub Copilot agent
+ * provider. Off unless {@link AgentHostCopilotAgentEnabledEnvVar} enables it.
+ */
+export function isCopilotAgentEnabled(env: { readonly [key: string]: string | undefined }): boolean {
+	return isAgentEnabled(env[AgentHostCopilotAgentEnabledEnvVar], false);
+}
+
 /** Overrides the soft cap on resident session roots. Primarily used by integration tests. */
 export const AgentHostSessionResidencyLimitEnvVar = 'VSCODE_AGENT_HOST_SESSION_RESIDENCY_LIMIT';
 

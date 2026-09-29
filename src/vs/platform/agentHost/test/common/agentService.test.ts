@@ -8,7 +8,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { IConfigurationService } from '../../../configuration/common/configuration.js';
 import { AgentSession, GITHUB_COPILOT_PROTECTED_RESOURCE, GITHUB_REPO_PROTECTED_RESOURCE, protectedResourcesRequireGitHubCopilotSignIn } from '../../common/agent.js';
-import { AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
+import { AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, isCopilotAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
 import type { ProtectedResourceMetadata } from '../../common/state/protocol/state.js';
 import { buildChatUri, buildDefaultChatUri, resolveChatUri } from '../../common/state/sessionState.js';
 import { TestConfigurationService } from '../../../configuration/test/common/testConfigurationService.js';
@@ -70,6 +70,20 @@ suite('isAgentEnabled', () => {
 			assert.strictEqual(isAgentEnabled(envValue, defaultEnabled), expected);
 		});
 	}
+});
+
+suite('isCopilotAgentEnabled', () => {
+
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('the Copilot agent is off unless the env var enables it', () => {
+		assert.deepStrictEqual({
+			absent: isCopilotAgentEnabled({}),
+			empty: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: '' }),
+			off: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: 'false' }),
+			on: isCopilotAgentEnabled({ VSCODE_AGENT_HOST_COPILOT_AGENT_ENABLED: 'true' }),
+		}, { absent: false, empty: false, off: false, on: true });
+	});
 });
 
 suite('shouldSurfaceLocalAgentHostProvider', () => {

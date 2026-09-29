@@ -98,6 +98,10 @@ export function isClaudeAccountSetUp(account: AccountInfo | undefined): boolean 
 	}
 	// `tokenSource` spells "no credential" as `'none'` rather than absence;
 	// `apiKeySource` has only ever been observed absent in that case.
+	// FlowLeap (PRD 0018 A3, spike #469): a `claude login` claude.ai account in
+	// the macOS keychain reports only `subscriptionType` with SDK 0.3.281 (no
+	// `tokenSource`, no `apiKeySource`), so a reported subscription counts too.
 	return (account.tokenSource !== undefined && account.tokenSource !== 'none')
-		|| account.apiKeySource !== undefined;
+		|| account.apiKeySource !== undefined
+		|| account.subscriptionType !== undefined;
 }
