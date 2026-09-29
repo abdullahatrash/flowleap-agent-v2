@@ -81,6 +81,23 @@ suite('GlobalCompositeBar', () => {
 
 		assert.deepStrictEqual({ heights, height: bar.getHeight(28, 0), actions: bar.globalActivityActionBar.length() }, { heights: [], height: 28, actions: 1 });
 	});
+
+	test('toggles Accounts below a leading Command Palette item', () => {
+		const bar = createGlobalBar(true);
+		bar.globalActivityActionBar.push(store.add(new Action('workbench.actions.activityBarCommandPalette')), { index: 0 });
+		const ids = () => bar.globalActivityActionBar.viewItems.map(item => item.action.id);
+
+		bar.accountsVisibilityPreference = false;
+		bar.toggleAccountsActivity();
+		const hidden = ids();
+		bar.accountsVisibilityPreference = true;
+		bar.toggleAccountsActivity();
+
+		assert.deepStrictEqual({ hidden, shown: ids() }, {
+			hidden: ['workbench.actions.activityBarCommandPalette', GLOBAL_ACTIVITY_ID],
+			shown: ['workbench.actions.activityBarCommandPalette', ACCOUNTS_ACTIVITY_ID, GLOBAL_ACTIVITY_ID],
+		});
+	});
 });
 
 interface IUpdateAvatarTestHarness {
