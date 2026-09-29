@@ -17,7 +17,7 @@ export const aiCustomizationViewIcon = registerIcon('ai-customization-view-icon'
 /**
  * Icon for custom agents.
  */
-export const agentIcon = registerIcon('ai-customization-agent', Codicon.agent, localize('aiCustomizationAgentIcon', "Icon for custom agents."));
+export const agentIcon = registerIcon('ai-customization-agent', Codicon.robot, localize('aiCustomizationAgentIcon', "Icon for custom agents."));
 
 /**
  * Icon for skills.
