@@ -45,6 +45,8 @@ CORE = [
 	(0xec4e, BR, 'copilot-success'),
 	(0xec52, TR, 'copilot-snooze'),
 	(0xec42, SLASH, 'copilot-unavailable'),
+	(0xecf2, TR, 'copilot-dot'),
+	(0xecf3, TR, 'copilot-dot-compact'),
 ]
 
 # vscode-copilot-chat assets/copilot.woff glyphs (contributes.icons)
