@@ -33,7 +33,7 @@ import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/co
 import { getRegisteredLanguageModels, resolveModelIdentifier, resolveModelIdentifierFromLanguageModels } from '../../../../../workbench/contrib/chat/common/modelSelection.js';
 import { ChatInteractivity, ChatModelSource, IChat, IChatCheckpoints, ISession, ISessionChangesSummary, ISessionFileChange, ISessionFolder, ISessionGitRepository, ISessionType, ISessionWorkspace, ISessionWorkspaceBrowseAction, ISideChatSelection, SESSION_WORKSPACE_GROUP_LOCAL, SessionStatus, SessionTypeAuthRequirement, sessionFileChangesEqual, sessionWorkspaceEqual, toSessionId } from '../../../../services/sessions/common/session.js';
 import { IDeleteChatOptions, ISendRequestOptions, ISessionChangeEvent, ISessionModelPickerOptions, ISessionModelsSnapshot, ISessionsProvider, ISessionsProviderCreateSessionOptions } from '../../../../services/sessions/common/sessionsProvider.js';
-import { createLocalChangesets } from './localChangesets.js';
+import { createLocalChangesets } from '../../localChatSessions/browser/localChangesets.js';
 
 /**
  * FlowLeap: the chat session type contributed by the extension-host Claude
