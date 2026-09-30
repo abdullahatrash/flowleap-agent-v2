@@ -257,6 +257,15 @@ foundry-local-sdk/**
 @github/copilot-sdk/node_modules/@github/copilot-win32-arm64/**
 @github/copilot-sdk/node_modules/@github/copilot-win32-x64/**
 
+# @github/copilot-sdk uses Koffi only for its in-process FFI transport (upstream 1.140 rule).
+# The agent host talks to the runtime over stdio and the Copilot agent is gated off
+# (PRD 0018 A3); the koffi-linux-* packages also carry musl builds that break dpkg-shlibdeps.
+koffi/**
+@koromix/koffi-*/**
+
+# Signing artifacts (upstream 1.140 rule)
+**/_manifest/**
+
 # es5-ext is quarantined protestware (sonatype-2022-2248). It is only consumed
 # in websocket's browser.js inside a try/catch with a globalThis fallback,
 # so it is unnecessary in the browsers/runtimes VS Code supports.
