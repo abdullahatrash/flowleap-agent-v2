@@ -31,6 +31,7 @@ export const recommendedDeps = [
 // as rpm Requires. `libcups.so.2` is a genuine new dependency on both arches.
 // armv7hl is untouched because this fork does not build it.
 //
+// 2026-09-30 (v0.5.0, PRD 0018 A2 native modules): +GLIBC_2.27 on both arches, +GLIBC_2.5 on x86_64.
 // To update after a legitimate change: read the "New:" list the failure prints
 // and paste it here verbatim. See docs/release/RELEASE.md, "Troubleshooting".
 export const referenceGeneratedDepsByArch = {
@@ -62,6 +63,7 @@ export const referenceGeneratedDepsByArch = {
 		'libc.so.6(GLIBC_2.18)(64bit)',
 		'libc.so.6(GLIBC_2.2.5)(64bit)',
 		'libc.so.6(GLIBC_2.25)(64bit)',
+		'libc.so.6(GLIBC_2.27)(64bit)',
 		'libc.so.6(GLIBC_2.28)(64bit)',
 		'libc.so.6(GLIBC_2.3)(64bit)',
 		'libc.so.6(GLIBC_2.3.2)(64bit)',
@@ -70,6 +72,7 @@ export const referenceGeneratedDepsByArch = {
 		'libc.so.6(GLIBC_2.33)(64bit)',
 		'libc.so.6(GLIBC_2.34)(64bit)',
 		'libc.so.6(GLIBC_2.4)(64bit)',
+		'libc.so.6(GLIBC_2.5)(64bit)',
 		'libc.so.6(GLIBC_2.6)(64bit)',
 		'libc.so.6(GLIBC_2.7)(64bit)',
 		'libc.so.6(GLIBC_2.8)(64bit)',
@@ -283,6 +286,7 @@ export const referenceGeneratedDepsByArch = {
 		'libc.so.6(GLIBC_2.17)(64bit)',
 		'libc.so.6(GLIBC_2.18)(64bit)',
 		'libc.so.6(GLIBC_2.25)(64bit)',
+		'libc.so.6(GLIBC_2.27)(64bit)',
 		'libc.so.6(GLIBC_2.28)(64bit)',
 		'libc.so.6(GLIBC_2.32)(64bit)',
 		'libc.so.6(GLIBC_2.33)(64bit)',
