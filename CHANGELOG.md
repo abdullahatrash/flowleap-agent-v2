@@ -14,6 +14,46 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-30
+
+### Added
+
+- **Agent sessions run in a dedicated agent host.** Claude sessions in the
+  Agents Window now run in their own process, the same way upstream VS Code
+  runs them. You get several chats in one session (New Chat in This Session),
+  forking a chat, a side chat, renaming and deleting sessions, and quick chats.
+- **Your existing Claude Code sessions appear in the Agents Window.** Sessions
+  you started from the Claude CLI in a terminal are listed under External and
+  can be resumed there.
+- **The Claude agent SDK downloads once, on first use.** The first Claude
+  session after installing or updating fetches about 100 MB from the FlowLeap
+  release page, then works offline. Sessions still sign in with your own
+  claude.ai account or Anthropic key, never through FlowLeap.
+
+### Changed
+
+- **Updated to the VS Code 1.140 baseline.** The whole editor and the Agents
+  Window are now on upstream's September 2026 code, so upstream fixes and
+  features arrive as they ship.
+- **New sessions ask before editing.** The permission mode for a new Claude
+  session starts as "Ask Before Edits". Auto and Bypass are still in the
+  picker.
+- **Session logs keep no content.** The agent host's diagnostic logs record
+  ids, timings and tool names only. Your prompts, model replies, tool output
+  and file contents are never written to them unless you switch on a developer
+  setting, and the debug-log export tells you when that setting is on.
+- **The composer speaks patent.** After a session starts, the input suggests a
+  patent research task instead of a generic chat prompt, and the recommended
+  model for a new session is Sonnet.
+
+### Fixed
+
+- **OCR was failing for everyone with a sign-in message.** The document-AI key
+  on the FlowLeap backend had expired. It is rotated, and a follow-up stops a
+  backend provider error from ever looking like a sign-in problem.
+- **The Mermaid preview logged an error at every launch.** It now enables the
+  API proposal it needs.
+
 ## [0.4.0] - 2026-09-24
 
 ### Added
