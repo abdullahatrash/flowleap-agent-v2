@@ -20,6 +20,11 @@
 #   - Linux ships .deb, .rpm and .tar.gz per arch, built natively on
 #     ubuntu-22.04 / ubuntu-22.04-arm (glibc 2.35 baseline). Unsigned, and
 #     deliberately not a Stamped Build — see the build-linux job comment.
+#   - The Claude agent SDK ships as per-platform tarballs attached to the same
+#     release (PRD 0018 A7, ADR 0009). The agent-sdk job builds them once, and
+#     every packaging job stamps `product.agentSdks.claude` into the BUILT
+#     product.json through upstream's AGENT_SDK_RESULTS_FILE hook — see the
+#     agent-sdk job comment.
 #   - A workflow_dispatch can narrow the build to one platform and skip the
 #     release draft entirely (the `platforms` and `dry_run` inputs), so a
 #     pipeline change can be exercised without minting a release.
@@ -65,8 +70,109 @@ env:
   NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
+  # The Claude agent SDK, one tarball per release target (PRD 0018 A7, ADR 0009
+  # decision 3). The app does not bundle the SDK: the agent host downloads the
+  # tarball for its own target on first use (agentSdkDownloader.ts) from the URL
+  # template stamped into the built product.json. Upstream serves these from its
+  # Azure CDN; we attach them to the release, and publish-public-release.sh
+  # copies them to abdullahatrash/flowleap-releases with the installers, so the
+  # template points at that repo's release download URL for this tag.
+  #
+  # build/flowleap/produce-claude-sdk.ts reuses upstream's buildOne() (npm ci of
+  # the pinned build/agent-sdk/agents/claude lockfile with the target's
+  # os/cpu/libc, then a reproducible node-tar), so one host builds every target.
+  # It honours the `platforms` input. On a dry run nothing is published because
+  # create-release is skipped, but the tarballs and the stamp still exist, so
+  # the dry run exercises the whole path.
+  #
+  # The packaging jobs need this job: a failure here must stop the release,
+  # because a stamped build whose tarball is missing cannot start Claude.
+  #
+  # macos-14 so the Mach-O check below can run: the SDK's `claude` binary is
+  # signed and notarized by Anthropic, is NOT inside our app bundle, and must
+  # never be re-signed (that would change the tarball bytes). The check fails
+  # the release if a future SDK version ships a binary without that signature.
+  agent-sdk:
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # The producer needs only node-tar, not the whole root dependency tree.
+      # The version comes from the root lockfile, so there is no second pin.
+      - name: Install node-tar for the producer
+        run: |
+          TAR_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/tar'].version")
+          npm install --no-save --no-package-lock --prefix build/agent-sdk "tar@$TAR_VERSION"
+
+      - name: Produce Claude SDK tarballs
+        run: |
+          node build/flowleap/produce-claude-sdk.ts \
+            --tag="$RELEASE_TAG" \
+            --platforms="${{ inputs.platforms || 'all' }}" \
+            --out=dist/agent-sdk \
+            --results=dist/agent-sdk-results/agent-sdks.json
+          ls -la dist/agent-sdk
+
+      - name: Verify the SDK binaries are Anthropic-signed
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          for tgz in dist/agent-sdk/*.tgz; do
+            target=$(basename "$tgz" .tgz | sed -E 's/^claude-agent-sdk-[^-]+-//')
+            case "$target" in
+              darwin-*)
+                bin="node_modules/@anthropic-ai/claude-agent-sdk-$target/claude"
+                tar -xzf "$tgz" -C "$work" "$bin"
+                codesign --verify --strict --check-notarization --verbose=2 "$work/$bin"
+                # Captured first: `grep -q` exiting early would SIGPIPE the producer under pipefail.
+                info=$(codesign -dv "$work/$bin" 2>&1)
+                grep -q '^TeamIdentifier=Q6L2SF6YDW$' <<< "$info" \
+                  || { echo "::error::$target claude binary is not signed by Anthropic (Q6L2SF6YDW)"; exit 1; }
+                echo "OK: $target claude binary is Anthropic-signed and notarized" ;;
+              win32-*)
+                bin="node_modules/@anthropic-ai/claude-agent-sdk-$target/claude.exe"
+                tar -xzf "$tgz" -C "$work" "$bin"
+                command -v osslsigncode >/dev/null || brew install osslsigncode
+                info=$(osslsigncode verify -in "$work/$bin")
+                grep -q 'CN=Anthropic\\, PBC' <<< "$info" \
+                  || { echo "::error::$target claude.exe has no Anthropic Authenticode signature"; exit 1; }
+                echo "OK: $target claude.exe carries Anthropic's Authenticode signature" ;;
+              linux-*)
+                bin="node_modules/@anthropic-ai/claude-agent-sdk-$target/claude"
+                tar -xzf "$tgz" -C "$work" "$bin"
+                file "$work/$bin" | grep -q ELF || { echo "::error::$target tarball has no ELF claude binary"; exit 1; }
+                echo "OK: $target carries an ELF claude binary (Linux ships unsigned, like the app)" ;;
+            esac
+          done
+
+      - name: Upload Claude SDK tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-sdk-claude
+          path: dist/agent-sdk/*.tgz
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the product.agentSdks stamp
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-sdk-results
+          path: dist/agent-sdk-results/agent-sdks.json
+          retention-days: 7
+          if-no-files-found: error
+
   # Build for macOS (both architectures)
   build-macos:
+    needs: agent-sdk
     # Empty on a tag push (no dispatch inputs) — which means "build it".
     if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'macos' }}
     runs-on: macos-14
@@ -127,12 +233,29 @@ jobs:
           npm run gulp compile-extension:flowleap
           npm run gulp compile-extension:docx-viewer
 
+      # The Claude SDK stamp from the agent-sdk job. The gulp package task reads
+      # AGENT_SDK_RESULTS_FILE and writes it into the BUILT product.json as
+      # `agentSdks` (build/gulpfile.vscode.ts). Dev builds never set the variable,
+      # so they stay unstamped and load the SDK from node_modules.
+      - name: Download Claude SDK stamp
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-sdk-results
+          path: ${{ runner.temp }}/agent-sdk
+
       - name: Build macOS ${{ matrix.arch }}
         run: |
           ulimit -n 65536 2>/dev/null || true
           npm run gulp vscode-darwin-${{ matrix.arch }}
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
+          AGENT_SDK_RESULTS_FILE: ${{ runner.temp }}/agent-sdk/agent-sdks.json
+
+      - name: Verify the Claude SDK stamp
+        run: |
+          node build/flowleap/produce-claude-sdk.ts \
+            --verify="../VSCode-darwin-${{ matrix.arch }}/Flow Leap, AI patent agent.app/Contents/Resources/app/product.json" \
+            --results="$RUNNER_TEMP/agent-sdk/agent-sdks.json"
 
       # Code Signing — uses the user's standard electron-builder secret names:
       #   CSC_LINK          base64-encoded .p12 "Developer ID Application" certificate
@@ -363,6 +486,7 @@ jobs:
   # binary for both arches), so the in-place updater runs under Windows-on-ARM's
   # x64 emulation.
   build-windows:
+    needs: agent-sdk
     if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     # Pinned: windows-latest now resolves to a VS 2026 image, but build/npm/preinstall.ts
     # only recognizes VS 2022/2019 install paths. windows-2025 still ships VS 2022.
@@ -442,10 +566,33 @@ jobs:
           Write-Host "Using signtool at: $($st.FullName)"
           $st.DirectoryName >> $env:GITHUB_PATH
 
+      # The Claude SDK stamp from the agent-sdk job. The gulp package task reads
+      # AGENT_SDK_RESULTS_FILE and writes it into the BUILT product.json as
+      # `agentSdks` (build/gulpfile.vscode.ts). Dev builds never set the variable,
+      # so they stay unstamped and load the SDK from node_modules.
+      - name: Download Claude SDK stamp
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-sdk-results
+          path: ${{ runner.temp }}/agent-sdk
+
       - name: Build Windows ${{ matrix.arch }}
         run: npm run gulp vscode-win32-${{ matrix.arch }}
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
+          AGENT_SDK_RESULTS_FILE: ${{ runner.temp }}/agent-sdk/agent-sdks.json
+
+      # win32VersionedUpdate may put resources\app under a commit-named folder,
+      # so find the app's product.json instead of hardcoding the path.
+      - name: Verify the Claude SDK stamp
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $product = Get-ChildItem -Path "..\VSCode-win32-${{ matrix.arch }}" -Recurse -Filter product.json |
+            Where-Object { $_.FullName -match '\\resources\\app\\product\.json$' } | Select-Object -First 1
+          if (-not $product) { Write-Host "::error::No resources\app\product.json in the build output"; exit 1 }
+          node build/flowleap/produce-claude-sdk.ts "--verify=$($product.FullName)" "--results=$env:RUNNER_TEMP/agent-sdk/agent-sdks.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package Windows Build
         shell: pwsh
@@ -565,6 +712,7 @@ jobs:
   # macOS. An unstamped build keeps the Notify-Only Checker as its single
   # update surface.
   build-linux:
+    needs: agent-sdk
     if: ${{ inputs.platforms == '' || inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
@@ -637,10 +785,27 @@ jobs:
       # `-min` is the minified variant, which is what a shipped Linux build
       # wants. It produces ../VSCode-linux-<arch>, the input to every packaging
       # task below.
+      # The Claude SDK stamp from the agent-sdk job. The gulp package task reads
+      # AGENT_SDK_RESULTS_FILE and writes it into the BUILT product.json as
+      # `agentSdks` (build/gulpfile.vscode.ts). Dev builds never set the variable,
+      # so they stay unstamped and load the SDK from node_modules.
+      - name: Download Claude SDK stamp
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-sdk-results
+          path: ${{ runner.temp }}/agent-sdk
+
       - name: Build Linux ${{ matrix.arch }}
         run: npm run gulp vscode-linux-${{ matrix.arch }}-min
         env:
           VSCODE_ARCH: ${{ matrix.arch }}
+          AGENT_SDK_RESULTS_FILE: ${{ runner.temp }}/agent-sdk/agent-sdks.json
+
+      - name: Verify the Claude SDK stamp
+        run: |
+          node build/flowleap/produce-claude-sdk.ts \
+            --verify="../VSCode-linux-${{ matrix.arch }}/resources/app/product.json" \
+            --results="$RUNNER_TEMP/agent-sdk/agent-sdks.json"
 
       # The packaging tasks read specific paths out of this tree (the launcher,
       # chrome-sandbox, chrome_crashpad_handler, bin/, and every native .node),
@@ -787,7 +952,7 @@ jobs:
 
   # Create GitHub Release
   create-release:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [agent-sdk, build-macos, build-windows, build-linux]
     # `dry_run` is empty on a tag push, so `!inputs.dry_run` is true there and
     # the release is drafted as before. A dispatch with dry_run=true stops here,
     # leaving only the uploaded workflow artifacts.
@@ -827,7 +992,7 @@ jobs:
         run: |
           mkdir -p artifacts
           cd artifacts
-          find . -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" \) -exec sha256sum {} \; > SHASUMS256.txt 2>/dev/null || echo "No files to checksum" > SHASUMS256.txt
+          find . -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.tgz" \) -exec sha256sum {} \; > SHASUMS256.txt 2>/dev/null || echo "No files to checksum" > SHASUMS256.txt
           cat SHASUMS256.txt
 
       - name: Extract Release Notes from CHANGELOG
@@ -889,6 +1054,7 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.rpm
             artifacts/**/*.tar.gz
+            artifacts/**/*.tgz
             artifacts/SHASUMS256.txt
           fail_on_unmatched_files: false
         env:
@@ -900,6 +1066,7 @@ jobs:
           echo "  - macOS:   ${{ needs.build-macos.result }} (signed + notarized + stapled)"
           echo "  - Windows: ${{ needs.build-windows.result }} (UNSIGNED)"
           echo "  - Linux:   ${{ needs.build-linux.result }} (unsigned; deb/rpm/tar.gz, glibc 2.35 baseline)"
+          echo "  - Claude SDK tarballs: ${{ needs.agent-sdk.result }} (claude-agent-sdk-*.tgz, Anthropic-signed binaries)"
           echo ""
           echo "Next steps:"
           echo "  1. Sign the Windows .exe files locally with build/flowleap/sign-windows-release.ps1"

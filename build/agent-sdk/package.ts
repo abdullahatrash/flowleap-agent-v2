@@ -81,6 +81,12 @@ export async function buildOne(args: IBuildArgs): Promise<IBuildResult> {
 		const npmEnv: NodeJS.ProcessEnv = { npm_config_os: targetOs, npm_config_cpu: cpu };
 		if (libc) {
 			npmEnv.npm_config_libc = libc;
+		} else if (targetOs === 'linux') {
+			// The glibc Linux packages declare `libc: ["glibc"]`. npm on a
+			// non-Linux host has no libc of its own and skips them, which
+			// silently produces a tarball with no platform binary. Say glibc
+			// explicitly so the output does not depend on the host OS.
+			npmEnv.npm_config_libc = 'glibc';
 		}
 		npmCi(stagingDir, npmEnv);
 
