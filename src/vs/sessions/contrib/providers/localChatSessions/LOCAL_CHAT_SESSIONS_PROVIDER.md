@@ -141,7 +141,7 @@ A local session may host multiple chats. The hierarchy is stored entirely in the
 
 The model picker is contributed by the sessions core (`contrib/chat/browser/modelPicker.ts`), not by this provider. It reads models via `ISessionsProvider.getModelsSnapshot`; for local sessions this returns general-purpose registered language models (those without a `targetChatSessionType` that are user-selectable). This provider's `getModelPickerOptions` returns `showManageModelsAction: true`, so the core picker surfaces the **Manage Models** action for local sessions.
 
-## Differences from `ClaudeChatSessionsProvider`
+## Design Notes
 
 - **No `IAgentSessionsService` dependency.** Uses `IChatService` directly.
 - **No untitled→committed URI swap.** Local session resources never change.

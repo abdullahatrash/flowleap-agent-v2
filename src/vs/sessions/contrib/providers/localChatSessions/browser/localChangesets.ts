@@ -54,8 +54,8 @@ class GitRepositoryChangesetResolver implements IChangesetResolver {
 
 /**
  * Creates the git-backed changesets (branch, uncommitted, all, last turn) for a
- * session that runs on a local folder. FlowLeap: the Claude and Local session
- * providers use this instead of the upstream Copilot changesets, which resolve
+ * session that runs on a local folder. FlowLeap: the Local session provider
+ * uses this instead of the upstream Copilot changesets, which resolve
  * checkpoints through the GitHub service that the Agents window does not register.
  */
 export function createLocalChangesets(

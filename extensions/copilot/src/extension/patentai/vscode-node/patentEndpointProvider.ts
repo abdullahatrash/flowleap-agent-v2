@@ -22,15 +22,14 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
  * provider":
  *  - `copilot`     — the built-in Copilot wrapper (routes to the retired backend)
  *  - `copilotcli`  — Copilot CLI agent-session models (targetChatSessionType-scoped)
- *  - `claude-code` — Claude Code agent-session models (targetChatSessionType-scoped)
  *  - `patent-ai` / `flowleap` — retired backend pseudo-models
  *
  * Counting any of these as a usable BYOK model is what let a no-key chat turn slip
  * past the onboarding gate into a dead backend request (`copilot`) or an endless
- * "thinking" hang (`copilotcli` / `claude-code`). This list is exhaustive: it covers
+ * "thinking" hang (`copilotcli`). This list is exhaustive: it covers
  * every non-BYOK `registerLanguageModelChatProvider` vendor in the extension.
  */
-export const NON_BYOK_VENDORS: ReadonlySet<string> = new Set(['copilot', 'copilotcli', 'claude-code', 'patent-ai', 'flowleap']);
+export const NON_BYOK_VENDORS: ReadonlySet<string> = new Set(['copilot', 'copilotcli', 'patent-ai', 'flowleap']);
 
 /**
  * The FlowLeap Trial provider's vendor id (ADR 0015): a backend-fetched OpenRouter key, so its
