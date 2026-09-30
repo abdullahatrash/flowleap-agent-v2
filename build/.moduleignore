@@ -214,6 +214,12 @@ zone.js/dist/**
 @xterm/xterm-addon-*/out/**
 @xterm/xterm-addon-*/out-test/**
 
+# foundry-local-sdk is hoisted by @github/copilot-sdk 1.0.15 and only named in its
+# runtime-artifacts list; the Copilot agent is gated off (PRD 0018 A3), nothing
+# requires it at load, and its 147 MB of per-platform native prebuilds break
+# rcedit on Windows and dpkg-shlibdeps on Linux (dry run 36669158844).
+foundry-local-sdk/**
+
 # @github/copilot - strip unneeded binaries and files
 @github/copilot/sdk/index.js
 @github/copilot/prebuilds/**
