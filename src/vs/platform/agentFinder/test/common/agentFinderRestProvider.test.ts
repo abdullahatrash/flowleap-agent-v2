@@ -491,7 +491,7 @@ suite('AgentFinderRestProvider', () => {
 	});
 
 	test('bounds consecutive Cursor-only pages instead of returning an empty continuation', async () => {
-		const requests = new TestRequestService(async () => response({
+		const requests: TestRequestService = new TestRequestService(async () => response({
 			results: [cursorPlugin], total: 100, offset: requests.requests.length - 1, pageSize: 1,
 		}));
 		await assert.rejects(new AgentFinderRestProvider(requests).query({ pageSize: 1 }, CancellationToken.None), /too many unsupported entries/);

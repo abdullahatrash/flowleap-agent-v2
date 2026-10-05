@@ -100,7 +100,7 @@ suite('CodexProviderConfiguration', () => {
 	});
 
 	test('installs only the portable alias without persisting process overrides or changing defaults', async () => {
-		const client = new TestConfigurationClient(() => userConfiguration({ personality: 'friendly', model_provider: 'openai' }));
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration({ personality: 'friendly', model_provider: 'openai' }));
 		await ensurePortableCodexProxyProvider(client);
 		assert.deepStrictEqual(client.writes, [{
 			edits: [{ keyPath: 'model_providers.vscode-proxy', value: portableProvider, mergeStrategy: 'replace' }],
@@ -110,7 +110,7 @@ suite('CodexProviderConfiguration', () => {
 	});
 
 	test('leaves an existing native-auth alias and transport tuning untouched', async () => {
-		const client = new TestConfigurationClient(() => userConfiguration({ model_providers: { 'vscode-proxy': { ...portableProvider, supports_websockets: false, request_max_retries: 2 } } }));
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration({ model_providers: { 'vscode-proxy': { ...portableProvider, supports_websockets: false, request_max_retries: 2 } } }));
 		await ensurePortableCodexProxyProvider(client);
 		assert.deepStrictEqual(client.writes, []);
 	});
@@ -135,7 +135,7 @@ suite('CodexProviderConfiguration', () => {
 	}
 
 	test('rereads the user configuration on a version conflict', async () => {
-		const client = new TestConfigurationClient(() => userConfiguration({ personality: 'pragmatic' }, `version-${client.readCount}`), () => {
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration({ personality: 'pragmatic' }, `version-${client.readCount}`), () => {
 			if (client.writes.length === 1) {
 				throw new JsonRpcError(-32600, 'Changed concurrently', { config_write_error_code: 'configVersionConflict' });
 			}
@@ -145,7 +145,7 @@ suite('CodexProviderConfiguration', () => {
 	});
 
 	test('preserves an alias installed concurrently by another client', async () => {
-		const client = new TestConfigurationClient(() => userConfiguration(client.readCount === 1 ? {} : { model_providers: { 'vscode-proxy': portableProvider } }), () => {
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration(client.readCount === 1 ? {} : { model_providers: { 'vscode-proxy': portableProvider } }), () => {
 			throw new JsonRpcError(-32600, 'Changed concurrently', { config_write_error_code: 'configVersionConflict' });
 		});
 		await ensurePortableCodexProxyProvider(client);
@@ -153,7 +153,7 @@ suite('CodexProviderConfiguration', () => {
 	});
 
 	test('does not overwrite a conflicting alias introduced by a concurrent edit', async () => {
-		const client = new TestConfigurationClient(() => userConfiguration(client.readCount === 1 ? {} : { model_providers: { 'vscode-proxy': { name: 'User provider', env_key: 'CUSTOM_TOKEN' } } }), () => {
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration(client.readCount === 1 ? {} : { model_providers: { 'vscode-proxy': { name: 'User provider', env_key: 'CUSTOM_TOKEN' } } }), () => {
 			throw new JsonRpcError(-32600, 'Changed concurrently', { config_write_error_code: 'configVersionConflict' });
 		});
 		await assert.rejects(ensurePortableCodexProxyProvider(client), /already defines an incompatible/);
@@ -162,14 +162,14 @@ suite('CodexProviderConfiguration', () => {
 
 	test('bounds retries when the user configuration keeps changing', async () => {
 		const conflict = new JsonRpcError(-32600, 'Changed concurrently', { config_write_error_code: 'configVersionConflict' });
-		const client = new TestConfigurationClient(() => userConfiguration(), () => { throw conflict; });
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration(), () => { throw conflict; });
 		await assert.rejects(ensurePortableCodexProxyProvider(client), error => error === conflict);
 		assert.deepStrictEqual({ reads: client.readCount, writes: client.writes.length }, { reads: 3, writes: 3 });
 	});
 
 	test('propagates write failures without retrying or guessing a config path', async () => {
 		const failure = new JsonRpcError(-32600, 'Configuration was modified', { config_write_error_code: 'configFileReadError' });
-		const client = new TestConfigurationClient(() => userConfiguration(), () => { throw failure; });
+		const client: TestConfigurationClient = new TestConfigurationClient(() => userConfiguration(), () => { throw failure; });
 		await assert.rejects(ensurePortableCodexProxyProvider(client), error => error === failure);
 		assert.deepStrictEqual({ reads: client.readCount, writes: client.writes.length }, { reads: 1, writes: 1 });
 	});
@@ -177,7 +177,7 @@ suite('CodexProviderConfiguration', () => {
 	test('reads the base user layer rather than the selected profile', async () => {
 		const response = userConfiguration();
 		response.layers!.unshift({ name: { type: 'user', profile: 'selected', file: '/custom-codex/config.toml' }, version: 'profile-version', config: { personality: 'pragmatic', model_providers: { 'vscode-proxy': { supports_websockets: false } } }, disabledReason: null });
-		const client = new TestConfigurationClient(() => response);
+		const client: TestConfigurationClient = new TestConfigurationClient(() => response);
 		await ensurePortableCodexProxyProvider(client);
 		assert.strictEqual(client.writes[0].expectedVersion, 'version-1');
 	});
@@ -185,7 +185,7 @@ suite('CodexProviderConfiguration', () => {
 	test('does not ignore a persistent endpoint inherited from another config layer', async () => {
 		const response = userConfiguration({ model_providers: { 'vscode-proxy': portableProvider } });
 		response.layers!.unshift({ name: { type: 'system', file: '/system/config.toml' }, version: 'system-version', config: { model_providers: { 'vscode-proxy': { base_url: 'https://example.com/v1' } } }, disabledReason: null });
-		const client = new TestConfigurationClient(() => response);
+		const client: TestConfigurationClient = new TestConfigurationClient(() => response);
 		await assert.rejects(ensurePortableCodexProxyProvider(client), /already defines an incompatible/);
 		assert.deepStrictEqual(client.writes, []);
 	});
@@ -196,7 +196,7 @@ suite('CodexProviderConfiguration', () => {
 			{ name: { type: 'sessionFlags' }, version: 'runtime-version', config: response.config as JsonValue, disabledReason: null },
 			{ name: { type: 'project', dotCodexFolder: '/untrusted/.codex' }, version: 'project-version', config: response.config as JsonValue, disabledReason: 'Untrusted project' },
 		);
-		const client = new TestConfigurationClient(() => response);
+		const client: TestConfigurationClient = new TestConfigurationClient(() => response);
 		await ensurePortableCodexProxyProvider(client);
 		assert.deepStrictEqual(client.writes[0].edits[0].value, portableProvider);
 	});
@@ -204,7 +204,7 @@ suite('CodexProviderConfiguration', () => {
 	test('refuses to write when only a profile layer is available', async () => {
 		const response = userConfiguration();
 		response.layers![0].name = { type: 'user', profile: 'selected', file: '/custom-codex/config.toml' };
-		const client = new TestConfigurationClient(() => response);
+		const client: TestConfigurationClient = new TestConfigurationClient(() => response);
 		await assert.rejects(ensurePortableCodexProxyProvider(client), /could not be read safely/);
 		assert.deepStrictEqual(client.writes, []);
 	});
@@ -212,7 +212,7 @@ suite('CodexProviderConfiguration', () => {
 	test('refuses to write when the user layer is disabled', async () => {
 		const response = userConfiguration();
 		response.layers![0].disabledReason = 'Managed configuration';
-		const client = new TestConfigurationClient(() => response);
+		const client: TestConfigurationClient = new TestConfigurationClient(() => response);
 		await assert.rejects(ensurePortableCodexProxyProvider(client), /could not be read safely/);
 		assert.deepStrictEqual(client.writes, []);
 	});

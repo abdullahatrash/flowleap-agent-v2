@@ -195,7 +195,7 @@ function formatCopilotPluginOutput(input: string, result: CopilotSlashCommandRes
 
 	const output = [`# ${localize('copilotPlugins.installed', "Installed plugins")}`, ''];
 	for (const line of lines.slice(2)) {
-		const match = /^  • (?<plugin>.+?)(?<disabled> \(disabled\))?$/.exec(line);
+		const match = /^  \u2022 (?<plugin>.+?)(?<disabled> \(disabled\))?$/.exec(line);
 		if (!match?.groups?.plugin) {
 			return undefined;
 		}
