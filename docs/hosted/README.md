@@ -27,12 +27,27 @@ Sign-in to the workspace (the gate in nginx):
    `state` and `expires_in`.
 3. nginx compares `state` with the cookie and keeps the token in the HttpOnly cookie
    `fl_hosted` (30 days). Then it sends the browser to `/`.
-4. On each request, nginx sends `fl_hosted` to the backend as `Authorization: Bearer`. The
-   answer is cached for 30 seconds: `204` lets the request through, `403` shows "not invited".
+4. On each request, nginx sends `fl_hosted` to the backend as `Authorization: Bearer`:
+   `204` lets the request through, `403` shows "not invited".
 
-We do not use the website's Clerk `__session` cookie. It is set for the website host, not for
-`*.app.flowleap.co`, and it expires in about one minute. nginx still forwards it, as the backend
-runbook says.
+We do not use the website's Clerk `__session` cookie. It expires in about one minute. nginx
+does **not** forward any browser cookie to the backend (#542). Clerk sets client cookies on the
+root domain `flowleap.co`, so the browser sends them to `*.app.flowleap.co` too. If nginx
+forwarded them, Clerk's middleware would answer the auth call with a `307` handshake redirect,
+and `auth_request` turns that into a `500`. The auth call also sends `Accept: application/json`
+and blank `Sec-Fetch-*` headers. The backend runbook text that says "forward the Cookie header"
+is wrong for this setup (flowleap-backend issue filed from #542).
+
+**No auth cache (decision, #542).** The first version cached `204`/`403` answers for 30 seconds
+(`proxy_cache hosted_auth`). On the first VM, `GET /` passed, then the next asset requests failed
+with `auth request unexpected status: 500`. Turning the cache off fixed it. We dropped the
+cache: each request makes one backend call, and the route has its own limiter (600 per minute),
+which is enough for one user. `verify.sh` checks that consecutive requests with a valid token
+all succeed.
+
+**Swap.** `install.sh` adds a 4 GB swapfile (mode 0600, `/etc/fstab`, `vm.swappiness=10`) when
+the VM has less than 6 GB RAM and no swap. A 4 GB VM needs it. Running the script again changes
+nothing.
 
 Workspace trust: the server starts with `--disable-workspace-trust`. The server then tells
 the web client that trust is off, so the folder does not open in Restricted Mode, and
@@ -51,7 +66,7 @@ user owns the folder.
 
 ## Ten-minute checklist
 
-1. **VM.** Make an Ubuntu 24.04 x64 VM with 2 vCPU, 4 GB RAM and 30 GB disk or more. Open
+1. **VM.** Make an Ubuntu 24.04 x64 VM with 2 vCPU, 4 GB RAM and 30 GB disk or more (install.sh adds swap on a VM with less than 6 GB RAM). Open
    ports 22, 80 and 443. Copy the package to the VM:
    `scp flowleap-server-web-*.tar.gz root@<ip>:/root/`.
 2. **DNS.** Add an `A` record `<name>.app.flowleap.co → <VM IPv4>` (if the VM has IPv6, add
@@ -74,7 +89,10 @@ user owns the folder.
 6. **Verify.** On the VM, run `sudo flowleap-server-web-*/hosted/verify.sh <name>`. All checks
    must pass. The checks: the units run, a signed-out visit goes to sign-in, every process of
    `flowleap` has only the dummy key, `flowleap` cannot read the key file or the proxy's
-   environment, an Anthropic call through the proxy gives `200`, and workspace trust is off.
+   environment, an Anthropic call through the proxy gives `200`, workspace trust is off, a bogus Clerk cookie
+   still gives the sign-in redirect (never `500`), and swap is present. With
+   `FLOWLEAP_VERIFY_TOKEN=<allowlisted token>` it also checks that three consecutive requests
+   do not fail.
 7. **Try it yourself first.** Temporarily add your own user id to the allowlist (step 5).
    Open `https://<name>.app.flowleap.co`, sign in, and do these steps:
    - In the terminal, `echo $ANTHROPIC_API_KEY` must print `hosted-dummy`.

@@ -65,6 +65,23 @@ if [ -z "$api_key" ]; then
 fi
 [ -n "$api_key" ] || die "no Anthropic API key"
 
+log "Swap"
+# 4 GB VMs run out of memory while the server, the extension host and the agent host start.
+mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+if [ "${mem_kb:-0}" -lt 6000000 ] && [ -z "$(swapon --show --noheadings 2>/dev/null)" ]; then
+	if [ ! -f /swapfile ]; then
+		fallocate -l 4G /swapfile
+		chmod 0600 /swapfile
+		mkswap /swapfile >/dev/null
+	fi
+	swapon /swapfile || echo "install: swapon failed (a container may forbid it); continuing" >&2
+	grep -qE '^/swapfile[[:space:]]' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+	echo 'vm.swappiness=10' > /etc/sysctl.d/99-flowleap-swap.conf
+	sysctl -q -p /etc/sysctl.d/99-flowleap-swap.conf || true
+else
+	echo "RAM >= 6 GB or swap already present: nothing to do"
+fi
+
 log "Packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -232,10 +249,8 @@ if [ "$tls" = letsencrypt ] && [ ! -f "$cert" ]; then
 		-m "${FLOWLEAP_CERTBOT_EMAIL:-ops@flowleap.co}" --deploy-hook "systemctl reload nginx"
 fi
 
-# Auth answers are cached 30 s per credential (backend runbook hosted-workspace-authorize.md).
+# No auth cache (#542): one backend call per request; the route has its own 600/min limiter.
 cat > /etc/nginx/conf.d/flowleap-hosted.conf <<'EOF'
-proxy_cache_path /var/cache/nginx/hosted_auth keys_zone=hosted_auth:1m max_size=1m;
-
 # The hosted sign-in stores the user's long-lived FlowLeap token in the fl_hosted cookie
 # on this host (the Clerk __session cookie of the website is not sent to *.app.flowleap.co).
 # The backend accepts that token only as a Bearer, so the auth subrequest sends it as one.
@@ -280,14 +295,20 @@ server {
 		proxy_pass_request_body off;
 		proxy_set_header Content-Length "";
 		proxy_set_header Host $api_host;
-		proxy_set_header Cookie \$http_cookie;
+		# The gate uses only the fl_hosted bearer. Never forward the browser's cookies:
+		# Clerk sets client cookies on flowleap.co, the browser sends them to
+		# *.app.flowleap.co, and Clerk's middleware then answers with a 307 handshake
+		# redirect, which auth_request turns into a 500 (#542). The Accept and Sec-Fetch-*
+		# headers are blanked for the same reason: they make Clerk treat this as a navigation.
+		proxy_set_header Cookie "";
+		proxy_set_header Accept "application/json";
+		proxy_set_header Sec-Fetch-Dest "";
+		proxy_set_header Sec-Fetch-Mode "";
+		proxy_set_header Sec-Fetch-Site "";
 		proxy_set_header Authorization \$hosted_authorization;
 		proxy_ssl_server_name on;
 		proxy_ssl_name $api_host;
-
-		proxy_cache hosted_auth;
-		proxy_cache_key "\$cookie___session\$hosted_authorization";
-		proxy_cache_valid 204 403 30s;
+		# No proxy_cache here (#542): a cached 204 failed the next auth_request with 500.
 	}
 
 	# --- Sign-in hand-over (no gate) --------------------------------------------------
@@ -334,7 +355,6 @@ server {
 	}
 }
 EOF
-install -d -o www-data -m 0700 /var/cache/nginx/hosted_auth
 nginx_reload
 
 log "Wait for the server"
