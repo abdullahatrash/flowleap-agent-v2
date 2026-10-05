@@ -10,7 +10,10 @@ inputs.
 
 1. **Target summary**: the publication, the critical date (from `objective`),
    the family members walked and the offices.
-2. **Examiner Baseline**: the cited document × office matrix from `baseline`.
+2. **Examiner Baseline**: the cited document × office matrix, read from the
+   file at `baselinePath` (the CLI JSON) or from inline `baseline` (the
+   facade-tool result). The writer states the source: "Examiner Baseline
+   source: file <path>" or "inline".
    Each cell shows the category and the cited claims with the citing
    publication beside them, never equated with the granted claims.
 3. **Gaps in the offices' records**: each `gaps[]` entry, as a gap, never as
@@ -22,6 +25,16 @@ inputs.
    claim N; the examiner's best art remains <pub>").
 5. **Tracks log**: every track and every query from `tracks`, including zeros.
 6. Retrieved-but-not-cited, limitations and the working-record pointer.
+
+## The Baseline input
+
+- CLI source: pass `baselinePath`, the workspace path of the unedited
+  `--json` file. Do not paste the matrix inline; a large family has more than
+  1,600 documents.
+- Facade-tool source (flowleap-backend#548): pass the result unedited as
+  `baseline`.
+- Give exactly one of the two. The writer refuses both, and refuses a file
+  that is not JSON.
 
 ## Your inputs, per independent claim
 

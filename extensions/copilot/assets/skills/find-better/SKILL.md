@@ -21,9 +21,10 @@ from one of these two sources:
 
 1. **The FlowLeap CLI**, with `run_in_terminal`:
    `flowleap --json patent examiner-baseline <granted-publication> > references/<granted-publication>.examiner-baseline.json`,
-   then read the file with `read_file`.
+   then read the file with `read_file` for your own reasoning. Keep the file
+   unedited: Step 5 passes its path to the writer.
 2. **The backend examiner-baseline facade tool**, when it is in your tool list
-   (it ships with flowleap-backend#548).
+   (it ships with flowleap-backend#548). Its result goes inline in Step 5.
 
 If neither source is available (no `flowleap` command, not signed in, no
 facade tool), stop and tell the user that Find Better needs the Examiner
@@ -96,7 +97,11 @@ Save with `write_patent_results`, `template: 'find-better-report'`, as a
 structured save: leave `content` empty and supply:
 
 - `challengedPublication`: the granted patent. `objective`: the critical-date basis.
-- `baseline`: the Examiner Baseline JSON from Step 1, unedited.
+- `baselinePath`: the workspace path of the CLI JSON from Step 1, for example
+  `references/<granted-publication>.examiner-baseline.json`. Do not paste the
+  matrix inline: a large family has more than 1,600 documents. Only for the
+  facade-tool source, pass its result unedited as `baseline` instead. Give
+  exactly one of the two.
 - `examinerBestArt`: per independent claim, `{ claimNumber, publications }`
   from Step 1. Each publication must be in `baseline.documents[]` with an X or
   Y category.
@@ -106,7 +111,9 @@ structured save: leave `content` empty and supply:
   `claimNumber`, `kind: 'feature'`), plus one `kind: 'combination'` row per
   claim. Each row has two sides, `examiner` and `found`. Each side has
   `status`, `sourceAnchors`, `evidence`, `elements` and `gap`. The `elements`
-  are literal fragments from the prior art, never from the target.
+  are literal fragments from the prior art, never from the target. The row's
+  own `status`, `sourceAnchors` and `gap` are not used for this template: send
+  `status: "unresolved"`, `sourceAnchors: []` and `gap: ""`.
 
 The writer validates the quotes and counts "disclosed n of m" from the rows.
 Do not pass a score. What the writer renders from these inputs is in

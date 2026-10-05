@@ -3,8 +3,9 @@
 `flowleap --json patent examiner-baseline <publication>` (and the backend
 examiner-baseline facade tool) return one object. Code computes every value
 from the offices' own records. Read it; do not rebuild it from other calls.
-Fields are only added, never renamed. Pass it unedited as `baseline` to
-`write_patent_results`.
+Fields are only added, never renamed. Give it unedited to
+`write_patent_results`: the CLI file as `baselinePath`, the facade result as
+`baseline`.
 
 ## Top level
 
