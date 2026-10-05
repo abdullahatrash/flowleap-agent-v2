@@ -82,13 +82,21 @@ Run all three tracks. Each one is mandatory. Use the tool calls in
 2. **Inventor and author networks**: the target's inventors, the inventors of
    the X/Y patents, and the authors of the X/Y non-patent documents.
 3. **Classification co-occurrence**: the classifications of the target and of
-   its X/Y documents, combined with the Discriminating Terms.
+   its X/Y documents, combined with the Discriminating Terms. One query is
+   not enough. Do the **term-drop pass**: run the first query again with ONE
+   term removed at a time, and once with the classification alone when the
+   first query gave 200 hits or fewer. Log each variant with its count, and
+   read the titles of the top hits of each variant before the critical date.
+   Then run one **title-phrase query** per Discriminating Term,
+   `ti="<two-word phrase from the claim>"`, because old US documents often
+   have no abstract in OPS.
 
 Keep only documents published before the critical date. Log every query with
 its count, empty results too.
 
-Done when each track has its log, and each kept candidate has its claims or
-full text pulled.
+Done when each track has its log, Track 3 has its term-drop variants and its
+title-phrase queries, and each kept candidate has its claims or full text
+pulled.
 
 ## Step 4: Compare
 
@@ -131,6 +139,12 @@ structured save: leave `content` empty and supply:
 The writer validates the quotes and counts "disclosed n of m" from the rows.
 Do not pass a score. What the writer renders from these inputs is in
 [references/save-inputs.md](references/save-inputs.md).
+
+**Second read.** The save result can list elements that the second read did
+not confirm. Correct the rows that it is right about and save again. Do this
+at most two times. When the result says "Stop", do not save again: give the
+remaining objections in the chat summary as open second-read points. If the
+result says "Second read: not run", say so in the chat summary.
 
 Done when the report holds every independent claim, every gap and every track log.
 

@@ -43,6 +43,8 @@ interface SecondReadStub {
 	/** One reply, or one per judged row in order. */
 	readonly reply?: string | readonly string[];
 	readonly failure?: string;
+	/** How many judge calls, from the first, fail on the network before the judge answers. */
+	readonly networkErrors?: number;
 }
 
 /**
@@ -72,11 +74,13 @@ function setup(ledger: IPatentExecutionLedger = unrecordedPatentLedger, secondRe
 		}
 	}();
 	let judged = 0;
+	let calls = 0;
 	const endpointFor = (model: string) => new class extends mock<IChatEndpoint>() {
 		override readonly model = model;
 		override readonly family = model;
 		override async makeChatRequest2(): Promise<ChatResponse> {
 			if (secondRead.failure) { throw new Error(secondRead.failure); }
+			if (calls++ < (secondRead.networkErrors ?? 0)) { return { type: ChatFetchResponseType.NetworkError, reason: 'net::ERR_CONNECTION_CLOSED', requestId: 'request', serverRequestId: undefined }; }
 			const replies = secondRead.reply === undefined ? [''] : typeof secondRead.reply === 'string' ? [secondRead.reply] : secondRead.reply;
 			const value = replies[Math.min(judged++, replies.length - 1)];
 			return { type: ChatFetchResponseType.Success, value, requestId: 'request', serverRequestId: undefined, usage: undefined, resolvedModel: model };
@@ -372,7 +376,7 @@ describe('candidate report save path', () => {
 				confirmedRow: false,
 				limitation: ['Second read by judge-model: 4 elements judged, 1 not confirmed, 0 unclear, 0 unparsed.'],
 				line: 'Second read (judge-model): 4 elements judged, 1 not confirmed. Not confirmed: Quick release combination / a cam profile carried on the handle stem — The quoted claim puts the cam surface in the head portion.',
-				guidance: 'If a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap.',
+				guidance: 'If a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap. Re-save at most 2 more times for second-read objections.',
 				receiptDigest: true,
 				completion: undefined,
 			});
@@ -415,6 +419,44 @@ describe('candidate report save path', () => {
 				verdictFiles: 0,
 				limitation: true,
 			});
+		});
+
+		it('retries a judge call that failed on the network once, and says "not run" when the retry fails too (#538)', async () => {
+			const outcome = async (networkErrors: number) => {
+				const { files, record, lines } = await save({ setting: 'render', networkErrors, reply: [combinationVerdicts, headVerdicts] });
+				const names = (await files.readDirectory(URI.file('/workspace'))).map(([name]) => name);
+				return { line: lines[1], record: record.split('\n').filter(line => line.startsWith('Second read')), verdictFiles: names.filter(name => name.endsWith('.second-read.json')).length };
+			};
+			expect({ retried: await outcome(1), notRun: await outcome(2) }).toEqual({
+				retried: {
+					line: 'Second read (judge-model): 4 elements judged, 1 not confirmed. Not confirmed: Quick release combination / a cam profile carried on the handle stem — The quoted claim puts the cam surface in the head portion.',
+					record: ['Second read by judge-model: 4 elements judged, 1 not confirmed, 0 unclear, 0 unparsed.', 'Second read (generated, judge-model): the following elements were not confirmed by an independent read of the cited text; the row\'s status is the author\'s judgment.'],
+					verdictFiles: 1,
+				},
+				notRun: {
+					line: 'Second read: not run (network error, retried once). The report and the working record say so.',
+					record: ['Second read: not run (network error, retried once).'],
+					verdictFiles: 0,
+				},
+			});
+		});
+
+		it('allows two re-saves after a second read with open objections, then tells the model to stop (#538)', async () => {
+			const { tool } = setup(judgedLedger, { setting: 'render', reply: combinationVerdicts });
+			await withRequest(tool);
+			const guidance: string[] = [];
+			for (let save = 0; save < 4; save++) {
+				const result = await tool.invoke({ input, toolInvocationToken: undefined }, CancellationToken.None);
+				guidance.push((result.content[0] as LanguageModelTextPart).value.split('\n')[2]);
+			}
+			const rule = 'If a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap.';
+			const stop = 'Stop: remaining objections are recorded for the reviewer. Do not re-save for them again; list them in the chat summary as open second-read points.';
+			expect(guidance).toEqual([
+				`${rule} Re-save at most 2 more times for second-read objections.`,
+				`${rule} Re-save at most once more for second-read objections.`,
+				stop,
+				stop,
+			]);
 		});
 	});
 
@@ -736,8 +778,8 @@ describe('candidate report save path', () => {
 			return lines.slice(start, end < 0 ? undefined : end).filter(line => line.trim());
 		}
 
-		async function save(value: object, onDisk?: { path: string; text: string }): Promise<{ report: string; message: string; files: MockFileSystemService }> {
-			const { tool, files } = setup(ledger);
+		async function save(value: object, onDisk?: { path: string; text: string }, withLedger: IPatentExecutionLedger = ledger): Promise<{ report: string; message: string; files: MockFileSystemService }> {
+			const { tool, files } = setup(withLedger);
 			if (onDisk) { await files.writeFile(URI.file(onDisk.path), new TextEncoder().encode(onDisk.text)); }
 			const result = await tool.invoke({ input: value as Parameters<typeof tool.invoke>[0]['input'], toolInvocationToken: undefined }, CancellationToken.None);
 			const message = (result.content[0] as LanguageModelTextPart).value;
@@ -975,6 +1017,41 @@ describe('candidate report save path', () => {
 				intermediate: 'No better art found for claim 1; the examiner\'s best art remains US5135330A (published after the critical date; not prior art for this claim unless the priority claim fails) (disclosed 1 of 2).',
 				later: 'No better art found for claim 1; the examiner\'s best art remains US5135330A (published after the critical date; not prior art for this claim unless the priority claim fails) (disclosed 1 of 2).',
 				earlier: 'No better art found for claim 1; the examiner\'s best art remains US5135330A (disclosed 1 of 2).',
+			});
+		});
+
+		it('(l) matches a logged query with a trailing note to the execution record, and names a document once whatever its kind code (#537)', async () => {
+			// The same DE1000000 claim recorded once with its kind code and once without it.
+			const bare = 'DE1000000:claims:1:en';
+			const twoSpellings: IPatentExecutionLedger = {
+				...unrecordedPatentLedger,
+				read: async () => {
+					const recorded = await ledger.read(undefined);
+					return { ...recorded, executions: [...recorded.executions, { id: 'four', recordedAt: '2026-10-05', kind: 'details', status: 'succeeded', publicationIds: ['DE1000000'], sources: [source(bare, 'DE1000000', betterClaim)] }] };
+				},
+			};
+			const noted = { ...betterInput, examinerBestArt: [{ claimNumber: '1', publications: ['US5135330A', 'US5135330'] }], tracks: [
+				betterInput.tracks[0],
+				{ name: 'Classification co-occurrence', queries: [
+					{ query: 'cpc=F16B2/18  and ta=skewer (first call HTTP 503, retried)', tool: 'search_patents', count: 14 },
+					{ query: 'cpc=F16B2/18 and (ta=skewer)', tool: 'search_patents', count: 3 },
+				] },
+				betterInput.tracks[2],
+			] };
+			noted.coverage = noted.coverage.map(row => row.kind === 'combination' ? { ...row, found: supported(bare, 'a cam surface on the head portion', 'a cam surface formed on the head portion') } : row);
+			const { report } = await save(noted, undefined, twoSpellings);
+			const claim = section(report, '### Claim 1');
+			expect({
+				header: claim[1],
+				result: claim[7],
+				tracks: section(report, '## Tracks log').filter(line => line.startsWith('| Classification')),
+			}).toEqual({
+				header: '| Element | Examiner\'s best art (US5135330A) | Best art found (DE1000000A) |',
+				result: 'For claim 1, the best art found (DE1000000A) discloses 2 of 2 elements; the examiner\'s best art US5135330A discloses 1 of 2.',
+				tracks: [
+					'| Classification co-occurrence | cpc=F16B2/18  and ta=skewer (first call HTTP 503, retried) | search_patents | 14 | execution record |',
+					'| Classification co-occurrence | cpc=F16B2/18 and (ta=skewer) | search_patents | 3 | as reported by the agent; not in the execution record |',
+				],
 			});
 		});
 

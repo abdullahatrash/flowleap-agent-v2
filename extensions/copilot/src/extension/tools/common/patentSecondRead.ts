@@ -91,7 +91,9 @@ export interface SecondReadSummary {
  */
 export type SecondReadOutcome =
 	| { readonly kind: 'judged'; readonly model: string; readonly rows: readonly SecondReadResult[]; readonly summary: SecondReadSummary }
-	| { readonly kind: 'skipped'; readonly reason: string };
+	| { readonly kind: 'skipped'; readonly reason: string }
+	/** The judge could not be reached, even on the retry; the report says the second read did not run. */
+	| { readonly kind: 'notRun'; readonly reason: string };
 
 /** Only a row that claims disclosure can be second-read; an unresolved row claims none. */
 const JUDGED_STATUSES: readonly string[] = ['supported', 'partial'];
@@ -273,6 +275,7 @@ export function unconfirmedVerdicts(results: readonly SecondReadResult[]): Secon
  */
 export function secondReadLimitation(outcome: SecondReadOutcome): string {
 	if (outcome.kind === 'skipped') { return `Second read: skipped (${outcome.reason}).`; }
+	if (outcome.kind === 'notRun') { return `Second read: not run (${outcome.reason}).`; }
 	const { elements, disagree, unclear, unparsed, notJudged } = outcome.summary;
 	return `Second read by ${outcome.model}: ${elements} elements judged, ${disagree} not confirmed, ${unclear} unclear, ${unparsed} unparsed${notJudged ? `, ${notJudged} not judged (figure)` : ''}.`;
 }

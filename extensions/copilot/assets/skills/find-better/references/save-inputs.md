@@ -78,6 +78,9 @@ inputs.
 - Score the examiner's art and the found art on the same element rows.
 - Every track appears in `tracks`, with every query, including the ones that
   returned 0.
+- Give `query` as the exact text the tool ran. Put a note (a retry, a partial
+  preview) in the chat or the track name, not in `query`. The writer ignores
+  one note in parentheses at the end of a query, but no other added text.
 - "No better art found" is a result, not a failure. Keep the full Baseline and
   the full log with it.
 - No similarity score, no "strong" or "weak" rating, no invalidity statement.
