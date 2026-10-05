@@ -7281,6 +7281,24 @@
         ]
       },
       {
+        "path": "./assets/prompts/flowleap/find-better.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/search-statement.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/examiner-baseline.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
         "path": "./assets/prompts/flowleap/classification-codes.prompt.md",
         "sessionTypes": [
           "local"

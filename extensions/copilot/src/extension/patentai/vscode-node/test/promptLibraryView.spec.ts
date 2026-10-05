@@ -57,6 +57,29 @@ describe('buildPromptTree', () => {
 		]);
 	});
 
+	it('lists the Find Better prompts with their spelled-out labels between the workflow and the PATSTAT prompts', () => {
+		const bundled = [
+			entry('flowleap-top-filers', 'bundled'),
+			entry('flowleap-examiner-baseline', 'bundled'),
+			entry('flowleap-search-statement', 'bundled'),
+			entry('flowleap-find-better', 'bundled'),
+			entry('flowleap-literature-review', 'bundled'),
+		];
+
+		expect(shape(buildPromptTree(bundled, []))).toEqual([
+			{
+				group: 'FlowLeap', children: [
+					'prompt:Literature review',
+					'prompt:Find Better',
+					'prompt:Search statement',
+					'prompt:Examiner Baseline',
+					'prompt:Top filers',
+				]
+			},
+			{ group: 'My prompts', children: ['placeholder:Add a prompt to reuse it later'] },
+		]);
+	});
+
 	it('shows a non-copyable placeholder when the user has written no prompts yet', () => {
 		expect(shape(buildPromptTree([entry('flowleap-patent-dossier', 'bundled')], []))).toEqual([
 			{ group: 'FlowLeap', children: ['prompt:Patent dossier'] },
