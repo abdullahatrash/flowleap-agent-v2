@@ -14,6 +14,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { IPatentBackendClient, PatentBackendError } from '../../patentai/vscode-node/patentBackendClient';
 import { publicationCountry, searchedJurisdictions } from './patentCandidateReview';
 import { callFacadeTool } from './patentFacade';
+import { formatPriorityDates, PriorityClaim } from './patentResponseFormatter';
 import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -57,7 +58,7 @@ interface BiblioData {
 	dates: {
 		filing: string | null;
 		publication: string | null;
-		priority: string[];
+		priority: ReadonlyArray<string | PriorityClaim>;
 	};
 	citedReferences?: CitedReference[];
 }
@@ -253,7 +254,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			`**Country:** ${countryCode}`,
 			`**Filing Date:** ${biblio.dates?.filing || 'N/A'}`,
 			`**Publication Date:** ${biblio.dates?.publication || 'N/A'}`,
-			`**Priority Date(s):** ${biblio.dates?.priority?.length > 0 ? biblio.dates.priority.join(', ') : 'N/A'}`,
+			`**Priority Date(s):** ${formatPriorityDates(biblio.dates?.priority)}`,
 			'',
 			`**Applicants:** ${biblio.applicants?.length > 0 ? biblio.applicants.join(', ') : 'N/A'}`,
 			`**Inventors:** ${biblio.inventors?.length > 0 ? biblio.inventors.join(', ') : 'N/A'}`,

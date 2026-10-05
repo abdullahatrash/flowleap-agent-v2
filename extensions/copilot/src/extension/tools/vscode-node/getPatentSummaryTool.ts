@@ -14,6 +14,7 @@ import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendCl
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
+import { formatPriorityDates, PriorityClaim } from './patentResponseFormatter';
 import { handlePatentToolError } from './patentToolError';
 
 interface IGetPatentSummaryParams {
@@ -32,7 +33,7 @@ interface SummaryData {
 		inventors: string[];
 		ipc: string[];
 		cpc: string[];
-		dates: { filing: string | null; publication: string | null; priority: string[] };
+		dates: { filing: string | null; publication: string | null; priority: ReadonlyArray<string | PriorityClaim> };
 	} | null;
 	/**
 	 * `designatedStates`/`extensionStates` are the EPC states the filing designates, rolled up by the
@@ -118,7 +119,7 @@ export class GetPatentSummaryTool implements ICopilotTool<IGetPatentSummaryParam
 			`**Inventors:** ${this.joinOrNa(biblio?.inventors)}`,
 			`**Filing Date:** ${biblio?.dates?.filing || 'N/A'}`,
 			`**Publication Date:** ${biblio?.dates?.publication || 'N/A'}`,
-			`**Priority Date(s):** ${this.joinOrNa(biblio?.dates?.priority)}`,
+			`**Priority Date(s):** ${formatPriorityDates(biblio?.dates?.priority)}`,
 			`**IPC:** ${this.joinOrNa(biblio?.ipc)}`,
 			`**CPC:** ${this.joinOrNa(biblio?.cpc)}`,
 			'',

@@ -132,3 +132,20 @@ describe('GetPatentDetailsTool claims selection', () => {
 		expect({ fallback: text.includes(unsegmented), notice: text.includes('Individual claim numbers could not be established') }).toEqual({ fallback: true, notice: true });
 	});
 });
+
+describe('GetPatentDetailsTool priority dates', () => {
+	it('renders an object-shaped priority claim as an ISO date and its application id', async () => {
+		const inner = backend(noClaims);
+		const client = new class extends mock<IPatentBackendClient>() {
+			override async post<T>(path: string, body?: unknown, token?: CancellationToken): Promise<T> {
+				const result = await inner.post<{ success: boolean; data: { dates?: object } }>(path, body, token as CancellationToken);
+				if (path.endsWith('get_bibliography') && result.data.dates) {
+					result.data.dates = { publication: '2000-01-01', priority: [{ country: 'US', date: '20080416', docdbApplication: 'US10374408 (A)', epodocApplication: 'US20080103744', kind: 'A', originalApplication: '103744' }] };
+				}
+				return result as T;
+			}
+		}();
+		const text = await detailsText(client);
+		expect(text.split('\n').find(line => line.startsWith('**Priority Date(s):**'))).toBe('**Priority Date(s):** 2008-04-16 (US20080103744)');
+	});
+});
