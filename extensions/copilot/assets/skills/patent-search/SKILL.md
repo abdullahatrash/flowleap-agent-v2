@@ -1,6 +1,6 @@
 ---
 name: patent-search
-description: Search EPO OPS for EP and WO and USPTO Open Data for US: query building, execution and refinement. Use when the user wants to find patents by topic, applicant or classification. For a documented prior-art hunt use prior-art; for filing statistics use patent-landscape.
+description: Search EPO OPS for EP and WO and USPTO Open Data for US: query building, execution and refinement. Use when the user wants to find patents by topic, applicant or classification, or asks to turn a claim or an invention into a search statement or a query to run in Espacenet. For a documented prior-art hunt use prior-art; for filing statistics use patent-landscape.
 user-invocable: true
 ---
 
@@ -87,6 +87,10 @@ syntax, not in strategy:
 - Boolean: `AND`, `OR`, `NOT`; group with parentheses; phrases in `"double quotes"`
 - Classification and date filters travel as separate body parameters, not inside the query
   string — `uspto_api_guide` gives their current names
+
+## Showing a Statement to the User
+When the user asks for a search statement, or will run the query themselves, show it as a
+**Search Statement** block: see `references/search-statement.md`.
 
 ## Search Refinement
 - Too many results (>1,000): add the next discriminating term from your Step 1 list; then a date filter or a narrower classification

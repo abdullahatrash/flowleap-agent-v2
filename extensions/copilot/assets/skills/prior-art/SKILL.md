@@ -32,6 +32,8 @@ Use dictionaries, technical manuals, and `web_search` (when available) to discov
 ### 1d. Classification Mapping
 Identify **2-3 CPC/IPC codes** covering the invention (see [references/cpc-classification.md](references/cpc-classification.md)). Note both broad parent codes and specific subgroups.
 
+Show the 1c table and these codes to the user as a **Search Statement** block: add a CPC column to the table, then the Boolean statement, the Espacenet link and the Discriminating Term, in the shape of [search-statement.md](../patent-search/references/search-statement.md). Show one block per statement that ran; when the user changes a concept, show the next version.
+
 ### 1e. Critical Date & Prior Art Scope
 - **Date basis**: preserve the user-confirmed publication cutoff, including whether it is strict or inclusive. Keep a demonstration cutoff separate from an actual priority/filing date; resolve legal eligibility separately when requested.
 - **Prior art includes** (per 35 USC 102): patents and published applications (US and foreign); printed publications (journals, manuals, websites); public use or on sale (trade shows, demos, launches); otherwise available to the public (talks, social media, videos)
