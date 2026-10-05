@@ -130,6 +130,7 @@ _Avoid_: letting an unstamped build prompt for updates.
 How **inference** happens. FlowLeap is **BYOK** (ADR 0004 in the old setup): the LLM call runs
 client-side through VS Code's native BYOK subsystem using the user's own provider key. There is
 no inference proxy — the old backend chat proxy is retired (410).
+On a **Hosted Workspace** the same Model Path runs on FlowLeap's server (ADR 0011).
 _Avoid_: confusing the Model Path with the FlowLeap Session — one is inference, the other is sign-in.
 
 **FlowLeap Session**:
@@ -223,6 +224,19 @@ directly. It checks that both sides are the same FlowLeap user and forwards byte
 It stores no Agent Session content and holds nothing while a Host is offline.
 _Avoid_: "proxy" or "backend" — the Relay never sees plaintext and serves no patent data.
 
+## Hosted Workspace
+
+**Hosted Workspace**:
+A FlowLeap instance that FlowLeap runs on its own server for **one user**, reached from a
+browser with that user's **FlowLeap Session**. It is the complete app, server build and web
+client, so Agent Sessions, the editor Patent Agent chat, skills, tools and files all work as on a
+desktop. Its Model Path runs on the server: a FlowLeap-owned API key for Agent Sessions, the
+trial or BYOK key for the editor chat (ADR 0011). Each user has their own isolated instance; an
+instance holds no backend secrets and talks to the Patent-data Backend as any desktop does.
+_Avoid_: "web version" / "cloud IDE" (too vague); confusing it with a **Viewer** — a Viewer
+follows a Host elsewhere, a Hosted Workspace *is* the machine; treating its inference as
+**FlowLeap-Managed Inference** — that list is about backend routes, this is a Model Path variant.
+
 ## Patent domain
 
 **Prior-Art Search**:
@@ -291,3 +305,30 @@ decides whether it counts; its **earliest priority date** matters only for E-cat
 art. Prior-art status is **jurisdiction-dependent** (US has a 1-year inventor grace period; Europe
 applies absolute novelty).
 _Avoid_: conflating "publication date" with "priority date" — they answer different questions.
+
+**Find Better**:
+The post-grant discovery deliverable: given a **granted patent**, find prior art earlier or
+closer than what the examining offices cited, and show per independent claim the examiner's
+best art beside the best art found, as disclosed-element counts. It sits between Prior-Art
+Search (pre-filing, from an Invention Disclosure) and Invalidity Analysis (venue, grounds,
+construction): it may feed an invalidity chart, it never states invalidity. "Nothing better
+found" with a full **Examiner Baseline** is a complete result (ADR 0010).
+_Avoid_: "better" as a model rating — the comparison is a count over validated coverage rows;
+"invalidity search" — no venue or legal ground is involved.
+
+**Examiner Baseline**:
+The matrix of every document cited across a granted patent's **Patent Family**, by office and
+by who cited it (examiner or applicant), with each examiner citation's **Relevance Category**
+and cited claims. Computed by code from the offices' own records; the remainder "cited by no
+office" is part of the Baseline. The starting point of Find Better and the "art of record"
+section of an Invalidity Analysis.
+_Avoid_: assembling it from chat prose or from one family member; reading an office with no
+full-text coverage (CN/JP/KR) as "nothing cited" — it is a gap, shown as a gap.
+
+**Search Statement**:
+The editable Boolean query built from the concept-synonym table and the classification mapping
+of a Prior-Art Search or Find Better run, in the field syntax of a target database, with a
+one-click hand-off (copy, or open in Espacenet). The user may add, remove or edit concepts and
+terms before running it; the working record keeps the version that ran.
+_Avoid_: "the query" when several statements exist per run; shipping a statement without its
+**Discriminating Term**.
