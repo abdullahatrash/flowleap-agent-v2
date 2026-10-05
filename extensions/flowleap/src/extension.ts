@@ -22,6 +22,7 @@ import {
 } from './projectSidebar/projectTreeProvider';
 import { ChatBarController, ChatInputPanel } from './chatBar/chatBarController';
 import { registerUpdateNotifier } from './updateNotifier/updateNotifier';
+import { registerHtmlPreview } from './htmlPreview/htmlPreview';
 
 let chatBarController: ChatBarController;
 let projectSidebarProvider: ProjectTreeProvider;
@@ -180,6 +181,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Notify-only update checker (polls the website; never installs automatically)
 	context.subscriptions.push(registerUpdateNotifier(context));
+
+	// Preview a workspace HTML file (a dashboard or another generated report) in a webview. It
+	// reads through the workspace file system, so it works in a hosted workspace in the browser too.
+	context.subscriptions.push(registerHtmlPreview());
 
 	// --- Commands ---
 
