@@ -219,7 +219,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 			return false;
 		}
 		this._logService.info('[Patent AI Auth] Sign-in already in progress; re-opening the browser for the same flow');
-		void vscode.env.openExternal(vscode.Uri.parse(this._pendingAuthUrl));
+		void this._openAuthUrl(this._pendingAuthUrl);
 		return true;
 	}
 
@@ -242,22 +242,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Store state for callback validation
 		this._pendingState = state;
 
-		// Build the canonical callback deep link from the product URI scheme + the extension id. It
-		// MUST exactly equal a backend allow-list entry, for example
-		// `flowleap://flowleap.patent-ai/callback`
-		// (oauth.ts REGISTERED_CLIENTS does EXACT-string matching). The authority is the lower-cased
-		// extension id (`flowleap.patent-ai`); `.toString(true)` skips
-		// percent-encoding so `URLSearchParams.set` below encodes it exactly once.
-		//
-		// We deliberately do NOT route through `vscode.env.asExternalUri`: on desktop it appends a
-		// `?windowId=N` query, which both double-encodes (`...callback%253FwindowId%253D1`) AND breaks
-		// the backend's exact-match allow-list -> "Invalid redirect_uri for this client". Sign-in is
-		// desktop-only (PRD 0002), so the remote/web URI rewriting asExternalUri offers is not needed.
-		const callbackUri = vscode.Uri.from({
-			scheme: vscode.env.uriScheme,
-			authority: this._context.extension.id.toLowerCase(),
-			path: '/callback'
-		}).toString(true);
+		const callbackUri = await this._buildCallbackUri();
 
 		// Build auth URL - backend will redirect to website for Clerk sign-in
 		const authUrl = new URL(config.authUrl);
@@ -268,7 +253,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 
 		this._logService.info('[Patent AI Auth] Opening browser for authorization');
 		this._pendingAuthUrl = authUrl.toString();
-		await vscode.env.openExternal(vscode.Uri.parse(this._pendingAuthUrl));
+		await this._openAuthUrl(this._pendingAuthUrl);
 
 		// Wait for callback with Clerk token
 		const tokenData = await this._waitForCallback();
@@ -293,6 +278,53 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Build/cache the session from the freshly stored token and fire `{added}`. Gated on real
 		// validity, so a dead-on-arrival token produces no session (and createSession then throws).
 		this._refreshSession();
+	}
+
+	/**
+	 * Build the OAuth `redirect_uri` that the backend and the website send the token back to.
+	 *
+	 * Desktop: the canonical callback deep link from the product URI scheme + the extension id,
+	 * for example `flowleap://flowleap.patent-ai/callback`. It MUST exactly equal a backend
+	 * allow-list entry (oauth.ts REGISTERED_CLIENTS does EXACT-string matching). The authority is
+	 * the lower-cased extension id; `.toString(true)` skips percent-encoding so
+	 * `URLSearchParams.set` encodes it exactly once. Desktop deliberately does NOT route through
+	 * `vscode.env.asExternalUri`: there it appends a `?windowId=N` query, which both
+	 * double-encodes (`...callback%253FwindowId%253D1`) AND breaks the exact-match allow-list.
+	 *
+	 * Web client (a Hosted Workspace, ADR 0011): a browser tab cannot receive the custom-scheme
+	 * deep link. `asExternalUri` rewrites the same canonical callback into the server's
+	 * `https://<host>/callback?vscode-reqid=…&vscode-scheme=…` route. That route gives the URI,
+	 * with the token query that the website appends, back to this extension's URI handler, as
+	 * upstream's auth providers do on web.
+	 */
+	private async _buildCallbackUri(): Promise<string> {
+		const canonical = vscode.Uri.from({
+			scheme: vscode.env.uriScheme,
+			authority: this._context.extension.id.toLowerCase(),
+			path: '/callback'
+		});
+		if (vscode.env.uiKind !== vscode.UIKind.Web) {
+			return canonical.toString(true);
+		}
+		const external = await vscode.env.asExternalUri(canonical);
+		return external.toString(true);
+	}
+
+	/**
+	 * Open the authorize URL in the browser.
+	 *
+	 * Desktop: `openExternal`, unchanged. Web client: the `redirect_uri` value is itself a URL with
+	 * a query (`…/callback?vscode-reqid=1&vscode-scheme=…`). A `vscode.Uri` decodes that nested
+	 * encoding, and the web opener then re-encodes it with `encodeURI(uri.toString(true))`, so the
+	 * backend receives a broken `redirect_uri` (`callback%253F…`, the `&` parameters split off).
+	 * The `vscode.open` command takes an http(s) URL as a string and opens that string as is.
+	 */
+	private async _openAuthUrl(url: string): Promise<void> {
+		if (vscode.env.uiKind === vscode.UIKind.Web) {
+			await vscode.commands.executeCommand('vscode.open', url);
+			return;
+		}
+		await vscode.env.openExternal(vscode.Uri.parse(url));
 	}
 
 	private async _waitForCallback(): Promise<TokenCallbackData> {

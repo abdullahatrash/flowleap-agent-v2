@@ -7,8 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mocks captured for assertions. `vi.hoisted` runs before the hoisted `vi.mock`
 // factories below, so they can close over these.
-const { openExternalMock, registerUriHandlerMock, showWarningMessageMock, showInformationMessageMock, showErrorMessageMock } = vi.hoisted(() => ({
+const { openExternalMock, executeCommandMock, asExternalUriMock, envState, registerUriHandlerMock, showWarningMessageMock, showInformationMessageMock, showErrorMessageMock } = vi.hoisted(() => ({
 	openExternalMock: vi.fn(async (_uri: unknown) => true),
+	executeCommandMock: vi.fn(async (_command: string, ..._args: unknown[]) => undefined),
+	// Fake of the web client's rewrite: the canonical callback becomes the server's `/callback`
+	// route that carries the original scheme/authority/path as `vscode-*` query parameters.
+	asExternalUriMock: vi.fn(async (_uri: { toString: (skipEncoding?: boolean) => string }) => ({
+		toString: (_skipEncoding?: boolean) => 'https://ws1.app.flowleap.co/callback?vscode-reqid=1&vscode-scheme=flowleap&vscode-authority=flowleap.patent-ai&vscode-path=/callback',
+	})),
+	// 1 = UIKind.Desktop, 2 = UIKind.Web (the mocked enum below).
+	envState: { uiKind: 1 },
 	registerUriHandlerMock: vi.fn((_handler: { handleUri: (uri: unknown) => void }) => ({ dispose: () => { /* noop */ } })),
 	showWarningMessageMock: vi.fn(),
 	showInformationMessageMock: vi.fn(),
@@ -51,9 +59,11 @@ vi.mock('vscode', () => {
 		env: {
 			openExternal: openExternalMock,
 			uriScheme: 'flowleap',
-			// Desktop: identity rewrite. (Remote/web rewrites are out of scope — see provider.)
-			asExternalUri: async (u: { toString: () => string }) => u,
+			asExternalUri: asExternalUriMock,
+			get uiKind() { return envState.uiKind; },
 		},
+		UIKind: { Desktop: 1, Web: 2 },
+		commands: { executeCommand: executeCommandMock },
 		EventEmitter: FakeEventEmitter,
 	};
 });
@@ -273,6 +283,52 @@ describe('FlowLeapAuthenticationProvider OAuth callback handling', () => {
 
 		await expect(signIn).resolves.toBeUndefined();
 		expect(provider.isAuthenticated).toBe(true);
+	});
+});
+
+describe('FlowLeapAuthenticationProvider redirect_uri per client kind', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		envState.uiKind = 1;
+	});
+
+	/** Start a sign-in under the given UI kind and return how it opened the browser and with what redirect_uri. */
+	async function redirectUriFor(uiKind: number) {
+		envState.uiKind = uiKind;
+		const provider = new FlowLeapAuthenticationProvider(makeExtensionContext(), makeLogService());
+		await provider.waitForInitialization();
+		provider.signIn().catch(() => { /* canceled below */ });
+		await tick();
+		const opened = openExternalMock.mock.calls.length
+			? { opener: 'openExternal', url: String(openExternalMock.mock.calls[0][0]) }
+			: { opener: String(executeCommandMock.mock.calls[0][0]), url: executeCommandMock.mock.calls[0][1] as string };
+		provider.cancelSignIn();
+		envState.uiKind = 1;
+		return {
+			opener: opened.opener,
+			redirectUri: new URL(opened.url).searchParams.get('redirect_uri'),
+			asExternalUriInputs: asExternalUriMock.mock.calls.map(([uri]) => uri.toString()),
+		};
+	}
+
+	it('desktop sends the canonical deep link via openExternal; web sends the server callback route as an unparsed URL string', async () => {
+		const desktop = await redirectUriFor(1);
+		vi.clearAllMocks();
+		const web = await redirectUriFor(2);
+
+		expect({ desktop, web }).toEqual({
+			desktop: {
+				opener: 'openExternal',
+				redirectUri: 'flowleap://flowleap.patent-ai/callback',
+				asExternalUriInputs: [],
+			},
+			web: {
+				// A string, not a vscode.Uri: a Uri round-trip would break the nested query.
+				opener: 'vscode.open',
+				redirectUri: 'https://ws1.app.flowleap.co/callback?vscode-reqid=1&vscode-scheme=flowleap&vscode-authority=flowleap.patent-ai&vscode-path=/callback',
+				asExternalUriInputs: ['flowleap://flowleap.patent-ai/callback'],
+			},
+		});
 	});
 });
 
