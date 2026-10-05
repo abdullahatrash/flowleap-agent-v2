@@ -65,6 +65,36 @@ case "$answer" in
 	*) fail "signed-out visit redirects to FlowLeap sign-in (got: $answer)" ;;
 esac
 
+echo "== Gate stability (#542)"
+# A bogus Clerk client cookie plus a browser Accept header must still redirect to sign-in.
+# If nginx forwarded Cookie to the backend, Clerk would answer 307 and nginx would give 500.
+answer="$(curl "${curl_args[@]}" -H 'Cookie: __client_uat=1' -H 'Accept: text/html' "https://$host/")"
+echo "      GET https://$host/ with Cookie: __client_uat=1 -> $answer"
+case "$answer" in
+	"302 "*"/oauth/authorize?"*) pass "bogus Clerk cookie still redirects to sign-in (no 500)" ;;
+	*) fail "bogus Clerk cookie still redirects to sign-in (got: $answer)" ;;
+esac
+token="${FLOWLEAP_VERIFY_TOKEN:-}"
+if [ -n "$token" ]; then
+	codes=""
+	for path in / /version /favicon.ico; do
+		code="$(curl "${curl_args[@]}" -H "Cookie: fl_hosted=$token" "https://$host$path" | cut -d' ' -f1)"
+		codes="$codes $code"
+	done
+	echo "      3 consecutive requests with a valid token ->$codes"
+	check "three consecutive requests with a valid token never fail with 5xx" sh -c "! echo '$codes' | grep -q '5[0-9][0-9]'"
+	check "the first request with a valid token is served (not 302/401/403)" sh -c "echo '$codes' | grep -qE '^ (200|204|304|404)'"
+else
+	echo "      SKIP  consecutive-request check: set FLOWLEAP_VERIFY_TOKEN to an allowlisted fl_pat_ or FlowLeap token"
+fi
+if [ -n "$(swapon --show --noheadings 2>/dev/null)" ]; then
+	echo "      swap: $(swapon --show --noheadings | awk '{print $1, $3}' | paste -sd, -)"
+	pass "swap is present"
+else
+	echo "      swap: none (install.sh adds 4 GB when RAM < 6 GB)"
+	if [ "$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)" -lt 6000000 ]; then fail "swap is present on a VM with < 6 GB RAM"; else pass "no swap needed (RAM >= 6 GB)"; fi
+fi
+
 echo "== Key isolation"
 server_pid="$(main_pid flowleap-server)"
 if [ -n "$server_pid" ] && [ -r "/proc/$server_pid/environ" ]; then
