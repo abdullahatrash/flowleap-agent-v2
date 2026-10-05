@@ -14,6 +14,10 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Hosted/web client: the patent tools were not offered to the chat (`!isWeb` gate).
+
 ## [0.5.1] - 2026-10-05
 
 ### Fixed
