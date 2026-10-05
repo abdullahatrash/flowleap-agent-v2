@@ -9,6 +9,54 @@ Shared authentication, configuration, and global-flag reference used by every
 other FlowLeap skill. For the overall map of commands, skills, and workflows,
 start from the `flowleap` skill.
 
+## Chat clients with the FlowLeap connector
+
+In claude.ai, Claude Desktop and mobile, Cowork, and ChatGPT, FlowLeap is a
+connector to the **hosted MCP server**, not a CLI. These clients have no shell,
+so no `flowleap …` command can run there.
+
+- **Call the tool of the same name through the connector.** The connector lists
+  the same registry as `flowleap tools list`: the same tool names, input schemas
+  (`snake_case` parameters), success envelope, and error codes. The table below
+  gives the tool behind each command family.
+- **Sign-in is the connector's OAuth.** The user connects FlowLeap in the
+  client's connector settings. `auth`, `doctor`, `setup`, `init`, `keys`,
+  `config`, `skills`, `upgrade`, `api`, `health`, and `mcp` have no tool: do
+  not tell the user to run them in a chat client. In place of `health`,
+  call `server_info`: it reports the backend's configured providers and
+  available tools.
+- **Patent-data keys are stored keys.** The CLI forwards the keys kept on the
+  user's machine; a chat client has no keys to forward, so the backend uses the
+  stored key the user added on the FlowLeap Patent-data keys page
+  (https://www.flowleap.co/en/dashboard/keys). When a tool answers a key gate,
+  relay that page (the error's `keysPageUrl` and `nextStep`, when present).
+  **Never ask for a key value in the chat.** The rest of the key doctrine in
+  `flowleap-keys` applies unchanged.
+- **Global flags do not apply.** `--json`, `--dry-run`, and `--output` are CLI
+  flags; a tool call always returns the JSON envelope.
+
+| Command family | Tool(s) | Notes |
+|---|---|---|
+| `ops biblio` / `claims` / `description` / `family` / `legal` / `abstract` | `get_bibliography`, `get_claims`, `get_description`, `get_family`, `get_legal_status`, `get_abstract` | `get_family` is the INPADOC extended family |
+| `patent search`, `ops search` | `search_patents` | `provider: "epo_ops"`, CQL |
+| `uspto search` | `search_patents` | `provider: "uspto"`, Lucene |
+| `uspto application` / `grant` / `continuity` | `get_us_application`, `get_us_grant`, `get_continuity` | |
+| `uspto transactions` / `assignments` / `foreign-priority` / `adjustment` / `attorney` | `get_transactions`, `get_assignments`, `get_foreign_priority`, `get_patent_term_adjustment`, `get_attorney` | |
+| `uspto documents` / `document-text` | `get_application_documents`, `read_application_document` | |
+| `citation search` / `forward` / `stats` | `search_office_action_citations`, `search_enriched_citations`, `get_citation_stats` | `citation novelty` is `search_office_action_citations` with `category: "X"`, `examiner_cited_only: true` |
+| EPO forward citations (no command) | `get_citations` | |
+| `patent examiner-baseline` | `get_family`, `get_bibliography`, `get_us_grant`, `search_office_action_citations` | No one-call tool. Walk every family member: `get_bibliography` per publication, and for a US grant `get_us_grant` then `search_office_action_citations` (`size: 1000`). Show a member without a citation block as a gap |
+| `academic search`, `npl` | `search_academic`, `search_npl` | |
+| `legal search` / `jurisdictions` | `reference_search`, `get_legal_jurisdictions` | |
+| `analytics` | `patent_analytics` | |
+| `ocr` | `ocr` | |
+| `patstat portfolio` / `query` / `docs` | `patstat_portfolio`, `patstat_query`, `patstat_docs` | |
+| `patstat graph resolve` / `cpc` / `patent` / `applicant` / `technology` / `neighborhood` / `path` / `explain` | `patstat_resolve`, `patstat_cpc`, `patstat_patent`, `patstat_applicant`, `patstat_technology`, `patstat_neighborhood`, `patstat_path`, `patstat_explain` | |
+| `tools run <name>` | the same names | |
+
+The one-call verbs (`summary`, `compare`, `timeline`, `figures`,
+`convert-number`) map the same way; their table is in the `flowleap` skill.
+
 ## Authentication
 
 Every authenticated request sends `Authorization: Bearer <credential>` — either
@@ -149,8 +197,9 @@ Doctor is the machine-readable onboarding contract. Its JSON always carries:
 - `ready: bool` — backend reachable AND authenticated AND no **blocking** next
   step pending. Stricter than `ok`, which keeps its reachability-only meaning.
 - `nextSteps` — the pending onboarding steps in dependency order (empty array
-  when complete). Steps already covered — e.g. a provider the server has its
-  own keys for — are omitted. Each step:
+  when complete). Steps already covered — e.g. a provider with a stored key
+  (validate `source: "stored"`), or one the server has its own keys for — are
+  omitted. Each step:
 
 ```json
 { "id": "store-epo-keys", "actor": "agent",
@@ -161,7 +210,8 @@ Doctor is the machine-readable onboarding contract. Its JSON always carries:
 Stable step ids (public contract): `auth-login` (human), `mint-personal-token`
 (agent — pending while auth is only a session token with no `fl_pat_` personal
 token), `obtain-epo-keys` (human), `store-epo-keys` (agent),
-`obtain-uspto-key` (human), `store-uspto-key` (agent), `verify-keys` (agent),
+`obtain-uspto-key` (human), `store-uspto-key` (agent; human, with the keys page
+`url`, when the office rejected the stored key), `verify-keys` (agent),
 `refresh-skills` (agent — installed skill files were written by an older CLI
 and still teach retired commands).
 
@@ -176,12 +226,19 @@ JSON always fully emitted first, so `flowleap doctor && <work>` gates
 pipelines without parsing. An unreachable backend still emits the checklist
 from local state (offline diagnosis works); `keyValidation.source` says
 whether provider verdicts came from the server (`"server"`) or fell back to
-local key presence (`"local"`, with a `note`).
+local key presence (`"local"`, with a `note`). `keyValidation.providers`
+(`{ epo, uspto }`) gives, per office, the validate `source` verbatim — `user`
+(forwarded key), `stored`, `server` or `none`; null when that office was not
+checked, and null for both on the local fallback.
 
 **Agent-mediated sequence**: run `flowleap --json doctor`; for each step in
 `nextSteps`, execute `actor: "agent"` steps yourself via their `run` command,
 and relay `actor: "human"` steps (title + `url`) to the user; re-run doctor
-until `ready` is true.
+until `ready` is true. One exception: run a `store-epo-keys` /
+`store-uspto-key` agent step only with keys the user gave you without being
+asked. Otherwise relay the FlowLeap Patent-data keys page
+(https://www.flowleap.co/en/dashboard/keys) — never ask for the key value in
+the chat (see `flowleap-keys`).
 
 ## Updating the CLI
 

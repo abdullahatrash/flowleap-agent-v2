@@ -99,6 +99,7 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
 	'excess-claims-estimator',
 	'fee-reduction-advisor',
 	'figure-analysis',
+	'find-better',
 	'freedom-to-operate',
 	'infringement-charting',
 	'invalidity-analysis',
