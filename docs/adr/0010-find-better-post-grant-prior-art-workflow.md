@@ -54,6 +54,10 @@ workflow and deliverable of its own, with its factual core computed in code.
 - CN, JP and KR members contribute citations and English abstracts only; element mapping against
   them is not possible until full text exists for those offices. The Baseline must show that gap
   as a gap, never as "nothing cited".
+- Amendment, 2026-10-05 (#531): "the examiner's best art" in decision 3 means the X or Y
+  citations, or, when a family has none (a US-origin family often carries no categories), the
+  examiner-cited documents and then the documents a US office action rejected claims with, each
+  shown with its basis; Track 1 of decision 4 starts from the same set.
 - The same proposal's second idea, an editable Boolean **Search Statement** with an "Open in
   Espacenet" hand-off, is a presentation change to the existing concept tables and needs no ADR.
 - The idea came as a private proposal. No public credit, case study or release note names its

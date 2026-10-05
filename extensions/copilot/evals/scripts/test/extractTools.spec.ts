@@ -25,6 +25,7 @@ describe('extract-tools', () => {
 			'compare_claims',
 			'compare_patents',
 			'create_file',
+			'examiner_baseline',
 			'fetch_webpage',
 			'get_continuity',
 			'get_legal_status',

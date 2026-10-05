@@ -1542,6 +1542,33 @@
         }
       },
       {
+        "name": "copilot_examinerBaseline",
+        "displayName": "Examiner Baseline",
+        "toolReferenceName": "examinerBaseline",
+        "when": "!isWeb",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(references)",
+        "userDescription": "Every document the examining offices cited across a patent family, saved in full to the workspace",
+        "modelDescription": "Examiner Baseline: every document cited across a granted patent's family, by office; computed in code, not assembled. One call walks the INPADOC family, reads the references-cited block of every publication of every member (EPO OPS bibliography) and, for each US grant, the USPTO office-action citations, and writes the FULL, unedited, untruncated Baseline JSON (publication, offices[], membersWalked[], documents[] with per-office cells and their citations[], gaps[], dedupe) to <saveDir>/<publication>.examiner-baseline.json in the workspace (saveDir defaults to 'references'). Provenance: every category, claim list and count is copied from the offices' records by code, never inferred by a model; a gaps[] row means that office returned no citation record or could not be read for that member: report it as a gap, never as \"nothing cited\". The tool returns only a short summary (offices, members walked with their citedCount/examinerCount, document and gap counts) and the file path, never the matrix: read documents[] from the file with read_file. USE FIRST in a Find Better run (find-better skill, Step 1), before any search. Pass the returned path as baselinePath to write_patent_results; never paste the matrix inline, never edit the file, and never rebuild the Baseline from family, bibliography or citation calls or from patent_api_request (a tool result with a character budget drops rows).",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "publication": {
+              "type": "string",
+              "description": "Any publication of the family with its kind code, e.g. 'EP2110298B1' or 'US7722129B2' (the granted patent is usual). The whole INPADOC family is walked."
+            },
+            "saveDir": {
+              "type": "string",
+              "description": "Optional workspace folder (relative, e.g. 'references') the Baseline JSON is written to. Defaults to 'references'. A folder outside the open workspace is refused."
+            }
+          },
+          "required": [
+            "publication"
+          ]
+        }
+      },
+      {
         "name": "copilot_getPatentTerm",
         "displayName": "Get Patent Term",
         "toolReferenceName": "patentTerm",
@@ -2190,7 +2217,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
-        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. An element may instead rest on a recorded drawing: give it the PUB:figure:N anchor printed by get_patent_figures, basis \"figure\" and a reading of what the figure clearly shows (never a dimension or ratio unless the drawing is stated to be to scale); the report marks that row as resting on a drawing reading and the second read does not judge it. An essential feature is refused as unresolved while no drawing of any retrieved document was read this session: call get_patent_figures on the closest candidates with saveDir \"references/figures\", or put in that row's gap the phrase \"figures not consulted:\" followed by why a drawing cannot settle it. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report (Find Better, ADR 0010) is structured only and refused without coverage, baseline or baselinePath, examinerBestArt and tracks: content stays empty; give the Examiner Baseline either inline as baseline (the --json output of flowleap patent examiner-baseline, or the examiner_baseline backend tool's result) or as baselinePath, the workspace path of that --json output on disk — exactly one of the two; examinerBestArt names, per independent claim, the Baseline document(s) taken as the examiner's best art, each of which must be in baseline.documents[] with an X or Y category; every coverage row is one element of one independent claim (claimNumber required) and carries two sides, examiner and found, each with its own status, sourceAnchors, evidence, elements and gap, checked exactly like an invalidity chart row; the examiner side may cite only that claim's examiner's best art. The writer renders the Baseline matrix and its gaps, a per-claim table element | examiner's best art | best art found, and counts \"disclosed n of m\" itself from the validated rows; no score or rating field exists and any number supplied outside tracks is ignored. Finding nothing better is a complete result. Free-form saves (no template) retain their existing behavior.",
+        "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. An element may instead rest on a recorded drawing: give it the PUB:figure:N anchor printed by get_patent_figures, basis \"figure\" and a reading of what the figure clearly shows (never a dimension or ratio unless the drawing is stated to be to scale); the report marks that row as resting on a drawing reading and the second read does not judge it. An essential feature is refused as unresolved while no drawing of any retrieved document was read this session: call get_patent_figures on the closest candidates with saveDir \"references/figures\", or put in that row's gap the phrase \"figures not consulted:\" followed by why a drawing cannot settle it. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report (Find Better, ADR 0010) is structured only and refused without coverage, baseline or baselinePath, examinerBestArt and tracks: content stays empty; give the Examiner Baseline either inline as baseline (the --json output of flowleap patent examiner-baseline, or the examiner_baseline backend tool's result) or as baselinePath, the workspace path of that --json output on disk — exactly one of the two; examinerBestArt names, per independent claim, the Baseline document(s) taken as the examiner's best art, each of which must be in baseline.documents[] with an X or Y category or, where none exists, an examiner citation or a US office-action rejection (an applicant-only document is refused); every coverage row is one element of one independent claim (claimNumber required) and carries two sides, examiner and found, each with its own status, sourceAnchors, evidence, elements and gap, checked exactly like an invalidity chart row; the examiner side may cite only that claim's examiner's best art. The writer renders the Baseline matrix and its gaps, a per-claim table element | examiner's best art | best art found, and counts \"disclosed n of m\" itself from the validated rows; no score or rating field exists and any number supplied outside tracks is ignored. The writer refuses a Baseline that carries _truncation or whose documents[] holds fewer citations from a publication than membersWalked counts for it (re-run the examiner_baseline tool or the CLI). The result sentence and table header name only the examiner's best art that an examiner-side row cites; the rest are listed as \"named but not scored\"; an examiner document with a P or E category, or published after the earliest date stated in objective (give it as YYYY-MM-DD), is flagged as published after the critical date. Finding nothing better is a complete result only when every track ran a query and the backward-citation track has a hop 2 entry; otherwise the result reads \"Search incomplete\". Free-form saves (no template) retain their existing behavior.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -2698,11 +2725,11 @@
             "baselinePath": {
               "type": "string",
               "minLength": 1,
-              "description": "find-better-report: workspace-relative or absolute workspace path to the unedited --json output of `flowleap patent examiner-baseline <publication> --json` saved on disk. Use it instead of baseline (exactly one of the two); the writer reads the file, checks the same shape, and states the source in the result and the working record."
+              "description": "find-better-report: workspace-relative or absolute workspace path of the unedited Baseline JSON on disk: the path the examiner_baseline tool returns, or the --json output of `flowleap patent examiner-baseline <publication>`. Use it instead of baseline (exactly one of the two); the writer reads the file, checks the same shape and its completeness, and states the source in the result and the working record."
             },
             "examinerBestArt": {
               "type": "array",
-              "description": "find-better-report: per independent claim, the Baseline document(s) taken as the examiner's best art. Each publication must be in baseline.documents[] and carry an X or Y category in at least one office; otherwise the save is refused.",
+              "description": "find-better-report: per independent claim, the Baseline document(s) taken as the examiner's best art. Each publication must be in baseline.documents[] and carry, in at least one office, an X or Y category; where no X or Y citation exists (a US-origin family often has none), a document an examiner cited or a US office action rejected claims with is accepted and shown with its basis. A document only the applicant cited, with no category and no rejection, is refused.",
               "minItems": 1,
               "items": {
                 "type": "object",
@@ -2731,7 +2758,7 @@
             },
             "tracks": {
               "type": "array",
-              "description": "find-better-report: every expansion track the run took (backward citations two hops from each X/Y reference; inventor and NPL-author networks; classification co-occurrence with the Discriminating Terms), each with every query and its hit count, zero included. A track with no query is listed with an empty queries array. A count the execution record holds replaces the one given here.",
+              "description": "find-better-report: every expansion track the run took (backward citations two hops from each X/Y reference; inventor and NPL-author networks; classification co-occurrence with the Discriminating Terms), each with every query and its hit count, zero included. A track with no query is listed with an empty queries array. Mark each backward-citation query with hop 1 or 2. A track with no query, or a backward-citation track with no hop 2 query, makes the per-claim result read \"Search incomplete for claim N\" instead of \"No better art found\". A count the execution record holds replaces the one given here.",
               "minItems": 1,
               "items": {
                 "type": "object",
@@ -2757,6 +2784,14 @@
                           "type": "integer",
                           "minimum": 0,
                           "description": "Hits returned, 0 included."
+                        },
+                        "hop": {
+                          "type": "integer",
+                          "enum": [
+                            1,
+                            2
+                          ],
+                          "description": "Backward-citation track only: the hop of the two-hop walk this query belongs to (1 = references of an X/Y document, 2 = references of a hop-1 document). A backward-citation track with no hop 2 query makes the result read \"Search incomplete\"; when hop 1 left no document outside the Baseline, log one hop 2 entry saying so with count 0."
                         }
                       },
                       "required": [

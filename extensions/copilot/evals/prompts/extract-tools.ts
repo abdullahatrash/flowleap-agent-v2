@@ -64,6 +64,7 @@ export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.PatstatQuery,
 	ToolName.PatstatGraph,
 	ToolName.PatstatApiGuide,
+	ToolName.ExaminerBaseline,
 ];
 
 /** Core coding tools that patentAIPrompt.tsx references by name. */

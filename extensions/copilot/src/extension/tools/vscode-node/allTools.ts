@@ -7,6 +7,7 @@
 
 import './citationApiGuideTool';
 import './compareClaimsTool';
+import './examinerBaselineTool';
 import './comparePatentsTool';
 import './fetchWebPageTool';
 import './getContinuityTool';
