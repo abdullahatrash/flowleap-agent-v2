@@ -1,6 +1,6 @@
 # PRD 0019 — Find Better, Search Statement, Hosted Workspace
 
-**Status:** ACTIVE 2026-10-05 — ADR 0010 + ADR 0011 accepted (#500); issues filed per slice below
+**Status:** ACTIVE 2026-10-05 — ADR 0010 + ADR 0011 accepted (#500); issues: F1 cli#125, F2 cli#126, F2(app) #502, F3 #503, F4 #504, F5 #505, H1 #506, H2 #507, H3 backend#547, H4 website#372, H5 #508, R1 #509
 **Date:** 2026-10-05
 **Base:** main after v0.5.0 (published 2026-10-05 09:36Z) and #500 (`7f93ec2cd56`)
 **Decides:** nothing new — executes ADR 0010 (Find Better) and ADR 0011 (Hosted Workspace).
