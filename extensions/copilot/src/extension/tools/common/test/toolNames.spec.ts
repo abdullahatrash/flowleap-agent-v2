@@ -13,6 +13,16 @@ describe('ToolNames', () => {
 		expect(getToolName(ContributedToolName.ApplyPatch)).toBe(ToolName.ApplyPatch);
 	});
 
+	it('does not gate any contributed language model tool on isWeb', () => {
+		// The hosted web client always runs against a reh-web server (node extension host), so the patent
+		// tools work there. A `"when": "!isWeb"` clause on a tool hides it from the web chat entirely (#543).
+		const tools: readonly { name: string; when?: string }[] = packageJson.contributes.languageModelTools;
+		const webGated = tools
+			.filter(tool => tool.when !== undefined && /\bisWeb\b/.test(tool.when))
+			.map(tool => tool.name);
+		expect(webGated).toEqual([]);
+	});
+
 	it('maps the search_patents contribution both ways so the patent prompt detects it', () => {
 		// `copilot_searchPatents` must resolve to the internal `search_patents` name that
 		// SearchPatentsTool registers under and that detectPatentTools() keys off — otherwise the
