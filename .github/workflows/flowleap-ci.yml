@@ -91,6 +91,13 @@ jobs:
       - name: Validate layers
         run: npm run valid-layers-check
 
+      # Every module the product spawns as a process or worker must be listed
+      # as a bundle entry point in build/next/index.ts, or the packaged app
+      # ships without it (#511). The release workflow checks the built product;
+      # this catches the same hole on the pull request, without a build.
+      - name: Check spawned entry points are bundled
+        run: node build/flowleap/verify-entry-points.mjs
+
   copilot-unit-tests:
     name: Copilot Unit Tests
     runs-on: ubuntu-latest

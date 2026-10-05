@@ -257,6 +257,14 @@ jobs:
             --verify="../VSCode-darwin-${{ matrix.arch }}/Flow Leap, AI patent agent.app/Contents/Resources/app/product.json" \
             --results="$RUNNER_TEMP/agent-sdk/agent-sdks.json"
 
+      # A module the product spawns as a process or worker (agent host, pty
+      # host, file watcher, ...) is loaded by path, so the bundler ships it only
+      # when build/next/index.ts lists it. v0.5.0 shipped without the agent host
+      # (#511). This fails the leg when any spawned module is missing from the
+      # packaged out folder.
+      - name: Verify spawned entry points are packaged
+        run: node build/flowleap/verify-entry-points.mjs --app-out="../VSCode-darwin-${{ matrix.arch }}/Flow Leap, AI patent agent.app/Contents/Resources/app/out"
+
       # Code Signing — uses the user's standard electron-builder secret names:
       #   CSC_LINK          base64-encoded .p12 "Developer ID Application" certificate
       #   CSC_KEY_PASSWORD  the .p12 password
@@ -594,6 +602,21 @@ jobs:
           node build/flowleap/produce-claude-sdk.ts "--verify=$($product.FullName)" "--results=$env:RUNNER_TEMP/agent-sdk/agent-sdks.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # A module the product spawns as a process or worker (agent host, pty
+      # host, file watcher, ...) is loaded by path, so the bundler ships it only
+      # when build/next/index.ts lists it. v0.5.0 shipped without the agent host
+      # (#511). This fails the leg when any spawned module is missing from the
+      # packaged out folder.
+      - name: Verify spawned entry points are packaged
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $product = Get-ChildItem -Path "..\VSCode-win32-${{ matrix.arch }}" -Recurse -Filter product.json |
+            Where-Object { $_.FullName -match '\\resources\\app\\product\.json$' } | Select-Object -First 1
+          if (-not $product) { Write-Host "::error::No resources\app\product.json in the build output"; exit 1 }
+          node build/flowleap/verify-entry-points.mjs "--app-out=$(Join-Path $product.DirectoryName 'out')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Package Windows Build
         shell: pwsh
         run: |
@@ -806,6 +829,14 @@ jobs:
           node build/flowleap/produce-claude-sdk.ts \
             --verify="../VSCode-linux-${{ matrix.arch }}/resources/app/product.json" \
             --results="$RUNNER_TEMP/agent-sdk/agent-sdks.json"
+
+      # A module the product spawns as a process or worker (agent host, pty
+      # host, file watcher, ...) is loaded by path, so the bundler ships it only
+      # when build/next/index.ts lists it. v0.5.0 shipped without the agent host
+      # (#511). This fails the leg when any spawned module is missing from the
+      # packaged out folder.
+      - name: Verify spawned entry points are packaged
+        run: node build/flowleap/verify-entry-points.mjs --app-out="../VSCode-linux-${{ matrix.arch }}/resources/app/out"
 
       # The packaging tasks read specific paths out of this tree (the launcher,
       # chrome-sandbox, chrome_crashpad_handler, bin/, and every native .node),

@@ -24,6 +24,8 @@ export const workbenchDesktop = [
 	createModuleDescription('vs/workbench/contrib/debug/node/telemetryApp'),
 	createModuleDescription('vs/platform/files/node/watcher/watcherMain'),
 	createModuleDescription('vs/platform/terminal/node/ptyHostMain'),
+	createModuleDescription('vs/platform/agentHost/node/agentHostMain'),
+	createModuleDescription('vs/platform/agentHost/node/diffWorkerMain'),
 	createModuleDescription('vs/workbench/api/node/extensionHostProcess'),
 	createModuleDescription('vs/workbench/workbench.desktop.main'),
 	createModuleDescription('vs/sessions/sessions.desktop.main')
@@ -56,6 +58,8 @@ export const codeServer = [
 	createModuleDescription('vs/workbench/api/node/extensionHostProcess'),
 	createModuleDescription('vs/platform/files/node/watcher/watcherMain'),
 	createModuleDescription('vs/platform/terminal/node/ptyHostMain'),
+	createModuleDescription('vs/platform/agentHost/node/agentHostMain'),
+	createModuleDescription('vs/platform/agentHost/node/diffWorkerMain'),
 ];
 
 export const entrypoint = createModuleDescription;

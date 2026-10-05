@@ -14,6 +14,11 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Agent Sessions could not start in the packaged 0.5.0 build (missing agent
+  host entry).
+
 ## [0.5.0] - 2026-09-30
 
 ### Added
