@@ -54,8 +54,8 @@ document.
   `patent-search` skill).
 - Probe the count first. Over about 1,000: add the next Discriminating Term.
   Under 10: drop to the CPC main group or OR in synonyms.
-- Example (EP2110298B1): `cpc=B62K25/02 AND ta="quick release" AND ta=cam AND
-  pd<20080416` gave 35.
+- Example (EP2743895B1): `cpc=E05G1/026 AND ta=lock AND ta=door AND
+  pd<20121217` gave 63.
 - US-only documents: write a Lucene query (`uspto_api_guide`) and run it with
   `patent_api_request`, with the same date limit.
 - Log: per code, each query and its count.
