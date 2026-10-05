@@ -27,8 +27,15 @@ inherits the server's environment. We decide to operate that build, one instance
    first instances are hand-made VMs; a spawner in the backend comes only when there are more
    users than hands.
 3. **The Model Path on a Hosted Workspace runs on the server.** Agent Sessions use a
-   FlowLeap-owned Anthropic **API key** in the process environment, with a spend cap set at the
-   provider. A claude.ai consumer login is never used to serve a third party. The editor chat
+   FlowLeap-owned Anthropic **API key**, with a spend cap set at the provider. The key is not in
+   the server's process environment: the pty host and the agent host are children of the server,
+   so a key there prints with `echo $ANTHROPIC_API_KEY` in the browser terminal and works
+   anywhere once copied. A key-injecting proxy on `127.0.0.1`, run as its own user from its own
+   root-only environment file, adds the real `x-api-key`; the server gets only
+   `ANTHROPIC_BASE_URL` (the proxy) and a dummy `ANTHROPIC_API_KEY`. A hosted user can still
+   spend through the proxy from inside their instance, which the spend cap bounds; they cannot
+   take the key away. This is the decision ADR 0009 decision 2 left open, for the Hosted
+   Workspace only: the desktop keeps the native path. Teardown revokes the key regardless. A claude.ai consumer login is never used to serve a third party. The editor chat
    runs on the trial-provisioned key or the user's own BYOK key, stored in that instance's secret
    storage, exactly as on a desktop. This is a Model Path variant, not an addition to the backend's
    **FlowLeap-Managed Inference** list: the hosted user has already placed their files and chats
