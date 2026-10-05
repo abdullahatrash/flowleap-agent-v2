@@ -119,6 +119,7 @@ export enum ToolName {
 	PatstatQuery = 'patstat_query',
 	PatstatGraph = 'patstat_graph',
 	PatstatApiGuide = 'patstat_api_guide',
+	ExaminerBaseline = 'examiner_baseline',
 }
 
 /**
@@ -206,6 +207,7 @@ export enum ContributedToolName {
 	PatstatQuery = 'copilot_patstatQuery',
 	PatstatGraph = 'copilot_patstatGraph',
 	PatstatApiGuide = 'copilot_patstatApiGuide',
+	ExaminerBaseline = 'copilot_examinerBaseline',
 }
 
 export const byokEditToolNamesToToolNames = {
@@ -363,6 +365,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.PatstatQuery]: ToolCategory.WebInteraction,
 	[ToolName.PatstatGraph]: ToolCategory.WebInteraction,
 	[ToolName.PatstatApiGuide]: ToolCategory.WebInteraction,
+	[ToolName.ExaminerBaseline]: ToolCategory.WebInteraction,
 } as const;
 
 

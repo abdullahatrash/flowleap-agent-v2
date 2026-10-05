@@ -23,6 +23,11 @@ interface ExaminerBaselineCitation {
 	readonly citedBy?: string;
 	readonly category?: string;
 	readonly relevantClaims?: string;
+	/**
+	 * The cited document's publication date, when a Baseline source carries one (neither the CLI nor
+	 * the backend sends it today). Read only to flag examiner's art published after the critical date.
+	 */
+	readonly publicationDate?: string;
 }
 
 /** One office's cell of a Baseline row. */
@@ -75,6 +80,11 @@ export interface ExaminerBaseline {
 	readonly documents?: readonly ExaminerBaselineDocument[];
 	readonly gaps?: readonly ExaminerBaselineGap[];
 	readonly dedupe?: string;
+	/**
+	 * Never in a Baseline the CLI or the backend computed: `patent_api_request` adds it when it cuts a
+	 * result at its character budget. A Baseline that carries it is refused (#526).
+	 */
+	readonly _truncation?: { readonly omittedItems?: number; readonly retainedItems?: number };
 }
 
 /** The publication(s) the agent picked as the examiner's best art for one independent claim. */
@@ -83,10 +93,13 @@ interface ExaminerBestArt {
 	readonly publications: readonly string[];
 }
 
-/** One expansion track of a Find Better run and every query it ran, empty ones included. */
+/**
+ * One expansion track of a Find Better run and every query it ran, empty ones included. A query of
+ * the backward-citation track carries `hop` (1 or 2): the hop of the two-hop walk it belongs to.
+ */
 interface FindBetterTrack {
 	readonly name: string;
-	readonly queries?: readonly { readonly query: string; readonly tool?: string; readonly count?: number }[];
+	readonly queries?: readonly { readonly query: string; readonly tool?: string; readonly count?: number; readonly hop?: number }[];
 }
 
 /** The find-better-only inputs of the writer. */
@@ -200,6 +213,44 @@ function categories(document: ExaminerBaselineDocument): ReadonlySet<string> {
 	return found;
 }
 
+/** Why a Baseline document may be the examiner's best art, ranked: lower is stronger. */
+interface ExaminerArtBasis {
+	readonly rank: number;
+	/** Shown beside the document in the per-claim header; empty for an X or Y citation. */
+	readonly note: string;
+}
+
+/**
+ * The basis on which a Baseline document is examiner's art (#531, amending ADR 0010 decision 3):
+ * an X or Y category from any office; else any other category or an examiner citation (only an
+ * examiner assigns a category, and a US grant's references-cited carries none unless an office
+ * action exists); else a US office-action rejection (`uspto_enriched`). A document only the
+ * applicant cited, with no category and no rejection, has no basis.
+ */
+function documentBasis(document: ExaminerBaselineDocument): ExaminerArtBasis | undefined {
+	const found = categories(document);
+	if (found.has('X')) { return { rank: 0, note: '' }; }
+	if (found.has('Y')) { return { rank: 1, note: '' }; }
+	const citations = Object.values(document.cells ?? {}).flatMap(cell => cell?.citations ?? []);
+	if (found.size) { return { rank: 2, note: `category ${[...found].join(',')}` }; }
+	if (citations.some(citation => citation?.citedBy === 'examiner')) { return { rank: 2, note: 'examiner-cited, no category' }; }
+	if (citations.some(citation => citation?.source === 'uspto_enriched')) { return { rank: 3, note: 'US office-action rejection, no category' }; }
+	return undefined;
+}
+
+/**
+ * The examiner's best art of a claim as the per-claim header names it: strongest basis first (X,
+ * then Y, then examiner-cited without category, then rejection only), each non-X/Y document with
+ * its basis beside it, e.g. `US3980041 (examiner-cited, no category)`.
+ */
+export function examinerArtHeader(review: FindBetterFields, publications: readonly string[]): string[] {
+	const based = publications.map(publication => {
+		const document = baselineDocument(review.baseline ?? {}, publication);
+		return { publication, basis: document ? documentBasis(document) : undefined };
+	});
+	return based.sort((a, b) => (a.basis?.rank ?? 9) - (b.basis?.rank ?? 9)).map(({ publication, basis }) => basis?.note ? `${publication} (${basis.note})` : publication);
+}
+
 /** The Baseline's shape: the fields this writer reads, each of the type the CLI prints. */
 function baselineShapeErrors(baseline: ExaminerBaseline): string[] {
 	const errors: string[] = [];
@@ -209,6 +260,70 @@ function baselineShapeErrors(baseline: ExaminerBaseline): string[] {
 	return errors;
 }
 
+/** The instruction every Baseline integrity refusal ends with: get the whole Baseline again, by code. */
+function rerunBaseline(baseline: ExaminerBaseline): string {
+	const publication = baseline.publication?.trim() || '<publication>';
+	return `Re-run the examiner_baseline tool (it writes the full JSON to references/${publication}.examiner-baseline.json), or the CLI (flowleap --json patent examiner-baseline ${publication} > references/${publication}.examiner-baseline.json), and pass that file unedited as baselinePath.`;
+}
+
+/**
+ * Per citing publication, the number of citations `documents[]` holds from it, keyed by the
+ * publication as `citing` names it (upper case, trimmed).
+ */
+function citationsByCiting(baseline: ExaminerBaseline): ReadonlyMap<string, number> {
+	const counted = new Map<string, number>();
+	for (const document of baseline.documents ?? []) {
+		for (const cell of Object.values(document.cells ?? {})) {
+			for (const citation of cell?.citations ?? []) {
+				const citing = citation?.citing?.trim().toUpperCase();
+				if (citing) { counted.set(citing, (counted.get(citing) ?? 0) + 1); }
+			}
+		}
+	}
+	return counted;
+}
+
+/** The publications `membersWalked` reports as read with an office count the matrix can be checked against. */
+function countedReads(baseline: ExaminerBaseline): { readonly office: string; readonly publication: string; readonly citedCount: number }[] {
+	return (baseline.membersWalked ?? []).flatMap(member => (member?.publications ?? []).flatMap(read =>
+		read?.status === 'read' && typeof read.citedCount === 'number' && read.publication?.trim()
+			? [{ office: member.office ?? '?', publication: read.publication.trim(), citedCount: read.citedCount }]
+			: []));
+}
+
+/**
+ * Whether the Baseline is the whole Baseline (#526). A Baseline that a tool cut at its character
+ * budget carries `_truncation`, and is refused. One whose marker was stripped is caught by its own
+ * counts: for every publication `membersWalked` reports as read, the office counted `citedCount`
+ * entries in its references-cited block, and the CLI and the backend turn each entry into one
+ * citation (whose `citing` is that publication) in `documents[].cells`. Two entries collapse into
+ * one citation only when they are identical, so a publication whose citations in `documents[]`
+ * number fewer than its `citedCount` lost rows. Citations are counted, not documents: one document
+ * cited twice by the same block (two kinds, two phases) is one row but two citations.
+ */
+function baselineIntegrityErrors(baseline: ExaminerBaseline): string[] {
+	if (baseline._truncation) {
+		const omitted = baseline._truncation.omittedItems;
+		return [`The Examiner Baseline carries _truncation: a tool cut it at its character budget${typeof omitted === 'number' ? ` and omitted ${omitted} item(s)` : ''}. A truncated Baseline is not the Baseline, and the report would state fewer cited documents than the offices cited. ${rerunBaseline(baseline)}`];
+	}
+	const counted = citationsByCiting(baseline);
+	const short = countedReads(baseline).flatMap(read => {
+		const held = counted.get(read.publication.toUpperCase()) ?? 0;
+		return held < read.citedCount ? [`${read.publication} (${read.office}) cited ${read.citedCount}, documents[] holds ${held} citation(s) from it, ${read.citedCount - held} missing`] : [];
+	});
+	return short.length ? [`The Examiner Baseline is incomplete: membersWalked counts more citations than documents[] holds (${short.join('; ')}). A Baseline cut by a character budget or edited by hand loses rows this way. ${rerunBaseline(baseline)}`] : [];
+}
+
+/**
+ * What the save result says when the completeness check had nothing to check: no publication in
+ * `membersWalked` is read with a `citedCount`, so a missing row cannot be detected.
+ */
+export function baselineIntegrityNote(baseline: ExaminerBaseline | undefined): string | undefined {
+	return baseline && countedReads(baseline).length === 0
+		? 'Baseline completeness not checked: membersWalked reports no read publication with a citedCount, so the writer could not compare documents[] with the offices\' own counts.'
+		: undefined;
+}
+
 /**
  * The find-better checks that sit on top of the ordinary row checks: the Baseline's shape, the
  * examiner's best art against the Baseline, both sides on every row, a claim on every row, and the
@@ -216,7 +331,9 @@ function baselineShapeErrors(baseline: ExaminerBaseline): string[] {
  */
 export function findBetterErrors(review: PatentCandidateReview, sources: Map<string, PatentEvidenceSource>): string[] {
 	const baseline = review.baseline ?? {};
-	const errors = baselineShapeErrors(baseline);
+	const errors = baseline._truncation ? [] : baselineShapeErrors(baseline);
+	if (errors.length) { return errors; }
+	errors.push(...baselineIntegrityErrors(baseline));
 	if (errors.length) { return errors; }
 	const bestArt = new Map<string, readonly string[]>();
 	for (const entry of review.examinerBestArt ?? []) {
@@ -225,9 +342,8 @@ export function findBetterErrors(review: PatentCandidateReview, sources: Map<str
 		bestArt.set(claim, entry.publications);
 		for (const publication of entry.publications) {
 			const document = baselineDocument(baseline, publication);
-			if (!document) { errors.push(`examinerBestArt for claim ${claim} names ${publication}, which is not in baseline.documents[]. The examiner's best art must be a document the Baseline lists; pick one of its X or Y citations.`); continue; }
-			const found = categories(document);
-			if (!found.has('X') && !found.has('Y')) { errors.push(`examinerBestArt for claim ${claim} names ${publication}, which carries no X or Y category in any office of the Baseline (${[...found].join(', ') || 'no category'}). The examiner's best art must be an X or Y citation.`); }
+			if (!document) { errors.push(`examinerBestArt for claim ${claim} names ${publication}, which is not in baseline.documents[]. The examiner's best art must be a document the Baseline lists; pick one of its X or Y citations, or, where none exists, an examiner-cited document.`); continue; }
+			if (!documentBasis(document)) { errors.push(`examinerBestArt for claim ${claim} names ${publication}, which only the applicant cited: the Baseline gives it no category, no examiner citation and no US office-action rejection. The examiner's best art must be an X or Y citation, or, where none exists, a document an examiner cited or a US office action rejected claims with.`); }
 		}
 	}
 	const claims = new Set<string>();
@@ -272,7 +388,7 @@ export function ignoredNumericFields(input: object): string[] {
 		if (!value || typeof value !== 'object') { return; }
 		for (const [key, child] of Object.entries(value)) {
 			if (!path && key === 'baseline') { continue; }
-			if (key === 'count' && /^tracks\[\d+\]\.queries\[\d+\]$/.test(path)) { continue; }
+			if ((key === 'count' || key === 'hop') && /^tracks\[\d+\]\.queries\[\d+\]$/.test(path)) { continue; }
 			walk(child, path ? `${path}.${key}` : key);
 		}
 	};
@@ -313,13 +429,105 @@ export function countLine(comparison: ClaimComparison): string {
 	return `examiner's best art: disclosed ${comparison.examinerDisclosed} of ${comparison.elements} · best art found: disclosed ${comparison.foundDisclosed} of ${comparison.elements}`;
 }
 
-/** The sentence that states the claim's result. "No better art found" is a complete result, not an error. */
-export function claimResultSentence(comparison: ClaimComparison, foundArt: readonly string[]): string {
-	const examiner = comparison.examinerArt.join(', ');
+/**
+ * The sentence that states the claim's result. "No better art found" is a complete result, not an
+ * error, but only over a complete search: while `incomplete` names a skipped mandatory part, the
+ * sentence says the search is incomplete instead (#529). `examinerArt` names only the examiner's
+ * best art that an examiner-side row cites, each with its critical-date flag, because the count is
+ * a property of those documents alone.
+ */
+export function claimResultSentence(comparison: ClaimComparison, foundArt: readonly string[], examinerArt: readonly string[], incomplete: readonly string[]): string {
+	const examiner = examinerArt.join(', ');
 	if (comparison.foundDisclosed > comparison.examinerDisclosed) {
-		return `For claim ${comparison.claim}, the best art found (${foundArt.join(', ') || 'no publication'}) discloses ${comparison.foundDisclosed} of ${comparison.elements} elements; the examiner's best art ${examiner} discloses ${comparison.examinerDisclosed} of ${comparison.elements}.`;
+		const examinerSide = examinerArt.length ? `the examiner's best art ${examiner} discloses ${comparison.examinerDisclosed} of ${comparison.elements}` : 'no examiner-side row cites the examiner\'s best art';
+		return `For claim ${comparison.claim}, the best art found (${foundArt.join(', ') || 'no publication'}) discloses ${comparison.foundDisclosed} of ${comparison.elements} elements; ${examinerSide}.`;
 	}
-	return `No better art found for claim ${comparison.claim}; the examiner's best art remains ${examiner} (disclosed ${comparison.examinerDisclosed} of ${comparison.elements}).`;
+	const remains = examinerArt.length
+		? `the examiner's best art remains ${examiner} (disclosed ${comparison.examinerDisclosed} of ${comparison.elements})`
+		: `no examiner-side row cites the examiner's best art (disclosed ${comparison.examinerDisclosed} of ${comparison.elements})`;
+	return incomplete.length
+		? `Search incomplete for claim ${comparison.claim}: ${incomplete.join('; ')}. The queries that ran found no better art; ${remains}.`
+		: `No better art found for claim ${comparison.claim}; ${remains}.`;
+}
+
+/** The mandatory tracks of ADR 0010 decision 4. */
+const MANDATORY_TRACKS = 3;
+
+/**
+ * The backward-citation track (Track 1): the track whose name says "backward", else the first one.
+ * Its hop-2 queries carry `hop: 2`.
+ */
+function backwardTrack(review: FindBetterFields): FindBetterTrack | undefined {
+	const tracks = review.tracks ?? [];
+	return tracks.find(track => /backward/i.test(track?.name ?? '')) ?? tracks[0];
+}
+
+/**
+ * Why the search behind a claim's result is incomplete; empty when every mandatory part ran. All
+ * three tracks are mandatory and Track 1 is two hops (ADR 0010 decision 4), so a track with no query,
+ * a missing track, or a Track 1 with no `hop: 2` query each make "no better art found" unearned.
+ */
+export function incompleteSearch(review: FindBetterFields): string[] {
+	const tracks = review.tracks ?? [];
+	const reasons = tracks.filter(track => !track?.queries?.length).map(track => `track ${track?.name?.trim() || '(unnamed)'} ran no query`);
+	if (tracks.length < MANDATORY_TRACKS) { reasons.push(`only ${tracks.length} of the ${MANDATORY_TRACKS} mandatory tracks is logged`); }
+	const first = backwardTrack(review);
+	if (first?.queries?.length && !first.queries.some(query => query?.hop === 2)) { reasons.push('Track 1 has no second-hop entry'); }
+	return reasons;
+}
+
+/** The examiner's best art of one claim, split by whether at least one examiner-side row cites it. */
+export function examinerArtReading(comparison: ClaimComparison, examinerCited: readonly string[]): { readonly scored: readonly string[]; readonly unscored: readonly string[] } {
+	const cited = new Set(examinerCited.map(documentKey));
+	return {
+		scored: comparison.examinerArt.filter(publication => cited.has(documentKey(publication))),
+		unscored: comparison.examinerArt.filter(publication => !cited.has(documentKey(publication))),
+	};
+}
+
+/** The flag an examiner document gets when it may postdate the critical date. */
+const AFTER_CRITICAL_DATE = 'published after the critical date; not prior art for this claim unless the priority claim fails';
+
+/** `YYYY-MM-DD` from a `YYYY-MM-DD` or `YYYYMMDD` date, or undefined. */
+function isoDate(value: string | undefined): string | undefined {
+	const match = /(?<year>\d{4})-?(?<month>0[1-9]|1[0-2])-?(?<day>0[1-9]|[12]\d|3[01])/.exec(value ?? '');
+	return match?.groups ? `${match.groups.year}-${match.groups.month}-${match.groups.day}` : undefined;
+}
+
+/**
+ * The critical date: the earliest date `objective` states. The skill puts the earliest priority date
+ * there as `YYYY-MM-DD`; any later date the sentence names (a filing or grant date) is not the one
+ * art is measured against.
+ */
+function criticalDate(objective: string | undefined): string | undefined {
+	const dates = [...(objective ?? '').matchAll(/\b(?<year>\d{4})-?(?<month>0[1-9]|1[0-2])-?(?<day>0[1-9]|[12]\d|3[01])\b/g)].map(match => isoDate(match[0])!).sort();
+	return dates[0];
+}
+
+/**
+ * A publication's date: from its Baseline citations when one carries `publicationDate`, else from
+ * the get_patent_details record of it in this session, else unknown.
+ */
+function publicationDate(baseline: ExaminerBaseline, publication: string, snapshot: PatentExecutionSnapshot): string | undefined {
+	const document = baselineDocument(baseline, publication);
+	const fromBaseline = Object.values(document?.cells ?? {}).flatMap(cell => cell?.citations ?? []).map(citation => isoDate(citation?.publicationDate)).find(date => !!date);
+	if (fromBaseline) { return fromBaseline; }
+	const key = documentKey(publication);
+	return snapshot.executions.filter(execution => execution.kind === 'details' && execution.status === 'succeeded' && execution.publicationIds?.some(id => documentKey(id) === key)).map(execution => isoDate(execution.publicationDate)).find(date => !!date);
+}
+
+/**
+ * An examiner document as the result sentence names it: flagged when the Baseline gives it a P or E
+ * category (published between priority and filing, or on or after filing) or its publication date
+ * is after the critical date stated in `objective`.
+ */
+export function examinerArtLabel(review: PatentCandidateReview, publication: string, snapshot: PatentExecutionSnapshot): string {
+	const document = baselineDocument(review.baseline ?? {}, publication);
+	const found = document ? categories(document) : new Set<string>();
+	const date = publicationDate(review.baseline ?? {}, publication, snapshot);
+	const critical = criticalDate(review.objective);
+	const late = found.has('P') || found.has('E') || (!!date && !!critical && date > critical);
+	return late ? `${publication} (${AFTER_CRITICAL_DATE})` : publication;
 }
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
@@ -410,7 +618,7 @@ export function renderTracks(review: FindBetterFields, snapshot: PatentExecution
 				const total = recorded.get(queryKey(query.query));
 				const hits = total !== undefined ? String(total) : typeof query.count === 'number' ? String(query.count) : 'not stated';
 				const basis = total !== undefined ? 'execution record' : 'as reported by the agent; not in the execution record';
-				return '| ' + [track.name, query.query, query.tool?.trim() || '—', hits, basis].map(cell).join(' | ') + ' |';
+				return '| ' + [query.hop === 1 || query.hop === 2 ? `${track.name} (hop ${query.hop})` : track.name, query.query, query.tool?.trim() || '—', hits, basis].map(cell).join(' | ') + ' |';
 			})
 			: ['| ' + [track.name, 'no query run', '—', '—', '—'].map(cell).join(' | ') + ' |']),
 		'',

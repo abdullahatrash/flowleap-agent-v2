@@ -21,7 +21,7 @@ import { IActivationTelemetryService } from '../../patentai/vscode-node/activati
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
-import { baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields } from './patentFindBetter';
+import { baselineIntegrityNote, baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields, incompleteSearch } from './patentFindBetter';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -104,7 +104,12 @@ const SUMMARY_CONTRACT = 'Chat summary contract: repeat each coverage row\'s sta
 function findBetterSummaryContract(review: PatentCandidateReview): string {
 	const counts = claimComparisons(review).map(comparison => `claim ${comparison.claim} — ${countLine(comparison)}`).join('; ');
 	const gaps = gapCount(review);
-	return `Chat summary contract: repeat each cell's status word exactly (disclosed / partially disclosed / not found); state each claim's counts exactly as the saved report counts them (${counts}); state that the Baseline has ${gaps} gap${gaps === 1 ? '' : 's'} in the offices' records and that a gap is not "nothing cited"; where no better art was found, say so as a complete result. Do not add invalidity, anticipation or obviousness conclusions. The summary must not be more certain than the saved report.`;
+	// "No better art found" is a complete result only over a complete search (#529).
+	const incomplete = incompleteSearch(review);
+	const result = incomplete.length
+		? `state that the search is incomplete (${incomplete.join('; ')}) and do not present "no better art found" as a complete result`
+		: 'where no better art was found, say so as a complete result';
+	return `Chat summary contract: repeat each cell's status word exactly (disclosed / partially disclosed / not found); state each claim's counts exactly as the saved report counts them (${counts}); state that the Baseline has ${gaps} gap${gaps === 1 ? '' : 's'} in the offices' records and that a gap is not "nothing cited"; ${result}. Do not add invalidity, anticipation or obviousness conclusions. The summary must not be more certain than the saved report.`;
 }
 
 /**
@@ -291,7 +296,8 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// The comparison is a count over validated rows; a number the model typed has no field to land
 			// in, so it is dropped and named rather than silently lost.
 			const ignored = findBetter ? ignoredNumericFields(options.input) : [];
-			const sourceResult = findBetter ? `\nExaminer Baseline source: ${baselineSource(input)}.` : '';
+			const integrityNote = findBetter ? baselineIntegrityNote(input.baseline) : undefined;
+			const sourceResult = findBetter ? `\nExaminer Baseline source: ${baselineSource(input)}.${integrityNote ? ` ${integrityNote}` : ''}` : '';
 			const ignoredResult = ignored.length ? `\nIgnored model-supplied numeric field(s): ${ignored.join(', ')}. A Find Better report counts disclosed elements from the validated rows only; no model-supplied number reaches the report.` : '';
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}${sourceResult}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
@@ -321,15 +327,15 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 	private async readBaseline(path: string, folders: readonly URI[]): Promise<ExaminerBaseline | string> {
 		const baselineUri = this.resolveWorkspacePath(path, folders);
 		if (!baselineUri || !folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(baselineUri, folder))) {
-			return `baselinePath "${path}" is not a path inside a workspace folder. Save the output of flowleap patent examiner-baseline <publication> --json in the workspace and give its path.`;
+			return `baselinePath "${path}" is not a path inside a workspace folder. Save the Baseline in the workspace with the examiner_baseline tool (or the --json output of flowleap patent examiner-baseline <publication>) and give its path.`;
 		}
 		try {
 			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, baselineUri));
 			const value: unknown = JSON.parse(new TextDecoder().decode(await this.fileSystemService.readFile(baselineUri)));
-			if (!value || typeof value !== 'object' || Array.isArray(value)) { return `baselinePath "${path}" does not hold a Baseline object. It must be the unedited --json output of flowleap patent examiner-baseline.`; }
+			if (!value || typeof value !== 'object' || Array.isArray(value)) { return `baselinePath "${path}" does not hold a Baseline object. It must be the unedited file the examiner_baseline tool wrote, or the unedited --json output of flowleap patent examiner-baseline.`; }
 			return value as ExaminerBaseline;
 		} catch (error) {
-			return `baselinePath "${path}" could not be read as JSON (${error instanceof Error ? error.message : String(error)}). It must be the unedited --json output of flowleap patent examiner-baseline.`;
+			return `baselinePath "${path}" could not be read as JSON (${error instanceof Error ? error.message : String(error)}). It must be the unedited file the examiner_baseline tool wrote, or the unedited --json output of flowleap patent examiner-baseline.`;
 		}
 	}
 

@@ -9,7 +9,7 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
-import { baselineSource, claimComparisons, claimResultSentence, countLine, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
+import { baselineSource, claimComparisons, claimResultSentence, countLine, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
  * Which structured report the coverage machinery is producing. The checks are identical; only the
@@ -967,6 +967,7 @@ function sidePublications(rows: readonly PatentCoverageRow[], side: FindBetterSi
 function findBetterSections(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, rowSection: (row: PatentCoverageRow) => string[]): string[] {
 	const sources = sourceIndex(snapshot);
 	const sided = review.coverage ?? [];
+	const incomplete = incompleteSearch(review);
 	return [
 		...renderBaseline(review),
 		'## Claim-by-claim comparison',
@@ -975,16 +976,20 @@ function findBetterSections(review: PatentCandidateReview, snapshot: PatentExecu
 		...claimComparisons(review).flatMap(comparison => {
 			const rows = sided.filter(row => row.claimNumber?.trim() === comparison.claim);
 			const found = sidePublications(rows, 'found', sources);
+			// Only the examiner's best art an examiner-side row cites is named with the count; the rest were never scored.
+			const examiner = examinerArtReading(comparison, sidePublications(rows, 'examiner', sources));
+			const label = (publication: string) => examinerArtLabel(review, publication, snapshot);
 			return [
 				`### Claim ${cell(comparison.claim)}`,
-				`| Element | Examiner's best art (${cell(comparison.examinerArt.join(', '))}) | Best art found (${cell(found.join(', ') || 'none cited')}) |`,
+				`| Element | Examiner's best art (${cell(examinerArtHeader(review, examiner.scored).join(', ') || 'none cited')}) | Best art found (${cell(found.join(', ') || 'none cited')}) |`,
 				'| --- | --- | --- |',
 				...rows.map(row => '| ' + [row.kind === 'combination' ? `${row.feature} (combination, not counted)` : row.feature, sideStatus(row, 'examiner'), sideStatus(row, 'found')].map(cell).join(' | ') + ' |'),
 				'',
 				countLine(comparison),
 				'',
-				claimResultSentence(comparison, found),
+				claimResultSentence(comparison, found, examiner.scored.map(label), incomplete),
 				'',
+				...(examiner.unscored.length ? [`Examiner's best art named but not scored: ${examiner.unscored.map(label).join(', ')}.`, ''] : []),
 				...rows.flatMap(row => (['examiner', 'found'] as const).flatMap(side => {
 					const value = row[side];
 					return value ? rowSection({ ...row, feature: sideFeature(row.feature, side), status: value.status, sourceAnchors: value.sourceAnchors ?? [], gap: value.gap ?? '', evidence: value.evidence, elements: value.elements }) : [];
@@ -1039,7 +1044,7 @@ export function renderWorkingRecord(sided: PatentCandidateReview, snapshot: Pate
 		...(wording.length ? [WORDING_REVIEW_INTRO, ...wording.map(value => '- ' + value)] : ['No phrases flagged.']),
 		'',
 		'## Provenance',
-		...(variant === 'find-better' ? [`Examiner Baseline source: ${baselineSource(sided)}. The writer checked its shape and its X/Y categories, not that the offices' records say what it says.`, ''] : []),
+		...(variant === 'find-better' ? [`Examiner Baseline source: ${baselineSource(sided)}. The writer checked its shape, its X/Y categories and that documents[] holds every citation membersWalked counts, not that the offices' records say what it says.`, ''] : []),
 		snapshot.limitation,
 		'',
 		CHECKED_MECHANICALLY,
