@@ -9,7 +9,7 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
-import { baselineSource, claimComparisons, claimResultSentence, countLine, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
+import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
  * Which structured report the coverage machinery is producing. The checks are identical; only the
@@ -948,14 +948,14 @@ function coverageRowSection(row: PatentCoverageRow, sources: Map<string, PatentE
 
 /** The publications a set of rows cites on one side, by their anchors, in the order first cited. */
 function sidePublications(rows: readonly PatentCoverageRow[], side: FindBetterSideName, sources: Map<string, PatentEvidenceSource>): string[] {
-	return [...new Set(rows.flatMap(row => {
+	return distinctDocuments(rows.flatMap(row => {
 		const value = row[side];
 		return [...(value?.sourceAnchors ?? []), ...(value?.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
 			.flatMap(anchor => {
 				const publication = sources.get(anchor)?.reference.publicationNumber;
 				return publication ? [publicationKey(publication)] : [];
 			});
-	}))];
+	}));
 }
 
 /**

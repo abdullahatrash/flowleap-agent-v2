@@ -194,6 +194,20 @@ function documentKey(publication: string): string {
 	return /^NPL:/i.test(publication.trim()) ? publication.trim().toUpperCase() : compact.replace(/^([A-Z]{2}\d+)[A-Z]\d?$/, '$1');
 }
 
+/**
+ * Publications with one entry per document: `EP1162102A2` and `EP1162102` are one document (#537),
+ * matched as the Baseline matches them. The fullest spelling is kept, in first-seen order.
+ */
+export function distinctDocuments(publications: readonly string[]): string[] {
+	const byDocument = new Map<string, string>();
+	for (const publication of publications) {
+		const key = documentKey(publication);
+		const kept = byDocument.get(key);
+		if (kept === undefined || publication.length > kept.length) { byDocument.set(key, publication); }
+	}
+	return [...byDocument.values()];
+}
+
 /** The Baseline row a publication names, if any. */
 function baselineDocument(baseline: ExaminerBaseline, publication: string): ExaminerBaselineDocument | undefined {
 	const key = documentKey(publication);
@@ -479,9 +493,10 @@ export function incompleteSearch(review: FindBetterFields): string[] {
 /** The examiner's best art of one claim, split by whether at least one examiner-side row cites it. */
 export function examinerArtReading(comparison: ClaimComparison, examinerCited: readonly string[]): { readonly scored: readonly string[]; readonly unscored: readonly string[] } {
 	const cited = new Set(examinerCited.map(documentKey));
+	const named = distinctDocuments(comparison.examinerArt);
 	return {
-		scored: comparison.examinerArt.filter(publication => cited.has(documentKey(publication))),
-		unscored: comparison.examinerArt.filter(publication => !cited.has(documentKey(publication))),
+		scored: named.filter(publication => cited.has(documentKey(publication))),
+		unscored: named.filter(publication => !cited.has(documentKey(publication))),
 	};
 }
 
@@ -598,6 +613,18 @@ function baselineCell(value: ExaminerBaselineCell | undefined): string {
 function queryKey(value: string): string { return value.replace(/\s+/g, ' ').trim(); }
 
 /**
+ * The keys a logged query is looked up under: the query itself, then the query without a trailing
+ * note in parentheses, e.g. `in="CHEN" AND pd<20080416 (inventor of X reference US2007052285)` (#537).
+ * Only a parenthetical after a space with no `=` in it is a note; a CQL group such as
+ * `(ta=cam OR ta=lobe)` is query text, and the exact query is always tried first.
+ */
+function queryKeys(value: string): string[] {
+	const key = queryKey(value);
+	const withoutNote = key.replace(/\s\([^()=]*\)$/, '').trim();
+	return withoutNote && withoutNote !== key ? [key, withoutNote] : [key];
+}
+
+/**
  * The tracks log: every query each track ran with its hit count, empty ones included, so a reviewer
  * sees what was searched and what was not. A count the execution record holds is taken from it; any
  * other count is shown as the agent reported it, labelled so.
@@ -615,7 +642,7 @@ export function renderTracks(review: FindBetterFields, snapshot: PatentExecution
 		'| --- | --- | --- | --- | --- |',
 		...(review.tracks ?? []).flatMap(track => track.queries?.length
 			? track.queries.map(query => {
-				const total = recorded.get(queryKey(query.query));
+				const total = queryKeys(query.query).map(key => recorded.get(key)).find(count => count !== undefined);
 				const hits = total !== undefined ? String(total) : typeof query.count === 'number' ? String(query.count) : 'not stated';
 				const basis = total !== undefined ? 'execution record' : 'as reported by the agent; not in the execution record';
 				return '| ' + [query.hop === 1 || query.hop === 2 ? `${track.name} (hop ${query.hop})` : track.name, query.query, query.tool?.trim() || '—', hits, basis].map(cell).join(' | ') + ' |';

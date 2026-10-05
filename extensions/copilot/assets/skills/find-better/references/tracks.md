@@ -60,6 +60,37 @@ document.
   `patent_api_request`, with the same date limit.
 - Log: per code, each query and its count.
 
+### Term-drop pass (mandatory)
+
+One query with two or more terms is over-specified: a reference that says
+"speed warning" instead of "limit" is not in its hits. After the first
+classification query, do these steps for each code:
+
+1. Run the query again once for each term, with only that ONE term removed.
+   Keep the code and the date limit.
+2. If the first query gave 200 hits or fewer, also run the code with the date
+   limit alone (`cpc=<code> AND pd<<critical-date>`).
+3. Log every variant with its count, 0 included.
+4. Read the titles of the top hits of every variant, published before the
+   critical date. Pull each title that matches a claim element.
+
+Example (US6778074B1, critical date 2002-03-18): the run's query
+`ic=G01P1/10 AND ta=speedometer AND ta=limit AND pd<20020318` (34) missed
+both IPR references. Without `ta=limit`, `ic=G01P1/10 AND ta=speedometer AND
+pd<20020318` (123) has Evans US3980041 ("Speedometer with speed warning
+indicator"). Without `ta=speedometer`, the claim phrase
+`cpc=G01P1/10 AND ta="speed limit" AND pd<20020318` (36) has Wendt US2711153
+("Automobile speed limit indicator").
+
+### Title-phrase query (old art)
+
+OPS has no abstract for many US documents published before 2000, so `ta=`
+finds them only by their title words. For each Discriminating Term, run one
+query on a two-word phrase from the claim:
+`ti="<two-word phrase>" AND pd<<critical-date>`, with no classification.
+Example: `ti="speed limit indicator" AND pd<20020318` (10) has Wendt
+US2711153, which has no abstract in OPS. Log each query and its count.
+
 ## Pull the candidates
 
 For each candidate that maps to at least one claim element, read its claims
