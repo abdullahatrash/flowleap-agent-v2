@@ -9,7 +9,7 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
-import { claimComparisons, claimResultSentence, countLine, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
+import { baselineSource, claimComparisons, claimResultSentence, countLine, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
  * Which structured report the coverage machinery is producing. The checks are identical; only the
@@ -1039,6 +1039,7 @@ export function renderWorkingRecord(sided: PatentCandidateReview, snapshot: Pate
 		...(wording.length ? [WORDING_REVIEW_INTRO, ...wording.map(value => '- ' + value)] : ['No phrases flagged.']),
 		'',
 		'## Provenance',
+		...(variant === 'find-better' ? [`Examiner Baseline source: ${baselineSource(sided)}. The writer checked its shape and its X/Y categories, not that the offices' records say what it says.`, ''] : []),
 		snapshot.limitation,
 		'',
 		CHECKED_MECHANICALLY,

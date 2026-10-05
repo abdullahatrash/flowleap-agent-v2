@@ -21,7 +21,7 @@ import { IActivationTelemetryService } from '../../patentai/vscode-node/activati
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
-import { claimComparisons, countLine, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields } from './patentFindBetter';
+import { baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields } from './patentFindBetter';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -179,8 +179,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		// Resolve relative paths against the workspace (and reject invalid input) rather than
 		// mapping them to the filesystem root via `URI.file`.
 		const folders = this.workspaceService.getWorkspaceFolders();
-		const relative = filePath.trim().length > 0 && !/^(?:[a-z][a-z0-9+.-]*:|[\\/])/i.test(filePath) && !filePath.includes('\0');
-		const uri = this.promptPathRepresentationService.resolveFilePath(filePath) ?? (relative && folders.length === 1 ? URI.joinPath(folders[0], filePath.replace(/\\/g, '/')) : undefined);
+		const uri = this.resolveWorkspacePath(filePath, folders);
 		if (!uri) {
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Error: Invalid file path "${filePath}". Provide an absolute workspace path, or a relative path when exactly one workspace folder is open.`)
@@ -196,8 +195,14 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
 
 		try {
+			// A Baseline given by path is read from the workspace once, then checked exactly like an inline one.
+			const loaded = findBetter && options.input.baselinePath?.trim() ? await this.readBaseline(options.input.baselinePath.trim(), folders) : undefined;
+			if (typeof loaded === 'string') {
+				return new LanguageModelToolResult([new LanguageModelTextPart(`Report was not saved. ${loaded}`)]);
+			}
+			const sided = loaded ? { ...options.input, baseline: loaded } : options.input;
 			const snapshot = structuredBody ? await this.ledger.read(options.chatSessionResource) : undefined;
-			const input = snapshot ? materializeCandidateReview(options.input, snapshot) : options.input;
+			const input = snapshot ? materializeCandidateReview(sided, snapshot) : sided;
 			// A Find Better row's two sides become two ordinary rows for every check and for the second
 			// read; the two-sided input is what the report renders.
 			const flat = flattenSides(input);
@@ -286,9 +291,10 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// The comparison is a count over validated rows; a number the model typed has no field to land
 			// in, so it is dropped and named rather than silently lost.
 			const ignored = findBetter ? ignoredNumericFields(options.input) : [];
+			const sourceResult = findBetter ? `\nExaminer Baseline source: ${baselineSource(input)}.` : '';
 			const ignoredResult = ignored.length ? `\nIgnored model-supplied numeric field(s): ${ignored.join(', ')}. A Find Better report counts disclosed elements from the validated rows only; no model-supplied number reaches the report.` : '';
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}${sourceResult}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
@@ -296,6 +302,34 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
 			]);
+		}
+	}
+
+	/**
+	 * Resolve a model-supplied path against the workspace: an absolute workspace path, or a relative one
+	 * when exactly one folder is open. Invalid input resolves to nothing rather than to the root.
+	 */
+	private resolveWorkspacePath(path: string, folders: readonly URI[]): URI | undefined {
+		const relative = path.trim().length > 0 && !/^(?:[a-z][a-z0-9+.-]*:|[\\/])/i.test(path) && !path.includes('\0');
+		return this.promptPathRepresentationService.resolveFilePath(path) ?? (relative && folders.length === 1 ? URI.joinPath(folders[0], path.replace(/\\/g, '/')) : undefined);
+	}
+
+	/**
+	 * Read the CLI's `--json` Baseline from the workspace. Returns the parsed object, or the reason it
+	 * cannot be used; the shape itself is checked later with the inline Baseline's checks.
+	 */
+	private async readBaseline(path: string, folders: readonly URI[]): Promise<ExaminerBaseline | string> {
+		const baselineUri = this.resolveWorkspacePath(path, folders);
+		if (!baselineUri || !folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(baselineUri, folder))) {
+			return `baselinePath "${path}" is not a path inside a workspace folder. Save the output of flowleap patent examiner-baseline <publication> --json in the workspace and give its path.`;
+		}
+		try {
+			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, baselineUri));
+			const value: unknown = JSON.parse(new TextDecoder().decode(await this.fileSystemService.readFile(baselineUri)));
+			if (!value || typeof value !== 'object' || Array.isArray(value)) { return `baselinePath "${path}" does not hold a Baseline object. It must be the unedited --json output of flowleap patent examiner-baseline.`; }
+			return value as ExaminerBaseline;
+		} catch (error) {
+			return `baselinePath "${path}" could not be read as JSON (${error instanceof Error ? error.message : String(error)}). It must be the unedited --json output of flowleap patent examiner-baseline.`;
 		}
 	}
 

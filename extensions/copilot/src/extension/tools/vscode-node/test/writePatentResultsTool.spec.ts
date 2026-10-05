@@ -736,8 +736,9 @@ describe('candidate report save path', () => {
 			return lines.slice(start, end < 0 ? undefined : end).filter(line => line.trim());
 		}
 
-		async function save(value: object): Promise<{ report: string; message: string; files: MockFileSystemService }> {
+		async function save(value: object, onDisk?: { path: string; text: string }): Promise<{ report: string; message: string; files: MockFileSystemService }> {
 			const { tool, files } = setup(ledger);
+			if (onDisk) { await files.writeFile(URI.file(onDisk.path), new TextEncoder().encode(onDisk.text)); }
 			const result = await tool.invoke({ input: value as Parameters<typeof tool.invoke>[0]['input'], toolInvocationToken: undefined }, CancellationToken.None);
 			const message = (result.content[0] as LanguageModelTextPart).value;
 			const report = await files.readFile(URI.file('/workspace/find-better.md')).then(bytes => new TextDecoder().decode(bytes), () => '');
@@ -864,7 +865,7 @@ describe('candidate report save path', () => {
 					'- examinerBestArt for claim 1 names US4000000A, which carries no X or Y category in any office of the Baseline (no category). The examiner\'s best art must be an X or Y citation.',
 					'- Row "Claim 1 — element (a): a skewer rod" cites US5135330A:claims:1:en (US5135330A) on the examiner side, but the examiner\'s best art for claim 1 is US4000000A. Cite that art on the examiner side, or name US5135330A in examinerBestArt if the Baseline supports it.',
 				],
-				missing: 'Report was not saved. find-better-report is a structured save and needs coverage (element rows, each with an examiner side and a found side); baseline (the Examiner Baseline JSON: the --json output of flowleap patent examiner-baseline, or the same shape built from the typed citation tools); examinerBestArt (per independent claim, the X or Y citation of the Baseline picked as the examiner\'s best art); tracks (every expansion track with its queries and hit counts, empty ones included). Leave content empty.',
+				missing: 'Report was not saved. find-better-report is a structured save and needs coverage (element rows, each with an examiner side and a found side); baseline or baselinePath (the Examiner Baseline JSON inline, or the workspace path of the --json output of flowleap patent examiner-baseline); examinerBestArt (per independent claim, the X or Y citation of the Baseline picked as the examiner\'s best art); tracks (every expansion track with its queries and hit counts, empty ones included). Leave content empty.',
 				written: '',
 			});
 		});
@@ -883,6 +884,30 @@ describe('candidate report save path', () => {
 				onPage: false,
 				counted: true,
 				wording: 'Wording review: 3 phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.',
+			});
+		});
+
+		it('(f) reads the Baseline from baselinePath, states its source, and refuses both or an unreadable file', async () => {
+			const { baseline: _inline, ...byPath } = { ...betterInput, baselinePath: 'references/baseline.json' };
+			const fromFile = await save(byPath, { path: '/workspace/references/baseline.json', text: JSON.stringify(baseline) });
+			const inline = await save(betterInput);
+			const both = await save({ ...betterInput, baselinePath: 'references/baseline.json' });
+			const unreadable = await save(byPath, { path: '/workspace/references/baseline.json', text: 'Examiner Baseline: EP2000000B1' });
+			const record = new TextDecoder().decode(await fromFile.files.readFile(URI.file('/workspace/find-better.working-record.md')));
+			expect({
+				source: fromFile.message.split('\n').find(line => line.startsWith('Examiner Baseline source: ')),
+				inlineSource: inline.message.split('\n').find(line => line.startsWith('Examiner Baseline source: ')),
+				recordSource: record.split('\n').find(line => line.startsWith('Examiner Baseline source: ')),
+				sameReport: fromFile.report.replace(/find-better\.working-record/g, '') === inline.report.replace(/find-better\.working-record/g, ''),
+				both: both.message,
+				unreadable: unreadable.message.startsWith('Report was not saved. baselinePath "references/baseline.json" could not be read as JSON'),
+			}).toEqual({
+				source: 'Examiner Baseline source: file references/baseline.json.',
+				inlineSource: 'Examiner Baseline source: inline.',
+				recordSource: 'Examiner Baseline source: file references/baseline.json. The writer checked its shape and its X/Y categories, not that the offices\' records say what it says.',
+				sameReport: true,
+				both: 'Report was not saved. find-better-report takes exactly one of baseline and baselinePath. Give the inline Baseline or the path to the CLI\'s --json output, not both.',
+				unreadable: true,
 			});
 		});
 	});

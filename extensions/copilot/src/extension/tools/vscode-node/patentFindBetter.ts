@@ -68,7 +68,7 @@ interface ExaminerBaselineMember {
  * The Examiner Baseline: the `--json` output of `flowleap patent examiner-baseline`, or the same
  * shape built from the typed citation tools. Field names are the CLI's contract.
  */
-interface ExaminerBaseline {
+export interface ExaminerBaseline {
 	readonly publication?: string;
 	readonly offices?: readonly string[];
 	readonly membersWalked?: readonly ExaminerBaselineMember[];
@@ -94,6 +94,11 @@ export interface FindBetterFields {
 	readonly baseline?: ExaminerBaseline;
 	readonly examinerBestArt?: readonly ExaminerBestArt[];
 	readonly tracks?: readonly FindBetterTrack[];
+	/**
+	 * Workspace-relative or absolute path to the `--json` output of `flowleap patent examiner-baseline`
+	 * on disk; the alternative to an inline `baseline`. Exactly one of the two is given.
+	 */
+	readonly baselinePath?: string;
 }
 
 export type FindBetterSideName = 'examiner' | 'found';
@@ -154,11 +159,17 @@ export function flattenSides<T extends PatentCandidateReview>(review: T): T {
 export function findBetterMissingInputs(input: PatentCandidateReview): string | undefined {
 	const missing = [
 		...(!input.coverage?.length ? ['coverage (element rows, each with an examiner side and a found side)'] : []),
-		...(!input.baseline || typeof input.baseline !== 'object' ? ['baseline (the Examiner Baseline JSON: the --json output of flowleap patent examiner-baseline, or the same shape built from the typed citation tools)'] : []),
+		...(input.baselinePath?.trim() ? [] : !input.baseline || typeof input.baseline !== 'object' ? ['baseline or baselinePath (the Examiner Baseline JSON inline, or the workspace path of the --json output of flowleap patent examiner-baseline)'] : []),
 		...(!input.examinerBestArt?.length ? ['examinerBestArt (per independent claim, the X or Y citation of the Baseline picked as the examiner\'s best art)'] : []),
 		...(!input.tracks?.length ? ['tracks (every expansion track with its queries and hit counts, empty ones included)'] : []),
 	];
-	return missing.length ? `find-better-report is a structured save and needs ${missing.join('; ')}. Leave content empty.` : undefined;
+	if (missing.length) { return `find-better-report is a structured save and needs ${missing.join('; ')}. Leave content empty.`; }
+	return input.baselinePath?.trim() && input.baseline ? 'find-better-report takes exactly one of baseline and baselinePath. Give the inline Baseline or the path to the CLI\'s --json output, not both.' : undefined;
+}
+
+/** Where the Baseline came from, as the tool result and the working record state it. */
+export function baselineSource(review: FindBetterFields): string {
+	return review.baselinePath?.trim() ? `file ${review.baselinePath.trim()}` : 'inline';
 }
 
 /**
