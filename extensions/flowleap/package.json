@@ -65,6 +65,7 @@
           "type": "webview",
           "id": "flowleap.browserLauncher",
           "name": "Browser",
+          "when": "!isWeb",
           "icon": "$(globe)",
           "contextualTitle": "Browser Launcher"
         }
@@ -187,6 +188,12 @@
         "category": "FlowLeap"
       },
       {
+        "command": "flowleap.previewHtmlFile",
+        "title": "Preview HTML File",
+        "category": "FlowLeap",
+        "icon": "$(open-preview)"
+      },
+      {
         "command": "flowleap.checkForUpdates",
         "title": "Check for Updates",
         "category": "FlowLeap"
@@ -198,6 +205,13 @@
           "command": "flowleap.openSettings",
           "group": "2_configuration",
           "order": 0.5
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "flowleap.previewHtmlFile",
+          "when": "resourceExtname =~ /^\\.html?$/i",
+          "group": "navigation@30"
         }
       ],
       "view/title": [

@@ -101,3 +101,8 @@ the same as any other deliverable on this skill:
    section (applications-by-filing-year vs publication-level counts, plus the
    PATSTAT edition), so the dashboard is auditable on its own without the chat
    transcript.
+4. **Viewing it.** Tell the user to open the saved file with **FlowLeap: Preview
+   HTML File** (right-click the file in the Explorer, or run it from the Command
+   Palette). It works on desktop and in a hosted workspace in the browser. In a
+   hosted workspace, `open` / `xdg-open` do nothing for the user. To take the
+   file away, use **Download…** on the file in the Explorer.
