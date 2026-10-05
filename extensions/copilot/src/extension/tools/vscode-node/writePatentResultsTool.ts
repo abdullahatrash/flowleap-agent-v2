@@ -21,6 +21,7 @@ import { IActivationTelemetryService } from '../../patentai/vscode-node/activati
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
+import { baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields } from './patentFindBetter';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -96,6 +97,17 @@ const SECOND_READ_RESULT_LIMIT = 6;
 const SUMMARY_CONTRACT = 'Chat summary contract: repeat each coverage row\'s status word exactly (supported / partial / unresolved), do not add novelty, anticipation, obviousness or teaching-away conclusions, and state the retrieved-but-not-cited count and any untranslated documents. The summary must not be more certain than the saved report.';
 
 /**
+ * The summary contract of a Find Better report, with the numbers the summary must repeat: the counts
+ * are the saved report's own, counted from validated rows, so the summary quotes them instead of
+ * re-deriving them.
+ */
+function findBetterSummaryContract(review: PatentCandidateReview): string {
+	const counts = claimComparisons(review).map(comparison => `claim ${comparison.claim} — ${countLine(comparison)}`).join('; ');
+	const gaps = gapCount(review);
+	return `Chat summary contract: repeat each cell's status word exactly (disclosed / partially disclosed / not found); state each claim's counts exactly as the saved report counts them (${counts}); state that the Baseline has ${gaps} gap${gaps === 1 ? '' : 's'} in the offices' records and that a gap is not "nothing cited"; where no better art was found, say so as a complete result. Do not add invalidity, anticipation or obviousness conclusions. The summary must not be more certain than the saved report.`;
+}
+
+/**
  * Writes patent search results (or analysis) to a local file. Independent of the FlowLeap backend
  * and BYOK inference — it only touches the file system, so it works regardless of auth state.
  *
@@ -143,10 +155,19 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 
 		const { filePath, content, template } = options.input;
 
-		// prior-art-report always generates its body from structured coverage; invalidity-claim-chart
-		// does so when the model supplies coverage, and keeps the written-content chart when it does not.
-		const structuredBody = template === 'prior-art-report' || (template === 'invalidity-claim-chart' && !!options.input.coverage?.length);
-		const variant: CandidateReviewVariant = template === 'invalidity-claim-chart' ? 'invalidity' : 'prior-art';
+		// prior-art-report and find-better-report always generate their body from structured coverage;
+		// invalidity-claim-chart does so when the model supplies coverage, and keeps the written-content
+		// chart when it does not.
+		const findBetter = template === 'find-better-report';
+		const structuredBody = template === 'prior-art-report' || findBetter || (template === 'invalidity-claim-chart' && !!options.input.coverage?.length);
+		const variant: CandidateReviewVariant = template === 'invalidity-claim-chart' ? 'invalidity' : findBetter ? 'find-better' : 'prior-art';
+
+		// A Find Better report without its structured inputs has nothing to compare, so it is refused
+		// before any path is resolved, naming what is missing.
+		const missing = findBetter ? findBetterMissingInputs(options.input) : undefined;
+		if (missing) {
+			return new LanguageModelToolResult([new LanguageModelTextPart(`Report was not saved. ${missing}`)]);
+		}
 
 		// A templated report with no body saves a shell of section stubs while the findings stay in
 		// the chat, so the requirement is checked before any path resolution or disk access.
@@ -158,8 +179,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		// Resolve relative paths against the workspace (and reject invalid input) rather than
 		// mapping them to the filesystem root via `URI.file`.
 		const folders = this.workspaceService.getWorkspaceFolders();
-		const relative = filePath.trim().length > 0 && !/^(?:[a-z][a-z0-9+.-]*:|[\\/])/i.test(filePath) && !filePath.includes('\0');
-		const uri = this.promptPathRepresentationService.resolveFilePath(filePath) ?? (relative && folders.length === 1 ? URI.joinPath(folders[0], filePath.replace(/\\/g, '/')) : undefined);
+		const uri = this.resolveWorkspacePath(filePath, folders);
 		if (!uri) {
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Error: Invalid file path "${filePath}". Provide an absolute workspace path, or a relative path when exactly one workspace folder is open.`)
@@ -175,10 +195,19 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
 
 		try {
+			// A Baseline given by path is read from the workspace once, then checked exactly like an inline one.
+			const loaded = findBetter && options.input.baselinePath?.trim() ? await this.readBaseline(options.input.baselinePath.trim(), folders) : undefined;
+			if (typeof loaded === 'string') {
+				return new LanguageModelToolResult([new LanguageModelTextPart(`Report was not saved. ${loaded}`)]);
+			}
+			const sided = loaded ? { ...options.input, baseline: loaded } : options.input;
 			const snapshot = structuredBody ? await this.ledger.read(options.chatSessionResource) : undefined;
-			const input = snapshot ? materializeCandidateReview(options.input, snapshot) : options.input;
+			const input = snapshot ? materializeCandidateReview(sided, snapshot) : sided;
+			// A Find Better row's two sides become two ordinary rows for every check and for the second
+			// read; the two-sided input is what the report renders.
+			const flat = flattenSides(input);
 			if (snapshot) {
-				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(input.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
+				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(flat.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -194,13 +223,13 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// The report is written once, with the second read already in it, so the receipt covers the
 			// final bytes. A judge failure is caught below and never reaches the save.
 			const mode = this.secondReadMode();
-			const secondRead = snapshot && mode !== 'off' ? await this.secondRead(input, snapshot, token) : undefined;
+			const secondRead = snapshot && mode !== 'off' ? await this.secondRead(flat, snapshot, token) : undefined;
 			// Wrap the model's content in the chosen professional report structure, or write it
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
 			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant, reportWorkspacePath(uri, folders)) : content;
-			const wording = snapshot ? candidateWordingReview(input) : [];
+			const wording = snapshot ? candidateWordingReview(input, variant) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of
 			// statuses, dates and quoted claims. The generated sections state which of them appear in the
@@ -210,7 +239,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const appendix = !provenance ? undefined : template === 'landscape-report' ? renderLandscapeAppendix(content, provenance) : renderFtoAppendix(content, provenance);
 			// The structured chart's header fields are read off the rows themselves, so the claims it
 			// states are the claims it actually charts.
-			const invalidityFields = structuredBody && variant === 'invalidity' ? {
+			const invalidityFields = structuredBody && variant !== 'prior-art' ? {
 				challengedPublication: input.challengedPublication ?? options.input.matter,
 				claimsAtIssue: challengedClaims(input).join(', '),
 				criticalDateBasis: options.input.objective,
@@ -244,7 +273,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const verdictFileName = secondRead ? await this.writeSecondReadFile(uri, companionId, secondRead) : undefined;
 			// The record links the verdict file, so it is written after it; losing it must not cost the
 			// report that is already on disk, so a failure is a warning and an unnamed record.
-			const recordWritten = snapshot ? await this.writeWorkingRecord(recordUri, renderWorkingRecord(input, snapshot, basename(uri), basename(evidenceUri), verdictFileName, secondRead)) : false;
+			const recordWritten = snapshot ? await this.writeWorkingRecord(recordUri, renderWorkingRecord(input, snapshot, basename(uri), basename(evidenceUri), verdictFileName, secondRead, variant)) : false;
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);
 
@@ -259,8 +288,13 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// A save that carries a generated provenance appendix is a checked report, not a free-form
 			// artifact, so it states what was traced instead of that nothing was.
 			const provenanceResult = !provenance ? '' : template === 'landscape-report' ? this.landscapeResult(content, provenance) : ftoProvenanceResult(content, provenance);
+			// The comparison is a count over validated rows; a number the model typed has no field to land
+			// in, so it is dropped and named rather than silently lost.
+			const ignored = findBetter ? ignoredNumericFields(options.input) : [];
+			const sourceResult = findBetter ? `\nExaminer Baseline source: ${baselineSource(input)}.` : '';
+			const ignoredResult = ignored.length ? `\nIgnored model-supplied numeric field(s): ${ignored.join(', ')}. A Find Better report counts disclosed elements from the validated rows only; no model-supplied number reaches the report.` : '';
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}\n${SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName)}${sourceResult}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {
@@ -268,6 +302,34 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
 			]);
+		}
+	}
+
+	/**
+	 * Resolve a model-supplied path against the workspace: an absolute workspace path, or a relative one
+	 * when exactly one folder is open. Invalid input resolves to nothing rather than to the root.
+	 */
+	private resolveWorkspacePath(path: string, folders: readonly URI[]): URI | undefined {
+		const relative = path.trim().length > 0 && !/^(?:[a-z][a-z0-9+.-]*:|[\\/])/i.test(path) && !path.includes('\0');
+		return this.promptPathRepresentationService.resolveFilePath(path) ?? (relative && folders.length === 1 ? URI.joinPath(folders[0], path.replace(/\\/g, '/')) : undefined);
+	}
+
+	/**
+	 * Read the CLI's `--json` Baseline from the workspace. Returns the parsed object, or the reason it
+	 * cannot be used; the shape itself is checked later with the inline Baseline's checks.
+	 */
+	private async readBaseline(path: string, folders: readonly URI[]): Promise<ExaminerBaseline | string> {
+		const baselineUri = this.resolveWorkspacePath(path, folders);
+		if (!baselineUri || !folders.some(folder => extUriBiasedIgnorePathCase.isEqualOrParent(baselineUri, folder))) {
+			return `baselinePath "${path}" is not a path inside a workspace folder. Save the output of flowleap patent examiner-baseline <publication> --json in the workspace and give its path.`;
+		}
+		try {
+			await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, baselineUri));
+			const value: unknown = JSON.parse(new TextDecoder().decode(await this.fileSystemService.readFile(baselineUri)));
+			if (!value || typeof value !== 'object' || Array.isArray(value)) { return `baselinePath "${path}" does not hold a Baseline object. It must be the unedited --json output of flowleap patent examiner-baseline.`; }
+			return value as ExaminerBaseline;
+		} catch (error) {
+			return `baselinePath "${path}" could not be read as JSON (${error instanceof Error ? error.message : String(error)}). It must be the unedited --json output of flowleap patent examiner-baseline.`;
 		}
 	}
 

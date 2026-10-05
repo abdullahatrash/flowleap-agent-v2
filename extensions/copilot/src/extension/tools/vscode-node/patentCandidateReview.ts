@@ -9,15 +9,52 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
+import { baselineSource, claimComparisons, claimResultSentence, countLine, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
  * Which structured report the coverage machinery is producing. The checks are identical; only the
  * wording of the content rule and of the rendered statuses differs, because an invalidity chart's
  * rows are the challenged patent's claim elements and its sources are the prior art.
  */
-export type CandidateReviewVariant = 'prior-art' | 'invalidity';
+export type CandidateReviewVariant = 'prior-art' | 'invalidity' | 'find-better';
 
-export interface PatentCandidateReview {
+/** One cited passage of a coverage row, with the source review beside it. */
+interface PatentCoverageEvidence {
+	readonly anchor: string;
+	readonly quote?: string;
+	readonly scope: string;
+	readonly qualifiers: string;
+	readonly quantityBasis: string;
+}
+
+/**
+ * The constituents the feature requires, each with the cited passage — or the recorded drawing
+ * page — that discloses it. A status is otherwise a one-bit judgment: the element map is what
+ * makes it checkable.
+ */
+interface PatentCoverageElementInput {
+	readonly element: string;
+	readonly anchor?: string;
+	readonly disclosedBy?: string;
+	/** `figure` marks an element disclosed by a recorded drawing page; absent means text. */
+	readonly basis?: 'text' | 'figure';
+	/** What the model says the drawing clearly shows; stands in place of `disclosedBy` for a figure. */
+	readonly reading?: string;
+}
+
+/**
+ * find-better-report: one side of an element row — the examiner's best art, or the best art found —
+ * with the same evidence fields an ordinary row carries, checked exactly as an ordinary row is.
+ */
+export interface FindBetterSide {
+	readonly status: 'supported' | 'partial' | 'unresolved';
+	readonly sourceAnchors?: readonly string[];
+	readonly gap: string;
+	readonly evidence?: readonly PatentCoverageEvidence[];
+	readonly elements?: readonly PatentCoverageElementInput[];
+}
+
+export interface PatentCandidateReview extends FindBetterFields {
 	readonly coverage?: readonly {
 		readonly feature: string;
 		readonly kind?: 'feature' | 'combination';
@@ -28,21 +65,12 @@ export interface PatentCandidateReview {
 		/** Required by the tool schema, but an unresolved row may arrive without it; never dereference unguarded. */
 		readonly sourceAnchors?: readonly string[];
 		readonly gap: string;
-		readonly evidence?: readonly { readonly anchor: string; readonly quote?: string; readonly scope: string; readonly qualifiers: string; readonly quantityBasis: string }[];
-		/**
-		 * The constituents the feature requires, each with the cited passage — or the recorded drawing
-		 * page — that discloses it. A status is otherwise a one-bit judgment: the element map is what
-		 * makes it checkable.
-		 */
-		readonly elements?: readonly {
-			readonly element: string;
-			readonly anchor?: string;
-			readonly disclosedBy?: string;
-			/** `figure` marks an element disclosed by a recorded drawing page; absent means text. */
-			readonly basis?: 'text' | 'figure';
-			/** What the model says the drawing clearly shows; stands in place of `disclosedBy` for a figure. */
-			readonly reading?: string;
-		}[];
+		readonly evidence?: readonly PatentCoverageEvidence[];
+		readonly elements?: readonly PatentCoverageElementInput[];
+		/** find-better-report: the examiner's best art on this element. The row's own status and sources are unused. */
+		readonly examiner?: FindBetterSide;
+		/** find-better-report: the best art found on this element. */
+		readonly found?: FindBetterSide;
 	}[];
 	readonly content?: string;
 	readonly limitations?: readonly string[];
@@ -90,15 +118,21 @@ const LEGAL_CONCLUSION_PHRASES: readonly string[] = [
 ];
 
 /**
+ * What a Find Better report additionally must not say: it compares disclosed-element counts and
+ * states no invalidity, anticipation or obviousness (ADR 0010).
+ */
+const FIND_BETTER_CONCLUSION_PHRASES: readonly string[] = ['invalid', 'invalidates', 'invalidated', 'invalidating', 'invalidity', 'obvious'];
+
+/**
  * Report the legal conclusions written into model-supplied prose. A disclaimer of the form
  * "does not establish novelty" is the opposite of a conclusion, so a match whose preceding 60
  * characters disclaim establishment is exempt.
  */
-function legalConclusions(fields: readonly (readonly [string, string | undefined])[]): string[] {
+function legalConclusions(fields: readonly (readonly [string, string | undefined])[], phrases: readonly string[] = LEGAL_CONCLUSION_PHRASES): string[] {
 	const findings: string[] = [];
 	for (const [field, value] of fields) {
 		if (!value) { continue; }
-		for (const phrase of LEGAL_CONCLUSION_PHRASES) {
+		for (const phrase of phrases) {
 			const pattern = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+')}\\b`, 'gi');
 			for (const match of value.matchAll(pattern)) {
 				const start = match.index ?? 0;
@@ -534,22 +568,28 @@ function elementMapErrors(row: PatentCoverageRow, sources: Map<string, PatentEvi
 /** Numbered claims can be copied from the ledger instead of transcribed by the model. */
 export function materializeCandidateReview<T extends PatentCandidateReview>(review: T, snapshot: PatentExecutionSnapshot): T {
 	const sources = sourceIndex(snapshot);
-	return { ...review, coverage: review.coverage?.map(row => ({ ...row, evidence: row.evidence?.map(evidence => {
-		const source = sources.get(evidence.anchor);
-		if (!source?.reference.claimNumber || !source.text) { return evidence; }
+	const materialize = (evidence: readonly PatentCoverageEvidence[] | undefined) => evidence?.map(item => {
+		const source = sources.get(item.anchor);
+		if (!source?.reference.claimNumber || !source.text) { return item; }
 		// A numbered claim is always rendered whole: an omitted quote is copied from the record, and a
 		// partial quotation that lies inside the claim expands to the whole claim instead of being rejected.
-		const partial = !!evidence.quote?.trim() && normalizeText(source.text).includes(normalizeText(evidence.quote));
-		return { ...evidence, quote: !evidence.quote?.trim() || partial ? source.text : evidence.quote };
-	}) })) };
+		const partial = !!item.quote?.trim() && normalizeText(source.text).includes(normalizeText(item.quote));
+		return { ...item, quote: !item.quote?.trim() || partial ? source.text : item.quote };
+	});
+	// A find-better row's two sides are rows of their own as far as quotation goes.
+	const side = (value: FindBetterSide | undefined) => value && { ...value, evidence: materialize(value.evidence) };
+	return { ...review, coverage: review.coverage?.map(row => ({ ...row, evidence: materialize(row.evidence), ...(row.examiner ? { examiner: side(row.examiner) } : {}), ...(row.found ? { found: side(row.found) } : {}) })) };
 }
 
 /** Validate explicit review structure and anchor identity, not the truth or entailment of prose. */
-export function validateCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, citedText = '', variant: CandidateReviewVariant = 'prior-art'): string[] {
+export function validateCandidateReview(sided: PatentCandidateReview, snapshot: PatentExecutionSnapshot, citedText = '', variant: CandidateReviewVariant = 'prior-art'): string[] {
 	const errors: string[] = [];
 	const sources = sourceIndex(snapshot);
 	const anchors = new Set(sources.keys());
-	if (review.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
+	if (sided.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : variant === 'find-better' ? 'find-better-report' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
+	if (variant === 'find-better') { errors.push(...findBetterErrors(sided, sources)); }
+	// Each side of a find-better row is checked as a row of its own; every other review is unchanged.
+	const review = flattenSides(sided);
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
 	// The match stops before trailing prose punctuation and closers, so a sentence-final period or a
 	// surrounding bracket is not read as part of the claim number.
@@ -606,7 +646,8 @@ export function validateCandidateReview(review: PatentCandidateReview, snapshot:
  * rendered in the report and reported to the model instead of rejecting the draft. Quotations are
  * verbatim source text and are never scanned; only prose the model wrote itself is.
  */
-export function candidateWordingReview(review: PatentCandidateReview): string[] {
+export function candidateWordingReview(sided: PatentCandidateReview, variant: CandidateReviewVariant = 'prior-art'): string[] {
+	const review = flattenSides(sided);
 	return legalConclusions([
 		['objective', review.objective],
 		['searchStrategy', review.searchStrategy],
@@ -627,7 +668,7 @@ export function candidateWordingReview(review: PatentCandidateReview): string[] 
 		]),
 		...(review.limitations ?? []).map((value, index) => [`limitations[${index}]`, value] as const),
 		['stopReason', review.stopReason],
-	]);
+	], variant === 'find-better' ? [...LEGAL_CONCLUSION_PHRASES, ...FIND_BETTER_CONCLUSION_PHRASES] : LEGAL_CONCLUSION_PHRASES);
 }
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
@@ -849,7 +890,8 @@ const CHECKED_MECHANICALLY = 'Anchor identity, quotation identity and required f
  * `outputs/prior-art-review.md`. A drawing page saved to disk is linked relative to it; without it
  * such a page is linked to its document, as an unsaved page always is.
  */
-export function renderCandidateReview(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art', reportWorkspacePath = ''): string {
+export function renderCandidateReview(sided: PatentCandidateReview, snapshot: PatentExecutionSnapshot, workingRecordFileName: string, variant: CandidateReviewVariant = 'prior-art', reportWorkspacePath = ''): string {
+	const review = flattenSides(sided);
 	const sources = sourceIndex(snapshot);
 	const documents = retrievedDocuments(review, snapshot);
 	const uncited = documents.filter(document => !document.cited);
@@ -870,22 +912,9 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		'| --- | --- | --- | --- |' + (jurisdictions.length ? ' --- |' : ''),
 		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, textLanguage(document), ...scope(document)].map(cell).join(' | ') + ' |'),
 		'',
-		'## Coverage and remaining search tracks',
-		...(review.coverage ?? []).flatMap(row => [
-			`### ${cell(row.feature)}`,
-			`**${row.kind} · ${row.importance} · ${variant === 'invalidity' ? INVALIDITY_STATUS[row.status] : row.status}${drawingReadingSuffix(row, sources)}**`,
-			row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
-			...(row.sourceAnchors ?? []).flatMap(anchor => {
-				const source = sources.get(anchor);
-				const evidence = row.evidence?.find(item => item.anchor === anchor);
-				return ['', source ? patentCitationLink(anchor, source.reference) : anchor,
-					...(evidence ? [quotation(evidence.quote ?? ''),
-						`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
-			}),
-			...elementMap(row, sources, reportWorkspacePath),
-			...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
-			`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
-		]),
+		...(variant === 'find-better'
+			? findBetterSections(sided, snapshot, row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '####'))
+			: ['## Coverage and remaining search tracks', ...(review.coverage ?? []).flatMap(row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '###'))]),
 		...(variant === 'invalidity' ? referenceRoleTable(review, sources) : []),
 		'', '## Retrieved but not cited in coverage',
 		'Retrieved text that no coverage row cites was not reviewed for this report; its content is unknown, not absent.',
@@ -895,6 +924,75 @@ export function renderCandidateReview(review: PatentCandidateReview, snapshot: P
 		...(automatic.length ? ['', 'Generated from the execution record, not supplied by the model:', ...automatic.map(value => '- ' + value)] : []),
 		'', `Working record: [${workingRecordFileName}](${encodeURIComponent(workingRecordFileName)}) — full search log including queries that could not run, retrieved-but-unread list, wording review, provenance and second read.`,
 	].join('\n');
+}
+
+/** One coverage row: its status line, each cited passage with its source review, the element map and the gap. */
+function coverageRowSection(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>, jurisdictions: readonly string[], variant: CandidateReviewVariant, reportWorkspacePath: string, heading: string): string[] {
+	const status = variant === 'invalidity' ? INVALIDITY_STATUS[row.status] : variant === 'find-better' ? FIND_BETTER_STATUS[row.status] : row.status;
+	return [
+		`${heading} ${cell(row.feature)}`,
+		`**${row.kind} · ${row.importance} · ${status}${drawingReadingSuffix(row, sources)}**`,
+		row.status === 'unresolved' ? 'No supported conclusion is established for this row.' : 'Status is a model assessment of the following evidence, not automated entailment.',
+		...(row.sourceAnchors ?? []).flatMap(anchor => {
+			const source = sources.get(anchor);
+			const evidence = row.evidence?.find(item => item.anchor === anchor);
+			return ['', source ? patentCitationLink(anchor, source.reference) : anchor,
+				...(evidence ? [quotation(evidence.quote ?? ''),
+					`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
+		}),
+		...elementMap(row, sources, reportWorkspacePath),
+		...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
+		`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
+	];
+}
+
+/** The publications a set of rows cites on one side, by their anchors, in the order first cited. */
+function sidePublications(rows: readonly PatentCoverageRow[], side: FindBetterSideName, sources: Map<string, PatentEvidenceSource>): string[] {
+	return [...new Set(rows.flatMap(row => {
+		const value = row[side];
+		return [...(value?.sourceAnchors ?? []), ...(value?.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
+			.flatMap(anchor => {
+				const publication = sources.get(anchor)?.reference.publicationNumber;
+				return publication ? [publicationKey(publication)] : [];
+			});
+	}))];
+}
+
+/**
+ * The body of a Find Better report: the Examiner Baseline, then per independent claim a table of
+ * element | examiner's best art | best art found with each cell a status word, the counted line and
+ * the result sentence, then each side's evidence exactly as an invalidity chart renders a row, and
+ * the tracks log.
+ */
+function findBetterSections(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, rowSection: (row: PatentCoverageRow) => string[]): string[] {
+	const sources = sourceIndex(snapshot);
+	const sided = review.coverage ?? [];
+	return [
+		...renderBaseline(review),
+		'## Claim-by-claim comparison',
+		'Each element of each independent claim is read against the examiner\'s best art and against the best art found, on the same rows. A count is the number of element rows marked disclosed after the writer checked their quotations; it is not a rating, and this report states no invalidity, anticipation or obviousness.',
+		'',
+		...claimComparisons(review).flatMap(comparison => {
+			const rows = sided.filter(row => row.claimNumber?.trim() === comparison.claim);
+			const found = sidePublications(rows, 'found', sources);
+			return [
+				`### Claim ${cell(comparison.claim)}`,
+				`| Element | Examiner's best art (${cell(comparison.examinerArt.join(', '))}) | Best art found (${cell(found.join(', ') || 'none cited')}) |`,
+				'| --- | --- | --- |',
+				...rows.map(row => '| ' + [row.kind === 'combination' ? `${row.feature} (combination, not counted)` : row.feature, sideStatus(row, 'examiner'), sideStatus(row, 'found')].map(cell).join(' | ') + ' |'),
+				'',
+				countLine(comparison),
+				'',
+				claimResultSentence(comparison, found),
+				'',
+				...rows.flatMap(row => (['examiner', 'found'] as const).flatMap(side => {
+					const value = row[side];
+					return value ? rowSection({ ...row, feature: sideFeature(row.feature, side), status: value.status, sourceAnchors: value.sourceAnchors ?? [], gap: value.gap ?? '', evidence: value.evidence, elements: value.elements }) : [];
+				})),
+			];
+		}),
+		...renderTracks(review, snapshot),
+	];
 }
 
 /** What the working record says about a second read, whichever way it ended. */
@@ -916,9 +1014,10 @@ function secondReadSection(review: PatentCandidateReview, secondRead: SecondRead
  * provenance of the mechanical checks — so a later session picking up the same matter can see what
  * was already searched and what was deliberately left.
  */
-export function renderWorkingRecord(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, reportFileName: string, evidenceFileName: string, secondReadFileName: string | undefined, secondRead?: SecondReadOutcome): string {
+export function renderWorkingRecord(sided: PatentCandidateReview, snapshot: PatentExecutionSnapshot, reportFileName: string, evidenceFileName: string, secondReadFileName: string | undefined, secondRead?: SecondReadOutcome, variant: CandidateReviewVariant = 'prior-art'): string {
+	const review = flattenSides(sided);
 	const documents = retrievedDocuments(review, snapshot);
-	const wording = candidateWordingReview(review);
+	const wording = candidateWordingReview(sided, variant);
 	const figures = snapshot.executions.filter(execution => execution.kind === 'figures').length;
 	return [
 		`# Working record — ${review.subject?.trim() || reportFileName}`,
@@ -940,6 +1039,7 @@ export function renderWorkingRecord(review: PatentCandidateReview, snapshot: Pat
 		...(wording.length ? [WORDING_REVIEW_INTRO, ...wording.map(value => '- ' + value)] : ['No phrases flagged.']),
 		'',
 		'## Provenance',
+		...(variant === 'find-better' ? [`Examiner Baseline source: ${baselineSource(sided)}. The writer checked its shape and its X/Y categories, not that the offices' records say what it says.`, ''] : []),
 		snapshot.limitation,
 		'',
 		CHECKED_MECHANICALLY,

@@ -311,9 +311,9 @@ describe('writePatentResults report templates', () => {
 			priorArt: contentRequirementError('prior-art-report', ''),
 			freeForm: contentRequirementError(undefined, ''),
 		}).toEqual({
-			empty: 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report uses empty content with structured fields.',
-			placeholder: 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report uses empty content with structured fields. A placeholder such as "to be completed" is not content.',
-			stub: 'fto-memo needs content: the per-feature analysis, naming each candidate blocking claim, its legal status and its jurisdiction. Only prior-art-report uses empty content with structured fields. A placeholder such as "to be completed" is not content.',
+			empty: 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report and find-better-report use empty content with structured fields.',
+			placeholder: 'landscape-report needs content: the filing-trend table, the top-filers table, the jurisdiction split and the white-space observations, each figure with its counting basis (families / applications / publications / live search hits) and its source (PATSTAT edition, analytics corpus, or the query). Only prior-art-report and find-better-report use empty content with structured fields. A placeholder such as "to be completed" is not content.',
+			stub: 'fto-memo needs content: the per-feature analysis, naming each candidate blocking claim, its legal status and its jurisdiction. Only prior-art-report and find-better-report use empty content with structured fields. A placeholder such as "to be completed" is not content.',
 			written: undefined,
 			priorArt: undefined,
 			freeForm: undefined,
@@ -334,8 +334,8 @@ describe('writePatentResults report templates', () => {
 	it('keeps every template\'s numbered scaffold for section text and steps aside for a body that structures itself', () => {
 		const authored = ['## Executive Summary', 'Filing growth is flat.', '', '## Filing Trends', '| Year | Families |', '| --- | --- |', '| 2019 | 1,240 |', '', '## White Space'].join('\n');
 		const sections = '| Year | Families |\n| --- | --- |\n| 2019 | 1,240 |';
-		// `prior-art-report` is excluded: its body is generated from structured coverage, not written free-form.
-		const content = PATENT_REPORT_TEMPLATES.filter(template => template !== 'prior-art-report');
+		// `prior-art-report` and `find-better-report` are excluded: their body is generated from structured coverage, not written free-form.
+		const content = PATENT_REPORT_TEMPLATES.filter(template => template !== 'prior-art-report' && template !== 'find-better-report');
 		expect({
 			scaffoldForSectionText: content.filter(template => buildPatentReport(sections, template).includes('## 1.')),
 			scaffoldForAuthoredReport: content.filter(template => buildPatentReport(authored, template).includes('## 1.')),
