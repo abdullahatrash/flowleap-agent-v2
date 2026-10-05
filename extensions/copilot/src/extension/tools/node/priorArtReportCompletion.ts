@@ -32,7 +32,12 @@ function digest(value: string | Uint8Array): string { return createHash('sha256'
 
 /** Conservative routing for explicit English prior-art deliverable requests, not every patent question. */
 export function requestsPriorArtReport(message: string): boolean {
-	return (/\bprior[\s-]+art\b/i.test(message) && /\b(report|review|save|write|output)\b/i.test(message)) || requestsInvalidityChart(message);
+	return (/\bprior[\s-]+art\b/i.test(message) && /\b(report|review|save|write|output)\b/i.test(message)) || requestsInvalidityChart(message) || requestsFindBetter(message);
+}
+
+/** A Find Better run is the same structured report, two-sided, so it is finalized on the same path. */
+function requestsFindBetter(message: string): boolean {
+	return /\bfind[\s-]+better\b/i.test(message);
 }
 
 /**
@@ -44,14 +49,15 @@ function requestsInvalidityChart(message: string): boolean {
 }
 
 /**
- * A writer call that finalizes a structured report: `prior-art-report` always, and
- * `invalidity-claim-chart` when it carries the coverage rows the writer validates and renders.
+ * A writer call that finalizes a structured report: `prior-art-report` and `find-better-report`
+ * always, and `invalidity-claim-chart` when it carries the coverage rows the writer validates and
+ * renders.
  */
 function finalizesStructuredReport(call: IToolCallRound['toolCalls'][number]): boolean {
 	if (call.name !== ToolName.WritePatentResults) { return false; }
 	try {
 		const value: { template?: unknown; coverage?: unknown } = JSON.parse(call.arguments);
-		return value.template === 'prior-art-report' || (value.template === 'invalidity-claim-chart' && Array.isArray(value.coverage) && value.coverage.length > 0);
+		return value.template === 'prior-art-report' || value.template === 'find-better-report' || (value.template === 'invalidity-claim-chart' && Array.isArray(value.coverage) && value.coverage.length > 0);
 	} catch { return false; }
 }
 
@@ -81,9 +87,11 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 	const required = writingReport || (currentReportRequest && (hasResearch || genericWrite)) || (!!reportRequest && hasResearch && (continuing || !!mentionsTarget)) || (pendingResearch && (hasResearch || continuing || !!mentionsTarget));
 	// The deliverable the user asked for decides which structured template finalizes it; both take the
 	// same empty content and evidence-backed coverage.
-	const invalidity = requestsInvalidityChart(reportRequest?.message ?? current.message);
-	const deliverable = invalidity ? 'invalidity chart' : 'prior-art report';
-	const structuredTemplate = invalidity ? 'invalidity-claim-chart' : 'prior-art-report';
+	const requested = reportRequest?.message ?? current.message;
+	const findBetter = requestsFindBetter(requested);
+	const invalidity = !findBetter && requestsInvalidityChart(requested);
+	const deliverable = findBetter ? 'Find Better report' : invalidity ? 'invalidity chart' : 'prior-art report';
+	const structuredTemplate = findBetter ? 'find-better-report' : invalidity ? 'invalidity-claim-chart' : 'prior-art-report';
 	if (required && !currentReceipts.length) {
 		return `The requested ${deliverable} has no successful structured finalization in this turn. Generic file writes and free-form writer calls are unvalidated drafts. Save the requested report with write_patent_results, template="${structuredTemplate}", empty content and the evidence-backed coverage fields. An honest interim report with unresolved features and explicit limitations is valid; do not invent support or repeat searches merely to pass validation.`;
 	}

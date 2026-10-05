@@ -23,6 +23,7 @@ export type PatentReportTemplate =
 	| 'fto-memo'
 	| 'office-action-scaffold'
 	| 'invalidity-claim-chart'
+	| 'find-better-report'
 	| 'eou-infringement-chart'
 	| 'patentability-opinion'
 	| 'landscape-report'
@@ -34,6 +35,7 @@ export const PATENT_REPORT_TEMPLATES: readonly PatentReportTemplate[] = [
 	'fto-memo',
 	'office-action-scaffold',
 	'invalidity-claim-chart',
+	'find-better-report',
 	'eou-infringement-chart',
 	'patentability-opinion',
 	'landscape-report',
@@ -59,11 +61,11 @@ export interface PatentReportFields {
 	readonly preparedBy?: string;
 	readonly objective?: string;
 	readonly searchStrategy?: string;
-	/** invalidity-claim-chart, structured path only: the patent whose claims the chart challenges. */
+	/** invalidity-claim-chart (structured) and find-better-report: the patent whose claims are charted. */
 	readonly challengedPublication?: string;
-	/** invalidity-claim-chart, structured path only: the distinct claims the chart's rows name. */
+	/** invalidity-claim-chart (structured) and find-better-report: the distinct claims the rows name. */
 	readonly claimsAtIssue?: string;
-	/** invalidity-claim-chart, structured path only: the date the art is measured against. */
+	/** invalidity-claim-chart (structured) and find-better-report: the date the art is measured against. */
 	readonly criticalDateBasis?: string;
 }
 
@@ -77,11 +79,14 @@ function section(stub: string, value: string | undefined): string {
 	return value?.trim() ? value.trim() : stub;
 }
 
+/** The templates whose body is always generated from structured coverage, so their content must be empty. */
+type StructuredTemplate = 'prior-art-report' | 'find-better-report';
+
 /**
- * What each template's `content` must carry. `prior-art-report` is absent: it is the one template
- * whose body is generated from structured coverage, so its content must be empty.
+ * What each template's `content` must carry. The structured templates are absent: their body is
+ * generated from structured coverage, so their content must be empty.
  */
-const CONTENT_REQUIREMENT: Record<Exclude<PatentReportTemplate, 'prior-art-report'>, string> = {
+const CONTENT_REQUIREMENT: Record<Exclude<PatentReportTemplate, StructuredTemplate>, string> = {
 	'fto-memo': 'fto-memo needs content: the per-feature analysis, naming each candidate blocking claim, its legal status and its jurisdiction.',
 	'office-action-scaffold': 'office-action-scaffold needs content: the remarks answering every ground of rejection, each naming the claims affected and the reference applied against them.',
 	'invalidity-claim-chart': 'invalidity-claim-chart needs content: the element-by-element table, one row per claim element and one column per reference, each cell quoting the disclosing passage.',
@@ -92,7 +97,7 @@ const CONTENT_REQUIREMENT: Record<Exclude<PatentReportTemplate, 'prior-art-repor
 };
 
 /** Closing sentence of every missing-content message: the one template the rule does not apply to. */
-const CONTENT_EXCEPTION = 'Only prior-art-report uses empty content with structured fields.';
+const CONTENT_EXCEPTION = 'Only prior-art-report and find-better-report use empty content with structured fields.';
 
 /** `invalidity-claim-chart` has the same structured alternative, so its message offers it instead. */
 const INVALIDITY_EXCEPTION = 'Either write the chart into content, or supply structured coverage and leave content empty; the writer then generates, validates and receipts the chart.';
@@ -129,7 +134,7 @@ function bareText(value: string): string {
  * where nothing keeps them. Free-form saves (no template) are unaffected.
  */
 export function contentRequirementError(template: PatentReportTemplate | undefined, content: string, structuredBody = false): string | undefined {
-	if (!template || template === 'prior-art-report' || structuredBody) {
+	if (!template || template === 'prior-art-report' || template === 'find-better-report' || structuredBody) {
 		return undefined;
 	}
 	const requirement = `${CONTENT_REQUIREMENT[template]} ${template === 'invalidity-claim-chart' ? INVALIDITY_EXCEPTION : CONTENT_EXCEPTION}`;
@@ -184,6 +189,8 @@ function templateHeader(template: PatentReportTemplate, f: PatentReportFields, s
 			return structuredBody
 				? ['# Invalidity Claim Chart', '', fieldTable([['Challenged patent', f.challengedPublication], ['Claim(s) at issue', f.claimsAtIssue], ['Critical date basis', f.criticalDateBasis], ['Date', f.date], ['Prepared by', f.preparedBy]]), '']
 				: ['# Invalidity Claim Chart', '', fieldTable([['Patent No. / Claim(s) at Issue', f.matter], ['Prior Art Reference(s)', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
+		case 'find-better-report':
+			return ['# Find Better Report', '', fieldTable([['Target patent', f.challengedPublication], ['Independent claim(s) compared', f.claimsAtIssue], ['Earliest priority date basis', f.criticalDateBasis], ['Date', f.date], ['Prepared by', f.preparedBy]]), ''];
 		case 'eou-infringement-chart':
 			return ['# Evidence-of-Use (EoU) Infringement Chart', '', fieldTable([['Patent No. / Claim(s) Asserted', f.matter], ['Accused Product / Service', f.subject], ['Date', f.date], ['Prepared By', f.preparedBy]]), ''];
 		case 'patentability-opinion':
@@ -284,6 +291,10 @@ function templateScaffold(content: string, template: PatentReportTemplate, f: Pa
 				'_Verbatim text of the challenged claim(s), for reference._',
 				'',
 			];
+
+		case 'find-better-report':
+			// Always structured: the body is generated from coverage, so there is no scaffold to fill.
+			return [...templateHeader(template, f, true), results, ''];
 
 		case 'eou-infringement-chart':
 			return [
