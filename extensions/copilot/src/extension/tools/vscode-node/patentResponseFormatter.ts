@@ -492,3 +492,34 @@ function alignmentMarker(align: IMarkdownColumn<unknown>['align']): string {
 		default: return '---';
 	}
 }
+
+/**
+ * One priority claim as the backend OPS biblio returns it. `date` is `YYYYMMDD` as OPS writes it.
+ * Older routes still send a plain string per claim, so consumers type the field as
+ * `ReadonlyArray<string | PriorityClaim>` and render it with {@link formatPriorityDates}.
+ */
+export interface PriorityClaim {
+	readonly date: string | null;
+	readonly country: string;
+	readonly epodocApplication: string | null;
+	readonly docdbApplication?: string | null;
+	readonly kind?: string | null;
+	readonly originalApplication?: string | null;
+}
+
+/**
+ * Renders priority claims for display: `YYYY-MM-DD (epodocApplication)` for an object, `YYYY-MM-DD`
+ * alone when it has no application id, a plain string as-is, and `N/A` when there are none.
+ */
+export function formatPriorityDates(priority: ReadonlyArray<string | PriorityClaim> | null | undefined): string {
+	if (!priority || priority.length === 0) {
+		return 'N/A';
+	}
+	return priority.map(claim => {
+		if (typeof claim === 'string') {
+			return claim;
+		}
+		const date = claim.date?.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') ?? 'unknown date';
+		return claim.epodocApplication ? `${date} (${claim.epodocApplication})` : date;
+	}).join(', ');
+}

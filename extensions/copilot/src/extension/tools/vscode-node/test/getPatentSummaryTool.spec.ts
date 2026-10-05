@@ -119,6 +119,21 @@ describe('GetPatentSummaryTool', () => {
 		`);
 	});
 
+	it('renders an object-shaped priority claim as an ISO date and its application id', async () => {
+		const { client } = makeBackendClient({
+			success: true,
+			data: {
+				patentNumber: 'EP2110298B1',
+				bibliography: { docId: 'EP2110298B1', title: 'T', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: '2009-04-15', publication: '2012-01-01', priority: [{ country: 'US', date: '20080416', docdbApplication: 'US10374408 (A)', epodocApplication: 'US20080103744', kind: 'A', originalApplication: '103744' }] } },
+				legalStatus: null,
+				family: null,
+				term: null,
+			},
+		});
+		const result = await new GetPatentSummaryTool(makeLogService(), client).invoke(makeOptions({ patentNumber: 'EP2110298B1' }), makeToken());
+		expect(textOf(result).split('\n').find(line => line.startsWith('**Priority Date(s):**'))).toBe('**Priority Date(s):** 2008-04-16 (US20080103744)');
+	});
+
 	it('carries the designated states into the legal-status section', async () => {
 		// The one-call overview is where "tell me about EP X" lands, so the designation has to be
 		// here too — family reports one "EP" member and cannot answer which countries it covers.

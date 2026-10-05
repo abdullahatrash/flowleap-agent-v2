@@ -47,6 +47,13 @@ function textOf(result: vscode.LanguageModelToolResult): string {
 
 describe('ComparePatentsTool', () => {
 
+	it('renders an object-shaped priority claim as an ISO date and its application id', async () => {
+		const patent = { patentNumber: 'EP2110298B1', docId: 'EP2110298B1', title: 'T', abstract: null, applicants: [], inventors: [], ipc: [], cpc: [], dates: { filing: '2009-04-15', publication: '2012-01-01', priority: [{ country: 'US', date: '20080416', docdbApplication: 'US10374408 (A)', epodocApplication: 'US20080103744', kind: 'A', originalApplication: '103744' }] } };
+		const { client } = makeBackendClient({ success: true, data: { count: 1, patents: [patent] } });
+		const result = await new ComparePatentsTool(makeLogService(), client).invoke(makeOptions({ patentNumbers: ['EP2110298B1', 'EP2110298B1'] }), makeToken());
+		expect(textOf(result).split('\n').find(line => line.startsWith('| Priority Date(s)'))).toBe('| Priority Date(s) | 2008-04-16 (US20080103744) |');
+	});
+
 	it('renders a side-by-side attribute table with bounded abstracts and the compare_claims distinction', async () => {
 		const { client, calls } = makeBackendClient({
 			success: true,

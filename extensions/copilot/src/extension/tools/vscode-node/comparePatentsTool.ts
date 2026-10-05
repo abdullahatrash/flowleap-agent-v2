@@ -12,7 +12,7 @@ import { IPatentBackendClient } from '../../patentai/vscode-node/patentBackendCl
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { callFacadeTool } from './patentFacade';
-import { IMarkdownColumn, renderMarkdownTable, truncatePreview } from './patentResponseFormatter';
+import { formatPriorityDates, IMarkdownColumn, PriorityClaim, renderMarkdownTable, truncatePreview } from './patentResponseFormatter';
 import { handlePatentToolError } from './patentToolError';
 
 interface IComparePatentsParams {
@@ -29,7 +29,7 @@ interface ComparedPatent {
 	inventors: string[];
 	ipc: string[];
 	cpc: string[];
-	dates: { filing: string | null; publication: string | null; priority: string[] };
+	dates: { filing: string | null; publication: string | null; priority: ReadonlyArray<string | PriorityClaim> };
 }
 
 /** `data` payload of the `/v1/tools/compare_patents` facade endpoint. */
@@ -119,7 +119,7 @@ export class ComparePatentsTool implements ICopilotTool<IComparePatentsParams> {
 			{ label: 'Inventors', value: p => this.joinOrNa(p.inventors) },
 			{ label: 'Filing Date', value: p => p.dates?.filing || 'N/A' },
 			{ label: 'Publication Date', value: p => p.dates?.publication || 'N/A' },
-			{ label: 'Priority Date(s)', value: p => this.joinOrNa(p.dates?.priority) },
+			{ label: 'Priority Date(s)', value: p => formatPriorityDates(p.dates?.priority) },
 			{ label: 'IPC', value: p => this.joinOrNa(p.ipc) },
 			{ label: 'CPC', value: p => this.joinOrNa(p.cpc) },
 		];
