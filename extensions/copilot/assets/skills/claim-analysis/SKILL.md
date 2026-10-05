@@ -55,6 +55,11 @@ The keyword that best separates this claim from its technology area is the
 **discriminating** term. To build the queries themselves, use the `patent-search` skill —
 it owns query construction and the CQL field reference.
 
+When the user asks for a search statement, or the terms will go to a search, show them as one
+**Search Statement** block — concept table, the Boolean statement, the Espacenet link and the
+Discriminating Term — in the shape of
+[search-statement.md](../patent-search/references/search-statement.md).
+
 ## Step 4: Scope Assessment
 
 - **Broadest independent claim**: which claim covers the most ground?
