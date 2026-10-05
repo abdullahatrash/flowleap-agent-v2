@@ -921,7 +921,7 @@
     "type": "function",
     "function": {
       "name": "write_patent_results",
-      "description": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. An element may instead rest on a recorded drawing: give it the PUB:figure:N anchor printed by get_patent_figures, basis \"figure\" and a reading of what the figure clearly shows (never a dimension or ratio unless the drawing is stated to be to scale); the report marks that row as resting on a drawing reading and the second read does not judge it. An essential feature is refused as unresolved while no drawing of any retrieved document was read this session: call get_patent_figures on the closest candidates with saveDir \"references/figures\", or put in that row's gap the phrase \"figures not consulted:\" followed by why a drawing cannot settle it. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. Free-form saves (no template) retain their existing behavior.",
+      "description": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. An element may instead rest on a recorded drawing: give it the PUB:figure:N anchor printed by get_patent_figures, basis \"figure\" and a reading of what the figure clearly shows (never a dimension or ratio unless the drawing is stated to be to scale); the report marks that row as resting on a drawing reading and the second read does not judge it. An essential feature is refused as unresolved while no drawing of any retrieved document was read this session: call get_patent_figures on the closest candidates with saveDir \"references/figures\", or put in that row's gap the phrase \"figures not consulted:\" followed by why a drawing cannot settle it. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report (Find Better, ADR 0010) is structured only and refused without coverage, baseline or baselinePath, examinerBestArt and tracks: content stays empty; give the Examiner Baseline either inline as baseline (the --json output of flowleap patent examiner-baseline, or the examiner_baseline backend tool's result) or as baselinePath, the workspace path of that --json output on disk — exactly one of the two; examinerBestArt names, per independent claim, the Baseline document(s) taken as the examiner's best art, each of which must be in baseline.documents[] with an X or Y category; every coverage row is one element of one independent claim (claimNumber required) and carries two sides, examiner and found, each with its own status, sourceAnchors, evidence, elements and gap, checked exactly like an invalidity chart row; the examiner side may cite only that claim's examiner's best art. The writer renders the Baseline matrix and its gaps, a per-claim table element | examiner's best art | best art found, and counts \"disclosed n of m\" itself from the validated rows; no score or rating field exists and any number supplied outside tracks is ignored. Finding nothing better is a complete result. Free-form saves (no template) retain their existing behavior.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -931,7 +931,7 @@
           },
           "content": {
             "type": "string",
-            "description": "Report body. Required for every template except prior-art-report, and except invalidity-claim-chart when it is saved with structured coverage; those take coverage instead and must leave content empty. For landscape-report include the trend, top-filer and jurisdiction tables and the white-space notes, each figure with its counting basis and source."
+            "description": "Report body. Required for every template except prior-art-report and find-better-report, and except invalidity-claim-chart when it is saved with structured coverage; those take coverage instead and must leave content empty. For landscape-report include the trend, top-filer and jurisdiction tables and the white-space notes, each figure with its counting basis and source."
           },
           "template": {
             "type": "string",
@@ -940,12 +940,13 @@
               "fto-memo",
               "office-action-scaffold",
               "invalidity-claim-chart",
+              "find-better-report",
               "eou-infringement-chart",
               "patentability-opinion",
               "landscape-report",
               "portfolio-due-diligence-memo"
             ],
-            "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts (invalidity-claim-chart also takes structured coverage, and then requires empty content), landscape-report for landscapes, portfolio-due-diligence-memo for portfolios. Omit for free-form content."
+            "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts (invalidity-claim-chart also takes structured coverage, and then requires empty content), find-better-report for a Find Better run on a granted patent (structured only: coverage with examiner and found sides, baseline, examinerBestArt, tracks; empty content), landscape-report for landscapes, portfolio-due-diligence-memo for portfolios. Omit for free-form content."
           },
           "matter": {
             "type": "string",
@@ -957,7 +958,7 @@
           },
           "objective": {
             "type": "string",
-            "description": "prior-art-report: one or two sentences stating the invention and the question the search answers. Provide it — do not leave the report's Objective section as a stub."
+            "description": "prior-art-report: one or two sentences stating the invention and the question the search answers. invalidity-claim-chart and find-better-report: the earliest priority date the art is measured against, with its basis. Provide it — do not leave the report's Objective section as a stub."
           },
           "searchStrategy": {
             "type": "string",
@@ -1016,11 +1017,11 @@
           },
           "challengedPublication": {
             "type": "string",
-            "description": "invalidity-claim-chart: the publication number of the patent whose claims are being charted against the cited art. Falls back to matter when unset."
+            "description": "invalidity-claim-chart and find-better-report: the publication number of the patent whose claims are being charted against the cited art (for find-better-report, the granted target patent). Falls back to matter when unset."
           },
           "coverage": {
             "type": "array",
-            "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 — element (b): …\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart.",
+            "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 — element (b): …\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report: one row per element of each independent claim (claimNumber required), each with an examiner side and a found side; the row's own status, sourceAnchors, evidence and elements are unused there.",
             "minItems": 1,
             "items": {
               "type": "object",
@@ -1064,7 +1065,7 @@
                 "claimNumber": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"). The chart's header states the distinct claims its rows name."
+                  "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"). The chart's header states the distinct claims its rows name. find-better-report: required on every row; the independent claim of the target patent this element belongs to."
                 },
                 "elements": {
                   "type": "array",
@@ -1106,6 +1107,230 @@
                     ],
                     "additionalProperties": false
                   }
+                },
+                "examiner": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "supported",
+                        "partial",
+                        "unresolved"
+                      ],
+                      "description": "supported renders as disclosed, partial as partially disclosed, unresolved as not found. Only supported counts toward \"disclosed n of m\"."
+                    },
+                    "sourceAnchors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "gap": {
+                      "type": "string",
+                      "description": "What this side's art does not disclose for the element; an empty string only when nothing is missing."
+                    },
+                    "elements": {
+                      "type": "array",
+                      "description": "Required for supported/partial rows (feature and combination alike): one entry per constituent the feature requires. A supported row discloses every element by cited text or by a recorded drawing; a partial row discloses some and leaves at least one undisclosed; a supported combination row must rest on a single publication. A text element gives anchor plus disclosedBy, a literal fragment of that anchor’s recorded text. A figure element gives anchor = a PUB:figure:N anchor printed by get_patent_figures, basis = \"figure\", and reading = what the drawing clearly shows (that an element exists, how parts connect or are arranged) — never a dimension, proportion or ratio unless the drawing is stated to be to scale.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "element": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "One required constituent of the feature in your own words (e.g. the component, the property it must have, the quantity or range)."
+                          },
+                          "anchor": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The one of this row’s sourceAnchors whose passage — or, with basis \"figure\", whose recorded drawing page — discloses this element. Omit together with disclosedBy when nothing cited discloses it."
+                          },
+                          "disclosedBy": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A literal fragment copied from that anchor’s recorded text that discloses the element; matching ignores case and whitespace. Fragments under 12 characters are disclosed as weak in the report. Omit together with anchor when no cited text discloses the element, and always for a figure element — a drawing has no quotable text."
+                          },
+                          "basis": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "figure"
+                            ],
+                            "description": "What discloses this element: \"text\" (the default) for a passage cited by anchor plus disclosedBy, \"figure\" for a recorded drawing page cited by a PUB:figure:N anchor and stated in reading."
+                          },
+                          "reading": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "basis \"figure\" only: what the drawing clearly shows — that an element exists, how the parts connect or are arranged. It replaces disclosedBy. A reading that states a dimension, a proportion or a ratio is rejected unless the same reading says the drawing is to scale (MPEP 2125)."
+                          }
+                        },
+                        "required": [
+                          "element"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "anchor": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "One of this row’s sourceAnchors."
+                          },
+                          "quote": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Optional for a numbered claim: omit to copy its entire recorded text verbatim by anchor. For a description passage this field is required and must match returned text. Never re-fetch a claim merely to transcribe it for this field."
+                          },
+                          "scope": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Identify independent/dependent claim or description/embodiment scope and reviewed dependency chain."
+                          },
+                          "qualifiers": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Preserve restrictions and distinguish overlapping ranges from exact feature support."
+                          },
+                          "quantityBasis": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "State original units, basis and every constituent. Keep parts as parts; do not substitute an unverified percentage conversion. Say not applicable when appropriate."
+                          }
+                        },
+                        "required": [
+                          "anchor",
+                          "scope",
+                          "qualifiers",
+                          "quantityBasis"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "sourceAnchors",
+                    "gap"
+                  ],
+                  "additionalProperties": false,
+                  "description": "find-better-report: the examiner's best art on this element, checked exactly like an invalidity chart row (quotes, element map, second read). Cite only the examiner's best art named for this claim in examinerBestArt. The row's own status, sourceAnchors, evidence and elements are unused in find-better-report: set status \"unresolved\", sourceAnchors [] and gap \"\"."
+                },
+                "found": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "supported",
+                        "partial",
+                        "unresolved"
+                      ],
+                      "description": "supported renders as disclosed, partial as partially disclosed, unresolved as not found. Only supported counts toward \"disclosed n of m\"."
+                    },
+                    "sourceAnchors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "gap": {
+                      "type": "string",
+                      "description": "What this side's art does not disclose for the element; an empty string only when nothing is missing."
+                    },
+                    "elements": {
+                      "type": "array",
+                      "description": "Required for supported/partial rows (feature and combination alike): one entry per constituent the feature requires. A supported row discloses every element by cited text or by a recorded drawing; a partial row discloses some and leaves at least one undisclosed; a supported combination row must rest on a single publication. A text element gives anchor plus disclosedBy, a literal fragment of that anchor’s recorded text. A figure element gives anchor = a PUB:figure:N anchor printed by get_patent_figures, basis = \"figure\", and reading = what the drawing clearly shows (that an element exists, how parts connect or are arranged) — never a dimension, proportion or ratio unless the drawing is stated to be to scale.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "element": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "One required constituent of the feature in your own words (e.g. the component, the property it must have, the quantity or range)."
+                          },
+                          "anchor": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The one of this row’s sourceAnchors whose passage — or, with basis \"figure\", whose recorded drawing page — discloses this element. Omit together with disclosedBy when nothing cited discloses it."
+                          },
+                          "disclosedBy": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A literal fragment copied from that anchor’s recorded text that discloses the element; matching ignores case and whitespace. Fragments under 12 characters are disclosed as weak in the report. Omit together with anchor when no cited text discloses the element, and always for a figure element — a drawing has no quotable text."
+                          },
+                          "basis": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "figure"
+                            ],
+                            "description": "What discloses this element: \"text\" (the default) for a passage cited by anchor plus disclosedBy, \"figure\" for a recorded drawing page cited by a PUB:figure:N anchor and stated in reading."
+                          },
+                          "reading": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "basis \"figure\" only: what the drawing clearly shows — that an element exists, how the parts connect or are arranged. It replaces disclosedBy. A reading that states a dimension, a proportion or a ratio is rejected unless the same reading says the drawing is to scale (MPEP 2125)."
+                          }
+                        },
+                        "required": [
+                          "element"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "anchor": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "One of this row’s sourceAnchors."
+                          },
+                          "quote": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Optional for a numbered claim: omit to copy its entire recorded text verbatim by anchor. For a description passage this field is required and must match returned text. Never re-fetch a claim merely to transcribe it for this field."
+                          },
+                          "scope": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Identify independent/dependent claim or description/embodiment scope and reviewed dependency chain."
+                          },
+                          "qualifiers": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Preserve restrictions and distinguish overlapping ranges from exact feature support."
+                          },
+                          "quantityBasis": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "State original units, basis and every constituent. Keep parts as parts; do not substitute an unverified percentage conversion. Say not applicable when appropriate."
+                          }
+                        },
+                        "required": [
+                          "anchor",
+                          "scope",
+                          "qualifiers",
+                          "quantityBasis"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "sourceAnchors",
+                    "gap"
+                  ],
+                  "additionalProperties": false,
+                  "description": "find-better-report: the best art the Find Better tracks found on this element, checked exactly like an invalidity chart row. If nothing found discloses the element, status \"unresolved\" with the gap saying so."
                 },
                 "evidence": {
                   "type": "array",
@@ -1155,6 +1380,125 @@
                 "sourceAnchors",
                 "gap",
                 "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "baseline": {
+            "type": "object",
+            "description": "find-better-report: the Examiner Baseline exactly as `flowleap patent examiner-baseline <publication> --json` prints it (publication, offices[], membersWalked[], documents[] with document, kinds, npl, cells{office: {text, citations[]}}, gaps[], dedupe), or the examiner_baseline backend tool's result. Pass it unedited; the writer renders the matrix and the gaps from it.",
+            "properties": {
+              "publication": {
+                "type": "string"
+              },
+              "offices": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "membersWalked": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "documents": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "gaps": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "dedupe": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "offices",
+              "documents",
+              "gaps"
+            ]
+          },
+          "baselinePath": {
+            "type": "string",
+            "minLength": 1,
+            "description": "find-better-report: workspace-relative or absolute workspace path to the unedited --json output of `flowleap patent examiner-baseline <publication> --json` saved on disk. Use it instead of baseline (exactly one of the two); the writer reads the file, checks the same shape, and states the source in the result and the working record."
+          },
+          "examinerBestArt": {
+            "type": "array",
+            "description": "find-better-report: per independent claim, the Baseline document(s) taken as the examiner's best art. Each publication must be in baseline.documents[] and carry an X or Y category in at least one office; otherwise the save is refused.",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "claimNumber": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The independent claim of the target patent, e.g. \"1\"."
+                },
+                "publications": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "Publication numbers as the Baseline lists them (kind code optional), e.g. \"US5135330\"."
+                }
+              },
+              "required": [
+                "claimNumber",
+                "publications"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "tracks": {
+            "type": "array",
+            "description": "find-better-report: every expansion track the run took (backward citations two hops from each X/Y reference; inventor and NPL-author networks; classification co-occurrence with the Discriminating Terms), each with every query and its hit count, zero included. A track with no query is listed with an empty queries array. A count the execution record holds replaces the one given here.",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "queries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "query": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "tool": {
+                        "type": "string",
+                        "description": "The tool or command the query ran through."
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Hits returned, 0 included."
+                      }
+                    },
+                    "required": [
+                      "query"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "queries"
               ],
               "additionalProperties": false
             }

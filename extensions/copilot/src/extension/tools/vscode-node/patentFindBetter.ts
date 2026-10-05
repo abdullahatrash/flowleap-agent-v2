@@ -65,8 +65,8 @@ interface ExaminerBaselineMember {
 }
 
 /**
- * The Examiner Baseline: the `--json` output of `flowleap patent examiner-baseline`, or the same
- * shape built from the typed citation tools. Field names are the CLI's contract.
+ * The Examiner Baseline: the `--json` output of `flowleap patent examiner-baseline`, or the
+ * examiner_baseline backend tool's result. Field names are the CLI's contract.
  */
 export interface ExaminerBaseline {
 	readonly publication?: string;
@@ -342,7 +342,7 @@ export function renderBaseline(review: FindBetterFields): string[] {
 	const members = baseline.membersWalked ?? [];
 	return [
 		'## Examiner Baseline',
-		`Every document the examining offices cited across the family of ${baseline.publication ?? 'the target'}, by office, as the Baseline supplied to the writer reports it (\`flowleap patent examiner-baseline --json\` or the same shape built from the typed citation tools). Cell: relevance category and cited claims, or \`applicant\` where only the applicant cited the document; \`-\` where the office did not cite it. Rows deduplicated by ${baseline.dedupe ?? 'an unstated key'}. Claim numbers in a cell are those of the citing publication named beside them (the claim set that office searched or examined), not the granted claims of the target; a combined category such as X,A is shown as the office printed it.`,
+		`Every document the examining offices cited across the family of ${baseline.publication ?? 'the target'}, by office, as the Baseline supplied to the writer reports it (\`flowleap patent examiner-baseline --json\` or the examiner_baseline backend tool's result). Cell: relevance category and cited claims, or \`applicant\` where only the applicant cited the document; \`-\` where the office did not cite it. Rows deduplicated by ${baseline.dedupe ?? 'an unstated key'}. Claim numbers in a cell are those of the citing publication named beside them (the claim set that office searched or examined), not the granted claims of the target; a combined category such as X,A is shown as the office printed it.`,
 		'',
 		...(members.length ? [
 			`Family members walked: ${members.length}. Offices: ${offices.join(', ') || 'none'}.`,
