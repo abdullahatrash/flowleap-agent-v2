@@ -35,7 +35,7 @@ does **not** forward any browser cookie to the backend (#542). Clerk sets client
 root domain `flowleap.co`, so the browser sends them to `*.app.flowleap.co` too. If nginx
 forwarded them, Clerk's middleware would answer the auth call with a `307` handshake redirect,
 and `auth_request` turns that into a `500`. The auth call also sends `Accept: application/json`
-and blank `Sec-Fetch-*` headers. The backend runbook text that says "forward the Cookie header"
+and blank `Sec-Fetch-*`, `Origin` and `Referer` headers. The backend runbook text that says "forward the Cookie header"
 is wrong for this setup (flowleap-backend issue filed from #542).
 
 **No auth cache (decision, #542).** The first version cached `204`/`403` answers for 30 seconds

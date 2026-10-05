@@ -305,6 +305,11 @@ server {
 		proxy_set_header Sec-Fetch-Dest "";
 		proxy_set_header Sec-Fetch-Mode "";
 		proxy_set_header Sec-Fetch-Site "";
+		# Origin/Referer: the backend's global CORS policy throws on an unknown Origin
+		# (500), and script/XHR requests from the workbench carry one. Server-to-server
+		# call: send neither.
+		proxy_set_header Origin "";
+		proxy_set_header Referer "";
 		proxy_set_header Authorization \$hosted_authorization;
 		proxy_ssl_server_name on;
 		proxy_ssl_name $api_host;
