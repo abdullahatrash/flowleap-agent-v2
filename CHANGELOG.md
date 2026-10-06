@@ -14,6 +14,10 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bundled CLI skills updated to flowleap-cli v0.10.0 (Find Better recipe, Search Statement reference).
+
 ### Fixed
 
 - Hosted/web client: the patent tools were not offered to the chat (`!isWeb` gate).
