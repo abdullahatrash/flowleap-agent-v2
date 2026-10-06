@@ -146,6 +146,24 @@ export interface IWorkbench {
 	shutdown: () => Promise<void>;
 }
 
+/**
+ * Where a Hosted Workspace keeps the user data of the web client on the server.
+ */
+export interface IHostedUserDataOptions {
+
+	/**
+	 * Absolute path of the server's user data folder (the folder that has `User/`).
+	 * `vscode-userdata:/<path>` resources are stored at `<userDataPath>/<path>` on the remote.
+	 */
+	readonly userDataPath: string;
+
+	/**
+	 * Server path that answers a `POST` with the 32 byte server part of the key
+	 * that encrypts the secrets file (same protocol as `vscode-secret-key-path`).
+	 */
+	readonly secretKeyPath: string;
+}
+
 export interface IWorkbenchConstructionOptions {
 
 	//#region Connection related configuration
@@ -244,6 +262,12 @@ export interface IWorkbenchConstructionOptions {
 	 * The secret storage provider to store and retrieve secrets.
 	 */
 	readonly secretStorageProvider?: ISecretStorageProvider;
+
+	/**
+	 * Keep user data, browser state and secrets on the remote server instead of
+	 * in the browser (FlowLeap Hosted Workspace, #547). Requires `remoteAuthority`.
+	 */
+	readonly hostedUserData?: IHostedUserDataOptions;
 
 	/**
 	 * Additional builtin extensions those cannot be uninstalled but only be disabled.

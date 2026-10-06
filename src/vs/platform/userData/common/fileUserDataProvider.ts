@@ -13,11 +13,17 @@ import { TernarySearchTree } from '../../../base/common/ternarySearchTree.js';
 import { IUserDataProfilesService } from '../../userDataProfile/common/userDataProfile.js';
 import { ResourceSet } from '../../../base/common/map.js';
 import { IUriIdentityService } from '../../uriIdentity/common/uriIdentity.js';
+import { joinPath, relativePath } from '../../../base/common/resources.js';
 
 /**
  * This is a wrapper on top of the local filesystem provider which will
  * 	- Convert the user data resources to file system scheme and vice-versa
  *  - Enforces atomic reads for user data
+ *
+ * When `fileSystemHome` is given, user data resources are rebased onto it
+ * (`vscode-userdata:/User/settings.json` -> `<fileSystemHome>/User/settings.json`)
+ * instead of only changing their scheme. A Hosted Workspace uses this to keep the
+ * web client's user data in the server's data folder (FlowLeap #547).
  */
 export class FileUserDataProvider extends Disposable implements
 	IFileSystemProviderWithFileReadWriteCapability,
@@ -45,6 +51,7 @@ export class FileUserDataProvider extends Disposable implements
 		private readonly userDataProfilesService: IUserDataProfilesService,
 		private readonly uriIdentityService: IUriIdentityService,
 		private readonly logService: ILogService,
+		private readonly fileSystemHome?: URI,
 	) {
 		super();
 		this.capabilities = this.fileSystemProvider.capabilities;
@@ -159,7 +166,7 @@ export class FileUserDataProvider extends Disposable implements
 			}
 
 			const userDataResource = this.toUserDataResource(change.resource);
-			if (this.watchResources.findSubstr(userDataResource)) {
+			if (userDataResource && this.watchResources.findSubstr(userDataResource)) {
 				userDataChanges.push({
 					resource: userDataResource,
 					type: change.type,
@@ -174,10 +181,17 @@ export class FileUserDataProvider extends Disposable implements
 	}
 
 	private toFileSystemResource(userDataResource: URI): URI {
+		if (this.fileSystemHome) {
+			return joinPath(this.fileSystemHome, userDataResource.path);
+		}
 		return userDataResource.with({ scheme: this.fileSystemScheme });
 	}
 
-	private toUserDataResource(fileSystemResource: URI): URI {
+	private toUserDataResource(fileSystemResource: URI): URI | undefined {
+		if (this.fileSystemHome) {
+			const path = relativePath(this.fileSystemHome, fileSystemResource);
+			return path === undefined ? undefined : URI.from({ scheme: this.userDataScheme, path: `/${path}` });
+		}
 		return fileSystemResource.with({ scheme: this.userDataScheme });
 	}
 
