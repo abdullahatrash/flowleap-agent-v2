@@ -17,6 +17,8 @@ test-only work, CI) belong in the commit message, not here.
 ### Fixed
 
 - Hosted/web client: the patent tools were not offered to the chat (`!isWeb` gate).
+- Hosted Workspace: settings, sign-in, model keys and chat history are now kept on the
+  server, so they survive a reload, a new browser or cleared site data (#547).
 
 ## [0.5.1] - 2026-10-05
 

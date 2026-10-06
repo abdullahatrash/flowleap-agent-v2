@@ -54,6 +54,29 @@ the web client that trust is off, so the folder does not open in Restricted Mode
 `flowleap.patent-ai` activates on the first load. The VM has one user and one folder, and that
 user owns the folder.
 
+## What is stored where
+
+The server starts with `--hosted-user-data` (#547). The web client then keeps the user's data
+on the VM, not in the browser. A new browser, a second tab, or a browser that clears its site
+data opens the same workspace with the same settings, sign-in and keys. The server data folder
+is `/home/flowleap/.flowleap-server/data`.
+
+| Data | Where | Notes |
+|---|---|---|
+| Workspace files, working records | `/home/flowleap/workspace` | As before. |
+| Settings, keybindings, `mcp.json`, `chatLanguageModels.json`, snippets, prompts | `data/User/` | The browser maps `vscode-userdata:/User/…` to this folder through the remote file system. |
+| Chat sessions, editing sessions, local history | `data/User/workspaceStorage/<id>/`, `data/User/History/` | |
+| Browser state (selected chat model, chat session list, layout, "seen" flags) | `data/User/globalStorage/browserState.json`, `browserState.shared.json`, `data/User/workspaceStorage/<id>/browserState.json` | JSON files. Global and profile state is watched, so a second tab sees changes. Workspace state is per tab, as in a desktop window. |
+| Secrets (FlowLeap sign-in, BYOK model keys, EPO/USPTO keys) | `data/User/secrets.json` | One file, AES-256-GCM. The key is `client part XOR server part`. The server part is `/etc/flowleap/hosted-secret.key` (`flowleap`, 0400), which `install.sh` makes once; the browser gets it from `POST /hosted-secret-key`. The secrets file alone cannot be opened. |
+| Extension global storage of the server extension host | `data/User/globalStorage/<extension>/` | As before. |
+| Logs of the web client | Browser IndexedDB (`vscode-web-db`) | Only logs stay in the browser. |
+| The `fl_hosted` gate cookie | Browser | The browser must keep cookies for the host, or it signs in again at the gate. |
+
+Limits: everything a user can read in the browser terminal (they run as `flowleap`) includes
+the key and the secrets file; the encryption protects a copy of the data folder, not the running
+VM. State that changed in the last five seconds before a tab closes can be lost (the browser
+writes state every five seconds). Teardown removes the data folder and the key.
+
 ## Before you start (once per workspace)
 
 - The package: `flowleap-server-web-<version>-linux-x64.tar.gz`, from
@@ -90,7 +113,8 @@ user owns the folder.
    must pass. The checks: the units run, a signed-out visit goes to sign-in, every process of
    `flowleap` has only the dummy key, `flowleap` cannot read the key file or the proxy's
    environment, an Anthropic call through the proxy gives `200`, workspace trust is off, a bogus Clerk cookie
-   still gives the sign-in redirect (never `500`), and swap is present. With
+   still gives the sign-in redirect (never `500`), swap is present, and user data is kept on
+   the server (the page has `hostedUserData`, the secrets key is 32 bytes and `flowleap`/0400). With
    `FLOWLEAP_VERIFY_TOKEN=<allowlisted token>` it also checks that three consecutive requests
    do not fail.
 7. **Try it yourself first.** Temporarily add your own user id to the allowlist (step 5).
@@ -98,6 +122,10 @@ user owns the folder.
    - In the terminal, `echo $ANTHROPIC_API_KEY` must print `hosted-dummy`.
    - In the Agents view, start an Agent Session with Claude. It must answer.
    - In the editor chat, "FlowLeap: Sign In" must work, and a Patent-data tool call must work.
+   - Change a setting and reload. Then open the URL in a private window (or another browser),
+     sign in at the gate: the setting and the FlowLeap sign-in must still be there. On the VM,
+     `ls /home/flowleap/.flowleap-server/data/User` shows `settings.json` and `secrets.json`.
+     The browser console must not log "Using in-memory user data provider".
 
    Then remove your id from the allowlist.
 8. **Hand-over.** Send the invitee the text below.
