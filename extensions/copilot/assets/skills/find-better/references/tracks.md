@@ -74,13 +74,16 @@ classification query, do these steps for each code:
 4. Read the titles of the top hits of every variant, published before the
    critical date. Pull each title that matches a claim element.
 
-Example (US6778074B1, critical date 2002-03-18): the run's query
-`ic=G01P1/10 AND ta=speedometer AND ta=limit AND pd<20020318` (34) missed
-both IPR references. Without `ta=limit`, `ic=G01P1/10 AND ta=speedometer AND
-pd<20020318` (123) has Evans US3980041 ("Speedometer with speed warning
-indicator"). Without `ta=speedometer`, the claim phrase
-`cpc=G01P1/10 AND ta="speed limit" AND pd<20020318` (36) has Wendt US2711153
-("Automobile speed limit indicator").
+Example (US6778074B1, critical date 2002-03-18), counts probed live on
+2026-10-06. The first query `cpc=G01P1/10 AND ta=speedometer AND ta=limit AND
+pd<20020318` gave 15 and missed both IPR references. Without `ta=limit`,
+`cpc=G01P1/10 AND ta=speedometer AND pd<20020318` (54) has Evans US3980041
+("Speedometer with speed warning indicator and method of providing the
+same"). Without `ta=speedometer`, `cpc=G01P1/10 AND ta=limit AND
+pd<20020318` gave 56. The claim phrase `cpc=G01P1/10 AND ta="speed limit" AND
+pd<20020318` (36) has Wendt US2711153 ("Automobile speed limit indicator").
+The classification with the date limit alone, `cpc=G01P1/10 AND
+pd<20020318`, gave 843.
 
 ### Title-phrase query (old art)
 
