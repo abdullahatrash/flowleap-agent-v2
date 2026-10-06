@@ -5,24 +5,47 @@ All notable changes to FlowLeap Patent AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and version numbers follow [Semantic Versioning](https://semver.org/).
 
-Add every user-visible change to `## [Unreleased]` in the same pull request that
-makes it. Cutting a release renames that heading to `## [X.Y.Z] - YYYY-MM-DD` and
-opens a fresh empty one — the release workflow copies the section verbatim into
-the GitHub release notes, so write for the person downloading the app, not for
-the person who wrote the patch. Changes with no user-visible effect (refactors,
-test-only work, CI) belong in the commit message, not here.
+Add every user-visible change to `## [Unreleased]
 
-## [Unreleased]
+## [0.6.0] - 2026-10-06
+
+### Added
+
+- **Find Better: post-grant prior-art discovery.** Start from a granted patent. The
+  Examiner Baseline collects every document each office cited across the family,
+  computed from the offices' own records, with missing records shown as gaps. Three
+  expansion tracks then search beyond it: backward citations two hops deep, inventor
+  and author networks, and classification combined with the claim's discriminating
+  terms, with a term-drop pass and title-phrase queries for old art. The report shows,
+  per independent claim, the examiner's best art beside the best art found as
+  disclosed-element counts, names only the documents that were scored, and says
+  "search incomplete" when a track did not run. (#510, #513, #530, #534, #541)
+- **Search Statement.** A claim becomes a concept table and a Boolean search
+  statement with a copy button and an "Open in Espacenet" link, and a warning when
+  the statement has no discriminating term. (#512)
+- **Three prompts in the Prompts view:** Find Better, Search Statement, Examiner
+  Baseline. (#525)
+- **FlowLeap: Preview HTML File.** Opens a generated dashboard or any single-file
+  HTML page in a preview panel. (#536)
 
 ### Changed
 
-- Bundled CLI skills updated to flowleap-cli v0.10.0 (Find Better recipe, Search Statement reference).
+- Bundled CLI skills updated to flowleap-cli v0.10.0 (Find Better recipe, Search
+  Statement reference). (#551)
+- Examiner-cited references without an X or Y category now count as examiner art,
+  so US-origin patents can be analysed. (#534)
+- The second read retries once on a network error and asks for at most two re-saves
+  while objections stay open. (#541)
 
 ### Fixed
 
-- Hosted/web client: the patent tools were not offered to the chat (`!isWeb` gate).
-- Hosted Workspace: settings, sign-in, model keys and chat history are now kept on the
-  server, so they survive a reload, a new browser or cleared site data (#547).
+- Priority dates were printed as "[object Object]" in patent details, summaries and
+  comparisons. (#524)
+- Hosted and web client: the patent tools were not offered to the chat; settings,
+  sign-in, model keys and chat history are now kept on the server (#545, #547);
+  webviews such as the Markdown preview were blank; the sign-in landing page was
+  branded as Visual Studio Code; the integrated browser is hidden where it cannot
+  run (#536); the server extension host crashed on start (#521).
 
 ## [0.5.1] - 2026-10-05
 
