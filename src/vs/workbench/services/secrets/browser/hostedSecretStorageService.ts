@@ -8,7 +8,7 @@ import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import { FileOperationError, FileOperationResult, IFileService } from '../../../../platform/files/common/files.js';
+import { FileOperationError, FileOperationResult, FileSystemProviderCapabilities, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ISecretStorageCrypto, NetworkError } from './secretStorageCrypto.js';
@@ -89,7 +89,7 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 			const secrets = await this.read();
 			change(secrets);
 			const sealed = await this.crypto.seal(JSON.stringify(secrets));
-			await this.fileService.writeFile(this.resource, VSBuffer.fromString(sealed), { atomic: { postfix: '.vsctmp' } });
+			await this.fileService.writeFile(this.resource, VSBuffer.fromString(sealed), this.fileService.hasCapability(this.resource, FileSystemProviderCapabilities.FileAtomicWrite) ? { atomic: { postfix: '.vsctmp' } } : undefined);
 			this.cache = Promise.resolve(secrets);
 			this._onDidChangeSecret.fire(key);
 		});
@@ -98,7 +98,7 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 	private async read(): Promise<Secrets> {
 		let content: string;
 		try {
-			content = (await this.fileService.readFile(this.resource, { atomic: true })).value.toString();
+			content = (await this.fileService.readFile(this.resource, { atomic: this.fileService.hasCapability(this.resource, FileSystemProviderCapabilities.FileAtomicRead) })).value.toString();
 		} catch (error) {
 			if (error instanceof FileOperationError && error.fileOperationResult === FileOperationResult.FILE_NOT_FOUND) {
 				return {};

@@ -13,7 +13,7 @@ import { TernarySearchTree } from '../../../base/common/ternarySearchTree.js';
 import { IUserDataProfilesService } from '../../userDataProfile/common/userDataProfile.js';
 import { ResourceSet } from '../../../base/common/map.js';
 import { IUriIdentityService } from '../../uriIdentity/common/uriIdentity.js';
-import { joinPath, relativePath } from '../../../base/common/resources.js';
+import { isEqualOrParent, joinPath, relativePath } from '../../../base/common/resources.js';
 
 /**
  * This is a wrapper on top of the local filesystem provider which will
@@ -189,8 +189,10 @@ export class FileUserDataProvider extends Disposable implements
 
 	private toUserDataResource(fileSystemResource: URI): URI | undefined {
 		if (this.fileSystemHome) {
-			const path = relativePath(this.fileSystemHome, fileSystemResource);
-			return path === undefined ? undefined : URI.from({ scheme: this.userDataScheme, path: `/${path}` });
+			if (!isEqualOrParent(fileSystemResource, this.fileSystemHome)) {
+				return undefined;
+			}
+			return URI.from({ scheme: this.userDataScheme, path: `/${relativePath(this.fileSystemHome, fileSystemResource) ?? ''}` });
 		}
 		return fileSystemResource.with({ scheme: this.userDataScheme });
 	}

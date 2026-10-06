@@ -11,7 +11,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { joinPath } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IStorageItemsChangeEvent, IUpdateRequest } from '../../../../base/parts/storage/common/storage.js';
-import { FileOperationError, FileOperationResult, IFileService } from '../../../../platform/files/common/files.js';
+import { FileOperationError, FileOperationResult, FileSystemProviderCapabilities, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { StorageScope } from '../../../../platform/storage/common/storage.js';
 import { IUserDataProfile } from '../../../../platform/userDataProfile/common/userDataProfile.js';
@@ -136,7 +136,7 @@ export class FileStorageDatabase extends Disposable implements IIndexedDBStorage
 	private async readFile(): Promise<Map<string, string>> {
 		let content: string;
 		try {
-			content = (await this.fileService.readFile(this.resource, { atomic: true })).value.toString();
+			content = (await this.fileService.readFile(this.resource, { atomic: this.fileService.hasCapability(this.resource, FileSystemProviderCapabilities.FileAtomicRead) })).value.toString();
 		} catch (error) {
 			if (error instanceof FileOperationError && error.fileOperationResult === FileOperationResult.FILE_NOT_FOUND) {
 				return new Map();
@@ -246,7 +246,7 @@ export class FileStorageDatabase extends Disposable implements IIndexedDBStorage
 		const snapshot = new Map(this.items);
 		return this.writeSequencer.queue(async () => {
 			try {
-				await this.fileService.writeFile(this.resource, VSBuffer.fromString(JSON.stringify(Object.fromEntries(snapshot))), { atomic: { postfix: '.vsctmp' } });
+				await this.fileService.writeFile(this.resource, VSBuffer.fromString(JSON.stringify(Object.fromEntries(snapshot))), this.fileService.hasCapability(this.resource, FileSystemProviderCapabilities.FileAtomicWrite) ? { atomic: { postfix: '.vsctmp' } } : undefined);
 				this.persisted = snapshot;
 			} finally {
 				this.pendingWrites--;
