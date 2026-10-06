@@ -144,6 +144,9 @@ check "proxy adds the real key (Anthropic answers 200; 401 = the key in $etc/ant
 
 echo "== Server"
 check "server sends enableWorkspaceTrust=false (no Restricted Mode)" sh -c "curl -sS --max-time 20 http://127.0.0.1:$FLOWLEAP_SERVER_PORT/ | grep -q 'enableWorkspaceTrust&quot;:false'"
+check "server keeps the web client's user data on the server (hostedUserData, #547)" sh -c "curl -sS --max-time 20 http://127.0.0.1:$FLOWLEAP_SERVER_PORT/ | grep -q 'hostedUserData&quot;:{'"
+check "server issues the 32-byte secrets key" sh -c "test \"\$(curl -sS --max-time 20 -X POST http://127.0.0.1:$FLOWLEAP_SERVER_PORT/hosted-secret-key | wc -c)\" -eq 32"
+check "secrets key file is owned by the server user, mode 0400" sh -c "test \"\$(stat -c '%U %a' $etc/hosted-secret.key)\" = 'flowleap 400'"
 
 echo
 if [ "$failures" = 0 ]; then

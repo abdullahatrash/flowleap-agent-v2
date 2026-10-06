@@ -124,8 +124,16 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:$proxy_port
 ANTHROPIC_API_KEY=hosted-dummy
 PATENT_API_URL=$patent_api_url
 VSCODE_AGENT_HOST_CLAUDE_SDK_ROOT=$prefix/claude-sdk
+FLOWLEAP_HOSTED_SECRET_KEY_FILE=$etc/hosted-secret.key
 EOF
 chmod 0644 "$etc/server.env"
+# Server part of the key that encrypts the browser's secrets file on this VM (#547).
+# Kept outside the server's data folder; made once, kept when install.sh runs again.
+if [ ! -s "$etc/hosted-secret.key" ]; then
+	(umask 077 && head -c 32 /dev/urandom > "$etc/hosted-secret.key")
+fi
+chown "$user:$user" "$etc/hosted-secret.key"
+chmod 0400 "$etc/hosted-secret.key"
 cat > "$etc/hosted.env" <<EOF
 FLOWLEAP_HOSTED_NAME=$name
 FLOWLEAP_HOSTED_HOST=$host
@@ -140,7 +148,10 @@ EOF
 # (src/vs/server/node/webClientServer.ts), so the workspace never opens in Restricted
 # Mode and flowleap.patent-ai activates on first load (#521 finding). The VM has one
 # user and one folder, which that user owns, so there is nothing to restrict.
-server_cmd=("$prefix/bin/flowleap-server" --host 127.0.0.1 --port "$server_port" --without-connection-token --accept-server-license-terms --disable-workspace-trust "$workspace")
+# --hosted-user-data: the web client keeps settings, browser state and secrets in the
+# server's data folder (~flowleap/.flowleap-server/data/User), not in the browser's
+# IndexedDB, so a new browser or cleared site data finds them again (#547).
+server_cmd=("$prefix/bin/flowleap-server" --host 127.0.0.1 --port "$server_port" --without-connection-token --accept-server-license-terms --disable-workspace-trust --hosted-user-data "$workspace")
 proxy_cmd=("$prefix/node" /usr/local/lib/flowleap/anthropic-proxy.ts)
 
 log "Services ($init)"

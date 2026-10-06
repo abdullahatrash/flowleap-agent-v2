@@ -450,3 +450,52 @@ suite('FileUserDataProvider - Watching', () => {
 	});
 
 });
+
+suite('FileUserDataProvider with a file system home (Hosted Workspace, #547)', () => {
+
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+
+	const remoteHome = URI.from({ scheme: Schemas.vscodeRemote, authority: 'hosted.example:443', path: '/home/flowleap/.flowleap-server/data' });
+	const userDataHome = URI.from({ scheme: Schemas.vscodeUserData, path: '/' });
+
+	let fileService: IFileService;
+	let testObject: FileUserDataProvider;
+
+	setup(async () => {
+		const logService = new NullLogService();
+		fileService = disposables.add(new FileService(logService));
+		const remoteFileSystemProvider = disposables.add(new InMemoryFileSystemProvider());
+		disposables.add(fileService.registerProvider(Schemas.vscodeRemote, remoteFileSystemProvider));
+
+		const environmentService = new TestEnvironmentService(URI.file('/User'));
+		const uriIdentityService = disposables.add(new UriIdentityService(fileService));
+		const userDataProfilesService = disposables.add(new UserDataProfilesService(environmentService, fileService, uriIdentityService, logService));
+		testObject = disposables.add(new FileUserDataProvider(Schemas.vscodeRemote, remoteFileSystemProvider, Schemas.vscodeUserData, userDataProfilesService, uriIdentityService, logService, remoteHome));
+		disposables.add(fileService.registerProvider(Schemas.vscodeUserData, testObject));
+		await fileService.createFolder(joinPath(remoteHome, 'User'));
+	});
+
+	test('user data is written to and read from the server user data folder', async () => {
+		await fileService.writeFile(joinPath(userDataHome, 'User', 'settings.json'), VSBuffer.fromString('{"editor.fontSize": 17}'));
+		await fileService.writeFile(joinPath(remoteHome, 'User', 'globalStorage', 'state.json'), VSBuffer.fromString('{}'));
+
+		const onServer = (await fileService.readFile(joinPath(remoteHome, 'User', 'settings.json'))).value.toString();
+		const listed = (await fileService.resolve(joinPath(userDataHome, 'User'))).children?.map(child => child.resource.toString()).sort();
+
+		assert.deepStrictEqual({ onServer, listed }, {
+			onServer: '{"editor.fontSize": 17}',
+			listed: ['vscode-userdata:/User/globalStorage', 'vscode-userdata:/User/settings.json'],
+		});
+	});
+
+	test('server changes are reported as user data changes, changes outside the folder are not', async () => {
+		disposables.add(testObject.watch(userDataHome, { excludes: [], recursive: true }));
+		const changes = Event.toPromise(testObject.onDidChangeFile);
+
+		await fileService.writeFile(URI.from({ scheme: Schemas.vscodeRemote, authority: 'hosted.example:443', path: '/home/flowleap/workspace/a.txt' }), VSBuffer.fromString('a'));
+		await fileService.writeFile(joinPath(remoteHome, 'User', 'settings.json'), VSBuffer.fromString('{}'));
+
+		const reported = [...new Set((await changes).map(change => change.resource.toString()))].sort();
+		assert.deepStrictEqual(reported, ['vscode-userdata:/', 'vscode-userdata:/User', 'vscode-userdata:/User/settings.json']);
+	});
+});

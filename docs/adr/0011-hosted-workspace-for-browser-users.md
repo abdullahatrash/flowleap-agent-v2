@@ -58,3 +58,14 @@ inherits the server's environment. We decide to operate that build, one instance
   page gains a hosted section; the website gets a sign-in path to a user's workspace.
 - Security surface: a signed-in hosted user can run anything inside their instance. Isolation is
   the control; nothing else on that instance may be worth taking.
+- **Amended 2026-10-06 (#547): the user's data lives on the instance, not in the browser.**
+  Upstream's web client keeps settings, browser state and secrets in the browser's IndexedDB
+  (and secrets only in memory when a remote has no key cookie, so they were lost on every
+  reload). On a Hosted Workspace that meant a cleared or blocked site-data store started from
+  zero, and two browsers saw two states. The server flag `--hosted-user-data` (set by
+  `install.sh`) makes the web client keep user data in the server's data folder through the
+  remote file system, browser state in JSON files there, and secrets in one AES-GCM file whose
+  key is split between the file and a server-issued key in `/etc/flowleap`. Desktop and web
+  without the flag are unchanged. The encryption protects a copy of the data folder, not a
+  running instance: its user can read both halves of the key, which is consistent with
+  isolation being the control.
