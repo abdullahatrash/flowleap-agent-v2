@@ -11,7 +11,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { CorrelatingInMemoryFileSystemProvider } from '../../../../../platform/files/test/common/correlatingInMemoryFileSystemProvider.js';
 import { NullLogService } from '../../../../../platform/log/common/log.js';
-import { HostedSecretStorageService } from '../../browser/hostedSecretStorageService.js';
+import { HostedSecretStorageProvider } from '../../browser/hostedSecretStorageProvider.js';
 import { ISecretStorageCrypto, NetworkError } from '../../browser/secretStorageCrypto.js';
 
 /** Reversible stand-in for the server-keyed AES crypto. */
@@ -28,7 +28,7 @@ class TestCrypto implements ISecretStorageCrypto {
 	}
 }
 
-suite('HostedSecretStorageService (#547)', () => {
+suite('HostedSecretStorageProvider (#547)', () => {
 
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -44,8 +44,8 @@ suite('HostedSecretStorageService (#547)', () => {
 		crypto = new TestCrypto();
 	});
 
-	function createTab(): HostedSecretStorageService {
-		return disposables.add(new HostedSecretStorageService(secretsFile, crypto, fileService, logService));
+	function createTab(): HostedSecretStorageProvider {
+		return disposables.add(new HostedSecretStorageProvider(secretsFile, crypto, fileService, logService));
 	}
 
 	test('secrets are sealed in one file and read back by a new browser', async () => {
@@ -70,10 +70,10 @@ suite('HostedSecretStorageService (#547)', () => {
 		const tabB = createTab();
 		assert.strictEqual(await tabB.get('session'), undefined); // tab B has read the file once
 
-		const heard = Event.toPromise(tabB.onDidChangeSecret);
+		const heard = Event.toPromise(tabB.onDidChangeSecretExternally);
 		await tabA.set('session', 'token-a');
 		const changedKey = await heard;
-		const heardByA = Event.toPromise(tabA.onDidChangeSecret);
+		const heardByA = Event.toPromise(tabA.onDidChangeSecretExternally);
 		await tabB.set('byok', 'key-b');
 		await heardByA;
 

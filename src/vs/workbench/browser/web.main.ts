@@ -90,8 +90,6 @@ import { BufferLogger } from '../../platform/log/common/bufferLog.js';
 import { FileLoggerService } from '../../platform/log/common/fileLog.js';
 import { IEmbedderTerminalService } from '../services/terminal/common/embedderTerminalService.js';
 import { BrowserSecretStorageService } from '../services/secrets/browser/secretStorageService.js';
-import { HostedSecretStorageService } from '../services/secrets/browser/hostedSecretStorageService.js';
-import { ServerKeyedAESCrypto, TransparentCrypto } from '../services/secrets/browser/secretStorageCrypto.js';
 import { HostedStorageService } from '../services/storage/browser/hostedStorageService.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { DiskFileSystemProviderClient } from '../../platform/files/common/diskFileSystemProviderClient.js';
@@ -458,13 +456,7 @@ export class BrowserMain extends Disposable {
 
 		const encryptionService = new EncryptionService();
 		serviceCollection.set(IEncryptionService, encryptionService);
-		const secretStorageService = this.hostedUserData && !environmentService.options?.secretStorageProvider
-			? this._register(new HostedSecretStorageService(
-				joinPath(environmentService.userRoamingDataHome, 'secrets.json'),
-				ServerKeyedAESCrypto.supported() ? new ServerKeyedAESCrypto(this.hostedUserData.options.secretKeyPath) : new TransparentCrypto(),
-				fileService,
-				logService))
-			: new BrowserSecretStorageService(storageService, encryptionService, environmentService, logService);
+		const secretStorageService = new BrowserSecretStorageService(storageService, encryptionService, environmentService, logService, fileService);
 		serviceCollection.set(ISecretStorageService, secretStorageService);
 
 		// Userdata Initialize Service

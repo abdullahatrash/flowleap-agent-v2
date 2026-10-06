@@ -10,7 +10,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { FileOperationError, FileOperationResult, FileSystemProviderCapabilities, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { ISecretStorageProvider } from '../../../../platform/secrets/common/secrets.js';
 import { ISecretStorageCrypto, NetworkError } from './secretStorageCrypto.js';
 
 type Secrets = Record<string, string>;
@@ -25,12 +25,11 @@ type Secrets = Record<string, string>;
  *   (or two browsers) on the same workspace do not overwrite each other's secrets.
  * - A failure to get the key (`NetworkError`) never discards the stored secrets.
  */
-export class HostedSecretStorageService extends Disposable implements ISecretStorageService {
+export class HostedSecretStorageProvider extends Disposable implements ISecretStorageProvider {
 
-	declare readonly _serviceBrand: undefined;
-
-	private readonly _onDidChangeSecret = this._register(new Emitter<string>());
-	readonly onDidChangeSecret = this._onDidChangeSecret.event;
+	private readonly _onDidChangeSecretExternally = this._register(new Emitter<string>());
+	/** A secret was changed by another tab or browser (not by this provider). */
+	readonly onDidChangeSecretExternally = this._onDidChangeSecretExternally.event;
 
 	readonly type = 'persisted';
 
@@ -40,8 +39,8 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 	constructor(
 		private readonly resource: URI,
 		private readonly crypto: ISecretStorageCrypto,
-		@IFileService private readonly fileService: IFileService,
-		@ILogService private readonly logService: ILogService,
+		private readonly fileService: IFileService,
+		private readonly logService: ILogService,
 	) {
 		super();
 
@@ -63,11 +62,11 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 	}
 
 	set(key: string, value: string): Promise<void> {
-		return this.update(key, secrets => { secrets[key] = value; });
+		return this.update(secrets => { secrets[key] = value; });
 	}
 
 	delete(key: string): Promise<void> {
-		return this.update(key, secrets => { delete secrets[key]; });
+		return this.update(secrets => { delete secrets[key]; });
 	}
 
 	private getSecrets(): Promise<Secrets> {
@@ -83,7 +82,7 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 		return this.cache;
 	}
 
-	private update(key: string, change: (secrets: Secrets) => void): Promise<void> {
+	private update(change: (secrets: Secrets) => void): Promise<void> {
 		return this.writeSequencer.queue(async () => {
 			// Read the file again: another tab may have changed it since our last read.
 			const secrets = await this.read();
@@ -91,7 +90,6 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 			const sealed = await this.crypto.seal(JSON.stringify(secrets));
 			await this.fileService.writeFile(this.resource, VSBuffer.fromString(sealed), this.fileService.hasCapability(this.resource, FileSystemProviderCapabilities.FileAtomicWrite) ? { atomic: { postfix: '.vsctmp' } } : undefined);
 			this.cache = Promise.resolve(secrets);
-			this._onDidChangeSecret.fire(key);
 		});
 	}
 
@@ -149,7 +147,7 @@ export class HostedSecretStorageService extends Disposable implements ISecretSto
 
 		for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
 			if (before[key] !== after[key]) {
-				this._onDidChangeSecret.fire(key);
+				this._onDidChangeSecretExternally.fire(key);
 			}
 		}
 	}
