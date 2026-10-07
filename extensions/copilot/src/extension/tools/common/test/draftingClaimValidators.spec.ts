@@ -86,6 +86,18 @@ describe('Application Drafting claim validators', () => {
 		]);
 	});
 
+	it('literal basis: checks the whole claim term phrase, plural-normalised, up to the next connecting word', () => {
+		const description = 'The hinges 10 have a lower lever arm 16 of steel, and a spring biasing plates 18. The coil housings 12 hold it (see FIG. 1).';
+		expect(checkLiteralBasis(claims(
+			'1. A hinge comprising a lower lever arm that pivots, a coil housing (12) and a spring biasing plate.',
+			'2. The hinge of claim 1, wherein a lower lever arm of steel has an upper lever arm configured to turn.',
+			'3. The hinge of claim 1, further comprising a lever of steel; and a spring cap.',
+		), description)).toEqual([
+			{ severity: 'Error', rule: 'literal-basis', file: 'claims.md', line: 2, claim: 2, message: 'The claim term "upper lever arm" (claim 2) does not appear in the description.' },
+			{ severity: 'Error', rule: 'literal-basis', file: 'claims.md', line: 3, claim: 3, message: 'The claim term "spring cap" (claim 3) does not appear in the description.' },
+		]);
+	});
+
 	it('claim count: no Note at the US and EPO thresholds', () => {
 		const twenty = Array.from({ length: 20 }, (_, i) => i < 3 ? `${i + 1}. A hinge ${i}.` : `${i + 1}. The hinge of claim 1.`);
 		expect([checkClaimCount(claims(...twenty), 'US'), checkClaimCount(claims(...twenty.slice(0, 15)), 'EPO')]).toEqual([[], []]);

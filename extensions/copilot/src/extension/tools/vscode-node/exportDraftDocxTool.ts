@@ -9,14 +9,14 @@ import { IFileSystemService } from '../../../platform/filesystem/common/fileSyst
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { LanguageModelToolResult } from '../../../vscodeTypes';
 import { diffDraftParagraphs } from '../common/drafting/draftDiff';
 import { blockingFindings } from '../common/drafting/findingsFile';
 import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workingRecord';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildDraftDocx } from './draftDocx';
-import { DraftingWorkspace, findingLine, gateRefusal } from './draftingWorkspace';
+import { DraftingWorkspace, findingLine, textResult } from './draftingWorkspace';
 
 interface IExportDraftDocxParams {
 	/** The matter folder name under `drafting/`. */
@@ -24,7 +24,7 @@ interface IExportDraftDocxParams {
 }
 
 function refusal(reason: string): LanguageModelToolResult {
-	return new LanguageModelToolResult([new LanguageModelTextPart(`The draft was not exported. ${reason}`)]);
+	return textResult(`The draft was not exported. ${reason}`);
 }
 
 /**
@@ -55,17 +55,14 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IExportDraftDocxParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const workspace = await DraftingWorkspace.locate(options.input.matter ?? '', this.workspaceService.getWorkspaceFolders(), this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
 		if (typeof workspace === 'string') {
 			return refusal(workspace);
 		}
 		const { folder } = workspace;
-		const approval = await workspace.checkClaimsApproval();
-		if (approval.changed && approval.cleared) {
-			return refusal(approval.changed);
-		}
-		if (approval.gate !== 'set') {
-			return refusal(gateRefusal(folder.claims, 'approved', approval.gate));
+		const approval = await workspace.requireApprovedClaims();
+		if (typeof approval === 'string') {
+			return refusal(approval);
 		}
 		if (approval.changed) {
 			return refusal(approval.changed);
@@ -88,11 +85,9 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		const diff = diffDraftParagraphs(snapshot, draft);
 		const record = await workspace.read(folder.workingRecord) ?? emptyWorkingRecord(folder.matter);
 		await workspace.write(folder.workingRecord, withAttorneyEdits(record, diff, new Date().toISOString()));
-		await workspace.write(folder.docx, await buildDraftDocx(draft));
+		await workspace.write(folder.docx, await buildDraftDocx(draft, office));
 		const count = (kind: string) => diff.changes.filter(change => change.kind === kind).length;
-		return new LanguageModelToolResult([new LanguageModelTextPart(
-			`Exported ${folder.docx} (source markers and Inventor Questions section removed). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing.`
-		)]);
+		return textResult(`Exported ${folder.docx} (source markers and Inventor Questions section removed). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing.`);
 	}
 }
 

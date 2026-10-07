@@ -13,12 +13,13 @@
  * or `the housing (12)`.
  */
 
-import { DraftFinding } from './finding';
+import { DraftFinding, INVENTOR_QUESTION } from './finding';
+import { DRAFTING_FILE_NAMES } from './folderContract';
 import { parseDraftingFrontmatter } from './frontmatter';
 import { DraftParagraph, parseInventorQuestions } from './sourceMarkers';
 
-const draftFile = 'draft-application.md';
-const figuresFile = 'figures.md';
+const draftFile = DRAFTING_FILE_NAMES.draft;
+const figuresFile = DRAFTING_FILE_NAMES.figures;
 
 /** One part of `figures.md` with its reference numeral. */
 export interface FigurePart {
@@ -72,7 +73,9 @@ function lineAt(paragraph: DraftParagraph, index: number): number {
 
 /**
  * Error when a term defined once (`(hereinafter "control unit")`, `referred to as "X"`,
- * `"X" means`) is written with other word separators elsewhere (`control-unit`, `controlunit`).
+ * `"X" means`), of one word or more, is written with other word separators elsewhere
+ * (`control-unit`, `controlunit`), or, when the defined term is capitalised (`"Controller"`),
+ * in another case (`controller`).
  */
 export function checkDefinedTerms(paragraphs: readonly DraftParagraph[]): DraftFinding[] {
 	const texts = paragraphs.filter(paragraph => paragraph.kind === 'text');
@@ -90,13 +93,15 @@ export function checkDefinedTerms(paragraphs: readonly DraftParagraph[]): DraftF
 	const findings: DraftFinding[] = [];
 	for (const term of terms.values()) {
 		const words = term.split(/[\s-]+/).filter(Boolean).map(escapeRegExp);
-		if (words.length < 2) {
+		if (!words.length) {
 			continue;
 		}
-		const variants = new RegExp(`\\b${words.join('[\\s-]*')}\\b`, 'gi');
+		// A capitalised defined term ("Controller") is a name: a lower-case variant is another spelling.
+		const capitalised = /^\p{Lu}/u.test(term);
+		const variants = new RegExp(`(?<![\\w-])${words.join('[\\s-]*')}(?![\\w-])`, 'gi');
 		for (const paragraph of texts) {
 			for (const match of paragraph.text.matchAll(variants)) {
-				if (match[0].toLowerCase() !== term.toLowerCase()) {
+				if (capitalised ? match[0] !== term : match[0].toLowerCase() !== term.toLowerCase()) {
 					const line = lineAt(paragraph, match.index ?? 0);
 					findings.push({ severity: 'Error', rule: 'defined-term', file: draftFile, line, message: `Line ${line} writes "${match[0]}"; the defined term is "${term}".` });
 				}
@@ -209,7 +214,7 @@ export function checkSourceMarkers(paragraphs: readonly DraftParagraph[]): Draft
 export function checkInventorQuestions(draft: string): DraftFinding[] {
 	return parseInventorQuestions(draft).map(question => ({
 		severity: 'Error',
-		rule: 'inventor-question',
+		rule: INVENTOR_QUESTION,
 		file: draftFile,
 		line: question.line,
 		message: `Inventor Question ${question.id} is open: ${question.text}`,

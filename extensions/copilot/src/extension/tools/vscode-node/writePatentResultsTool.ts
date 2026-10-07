@@ -35,7 +35,7 @@ import { buildPatentReport, contentRequirementError, PatentReportTemplate } from
 import { extractFigures, figureProvenance, figureSentence, ftoProvenanceResult, renderFtoAppendix, renderLandscapeAppendix } from '../common/patentReportProvenance';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
-import { resolveDraftingFolder } from '../common/drafting/folderContract';
+import { matchDraftPath, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { saveDraftApplication } from './draftApplicationSave';
 import { DraftingWorkspace } from './draftingWorkspace';
 
@@ -372,7 +372,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		const folders = this.workspaceService.getWorkspaceFolders();
 		const uri = this.resolveWorkspacePath(input.filePath, folders);
 		const root = uri && folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(uri, folder));
-		const matter = uri && root ? /^drafting\/(?<matter>[^/]+)\/draft-application\.md$/.exec(extUriBiasedIgnorePathCase.relativePath(root, uri) ?? '')?.groups?.matter : undefined;
+		const matter = uri && root ? matchDraftPath(extUriBiasedIgnorePathCase.relativePath(root, uri) ?? '') : undefined;
 		const folder = matter ? resolveDraftingFolder(matter) : undefined;
 		if (!uri || !root || !folder) {
 			return new LanguageModelToolResult([new LanguageModelTextPart('Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.')]);
@@ -382,6 +382,8 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			if (!outcome.saved) {
 				return new LanguageModelToolResult([new LanguageModelTextPart(`Draft was not saved. ${outcome.reason}`)]);
 			}
+			// Not counted until the backend's closed template-kind set names it: the service skips a
+			// kind outside REPORTED_TEMPLATE_KINDS rather than lose the whole batch.
 			this.activationTelemetryService.recordReportSaved('draft-application');
 			try {
 				await vscode.commands.executeCommand('vscode.open', vscode.Uri.from(uri));

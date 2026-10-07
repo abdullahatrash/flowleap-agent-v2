@@ -11,8 +11,9 @@
 
 import { DraftClaim } from './claims';
 import { DraftFinding } from './finding';
+import { DRAFTING_FILE_NAMES } from './folderContract';
 
-const claimsFile = 'claims.md';
+const claimsFile = DRAFTING_FILE_NAMES.claims;
 
 function claimFinding(severity: DraftFinding['severity'], rule: string, claim: DraftClaim, message: string): DraftFinding {
 	return { severity, rule, file: claimsFile, line: claim.line, claim: claim.number, message };
@@ -164,24 +165,67 @@ export function checkAntecedentBasis(claims: readonly DraftClaim[]): DraftFindin
 	return findings;
 }
 
+/** Words that end a claim term phrase: connectors, relative pronouns and the next article. */
+const phraseStops = new Set(['and', 'or', 'that', 'which', 'wherein', 'configured', 'for', 'to', 'of', 'having', 'comprising', 'including', 'a', 'an', 'the', 'said']);
+
+const introducingPattern = /\b(?:a plurality of|plurality of|at least one|one or more|an|a)\s+(?:(?:at least one|one or more|plurality of)\s+)?/gi;
+
+/** The words of a text in order, lower case; numbers, reference signs and punctuation are left out. */
+function words(text: string): string[] {
+	return text.toLowerCase().match(/[a-z][a-z0-9-]*/g) ?? [];
+}
+
+/** Singular form of one word: `housings` and `boxes` match `housing` and `box`. */
+function singular(word: string): string {
+	return /(?:x|ch|sh|ss)es$/.test(word) ? word.slice(0, -2) : word.replace(/(?<!s)s$/, '');
+}
+
 /**
- * Error when a term a claim introduces ("a X") does not appear in the description (literal
- * basis). Each term is reported once, at the first claim that introduces it.
+ * The claim term phrases a claim introduces: after "a", "an", "a plurality of", ... all words up
+ * to the next comma, semicolon or other punctuation, a stop word (`and`, `or`, `that`, `which`,
+ * `wherein`, `configured`, `for`, `to`, `of`, `having`, `comprising`, `including`, an article),
+ * a number or the end.
+ */
+function introducedPhrases(text: string): string[] {
+	const phrases: string[] = [];
+	for (const match of text.matchAll(introducingPattern)) {
+		const phrase: string[] = [];
+		for (const token of text.slice((match.index ?? 0) + match[0].length).split(/\s+/)) {
+			const word = /^[a-z][a-z0-9-]*/i.exec(token)?.[0].toLowerCase();
+			if (!word || phraseStops.has(word)) {
+				break;
+			}
+			phrase.push(word);
+			if (word.length !== token.length) {
+				break;
+			}
+		}
+		if (phrase.length) {
+			phrases.push(phrase.join(' '));
+		}
+	}
+	return phrases;
+}
+
+/**
+ * Error when a claim term phrase a claim introduces ("a lower lever arm that ...") does not appear
+ * verbatim in the description (literal basis), case-insensitive and plural-normalised; reference
+ * numerals and punctuation in the description are ignored. Each phrase is reported once, at the
+ * first claim that introduces it.
  */
 export function checkLiteralBasis(claims: readonly DraftClaim[], description: string): DraftFinding[] {
-	const text = description.toLowerCase();
+	const text = ` ${words(description).map(singular).join(' ')} `;
 	const reported = new Set<string>();
 	const findings: DraftFinding[] = [];
 	for (const claim of claims) {
-		for (const term of readTerms(claim.text).filter(candidate => candidate.introduces)) {
-			const singular = stem(term.key);
-			if (reported.has(singular)) {
+		for (const phrase of introducedPhrases(claim.text)) {
+			const normalised = phrase.split(' ').map(singular).join(' ');
+			if (reported.has(normalised)) {
 				continue;
 			}
-			reported.add(singular);
-			const escaped = singular.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
-			if (!new RegExp(`\\b${escaped}(?:s|es)?\\b`).test(text)) {
-				findings.push(claimFinding('Error', 'literal-basis', claim, `The claim term "${term.key}" (claim ${claim.number}) does not appear in the description.`));
+			reported.add(normalised);
+			if (!text.includes(` ${normalised} `)) {
+				findings.push(claimFinding('Error', 'literal-basis', claim, `The claim term "${phrase}" (claim ${claim.number}) does not appear in the description.`));
 			}
 		}
 	}

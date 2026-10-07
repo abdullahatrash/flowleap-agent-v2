@@ -38,7 +38,7 @@ Attorney:
 
 exports[`export_draft_docx > refuses on an open Inventor Question and on claims changed after approval 1`] = `
 {
-  "claimsChanged": "The draft was not exported. drafting/hinge/claims.md changed after it was approved for this draft, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.",
+  "claimsChanged": "The draft was not exported. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.",
   "openQuestionRefusal": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
 - \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is open: Which steel grade is the lever made of?",
   "unapproved": "The draft was not exported. \`approved\` in drafting/hinge/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate.",
@@ -129,7 +129,7 @@ Report these by severity with their line references. Do not call the draft passe
 
 exports[`write_patent_results draft-application template > starts the next version when the claims changed and were approved again, keeping the previous draft and record 1`] = `
 {
-  "cleared": "Drafting did not start. drafting/hinge/claims.md changed after it was approved for this draft, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.",
+  "cleared": "Drafting did not start. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.",
   "previousDraftVersion": "1",
   "previousRecordKept": true,
   "result": "Saved drafting/hinge/draft-application.md (version 2, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.
@@ -167,14 +167,16 @@ Companion to [draft-application.md](draft-application.md): how this Draft Applic
 
 ## Source map
 
-Each paragraph of the draft as saved, with the source its marker names. "none" means the paragraph has no valid marker; the claims carry none, they are the Approved Claims.
+Each sentence of the draft as saved, at the line of its paragraph, with the sources the paragraph marker names. "none" means the paragraph has no valid marker; the claims carry none, they are the Approved Claims.
 
-| Line | Section | Sources | Paragraph |
+| Line | Section | Sources | Sentence |
 | --- | --- | --- | --- |
 | 12 | BACKGROUND | disclosure:§1 | A hinge joins a door to a frame. |
-| 17 | SUMMARY | feature:F1 | A hinge has a housing and a lever. The lever is steel. |
+| 17 | SUMMARY | feature:F1 | A hinge has a housing and a lever. |
+| 17 | SUMMARY | feature:F1 | The lever is steel. |
 | 22 | BRIEF DESCRIPTION OF THE DRAWINGS | template | FIG. 1 is a side view of the hinge. |
-| 27 | DETAILED DESCRIPTION | feature:F1 | The housing 12 holds the lever 14. The lever 14 is steel. |
+| 27 | DETAILED DESCRIPTION | feature:F1 | The housing 12 holds the lever 14. |
+| 27 | DETAILED DESCRIPTION | feature:F1 | The lever 14 is steel. |
 | 31 | CLAIMS | Approved Claims | 1. A hinge comprising a housing and a lever. 2. The hinge of claim 1, wherein the lever is steel. |
 | 37 | ABSTRACT | feature:F1 | A hinge has a housing and a lever of steel. |
 | 41 | Inventor Questions | Inventor Question | > **Inventor Question IQ-1:** Which steel grade is the lever made of? |

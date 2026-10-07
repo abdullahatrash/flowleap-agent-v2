@@ -25,6 +25,18 @@
 /** The workspace-level folder of style exemplars. */
 export const DRAFTING_STYLE_FOLDER = 'style';
 
+/** The file names of one matter's drafting files in its folder; also the `file` of a Finding. */
+export const DRAFTING_FILE_NAMES = {
+	featureList: 'feature-list.md',
+	figures: 'figures.md',
+	claims: 'claims.md',
+	draft: 'draft-application.md',
+	generatedSnapshot: 'draft-application.generated.md',
+	workingRecord: 'draft-application.working-record.md',
+	findings: 'findings.md',
+	docx: 'draft-application.docx',
+} as const;
+
 /** The workspace-relative paths of one matter's drafting files. */
 export interface DraftingFolder {
 	readonly matter: string;
@@ -52,13 +64,25 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 	return {
 		matter: name,
 		folder,
-		featureList: `${folder}/feature-list.md`,
-		figures: `${folder}/figures.md`,
-		claims: `${folder}/claims.md`,
-		draft: `${folder}/draft-application.md`,
-		generatedSnapshot: `${folder}/draft-application.generated.md`,
-		workingRecord: `${folder}/draft-application.working-record.md`,
-		findings: `${folder}/findings.md`,
-		docx: `${folder}/draft-application.docx`,
+		featureList: `${folder}/${DRAFTING_FILE_NAMES.featureList}`,
+		figures: `${folder}/${DRAFTING_FILE_NAMES.figures}`,
+		claims: `${folder}/${DRAFTING_FILE_NAMES.claims}`,
+		draft: `${folder}/${DRAFTING_FILE_NAMES.draft}`,
+		generatedSnapshot: `${folder}/${DRAFTING_FILE_NAMES.generatedSnapshot}`,
+		workingRecord: `${folder}/${DRAFTING_FILE_NAMES.workingRecord}`,
+		findings: `${folder}/${DRAFTING_FILE_NAMES.findings}`,
+		docx: `${folder}/${DRAFTING_FILE_NAMES.docx}`,
 	};
+}
+
+/**
+ * The matter of a workspace-relative Draft Application path (`drafting/<matter>/draft-application.md`),
+ * or `undefined` for any other path and for a matter name {@link resolveDraftingFolder} refuses.
+ */
+export function matchDraftPath(path: string): string | undefined {
+	const [top, matter, file, ...rest] = path.split('/');
+	if (top !== 'drafting' || file !== DRAFTING_FILE_NAMES.draft || rest.length || matter === undefined) {
+		return undefined;
+	}
+	return resolveDraftingFolder(matter)?.matter === matter ? matter : undefined;
 }

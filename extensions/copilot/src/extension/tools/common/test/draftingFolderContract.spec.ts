@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { DRAFTING_STYLE_FOLDER, resolveDraftingFolder } from '../drafting/folderContract';
+import { DRAFTING_STYLE_FOLDER, matchDraftPath, resolveDraftingFolder } from '../drafting/folderContract';
 
 describe('Application Drafting folder contract', () => {
 
@@ -29,6 +29,12 @@ describe('Application Drafting folder contract', () => {
 	it('refuses a matter name that is empty or leaves the drafting folder', () => {
 		expect(['', '  ', '../secrets', 'a/b', 'a\\b', '.hidden'].map(matter => resolveDraftingFolder(matter))).toEqual([
 			undefined, undefined, undefined, undefined, undefined, undefined,
+		]);
+	});
+
+	it('reads the matter of a draft path, and nothing from any other path', () => {
+		expect(['drafting/hinge/draft-application.md', 'drafting/hinge/claims.md', 'outputs/draft-application.md', 'drafting/a/b/draft-application.md', 'drafting/.hidden/draft-application.md'].map(matchDraftPath)).toEqual([
+			'hinge', undefined, undefined, undefined, undefined,
 		]);
 	});
 });

@@ -92,6 +92,7 @@ export interface ActivationTelemetryRequestBody {
  * leak.
  */
 export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
+	'application-drafting',
 	'audit-report',
 	'citation-analysis',
 	'claim-analysis',
@@ -128,6 +129,33 @@ export const CUSTOM_SKILL_ID = 'custom';
 
 /** The free-form save: a report written with no template. */
 export const FREE_FORM_TEMPLATE_KIND = 'free-form';
+
+/**
+ * The template kinds the backend accepts for `report_saved`, mirroring its closed set
+ * (flowleap-backend `src/routes/telemetry-activation.ts`). A kind outside it would make the
+ * backend reject the whole batch, so such a save is not counted. Adding one is a coordinated app +
+ * backend change.
+ */
+export const REPORTED_TEMPLATE_KINDS: ReadonlySet<string> = new Set([
+	'prior-art-report',
+	'fto-memo',
+	'office-action-scaffold',
+	'invalidity-claim-chart',
+	'eou-infringement-chart',
+	'patentability-opinion',
+	'landscape-report',
+	'portfolio-due-diligence-memo',
+	FREE_FORM_TEMPLATE_KIND,
+]);
+
+/**
+ * The template kind a report save is reported under: an empty kind is {@link FREE_FORM_TEMPLATE_KIND};
+ * a kind the backend does not accept gives `undefined`, and the save is not counted.
+ */
+export function reportedTemplateKind(templateKind: string): string | undefined {
+	const kind = templateKind || FREE_FORM_TEMPLATE_KIND;
+	return REPORTED_TEMPLATE_KINDS.has(kind) ? kind : undefined;
+}
 
 /**
  * The id a skill run is reported under.

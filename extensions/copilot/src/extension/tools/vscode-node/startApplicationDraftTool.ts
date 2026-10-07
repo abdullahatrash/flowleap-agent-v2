@@ -9,11 +9,11 @@ import { IFileSystemService } from '../../../platform/filesystem/common/fileSyst
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { parseDraftingFrontmatter, readGateFlag, readOffice } from '../common/drafting/frontmatter';
+import { LanguageModelToolResult } from '../../../vscodeTypes';
+import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontmatter';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, gateRefusal, PdfTextReader } from './draftingWorkspace';
+import { DraftingWorkspace, PdfTextReader, textResult } from './draftingWorkspace';
 import { readPdfText } from './pdfPreviewApi';
 
 interface IStartApplicationDraftParams {
@@ -22,7 +22,7 @@ interface IStartApplicationDraftParams {
 }
 
 function refusal(reason: string): LanguageModelToolResult {
-	return new LanguageModelToolResult([new LanguageModelTextPart(`Drafting did not start. ${reason}`)]);
+	return textResult(`Drafting did not start. ${reason}`);
 }
 
 /**
@@ -36,11 +36,15 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 
 	public static readonly toolName = ToolName.StartApplicationDraft;
 
+	/**
+	 * @param readPdf Reads a PDF style exemplar; the tool registry passes none, so the FlowLeap PDF
+	 * Preview reader is used. Non-service parameters come before the injected services.
+	 */
 	constructor(
+		private readonly readPdf: PdfTextReader = uri => readPdfText(uri),
 		@IFileSystemService private readonly fileSystemService: IFileSystemService,
 		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		private readonly readPdf: PdfTextReader = uri => readPdfText(uri),
 	) { }
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IStartApplicationDraftParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
@@ -48,25 +52,20 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IStartApplicationDraftParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const workspace = await DraftingWorkspace.locate(options.input.matter ?? '', this.workspaceService.getWorkspaceFolders(), this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
 		if (typeof workspace === 'string') {
 			return refusal(workspace);
 		}
 		const { folder } = workspace;
-		const featureList = await workspace.read(folder.featureList);
-		const featureFields = featureList === undefined ? undefined : parseDraftingFrontmatter(featureList).fields;
-		const confirmed = featureFields ? readGateFlag(featureFields, 'confirmed') : 'no-file';
-		if (confirmed !== 'set') {
-			return refusal(gateRefusal(folder.featureList, 'confirmed', confirmed));
+		const featureList = await workspace.requireConfirmedFeatureList();
+		if (typeof featureList === 'string') {
+			return refusal(featureList);
 		}
-		const approval = await workspace.checkClaimsApproval();
-		if (approval.changed && approval.cleared) {
-			return refusal(approval.changed);
+		const approval = await workspace.requireApprovedClaims();
+		if (typeof approval === 'string') {
+			return refusal(approval);
 		}
-		if (approval.gate !== 'set' || !approval.hash) {
-			return refusal(gateRefusal(folder.claims, 'approved', approval.gate));
-		}
-		const office = readOffice(featureFields ?? {});
+		const office = readOffice(featureList.fields);
 		if (!office) {
 			return refusal(`${folder.featureList} names no office. Its frontmatter needs \`office: US\` or \`office: EPO\`.`);
 		}
@@ -82,7 +81,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 			'',
 			`## Feature List (${folder.featureList})`,
 			'',
-			body(featureList ?? ''),
+			body(featureList.text),
 			'',
 			`## Figures (${folder.figures})`,
 			'',
@@ -104,7 +103,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 				exemplar.error ? `Not read: ${exemplar.error}.` : `${exemplar.text?.trim()}${exemplar.truncated ? '\n\n[Exemplar cut here; the rest is not shown.]' : ''}`,
 			]),
 		];
-		return new LanguageModelToolResult([new LanguageModelTextPart(sections.join('\n'))]);
+		return textResult(sections.join('\n'));
 	}
 }
 

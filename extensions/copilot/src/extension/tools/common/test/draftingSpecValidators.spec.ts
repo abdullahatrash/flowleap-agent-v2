@@ -49,6 +49,22 @@ describe('Application Drafting specification validators', () => {
 		]);
 	});
 
+	it('defined terms: one-word terms and case variants of a capitalised term', () => {
+		expect([
+			checkDefinedTerms(draft('A unit (hereinafter "Controller") is used.', '', 'The Controller is small. A controller-board holds the Controller.')),
+			checkDefinedTerms(draft('A unit (hereinafter "Controller") is used.', '', 'The controller is small.', '', '"Sensor Module" means the part.', '', 'The sensor module and the Sensor-Module work.')),
+			checkDefinedTerms(draft('"bolt" means the pin.', '', 'Bolt 12 holds. The bolt holds.')),
+		]).toEqual([
+			[],
+			[
+				{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 3, message: 'Line 3 writes "controller"; the defined term is "Controller".' },
+				{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 7, message: 'Line 7 writes "sensor module"; the defined term is "Sensor Module".' },
+				{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 7, message: 'Line 7 writes "Sensor-Module"; the defined term is "Sensor Module".' },
+			],
+			[],
+		]);
+	});
+
 	it('figure parts: parses list items and table rows with their lines', () => {
 		expect(parseFigureParts(figures)).toEqual([
 			{ numeral: '10', part: 'hinge', line: 4 },

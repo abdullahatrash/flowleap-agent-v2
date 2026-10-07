@@ -28,6 +28,8 @@
  */
 
 import { DraftDiff } from './draftDiff';
+import { INVENTOR_QUESTION } from './finding';
+import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftSource, parseDraftParagraphs } from './sourceMarkers';
 import { isClaimsParagraph } from './specValidators';
 
@@ -40,7 +42,10 @@ export const VERSION_CLAIMS_HASH = 'Claims SHA-256 of this version';
 /** When a tool cleared `approved` because `claims.md` changed after approval. */
 export const APPROVAL_CLEARED = 'Approval cleared';
 
-const draftFileName = 'draft-application.md';
+/** When a later save of the same draft version refreshed the source map. */
+const RESAVED = 'Re-saved';
+
+const draftFileName = DRAFTING_FILE_NAMES.draft;
 
 /** The provenance of one saved Draft Application version. */
 export interface DraftRecordHeader {
@@ -89,6 +94,12 @@ export function readRecordField(record: string, label: string): string | undefin
 	return fieldPattern(label).exec(record)?.groups?.value.trim() || undefined;
 }
 
+/** Reads every header line of a record with this label, in order (e.g. each `Approval cleared`). */
+export function readRecordFields(record: string, label: string): string[] {
+	const pattern = new RegExp(fieldPattern(label).source, 'gm');
+	return [...record.matchAll(pattern)].map(match => match.groups?.value.trim() ?? '').filter(Boolean);
+}
+
 /**
  * Sets one header field of a record: replaces the line with this label, or adds it at the end
  * of the `## Header` section (which is added when the record has none).
@@ -99,6 +110,15 @@ export function setRecordField(record: string, label: string, value: string): st
 	if (pattern.test(record)) {
 		return record.replace(pattern, () => line);
 	}
+	return addRecordLine(record, label, value);
+}
+
+/**
+ * Adds one header line to a record at the end of the `## Header` section (which is added when the
+ * record has none), keeping the lines with the same label: for events such as `Approval cleared`.
+ */
+export function addRecordLine(record: string, label: string, value: string): string {
+	const line = fieldLine(label, value);
 	const lines = record.replace(/\r\n/g, '\n').split('\n');
 	const header = lines.findIndex(content => /^##\s+Header\s*$/.test(content));
 	if (header < 0) {
@@ -124,14 +144,73 @@ function sourceLabel(sources: readonly DraftSource[] | undefined): string {
 	return sources?.length ? sources.map(source => source.ref ? `${source.kind}:${source.ref}` : source.kind).join(', ') : 'none';
 }
 
+/** Text as one table cell: one line, pipes escaped. */
+function cell(text: string): string {
+	return oneLine(text).replace(/\|/g, '\\|');
+}
+
 function excerpt(text: string): string {
-	const flat = oneLine(text).replace(/\|/g, '\\|');
+	const flat = cell(text);
 	return flat.length > 100 ? `${flat.slice(0, 97)}...` : flat;
 }
 
+/** Abbreviations whose period does not end a sentence (compared case-insensitively). */
+const abbreviations = new Set(['fig', 'figs', 'no', 'nos', 'e.g', 'i.e', 'approx', 'ca', 'cf', 'vs', 'etc', 'et al', 'al', 'ref', 'refs', 'eq', 'para']);
+
 /**
- * Renders the Working Record of a saved Draft Application: the header and the source map of
- * every paragraph (line, section, sources, opening words).
+ * Splits a paragraph into sentences: a sentence ends at `.`, `?` or `!` followed by white space or
+ * the end of the text. A period after a common abbreviation ("FIG.", "No.", "e.g.", "i.e.",
+ * "approx.") does not end a sentence.
+ */
+export function splitSentences(text: string): string[] {
+	const flat = oneLine(text);
+	const sentences: string[] = [];
+	let start = 0;
+	for (const match of flat.matchAll(/[.?!](?=\s|$)/g)) {
+		const end = (match.index ?? 0) + 1;
+		if (match[0] === '.') {
+			const word = /(?<word>[A-Za-z]+(?:\.[A-Za-z]+)*)\.$/.exec(flat.slice(start, end))?.groups?.word.toLowerCase();
+			if (word && abbreviations.has(word)) {
+				continue;
+			}
+		}
+		sentences.push(flat.slice(start, end).trim());
+		start = end;
+	}
+	const rest = flat.slice(start).trim();
+	return [...sentences, ...(rest ? [rest] : [])].filter(Boolean);
+}
+
+/** The `## Source map` section: one row per sentence, with the sources of its paragraph. */
+function sourceMapSection(draft: string): string {
+	const rows = parseDraftParagraphs(draft)
+		.filter(paragraph => paragraph.kind !== 'heading')
+		.flatMap(paragraph => {
+			const section = cell(paragraph.section ?? '');
+			if (paragraph.kind === INVENTOR_QUESTION) {
+				return [`| ${paragraph.line} | ${section} | Inventor Question | ${cell(paragraph.text)} |`];
+			}
+			if (isClaimsParagraph(paragraph) && !paragraph.sources) {
+				return [`| ${paragraph.line} | ${section} | Approved Claims | ${excerpt(paragraph.text)} |`];
+			}
+			const sources = sourceLabel(paragraph.sources);
+			return splitSentences(paragraph.text).map(sentence => `| ${paragraph.line} | ${section} | ${sources} | ${cell(sentence)} |`);
+		});
+	return [
+		'## Source map',
+		'',
+		'Each sentence of the draft as saved, at the line of its paragraph, with the sources the paragraph marker names. "none" means the paragraph has no valid marker; the claims carry none, they are the Approved Claims.',
+		'',
+		'| Line | Section | Sources | Sentence |',
+		'| --- | --- | --- | --- |',
+		...rows,
+		'',
+	].join('\n');
+}
+
+/**
+ * Renders the Working Record of the first save of a Draft Application version: the header and
+ * the sentence-level source map.
  */
 export function renderDraftWorkingRecord(header: DraftRecordHeader, draft: string): string {
 	const fields: [string, string | number | undefined][] = [
@@ -146,23 +225,32 @@ export function renderDraftWorkingRecord(header: DraftRecordHeader, draft: strin
 		[APPROVED_CLAIMS_HASH, header.approvedClaimsHash],
 		[VERSION_CLAIMS_HASH, header.versionClaimsHash],
 	];
-	const rows = parseDraftParagraphs(draft)
-		.filter(paragraph => paragraph.kind !== 'heading')
-		.map(paragraph => `| ${paragraph.line} | ${excerpt(paragraph.section ?? '')} | ${paragraph.kind === 'inventor-question' ? 'Inventor Question' : isClaimsParagraph(paragraph) && !paragraph.sources ? 'Approved Claims' : sourceLabel(paragraph.sources)} | ${excerpt(paragraph.text)} |`);
 	return [
 		emptyWorkingRecord(header.matter).trimEnd(),
 		'',
 		...fields.filter((entry): entry is [string, string | number] => entry[1] !== undefined && String(entry[1]).trim() !== '').map(([label, value]) => fieldLine(label, String(value))),
 		'',
-		'## Source map',
-		'',
-		'Each paragraph of the draft as saved, with the source its marker names. "none" means the paragraph has no valid marker; the claims carry none, they are the Approved Claims.',
-		'',
-		'| Line | Section | Sources | Paragraph |',
-		'| --- | --- | --- | --- |',
-		...rows,
-		'',
+		sourceMapSection(draft),
 	].join('\n');
+}
+
+/**
+ * The Working Record after a later save of the same draft version: the header (with its
+ * `Approval cleared` lines) and the `## Attorney edits` section are kept, a `Re-saved` line is
+ * added to the header, and the source map is refreshed from the saved draft.
+ */
+export function resaveWorkingRecord(record: string, draft: string, savedAt: string): string {
+	const updated = addRecordLine(record.replace(/\r\n/g, '\n'), RESAVED, savedAt);
+	const start = updated.search(/^## Source map\s*$/m);
+	if (start < 0) {
+		const edits = updated.search(/^## Attorney edits\s*$/m);
+		return edits < 0
+			? `${updated.trimEnd()}\n\n${sourceMapSection(draft)}`
+			: `${updated.slice(0, edits).trimEnd()}\n\n${sourceMapSection(draft)}\n${updated.slice(edits)}`;
+	}
+	const next = updated.slice(start + 1).search(/^## /m);
+	const after = next < 0 ? '' : updated.slice(start + 1 + next);
+	return `${updated.slice(0, start)}${sourceMapSection(draft)}${after ? `\n${after}` : ''}`;
 }
 
 function quote(text: string): string {

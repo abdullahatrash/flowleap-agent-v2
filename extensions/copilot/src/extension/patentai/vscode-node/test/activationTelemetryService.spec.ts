@@ -250,6 +250,18 @@ describe('ActivationTelemetryService payloads', () => {
 		});
 		service.dispose();
 	});
+	it('skips a report_saved whose template kind the backend does not accept, instead of losing the batch', async () => {
+		const { service, posts } = makeService({ verdict: 'always' });
+
+		service.recordReportSaved('draft-application');
+		service.recordReportSaved('find-better-report');
+		service.recordReportSaved('prior-art-report');
+		await vi.advanceTimersByTimeAsync(20_000);
+
+		const body = posts[0].body as { events: { props: unknown }[] };
+		expect(body.events.map(event => event.props)).toEqual([{ templateKind: 'prior-art-report' }]);
+		service.dispose();
+	});
 });
 
 describe('ActivationTelemetryService prompt', () => {

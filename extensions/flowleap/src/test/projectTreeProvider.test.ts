@@ -127,7 +127,7 @@ suite('ProjectTreeProvider', () => {
 			'## Gates', '',
 			'1. The feature list must be confirmed before claims are drafted.',
 			'2. The claims must be approved before the application is drafted.',
-			'3. Export refuses while an Error finding or an Inventor Question is open.', '', '',
+			'3. Export refuses on an unwaived Error or an open Inventor Question.', '', '',
 			'## Open Questions', '', ''
 		].join('\n'));
 	});

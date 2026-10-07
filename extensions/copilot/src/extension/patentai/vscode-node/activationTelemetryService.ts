@@ -23,10 +23,10 @@ import {
 	buildRequestBody,
 	decideFromAnswer,
 	decideFromStored,
-	FREE_FORM_TEMPLATE_KIND,
 	MAX_BATCH,
 	reportedPlatform,
 	reportedSkillId,
+	reportedTemplateKind,
 } from '../common/activationTelemetry';
 import { getPatentAccessToken } from '../common/patentTokenRegistry';
 import { IPatentBackendClient } from './patentBackendClient';
@@ -192,7 +192,11 @@ export class ActivationTelemetryService extends Disposable implements IActivatio
 	}
 
 	recordReportSaved(templateKind: string): void {
-		this._enqueue({ name: 'report_saved', props: { templateKind: templateKind || FREE_FORM_TEMPLATE_KIND } });
+		// A kind outside the backend's closed set would make it reject the whole batch: skip it.
+		const kind = reportedTemplateKind(templateKind);
+		if (kind) {
+			this._enqueue({ name: 'report_saved', props: { templateKind: kind } });
+		}
 	}
 
 	recordKeysAdded(epo: boolean, uspto: boolean): void {

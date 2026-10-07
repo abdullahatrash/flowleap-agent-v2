@@ -25,8 +25,11 @@ export type DraftingGateFlag = 'confirmed' | 'approved';
 /** The state of a gate flag: set (`true`), present but not `true`, or missing. */
 export type DraftingGateState = 'set' | 'not-true' | 'missing';
 
-/** Frontmatter field values as YAML parses them. */
-export type DraftingFrontmatterFields = Record<string, string | number | boolean | null | undefined | object>;
+/** One frontmatter field value as YAML parses it. */
+export type DraftingFrontmatterValue = string | number | boolean | null | undefined | object;
+
+/** Frontmatter fields as YAML parses them. */
+export type DraftingFrontmatterFields = Record<string, DraftingFrontmatterValue>;
 
 /** A drafting artifact split into its frontmatter fields and its body. */
 export interface ParsedDraftingFile {

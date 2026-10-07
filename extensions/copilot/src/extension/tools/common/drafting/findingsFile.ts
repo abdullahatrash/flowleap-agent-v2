@@ -17,11 +17,11 @@
  * (ADR 0012 decision 5).
  */
 
-import { DraftFinding } from './finding';
+import { DraftFinding, isInventorQuestion } from './finding';
 
 const sections: readonly { heading: string; severity: DraftFinding['severity']; accepts: (finding: DraftFinding) => boolean }[] = [
-	{ heading: 'Errors', severity: 'Error', accepts: finding => finding.severity === 'Error' && finding.rule !== 'inventor-question' },
-	{ heading: 'Inventor Questions', severity: 'Error', accepts: finding => finding.severity === 'Error' && finding.rule === 'inventor-question' },
+	{ heading: 'Errors', severity: 'Error', accepts: finding => finding.severity === 'Error' && !isInventorQuestion(finding) },
+	{ heading: 'Inventor Questions', severity: 'Error', accepts: finding => finding.severity === 'Error' && isInventorQuestion(finding) },
 	{ heading: 'Notes', severity: 'Note', accepts: finding => finding.severity === 'Note' },
 	{ heading: 'Advisory', severity: 'Advisory', accepts: finding => finding.severity === 'Advisory' },
 ];

@@ -7,15 +7,17 @@ import { createHash } from 'crypto';
 import * as mammoth from 'mammoth';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { FileType } from '../../../platform/filesystem/common/fileTypes';
+import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { dirname } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { DraftFinding } from '../common/drafting/finding';
+import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
-import { DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
-import { DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
+import { DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
+import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { validateDraft } from '../common/drafting/validateDraft';
-import { APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
+import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
@@ -50,12 +52,36 @@ export interface StyleExemplar {
 }
 
 /** The SHA-256 of the claims body of a `claims.md` text. */
-export function claimsHash(claims: string): string {
+function claimsHash(claims: string): string {
 	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
 }
 
+/** The frontmatter field of `claims.md` that ties `approved: true` to the claims body it approved. */
+const APPROVED_HASH_FIELD = 'approvedHash';
+
+/** The fields with `approvedHash` set right after `approved`. */
+function withApprovedHash(fields: DraftingFrontmatterFields, hash: string): DraftingFrontmatterFields {
+	const result: DraftingFrontmatterFields = {};
+	for (const [key, value] of Object.entries(withoutApprovedHash(fields))) {
+		result[key] = value;
+		if (key === 'approved') {
+			result[APPROVED_HASH_FIELD] = hash;
+		}
+	}
+	return result;
+}
+
+function withoutApprovedHash(fields: DraftingFrontmatterFields): DraftingFrontmatterFields {
+	return Object.fromEntries(Object.entries(fields).filter(([key]) => key !== APPROVED_HASH_FIELD));
+}
+
+/** A tool result of one text part. */
+export function textResult(text: string): LanguageModelToolResult {
+	return new LanguageModelToolResult([new LanguageModelTextPart(text)]);
+}
+
 /** The refusal sentence for a gate flag that is not set. */
-export function gateRefusal(path: string, flag: DraftingGateFlag, state: DraftingGateState | 'no-file'): string {
+function gateRefusal(path: string, flag: DraftingGateFlag, state: DraftingGateState | 'no-file'): string {
 	if (state === 'no-file') {
 		return `${path} does not exist. The attorney sets \`${flag}: true\` in its frontmatter after review.`;
 	}
@@ -74,7 +100,9 @@ export class DraftingWorkspace {
 	 * Finds the workspace folder of a matter: the only folder, or in a multi-root workspace the
 	 * folder that has `drafting/<matter>/`. Returns the refusal text when there is none.
 	 */
-	static async locate(matter: string, folders: readonly URI[], fileSystemService: IFileSystemService, instantiationService: IInstantiationService): Promise<DraftingWorkspace | string> {
+	static async locate(matter: string | undefined, workspaceService: IWorkspaceService, fileSystemService: IFileSystemService, instantiationService: IInstantiationService): Promise<DraftingWorkspace | string> {
+		matter ??= '';
+		const folders = workspaceService.getWorkspaceFolders();
 		const folder = resolveDraftingFolder(matter);
 		if (!folder) {
 			return `"${matter}" is not a matter name. Give the folder name under drafting/, e.g. "hinge" for drafting/hinge/.`;
@@ -131,11 +159,17 @@ export class DraftingWorkspace {
 	}
 
 	/**
-	 * Reads the claims approval. When the claims body changed after `start_application_draft`
-	 * recorded it, the approval no longer holds: a set `approved` flag is cleared in `claims.md`
-	 * (set to `false`) and the new hash is recorded, so the attorney's next `approved: true` is a
-	 * new approval. When the approval is current but the saved draft version was generated
-	 * against other claims, the draft is stale.
+	 * Reads the claims approval. The approval is tied to the claims body by `approvedHash` in the
+	 * frontmatter of `claims.md`, beside `approved`:
+	 *
+	 * - `approved: true` without `approvedHash` is a new approval: the hash of the body is written.
+	 * - `approved: true` with an `approvedHash` the body no longer has: the claims changed after
+	 *   approval, so `approved` is set to `false`, `approvedHash` is removed and the clearing is
+	 *   recorded in the Working Record. The attorney's next `approved: true` is a new approval.
+	 * - `approved` not `true`: a left-over `approvedHash` is removed, so a later approval is new.
+	 *
+	 * When the approval holds but the saved draft version was generated against other claims, the
+	 * draft is stale (`changed`, not `cleared`).
 	 */
 	async checkClaimsApproval(): Promise<ClaimsApproval> {
 		const text = await this.read(this.folder.claims);
@@ -144,33 +178,62 @@ export class DraftingWorkspace {
 		}
 		const { fields } = parseDraftingFrontmatter(text);
 		const hash = claimsHash(text);
-		const record = await this.read(this.folder.workingRecord) ?? '';
-		const approvedHash = readRecordField(record, APPROVED_CLAIMS_HASH);
-		if (approvedHash && approvedHash !== hash) {
-			const gate = readGateFlag(fields, 'approved');
-			const cleared = gate === 'set';
-			if (cleared) {
-				await this.write(this.folder.claims, writeDraftingFrontmatter({ ...fields, approved: false }, text));
-			}
-			let updated = setRecordField(record || emptyWorkingRecord(this.folder.matter), APPROVED_CLAIMS_HASH, hash);
-			updated = setRecordField(updated, APPROVAL_CLEARED, `${new Date().toISOString()} (claims.md changed after approval)`);
-			await this.write(this.folder.workingRecord, updated);
+		const gate = readGateFlag(fields, 'approved');
+		const approvedHash = fields[APPROVED_HASH_FIELD];
+		if (gate === 'set' && approvedHash !== undefined && approvedHash !== hash) {
+			await this.write(this.folder.claims, writeDraftingFrontmatter({ ...withoutApprovedHash(fields), approved: false }, text));
+			const record = await this.read(this.folder.workingRecord) ?? emptyWorkingRecord(this.folder.matter);
+			await this.write(this.folder.workingRecord, addRecordLine(record, APPROVAL_CLEARED, `${new Date().toISOString()} (${DRAFTING_FILE_NAMES.claims} changed after approval)`));
 			return {
-				gate: cleared ? 'not-true' : gate,
+				gate: 'not-true',
 				hash,
-				cleared,
-				changed: `${this.folder.claims} changed after it was approved for this draft${cleared ? ', so `approved` was set to `false`' : ''}. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.`,
+				cleared: true,
+				changed: `${this.folder.claims} changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.`,
 			};
 		}
-		const versionHash = readRecordField(record, VERSION_CLAIMS_HASH);
-		const gate = readGateFlag(fields, 'approved');
+		if (gate === 'set' && approvedHash === undefined) {
+			await this.write(this.folder.claims, writeDraftingFrontmatter(withApprovedHash(fields, hash), text));
+		} else if (gate !== 'set' && approvedHash !== undefined) {
+			await this.write(this.folder.claims, writeDraftingFrontmatter(withoutApprovedHash(fields), text));
+		}
+		const versionHash = readRecordField(await this.read(this.folder.workingRecord) ?? '', VERSION_CLAIMS_HASH);
 		if (versionHash && versionHash !== hash) {
 			return { gate, hash, changed: `The saved draft was generated against other claims than the current ${this.folder.claims}. Call start_application_draft, regenerate the specification and save it: the save starts the next draft version.` };
 		}
 		return { gate, hash };
 	}
 
-	/** Records the approved claims hash in the Working Record (the start of a draft). */
+	/**
+	 * The `confirmed` gate of `feature-list.md`: its frontmatter fields when the flag is set, else
+	 * the refusal naming the flag and the file.
+	 */
+	async requireConfirmedFeatureList(): Promise<{ readonly text: string; readonly fields: DraftingFrontmatterFields } | string> {
+		const text = await this.read(this.folder.featureList);
+		if (text === undefined) {
+			return gateRefusal(this.folder.featureList, 'confirmed', 'no-file');
+		}
+		const { fields } = parseDraftingFrontmatter(text);
+		const confirmed = readGateFlag(fields, 'confirmed');
+		return confirmed === 'set' ? { text, fields } : gateRefusal(this.folder.featureList, 'confirmed', confirmed);
+	}
+
+	/**
+	 * The `approved` gate of `claims.md` (see {@link checkClaimsApproval}): the approval when it
+	 * holds, else the refusal naming the flag and the file, or saying that the claims changed.
+	 * A stale draft (`changed` without `cleared`) is returned for the caller to judge.
+	 */
+	async requireApprovedClaims(): Promise<ClaimsApproval & { readonly hash: string } | string> {
+		const approval = await this.checkClaimsApproval();
+		if (approval.changed && approval.cleared) {
+			return approval.changed;
+		}
+		if (approval.gate !== 'set' || !approval.hash) {
+			return gateRefusal(this.folder.claims, 'approved', approval.gate);
+		}
+		return { ...approval, hash: approval.hash };
+	}
+
+	/** Records the approved claims hash in the Working Record: the claims the next draft is generated against. */
 	async recordApprovedClaims(hash: string): Promise<void> {
 		const record = await this.read(this.folder.workingRecord) ?? emptyWorkingRecord(this.folder.matter);
 		await this.write(this.folder.workingRecord, setRecordField(record, APPROVED_CLAIMS_HASH, hash));
@@ -193,7 +256,7 @@ export class DraftingWorkspace {
 	async validate(office: DraftingOffice, draft: string, claims: string, approval: ClaimsApproval, advisory: readonly DraftFinding[]): Promise<DraftFinding[]> {
 		const figures = await this.read(this.folder.figures);
 		const current: DraftFinding[] = [
-			...(approval.changed ? [{ severity: 'Error' as const, rule: 'claims-changed', file: 'claims.md', message: approval.changed }] : []),
+			...(approval.changed ? [{ severity: 'Error' as const, rule: 'claims-changed', file: DRAFTING_FILE_NAMES.claims, message: approval.changed }] : []),
 			...validateDraft({ office, draft, claims, figures }),
 			...advisory,
 		];
@@ -249,8 +312,8 @@ export function findingLine(finding: DraftFinding): string {
 
 /** Counts by severity and the blocking list, for a tool result. */
 export function findingsSummary(findings: readonly DraftFinding[]): string {
-	const errors = findings.filter(finding => finding.severity === 'Error' && finding.rule !== 'inventor-question');
-	const questions = findings.filter(finding => finding.rule === 'inventor-question');
+	const errors = findings.filter(finding => finding.severity === 'Error' && !isInventorQuestion(finding));
+	const questions = findings.filter(isInventorQuestion);
 	const count = (severity: DraftFinding['severity']) => findings.filter(finding => finding.severity === severity).length;
 	const blocking = blockingFindings(findings);
 	return [
