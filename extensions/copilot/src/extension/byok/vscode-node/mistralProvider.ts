@@ -58,23 +58,65 @@ export function mistralModelCapabilities(model: MistralModelData): BYOKModelCapa
 }
 
 /**
- * Mistral lists every model twice: once under its dated id (`mistral-large-2411`) and once under
- * the rolling alias (`mistral-large-latest`), each naming the other in `aliases`. Showing both
- * doubles the picker with identical rows, so a dated entry is dropped when its `-latest` alias is
- * itself in the listing; a dated model with no alias entry stays. Retired models drop too.
+ * Mistral lists one model under several ids: the dated id (`codestral-2508`), the rolling alias
+ * (`codestral-latest`) and sometimes more, each entry carrying the same `name` and naming the
+ * others in `aliases`. The picker would show three identical rows. Entries are grouped by alias
+ * connectivity and by shared `name`, and one id is kept per group: the `-latest` alias when there
+ * is one, else the id matching the name, else the first listed. Retired models drop first.
  */
 export function selectMistralListings(models: readonly MistralModelData[], now: Date = new Date()): MistralModelData[] {
+	const live = models.filter(model => !(model.deprecation && new Date(model.deprecation) <= now));
+	const groups = groupConnectedListings(live);
+	return groups.map(group => pickRepresentative(group));
+}
+
+function groupConnectedListings(models: readonly MistralModelData[]): MistralModelData[][] {
+	const parent = new Map<string, string>();
+	const find = (key: string): string => {
+		let root = key;
+		while (parent.get(root) !== undefined && parent.get(root) !== root) {
+			root = parent.get(root)!;
+		}
+		parent.set(key, root);
+		return root;
+	};
+	const union = (a: string, b: string) => {
+		const rootA = find(a);
+		const rootB = find(b);
+		if (rootA !== rootB) {
+			parent.set(rootB, rootA);
+		}
+	};
 	const listedIds = new Set(models.map(model => model.id));
-	return models.filter(model => {
-		if (model.deprecation && new Date(model.deprecation) <= now) {
-			return false;
+	for (const model of models) {
+		find(model.id);
+		for (const alias of model.aliases ?? []) {
+			if (listedIds.has(alias)) {
+				union(model.id, alias);
+			}
 		}
-		if (model.id.endsWith('-latest')) {
-			return true;
+		const name = model.name?.trim();
+		if (name) {
+			union(model.id, `name:${name}`);
 		}
-		const rollingAlias = model.aliases?.find(alias => alias.endsWith('-latest'));
-		return !(rollingAlias && listedIds.has(rollingAlias));
-	});
+	}
+	const byRoot = new Map<string, MistralModelData[]>();
+	for (const model of models) {
+		const root = find(model.id);
+		const group = byRoot.get(root);
+		if (group) {
+			group.push(model);
+		} else {
+			byRoot.set(root, [model]);
+		}
+	}
+	return Array.from(byRoot.values());
+}
+
+function pickRepresentative(group: MistralModelData[]): MistralModelData {
+	return group.find(model => model.id.endsWith('-latest'))
+		?? group.find(model => model.id === model.name?.trim())
+		?? group[0];
 }
 
 function humanizeMistralModelId(modelId: string): string {

@@ -14,17 +14,25 @@ describe('mistralProvider', () => {
 		...extra,
 	});
 
-	it('keeps one row per model: the rolling -latest alias wins, lone dated ids and retired models are handled', () => {
+	it('keeps one row per model across dated ids, rolling aliases and shared names; retired models drop', () => {
 		const listing: MistralModelData[] = [
-			chat('mistral-large-2411', { aliases: ['mistral-large-latest'] }),
-			chat('mistral-large-latest', { aliases: ['mistral-large-2411'] }),
-			chat('codestral-2501', { aliases: ['codestral-latest'] }),
-			chat('open-mistral-nemo', { aliases: [] }),
-			chat('mistral-medium-2505', { aliases: ['mistral-medium-latest'], deprecation: '2026-01-01T00:00:00Z' }),
-			chat('mistral-medium-2508', { aliases: ['mistral-medium-latest'], deprecation: '2027-01-01T00:00:00Z' }),
+			// Live shape: three ids, one shared name, aliases pointing at each other.
+			chat('codestral-2508', { name: 'codestral-2508', aliases: ['codestral-latest'] }),
+			chat('codestral-latest', { name: 'codestral-2508', aliases: ['codestral-2508'] }),
+			chat('codestral-2508-v2', { name: 'codestral-2508', aliases: [] }),
+			// Dated id with no rolling alias listed keeps the dated id.
+			chat('mistral-large-2512', { name: 'mistral-large-2512', aliases: ['mistral-large-latest'] }),
+			// No aliases at all, distinct names: both stay.
+			chat('glm-5-2', { name: 'glm-5-2' }),
+			chat('zai-glm-5-3', { name: 'zai-glm-5-3' }),
+			// Same name, no aliases: still one row.
+			chat('mistral-medium-latest', { name: 'mistral-medium-latest' }),
+			chat('mistral-medium-2508', { name: 'mistral-medium-latest' }),
+			// Retired.
+			chat('mistral-medium-2505', { name: 'mistral-medium-2505', deprecation: '2026-01-01T00:00:00Z' }),
 		];
 		const kept = selectMistralListings(listing, new Date('2026-10-07T00:00:00Z')).map(m => m.id);
-		expect(kept).toEqual(['mistral-large-latest', 'codestral-2501', 'open-mistral-nemo', 'mistral-medium-2508']);
+		expect(kept).toEqual(['codestral-latest', 'mistral-large-2512', 'glm-5-2', 'zai-glm-5-3', 'mistral-medium-latest']);
 	});
 
 	it('maps the listing to capabilities and hides models that cannot chat', () => {
