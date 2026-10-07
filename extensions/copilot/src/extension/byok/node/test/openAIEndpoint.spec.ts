@@ -17,7 +17,7 @@ import { DisposableStore } from '../../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { CAPIChatMessage } from '../../../../platform/networking/common/openai';
 import { createExtensionUnitTestingServices } from '../../../test/node/services';
-import { hoistToolResultImages, OpenAIEndpoint } from '../openAIEndpoint';
+import { hoistToolResultImages, OpenAIEndpoint, stripCapiImageMediaType } from '../openAIEndpoint';
 
 // Test fixtures for thinking content
 const createThinkingMessage = (thinkingId: string, thinkingText: string): Raw.ChatMessage => ({
@@ -600,6 +600,27 @@ describe('OpenAIEndpoint - Reasoning Properties', () => {
 
 			expect(body.reasoning_effort).toBeUndefined();
 		});
+	});
+});
+
+describe('stripCapiImageMediaType', () => {
+	it('removes media_type from image parts and leaves every other message untouched', () => {
+		const withMediaType = { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA', media_type: 'image/png' } } as unknown as OpenAI.ChatCompletionContentPart;
+		const messages: CAPIChatMessage[] = [
+			{ role: OpenAI.ChatRole.User, content: 'plain' },
+			{ role: OpenAI.ChatRole.User, content: [{ type: 'text', text: 'figures:' }, withMediaType] },
+			{ role: OpenAI.ChatRole.Tool, tool_call_id: 'c', content: [{ type: 'text', text: 'done' }] },
+		];
+
+		const result = stripCapiImageMediaType(messages);
+
+		expect(result).toEqual([
+			messages[0],
+			{ role: OpenAI.ChatRole.User, content: [{ type: 'text', text: 'figures:' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA' } }] },
+			messages[2],
+		]);
+		expect(result[0]).toBe(messages[0]);
+		expect(result[2]).toBe(messages[2]);
 	});
 });
 
