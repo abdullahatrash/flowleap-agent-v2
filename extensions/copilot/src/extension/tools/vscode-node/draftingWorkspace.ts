@@ -52,6 +52,19 @@ export interface StyleExemplar {
 }
 
 /** The SHA-256 of the claims body of a `claims.md` text. */
+/**
+ * A Note, never an Error, when the claims file still carries the "not searched" status the
+ * claim-drafting skill writes for claims drafted without a prior-art search. The attorney may
+ * approve such claims on purpose; the record must show it.
+ */
+function unsearchedClaimsNote(claims: string): DraftFinding[] {
+	const status = parseDraftingFrontmatter(claims).fields.status;
+	if (typeof status !== 'string' || !/^not searched/i.test(status.trim())) {
+		return [];
+	}
+	return [{ severity: 'Note', rule: 'claims-unsearched', file: DRAFTING_FILE_NAMES.claims, message: `The Approved Claims carry status "${status.trim()}": they were drafted without a prior-art search. Run the prior-art step and re-approve, or record in the review that the claims are deliberately unsearched.` }];
+}
+
 function claimsHash(claims: string): string {
 	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
 }
@@ -257,6 +270,7 @@ export class DraftingWorkspace {
 		const figures = await this.read(this.folder.figures);
 		const current: DraftFinding[] = [
 			...(approval.changed ? [{ severity: 'Error' as const, rule: 'claims-changed', file: DRAFTING_FILE_NAMES.claims, message: approval.changed }] : []),
+			...unsearchedClaimsNote(claims),
 			...validateDraft({ office, draft, claims, figures }),
 			...advisory,
 		];

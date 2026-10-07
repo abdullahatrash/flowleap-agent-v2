@@ -334,6 +334,16 @@ describe('validate_draft', () => {
 		expect({ second, findings: await read('drafting/hinge/findings.md') }).toMatchSnapshot();
 	});
 
+	it('adds a Note when the approved claims were never searched against prior art', async () => {
+		const unsearched = claims().replace('approved: true\n', 'approved: true\nstatus: not searched — scope unvalidated\n');
+		const { tools, read } = setup({ ...gatesOpen, 'drafting/hinge/claims.md': unsearched });
+		await tools.start();
+		await tools.save(draft());
+		await tools.validate();
+		expect((await read('drafting/hinge/findings.md')).match(/- `claims-unsearched`[^\n]*/)?.[0]).toBe(
+			'- `claims-unsearched` (claims.md): The Approved Claims carry status "not searched — scope unvalidated": they were drafted without a prior-art search. Run the prior-art step and re-approve, or record in the review that the claims are deliberately unsearched.');
+	});
+
 	it('refuses a matter name that leaves drafting/ and a matter folder that does not exist', async () => {
 		const { tools } = setup(gatesOpen);
 		expect([await tools.validate(undefined, '../secrets'), await tools.validate(undefined, 'pump')]).toEqual([
