@@ -4,54 +4,53 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { buildPreviewHtml } from './htmlPreviewDocument';
+import { HTML_PREVIEW_VIEW_TYPE, HtmlPreviewEditorProvider } from './htmlPreviewEditor';
 
-/** Command that previews a workspace HTML file (a dashboard or another generated report). */
+/** Open an HTML file in the rendered preview editor. */
 export const PREVIEW_HTML_COMMAND = 'flowleap.previewHtmlFile';
 
+/** Open the active preview's HTML file in the text editor. */
+export const OPEN_HTML_SOURCE_COMMAND = 'flowleap.openHtmlSource';
+
 /**
- * Open a workspace HTML file in a webview panel. The file is read through the workspace file
- * system, so this works the same on desktop and in a hosted workspace in the browser, where
- * `open`/`xdg-open` on the server show nothing to the user and no port is forwarded.
+ * Resolve the file an HTML command acts on: the argument (Explorer, editor title), else the
+ * active text editor when it shows an HTML file, else a file the user picks.
  */
-async function previewHtmlFile(resource: vscode.Uri | undefined): Promise<void> {
+async function resolveHtmlFile(resource: vscode.Uri | undefined): Promise<vscode.Uri | undefined> {
 	const active = vscode.window.activeTextEditor?.document.uri;
-	const uri = resource ?? (active && /\.html?$/i.test(active.path) ? active : undefined);
-	if (!uri) {
-		const picked = await vscode.window.showOpenDialog({
-			canSelectMany: false,
-			filters: { [vscode.l10n.t('HTML files')]: ['html', 'htm'] },
-			title: vscode.l10n.t('Preview HTML File'),
-		});
-		if (!picked?.length) {
-			return;
-		}
-		return previewHtmlFile(picked[0]);
+	if (resource) {
+		return resource;
 	}
-
-	let text: string;
-	try {
-		text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-	} catch (error) {
-		vscode.window.showErrorMessage(vscode.l10n.t('Could not read {0}: {1}', uri.path, String(error)));
-		return;
+	if (active && /\.html?$/i.test(active.path)) {
+		return active;
 	}
-
-	const folder = vscode.Uri.joinPath(uri, '..');
-	const panel = vscode.window.createWebviewPanel(
-		'flowleap.htmlPreview',
-		vscode.l10n.t('Preview {0}', uri.path.split('/').pop() ?? ''),
-		vscode.ViewColumn.Active,
-		{
-			enableScripts: true,
-			localResourceRoots: [folder],
-		}
-	);
-	const baseHref = panel.webview.asWebviewUri(folder).toString().replace(/\/?$/, '/');
-	panel.webview.html = buildPreviewHtml(text, panel.webview.cspSource, baseHref);
+	const picked = await vscode.window.showOpenDialog({
+		canSelectMany: false,
+		filters: { [vscode.l10n.t('HTML files')]: ['html', 'htm'] },
+		title: vscode.l10n.t('Preview HTML File'),
+	});
+	return picked?.[0];
 }
 
-/** Register the HTML file preview command. */
+/** Register the HTML preview editor and its commands. */
 export function registerHtmlPreview(): vscode.Disposable {
-	return vscode.commands.registerCommand(PREVIEW_HTML_COMMAND, (resource?: vscode.Uri) => previewHtmlFile(resource));
+	return vscode.Disposable.from(
+		vscode.window.registerCustomEditorProvider(HTML_PREVIEW_VIEW_TYPE, new HtmlPreviewEditorProvider(), {
+			webviewOptions: { retainContextWhenHidden: true },
+			supportsMultipleEditorsPerDocument: false,
+		}),
+		vscode.commands.registerCommand(PREVIEW_HTML_COMMAND, async (resource?: vscode.Uri) => {
+			const uri = await resolveHtmlFile(resource);
+			if (uri) {
+				await vscode.commands.executeCommand('vscode.openWith', uri, HTML_PREVIEW_VIEW_TYPE);
+			}
+		}),
+		vscode.commands.registerCommand(OPEN_HTML_SOURCE_COMMAND, async (resource?: vscode.Uri) => {
+			const activeInput = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+			const uri = resource ?? (activeInput instanceof vscode.TabInputCustom ? activeInput.uri : await resolveHtmlFile(undefined));
+			if (uri) {
+				await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
+			}
+		}),
+	);
 }
