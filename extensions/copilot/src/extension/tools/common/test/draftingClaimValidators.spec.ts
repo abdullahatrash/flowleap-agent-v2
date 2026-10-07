@@ -64,6 +64,14 @@ describe('Application Drafting claim validators', () => {
 		))).toEqual([]);
 	});
 
+	it('antecedent basis: pass for terms introduced by a bare quantifier and referred to with it', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A quick release wherein rotation of a shaft moves a head through at least three positions, the at least three positions comprising a first position.',
+			'2. The quick release of claim 1, wherein a second head comprises two independently adjustable portions.',
+			'3. The quick release of claim 2, wherein the two independently adjustable portions are two disks, and the at least three positions are discrete.',
+		))).toEqual([]);
+	});
+
 	it('antecedent basis: Error per missing term, checked along every dependency path', () => {
 		expect(checkAntecedentBasis(claims(
 			'1. A hinge comprising a housing.',

@@ -95,7 +95,16 @@ const termModifiers = new Set(['first', 'second', 'third', 'fourth', 'fifth', 's
 /** Words after "the" that are not claim terms (`the same`, `the other`). */
 const exemptReferences = new Set(['same', 'other', 'like', 'invention', 'plurality', 'following', 'preceding', 'foregoing', 'above', 'below', 'present', 'respective', 'claim', 'claims']);
 
-const termPattern = /\b(?<article>a plurality of|plurality of|at least one|one or more|an|a|the|said)\s+(?:(?:at least one|one or more|plurality of)\s+)?(?<first>[a-z][a-z0-9-]*)/gi;
+/**
+ * Number words that introduce a term without an article ("two disks", "at least three positions").
+ * A reference to such a term keeps the quantifier ("the at least three positions"), so the
+ * quantifier is skipped on both sides and the term key is the noun phrase after it.
+ */
+const numberWords = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve';
+const termPattern = new RegExp(
+	String.raw`\b(?<article>a plurality of|plurality of|at least one|one or more|an|a|the|said|at least|at most|no more than|${numberWords})\s+` +
+	String.raw`(?:(?:at least one|one or more|plurality of|at least|at most|no more than)\s+)?(?:(?:${numberWords}|\d+)\s+)?(?<first>[a-z][a-z0-9-]*)`,
+	'gi');
 
 interface ClaimTerm {
 	readonly key: string;
@@ -110,7 +119,7 @@ function readTerms(text: string): ClaimTerm[] {
 		const first = groups.first.toLowerCase();
 		const index = match.index ?? 0;
 		const second = /^\s+(?<second>[a-z][a-z0-9-]*)/i.exec(text.slice(index + match[0].length))?.groups?.second.toLowerCase();
-		const key = termModifiers.has(first) && second ? `${first} ${second}` : first;
+		const key = second && (termModifiers.has(first) || first.endsWith('ly')) ? `${first} ${second}` : first;
 		const article = groups.article.toLowerCase();
 		const introduces = article !== 'the' && article !== 'said';
 		if (!introduces && exemptReferences.has(first)) {
