@@ -120,6 +120,9 @@ export enum ToolName {
 	PatstatGraph = 'patstat_graph',
 	PatstatApiGuide = 'patstat_api_guide',
 	ExaminerBaseline = 'examiner_baseline',
+	StartApplicationDraft = 'start_application_draft',
+	ValidateDraft = 'validate_draft',
+	ExportDraftDocx = 'export_draft_docx',
 }
 
 /**
@@ -208,6 +211,9 @@ export enum ContributedToolName {
 	PatstatGraph = 'copilot_patstatGraph',
 	PatstatApiGuide = 'copilot_patstatApiGuide',
 	ExaminerBaseline = 'copilot_examinerBaseline',
+	StartApplicationDraft = 'copilot_startApplicationDraft',
+	ValidateDraft = 'copilot_validateDraft',
+	ExportDraftDocx = 'copilot_exportDraftDocx',
 }
 
 export const byokEditToolNamesToToolNames = {
@@ -366,6 +372,9 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.PatstatGraph]: ToolCategory.WebInteraction,
 	[ToolName.PatstatApiGuide]: ToolCategory.WebInteraction,
 	[ToolName.ExaminerBaseline]: ToolCategory.WebInteraction,
+	[ToolName.StartApplicationDraft]: ToolCategory.Core,
+	[ToolName.ValidateDraft]: ToolCategory.Core,
+	[ToolName.ExportDraftDocx]: ToolCategory.Core,
 } as const;
 
 

@@ -60,7 +60,7 @@ approval, the attorney sets the flag again.
 
 1. Before the first drafting call, state in chat the model and the provider
    the disclosure goes to. Use the same values in the save in Step 4.
-2. Call **start_application_draft** with the matter folder. It returns the
+2. Call `start_application_draft` with the matter folder. It returns the
    Feature List, the figures, the Approved Claims and up to five style
    exemplars, or it refuses and names the missing flag.
 3. Write the specification in the office's section order:
@@ -85,12 +85,12 @@ specification.
 1. Save with `write_patent_results`, template `draft-application`, to
    `drafting/<matter>/draft-application.md`, with `office`, `model`,
    `provider` and `version`. Findings never block a save.
-2. Call **validate_draft** on the matter folder. It runs the code validators
+2. Call `validate_draft` on the matter folder. It runs the code validators
    and writes `findings.md`.
 3. Run the advisory review: scope, clarity, and support of each claimed
    combination (a term that appears in the specification does not yet support
    the combination). Each item quotes the passage it concerns and gives its
-   paragraph. Pass the items to **validate_draft** as advisory items.
+   paragraph. Pass the items to `validate_draft` as advisory items.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 
@@ -101,7 +101,7 @@ Inventor Questions, each with its line reference. Report what the validators
 found and what stays open. A run without Errors is "no Error findings", never
 "passed" or "ready to file".
 
-When the attorney asks for the Word file, call **export_draft_docx**. It
+When the attorney asks for the Word file, call `export_draft_docx`. It
 refuses on an unwaived Error or an open Inventor Question: report each one.
 The attorney resolves it, or writes a waiver with a reason in `findings.md`.
 

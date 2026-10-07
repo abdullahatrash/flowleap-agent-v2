@@ -1,6 +1,6 @@
 # Exemplar rule
 
-**start_application_draft** returns up to five exemplars from the `style/`
+`start_application_draft` returns up to five exemplars from the `style/`
 folder of the workspace: earlier applications of this client, chosen by the
 attorney. The workspace is one client, so the exemplars are that client's.
 

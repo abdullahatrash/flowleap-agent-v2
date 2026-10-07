@@ -1,0 +1,99 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as l10n from '@vscode/l10n';
+import type * as vscode from 'vscode';
+import { IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
+import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+import { CancellationToken } from '../../../util/vs/base/common/cancellation';
+import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { diffDraftParagraphs } from '../common/drafting/draftDiff';
+import { blockingFindings } from '../common/drafting/findingsFile';
+import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workingRecord';
+import { ToolName } from '../common/toolNames';
+import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { buildDraftDocx } from './draftDocx';
+import { DraftingWorkspace, findingLine, gateRefusal } from './draftingWorkspace';
+
+interface IExportDraftDocxParams {
+	/** The matter folder name under `drafting/`. */
+	matter: string;
+}
+
+function refusal(reason: string): LanguageModelToolResult {
+	return new LanguageModelToolResult([new LanguageModelTextPart(`The draft was not exported. ${reason}`)]);
+}
+
+/**
+ * Exports a Draft Application to `draft-application.docx` (ADR 0012). It re-runs the validators
+ * and refuses while an Error or an Inventor Question is open and unwaived, while `approved` is not
+ * `true` in `claims.md`, or while `claims.md` differs from the claims the draft was generated
+ * against. Otherwise it logs the attorney's edits against the generated snapshot in the Working
+ * Record, strips the source markers and writes the .docx.
+ */
+export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams> {
+
+	public static readonly toolName = ToolName.ExportDraftDocx;
+
+	constructor(
+		@IFileSystemService private readonly fileSystemService: IFileSystemService,
+		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) { }
+
+	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IExportDraftDocxParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
+		return {
+			invocationMessage: l10n.t`Exporting the draft of ${options.input.matter} to Word`,
+			confirmationMessages: {
+				title: l10n.t`Export Draft Application`,
+				message: l10n.t`Allow Patent AI to write the Word export of the draft of ${options.input.matter}?`,
+			},
+		};
+	}
+
+	async invoke(options: vscode.LanguageModelToolInvocationOptions<IExportDraftDocxParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
+		const workspace = await DraftingWorkspace.locate(options.input.matter ?? '', this.workspaceService.getWorkspaceFolders(), this.fileSystemService, this.instantiationService);
+		if (typeof workspace === 'string') {
+			return refusal(workspace);
+		}
+		const { folder } = workspace;
+		const approval = await workspace.checkClaimsApproval();
+		if (approval.changed && approval.cleared) {
+			return refusal(approval.changed);
+		}
+		if (approval.gate !== 'set') {
+			return refusal(gateRefusal(folder.claims, 'approved', approval.gate));
+		}
+		if (approval.changed) {
+			return refusal(approval.changed);
+		}
+		const draft = await workspace.read(folder.draft);
+		const snapshot = await workspace.read(folder.generatedSnapshot);
+		const claims = await workspace.read(folder.claims);
+		if (draft === undefined || snapshot === undefined || claims === undefined) {
+			return refusal(`${draft === undefined ? folder.draft : folder.generatedSnapshot} does not exist: save the draft with write_patent_results, template draft-application, first.`);
+		}
+		const office = await workspace.office(draft);
+		if (!office) {
+			return refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`);
+		}
+		const findings = await workspace.validate(office, draft, claims, approval, []);
+		const blocking = blockingFindings(findings);
+		if (blocking.length) {
+			return refusal(`${blocking.length} finding(s) in ${folder.findings} are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):\n${blocking.map(findingLine).join('\n')}`);
+		}
+		const diff = diffDraftParagraphs(snapshot, draft);
+		const record = await workspace.read(folder.workingRecord) ?? emptyWorkingRecord(folder.matter);
+		await workspace.write(folder.workingRecord, withAttorneyEdits(record, diff, new Date().toISOString()));
+		await workspace.write(folder.docx, await buildDraftDocx(draft));
+		const count = (kind: string) => diff.changes.filter(change => change.kind === kind).length;
+		return new LanguageModelToolResult([new LanguageModelTextPart(
+			`Exported ${folder.docx} (source markers and Inventor Questions section removed). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing.`
+		)]);
+	}
+}
+
+ToolRegistry.registerTool(ExportDraftDocxTool);

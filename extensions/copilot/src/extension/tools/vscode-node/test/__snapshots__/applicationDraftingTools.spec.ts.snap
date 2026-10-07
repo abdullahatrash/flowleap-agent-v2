@@ -1,0 +1,186 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`export_draft_docx > appends the attorney edits to the Working Record and writes the .docx without markers 1`] = `
+{
+  "attorneyEdits": "## Attorney edits
+
+Exported <time>. Against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added.
+
+### Changed (line 12)
+
+Generated (sources: disclosure:§1):
+
+> A hinge joins a door to a frame.
+
+Attorney:
+
+> A hinge pivotally joins a door to a frame.
+",
+  "docxParagraphs": [
+    "Hinge",
+    "BACKGROUND",
+    "A hinge pivotally joins a door to a frame.",
+    "SUMMARY",
+    "A hinge has a housing and a lever. The lever is steel.",
+    "BRIEF DESCRIPTION OF THE DRAWINGS",
+    "FIG. 1 is a side view of the hinge.",
+    "DETAILED DESCRIPTION",
+    "The housing 12 holds the lever 14. The lever 14 is steel.",
+    "CLAIMS",
+    "1. A hinge comprising a housing and a lever.",
+    "2. The hinge of claim 1, wherein the lever is steel.",
+    "ABSTRACT",
+    "A hinge has a housing and a lever of steel.",
+  ],
+  "result": "Exported drafting/hinge/draft-application.docx (source markers and Inventor Questions section removed). Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing.",
+}
+`;
+
+exports[`export_draft_docx > refuses on an open Inventor Question and on claims changed after approval 1`] = `
+{
+  "claimsChanged": "The draft was not exported. drafting/hinge/claims.md changed after it was approved for this draft, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.",
+  "openQuestionRefusal": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
+- \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is open: Which steel grade is the lever made of?",
+  "unapproved": "The draft was not exported. \`approved\` in drafting/hinge/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate.",
+}
+`;
+
+exports[`start_application_draft > returns the inputs and the style exemplars, labelled style only, and records the approved claims 1`] = `
+{
+  "pdfReads": [
+    "/workspace/style/c.pdf",
+  ],
+  "record": "# Working record — hinge
+
+Companion to [draft-application.md](draft-application.md): how this Draft Application was made. Internal; not part of the filed application.
+
+## Header
+
+- **Approved claims SHA-256:** <sha>
+",
+  "result": "Drafting started for matter "hinge". Office: US. Gates read from the files: \`confirmed: true\` in drafting/hinge/feature-list.md, \`approved: true\` in drafting/hinge/claims.md. The approved claims are recorded (SHA-256 <sha>) in drafting/hinge/draft-application.working-record.md: when drafting/hinge/claims.md changes, the drafting tools set \`approved\` to \`false\` and refuse until the attorney approves again.
+Save the draft with write_patent_results, template draft-application, to drafting/hinge/draft-application.md; then call validate_draft.
+
+## Feature List (drafting/hinge/feature-list.md)
+
+| ID | Feature | Source |
+| --- | --- | --- |
+| F1 | A housing 12 that holds a lever 14 of steel. | disclosure:§1 |
+
+## Figures (drafting/hinge/figures.md)
+
+## FIG. 1
+
+- 12: housing
+- 14: lever
+
+## Approved Claims (drafting/hinge/claims.md)
+
+1. A hinge comprising a housing and a lever.
+2. The hinge of claim 1, wherein the lever is steel.
+
+## Style exemplars (style only, never a source)
+
+Voice and structure only. No fact, feature, embodiment, value, example or result enters the draft from an exemplar.
+
+### Style exemplar 1: style/a.md (style only, never a source)
+
+In one embodiment, the widget turns.
+
+### Style exemplar 2: style/b.docx (style only, never a source)
+
+The present disclosure relates to doors.
+
+### Style exemplar 3: style/c.pdf (style only, never a source)
+
+Text of the PDF exemplar.",
+}
+`;
+
+exports[`validate_draft > keeps the attorney's waiver across two runs and merges the advisory items 1`] = `
+{
+  "findings": "# Findings
+
+Errors and Inventor Questions block export until they are resolved or waived. To waive one, add a line \`  - Waived: <reason>\` under it. Notes never block. Advisory items come from the model review; they are advice, not a pass.
+
+## Errors
+
+None.
+
+## Inventor Questions
+
+- \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is open: Which steel grade is the lever made of?
+  - Waived: Grade is left to the manufacturer.
+
+## Notes
+
+None.
+
+## Advisory
+
+- \`advisory\` (draft-application.md, line 27, claim 2): Claim 2: "steel" has literal basis, but no passage supports steel in combination with the housing.
+",
+  "second": "Wrote drafting/hinge/findings.md (US validators, 1 advisory item(s); waivers kept).
+Errors: 0 (0 waived). Inventor Questions: 1 (1 waived). Notes: 0. Advisory: 1.
+No unwaived Error and no open Inventor Question.
+Report these by severity with their line references. Do not call the draft passed or ready to file.",
+}
+`;
+
+exports[`write_patent_results draft-application template > starts the next version when the claims changed and were approved again, keeping the previous draft and record 1`] = `
+{
+  "cleared": "Drafting did not start. drafting/hinge/claims.md changed after it was approved for this draft, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.",
+  "previousDraftVersion": "1",
+  "previousRecordKept": true,
+  "result": "Saved drafting/hinge/draft-application.md (version 2, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.
+The claims changed since version 1: this is version 2; the previous files are kept as drafting/hinge/draft-application.v1.md, drafting/hinge/draft-application.v1.generated.md, drafting/hinge/draft-application.v1.working-record.md.
+Findings are not checked at save. Call validate_draft next.",
+  "version": "2",
+}
+`;
+
+exports[`write_patent_results draft-application template > writes the draft with its frontmatter first, the generated snapshot and the Working Record, never blocked by findings 1`] = `
+{
+  "firstLine": "---",
+  "frontmatter": "
+office: US
+model: claude-sonnet-5
+provider: anthropic
+version: 1
+",
+  "record": "# Working record — hinge
+
+Companion to [draft-application.md](draft-application.md): how this Draft Application was made. Internal; not part of the filed application.
+
+## Header
+
+- **Matter:** hinge
+- **Office:** US
+- **Model:** claude-sonnet-5
+- **Provider:** anthropic
+- **Version:** 1
+- **Disclosure version:** disclosure v2 (2026-10-01)
+- **Prompts:** application-drafting skill, US template
+- **Saved:** <time>
+- **Approved claims SHA-256:** <sha>
+- **Claims SHA-256 of this version:** <sha>
+
+## Source map
+
+Each paragraph of the draft as saved, with the source its marker names. "none" means the paragraph has no valid marker; the claims carry none, they are the Approved Claims.
+
+| Line | Section | Sources | Paragraph |
+| --- | --- | --- | --- |
+| 12 | BACKGROUND | disclosure:§1 | A hinge joins a door to a frame. |
+| 17 | SUMMARY | feature:F1 | A hinge has a housing and a lever. The lever is steel. |
+| 22 | BRIEF DESCRIPTION OF THE DRAWINGS | template | FIG. 1 is a side view of the hinge. |
+| 27 | DETAILED DESCRIPTION | feature:F1 | The housing 12 holds the lever 14. The lever 14 is steel. |
+| 31 | CLAIMS | Approved Claims | 1. A hinge comprising a housing and a lever. 2. The hinge of claim 1, wherein the lever is steel. |
+| 37 | ABSTRACT | feature:F1 | A hinge has a housing and a lever of steel. |
+| 41 | Inventor Questions | Inventor Question | > **Inventor Question IQ-1:** Which steel grade is the lever made of? |
+",
+  "result": "Saved drafting/hinge/draft-application.md (version 1, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.
+Findings are not checked at save. Call validate_draft next.",
+  "snapshotIsDraft": true,
+}
+`;
