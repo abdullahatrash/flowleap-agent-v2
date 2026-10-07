@@ -554,6 +554,11 @@ function renderStartupView(recentProjects: RecentProject[]): string {
 				<div class="type-card-title">Claim Analysis</div>
 				<div class="type-card-desc">Extract and analyze the claims of a patent</div>
 			</div>
+			<div class="type-card" data-action="newProject" data-type="application-drafting">
+				<div class="type-card-icon">\u{270D}\u{FE0F}</div>
+				<div class="type-card-title">Application Drafting</div>
+				<div class="type-card-desc">Draft an application from an invention disclosure</div>
+			</div>
 			<div class="type-card" data-action="newProject" data-type="custom">
 				<div class="type-card-icon">\u{1F4C1}</div>
 				<div class="type-card-title">Custom Project</div>

@@ -15,6 +15,7 @@ export type ProjectType =
 	| 'freedom-to-operate'
 	| 'patent-landscape'
 	| 'claim-analysis'
+	| 'application-drafting'
 	| 'custom';
 
 /**
@@ -48,8 +49,61 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 	'freedom-to-operate': 'Freedom-to-Operate',
 	'patent-landscape': 'Patent Landscape',
 	'claim-analysis': 'Claim Analysis',
+	'application-drafting': 'Application Drafting',
 	'custom': 'Custom'
 };
+
+/**
+ * H2 sections seeded into `notes.md` for each project type. A prior-art search keeps only the
+ * headings the notes own: the queries, the relevant references and the gaps of a saved search live
+ * in the generated working record beside its report, and a second copy would only go stale.
+ */
+export const NOTES_SECTIONS: Record<ProjectType, string[]> = {
+	'patent-analysis': ['Patent Under Analysis', 'Claim Map', 'Prior Art of Record', 'Findings', 'Open Questions'],
+	'prior-art-search': ['Search Scope', 'Notes', 'References'],
+	'freedom-to-operate': ['Product / Feature', 'Blocking Patents', 'Claim Charts', 'Design-Arounds', 'Conclusion'],
+	'patent-landscape': ['Technology Scope', 'Key Players', 'Trends', 'Notable Patents', 'References'],
+	'claim-analysis': ['Claims', 'Element Breakdown', 'Support in Specification', 'Findings', 'Open Questions'],
+	'application-drafting': ['Invention Disclosure', 'Folder Contract', 'Gates', 'Open Questions'],
+	'custom': ['Key Findings', 'Open Questions', 'References']
+};
+
+/**
+ * Body text seeded under a section heading, for the sections that carry more than an empty
+ * placeholder. Application Drafting seeds the pipeline folder contract and the three gates so the
+ * notes name the files the drafting tools read and write. Label and seed only, no behavior switch.
+ */
+const NOTES_SECTION_SEEDS: Partial<Record<ProjectType, Record<string, string>>> = {
+	'application-drafting': {
+		'Folder Contract': [
+			'Each matter lives in `drafting/<matter>/`:',
+			'',
+			'- `feature-list.md` - the confirmed feature list',
+			'- `figures.md` - figure descriptions',
+			'- `claims.md` - the claim set',
+			'- `draft-application.md` - the draft application',
+			'- `draft-application.generated.md` - the generated draft',
+			'- `draft-application.working-record.md` - the working record',
+			'- `findings.md` - validator findings',
+			'- `draft-application.docx` - the exported Word document',
+			'',
+			'Put exemplar applications in `style/` at the workspace root.'
+		].join('\n'),
+		'Gates': [
+			'1. The feature list must be confirmed before claims are drafted.',
+			'2. The claims must be approved before the application is drafted.',
+			'3. Export refuses while an Error finding or an Inventor Question is open.'
+		].join('\n')
+	}
+};
+
+/** Build the starting `notes.md` for a new project: title, type label, then the seeded sections. */
+export function getNotesTemplate(projectName: string, projectType: ProjectType): string {
+	const typeLabel = PROJECT_TYPE_LABELS[projectType];
+	const seeds = NOTES_SECTION_SEEDS[projectType] ?? {};
+	const body = NOTES_SECTIONS[projectType].map(section => `## ${section}\n\n${seeds[section] ? `${seeds[section]}\n\n` : ''}`).join('\n');
+	return `# ${projectName}\n\n> ${typeLabel}\n\n${body}`;
+}
 
 /** Human-readable label for each of the four display statuses. */
 export const PROJECT_STATUS_LABELS: Record<DisplayStatus, string> = {

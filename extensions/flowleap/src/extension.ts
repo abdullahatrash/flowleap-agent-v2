@@ -16,6 +16,7 @@ import {
 	ProjectStatus,
 	DisplayStatus,
 	PROJECT_TYPE_LABELS,
+	getNotesTemplate,
 	PROJECT_STATUS_LABELS,
 	isProjectType,
 	projectFromCommandArgument
@@ -58,6 +59,11 @@ const PROJECT_TYPE_INFO: Record<ProjectType, { icon: string; placeholder: string
 		placeholder: 'e.g., EP1234567 claim 1 — element mapping',
 		description: 'Extract and analyze the claims of a patent'
 	},
+	'application-drafting': {
+		icon: '$(edit)',
+		placeholder: 'e.g., Self-healing concrete — EP application',
+		description: 'Draft a patent application from an invention disclosure'
+	},
 	'custom': {
 		icon: '$(folder)',
 		placeholder: 'e.g., Client ABC portfolio review',
@@ -73,20 +79,6 @@ const STATUS_PICK_ICONS: Record<DisplayStatus, string> = {
 	'archived': '$(archive)'
 };
 
-/**
- * H2 sections seeded into `notes.md` for each project type. A prior-art search keeps only the
- * headings the notes own: the queries, the relevant references and the gaps of a saved search live
- * in the generated working record beside its report, and a second copy would only go stale.
- */
-const NOTES_SECTIONS: Record<ProjectType, string[]> = {
-	'patent-analysis': ['Patent Under Analysis', 'Claim Map', 'Prior Art of Record', 'Findings', 'Open Questions'],
-	'prior-art-search': ['Search Scope', 'Notes', 'References'],
-	'freedom-to-operate': ['Product / Feature', 'Blocking Patents', 'Claim Charts', 'Design-Arounds', 'Conclusion'],
-	'patent-landscape': ['Technology Scope', 'Key Players', 'Trends', 'Notable Patents', 'References'],
-	'claim-analysis': ['Claims', 'Element Breakdown', 'Support in Specification', 'Findings', 'Open Questions'],
-	'custom': ['Key Findings', 'Open Questions', 'References']
-};
-
 function getProjectsDirectory(): string {
 	const config = vscode.workspace.getConfiguration('flowleap');
 	const customDir = config.get<string>('projectsDirectory', '');
@@ -94,12 +86,6 @@ function getProjectsDirectory(): string {
 		return customDir.replace('~', os.homedir());
 	}
 	return path.join(os.homedir(), 'FlowLeap Projects');
-}
-
-function getNotesTemplate(projectName: string, projectType: ProjectType): string {
-	const typeLabel = PROJECT_TYPE_LABELS[projectType];
-	const body = NOTES_SECTIONS[projectType].map(section => `## ${section}\n\n`).join('\n');
-	return `# ${projectName}\n\n> ${typeLabel}\n\n${body}`;
 }
 
 /** Convert a project name into a filesystem-safe folder name. */

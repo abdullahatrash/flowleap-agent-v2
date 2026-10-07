@@ -8,6 +8,8 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
 	ProjectTreeProvider,
+	PROJECT_TYPE_LABELS,
+	getNotesTemplate,
 	PatentProject,
 	DisplayStatus,
 	mapLegacyStatus,
@@ -98,6 +100,36 @@ suite('ProjectTreeProvider', () => {
 			'legacy-draft-live': 'active',
 			'active-archived': 'archived'
 		});
+	});
+
+	test('lists seven project types with Application Drafting seventh before Custom', () => {
+		assert.deepStrictEqual(Object.values(PROJECT_TYPE_LABELS), [
+			'Patent Analysis', 'Prior-Art Search', 'Freedom-to-Operate', 'Patent Landscape', 'Claim Analysis', 'Application Drafting', 'Custom'
+		]);
+		assert.strictEqual(isProjectType('application-drafting'), true);
+	});
+
+	test('Application Drafting notes seed the folder contract and the three gates', () => {
+		assert.strictEqual(getNotesTemplate('Matter A', 'application-drafting'), [
+			'# Matter A', '', '> Application Drafting', '',
+			'## Invention Disclosure', '', '',
+			'## Folder Contract', '',
+			'Each matter lives in `drafting/<matter>/`:', '',
+			'- `feature-list.md` - the confirmed feature list',
+			'- `figures.md` - figure descriptions',
+			'- `claims.md` - the claim set',
+			'- `draft-application.md` - the draft application',
+			'- `draft-application.generated.md` - the generated draft',
+			'- `draft-application.working-record.md` - the working record',
+			'- `findings.md` - validator findings',
+			'- `draft-application.docx` - the exported Word document', '',
+			'Put exemplar applications in `style/` at the workspace root.', '', '',
+			'## Gates', '',
+			'1. The feature list must be confirmed before claims are drafted.',
+			'2. The claims must be approved before the application is drafted.',
+			'3. Export refuses while an Error finding or an Inventor Question is open.', '', '',
+			'## Open Questions', '', ''
+		].join('\n'));
 	});
 
 	test('isProjectType accepts only real type keys and rejects stale/non-string values', () => {
