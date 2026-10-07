@@ -13,6 +13,47 @@ import { FinishedCallback, getRequestId, ICodeVulnerabilityAnnotation, ICopilotB
 import { DestroyableStream, Response } from '../common/fetcherService';
 import { APIErrorResponse, APIJsonData, APIUsage, ChoiceLogProbs, FilterReason, FinishedCompletionReason, isApiUsage, IToolCall } from '../common/openai';
 
+/**
+ * One part of a chunked `delta.content`. Mistral streams reasoning models this way: `content`
+ * is an array of `text` chunks and `thinking` chunks (each wrapping its own text chunks) rather
+ * than the OpenAI string. See https://docs.mistral.ai/capabilities/reasoning/
+ */
+interface ContentChunk {
+	type?: string;
+	text?: string;
+	thinking?: ContentChunk[];
+}
+
+/**
+ * Folds an array-shaped `delta.content` into the string the rest of the processor expects:
+ * `text` chunks join into `content`, `thinking` chunks land in `reasoning_content` so the
+ * existing thinking extraction surfaces them. A string or null content is left untouched.
+ * Exported for tests.
+ */
+export function normalizeChunkedDeltaContent(choice: { delta?: { content?: unknown; reasoning_content?: string } }): void {
+	const content = choice.delta?.content;
+	if (!choice.delta || !Array.isArray(content)) {
+		return;
+	}
+	const text: string[] = [];
+	const thinking: string[] = [];
+	for (const chunk of content as ContentChunk[]) {
+		if (chunk.type === 'thinking') {
+			for (const inner of chunk.thinking ?? []) {
+				if (typeof inner.text === 'string') {
+					thinking.push(inner.text);
+				}
+			}
+		} else if (typeof chunk.text === 'string') {
+			text.push(chunk.text);
+		}
+	}
+	choice.delta.content = text.length ? text.join('') : null;
+	if (thinking.length) {
+		choice.delta.reasoning_content = (choice.delta.reasoning_content ?? '') + thinking.join('');
+	}
+}
+
 /** Gathers together many chunks of a single completion choice. */
 class APIJsonDataStreaming {
 
@@ -417,6 +458,7 @@ export class SSEProcessor {
 
 				for (let i = 0; i < json.choices.length; i++) {
 					const choice = json.choices[i];
+					normalizeChunkedDeltaContent(choice);
 
 					this.logChoice(choice);
 

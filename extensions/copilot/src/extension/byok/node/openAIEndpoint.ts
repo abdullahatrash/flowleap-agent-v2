@@ -88,6 +88,29 @@ export function hoistToolResultImages(messages: CAPIChatMessage[]): CAPIChatMess
 }
 
 /**
+ * Drops the Copilot-API-only `media_type` that `rawMessageToCAPI` adds to every image part.
+ * OpenAI and most compatible hosts ignore the extra field, but Mistral validates `image_url`
+ * strictly and rejects the whole request with 422 "Extra inputs are not permitted". Exported
+ * for tests.
+ */
+export function stripCapiImageMediaType(messages: CAPIChatMessage[]): CAPIChatMessage[] {
+	return messages.map(message => {
+		if (!Array.isArray(message.content) || !message.content.some(part => part.type === 'image_url' && 'media_type' in part.image_url)) {
+			return message;
+		}
+		const content = message.content.map(part => {
+			if (part.type !== 'image_url' || !('media_type' in part.image_url)) {
+				return part;
+			}
+			const { media_type: _drop, ...image_url } = part.image_url as OpenAI.ChatCompletionContentPartImage['image_url'] & { media_type?: string };
+			return { ...part, image_url };
+		});
+		// Only user and tool messages carry part arrays; the spread keeps the role, so the union member is unchanged.
+		return { ...message, content } as CAPIChatMessage;
+	});
+}
+
+/**
  * Checks to see if a given endpoint is a BYOK model.
  * @param endpoint The endpoint to check if it's a BYOK model
  * @returns 1 if client side byok, 2 if server side byok, -1 if not a byok model
@@ -336,7 +359,7 @@ export class OpenAIEndpoint extends ChatEndpoint {
 			};
 			const body = createCapiRequestBody(options, this.model, callback);
 			if (body.messages) {
-				body.messages = hoistToolResultImages(body.messages);
+				body.messages = stripCapiImageMediaType(hoistToolResultImages(body.messages));
 			}
 			this._applyReasoningEffort(body, options);
 			return body;
