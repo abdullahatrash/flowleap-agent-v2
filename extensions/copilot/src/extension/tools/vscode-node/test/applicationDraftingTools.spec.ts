@@ -138,13 +138,15 @@ function setup(files: Record<string, string> = {}) {
 	const configuration = new class extends mock<IConfigurationService>() { override getNonExtensionConfig<T>(): T | undefined { return 'off' as T; } }();
 	const telemetry = new class extends mock<IActivationTelemetryService>() { override recordReportSaved() { } }();
 	const pdfReads: string[] = [];
-	const readPdf = async (uri: URI) => {
-		pdfReads.push(uri.path);
-		return 'Text of the PDF exemplar.';
-	};
+	class TestStartApplicationDraftTool extends StartApplicationDraftTool {
+		protected override async readPdf(uri: URI): Promise<string> {
+			pdfReads.push(uri.path);
+			return 'Text of the PDF exemplar.';
+		}
+	}
 	const run = async (result: Promise<LanguageModelToolResult | vscode.LanguageModelToolResult>) => ((await result).content[0] as LanguageModelTextPart).value;
 	const tools = {
-		start: (matter = 'hinge') => run(new StartApplicationDraftTool(readPdf, fileSystem, workspace, instantiation).invoke({ input: { matter }, toolInvocationToken: undefined }, CancellationToken.None)),
+		start: (matter = 'hinge') => run(new TestStartApplicationDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter }, toolInvocationToken: undefined }, CancellationToken.None)),
 		validate: (advisory?: { message: string; line?: number; claim?: number }[], matter = 'hinge') => run(new ValidateDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter, advisory }, toolInvocationToken: undefined }, CancellationToken.None)),
 		exportDocx: () => run(new ExportDraftDocxTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge' }, toolInvocationToken: undefined }, CancellationToken.None)),
 		save: (content: string, extra: Record<string, string> = {}, filePath = 'drafting/hinge/draft-application.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)

@@ -8,12 +8,13 @@ import type * as vscode from 'vscode';
 import { IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
+import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelToolResult } from '../../../vscodeTypes';
 import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontmatter';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, PdfTextReader, textResult } from './draftingWorkspace';
+import { DraftingWorkspace, textResult } from './draftingWorkspace';
 import { readPdfText } from './pdfPreviewApi';
 
 interface IStartApplicationDraftParams {
@@ -36,16 +37,20 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 
 	public static readonly toolName = ToolName.StartApplicationDraft;
 
-	/**
-	 * @param readPdf Reads a PDF style exemplar; the tool registry passes none, so the FlowLeap PDF
-	 * Preview reader is used. Non-service parameters come before the injected services.
-	 */
 	constructor(
-		private readonly readPdf: PdfTextReader = uri => readPdfText(uri),
 		@IFileSystemService private readonly fileSystemService: IFileSystemService,
 		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
+
+	/**
+	 * Reads a PDF style exemplar through the FlowLeap PDF Preview extension. A seam for tests, which
+	 * override it; a constructor parameter would conflict with the tool registry's argument-free
+	 * instantiation.
+	 */
+	protected readPdf(uri: URI): Promise<string> {
+		return readPdfText(uri);
+	}
 
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IStartApplicationDraftParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		return { invocationMessage: l10n.t`Reading the drafting inputs of ${options.input.matter}` };
@@ -72,7 +77,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		await workspace.recordApprovedClaims(approval.hash);
 		const figures = await workspace.read(folder.figures);
 		const claims = await workspace.read(folder.claims) ?? '';
-		const exemplars = await workspace.styleExemplars(this.readPdf);
+		const exemplars = await workspace.styleExemplars(uri => this.readPdf(uri));
 		const body = (text: string) => parseDraftingFrontmatter(text).body.trim();
 
 		const sections = [
