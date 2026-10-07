@@ -649,6 +649,33 @@ data: [DONE]
 	});
 
 	// Regression for https://github.com/microsoft/vscode/issues/312746
+	// Mistral reasoning models stream `content` as an array of thinking and text chunks.
+	test('stream with Mistral chunked content yields the text and surfaces the thinking', async function () {
+		const response = [
+			`data: {"choices":[{"delta":{"role":"assistant","content":[{"type":"thinking","thinking":[{"type":"text","text":"Plan: "},{"type":"text","text":"greet"}]}]},"index":0}],"id":"m1","model":"magistral-medium-latest","object":"chat.completion.chunk"}\n`,
+			`data: {"choices":[{"delta":{"content":[{"type":"text","text":"Hel"}]},"index":0}],"id":"m1","model":"magistral-medium-latest","object":"chat.completion.chunk"}\n`,
+			`data: {"choices":[{"delta":{"content":[{"type":"text","text":"lo"}]},"index":0,"finish_reason":"stop"}],"id":"m1","model":"magistral-medium-latest","object":"chat.completion.chunk"}\n`,
+			`data: [DONE]\n`,
+		];
+		const processor = await SSEProcessor.create(
+			logService,
+			telemetryService,
+			1,
+			createFakeStreamResponse(response),
+		);
+
+		let thinkingText = '';
+		const results = await getAll(processor.processSSE((text: string, index: number, delta: IResponseDelta) => {
+			if (delta.thinking && !isEncryptedThinkingDelta(delta.thinking) && delta.thinking.text) {
+				thinkingText += Array.isArray(delta.thinking.text) ? delta.thinking.text.join('') : delta.thinking.text;
+			}
+			return Promise.resolve(undefined);
+		}));
+
+		expect({ thinkingText, text: results.map(r => r.solution.text.join('')), reason: results.map(r => r.reason) })
+			.toEqual({ thinkingText: 'Plan: greet', text: ['Hello'], reason: [FinishedCompletionReason.Stop] });
+	});
+
 	// DeepSeek / Moonshot (Kimi) / Minimax stream reasoning under `reasoning_content`.
 	test('stream containing reasoning_content (DeepSeek/Kimi/Moonshot)', async function () {
 		const response = [
