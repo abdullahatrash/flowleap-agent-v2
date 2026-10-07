@@ -96,6 +96,11 @@ export interface OpenAICompatibleLanguageModelChatInformation<C extends Language
 	url: string;
 }
 
+/** One entry of a provider's model listing: only the id is required of every provider. */
+export interface DiscoveredModelListing {
+	readonly id: string;
+}
+
 export abstract class AbstractOpenAICompatibleLMProvider<T extends LanguageModelChatConfiguration = LanguageModelChatConfiguration> extends AbstractLanguageModelChatProvider<T, OpenAICompatibleLanguageModelChatInformation<T>> {
 	protected readonly _lmWrapper: CopilotLanguageModelWrapper;
 
@@ -156,12 +161,12 @@ export abstract class AbstractOpenAICompatibleLMProvider<T extends LanguageModel
 			const data = await response.json();
 			const modelList: BYOKKnownModels = {};
 
-			const models = data.data ?? data.models;
+			const models: DiscoveredModelListing[] | undefined = data.data ?? data.models;
 			if (!models || !Array.isArray(models)) {
 				throw new Error('Invalid response format');
 			}
 
-			for (const model of models) {
+			for (const model of this.selectDiscoveredModels(models)) {
 				let modelCapabilities = this._knownModels?.[model.id];
 				if (!modelCapabilities) {
 					modelCapabilities = this.resolveModelCapabilities(model);
@@ -196,6 +201,14 @@ export abstract class AbstractOpenAICompatibleLMProvider<T extends LanguageModel
 
 	protected resolveModelCapabilities(modelData: unknown): BYOKModelCapabilities | undefined {
 		return undefined;
+	}
+
+	/**
+	 * Hook for a provider to drop or dedupe listings before per-model resolution, which only ever
+	 * sees one entry at a time. Default keeps the listing as served.
+	 */
+	protected selectDiscoveredModels(models: DiscoveredModelListing[]): DiscoveredModelListing[] {
+		return models;
 	}
 
 	protected abstract getModelsBaseUrl(configuration: T | undefined): string | undefined;

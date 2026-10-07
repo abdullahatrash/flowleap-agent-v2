@@ -69,6 +69,7 @@ const BUILT_IN_BYOK_VENDOR_IDS = new Set<string>([
 	'openrouter',
 	'azure',
 	'xai',
+	'mistral',
 	'customoai',
 	'customendpoint',
 ]);

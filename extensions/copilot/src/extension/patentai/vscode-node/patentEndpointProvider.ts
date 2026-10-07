@@ -46,6 +46,7 @@ const USER_BYOK_VENDOR_IDS: readonly string[] = [
 	'customendpoint',
 	'customoai',
 	'gemini',
+	'mistral',
 	'ollama',
 	'openai',
 	'openrouter',

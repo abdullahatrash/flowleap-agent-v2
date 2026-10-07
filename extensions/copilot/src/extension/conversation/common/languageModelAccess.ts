@@ -141,6 +141,11 @@ export function getModelCapabilitiesDescription(endpoint: IChatEndpoint | Langua
 		return l10n.t('xAI Grok model optimized for fast code generation and development tasks.');
 	}
 
+	// Mistral models
+	if (family.includes('mistral') || name.includes('mistral') || family.includes('magistral') || name.includes('magistral')) {
+		return l10n.t('Mistral model for coding and general assistance, served from Mistral\'s European infrastructure.');
+	}
+
 	return undefined;
 }
 

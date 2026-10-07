@@ -19,6 +19,7 @@ import { CustomEndpointBYOKModelProvider } from './customEndpointProvider';
 import { CustomOAIBYOKModelProvider } from './customOAIProvider';
 import { FlowLeapTrialLMProvider } from './flowleapTrialProvider';
 import { GeminiNativeBYOKLMProvider } from './geminiNativeProvider';
+import { MistralBYOKLMProvider } from './mistralProvider';
 import { OllamaLMProvider } from './ollamaProvider';
 import { OAIBYOKLMProvider } from './openAIProvider';
 import { OpenRouterLMProvider } from './openRouterProvider';
@@ -53,12 +54,14 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 		const gemini = instantiationService.createInstance(GeminiNativeBYOKLMProvider, undefined, this._byokStorageService);
 		const xai = instantiationService.createInstance(XAIBYOKLMProvider, {}, this._byokStorageService);
 		const openai = instantiationService.createInstance(OAIBYOKLMProvider, {}, this._byokStorageService);
+		const mistral = instantiationService.createInstance(MistralBYOKLMProvider, {}, this._byokStorageService);
 
 		this._providers.set(OllamaLMProvider.providerId, instantiationService.createInstance(OllamaLMProvider, this._byokStorageService));
 		this._providers.set(AnthropicLMProvider.providerId, anthropic);
 		this._providers.set(GeminiNativeBYOKLMProvider.providerId, gemini);
 		this._providers.set(XAIBYOKLMProvider.providerId, xai);
 		this._providers.set(OAIBYOKLMProvider.providerId, openai);
+		this._providers.set(MistralBYOKLMProvider.providerId, mistral);
 		this._providers.set(OpenRouterLMProvider.providerId, instantiationService.createInstance(OpenRouterLMProvider, this._byokStorageService));
 		// The FlowLeap Trial provider registers alongside the BYO-key providers but decides its
 		// own visibility per listing: models are served only while the subscription snapshot /
@@ -75,6 +78,7 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
 			[GeminiNativeBYOKLMProvider.providerName, gemini],
 			[XAIBYOKLMProvider.providerName, xai],
 			[OAIBYOKLMProvider.providerName, openai],
+			[MistralBYOKLMProvider.providerName, mistral],
 		];
 	}
 
