@@ -7502,6 +7502,30 @@
         ]
       },
       {
+        "path": "./assets/prompts/flowleap/upc-what-to-file-next.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/upc-prepare-a-filing.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/upc-court-fee.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/upc-register-as-representative.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
         "path": "./assets/prompts/plan.prompt.md",
         "sessionTypes": [
           "local"
@@ -7716,6 +7740,15 @@
       },
       {
         "path": "./assets/skills/upc-division-router/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/upc-filing-prep/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/upc-case-navigator/SKILL.md"
+      },
+      {
+        "path": "./assets/skills/upc-representative-start/SKILL.md"
       },
       {
         "path": "./assets/skills/sep-declarations/SKILL.md"
