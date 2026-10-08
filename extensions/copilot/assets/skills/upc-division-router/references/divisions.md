@@ -1,46 +1,50 @@
 # UPC Divisions & Languages of Proceedings — Reference
 
-**Compiled:** 2026-07-10. Derived from a study of the Unified Patent Court case-management system's division and case-type configuration plus the UPC Agreement and the court's published division list. **Caveat:** the UPC Agreement, the Rules of Procedure, and the court's current list of divisions and languages govern; divisions and their designated languages change over time, so verify the specific division against the official source before advising.
+**Sources (checked 2026-10-08):** the court's list of locations, https://www.unifiedpatentcourt.org/en/court/locations, and its list of languages of proceedings, https://www.unifiedpatentcourt.org/en/court/language-proceedings (R.14.3 RoP: the Registrar keeps this list public). **Caveat:** the UPC Agreement, the Rules of Procedure and the court's current lists govern. Divisions and their languages change over time, so check the official lists before advising.
 
 ## Court structure
 
-- **Court of First Instance** — local divisions, regional divisions, and a central division (multiple seats/sections).
+- **Court of First Instance** — local divisions, one regional division, and a central division (seat in Paris, sections in Munich and Milan).
 - **Court of Appeal** — Luxembourg.
 
-## Local and regional divisions (illustrative — verify current list)
+## Local and regional divisions (official list, checked 2026-10-08)
 
 | Division | Type | Language(s) of proceedings |
 |----------|------|----------------------------|
-| Vienna | Local | German, English |
-| Brussels | Local | Dutch, French, German, English |
-| Copenhagen | Local | Danish, English |
-| Helsinki | Local | Finnish, Swedish, English |
-| Paris (local) | Local | French, English |
-| Düsseldorf | Local | German, English |
-| Hamburg | Local | German, English |
-| Mannheim | Local | German, English |
-| Munich (local) | Local | German, English |
-| Milan (local) | Local | Italian, English |
-| The Hague | Local | Dutch, English |
-| Lisbon | Local | Portuguese, English |
-| Ljubljana | Local | Slovenian, English |
-| Nordic-Baltic | Regional | English |
+| Vienna (AT) | Local | German, English |
+| Brussels (BE) | Local | Dutch, French, German, English * |
+| Copenhagen (DK) | Local | Danish, English |
+| Helsinki (FI) | Local | Finnish, Swedish, English |
+| Paris (FR) | Local | French, English * |
+| Düsseldorf (DE) | Local | German, English * |
+| Hamburg (DE) | Local | German, English * |
+| Mannheim (DE) | Local | German, English * |
+| Munich (DE) | Local | German, English * |
+| Milan (IT) | Local | Italian, English * |
+| The Hague (NL) | Local | Dutch, English |
+| Lisbon (PT) | Local | Portuguese, English |
+| Ljubljana (SI) | Local | Slovenian, English |
+| Nordic-Baltic (SE, EE, LT, LV) — seat Stockholm; hearings also in Riga, Tallinn, Vilnius | Regional | English |
 
-Note: the German local divisions (Munich, Düsseldorf, Hamburg, Mannheim) offer German and English. The Nordic-Baltic regional division runs in English. A division may also permit the language of the patent where the court and parties allow.
+\* The court's list refers to R.14.2(c) RoP for these divisions: even when the proceedings run in English, the judge-rapporteur may order that judges use the national language in the oral hearing, and that orders and decisions are given in the national language with a certified English translation. For Brussels the list also refers to R.14.2(b) RoP: against a defendant domiciled in Belgium that could not be sued at any other division, the proceedings run in the official language of the defendant.
+
+The official list has no other local or regional division. There is, for example, no local division in Bologna or Bucharest. Do not name a division that is not in this table.
+
+Before a local or regional division, the parties may also agree to use the language in which the patent was granted (official language page).
 
 ## Central division
 
 | Seat / section | Subject matter |
 |----------------|----------------|
-| Paris | Central-division matters outside the Munich/Milan technical areas |
-| Munich (section) | Defined IPC technical fields |
-| Milan (section) | Defined IPC technical fields |
+| Paris (seat) | Central-division matters outside the Munich and Milan technical areas |
+| Munich (section) | Defined IPC technical fields (Annex II UPCA) |
+| Milan (section) | Defined IPC technical fields (Annex II UPCA) |
 
-Central-division allocation is by **IPC technical area**; the language of proceedings is typically the **language in which the patent was granted**.
+Central-division allocation is by **IPC technical area** (Annex II UPCA). The language of proceedings is the **language in which the patent was granted** (official language page).
 
 ## Court of Appeal
 
-Luxembourg — accepts **all UPC languages of proceedings**.
+Luxembourg. The language of proceedings is in general the language used before the Court of First Instance in that case (official language page).
 
 ## Forum rules
 
