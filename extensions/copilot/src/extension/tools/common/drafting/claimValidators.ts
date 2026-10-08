@@ -89,8 +89,8 @@ export function checkUsMultipleDependency(claims: readonly DraftClaim[]): DraftF
 }
 
 /**
- * Words that make a two-word claim term (`first lever`, `upper arm`). Any other first word is
- * the term on its own (`lever`): a heuristic that keeps false Errors low.
+ * Words that tell two claim terms with the same noun apart (`first lever`, `second lever`): a
+ * reference with such a word needs an introduction with the same word.
  */
 const termModifiers = new Set(['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'further', 'additional', 'upper', 'lower', 'inner', 'outer', 'front', 'rear', 'left', 'right', 'top', 'bottom', 'main', 'primary', 'secondary', 'proximal', 'distal']);
 
@@ -98,43 +98,108 @@ const termModifiers = new Set(['first', 'second', 'third', 'fourth', 'fifth', 's
 const exemptReferences = new Set(['same', 'other', 'like', 'invention', 'plurality', 'following', 'preceding', 'foregoing', 'above', 'below', 'present', 'respective', 'claim', 'claims']);
 
 /**
- * Number words that introduce a term without an article ("two disks", "at least three positions").
- * A reference to such a term keeps the quantifier ("the at least three positions"), so the
- * quantifier is skipped on both sides and the term key is the noun phrase after it.
+ * Inherent properties: "the mass of X", "the total weight of X" need no antecedent of their own,
+ * only X does (which is checked as its own reference).
  */
-const numberWords = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve';
-const termPattern = new RegExp(
-	String.raw`\b(?<article>a plurality of|plurality of|at least one|one or more|an|a|the|said|at least|at most|no more than|${numberWords})\s+` +
-	String.raw`(?:(?:at least one|one or more|plurality of|at least|at most|no more than)\s+)?(?:(?:${numberWords}|\d+)\s+)?(?<first>[a-z][a-z0-9-]*)`,
-	'gi');
+const inherentProperties = new Set(['mass', 'weight', 'volume', 'amount', 'total', 'sum', 'surface', 'length', 'width', 'height', 'depth', 'thickness', 'size', 'diameter', 'area', 'shape', 'end', 'ends', 'side', 'sides', 'number', 'proportion', 'content', 'concentration', 'temperature', 'pressure', 'remainder', 'rest', 'balance']);
 
-interface ClaimTerm {
-	readonly key: string;
-	readonly introduces: boolean;
+/** Words that say "the whole of": `the total composition`, `the overall composition` refer to the composition. */
+const wholeWords = new Set(['total', 'overall', 'entire', 'whole']);
+
+/** Words that introduce a claim term: `a lever`, `each particle`, `two disks`, `at least three positions`. */
+const introducers = new Set(['a', 'an', 'one', 'each', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'plurality', 'least', 'most', 'more', 'several', 'multiple']);
+
+/** Words after which a bare noun phrase introduces a claim term: `comprising inorganic filler`, `to form composite granules`. */
+const bareIntroducers = new Set(['comprising', 'comprises', 'comprise', 'containing', 'contains', 'contain', 'including', 'includes', 'include', 'of', 'with', 'having', 'has', 'form', 'forms', 'forming', 'produce', 'produces', 'producing', 'obtain', 'obtaining']);
+
+/** Quantifier words skipped at the start of a phrase: `the at least three positions`, `the two portions`. */
+const quantifiers = new Set(['at', 'least', 'most', 'one', 'or', 'more', 'no', 'than', 'plurality', 'of', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'several', 'multiple']);
+
+/** Words that end a claim term phrase: connectors, prepositions, verbs of being and having, articles. */
+const termStops = new Set(['and', 'or', 'but', 'that', 'which', 'wherein', 'whereby', 'where', 'when', 'while', 'whose', 'so', 'as', 'than', 'configured', 'adapted', 'arranged', 'suitable', 'for', 'to', 'of', 'in', 'on', 'at', 'by', 'with', 'without', 'from', 'into', 'onto', 'below', 'above', 'between', 'within', 'through', 'over', 'under', 'via', 'per', 'based', 'having', 'has', 'have', 'had', 'comprising', 'comprises', 'comprise', 'including', 'includes', 'containing', 'contains', 'consisting', 'consists', 'is', 'are', 'was', 'were', 'be', 'being', 'been', 'a', 'an', 'the', 'said', 'each', 'claim', 'claims']);
+
+interface ClaimToken {
+	readonly word: string;
 	readonly index: number;
 }
 
-function readTerms(text: string): ClaimTerm[] {
-	const terms: ClaimTerm[] = [];
-	for (const match of text.matchAll(termPattern)) {
-		const groups = match.groups!;
-		const first = groups.first.toLowerCase();
-		const index = match.index ?? 0;
-		const second = /^\s+(?<second>[a-z][a-z0-9-]*)/i.exec(text.slice(index + match[0].length))?.groups?.second.toLowerCase();
-		const key = second && (termModifiers.has(first) || first.endsWith('ly')) ? `${first} ${second}` : first;
-		const article = groups.article.toLowerCase();
-		const introduces = article !== 'the' && article !== 'said';
-		if (!introduces && exemptReferences.has(first)) {
-			continue;
-		}
-		terms.push({ key, introduces, index });
+/** The words and punctuation of a claim, lower-case. A number or punctuation is its own token. */
+function tokenize(text: string): ClaimToken[] {
+	return [...text.matchAll(/[A-Za-zµ][A-Za-z0-9µ-]*|\d[\d.,%-]*|[^\sA-Za-z\d]/g)].map(match => ({ word: match[0].toLowerCase(), index: match.index ?? 0 }));
+}
+
+const isWord = (token: ClaimToken | undefined) => !!token && /^[a-zµ]/.test(token.word);
+
+/** The noun phrase from token `start`: quantifiers skipped, up to the next stop word, verb, number or punctuation. */
+function readPhrase(tokens: readonly ClaimToken[], start: number): { readonly words: string[]; readonly end: number } {
+	let index = start;
+	while (isWord(tokens[index]) && quantifiers.has(tokens[index].word) && isWord(tokens[index + 1])) {
+		index++;
 	}
-	return terms;
+	const words: string[] = [];
+	while (isWord(tokens[index]) && !termStops.has(tokens[index].word) && !(words.length && isVerb(tokens, index))) {
+		words.push(tokens[index].word);
+		index++;
+	}
+	return { words, end: index };
+}
+
+/**
+ * True for a word after the first word of a phrase that reads as its verb: a word in -s before an
+ * article or a number ("the housing holds the lever"), or a word in -ed before a stop word or
+ * punctuation ("the lever attached to").
+ */
+function isVerb(tokens: readonly ClaimToken[], index: number): boolean {
+	const { word } = tokens[index];
+	const next = tokens[index + 1];
+	if (/[^s]s$/.test(word)) {
+		return !!next && (['a', 'an', 'the', 'said'].includes(next.word) || /^\d/.test(next.word));
+	}
+	return /ed$/.test(word) && (!isWord(next) || termStops.has(next.word));
+}
+
+/** A claim term phrase: introduced (`a lever`) or referred to (`the lever`). */
+interface ClaimPhrase {
+	readonly words: readonly string[];
+	readonly introduces: boolean;
+	readonly index: number;
+	/** The word after the phrase, e.g. `of` in "the mass of the filler". */
+	readonly next?: string;
+}
+
+function readPhrases(text: string): ClaimPhrase[] {
+	const tokens = tokenize(text);
+	const phrases: ClaimPhrase[] = [];
+	tokens.forEach((token, position) => {
+		const reference = token.word === 'the' || token.word === 'said';
+		const introduces = introducers.has(token.word) || (bareIntroducers.has(token.word) && isWord(tokens[position + 1]) && !termStops.has(tokens[position + 1].word) && !introducers.has(tokens[position + 1].word));
+		if (!reference && !introduces) {
+			return;
+		}
+		const { words, end } = readPhrase(tokens, position + 1);
+		if (words.length) {
+			phrases.push({ words, introduces: !reference, index: token.index, next: tokens[end]?.word });
+		}
+	});
+	return phrases;
 }
 
 /** Singular form for matching `arms` against `arm`. */
-function stem(key: string): string {
-	return key.replace(/(?<!s)s$/, '');
+function stem(word: string): string {
+	return word.replace(/(?<!s)s$/, '');
+}
+
+/** True when an introduced phrase gives a reference its antecedent: the same distinguishing words and a shared noun. */
+function introducesReference(introduction: ClaimPhrase, reference: ClaimPhrase): boolean {
+	const introduced = new Set(introduction.words.map(stem));
+	const modifiers = reference.words.filter(word => termModifiers.has(word));
+	const nouns = reference.words.filter(word => !termModifiers.has(word) && !wholeWords.has(word));
+	return modifiers.every(word => introduced.has(word)) && nouns.some(word => introduced.has(stem(word)));
+}
+
+/** True for a reference that needs no antecedent: `the same`, or an inherent property such as "the mass of". */
+function needsNoAntecedent(reference: ClaimPhrase): boolean {
+	return exemptReferences.has(reference.words[0]) || (reference.next === 'of' && reference.words.every(word => inherentProperties.has(word) || wholeWords.has(word)));
 }
 
 /** The dependency paths of a claim, root first, each ending with the claim itself. */
@@ -147,30 +212,36 @@ function dependencyPaths(claim: DraftClaim, byNumber: Map<number, DraftClaim>, d
 }
 
 /**
- * Error when a claim refers to "the X" or "said X" and no earlier "a X" introduces it, in the
- * claim itself or along any of its dependency paths.
+ * Error when a claim refers to "the X" or "said X" and no earlier introduced phrase in the claim
+ * or along any of its dependency paths shares a noun of X: `a particulate composite filler` for
+ * `the composite filler`, `containing inorganic filler` for `the inorganic filler`, `curing an
+ * organic-inorganic composite` for `the cured composite`, the parent preamble `A dental
+ * composition` for `The composition of claim 1`. A distinguishing word (`second`, `upper`) must be
+ * in the introduction too. An inherent property (`the mass of`, `the total weight of`) needs no
+ * antecedent; `the total` or `the overall` before a noun refers to that noun.
  */
 export function checkAntecedentBasis(claims: readonly DraftClaim[]): DraftFinding[] {
 	const byNumber = new Map(claims.map(claim => [claim.number, claim]));
 	const findings: DraftFinding[] = [];
 	for (const claim of claims) {
 		const paths = dependencyPaths(claim, byNumber);
-		const own = readTerms(claim.text);
+		const own = readPhrases(claim.text);
 		const reported = new Set<string>();
-		for (const reference of own.filter(term => !term.introduces)) {
-			if (reported.has(reference.key)) {
+		for (const reference of own.filter(phrase => !phrase.introduces && !needsNoAntecedent(phrase))) {
+			const key = reference.words.join(' ');
+			if (reported.has(key)) {
 				continue;
 			}
-			const matches = (term: ClaimTerm) => term.introduces && stem(term.key) === stem(reference.key);
-			const introducedEarlier = own.some(term => term.index < reference.index && matches(term));
-			const failing = introducedEarlier ? [] : paths.filter(path => !path.slice(0, -1).some(ancestor => readTerms(ancestor.text).some(matches)));
+			const matches = (phrase: ClaimPhrase) => phrase.introduces && introducesReference(phrase, reference);
+			const introducedEarlier = own.some(phrase => phrase.index < reference.index && matches(phrase));
+			const failing = introducedEarlier ? [] : paths.filter(path => !path.slice(0, -1).some(ancestor => readPhrases(ancestor.text).some(matches)));
 			if (!failing.length) {
 				continue;
 			}
-			reported.add(reference.key);
+			reported.add(key);
 			const pathNote = failing.length < paths.length ? ` (dependency path ${failing[0].map(step => step.number).join(' → ')})` : '';
-			const article = /^[aeiou]/.test(reference.key) ? 'an' : 'a';
-			findings.push(claimFinding('Error', 'antecedent-basis', claim, `Claim ${claim.number}: "the ${reference.key}" has no antecedent basis ("${article} ${reference.key}") earlier in claim ${claim.number} or in the claims it depends on${pathNote}.`));
+			const article = /^[aeiou]/.test(key) ? 'an' : 'a';
+			findings.push(claimFinding('Error', 'antecedent-basis', claim, `Claim ${claim.number}: "the ${key}" has no antecedent basis ("${article} ${key}") earlier in claim ${claim.number} or in the claims it depends on${pathNote}.`));
 		}
 	}
 	return findings;

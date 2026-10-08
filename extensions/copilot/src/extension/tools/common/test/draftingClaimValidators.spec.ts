@@ -83,6 +83,31 @@ describe('Application Drafting claim validators', () => {
 		]);
 	});
 
+	it('antecedent basis: IDF-006 (EPO) claims verbatim: noun phrases, parent preambles, process steps and inherent properties need no "a" of their first word', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A photocurable dental composition comprising a polymerizable monomer and/or prepolymer, a polymerization initiator suitable for light curing, and a particulate composite filler, wherein the composite filler is present in an amount of 20-90 wt% of the overall composition, each composite filler particle is a composite granule containing inorganic filler in an organic polymer body, the composite granules have an average particle size of 20-50 µm, at most 10 wt% of the composite filler particles, based on the mass of the composite filler, have a particle size below 10 µm, and the overall composition is essentially free of filler having a particle size below 100 nm.',
+			'2. The composition of claim 1, wherein the overall composition contains less than 1 wt% of filler having a particle size below 100 nm, based on the total composition.',
+			'3. The composition of claim 1, wherein the polymerizable monomer comprises urethane dimethacrylate.',
+			'4. The composition of claim 1, wherein the polymerization initiator comprises camphorquinone and an amine reducing agent.',
+			'5. The composition of claim 1, wherein the inorganic filler comprises barium glass and/or strontium glass having a mean particle size of 0.4-1.5 µm.',
+			'6. The composition of claim 1, wherein at most 8 wt% of the composite filler particles, based on the mass of the composite filler, have a particle size below 10 µm.',
+			'7. The composition of claim 1, wherein the composite filler has a mean particle size of 30-40 µm and a maximum particle size of 70 µm.',
+			'8. A method for producing a photocurable dental composition, comprising: curing an organic-inorganic composite; milling the cured composite to form composite granules; classifying the milled granules to remove particles below 10 µm and particles above 70 µm; and incorporating the retained composite granules into a polymerizable composition with a light-curing initiator.',
+		))).toEqual([]);
+	});
+
+	it('antecedent basis: the head noun of the phrase must be introduced; an inherent property needs no antecedent, a missing part still errors', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A hinge comprising a lever of steel, wherein the total weight of the lever is low and the overall hinge is small.',
+			'2. The hinge of claim 1, wherein the housing holds the steel lever and the thickness of the housing is 2 mm.',
+			'3. The door of claim 1, wherein the second lever is long.',
+		))).toEqual([
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the housing" has no antecedent basis ("a housing") earlier in claim 2 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the door" has no antecedent basis ("a door") earlier in claim 3 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the second lever" has no antecedent basis ("a second lever") earlier in claim 3 or in the claims it depends on.' },
+		]);
+	});
+
 	it('literal basis: pass when every claim term appears in the description', () => {
 		expect(checkLiteralBasis(claims('1. A hinge comprising a housing and a plurality of arms.'), 'The hinge 10 has a housing 12 and an arm 14.')).toEqual([]);
 	});
