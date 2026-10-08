@@ -8,12 +8,12 @@
 	},
 	"model": "anthropic/claude-sonnet-5",
 	"judge": "google/gemini-2.5-flash (max_tokens 4096)",
-	"notes": "First record of the skill-grounded suite (#569, review fixes #568): all six cases 3/3, 0 voided, no cache. N1 gives a service date in the prompt (the answer may repeat it; any other date fails). N4 asks for the appeal fees (EUR 29,200 and EUR 4,000 from fees-2026.md section 4). Re-baseline deliberately, in its own commit, when a skill or a case changes.",
+	"notes": "First record of the skill-grounded suite (#569, review fixes #568): all six cases 3/3, 0 voided, no cache. N1 gives a service date in the prompt (the answer may repeat it; any other date fails). N4 asks for the appeal fees (EUR 29,200 and EUR 4,000 from fees-2026.md section 4). Re-baseline deliberately, in its own commit, when a skill or a case changes. Re-recorded after the N4 rubric fix: all six cases 3/3, 0 voided, no cache.",
 	"cases": {
 		"S1": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "Smoke: upc-division-router forum, language and counterclaim options." },
 		"S5": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "upc-representative-start: Art. 48(2), R.11, R.18 and the registration route." },
 		"N1": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "upc-case-navigator scenario 1: RoP 19.1 and 23, 1 and 3 months. Every answer repeated the prompt's service date and passed the date check." },
-		"N4": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "upc-case-navigator scenario 4: RoP 220.1, 220.2, 224.1, 224.2; 2 months, 4 months, 15 days; EUR 29,200 and EUR 4,000." },
+		"N4": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "upc-case-navigator scenario 4: RoP 21.1, 220.1, 220.2, 224.1, 224.2; 2 months, 4 months, 15 days; EUR 29,200 and EUR 4,000. Rubric point 2 grades the RoP 21.1 route (an order rejecting a Preliminary objection is appealable only under RoP 220.2), not the RoP 220.1(c) category the prompt does not ask about." },
 		"U2a": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "upc-filing-prep scenario 2: revocation for an SME, EUR 26,500 and EUR 13,250." },
 		"U2b": { "expected": "PASS", "observed": "3/3 (2026-10-08)", "note": "upc-filing-prep scenario 3: protective letter, EUR 300 and EUR 130, RoP 207." },
 		"F1": { "expected": "PASS", "observed": "3/3 (2026-10-08, #577)", "note": "Built-in prior-art skill + firm fixtures/skill-grounded/prior-art-practice.instructions.md attached as the app attaches an applyTo '**' instruction file: search_patents and the concept-synonym table kept, German utility models and the client's own patents in a separate table added. Red without vars.instructions (no utility models)." }
