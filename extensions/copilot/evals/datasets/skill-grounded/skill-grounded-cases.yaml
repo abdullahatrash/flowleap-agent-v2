@@ -5,6 +5,7 @@
 # and returns `{ skill, loadedFiles, finalText }`; read the answer with `H.answerText(output)`.
 #
 # Every case gets the suite-wide `no_calendar_date` check (promptfooconfig.skill-grounded.yaml).
+# A date given in `vars.prompt` may appear in the answer; any other date fails.
 # Add the checks the case needs:
 #
 #   Exact rule numbers — fails and names each rule the answer does not cite (R.23, Rule 23, RoP 23):
@@ -96,7 +97,7 @@
 - description: "N1 — U3 scenario 1, defendant served with a Statement of claim: next filings, rules, periods (upc-case-navigator)"
   vars:
     skill: upc-case-navigator
-    prompt: "We are the defendant in an infringement action and were served the Statement of claim: what can we file next, under which rule?"
+    prompt: "We are the defendant in an infringement action and were served the Statement of claim on 1 October 2026: what can we file next, under which rule?"
   assert:
     - type: javascript
       value: JSON.parse(output).loadedFiles.includes('../upc-filing-prep/references/next-filings.md');
@@ -124,15 +125,16 @@
         2. The Statement of defence by the defendant (RoP 23), within 3 months of service of the Statement of
            claim, and that a Counterclaim for revocation can be included in it (RoP 25).
         3. Each period runs from service of the Statement of claim (the trigger event); the answer gives the
-           period and the trigger, not a calendar deadline date.
+           period and the trigger, not a calendar deadline date. Repeating the service date the user gave
+           (1 October 2026) is not a deadline date.
         Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
         Do not grade style or length.
       metric: u3_1_complete
 
-- description: "N4 — U3 scenario 4, appeal against an order versus a final decision: rules and periods (upc-case-navigator)"
+- description: "N4 — U3 scenario 4, appeal against an order versus a final decision: rules, periods and fees (upc-case-navigator)"
   vars:
     skill: upc-case-navigator
-    prompt: "Appeal against an order versus against a final decision: what do we file at the UPC Court of Appeal, under which rule, and in which period?"
+    prompt: "We are the patentee and lost a stand-alone revocation action at the UPC central division. Earlier, the Court rejected our Preliminary objection by an order. Appeal against that order versus against the final decision: what do we file at the UPC Court of Appeal, under which rule, in which period, and what is the court fee for each?"
   assert:
     - type: javascript
       value: JSON.parse(output).loadedFiles.includes('../upc-filing-prep/references/appeal.md');
@@ -151,6 +153,15 @@
         const missing = Object.keys(periods).filter(p => !periods[p].test(text));
         return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All periods stated' : `Periods not stated: ${missing.join(', ')}` };
       metric: u3_4_periods
+    # Fees from upc-filing-prep/references/fees-2026.md §4: appeal against the final decision in a
+    # revocation action EUR 29,200; appeal with leave against another order (RoP 220.2) EUR 4,000.
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingFees(H.answerText(output), [29200, 4000]);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All fees stated' : `Fees not stated: ${missing.join(', ')}` }; });
+      metric: u3_4_fees
     - type: llm-rubric
       transform: JSON.parse(output).finalText
       value: |
@@ -163,6 +174,8 @@
         3. Other orders (RoP 220.2): appeal only together with the appeal against the final decision, or with
            leave of the Court of First Instance; then 15 days from service of the decision granting leave.
         4. Periods run from service (the trigger event); the answer gives no calendar deadline date.
+        5. Court fees (2026 table): EUR 29,200 for the appeal against the final decision in a revocation
+           action; EUR 4,000 for an appeal with leave against an order under RoP 220.2.
         Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
         Do not grade style or length.
       metric: u3_4_complete

@@ -37,13 +37,14 @@ defaultTest:
           stream: false
   assert:
     # ADR 0013, decision 3: a UPC answer gives the rule, the period and the trigger event — never
-    # a calendar date. Applies to every case.
+    # a calendar date. Applies to every case. A date the user gave in the prompt (for example the
+    # service date) may be repeated; any other date fails.
     - type: javascript
       value: |
         return import('node:url')
           .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
           .then(H => {
-            const dates = H.findCalendarDates(H.answerText(output));
+            const dates = H.findCalendarDates(H.answerText(output), context.vars.prompt);
             return { pass: dates.length === 0, score: dates.length === 0 ? 1 : 0, reason: dates.length === 0 ? 'No calendar date' : `Calendar date(s) in the answer: ${dates.join('; ')}` };
           });
       metric: no_calendar_date
