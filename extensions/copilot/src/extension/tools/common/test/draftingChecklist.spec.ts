@@ -150,7 +150,7 @@ describe('Application Drafting checklist', () => {
 			- [x] 2. Claims approved: claims.md has \`approved: true\`
 			- [x] 3. Draft written: draft-application.md
 			- [x] 4. Errors fixed or waived: none open in findings.md
-			- [x] 5. Inventor Questions answered and applied: none open in draft-application.md
+			- [x] 5. Inventor Questions answered and applied: 1 waived in findings.md, none open
 			- [ ] 6. Export to Word: ready
 			      → Tell the agent: "Export to Word"
 

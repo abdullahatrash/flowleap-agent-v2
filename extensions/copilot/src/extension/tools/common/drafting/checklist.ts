@@ -208,7 +208,9 @@ function questionsStep(input: DraftingChecklistFiles, findingsItems: readonly Fi
 	const ids = [...inDraft, ...sections.filter(section => !inDraft.includes(section.id) && !isAnswered(currentAnswer(section))).map(section => section.id)]
 		.filter(id => !waived.has(id));
 	if (!ids.length) {
-		return done(number, 'Inventor Questions answered and applied', `none open in ${DRAFTING_FILE_NAMES.draft}`);
+		return done(number, 'Inventor Questions answered and applied', waived.size
+			? `${waived.size} waived in ${DRAFTING_FILE_NAMES.findings}, none open`
+			: `none open in ${DRAFTING_FILE_NAMES.draft}`);
 	}
 	const section = (id: string) => sections.find(candidate => candidate.id === id);
 	const answered = ids.filter(id => inDraft.includes(id) && isAnswered(currentAnswer(section(id))));
