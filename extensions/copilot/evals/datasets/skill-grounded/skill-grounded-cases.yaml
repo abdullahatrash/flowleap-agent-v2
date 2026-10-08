@@ -90,3 +90,79 @@
            a court filing must be signed by a registered representative.
         Fail if any point is missing or contradicted. Do not grade style or length.
       metric: s5_complete
+
+# ── #574 (PRD 0021 U3) — upc-case-navigator: PRD scenarios 1 and 4. ──
+# Rules and periods from upc-filing-prep/references/next-filings.md and appeal.md.
+- description: "N1 — U3 scenario 1, defendant served with a Statement of claim: next filings, rules, periods (upc-case-navigator)"
+  vars:
+    skill: upc-case-navigator
+    prompt: "We are the defendant in an infringement action and were served the Statement of claim: what can we file next, under which rule?"
+  assert:
+    - type: javascript
+      value: JSON.parse(output).loadedFiles.includes('../upc-filing-prep/references/next-filings.md');
+      metric: u3_1_next_filings_loaded
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['19.1', '23']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u3_1_rules
+    - type: javascript
+      value: |
+        const text = JSON.parse(output).finalText;
+        const periods = { '1 month': /\b(?:1|one)[\s-]+month\b/i, '3 months': /\b(?:3|three)[\s-]+months?\b/i };
+        const missing = Object.keys(periods).filter(p => !periods[p].test(text));
+        return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All periods stated' : `Periods not stated: ${missing.join(', ')}` };
+      metric: u3_1_periods
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer tells a UPC infringement defendant, just served with the Statement of claim, what it can
+        file next. It is complete only if it covers ALL of these points:
+        1. A Preliminary objection by the defendant (RoP 19.1), within 1 month of service of the Statement of claim.
+        2. The Statement of defence by the defendant (RoP 23), within 3 months of service of the Statement of
+           claim, and that a Counterclaim for revocation can be included in it (RoP 25).
+        3. Each period runs from service of the Statement of claim (the trigger event); the answer gives the
+           period and the trigger, not a calendar deadline date.
+        Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
+        Do not grade style or length.
+      metric: u3_1_complete
+
+- description: "N4 — U3 scenario 4, appeal against an order versus a final decision: rules and periods (upc-case-navigator)"
+  vars:
+    skill: upc-case-navigator
+    prompt: "Appeal against an order versus against a final decision: what do we file at the UPC Court of Appeal, under which rule, and in which period?"
+  assert:
+    - type: javascript
+      value: JSON.parse(output).loadedFiles.includes('../upc-filing-prep/references/appeal.md');
+      metric: u3_4_appeal_loaded
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['220.1', '220.2', '224.1', '224.2']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u3_4_rules
+    - type: javascript
+      value: |
+        const text = JSON.parse(output).finalText;
+        const periods = { '2 months': /\b(?:2|two)[\s-]+months?\b/i, '4 months': /\b(?:4|four)[\s-]+months?\b/i, '15 days': /\b(?:15|fifteen)[\s-]+(?:calendar[\s-]+)?days?\b/i };
+        const missing = Object.keys(periods).filter(p => !periods[p].test(text));
+        return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All periods stated' : `Periods not stated: ${missing.join(', ')}` };
+      metric: u3_4_periods
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer compares a UPC appeal against a final decision with an appeal against an order. It is
+        complete only if it covers ALL of these points:
+        1. Final decision (RoP 220.1(a), (b)): appeal as of right; Statement of appeal within 2 months and
+           Statement of grounds of appeal within 4 months, both from service of the decision (RoP 224.1(a), 224.2(a)).
+        2. Orders listed in RoP 220.1(c) (for example provisional measures or evidence orders): appeal as of
+           right; Statement of appeal and grounds within 15 days of service of the order (RoP 224.1(b), 224.2(b)).
+        3. Other orders (RoP 220.2): appeal only together with the appeal against the final decision, or with
+           leave of the Court of First Instance; then 15 days from service of the decision granting leave.
+        4. Periods run from service (the trigger event); the answer gives no calendar deadline date.
+        Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
+        Do not grade style or length.
+      metric: u3_4_complete
