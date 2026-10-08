@@ -1,6 +1,6 @@
 # PRD 0020 — Application Drafting
 
-**Status:** READY 2026-10-07 — ADR 0012 accepted; spec issue #556 `ready-for-agent`; tickets D1 #557, D2 #558, D3 #559, D4 #560, D5 #561
+**Status:** READY 2026-10-07 — ADR 0012 accepted; spec issue #556 `ready-for-agent`; tickets D1 #557, D2 #558, D3 #559, D4 #560, D5 #561; follow-ups #564 #565 #566 (EPO Front Office research)
 **Date:** 2026-10-07
 **Base:** main after v0.6.0 and #555 (`1b9d571779b`)
 **Decides:** nothing new — executes ADR 0012 (traced application drafting).
