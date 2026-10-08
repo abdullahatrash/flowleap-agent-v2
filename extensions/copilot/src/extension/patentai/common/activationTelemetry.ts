@@ -118,9 +118,12 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
 	'pre-filing-checklist',
 	'prior-art',
 	'sep-declarations',
+	'upc-case-navigator',
 	'upc-division-router',
+	'upc-filing-prep',
 	'upc-opt-out-actions',
 	'upc-opt-out-check',
+	'upc-representative-start',
 	'upc-rop-explainer',
 ]);
 
