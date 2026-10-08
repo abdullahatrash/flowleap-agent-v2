@@ -16,31 +16,7 @@ import { ToolName } from '../common/toolNames';
 import { formatUriForFileWidget } from '../common/toolUtils';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { resolveToolInputPath } from '../node/toolUtils';
-
-/**
- * Subset of the `flowleap.pdf-preview` extension API consumed here. The extension owns the
- * `pdfjs-dist` dependency and exposes text extraction so this tool never bundles a PDF parser.
- */
-interface PdfPreviewAPI {
-	extractText(uri: vscode.Uri): Promise<string>;
-	extractTextFromPages(uri: vscode.Uri, startPage: number, endPage: number): Promise<string>;
-	getMetadata(uri: vscode.Uri): Promise<PdfMetadata>;
-	getPageText(uri: vscode.Uri, pageNumber: number): Promise<string>;
-	getPageCount(uri: vscode.Uri): Promise<number>;
-}
-
-interface PdfMetadata {
-	title?: string;
-	author?: string;
-	subject?: string;
-	keywords?: string;
-	creator?: string;
-	producer?: string;
-	creationDate?: Date;
-	modificationDate?: Date;
-	pageCount: number;
-	isEncrypted: boolean;
-}
+import { getPdfPreviewApi, PdfMetadata, PdfPreviewAPI } from './pdfPreviewApi';
 
 export interface IReadPdfParams {
 	filePath: string;
@@ -51,9 +27,6 @@ export interface IReadPdfParams {
 
 /** Maximum characters to return (roughly 50 pages worth). */
 const MAX_CHARS = 200000;
-
-/** Extension ID providing the {@link PdfPreviewAPI} (the FlowLeap PDF Preview built-in extension). */
-const PDF_PREVIEW_EXTENSION_ID = 'flowleap.pdf-preview';
 
 /**
  * Tool for extracting text from local PDF files (patent PDFs, papers, technical docs). Delegates the
@@ -69,20 +42,7 @@ export class ReadPdfTool implements ICopilotTool<IReadPdfParams> {
 	) { }
 
 	private async getPdfApi(): Promise<PdfPreviewAPI> {
-		if (this._pdfApi) {
-			return this._pdfApi;
-		}
-
-		const pdfExtension = vscode.extensions.getExtension<PdfPreviewAPI>(PDF_PREVIEW_EXTENSION_ID);
-		if (!pdfExtension) {
-			throw new Error(`PDF Preview extension (${PDF_PREVIEW_EXTENSION_ID}) is not installed. Please ensure the PDF Preview extension is available.`);
-		}
-
-		if (!pdfExtension.isActive) {
-			await pdfExtension.activate();
-		}
-
-		this._pdfApi = pdfExtension.exports;
+		this._pdfApi ??= await getPdfPreviewApi();
 		return this._pdfApi;
 	}
 

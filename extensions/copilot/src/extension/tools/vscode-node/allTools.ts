@@ -8,6 +8,7 @@
 import './citationApiGuideTool';
 import './compareClaimsTool';
 import './examinerBaselineTool';
+import './exportDraftDocxTool';
 import './comparePatentsTool';
 import './fetchWebPageTool';
 import './getContinuityTool';
@@ -35,5 +36,7 @@ import './searchLegalTool';
 import './searchPatentsTool';
 import './switchAgentTool';
 import './usptoApiGuideTool';
+import './startApplicationDraftTool';
+import './validateDraftTool';
 import './writePatentResultsTool';
 

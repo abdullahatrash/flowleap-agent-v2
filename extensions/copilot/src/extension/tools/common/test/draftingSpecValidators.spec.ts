@@ -1,0 +1,125 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { describe, expect, it } from 'vitest';
+import { parseDraftParagraphs } from '../drafting/sourceMarkers';
+import { checkAbstractLength, checkDefinedTerms, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, parseFigureParts } from '../drafting/specValidators';
+
+function draft(...lines: string[]) {
+	return parseDraftParagraphs(lines.join('\n'));
+}
+
+const words = (count: number) => Array.from({ length: count }, (_, i) => `word${i}`).join(' ');
+
+const figures = [
+	'# Figures',
+	'',
+	'## FIG. 1: perspective view of the hinge',
+	'- 10: hinge',
+	'- 12: housing',
+	'| 14 | coil spring |',
+].join('\n');
+
+describe('Application Drafting specification validators', () => {
+
+	it('abstract length: pass at 150 words', () => {
+		expect(checkAbstractLength(draft('# Abstract', '', `<!-- src: template --> ${words(150)}`))).toEqual([]);
+	});
+
+	it('abstract length: Error over 150 words and when the Abstract is missing', () => {
+		expect([
+			checkAbstractLength(draft('# Abstract of the Disclosure', '', '<!-- src: template -->', words(100), '', `<!-- src: feature:F1 --> ${words(51)}`)),
+			checkAbstractLength(draft('# Description', '', 'Text.')),
+		]).toEqual([
+			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; it must have at most 150 (37 CFR 1.72(b); Rule 47(3) EPC).' }],
+			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', message: 'The draft has no Abstract section (a heading that contains "Abstract").' }],
+		]);
+	});
+
+	it('defined terms: pass when a defined term keeps its spelling', () => {
+		expect(checkDefinedTerms(draft('A control unit (hereinafter "control unit") is used.', '', 'The control unit is small.'))).toEqual([]);
+	});
+
+	it('defined terms: Error for another spelling of a defined term', () => {
+		expect(checkDefinedTerms(draft('A unit is referred to as "control unit".', '', 'The control-unit is small.', '', '"Sensor module" means the part.', '', 'The sensormodule and the Sensor module work.'))).toEqual([
+			{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 3, message: 'Line 3 writes "control-unit"; the defined term is "control unit".' },
+			{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 7, message: 'Line 7 writes "sensormodule"; the defined term is "Sensor module".' },
+		]);
+	});
+
+	it('defined terms: one-word terms and case variants of a capitalised term', () => {
+		expect([
+			checkDefinedTerms(draft('A unit (hereinafter "Controller") is used.', '', 'The Controller is small. A controller-board holds the Controller.')),
+			checkDefinedTerms(draft('A unit (hereinafter "Controller") is used.', '', 'The controller is small.', '', '"Sensor Module" means the part.', '', 'The sensor module and the Sensor-Module work.')),
+			checkDefinedTerms(draft('"bolt" means the pin.', '', 'Bolt 12 holds. The bolt holds.')),
+		]).toEqual([
+			[],
+			[
+				{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 3, message: 'Line 3 writes "controller"; the defined term is "Controller".' },
+				{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 7, message: 'Line 7 writes "sensor module"; the defined term is "Sensor Module".' },
+				{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 7, message: 'Line 7 writes "Sensor-Module"; the defined term is "Sensor Module".' },
+			],
+			[],
+		]);
+	});
+
+	it('figure parts: parses list items and table rows with their lines', () => {
+		expect(parseFigureParts(figures)).toEqual([
+			{ numeral: '10', part: 'hinge', line: 4 },
+			{ numeral: '12', part: 'housing', line: 5 },
+			{ numeral: '14', part: 'coil spring', line: 6 },
+		]);
+	});
+
+	it('reference numerals: pass when text and figures.md agree', () => {
+		expect(checkReferenceNumerals(draft(
+			'# Brief Description of the Drawings',
+			'',
+			'FIG. 1 shows the hinge 10 of about 5 mm, set at 90 degrees, as in claim 1 and in 2024.',
+			'',
+			'The housing 12 holds the spring 14 (see FIGS. 1 and 2).',
+		), figures)).toEqual([]);
+	});
+
+	it('reference numerals: Error for unknown, unused, mismatched and doubled numerals', () => {
+		const doubled = `${figures}\n- 12: lever\n- 16: housing`;
+		expect(checkReferenceNumerals(draft(
+			'The hinge 10 has a lever 12 and a damper 18.',
+		), doubled)).toEqual([
+			{ severity: 'Error', rule: 'reference-numeral', file: 'figures.md', line: 7, message: 'Numeral 12 names two parts in figures.md: "housing" and "lever". Use one numeral per part.' },
+			{ severity: 'Error', rule: 'reference-numeral', file: 'figures.md', line: 8, message: 'Part "housing" has two numerals in figures.md: 12 and 16. Use one numeral per part.' },
+			{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 uses numeral 18 ("damper 18"), which figures.md does not list.' },
+			{ severity: 'Error', rule: 'reference-numeral', file: 'figures.md', line: 6, message: 'Numeral 14 ("coil spring") in figures.md does not appear in the draft text.' },
+			{ severity: 'Error', rule: 'reference-numeral', file: 'figures.md', line: 8, message: 'Numeral 16 ("housing") in figures.md does not appear in the draft text.' },
+		]);
+	});
+
+	it('reference numerals: Error when the text names a numeral as another part', () => {
+		expect(checkReferenceNumerals(draft('The hinge 10 has a housing 12 and a lever 14.'), figures)).toEqual([
+			{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 writes "lever 14", but figures.md names numeral 14 "coil spring".' },
+		]);
+	});
+
+	it('source markers: pass when every text paragraph outside the claims has a source', () => {
+		expect(checkSourceMarkers(draft('# Description', '', '<!-- src: feature:F1 -->', 'Text.', '', '# Claims', '', '1. A hinge.'))).toEqual([]);
+	});
+
+	it('source markers: Error for a paragraph without a source or with an invalid marker', () => {
+		expect(checkSourceMarkers(draft('# Description', '', 'No source.', '', '<!-- src: feature -->', 'Bad marker.'))).toEqual([
+			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 3, message: 'The paragraph at line 3 has no source marker (<!-- src: ... -->).' },
+			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, instruction, template or model-proposed.' },
+		]);
+	});
+
+	it('inventor questions: pass when none is open', () => {
+		expect(checkInventorQuestions('# Description\n\n<!-- src: template -->\nText.')).toEqual([]);
+	});
+
+	it('inventor questions: Error for each open Inventor Question', () => {
+		expect(checkInventorQuestions('## Inventor Questions\n\n> **Inventor Question IQ-1:** What is the spring made of?')).toEqual([
+			{ severity: 'Error', rule: 'inventor-question', file: 'draft-application.md', line: 3, message: 'Inventor Question IQ-1 is open: What is the spring made of?' },
+		]);
+	});
+});

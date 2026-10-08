@@ -1559,6 +1559,96 @@
         }
       },
       {
+        "name": "copilot_startApplicationDraft",
+        "displayName": "Start Application Draft",
+        "toolReferenceName": "startApplicationDraft",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(file-text)",
+        "userDescription": "Read the gates and the inputs of an Application Drafting matter",
+        "modelDescription": "Start Application Drafting (application-drafting skill, Step 3) for one matter folder drafting/<matter>/. The tool reads the gates from the files, never from the chat: `confirmed: true` in feature-list.md and `approved: true` in claims.md (only the literal YAML boolean true counts). If a file or a flag is missing or not true, it refuses and names the file and the flag: report that and ask the attorney to set the flag; an approval said in chat opens no gate. When the gates are open it returns the Feature List, figures.md, the Approved Claims, the office, and up to five style exemplars from the workspace style/ folder (.md, .docx, .pdf) as text. Exemplars are labelled style only, never a source: they shape voice and structure, and no fact, feature, value, example or result enters the draft from them. The tool records the SHA-256 of the approved claims in drafting/<matter>/draft-application.working-record.md. Editing claims.md after this clears the approval: this tool, validate_draft and export_draft_docx then set `approved: false` in claims.md and refuse until the attorney reviews the claims and sets `approved: true` again; the next save then starts a new draft version. Call it before writing the specification, and again after any change to the claims.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge' for drafting/hinge/."
+            }
+          },
+          "required": [
+            "matter"
+          ]
+        }
+      },
+      {
+        "name": "copilot_validateDraft",
+        "displayName": "Validate Draft",
+        "toolReferenceName": "validateDraft",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(checklist)",
+        "userDescription": "Run the drafting validators and write the findings file",
+        "modelDescription": "Validate a saved Draft Application (application-drafting skill, Step 4). Reads drafting/<matter>/draft-application.md, claims.md and figures.md, runs the deterministic validators of the office in code (antecedent basis, dependency targets, claim numbering, the office claim-form rule, abstract length, defined terms, reference numerals against figures.md, literal basis, source markers, open Inventor Questions; Notes for claim count and relative terms) and writes drafting/<matter>/findings.md. The attorney's waivers (a `  - Waived: <reason>` line under an item) are kept across runs. Pass the items of your advisory review in `advisory`: each quotes the passage it concerns and gives its line or claim; they are recorded as Advisory findings and never block export. When claims.md changed after start_application_draft recorded the approved claims, the tool adds a `claims-changed` Error and sets `approved: false` in claims.md: the attorney approves again and the draft is regenerated. Returns the counts by severity and the list of findings that block export. Report them by severity with line references; never say the draft passed or is ready to file.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge'."
+            },
+            "advisory": {
+              "type": "array",
+              "description": "Optional advisory review items from the model (scope, clarity, support of each claimed combination). Each quotes the passage it concerns.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "The item, quoting the passage it concerns."
+                  },
+                  "line": {
+                    "type": "number",
+                    "description": "The 1-based line of the passage in draft-application.md."
+                  },
+                  "claim": {
+                    "type": "number",
+                    "description": "The claim the item concerns."
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              }
+            }
+          },
+          "required": [
+            "matter"
+          ]
+        }
+      },
+      {
+        "name": "copilot_exportDraftDocx",
+        "displayName": "Export Draft to Word",
+        "toolReferenceName": "exportDraftDocx",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(export)",
+        "userDescription": "Export a validated Draft Application to a Word file",
+        "modelDescription": "Export a Draft Application to drafting/<matter>/draft-application.docx (application-drafting skill, Step 5), only when the attorney asks for the Word file. The tool re-runs the validators and refuses while any Error or Inventor Question in findings.md is open and unwaived, while `approved` in claims.md is not true, or while claims.md differs from the claims the draft was generated against (it then sets `approved: false`); each refusal names what is open. Report every item it lists; the attorney resolves it in the draft or writes a waiver with a reason in findings.md. On success it diffs the edited draft against the generated snapshot (draft-application.generated.md) paragraph by paragraph, appends the attorney's edits to the Working Record, strips the source markers and the Inventor Questions section, and writes the .docx with the draft's headings in order (Claims and Abstract on new pages, one paragraph per numbered claim). Returns the path and the counts of kept, changed, deleted and added paragraphs. The export is a draft for attorney review, not a filing.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge'."
+            }
+          },
+          "required": [
+            "matter"
+          ]
+        }
+      },
+      {
         "name": "copilot_getPatentTerm",
         "displayName": "Get Patent Term",
         "toolReferenceName": "patentTerm",
@@ -2211,9 +2301,10 @@
                 "eou-infringement-chart",
                 "patentability-opinion",
                 "landscape-report",
-                "portfolio-due-diligence-memo"
+                "portfolio-due-diligence-memo",
+                "draft-application"
               ],
-              "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts (invalidity-claim-chart also takes structured coverage, and then requires empty content), find-better-report for a Find Better run on a granted patent (structured only: coverage with examiner and found sides, baseline, examinerBestArt, tracks; empty content), landscape-report for landscapes, portfolio-due-diligence-memo for portfolios. Omit for free-form content."
+              "description": "Optional report wrapper. prior-art-report is a review of candidate evidence, not an ISR or patentability opinion. Use patentability-opinion only for a requested formal assessment; fto-memo for FTO, office-action-scaffold for responses, invalidity-claim-chart/eou-infringement-chart for their respective element charts (invalidity-claim-chart also takes structured coverage, and then requires empty content), find-better-report for a Find Better run on a granted patent (structured only: coverage with examiner and found sides, baseline, examinerBestArt, tracks; empty content), landscape-report for landscapes, portfolio-due-diligence-memo for portfolios, draft-application for a Draft Application of the application-drafting skill (filePath drafting/<matter>/draft-application.md; content is the whole draft starting with its frontmatter; it is written unchanged, never wrapped, with the generated snapshot and the Working Record beside it; findings never block it). Omit for free-form content."
             },
             "matter": {
               "type": "string",
@@ -2226,6 +2317,30 @@
             "objective": {
               "type": "string",
               "description": "prior-art-report: one or two sentences stating the invention and the question the search answers. invalidity-claim-chart and find-better-report: the earliest priority date the art is measured against, with its basis. Provide it — do not leave the report's Objective section as a stub."
+            },
+            "office": {
+              "type": "string",
+              "enum": [
+                "US",
+                "EPO"
+              ],
+              "description": "draft-application: the office, when the draft frontmatter does not name it."
+            },
+            "model": {
+              "type": "string",
+              "description": "draft-application: the model the disclosure went to (the one stated in chat before drafting), when the draft frontmatter does not name it."
+            },
+            "provider": {
+              "type": "string",
+              "description": "draft-application: the provider the disclosure went to, when the draft frontmatter does not name it."
+            },
+            "disclosureVersion": {
+              "type": "string",
+              "description": "draft-application: the version or date of the invention disclosure the draft is made from, for the Working Record."
+            },
+            "promptsSummary": {
+              "type": "string",
+              "description": "draft-application: a short summary of the skill, template and attorney instructions the draft was made with, for the Working Record."
             },
             "searchStrategy": {
               "type": "string",
@@ -7540,6 +7655,9 @@
         "path": "./assets/skills/claim-drafting/SKILL.md"
       },
       {
+        "path": "./assets/skills/application-drafting/SKILL.md"
+      },
+      {
         "path": "./assets/skills/office-action-response/SKILL.md"
       },
       {
@@ -7764,11 +7882,13 @@
     "applicationinsights": "^2.9.7",
     "best-effort-json-parser": "^1.2.1",
     "diff": "^8.0.3",
+    "docx": "^9.9.0",
     "express": "^5.2.1",
     "ignore": "^7.0.5",
     "isbinaryfile": "^5.0.4",
     "jsonc-parser": "^3.3.1",
     "lru-cache": "^11.1.0",
+    "mammoth": "^1.13.0",
     "markdown-it": "^14.1.1",
     "minimatch": "^10.2.1",
     "undici": "^7.24.1",

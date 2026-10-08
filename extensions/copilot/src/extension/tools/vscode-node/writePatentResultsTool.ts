@@ -35,12 +35,18 @@ import { buildPatentReport, contentRequirementError, PatentReportTemplate } from
 import { extractFigures, figureProvenance, figureSentence, ftoProvenanceResult, renderFtoAppendix, renderLandscapeAppendix } from '../common/patentReportProvenance';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
+import { matchDraftPath, resolveDraftingFolder } from '../common/drafting/folderContract';
+import { saveDraftApplication } from './draftApplicationSave';
+import { DraftingWorkspace } from './draftingWorkspace';
 
 interface IWritePatentResultsParams extends PatentCandidateReview {
 	filePath: string;
 	content: string;
-	/** Optional report template. Omitted = free-form save of `content` unchanged. */
-	template?: PatentReportTemplate;
+	/**
+	 * Optional report template. Omitted = free-form save of `content` unchanged. `draft-application`
+	 * saves a Draft Application with its snapshot and Working Record, outside the report templates.
+	 */
+	template?: PatentReportTemplate | 'draft-application';
 	/** Matter/case reference or the document's identifying number, when the user provided one. */
 	matter?: string;
 	/** The technology/product/portfolio the report is about, in a short phrase. */
@@ -49,6 +55,16 @@ interface IWritePatentResultsParams extends PatentCandidateReview {
 	objective?: string;
 	/** Short summary of databases, codes, and key queries used (prior-art and landscape reports). */
 	searchStrategy?: string;
+	/** draft-application: the office, when the content's frontmatter does not name it. */
+	office?: string;
+	/** draft-application: the model the disclosure went to, when the frontmatter does not name it. */
+	model?: string;
+	/** draft-application: the provider the disclosure went to, when the frontmatter does not name it. */
+	provider?: string;
+	/** draft-application: the version of the invention disclosure the draft is made from. */
+	disclosureVersion?: string;
+	/** draft-application: a short summary of the prompts and instructions the draft was made with. */
+	promptsSummary?: string;
 }
 
 /**
@@ -192,6 +208,9 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		this.logService.trace('[WritePatentResultsTool] Invoking write patent results');
 
 		const { filePath, content, template } = options.input;
+		if (template === 'draft-application') {
+			return this.saveDraft(options.input);
+		}
 
 		// prior-art-report and find-better-report always generate their body from structured coverage;
 		// invalidity-claim-chart does so when the model supplies coverage, and keeps the written-content
@@ -342,6 +361,39 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)
 			]);
+		}
+	}
+
+	/**
+	 * The `draft-application` save: written as the model gave it, with its frontmatter on line 1,
+	 * never wrapped in a report template and never blocked by findings (ADR 0012).
+	 */
+	private async saveDraft(input: IWritePatentResultsParams): Promise<LanguageModelToolResult> {
+		const folders = this.workspaceService.getWorkspaceFolders();
+		const uri = this.resolveWorkspacePath(input.filePath, folders);
+		const root = uri && folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(uri, folder));
+		const matter = uri && root ? matchDraftPath(extUriBiasedIgnorePathCase.relativePath(root, uri) ?? '') : undefined;
+		const folder = matter ? resolveDraftingFolder(matter) : undefined;
+		if (!uri || !root || !folder) {
+			return new LanguageModelToolResult([new LanguageModelTextPart('Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.')]);
+		}
+		try {
+			const outcome = await saveDraftApplication(new DraftingWorkspace(root, folder, this.fileSystemService, this.instantiationService), input);
+			if (!outcome.saved) {
+				return new LanguageModelToolResult([new LanguageModelTextPart(`Draft was not saved. ${outcome.reason}`)]);
+			}
+			// Not counted until the backend's closed template-kind set names it: the service skips a
+			// kind outside REPORTED_TEMPLATE_KINDS rather than lose the whole batch.
+			this.activationTelemetryService.recordReportSaved('draft-application');
+			try {
+				await vscode.commands.executeCommand('vscode.open', vscode.Uri.from(uri));
+			} catch (openError) {
+				this.logService.warn(`[WritePatentResultsTool] Wrote the draft but failed to open it: ${openError instanceof Error ? openError.message : String(openError)}`);
+			}
+			return new LanguageModelToolResult([new LanguageModelTextPart(outcome.message)]);
+		} catch (error) {
+			this.logService.error(`[WritePatentResultsTool] Exception: ${error instanceof Error ? error.message : String(error)}`);
+			return new LanguageModelToolResult([new LanguageModelTextPart(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`)]);
 		}
 	}
 
