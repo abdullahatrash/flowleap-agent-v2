@@ -22,7 +22,7 @@
 | Cost decision (RoP 157, 221) | Application for leave to the standing judge | Application for leave: 15 days from service of the cost decision (RoP 221.1) | — | "RoP 221 - Application for leave to appeal a cost decision" |
 | Decision in an action against an EPO decision | See `action-against-epo-decisions.md` | RoP 220.1(a), (b); for RoP 97: 3 weeks (RoP 97.5) | — | "RoP 97.5" |
 
-A decision allowing a Preliminary objection is appealable under RoP 220.1(a); an order rejecting it only under RoP 220.2 (RoP 21.1).
+A decision allowing a Preliminary objection is appealable under RoP 220.1(a); an order rejecting it only under RoP 220.2 (RoP 21.1). RoP 220.2 gives two routes: (1) together with the appeal against the final decision, or (2) with leave of the Court of First Instance, within 15 days from service of the decision granting leave (RoP 224.1(b), 224.2(b)). If leave is refused, a request for discretionary review is possible (RoP 220.3). Always state both routes.
 
 ## Statement of appeal (Initial Filing at the Court of Appeal)
 
