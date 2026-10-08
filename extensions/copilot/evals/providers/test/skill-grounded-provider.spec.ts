@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import SkillGroundedProvider from '../skill-grounded-provider';
+import SkillGroundedProvider, { SKILL_SKIP_DIRS } from '../skill-grounded-provider';
 
 /** A skills folder on disk with two skills: one links to a reference file of the other. */
 let skillsDir: string;
@@ -42,12 +42,12 @@ interface SentMessage {
 }
 
 /** Runs one case and returns what the provider sent and what it returned. */
-async function runCase(vars: Record<string, string>, env: NodeJS.ProcessEnv = { OPENROUTER_API_KEY: 'k' }) {
+async function runCase(vars: Record<string, string>, env: NodeJS.ProcessEnv = { OPENROUTER_API_KEY: 'k' }, responseBody: unknown = { choices: [{ finish_reason: 'stop', message: { content: 'the answer' } }] }) {
 	const bodies: Array<{ messages: SentMessage[]; tools?: Array<{ function: { name: string } }>; tool_choice?: string }> = [];
 	const provider = new SkillGroundedProvider({ config: { skillsDir } }, {
 		fetch: async (_url, init) => {
 			bodies.push(JSON.parse(String(init?.body)));
-			return jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: 'the answer' } }] });
+			return jsonResponse(responseBody);
 		},
 		env,
 	});
@@ -65,13 +65,13 @@ describe('SkillGroundedProvider', () => {
 		const readCalls = messages[4].tool_calls!;
 		expect({
 			requests: bodies.length,
-			roles: messages.map(m => m.role),
+			roles: messages.map(message => message.role),
 			user: messages[1].content,
 			skillCall: { name: skillCall.function.name, args: JSON.parse(skillCall.function.arguments) },
 			skillResult: messages[3].content,
-			reads: readCalls.map(c => ({ name: c.function.name, filePath: JSON.parse(c.function.arguments).filePath })),
-			readResults: messages.slice(5).map(m => [m.tool_call_id === readCalls[messages.indexOf(m) - 5].id, m.content]),
-			tools: bodies[0].tools!.map(t => t.function.name),
+			reads: readCalls.map(call => ({ name: call.function.name, filePath: JSON.parse(call.function.arguments).filePath })),
+			readResults: messages.slice(5).map((message, index) => [message.tool_call_id === readCalls[index].id, message.content]),
+			tools: bodies[0].tools!.map(tool => tool.function.name),
 			toolChoice: bodies[0].tool_choice,
 			output: JSON.parse(String(result.output)),
 		}).toEqual({
@@ -101,5 +101,48 @@ describe('SkillGroundedProvider', () => {
 			noKey: /API key/.test(String(noKey.result.error)),
 			requests: missingSkill.bodies.length + noSkillVar.bodies.length + noKey.bodies.length,
 		}).toEqual({ missingSkill: true, noSkillVar: true, noKey: true, requests: 0 });
+	});
+
+	it('reports an upstream error carried in a 200 body as a provider error, with the message the trajectory provider gives', async () => {
+		const { result } = await runCase({ skill: 'demo' }, undefined, {
+			choices: [{ finish_reason: 'error', error: { code: 429, message: 'rate-limited upstream' }, message: { content: null } }],
+		});
+		expect({ output: result.output, error: result.error }).toEqual({
+			output: undefined,
+			error: 'Upstream error in a 200 response (finish_reason=error): rate-limited upstream',
+		});
+	});
+});
+
+/**
+ * The provider copies two things from the app's skill tool, because the evals cannot import
+ * `skillTool.ts` (it needs the `vscode` module): the folders it skips and the `<skill-context>`
+ * text of `SkillTool.invokeInline`. These checks read the app source and fail when the copies drift.
+ */
+describe('SkillGroundedProvider matches the app skill tool', () => {
+	const appSource = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src', 'extension', 'tools', 'node', 'skillTool.ts'), 'utf-8');
+	const providerSource = fs.readFileSync(path.join(__dirname, '..', 'skill-grounded-provider.ts'), 'utf-8');
+
+	/** The template literals from `relatedFilesSection` to `</skill-context>`, with each interpolation replaced by `${}`. */
+	function skillContextTemplates(source: string): string[] {
+		const start = source.indexOf('const relatedFilesSection');
+		const end = source.indexOf('</skill-context>`', start) + '</skill-context>`'.length;
+		let region = source.slice(start, end);
+		for (let previous = ''; previous !== region;) {
+			previous = region;
+			region = region.replace(/\$\{[^{}]*\}/g, '<interpolation>');
+		}
+		return [...region.matchAll(/`[^`]*`/g)].map(match => match[0].replaceAll('<interpolation>', '${}'));
+	}
+
+	it('skips the same folders as SKILL_SKIP_DIRS in skillTool.ts', () => {
+		const literal = /const SKILL_SKIP_DIRS = new Set\(\[(?<entries>[^\]]*)\]\)/.exec(appSource)?.groups?.entries ?? '';
+		const appDirs = [...literal.matchAll(/'(?<name>[^']+)'/g)].map(match => match.groups!.name);
+		expect([...SKILL_SKIP_DIRS].sort()).toEqual(appDirs.sort());
+	});
+
+	it('renders the same <skill-context> text as SkillTool.invokeInline', () => {
+		const appTemplates = skillContextTemplates(appSource);
+		expect({ count: appTemplates.length, provider: skillContextTemplates(providerSource) }).toEqual({ count: 2, provider: appTemplates });
 	});
 });
