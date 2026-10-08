@@ -80,6 +80,27 @@ describe('buildPromptTree', () => {
 		]);
 	});
 
+	it('lists the UPC prompts with their spelled-out labels after the Find Better prompts and before the PATSTAT prompts', () => {
+		const bundled = [
+			entry('flowleap-top-filers', 'bundled'),
+			entry('flowleap-upc-opt-out-check', 'bundled'),
+			entry('flowleap-examiner-baseline', 'bundled'),
+			entry('flowleap-upc-which-division', 'bundled'),
+		];
+
+		expect(shape(buildPromptTree(bundled, []))).toEqual([
+			{
+				group: 'FlowLeap', children: [
+					'prompt:Examiner Baseline',
+					'prompt:UPC: which division',
+					'prompt:UPC: opt-out check',
+					'prompt:Top filers',
+				]
+			},
+			{ group: 'My prompts', children: ['placeholder:Add a prompt to reuse it later'] },
+		]);
+	});
+
 	it('shows a non-copyable placeholder when the user has written no prompts yet', () => {
 		expect(shape(buildPromptTree([entry('flowleap-patent-dossier', 'bundled')], []))).toEqual([
 			{ group: 'FlowLeap', children: ['prompt:Patent dossier'] },
