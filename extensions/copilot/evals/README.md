@@ -721,7 +721,7 @@ It runs skills that `chatSkills` does not register yet, so a new skill is measur
 local build checks routing.
 
 ```bash
-# The verdict — 3 runs under the repeat policy (no committed baseline yet: every case must pass)
+# The verdict — 3 runs under the repeat policy, compared with output/skill-grounded-baseline.json
 OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded:repeat
 
 # A single run (a probe while iterating)
@@ -744,7 +744,7 @@ Deterministic checks (`assertions/skill-grounded-assertions.mjs`, proven offline
 
 | Helper | Fails when |
 |---|---|
-| `findCalendarDates` (suite-wide `no_calendar_date`) | The answer gives a calendar date in any form: `1 November 2026`, `2026-11-01`, `01.11.2026`, `November 1st`, `11/01/2026`. A period with its trigger ("2 months from service") passes. ADR 0013, decision 3 |
+| `findCalendarDates(text, prompt)` (suite-wide `no_calendar_date`) | The answer gives a calendar date in any form: `1 November 2026`, `2026-11-01`, `01.11.2026`, `November 1st`, `11/01/2026`. A period with its trigger ("2 months from service") passes. A date the user gave in the prompt (in any written form) and the fixed dates of the fee table pass; any other date fails. ADR 0013, decision 3 |
 | `missingRules(text, ['23', '224.1'])` | A rule is not cited with its exact number after `R.`, `Rule`, `Rules` or `RoP` (`R.230` does not cite Rule 23) |
 | `missingFees(text, [11000])` | An amount is not stated in euros exactly (`EUR 11,000`, `€11 000`, `11.000 EUR` all match) |
 
@@ -756,9 +756,28 @@ judge reads the answer, not the JSON. The dataset header shows the assertion sha
 |---|---|---|
 | S1 | `upc-division-router` (smoke) | Reference file loaded, no calendar date, forum + language + counterclaim options complete |
 | S5 | `upc-representative-start` | Reference file loaded, Art. 48(2) + R.11 + R.18 cited, no calendar date, route + evidence + Registrar outcomes + petition for review + team roles complete |
+| N1 | `upc-case-navigator` | `next-filings.md` loaded, RoP 19.1 + 23 cited, 1 and 3 months stated, no date other than the service date in the prompt, next filings complete |
+| N4 | `upc-case-navigator` | `appeal.md` loaded, RoP 220.1 + 220.2 + 224.1 + 224.2 cited, 2 months + 4 months + 15 days stated, fees EUR 29,200 + EUR 4,000, routes complete |
+| U2a | `upc-filing-prep` | RoP 44 + 45.1 + 46 + 370.8 cited, fees EUR 26,500 + EUR 13,250, checklist and verdict complete |
+| U2b | `upc-filing-prep` | RoP 207.2 + 207.4 + 207.9 cited, fees EUR 300 + EUR 130, checklist and verdict complete |
 
-**Smoke (2026-10-08, `anthropic/claude-sonnet-5`, `--no-cache`): S1 3/3, verdict PASS, 0 voided.**
-**S5 (2026-10-08, `--filter-pattern S5`): 3/3, verdict PASS, 0 voided.**
+The provider replays the app's skill tool from a copy, because the evals cannot import
+`skillTool.ts` (it needs the `vscode` module). `providers/test/skill-grounded-provider.spec.ts`
+reads the app source and fails when the skipped folders or the `<skill-context>` text drift.
+
+### Baseline: skill-grounded suite (2026-10-08, `anthropic/claude-sonnet-5`, no cache)
+
+`npm run eval:skill-grounded:repeat`, full suite, 3 runs, judge `google/gemini-2.5-flash`.
+Recorded in `output/skill-grounded-baseline.json`; every case is expected to PASS.
+
+| Case | Runs | Pass | Voided | Verdict |
+|---|---|---|---|---|
+| S1 | P P P | 3/3 | 0 | PASS |
+| S5 | P P P | 3/3 | 0 | PASS |
+| N1 | P P P | 3/3 | 0 | PASS (every answer repeated the prompt's service date and passed the date check) |
+| N4 | P P P | 3/3 | 0 | PASS |
+| U2a | P P P | 3/3 | 0 | PASS |
+| U2b | P P P | 3/3 | 0 | PASS |
 
 ## File Structure
 
@@ -775,11 +794,12 @@ evals/
 ├── providers/
 │   ├── patent-ai-provider.ts     # Custom provider → OpenRouter (BYOK, no backend)
 │   ├── trajectory-provider.ts    # Multi-turn replay loop (trajectory + key-gate suites)
+│   ├── chat-completions.ts       # Chat-completions call shared by the trajectory and skill-grounded providers
 │   └── skill-grounded-provider.ts # Replays a skill run, then one answer (skill-grounded suite)
 ├── assertions/
 │   ├── trajectory-assertions.mjs # Structural predicates, trajectory gate
 │   ├── key-gate-assertions.mjs   # Structural predicates, key-gate suite
-│   └── skill-grounded-assertions.mjs # No calendar date, exact rules, exact fees
+│   └── skill-grounded-assertions.mjs # No calendar date (except prompt dates), exact rules, exact fees
 ├── prompts/
 │   ├── system-prompt.txt         # Static render of patentAIPrompt.tsx
 │   ├── key-state/                # Per-key-state prompt variants (same render script)
@@ -794,7 +814,7 @@ evals/
 │   ├── search-strategy.yaml      # 5 tests — API syntax correctness
 │   ├── frontier.yaml             # 5 probes — NON-GATING (failures are findings)
 │   ├── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
-│   └── skill-grounded/           # Skill-content cases (S1 smoke)
+│   └── skill-grounded/           # Skill-content cases (S1, S5, N1, N4, U2a, U2b)
 ├── scripts/
 │   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
