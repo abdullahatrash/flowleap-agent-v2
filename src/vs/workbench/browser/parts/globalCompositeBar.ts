@@ -56,6 +56,11 @@ import { createCodexAccountMenuActions, ICodexAccountService, shouldShowCodexAcc
 const COMMAND_PALETTE_ACTIVITY_ID = 'workbench.actions.activityBarCommandPalette';
 /** The command opened when the activity-bar Command Palette icon is clicked (same as the Command Palette keybinding). */
 const SHOW_COMMANDS_COMMAND_ID = 'workbench.action.showCommands';
+/**
+ * Id of the authentication provider (owned by the FlowLeap extension) that holds the FlowLeap Session.
+ * Referenced here by string on purpose so core never becomes a second owner of it.
+ */
+const FLOWLEAP_AUTH_PROVIDER_ID = 'flowleap';
 
 export class GlobalCompositeBar extends Disposable {
 
@@ -527,10 +532,14 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 		}
 	}
 
+	/**
+	 * The avatar of the default account. When there is no default account (FlowLeap never sets one),
+	 * the avatar of the FlowLeap Session account is used instead.
+	 */
 	private getDefaultAccountAvatarIcon(): URI | undefined {
 		const currentDefaultAccount = this.defaultAccountService.currentDefaultAccount;
 		if (!currentDefaultAccount) {
-			return undefined;
+			return this.groupedAccounts.get(FLOWLEAP_AUTH_PROVIDER_ID)?.find(account => account.icon)?.icon;
 		}
 
 		const accounts = this.groupedAccounts.get(currentDefaultAccount.authenticationProvider.id);

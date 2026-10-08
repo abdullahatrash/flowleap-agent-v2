@@ -385,6 +385,35 @@ describe('FlowLeapAuthenticationProvider session lifecycle', () => {
 		});
 	});
 
+	it('sets the account icon from the profile imageUrl, once per token; null or non-https means no icon', async () => {
+		/** Sign in with an email-bearing JWT and return the account after the profile resolves, plus the fetch count. */
+		async function accountFor(imageUrl: string | null) {
+			let fetches = 0;
+			const fetchImpl = (async () => {
+				fetches++;
+				return { ok: true, json: async () => ({ email: 'jane@flowleap.co', imageUrl }) };
+			}) as unknown as typeof fetch;
+			const provider = new FlowLeapAuthenticationProvider(makeExtensionContext({ token: makeJwt({ sub: 'user_123', email: 'jane@flowleap.co' }), expiresAt: Date.now() + 60 * 60_000 }), makeLogService(), undefined, fetchImpl);
+			await provider.waitForInitialization();
+			await provider.getSessions();
+			await tick();
+			const [session] = await provider.getSessions();
+			provider.getIdentity();
+			await tick();
+			return { account: session.account, fetches };
+		}
+
+		expect({
+			picture: await accountFor('https://img.clerk.com/abc'),
+			none: await accountFor(null),
+			insecure: await accountFor('http://img.clerk.com/abc'),
+		}).toEqual({
+			picture: { account: { id: 'user_123', label: 'jane@flowleap.co', icon: 'https://img.clerk.com/abc' }, fetches: 1 },
+			none: { account: { id: 'user_123', label: 'jane@flowleap.co' }, fetches: 1 },
+			insecure: { account: { id: 'user_123', label: 'jane@flowleap.co' }, fetches: 1 },
+		});
+	});
+
 	it('getSessions returns [] and deletes the secret once the token has expired', async () => {
 		const clock = fakeClock(1_700_000_000_000);
 		const { provider } = await createSessionViaFlow(clock);
