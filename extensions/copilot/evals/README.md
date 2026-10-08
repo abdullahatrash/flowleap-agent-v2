@@ -111,6 +111,9 @@ npm run eval:check-baseline
 # A single run of either suite is a probe, not a verdict: see Repeat policy.
 OPENROUTER_API_KEY=sk-or-... npm run eval:trajectory:repeat
 OPENROUTER_API_KEY=sk-or-... npm run eval:key-gate:repeat
+
+# Skill content, before the skill is registered (see Skill-grounded suite)
+OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded:repeat
 ```
 
 ## Cost: prompt caching is on by default
@@ -709,6 +712,52 @@ and 6/6 on each of three runs under the repeat policy, with a strict per-case th
 [Repeat policy](#repeat-policy--the-trajectory-and-key-gate-verdicts-are-statistical-184) and
 `output/key-gate-baseline.json`.**
 
+## Skill-grounded suite (#569)
+
+`promptfooconfig.skill-grounded.yaml` + `datasets/skill-grounded/skill-grounded-cases.yaml` grade
+a skill's **content**: given the skill, does the answer have the right rules, fees and points?
+It runs skills that `chatSkills` does not register yet, so a new skill is measured before it ships
+(PRD 0021 U6). Whether the model **picks** the skill is out of scope; a live acceptance run in a
+local build checks routing.
+
+```bash
+# The verdict — 3 runs under the repeat policy (no committed baseline yet: every case must pass)
+OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded:repeat
+
+# A single run (a probe while iterating)
+OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded -- --no-cache
+```
+
+Each case names a skill folder under `assets/skills` in `vars.skill`. The provider
+(`providers/skill-grounded-provider.ts`) replays what the app does when a skill runs inline:
+
+1. a `skill` tool call whose result is the app's `<skill-context>` block (base directory, the
+   "Related files" list, SKILL.md) — the same text `SkillTool.invokeInline` returns;
+2. a `read_file` call for every file in the skill folder, and for every file outside the folder
+   that SKILL.md or a folder file links to (for example `../upc-filing-prep/references/x.md`).
+
+Then the model answers with `tool_choice: 'none'`, so the answer rests on the skill alone. The
+output is `{ skill, loadedFiles, finalText }`.
+
+Deterministic checks (`assertions/skill-grounded-assertions.mjs`, proven offline by
+`assertions/test/skill-grounded-assertions.spec.ts`):
+
+| Helper | Fails when |
+|---|---|
+| `findCalendarDates` (suite-wide `no_calendar_date`) | The answer gives a calendar date in any form: `1 November 2026`, `2026-11-01`, `01.11.2026`, `November 1st`, `11/01/2026`. A period with its trigger ("2 months from service") passes. ADR 0013, decision 3 |
+| `missingRules(text, ['23', '224.1'])` | A rule is not cited with its exact number after `R.`, `Rule`, `Rules` or `RoP` (`R.230` does not cite Rule 23) |
+| `missingFees(text, [11000])` | An amount is not stated in euros exactly (`EUR 11,000`, `€11 000`, `11.000 EUR` all match) |
+
+Completeness is an `llm-rubric` per case that lists the points the answer must cover, on the
+same judge as the trajectory gate; give it `transform: JSON.parse(output).finalText` so the
+judge reads the answer, not the JSON. The dataset header shows the assertion shapes to copy.
+
+| Case | Skill | Graded on |
+|---|---|---|
+| S1 | `upc-division-router` (smoke) | Reference file loaded, no calendar date, forum + language + counterclaim options complete |
+
+**Smoke (2026-10-08, `anthropic/claude-sonnet-5`, `--no-cache`): S1 3/3, verdict PASS, 0 voided.**
+
 ## File Structure
 
 ```
@@ -717,15 +766,18 @@ evals/
 ├── promptfooconfig.frontier.yaml # Non-gating frontier probe config (5 cases)
 ├── promptfooconfig.multi.yaml    # Multi-model comparison (all 9 models)
 ├── promptfooconfig.key-gate.yaml # Key-gate doctrine adherence (6 cases, #176)
+├── promptfooconfig.skill-grounded.yaml # Skill content before registration (#569)
 ├── package.json                  # Pins promptfoo to an EXACT version (see version policy)
 ├── package-lock.json             # Committed — the pin covers transitive deps too
 ├── README.md                     # This file
 ├── providers/
 │   ├── patent-ai-provider.ts     # Custom provider → OpenRouter (BYOK, no backend)
-│   └── trajectory-provider.ts    # Multi-turn replay loop (trajectory + key-gate suites)
+│   ├── trajectory-provider.ts    # Multi-turn replay loop (trajectory + key-gate suites)
+│   └── skill-grounded-provider.ts # Replays a skill run, then one answer (skill-grounded suite)
 ├── assertions/
 │   ├── trajectory-assertions.mjs # Structural predicates, trajectory gate
-│   └── key-gate-assertions.mjs   # Structural predicates, key-gate suite
+│   ├── key-gate-assertions.mjs   # Structural predicates, key-gate suite
+│   └── skill-grounded-assertions.mjs # No calendar date, exact rules, exact fees
 ├── prompts/
 │   ├── system-prompt.txt         # Static render of patentAIPrompt.tsx
 │   ├── key-state/                # Per-key-state prompt variants (same render script)
@@ -739,7 +791,8 @@ evals/
 │   ├── source-attribution.yaml   # 2 tests — source citing
 │   ├── search-strategy.yaml      # 5 tests — API syntax correctness
 │   ├── frontier.yaml             # 5 probes — NON-GATING (failures are findings)
-│   └── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
+│   ├── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
+│   └── skill-grounded/           # Skill-content cases (S1 smoke)
 ├── scripts/
 │   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
