@@ -7490,6 +7490,18 @@
         ]
       },
       {
+        "path": "./assets/prompts/flowleap/upc-which-division.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
+        "path": "./assets/prompts/flowleap/upc-opt-out-check.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
         "path": "./assets/prompts/plan.prompt.md",
         "sessionTypes": [
           "local"

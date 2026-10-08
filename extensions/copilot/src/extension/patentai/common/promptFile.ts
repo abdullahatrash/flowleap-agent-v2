@@ -74,7 +74,7 @@ export function parsePromptFile(text: string, fileStem: string): ParsedPromptFil
  * else falls back to the generic rule. The three published first runs lead, because they are what a
  * new user is told to try on the website and in the day-0 trial email, and they have to stay
  * findable here once the first-launch tab is gone; the document-workflow prompts (PRD 0014, plus the three Find Better prompts of PRD 0019)
- * follow; the PATSTAT analytics prompts (#352) come last, kept contiguous so the tree groups them
+ * follow, then the UPC prompts (PRD 0021); the PATSTAT analytics prompts (#352) come last, kept contiguous so the tree groups them
  * together.
  */
 const BUNDLED_PROMPT_LABELS = new Map<string, string>([
@@ -93,6 +93,8 @@ const BUNDLED_PROMPT_LABELS = new Map<string, string>([
 	['flowleap-find-better', 'Find Better'],
 	['flowleap-search-statement', 'Search statement'],
 	['flowleap-examiner-baseline', 'Examiner Baseline'],
+	['flowleap-upc-which-division', 'UPC: which division'],
+	['flowleap-upc-opt-out-check', 'UPC: opt-out check'],
 	['flowleap-classification-codes', 'Classification codes'],
 	['flowleap-family-descendants', 'Family descendants'],
 	['flowleap-opposition-rate', 'Opposition rate'],
