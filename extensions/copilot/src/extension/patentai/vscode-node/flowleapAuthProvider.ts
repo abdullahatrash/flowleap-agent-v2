@@ -26,6 +26,34 @@ interface JwtUserClaims {
 	name?: string;
 }
 
+/** The profile fields the provider reads from `GET <api>/api/profile`. */
+interface ProfileResponse {
+	email?: string;
+	name?: string;
+	/** The Clerk profile picture; `null` (or absent on an older backend) when there is none. */
+	imageUrl?: string | null;
+	user?: { email?: string; name?: string };
+}
+
+interface CachedUserInfo {
+	email?: string;
+	name?: string;
+	/** An https profile-picture URL, or `undefined` when the user has no picture. */
+	imageUrl?: string;
+}
+
+/** Accept only a well-formed https URL as an avatar; anything else means "no picture". */
+function toHttpsImageUrl(value: unknown): string | undefined {
+	if (typeof value !== 'string') {
+		return undefined;
+	}
+	try {
+		return new URL(value).protocol === 'https:' ? value : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 interface StoredTokenData {
 	token: string;
 	expiresAt: number;
@@ -65,15 +93,16 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	private _isInitialized: boolean = false;
 
 	// The VS Code session derived from the current valid token, and the lazily-fetched profile
-	// used to enrich its Accounts-menu label.
+	// used to enrich its Accounts-menu label and avatar.
 	private _currentSession: vscode.AuthenticationSession | undefined;
-	private _cachedUserInfo: { email?: string; name?: string } | undefined;
+	private _cachedUserInfo: CachedUserInfo | undefined;
 	// The last snapshot {@link getSubscriptionSnapshot} resolved, served synchronously through the
 	// patentSubscriptionRegistry seam. Every resolution overwrites it — including `unknown` — so a
 	// sign-out or a failed read can never leave a stale "active" behind.
 	private _lastSubscriptionSnapshot: FlowLeapSubscriptionSnapshot | undefined;
-	// Dedup guard so repeated getIdentity()/session builds don't fan out concurrent profile fetches.
-	private _userInfoFetchInFlight = false;
+	// The token for which the profile fetch already started. The profile is fetched once per token
+	// (success or failure), so repeated getIdentity()/session builds never fan out or loop.
+	private _profileFetchedForToken: string | undefined;
 
 	// Pending auth callback state
 	private _pendingAuthResolve?: (data: TokenCallbackData) => void;
@@ -502,7 +531,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	/**
 	 * The signed-in user's identity for account UI, or `undefined` when signed out. Derived from the
 	 * current token's JWT claims, falling back to the backend profile cached by {@link _fetchUserInfo}.
-	 * Sync and side-effect free apart from kicking a one-time profile fetch when nothing is cached yet;
+	 * Sync and side-effect free apart from kicking the profile fetch once per token;
 	 * that fetch fires `{changed}` on {@link onDidChangeSessions} when it resolves, so a caller listening
 	 * to session changes re-reads and picks up the email that arrived late.
 	 */
@@ -514,9 +543,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		const claims = this._parseJwtClaims(token);
 		const email = claims.email || this._cachedUserInfo?.email;
 		const name = claims.name || this._cachedUserInfo?.name;
-		if (!email && !this._cachedUserInfo) {
-			void this._fetchUserInfo(token);
-		}
+		this._fetchUserInfoOnce(token);
 		return { name, email };
 	}
 
@@ -556,6 +583,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		} else if (oldSession) {
 			this._currentSession = undefined;
 			this._cachedUserInfo = undefined;
+			this._profileFetchedForToken = undefined;
 			this._onDidChangeSessions.fire({ added: [], removed: [oldSession], changed: [] });
 		}
 	}
@@ -578,6 +606,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		this._tokenExpiresAt = 0;
 		this._currentSession = undefined;
 		this._cachedUserInfo = undefined;
+		this._profileFetchedForToken = undefined;
 		// The subscription belongs to the signed-in account: sign-out invalidates the cached
 		// snapshot, and listeners (e.g. the FlowLeap Trial provider discarding its key, #242) must
 		// hear about it — the next backend read only happens after a fresh sign-in.
@@ -599,8 +628,9 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	}
 
 	/**
-	 * Build a VS Code session from a token, deriving the Accounts-menu label from the JWT claims
-	 * (falling back to a backend profile fetch when the claims carry no name/email).
+	 * Build a VS Code session from a token, deriving the Accounts-menu label from the JWT claims and
+	 * the avatar from the backend profile. The profile is fetched once per token, because the JWT
+	 * never carries the picture.
 	 */
 	private _buildSession(token: string): vscode.AuthenticationSession {
 		const claims = this._parseJwtClaims(token);
@@ -608,11 +638,9 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Use JWT claims first, then cached user info from backend.
 		const email = claims.email || this._cachedUserInfo?.email;
 		const name = claims.name || this._cachedUserInfo?.name;
+		const imageUrl = this._cachedUserInfo?.imageUrl;
 
-		// If no user info yet, fetch from backend asynchronously.
-		if (!email && !this._cachedUserInfo) {
-			void this._fetchUserInfo(token);
-		}
+		this._fetchUserInfoOnce(token);
 
 		const label = name ? `${name} (${email || 'FlowLeap User'})` : (email || 'FlowLeap User');
 
@@ -622,43 +650,52 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 			account: {
 				id: claims.sub || 'flowleap-user',
 				label,
+				// No picture → no icon, so the workbench shows its default avatar.
+				...(imageUrl ? { icon: vscode.Uri.parse(imageUrl, true) } : {}),
 			},
 			scopes: [],
 		};
 	}
 
-	/**
-	 * Fetch the user profile from the backend and refresh the session label. The rebuilt session
-	 * keeps the same account id (the JWT `sub`), so the Accounts menu relabels the account in place.
-	 */
-	private async _fetchUserInfo(token: string): Promise<void> {
-		if (this._userInfoFetchInFlight) {
+	/** Start the profile fetch for this token, unless it already started for it. */
+	private _fetchUserInfoOnce(token: string): void {
+		if (this._profileFetchedForToken === token) {
 			return;
 		}
-		this._userInfoFetchInFlight = true;
+		this._profileFetchedForToken = token;
+		void this._fetchUserInfo(token);
+	}
+
+	/**
+	 * Fetch the user profile from the backend and refresh the session label and avatar. The rebuilt
+	 * session keeps the same account id (the JWT `sub`), so the Accounts menu updates the account in
+	 * place.
+	 */
+	private async _fetchUserInfo(token: string): Promise<void> {
 		try {
 			const config = getPatentAIConfig();
 			const profileUrl = `${config.apiUrl.replace(/\/v1\/?$/, '')}/api/profile`;
 			const res = await this._fetchImpl(profileUrl, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
-			if (res.ok) {
-				const data = await res.json() as { email?: string; name?: string; user?: { email?: string; name?: string } };
-				this._cachedUserInfo = {
-					email: data.email || data.user?.email,
-					name: data.name || data.user?.name,
-				};
-				// Rebuild the label only if we are still signed in with this same token.
-				if (this._currentSession && this._currentSession.accessToken === token) {
-					const updated = this._buildSession(token);
-					this._currentSession = updated;
-					this._onDidChangeSessions.fire({ added: [], removed: [], changed: [updated] });
-				}
+			if (!res.ok || this._clerkToken !== token) {
+				// Failed, or the user signed out / signed in again while the fetch ran.
+				return;
+			}
+			const data = await res.json() as ProfileResponse;
+			this._cachedUserInfo = {
+				email: data.email || data.user?.email,
+				name: data.name || data.user?.name,
+				imageUrl: toHttpsImageUrl(data.imageUrl),
+			};
+			// Rebuild the session only if we are still signed in with this same token.
+			if (this._currentSession && this._currentSession.accessToken === token) {
+				const updated = this._buildSession(token);
+				this._currentSession = updated;
+				this._onDidChangeSessions.fire({ added: [], removed: [], changed: [updated] });
 			}
 		} catch {
-			// Silently fail — label stays as fallback.
-		} finally {
-			this._userInfoFetchInFlight = false;
+			// Silently fail — label and avatar stay as fallback.
 		}
 	}
 

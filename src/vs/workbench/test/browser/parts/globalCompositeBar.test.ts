@@ -175,6 +175,23 @@ suite('AccountsActivityActionViewItem - updateAvatar', () => {
 		);
 	});
 
+	test('prefers the FlowLeap account avatar when there is no default account, and clears it on sign-out', () => {
+		const flowLeapIcon = URI.parse('https://img.clerk.com/flowleap.png');
+		const groupedAccounts = createGroupedAccounts();
+		groupedAccounts.set('flowleap', [{ id: 'user_123', label: 'jane@flowleap.co', icon: flowLeapIcon, canSignOut: true }]);
+		const harness = createHarness(groupedAccounts, null);
+
+		updateAvatar.call(harness);
+		const signedIn = harness.avatarImg.src;
+		groupedAccounts.clear();
+		updateAvatar.call(harness);
+
+		assert.deepStrictEqual(
+			{ signedIn, signedOut: harness.avatarImg.getAttribute('src'), hasAvatarClass: harness.label.classList.contains('has-avatar') },
+			{ signedIn: flowLeapIcon.toString(true), signedOut: null, hasAvatarClass: false }
+		);
+	});
+
 	test('falls back to the first account with an icon when the matching default account has no icon', () => {
 		const groupedAccounts = createGroupedAccounts();
 		groupedAccounts.set('microsoft', [{ id: 'default-id', label: 'default-account', icon: undefined, canSignOut: true }]);
