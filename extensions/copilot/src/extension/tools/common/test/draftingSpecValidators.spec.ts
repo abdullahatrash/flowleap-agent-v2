@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
-import { checkAbstractLength, checkDefinedTerms, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, parseFigureParts } from '../drafting/specValidators';
+import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, parseFigureParts } from '../drafting/specValidators';
 
 function draft(...lines: string[]) {
 	return parseDraftParagraphs(lines.join('\n'));
@@ -25,16 +25,34 @@ const figures = [
 describe('Application Drafting specification validators', () => {
 
 	it('abstract length: pass at 150 words', () => {
-		expect(checkAbstractLength(draft('# Abstract', '', `<!-- src: template --> ${words(150)}`))).toEqual([]);
+		const text = draft('# Abstract', '', `<!-- src: template --> ${words(150)}`);
+		expect([checkAbstractLength(text, 'US'), checkAbstractLength(text, 'EPO')]).toEqual([[], []]);
 	});
 
-	it('abstract length: Error over 150 words and when the Abstract is missing', () => {
+	it('abstract length: Error over 150 words for US, Note for EPO; Error when the Abstract is missing', () => {
+		const long = draft('# Abstract of the Disclosure', '', '<!-- src: template -->', words(100), '', `<!-- src: feature:F1 --> ${words(51)}`);
 		expect([
-			checkAbstractLength(draft('# Abstract of the Disclosure', '', '<!-- src: template -->', words(100), '', `<!-- src: feature:F1 --> ${words(51)}`)),
-			checkAbstractLength(draft('# Description', '', 'Text.')),
+			checkAbstractLength(long, 'US'),
+			checkAbstractLength(long, 'EPO'),
+			checkAbstractLength(draft('# Description', '', 'Text.'), 'EPO'),
 		]).toEqual([
-			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; it must have at most 150 (37 CFR 1.72(b); Rule 47(3) EPC).' }],
+			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; it must have at most 150 (37 CFR 1.72(b)).' }],
+			[{ severity: 'Note', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; Rule 47(3) EPC asks for preferably at most 150.' }],
 			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', message: 'The draft has no Abstract section (a heading that contains "Abstract").' }],
+		]);
+	});
+
+	it('EPO abstract figure: pass when the Abstract names a figure and puts reference signs in parentheses, and without figures', () => {
+		expect([
+			checkEpoAbstractFigure(draft('# Abstract', '', '<!-- src: template -->', 'A hinge (10) has a housing (12) and a coil spring (14). (Fig. 1)'), figures),
+			checkEpoAbstractFigure(draft('# Abstract', '', '<!-- src: template -->', 'A hinge has a housing.'), ''),
+		]).toEqual([[], []]);
+	});
+
+	it('EPO abstract figure: Note when the Abstract names no figure or has features without signs in parentheses (Rule 47(4) EPC)', () => {
+		expect(checkEpoAbstractFigure(draft('# Abstract', '', '<!-- src: template -->', 'A hinge (10) has a housing 12 and a coil spring.'), figures)).toEqual([
+			{ severity: 'Note', rule: 'epo-abstract-figure', file: 'draft-application.md', line: 1, message: 'The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".' },
+			{ severity: 'Note', rule: 'epo-abstract-figure', file: 'draft-application.md', line: 1, message: 'The Abstract mentions "housing", "coil spring" without their reference signs in parentheses. Rule 47(4) EPC: follow each main feature shown in a figure by its reference sign in parentheses, e.g. "housing (12)".' },
 		]);
 	});
 

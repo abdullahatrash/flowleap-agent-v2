@@ -12,6 +12,8 @@
 import { DraftClaim } from './claims';
 import { DraftFinding } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
+import { DraftingOffice } from './frontmatter';
+import { hasFigures, parseFigureParts, readReferenceSigns } from './specValidators';
 
 const claimsFile = DRAFTING_FILE_NAMES.claims;
 
@@ -269,6 +271,93 @@ export function checkRelativeTerms(claims: readonly DraftClaim[]): DraftFinding[
 		if (terms.length) {
 			findings.push(claimFinding('Note', 'relative-term', claim, `Claim ${claim.number} uses relative terms: ${terms.map(term => `"${term}"`).join(', ')}. Check that the description gives them a definite meaning.`));
 		}
+	}
+	return findings;
+}
+
+/**
+ * Abbreviations that end with a period inside a sentence (lower case, without the period).
+ * `wt.%` and decimal numbers need no entry: a period followed by a non-space never ends a sentence.
+ */
+const abbreviations = new Set(['e.g', 'i.e', 'u.s', 'etc', 'approx', 'ca', 'cf', 'vs', 'resp', 'incl', 'esp', 'max', 'min', 'fig', 'figs', 'no', 'nos', 'wt', 'vol', 'mol', 'temp', 'eq', 'ref', 'al']);
+
+/**
+ * Error when a claim has a period that ends a sentence before its final period: a period followed
+ * by white space, after a word that is not an abbreviation (`e.g.`, `approx.`, `Fig.`, `No.`) and
+ * not a single-letter label (`a.`). A claim is one sentence (Guidelines F-IV, 4.1; MPEP 608.01(m)).
+ */
+export function checkClaimOneSentence(claims: readonly DraftClaim[]): DraftFinding[] {
+	const findings: DraftFinding[] = [];
+	for (const claim of claims) {
+		for (const match of claim.text.matchAll(/(?<word>\S+)\.\s+\S/g)) {
+			const word = match.groups!.word.replace(/^[("'“]+/, '').toLowerCase();
+			if (abbreviations.has(word) || /^[a-z]$/.test(word)) {
+				continue;
+			}
+			const before = claim.text.slice(0, (match.index ?? 0) + match.groups!.word.length).split(/\s+/).slice(-3).join(' ');
+			findings.push(claimFinding('Error', 'claim-one-sentence', claim, `Claim ${claim.number} has a period inside the claim, after "${before}". A claim is one sentence with one period at its end (Guidelines F-IV, 4.1; MPEP 608.01(m)).`));
+			break;
+		}
+	}
+	return findings;
+}
+
+/**
+ * Phrases by which a claim relies on the description or drawings: `as described`, `as shown in
+ * Fig. 2`, `as illustrated`, and any figure reference `FIG. 3a`. `as described in claim 1` refers
+ * to a claim and is left out.
+ */
+const descriptionReferencePattern = new RegExp(
+	String.raw`\bas\s+(?:(?:substantially|hereinbefore|herein|hereinafter)\s+)*(?:described|shown|illustrated|depicted|disclosed|represented|set\s+forth)\b(?!\s+in\s+(?:any\s+(?:one\s+)?of\s+)?claims?\b)` +
+	String.raw`(?:\s+(?:in|on|by|with\s+reference\s+to)\s+(?:the\s+)?(?:(?:figs?\.?|figures?)\s*\d+[a-z]?\b|drawings?\b|description\b|specification\b|examples?(?:\s+\d+)?\b))?` +
+	String.raw`|\b(?:figs?\.?|figures?)\s*\d+[a-z]?\b`,
+	'gi');
+
+/**
+ * Finding per claim that relies on references to the description or drawings ("as shown in
+ * Fig. 2"): an Error for EPO (Rule 43(6) EPC, "except where absolutely necessary", so it can be
+ * waived), a Note for US (MPEP 2173.05(s)).
+ */
+export function checkClaimReferencesToDescription(claims: readonly DraftClaim[], office: DraftingOffice): DraftFinding[] {
+	const findings: DraftFinding[] = [];
+	for (const claim of claims) {
+		const phrases = [...new Set([...claim.text.matchAll(descriptionReferencePattern)].map(match => match[0]))];
+		if (!phrases.length) {
+			continue;
+		}
+		const quoted = phrases.map(phrase => `"${phrase}"`).join(', ');
+		findings.push(office === 'US'
+			? claimFinding('Note', 'claim-refers-to-description', claim, `Claim ${claim.number} relies on a reference to the description or drawings: ${quoted}. A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.`)
+			: claimFinding('Error', 'claim-refers-to-description', claim, `Claim ${claim.number} relies on a reference to the description or drawings: ${quoted}. Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.`));
+	}
+	return findings;
+}
+
+/**
+ * EPO, Rule 43(7) EPC: Notes when `figures.md` lists parts and a claim writes a reference sign of
+ * `figures.md` without parentheses (`housing 12`), or no claim has a reference sign at all. A
+ * reference sign is a number after a word, as `readReferenceSigns` reads it; only numerals that
+ * `figures.md` lists count, so `claim 1` and quantities never do.
+ */
+export function checkEpoClaimReferenceSigns(claims: readonly DraftClaim[], figures: string): DraftFinding[] {
+	const parts = parseFigureParts(figures);
+	const numerals = new Set(parts.map(part => part.numeral));
+	if (!hasFigures(figures) || !parts.length) {
+		return [];
+	}
+	const findings: DraftFinding[] = [];
+	let anySign = false;
+	for (const claim of claims) {
+		const signs = readReferenceSigns(claim.text).filter(sign => numerals.has(sign.numeral));
+		anySign ||= signs.length > 0;
+		const bare = signs.filter(sign => !sign.parenthesised);
+		if (bare.length) {
+			const written = [...new Set(bare.map(sign => `"${sign.word} ${sign.numeral}"`))].join(', ');
+			findings.push(claimFinding('Note', 'epo-claim-reference-signs', claim, `Claim ${claim.number} writes ${written}: Rule 43(7) EPC puts reference signs in parentheses after the feature, e.g. "${bare[0].word} (${bare[0].numeral})".`));
+		}
+	}
+	if (!anySign && claims.length) {
+		findings.push({ severity: 'Note', rule: 'epo-claim-reference-signs', file: claimsFile, message: `No claim has a reference sign, but figures.md lists parts. Rule 43(7) EPC: technical features in the claims are preferably followed by their reference signs in parentheses, e.g. "${parts[0].part} (${parts[0].numeral})".` });
 	}
 	return findings;
 }

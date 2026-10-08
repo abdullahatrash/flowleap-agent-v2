@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseClaims } from '../drafting/claims';
-import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkDependencyTargets, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from '../drafting/claimValidators';
+import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from '../drafting/claimValidators';
 
 function claims(...lines: string[]) {
 	return parseClaims(lines.join('\n'));
@@ -131,6 +131,64 @@ describe('Application Drafting claim validators', () => {
 	it('relative terms: Note per claim naming the relative terms', () => {
 		expect(checkRelativeTerms(claims('1. A hinge comprising a substantially flat lever of about 5 mm.', '2. The hinge of claim 1.'))).toEqual([
 			{ severity: 'Note', rule: 'relative-term', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 uses relative terms: "substantially", "about". Check that the description gives them a definite meaning.' },
+		]);
+	});
+
+	it('one sentence: pass with abbreviations, decimal numbers and one final period', () => {
+		expect(checkClaimOneSentence(claims(
+			'1. A hinge, e.g. for a door, with a lever of approx. 2.5 mm and 5 wt.% carbon, i.e. a steel lever.',
+			'2. The hinge of claim 1, wherein the lever is of steel No. 3, cf. a known grade, etc.',
+		))).toEqual([]);
+	});
+
+	it('one sentence: Error for a period that ends a sentence before the end of the claim', () => {
+		expect(checkClaimOneSentence(claims('1. A hinge.', '2. The hinge of claim 1, comprising a housing. The housing is of steel.'))).toEqual([
+			{ severity: 'Error', rule: 'claim-one-sentence', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 has a period inside the claim, after "comprising a housing". A claim is one sentence with one period at its end (Guidelines F-IV, 4.1; MPEP 608.01(m)).' },
+		]);
+	});
+
+	it('references to the description or drawings: pass for claims in words and references to other claims', () => {
+		const text = claims('1. A hinge comprising a housing (12).', '2. The hinge as described in claim 1, wherein the housing is shown to the user.');
+		expect([checkClaimReferencesToDescription(text, 'EPO'), checkClaimReferencesToDescription(text, 'US')]).toEqual([[], []]);
+	});
+
+	it('references to the description or drawings: Error for EPO (Rule 43(6) EPC), Note for US', () => {
+		const text = claims('1. A hinge as shown in Fig. 2.', '2. The hinge of claim 1, with a lever as illustrated, and a cam according to FIG. 3a.', '3. The hinge of claim 1, as described in the description.');
+		expect([checkClaimReferencesToDescription(text, 'EPO'), checkClaimReferencesToDescription(text, 'US')]).toEqual([
+			[
+				{ severity: 'Error', rule: 'claim-refers-to-description', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 relies on a reference to the description or drawings: "as shown in Fig. 2". Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.' },
+				{ severity: 'Error', rule: 'claim-refers-to-description', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 relies on a reference to the description or drawings: "as illustrated", "FIG. 3a". Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.' },
+				{ severity: 'Error', rule: 'claim-refers-to-description', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3 relies on a reference to the description or drawings: "as described in the description". Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.' },
+			],
+			[
+				{ severity: 'Note', rule: 'claim-refers-to-description', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 relies on a reference to the description or drawings: "as shown in Fig. 2". A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.' },
+				{ severity: 'Note', rule: 'claim-refers-to-description', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 relies on a reference to the description or drawings: "as illustrated", "FIG. 3a". A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.' },
+				{ severity: 'Note', rule: 'claim-refers-to-description', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3 relies on a reference to the description or drawings: "as described in the description". A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.' },
+			],
+		]);
+	});
+
+	it('EPO reference signs: pass with signs in parentheses, and without figures', () => {
+		const figures = '- 10: hinge\n- 12: housing\n- 14: coil spring\n';
+		expect([
+			checkEpoClaimReferenceSigns(claims('1. A hinge (10) comprising a housing (12) and a coil spring (14) of 5 mm.', '2. The hinge (10) of claim 1, wherein the housing and spring (12, 14) are steel.'), figures),
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a housing 12.'), ''),
+		]).toEqual([[], []]);
+	});
+
+	it('EPO reference signs: Note for a sign without parentheses (Rule 43(7) EPC), and when no claim has a sign', () => {
+		const figures = '- 10: hinge\n- 12: housing\n- 14: coil spring\n';
+		expect([
+			checkEpoClaimReferenceSigns(claims('1. A hinge (10) comprising a housing 12 and a coil spring 14.', '2. The hinge of claim 1, wherein the housing 12 is steel.'), figures),
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a housing.'), figures),
+		]).toEqual([
+			[
+				{ severity: 'Note', rule: 'epo-claim-reference-signs', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 writes "housing 12", "spring 14": Rule 43(7) EPC puts reference signs in parentheses after the feature, e.g. "housing (12)".' },
+				{ severity: 'Note', rule: 'epo-claim-reference-signs', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 writes "housing 12": Rule 43(7) EPC puts reference signs in parentheses after the feature, e.g. "housing (12)".' },
+			],
+			[
+				{ severity: 'Note', rule: 'epo-claim-reference-signs', file: 'claims.md', message: 'No claim has a reference sign, but figures.md lists parts. Rule 43(7) EPC: technical features in the claims are preferably followed by their reference signs in parentheses, e.g. "hinge (10)".' },
+			],
 		]);
 	});
 });

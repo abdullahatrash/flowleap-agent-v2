@@ -15,7 +15,7 @@
 
 import { DraftFinding, INVENTOR_QUESTION } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
-import { parseDraftingFrontmatter } from './frontmatter';
+import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
 import { DraftParagraph, parseInventorQuestions } from './sourceMarkers';
 
 const draftFile = DRAFTING_FILE_NAMES.draft;
@@ -42,18 +42,37 @@ function wordCount(text: string): number {
 	return text.split(/\s+/).filter(Boolean).length;
 }
 
-/** Error when the Abstract has more than 150 words, or when there is no Abstract section. */
-export function checkAbstractLength(paragraphs: readonly DraftParagraph[]): DraftFinding[] {
+/** The Abstract heading and its text paragraphs, or `undefined` when the draft has no Abstract section. */
+function readAbstract(paragraphs: readonly DraftParagraph[]): { readonly heading: DraftParagraph; readonly text: string } | undefined {
 	const heading = paragraphs.find(paragraph => paragraph.kind === 'heading' && isAbstractParagraph(paragraph));
 	if (!heading) {
+		return undefined;
+	}
+	const text = paragraphs
+		.filter(paragraph => paragraph.kind === 'text' && paragraph.section === heading.section)
+		.map(paragraph => paragraph.text)
+		.join('\n\n');
+	return { heading, text };
+}
+
+/**
+ * Finding when the Abstract has more than 150 words: an Error for US (37 CFR 1.72(b) "may not
+ * exceed"), a Note for EPO (Rule 47(3) EPC "preferably"). Error for both offices when there is
+ * no Abstract section.
+ */
+export function checkAbstractLength(paragraphs: readonly DraftParagraph[], office: DraftingOffice): DraftFinding[] {
+	const abstract = readAbstract(paragraphs);
+	if (!abstract) {
 		return [{ severity: 'Error', rule: 'abstract-length', file: draftFile, message: 'The draft has no Abstract section (a heading that contains "Abstract").' }];
 	}
-	const words = paragraphs
-		.filter(paragraph => paragraph.kind === 'text' && paragraph.section === heading.section)
-		.reduce((total, paragraph) => total + wordCount(paragraph.text), 0);
-	return words > 150
-		? [{ severity: 'Error', rule: 'abstract-length', file: draftFile, line: heading.line, message: `The Abstract has ${words} words; it must have at most 150 (37 CFR 1.72(b); Rule 47(3) EPC).` }]
-		: [];
+	const words = wordCount(abstract.text);
+	if (words <= 150) {
+		return [];
+	}
+	const line = abstract.heading.line;
+	return office === 'US'
+		? [{ severity: 'Error', rule: 'abstract-length', file: draftFile, line, message: `The Abstract has ${words} words; it must have at most 150 (37 CFR 1.72(b)).` }]
+		: [{ severity: 'Note', rule: 'abstract-length', file: draftFile, line, message: `The Abstract has ${words} words; Rule 47(3) EPC asks for preferably at most 150.` }];
 }
 
 const definitionPatterns = [
@@ -128,7 +147,33 @@ export function parseFigureParts(figures: string): FigurePart[] {
 /** Words that precede a number which is not a reference numeral (`claim 1`, `about 5`). */
 const notNumeralWords = new Set(['fig', 'figs', 'figure', 'figures', 'claim', 'claims', 'about', 'approximately', 'around', 'nearly', 'than', 'of', 'to', 'and', 'or', 'by', 'at', 'in', 'on', 'from', 'between', 'within', 'over', 'under', 'up', 'per', 'for', 'with', 'the', 'a', 'an', 'is', 'are', 'be', 'has', 'have', 'comprises', 'includes', 'each', 'every', 'all', 'only', 'least', 'most', 'paragraph', 'paragraphs', 'example', 'examples', 'embodiment', 'table', 'section', 'rule', 'article', 'cfr', 'usc', 'page', 'line', 'column', 'version', 'iq', 'times']);
 
-const numeralPattern = /\b(?<word>[A-Za-z][A-Za-z-]*)\s+\(?(?<numeral>\d{1,4}[a-z]?)\)?(?![\d.,]*\d)(?!\s*(?:%|°|(?:mm|cm|m|µm|um|nm|km|mg|g|kg|ml|l|s|ms|min|h|hz|khz|mhz|ghz|v|mv|kv|ma|w|kw|mw|n|pa|kpa|mpa|bar|rpm|ppm|wt|vol|degrees?|percent)\b))/g;
+const numeralPattern = /\b(?<word>[A-Za-z][A-Za-z-]*)\s+(?<open>\()?(?<numeral>\d{1,4}[a-z]?)\)?(?![\d.,]*\d)(?!\s*(?:%|°|(?:mm|cm|m|µm|um|nm|km|mg|g|kg|ml|l|s|ms|min|h|hz|khz|mhz|ghz|v|mv|kv|ma|w|kw|mw|n|pa|kpa|mpa|bar|rpm|ppm|wt|vol|degrees?|percent)\b))/g;
+
+/** A reference sign after a word of the text: `housing 12` or `housing (12)`. */
+export interface ReferenceSign {
+	readonly word: string;
+	readonly numeral: string;
+	/** True when the sign is in parentheses, `housing (12)`. */
+	readonly parenthesised: boolean;
+	/** The character index of `word` in the text. */
+	readonly index: number;
+}
+
+/**
+ * The reference signs of a text: a number of at most four digits (with an optional letter) after a
+ * word. Numbers after words such as `claim`, `Fig.` or `about`, decimal numbers and numbers with a
+ * unit (`5 mm`, `90 degrees`) are left out.
+ */
+export function readReferenceSigns(text: string): ReferenceSign[] {
+	const signs: ReferenceSign[] = [];
+	for (const match of text.matchAll(numeralPattern)) {
+		const { word, numeral, open } = match.groups!;
+		if (!notNumeralWords.has(word.toLowerCase())) {
+			signs.push({ word, numeral, parenthesised: !!open, index: match.index ?? 0 });
+		}
+	}
+	return signs;
+}
 
 function stemWord(word: string): string {
 	return word.toLowerCase().replace(/(?<!s)s$/, '');
@@ -161,13 +206,9 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 	const used = new Set<string>();
 	const reported = new Set<string>();
 	for (const paragraph of paragraphs.filter(candidate => candidate.kind === 'text')) {
-		for (const match of paragraph.text.matchAll(numeralPattern)) {
-			const { word, numeral } = match.groups!;
-			if (notNumeralWords.has(word.toLowerCase())) {
-				continue;
-			}
+		for (const { word, numeral, index } of readReferenceSigns(paragraph.text)) {
 			used.add(numeral);
-			const line = lineAt(paragraph, match.index ?? 0);
+			const line = lineAt(paragraph, index);
 			const known = partsByNumeral.get(numeral);
 			if (!known) {
 				if (!reported.has(numeral)) {
@@ -191,6 +232,44 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 			unusedReported.add(part.numeral + part.part);
 			findings.push({ severity: 'Error', rule: 'reference-numeral', file: figuresFile, line: part.line, message: `Numeral ${part.numeral} ("${part.part}") in figures.md does not appear in the draft text.` });
 		}
+	}
+	return findings;
+}
+
+/** True when `figures.md` has content after its frontmatter, i.e. the application has figures. */
+export function hasFigures(figures: string): boolean {
+	return parseDraftingFrontmatter(figures).body.trim().length > 0;
+}
+
+const figureNamePattern = /\b(?:figs?\.?|figures?)\s*\d+[a-z]?\b/i;
+
+/**
+ * EPO, Rule 47(4) EPC: Notes when the application has figures and the Abstract does not name the
+ * figure to publish with it (`Fig. 1`), or mentions a part of `figures.md` without its reference
+ * sign in parentheses (`housing (12)`). No finding without figures or without an Abstract.
+ */
+export function checkEpoAbstractFigure(paragraphs: readonly DraftParagraph[], figures: string): DraftFinding[] {
+	const abstract = readAbstract(paragraphs);
+	if (!abstract || !hasFigures(figures)) {
+		return [];
+	}
+	const line = abstract.heading.line;
+	const findings: DraftFinding[] = [];
+	if (!figureNamePattern.test(abstract.text)) {
+		findings.push({ severity: 'Note', rule: 'epo-abstract-figure', file: draftFile, line, message: 'The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".' });
+	}
+	const missing: FigurePart[] = [];
+	for (const part of parseFigureParts(figures)) {
+		const name = part.part.split(/\s+/).map(escapeRegExp).join('\\s+');
+		const mentioned = new RegExp(`(?<![\\w-])${name}(?:s|es)?(?![\\w-])`, 'i').test(abstract.text);
+		const signed = new RegExp(`\\([^)]*(?<![\\w.])${escapeRegExp(part.numeral)}(?![\\w.])[^)]*\\)`).test(abstract.text);
+		if (mentioned && !signed && !missing.some(other => other.part.toLowerCase() === part.part.toLowerCase())) {
+			missing.push(part);
+		}
+	}
+	if (missing.length) {
+		const example = `${missing[0].part} (${missing[0].numeral})`;
+		findings.push({ severity: 'Note', rule: 'epo-abstract-figure', file: draftFile, line, message: `The Abstract mentions ${missing.map(part => `"${part.part}"`).join(', ')} without their reference signs in parentheses. Rule 47(4) EPC: follow each main feature shown in a figure by its reference sign in parentheses, e.g. "${example}".` });
 	}
 	return findings;
 }

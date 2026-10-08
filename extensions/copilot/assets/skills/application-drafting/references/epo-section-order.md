@@ -13,8 +13,8 @@ keep this order unless the attorney asks otherwise.
 | 5 | Brief description of the drawings | Rule 42(1)(d) | One sentence per figure from `figures.md`. |
 | 6 | Detailed description of embodiments | Rule 42(1)(e) | At least one way of carrying out the invention as claimed, with examples where they exist, using the numerals of `figures.md`. Working examples in past tense only when the inventor ran them. |
 | 7 | Industrial application | Rule 42(1)(f) | Only when it is not obvious from the description; source `template` or `instruction`. |
-| 8 | Claims | Rule 43 | The Approved Claims, unchanged: two-part form where appropriate, one independent claim per category (Rule 43(2)), reference signs in parentheses (Rule 43(7)). Heading contains "Claims". |
-| 9 | Abstract | Rule 47 | Preferably at most 150 words, with the reference signs of the main features in parentheses. Heading contains "Abstract". |
+| 8 | Claims | Rule 43 | The Approved Claims, unchanged: two-part form where appropriate, one independent claim per category (Rule 43(2)), each claim one sentence, no "as shown in Fig. 1" (Rule 43(6)), reference signs in parentheses (Rule 43(7)). Heading contains "Claims". |
+| 9 | Abstract | Rule 47 | Preferably at most 150 words, with the reference signs of the main features in parentheses, and the figure to publish with it named, e.g. "(Fig. 1)" (Rule 47(4)). Heading contains "Abstract". |
 
 ## EPO practice notes
 

@@ -418,7 +418,9 @@ _Avoid_: resolving one by letting the model answer it; dropping one without a re
 **Finding**:
 One result of the draft validators or of the advisory review. An **Error** (antecedent basis,
 dependency target, numbering, numeral mismatch, missing literal basis, office claim-form rule,
-abstract length) blocks export until waived with a reason that is kept. A **Note** (claim count
-over the fee threshold, relative terms present) never blocks. An **Advisory** item comes from
+claim not one sentence, EPO claim that relies on the description or drawings, US abstract
+length) blocks export until waived with a reason that is kept. A **Note** (claim count over the
+fee threshold, relative terms present, EPO abstract length, EPO reference signs not in
+parentheses, EPO abstract without its figure) never blocks. An **Advisory** item comes from
 the model review, cites a passage, and never says "passed".
 _Avoid_: an advisory item marked Error; a validator result without a line reference.
