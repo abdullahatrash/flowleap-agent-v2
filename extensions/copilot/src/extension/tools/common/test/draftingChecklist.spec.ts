@@ -158,4 +158,20 @@ describe('Application Drafting checklist', () => {
 		const checklist = readDraftingChecklist({ matter: 'hinge', featureList: featureList(), claims: claims(), draft, inventorAnswers: answers(), findings: renderFindingsFile(errors), findingsCurrent: true, exported: false });
 		expect(checklistPointer(checklist, 'drafting/hinge/checklist.md')).toBe('Open in drafting/hinge/checklist.md: step 4 (Answer the Inventor Questions), step 5 (Fix or waive the Errors).');
 	});
+
+	it('an optional style step shows the exemplar count and the instruction; it never blocks', () => {
+		const lines = (count: number) => render({ styleExemplars: count }).split('\n').filter(line => /Style exemplars|Put 1 to 5|^Next step/.test(line));
+		expect({ none: lines(0), many: lines(7) }).toEqual({
+			none: [
+				'- Optional. Style exemplars: 0 files in style/',
+				'      → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.',
+				'Next step for you: step 1.',
+			],
+			many: [
+				'- Optional. Style exemplars: 7 files in style/ (only the first 5 are read)',
+				'      → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.',
+				'Next step for you: step 1.',
+			],
+		});
+	});
 });

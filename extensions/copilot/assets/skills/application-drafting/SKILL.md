@@ -81,7 +81,9 @@ approval, the attorney sets the flag again.
 6. Write results only for experiments the disclosure says were run. A
    prophetic example is in present or future tense.
 7. Exemplars shape voice and structure only, per
-   [references/exemplar-rule.md](references/exemplar-rule.md).
+   [references/exemplar-rule.md](references/exemplar-rule.md). The tools
+   create `style/` with a README; when it has no exemplar, tell the attorney
+   once that they can put 1 to 5 of their own filed applications there.
 
 Done when every paragraph has a marker and every claim term appears in the
 specification.

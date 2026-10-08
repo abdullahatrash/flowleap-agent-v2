@@ -8,6 +8,7 @@
  *
  * ```
  * style/                                 workspace-level style exemplars (voice only, never a source)
+ *   README.md                            how to use the folder; written by the tools when missing, never an exemplar
  * drafting/<matter>/
  *   feature-list.md                      Feature List; frontmatter: office, confirmed
  *   figures.md                           figure list with parts and reference numerals

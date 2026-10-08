@@ -23,10 +23,11 @@
 
 import { isInventorQuestion } from './finding';
 import { parseFindingsFileItems } from './findingsFile';
-import { DRAFTING_FILE_NAMES } from './folderContract';
+import { DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER } from './folderContract';
 import { DraftingGateFlag, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice } from './frontmatter';
 import { currentAnswer, isAnswered, parseInventorAnswers } from './inventorAnswers';
 import { parseInventorQuestions } from './sourceMarkers';
+import { MAX_STYLE_EXEMPLARS, STYLE_INSTRUCTION } from './styleFolder';
 
 /** The file contents of one matter that the checklist reads; absent = the file does not exist. */
 export interface DraftingChecklistFiles {
@@ -40,6 +41,8 @@ export interface DraftingChecklistFiles {
 	readonly findingsCurrent: boolean;
 	/** True when the .docx files of the export exist. */
 	readonly exported: boolean;
+	/** The style exemplars in the workspace `style/` folder; absent when not counted. */
+	readonly styleExemplars?: number;
 }
 
 /** The step numbers of the checklist. */
@@ -64,6 +67,8 @@ export interface DraftingChecklist {
 	readonly matter: string;
 	readonly office?: DraftingOffice;
 	readonly steps: readonly DraftingChecklistStep[];
+	/** The style exemplars in `style/`: an optional step that never blocks. */
+	readonly styleExemplars?: number;
 }
 
 const files = DRAFTING_FILE_NAMES;
@@ -162,7 +167,7 @@ export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingCh
 		? done(6, 'Exported to Word', [files.descriptionDocx, files.claimsDocx, files.abstractDocx].join(', '))
 		: step(6, 'Export to Word', 'ready', ['→ Tell the agent: "Export to Word"'], exportBlockers));
 
-	return { matter: input.matter, ...(office ? { office } : {}), steps };
+	return { matter: input.matter, ...(office ? { office } : {}), steps, ...(input.styleExemplars !== undefined ? { styleExemplars: input.styleExemplars } : {}) };
 }
 
 /** Step 4: the Inventor Questions still in the draft, open or answered but not yet applied. */
@@ -224,6 +229,10 @@ export function renderChecklist(checklist: DraftingChecklist): string {
 			`- [${entry.done ? 'x' : ' '}] ${entry.step}. ${entry.title}${entry.detail ? `: ${entry.detail}` : ''}`,
 			...entry.actions.map(action => `      ${action}`),
 		]),
+		...(checklist.styleExemplars !== undefined ? [
+			`- Optional. Style exemplars: ${checklist.styleExemplars} file${checklist.styleExemplars === 1 ? '' : 's'} in ${DRAFTING_STYLE_FOLDER}/${checklist.styleExemplars > MAX_STYLE_EXEMPLARS ? ` (only the first ${MAX_STYLE_EXEMPLARS} are read)` : ''}`,
+			`      → ${STYLE_INSTRUCTION}`,
+		] : []),
 		'',
 		next ? `Next step for you: step ${next.step}.` : 'Next step for you: none. Review the Word files: they are a draft for attorney review, not a filing.',
 	];

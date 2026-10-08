@@ -13,6 +13,8 @@ Code writes this file from the files of this folder after every drafting tool ca
 - [ ] 4. Answer the Inventor Questions: blocked by step 3
 - [ ] 5. Fix or waive the Errors: blocked by step 3
 - [ ] 6. Export to Word: blocked by steps 2, 3, 4 and 5
+- Optional. Style exemplars: 0 files in style/
+      → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.
 
 Next step for you: step 2.
 ",
@@ -29,6 +31,8 @@ Code writes this file from the files of this folder after every drafting tool ca
 - [ ] 5. Fix or waive the Errors: not checked yet
       → Tell the agent: "Validate the draft"
 - [ ] 6. Export to Word: blocked by steps 4 and 5
+- Optional. Style exemplars: 0 files in style/
+      → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.
 
 Next step for you: step 4.
 ",
@@ -232,6 +236,23 @@ The present disclosure relates to doors.
 ### Style exemplar 3: style/c.pdf (style only, never a source)
 
 Text of the PDF exemplar.",
+}
+`;
+
+exports[`style folder > every drafting tool creates style/README.md once, never overwrites it, never reads it as an exemplar; the checklist counts the exemplars 1`] = `
+{
+  "checklistStyleLine": "- Optional. Style exemplars: 1 file in style/",
+  "created": "# Style exemplars
+
+Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.
+
+Only the first 5 files, in name order, are read. This README is never read as an exemplar. FlowLeap does not change or delete any file in this folder.
+",
+  "exemplarHeadings": [
+    "### Style exemplar 1: style/a.md (style only, never a source)",
+  ],
+  "firstSaysNoExemplar": true,
+  "readmeKept": "My own notes.",
 }
 `;
 

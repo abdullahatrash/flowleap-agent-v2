@@ -17,6 +17,7 @@ import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
+import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README } from '../common/drafting/styleFolder';
 import { validateDraft } from '../common/drafting/validateDraft';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
@@ -24,13 +25,8 @@ import { assertFileOkForTool } from '../node/toolUtils';
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
 export type PdfTextReader = (uri: URI) => Promise<string>;
 
-/** At most this many style exemplars are returned. */
-const MAX_EXEMPLARS = 5;
-
 /** Characters of one exemplar returned; the rest is cut and the cut is stated. */
 const MAX_EXEMPLAR_CHARS = 20_000;
-
-const exemplarExtensions = /\.(?:md|docx|pdf)$/i;
 
 /** The state of the claims approval of a matter, read from `claims.md` and the Working Record. */
 export interface ClaimsApproval {
@@ -325,16 +321,19 @@ export class DraftingWorkspace {
 			findings,
 			findingsCurrent: findings !== undefined && draft !== undefined && validatedHash === draftHash(draft),
 			exported,
+			styleExemplars: await this.countStyleExemplars(),
 		});
 		await this.write(folder.checklist, renderChecklist(checklist));
 		return checklist;
 	}
 
 	/**
-	 * Writes the Drafting Checklist and returns the sentence a tool result ends with: after a
-	 * refusal the open steps, else the next step. Empty when no checklist was written.
+	 * Creates the style folder when it has no README, writes the Drafting Checklist and returns the
+	 * sentence a tool result ends with: after a refusal the open steps, else the next step. Empty
+	 * when no checklist was written.
 	 */
 	async checklistLine(refused: boolean): Promise<string> {
+		await this.ensureStyleFolder();
 		const checklist = await this.writeChecklist();
 		if (!checklist) {
 			return '';
@@ -346,7 +345,27 @@ export class DraftingWorkspace {
 		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).` : 'every step is done.'}`;
 	}
 
-	/** Reads up to five style exemplars from the workspace `style/` folder, in name order. */
+	/**
+	 * Creates the workspace `style/` folder with its `README.md` when the README is missing. Never
+	 * overwrites the README or any other file.
+	 */
+	async ensureStyleFolder(): Promise<void> {
+		const readme = `${DRAFTING_STYLE_FOLDER}/${STYLE_README}`;
+		if (!await this.exists(readme)) {
+			await this.write(readme, renderStyleReadme());
+		}
+	}
+
+	/** The number of style exemplars in the workspace `style/` folder (the README is none). */
+	async countStyleExemplars(): Promise<number> {
+		try {
+			return (await this.fileSystemService.readDirectory(this.uri(DRAFTING_STYLE_FOLDER))).filter(([name, type]) => type === FileType.File && isStyleExemplar(name)).length;
+		} catch {
+			return 0;
+		}
+	}
+
+	/** Reads up to five style exemplars from the workspace `style/` folder, in name order; never the README. */
 	async styleExemplars(readPdf: PdfTextReader): Promise<StyleExemplar[]> {
 		let entries: [string, FileType][];
 		try {
@@ -354,7 +373,7 @@ export class DraftingWorkspace {
 		} catch {
 			return [];
 		}
-		const names = entries.filter(([name, type]) => type === FileType.File && exemplarExtensions.test(name)).map(([name]) => name).sort().slice(0, MAX_EXEMPLARS);
+		const names = entries.filter(([name, type]) => type === FileType.File && isStyleExemplar(name)).map(([name]) => name).sort().slice(0, MAX_STYLE_EXEMPLARS);
 		const exemplars: StyleExemplar[] = [];
 		for (const name of names) {
 			const path = `${DRAFTING_STYLE_FOLDER}/${name}`;

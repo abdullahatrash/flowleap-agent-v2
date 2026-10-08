@@ -12,6 +12,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelToolResult } from '../../../vscodeTypes';
 import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontmatter';
+import { STYLE_INSTRUCTION } from '../common/drafting/styleFolder';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { DraftingWorkspace, textResult } from './draftingWorkspace';
@@ -101,7 +102,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 			'',
 			exemplars.length
 				? 'Voice and structure only. No fact, feature, embodiment, value, example or result enters the draft from an exemplar.'
-				: 'No exemplar in style/: use the office template only.',
+				: `No exemplar in style/: use the office template style only. Tell the attorney: ${STYLE_INSTRUCTION}`,
 			...exemplars.flatMap((exemplar, index) => [
 				'',
 				`### Style exemplar ${index + 1}: ${exemplar.path} (style only, never a source)`,

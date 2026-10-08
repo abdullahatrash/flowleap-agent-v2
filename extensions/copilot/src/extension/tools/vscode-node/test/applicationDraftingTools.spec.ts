@@ -478,3 +478,23 @@ describe('Drafting Checklist', () => {
 		expect({ refused, afterRefusal, afterSave: await read('drafting/hinge/checklist.md') }).toMatchSnapshot();
 	});
 });
+
+describe('style folder', () => {
+	it('every drafting tool creates style/README.md once, never overwrites it, never reads it as an exemplar; the checklist counts the exemplars', async () => {
+		const { tools, read, write, fileSystem } = setup(gatesOpen);
+		const first = await tools.start();
+		const created = await read('style/README.md');
+		write('style/README.md', 'My own notes.');
+		fileSystem.mockDirectory(URI.file('/workspace/style'), [['README.md', FileType.File], ['a.md', FileType.File]]);
+		write('style/a.md', 'In one embodiment, the widget turns.');
+		const second = await tools.start();
+		await tools.validate();
+		expect({
+			created,
+			firstSaysNoExemplar: first.includes('No exemplar in style/: use the office template style only. Tell the attorney: Put 1 to 5 of your own filed applications or claim sets in style/'),
+			readmeKept: await read('style/README.md'),
+			exemplarHeadings: second.match(/^### Style exemplar.*$/gm),
+			checklistStyleLine: (await read('drafting/hinge/checklist.md')).match(/^- Optional\. Style exemplars:.*$/m)?.[0],
+		}).toMatchSnapshot();
+	});
+});
