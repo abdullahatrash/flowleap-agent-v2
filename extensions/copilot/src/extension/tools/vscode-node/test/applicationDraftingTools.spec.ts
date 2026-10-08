@@ -25,6 +25,7 @@ import { ExportDraftDocxTool } from '../exportDraftDocxTool';
 import { StartApplicationDraftTool } from '../startApplicationDraftTool';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
+import { parseInventorAnswers } from '../../common/drafting/inventorAnswers';
 import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
@@ -119,6 +120,23 @@ const openQuestion = `
 > **Inventor Question IQ-1:** Which steel grade is the lever made of?
 `;
 
+const twoQuestions = `
+## Inventor Questions
+
+> **Inventor Question IQ-1:** Which steel grade is the lever made of?
+> Belongs: Detailed Description, after the paragraph on the housing 12.
+
+> **Inventor Question IQ-2:** How thick is the lever?
+`;
+
+/** The draft after the agent applied the answer to IQ-1: the answer at its place with its marker, the question deleted. */
+const appliedIq1 = (questions = '\n## Inventor Questions\n\n> **Inventor Question IQ-2:** How thick is the lever?\n') => draft(questions).replace(
+	'The housing 12 holds the lever 14. The lever 14 is steel.\n',
+	'The housing 12 holds the lever 14. The lever 14 is steel.\n\n<!-- src: inventor:IQ-1 -->\nThe lever 14 is stainless steel.\n');
+
+/** Fills the answer slot of one question in inventor-answers.md, the way the attorney or the inventor does. */
+const fillAnswer = (answers: string, id: string, answer: string) => answers.replace(new RegExp(`(## ${id}\\n[\\s\\S]*?\\*\\*Answer:\\*\\*\\n)`), `$1${answer}\n`);
+
 function setup(files: Record<string, string> = {}) {
 	const fileSystem = new BinaryFileSystem();
 	for (const [path, contents] of Object.entries(files)) {
@@ -182,11 +200,11 @@ describe('start_application_draft', () => {
 			results.push(await setup(files).tools.start());
 		}
 		expect(results).toEqual([
-			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney sets `confirmed: true` in its frontmatter after review.',
-			'Drafting did not start. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate.',
-			'Drafting did not start. drafting/hinge/feature-list.md has no `confirmed` flag in its frontmatter. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate.',
-			'Drafting did not start. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate.',
-			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney sets `approved: true` in its frontmatter after review.',
+			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney sets `confirmed: true` in its frontmatter after review. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. drafting/hinge/feature-list.md has no `confirmed` flag in its frontmatter. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney sets `approved: true` in its frontmatter after review. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 		]);
 	});
 
@@ -265,7 +283,7 @@ describe('write_patent_results draft-application template', () => {
 			await tools.save(draft().replace('model: claude-sonnet-5\nprovider: anthropic\n', '')),
 			await tools.save(draft(), {}, 'outputs/draft-application.md'),
 		]).toEqual([
-			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider.',
+			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider. Open in drafting/hinge/checklist.md: step 3 (Write the draft).',
 			'Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.',
 		]);
 	});
@@ -275,8 +293,8 @@ describe('write_patent_results draft-application template', () => {
 			await setup({ ...gatesOpen, 'drafting/hinge/feature-list.md': featureList('false') }).tools.save(draft()),
 			await setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false') }).tools.save(draft()),
 		]).toEqual([
-			'Draft was not saved. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate.',
-			'Draft was not saved. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate.',
+			'Draft was not saved. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Draft was not saved. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 		]);
 	});
 
@@ -371,27 +389,155 @@ describe('export_draft_docx', () => {
 		await tools.save(draft().replace('<!-- src: disclosure:§1 -->\n', ''));
 		expect({
 			result: await tools.exportDocx(),
-			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.docx`)).then(() => true, () => false),
+			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
-			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).',
+			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors).',
 			docxWritten: false,
 		});
 	});
 
-	it('appends the attorney edits to the Working Record and writes the .docx without markers', async () => {
+	it('appends the attorney edits to the Working Record and writes the description, claims and abstract .docx files without markers', async () => {
 		const { tools, read, fileSystem, write } = setup(gatesOpen);
 		await tools.start();
 		await tools.save(draft());
 		const saved = await read('drafting/hinge/draft-application.md');
 		write('drafting/hinge/draft-application.md', saved.replace('A hinge joins a door to a frame.', 'A hinge pivotally joins a door to a frame.'));
 		const result = await tools.exportDocx();
-		const docx = await fileSystem.readFile(URI.file(`${root}/draft-application.docx`));
-		const text = (await mammoth.extractRawText({ buffer: Buffer.from(docx) })).value;
+		const docxParagraphs: Record<string, string[]> = {};
+		for (const type of ['description', 'claims', 'abstract']) {
+			const docx = await fileSystem.readFile(URI.file(`${root}/draft-application.${type}.docx`));
+			docxParagraphs[type] = (await mammoth.extractRawText({ buffer: Buffer.from(docx) })).value.split('\n').filter(Boolean);
+		}
 		const record = await read('drafting/hinge/draft-application.working-record.md');
+		const fullCopy = (await mammoth.extractRawText({ buffer: Buffer.from(await fileSystem.readFile(URI.file(`${root}/draft-application.full.docx`))) })).value.split('\n').filter(Boolean);
 		expect({
 			result,
-			docxParagraphs: text.split('\n').filter(Boolean),
+			docxParagraphs,
+			fullCopyStart: fullCopy.slice(0, 3),
+			filingManifest: await read('drafting/hinge/filing-manifest.md'),
 			attorneyEdits: record.slice(record.indexOf('## Attorney edits')).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>'),
+		}).toMatchSnapshot();
+	});
+});
+
+describe('Inventor Question answers', () => {
+	it('the save writes inventor-answers.md; an applied answer closes its question, is recorded, and the export blocks only on the rest', async () => {
+		const { tools, read, write } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		const written = await read('drafting/hinge/inventor-answers.md');
+		write('drafting/hinge/inventor-answers.md', fillAnswer(written, 'IQ-1', 'Stainless steel.'));
+		await tools.validate();
+		const answeredNotApplied = {
+			findings: (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g),
+			checklistStep5: (await read('drafting/hinge/checklist.md')).match(/- \[ \] 5\.[^\n]*/)?.[0],
+		};
+		await tools.save(appliedIq1());
+		const exportResult = await tools.exportDocx();
+		expect({
+			written,
+			answeredNotApplied,
+			exportResult,
+			answersKept: (await read('drafting/hinge/inventor-answers.md')).includes('**Answer:**\nStainless steel.\n'),
+			recorded: (await read('drafting/hinge/draft-application.working-record.md')).match(/^- \*\*Inventor answer applied:\*\*.*$/gm)?.map(line => line.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/, '<time>')),
+		}).toMatchSnapshot();
+	});
+
+	it('a partial answer narrows the question: the save adds a new empty slot and the question stays open', async () => {
+		const { tools, read, write } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		write('drafting/hinge/inventor-answers.md', fillAnswer(await read('drafting/hinge/inventor-answers.md'), 'IQ-1', 'Stainless steel; the hardness is not known.'));
+		await tools.save(appliedIq1('\n## Inventor Questions\n\n> **Inventor Question IQ-1:** What hardness has the stainless steel lever?\n'));
+		await tools.validate();
+		expect({
+			answers: (await read('drafting/hinge/inventor-answers.md')).slice((await read('drafting/hinge/inventor-answers.md')).indexOf('## IQ-1')),
+			findings: (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g),
+		}).toMatchSnapshot();
+	});
+
+	it('a filled answer stays current until a save applies it, and the Working Record names the round applied', async () => {
+		const { tools, read, write } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		write('drafting/hinge/inventor-answers.md', fillAnswer(await read('drafting/hinge/inventor-answers.md'), 'IQ-1', 'Stainless steel; the hardness is not known.'));
+		const narrowedQuestion = '\n## Inventor Questions\n\n> **Inventor Question IQ-1:** What hardness has the stainless steel lever?\n\n> **Inventor Question IQ-2:** How thick is the lever?\n';
+		await tools.save(appliedIq1(narrowedQuestion));
+		write('drafting/hinge/inventor-answers.md', (await read('drafting/hinge/inventor-answers.md')).replace(/(\*\*Narrowed question:\*\* What hardness has the stainless steel lever\?\n\n\*\*Answer:\*\*\n)/, '$1Hardened to 40 HRC.\n'));
+		await tools.save(appliedIq1(narrowedQuestion));
+		const notYetApplied = parseInventorAnswers(await read('drafting/hinge/inventor-answers.md'))[0].rounds.length;
+		await tools.save(appliedIq1('\n## Inventor Questions\n\n> **Inventor Question IQ-2:** How thick is the lever?\n').replace('The lever 14 is stainless steel.', 'The lever 14 is stainless steel, hardened to 40 HRC.'));
+		expect({
+			notYetApplied,
+			rounds: parseInventorAnswers(await read('drafting/hinge/inventor-answers.md'))[0].rounds.map(round => round.answer),
+			recorded: (await read('drafting/hinge/draft-application.working-record.md')).match(/^- \*\*Inventor answer applied:\*\*.*$/gm)?.map(line => line.replace(/ at \S+$/, '')),
+		}).toEqual({
+			notYetApplied: 2,
+			rounds: ['Stainless steel; the hardness is not known.', 'Hardened to 40 HRC.'],
+			recorded: [
+				'- **Inventor answer applied:** IQ-1, answer 1, from inventor-answers.md',
+				'- **Inventor answer applied:** IQ-1, answer 2, from inventor-answers.md',
+			],
+		});
+	});
+
+	it('an inventor:IQ-n marker without a filled answer is an Error', async () => {
+		const { tools, read } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		await tools.save(appliedIq1());
+		await tools.validate();
+		expect((await read('drafting/hinge/findings.md')).match(/- `source-marker`[^\n]*/g)).toEqual([
+			'- `source-marker` (draft-application.md, line 30): The paragraph at line 30 cites inventor:IQ-1, but inventor-answers.md has no answer to IQ-1.',
+		]);
+	});
+});
+
+describe('Drafting Checklist', () => {
+	it('every drafting tool rewrites checklist.md, also after a refusal', async () => {
+		const { tools, read, edit } = setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false') });
+		const refused = await tools.start();
+		const afterRefusal = await read('drafting/hinge/checklist.md');
+		await edit('drafting/hinge/claims.md', 'approved: false', 'approved: true');
+		await tools.start();
+		await tools.save(draft(openQuestion));
+		expect({ refused, afterRefusal, afterSave: await read('drafting/hinge/checklist.md') }).toMatchSnapshot();
+	});
+});
+
+describe('Drafting Checklist export step', () => {
+	it('step 6 is checked only while the export was written from the current draft', async () => {
+		const { tools, read, edit } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft());
+		await tools.exportDocx();
+		const step6 = async () => (await read('drafting/hinge/checklist.md')).match(/^- \[.\] 6\..*$/m)?.[0];
+		const afterExport = await step6();
+		await edit('drafting/hinge/draft-application.md', 'A hinge joins a door to a frame.', 'A hinge pivotally joins a door to a frame.');
+		await tools.validate();
+		expect({ afterExport, afterEdit: await step6() }).toEqual({
+			afterExport: '- [x] 6. Exported to Word: draft-application.description.docx, draft-application.claims.docx, draft-application.abstract.docx',
+			afterEdit: '- [ ] 6. Export to Word: ready',
+		});
+	});
+});
+
+describe('style folder', () => {
+	it('every drafting tool creates style/README.md once, never overwrites it, never reads it as an exemplar; the checklist counts the exemplars', async () => {
+		const { tools, read, write, fileSystem } = setup(gatesOpen);
+		const first = await tools.start();
+		const created = await read('style/README.md');
+		write('style/README.md', 'My own notes.');
+		fileSystem.mockDirectory(URI.file('/workspace/style'), [['README.md', FileType.File], ['a.md', FileType.File]]);
+		write('style/a.md', 'In one embodiment, the widget turns.');
+		const second = await tools.start();
+		await tools.validate();
+		expect({
+			created,
+			firstSaysNoExemplar: first.includes('No exemplar in style/: use the office template style only. Tell the attorney: Put 1 to 5 of your own filed applications or claim sets in style/'),
+			readmeKept: await read('style/README.md'),
+			exemplarHeadings: second.match(/^### Style exemplar.*$/gm),
+			checklistStyleLine: (await read('drafting/hinge/checklist.md')).match(/^- Style exemplars:.*$/m)?.[0],
 		}).toMatchSnapshot();
 	});
 });

@@ -15,11 +15,16 @@
 
 import { DraftFinding, INVENTOR_QUESTION } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
-import { parseDraftingFrontmatter } from './frontmatter';
+import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
+import { currentAnswer, currentRound, hasAnyAnswer, InventorAnswerSection, isAnswered } from './inventorAnswers';
 import { DraftParagraph, parseInventorQuestions } from './sourceMarkers';
 
 const draftFile = DRAFTING_FILE_NAMES.draft;
 const figuresFile = DRAFTING_FILE_NAMES.figures;
+const answersFile = DRAFTING_FILE_NAMES.inventorAnswers;
+
+/** The word of a figure name before its number: `FIG.`, `Figs.`, `Figure` (see {@link figureNamePattern}). */
+const figureWord = String.raw`(?:(?:FIGS?|Figs?)\.?|FIGURES?|Figures?)\s*`;
 
 /** One part of `figures.md` with its reference numeral. */
 export interface FigurePart {
@@ -42,18 +47,37 @@ function wordCount(text: string): number {
 	return text.split(/\s+/).filter(Boolean).length;
 }
 
-/** Error when the Abstract has more than 150 words, or when there is no Abstract section. */
-export function checkAbstractLength(paragraphs: readonly DraftParagraph[]): DraftFinding[] {
+/** The Abstract heading and its text paragraphs, or `undefined` when the draft has no Abstract section. */
+function readAbstract(paragraphs: readonly DraftParagraph[]): { readonly heading: DraftParagraph; readonly text: string } | undefined {
 	const heading = paragraphs.find(paragraph => paragraph.kind === 'heading' && isAbstractParagraph(paragraph));
 	if (!heading) {
+		return undefined;
+	}
+	const text = paragraphs
+		.filter(paragraph => paragraph.kind === 'text' && paragraph.section === heading.section)
+		.map(paragraph => paragraph.text)
+		.join('\n\n');
+	return { heading, text };
+}
+
+/**
+ * Finding when the Abstract has more than 150 words: an Error for US (37 CFR 1.72(b) "may not
+ * exceed"), a Note for EPO (Rule 47(3) EPC "preferably"). Error for both offices when there is
+ * no Abstract section.
+ */
+export function checkAbstractLength(paragraphs: readonly DraftParagraph[], office: DraftingOffice): DraftFinding[] {
+	const abstract = readAbstract(paragraphs);
+	if (!abstract) {
 		return [{ severity: 'Error', rule: 'abstract-length', file: draftFile, message: 'The draft has no Abstract section (a heading that contains "Abstract").' }];
 	}
-	const words = paragraphs
-		.filter(paragraph => paragraph.kind === 'text' && paragraph.section === heading.section)
-		.reduce((total, paragraph) => total + wordCount(paragraph.text), 0);
-	return words > 150
-		? [{ severity: 'Error', rule: 'abstract-length', file: draftFile, line: heading.line, message: `The Abstract has ${words} words; it must have at most 150 (37 CFR 1.72(b); Rule 47(3) EPC).` }]
-		: [];
+	const words = wordCount(abstract.text);
+	if (words <= 150) {
+		return [];
+	}
+	const line = abstract.heading.line;
+	return office === 'US'
+		? [{ severity: 'Error', rule: 'abstract-length', file: draftFile, line, message: `The Abstract has ${words} words; it must have at most 150 (37 CFR 1.72(b)).` }]
+		: [{ severity: 'Note', rule: 'abstract-length', file: draftFile, line, message: `The Abstract has ${words} words; Rule 47(3) EPC asks for preferably at most 150.` }];
 }
 
 const definitionPatterns = [
@@ -126,9 +150,35 @@ export function parseFigureParts(figures: string): FigurePart[] {
 }
 
 /** Words that precede a number which is not a reference numeral (`claim 1`, `about 5`). */
-const notNumeralWords = new Set(['fig', 'figs', 'figure', 'figures', 'claim', 'claims', 'about', 'approximately', 'around', 'nearly', 'than', 'of', 'to', 'and', 'or', 'by', 'at', 'in', 'on', 'from', 'between', 'within', 'over', 'under', 'up', 'per', 'for', 'with', 'the', 'a', 'an', 'is', 'are', 'be', 'has', 'have', 'comprises', 'includes', 'each', 'every', 'all', 'only', 'least', 'most', 'paragraph', 'paragraphs', 'example', 'examples', 'embodiment', 'table', 'section', 'rule', 'article', 'cfr', 'usc', 'page', 'line', 'column', 'version', 'iq', 'times']);
+const notNumeralWords = new Set(['fig', 'figs', 'figure', 'figures', 'claim', 'claims', 'about', 'approximately', 'around', 'nearly', 'than', 'of', 'to', 'and', 'or', 'by', 'at', 'in', 'on', 'from', 'between', 'within', 'over', 'under', 'up', 'per', 'for', 'with', 'the', 'a', 'an', 'is', 'are', 'be', 'has', 'have', 'comprises', 'includes', 'each', 'every', 'all', 'only', 'least', 'most', 'paragraph', 'paragraphs', 'example', 'examples', 'embodiment', 'table', 'section', 'rule', 'article', 'cfr', 'usc', 'page', 'line', 'column', 'version', 'iq', 'times', 'no', 'nos', 'number', 'grade', 'type', 'model', 'series', 'class', 'size', 'sample', 'batch', 'lot', 'iso', 'din', 'astm']);
 
-const numeralPattern = /\b(?<word>[A-Za-z][A-Za-z-]*)\s+\(?(?<numeral>\d{1,4}[a-z]?)\)?(?![\d.,]*\d)(?!\s*(?:%|°|(?:mm|cm|m|µm|um|nm|km|mg|g|kg|ml|l|s|ms|min|h|hz|khz|mhz|ghz|v|mv|kv|ma|w|kw|mw|n|pa|kpa|mpa|bar|rpm|ppm|wt|vol|degrees?|percent)\b))/g;
+const numeralPattern = /\b(?<word>[A-Za-z][A-Za-z-]*)\s+(?<open>\()?(?<numeral>\d{1,4}[a-z]?)\)?(?![\d.,]*\d)(?!\s*(?:%|°|(?:mm|cm|m|µm|um|nm|km|mg|g|kg|ml|l|s|ms|min|h|hz|khz|mhz|ghz|v|mv|kv|ma|w|kw|mw|n|pa|kpa|mpa|bar|rpm|ppm|wt|vol|degrees?|percent)\b))/g;
+
+/** A reference sign after a word of the text: `housing 12` or `housing (12)`. */
+export interface ReferenceSign {
+	readonly word: string;
+	readonly numeral: string;
+	/** True when the sign is in parentheses, `housing (12)`. */
+	readonly parenthesised: boolean;
+	/** The character index of `word` in the text. */
+	readonly index: number;
+}
+
+/**
+ * The reference signs of a text: a number of at most four digits (with an optional letter) after a
+ * word. Numbers after words such as `claim`, `Fig.` or `about`, decimal numbers and numbers with a
+ * unit (`5 mm`, `90 degrees`) are left out.
+ */
+export function readReferenceSigns(text: string): ReferenceSign[] {
+	const signs: ReferenceSign[] = [];
+	for (const match of text.matchAll(numeralPattern)) {
+		const { word, numeral, open } = match.groups!;
+		if (!notNumeralWords.has(word.toLowerCase())) {
+			signs.push({ word, numeral, parenthesised: !!open, index: match.index ?? 0 });
+		}
+	}
+	return signs;
+}
 
 function stemWord(word: string): string {
 	return word.toLowerCase().replace(/(?<!s)s$/, '');
@@ -161,13 +211,9 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 	const used = new Set<string>();
 	const reported = new Set<string>();
 	for (const paragraph of paragraphs.filter(candidate => candidate.kind === 'text')) {
-		for (const match of paragraph.text.matchAll(numeralPattern)) {
-			const { word, numeral } = match.groups!;
-			if (notNumeralWords.has(word.toLowerCase())) {
-				continue;
-			}
+		for (const { word, numeral, index } of readReferenceSigns(paragraph.text)) {
 			used.add(numeral);
-			const line = lineAt(paragraph, match.index ?? 0);
+			const line = lineAt(paragraph, index);
 			const known = partsByNumeral.get(numeral);
 			if (!known) {
 				if (!reported.has(numeral)) {
@@ -195,11 +241,131 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 	return findings;
 }
 
-/** Error for each text paragraph outside the claims without a valid source marker. */
-export function checkSourceMarkers(paragraphs: readonly DraftParagraph[]): DraftFinding[] {
+/** One figure heading of `figures.md` (`## FIG. 1`, `## FIGS. 7 to 10`) with the parts listed under it. */
+export interface FigureSection {
+	/** The heading as written, without the `#` characters. */
+	readonly label: string;
+	readonly line: number;
+	/** The figures the heading names: 1, or the size of a range or list (`FIGS. 7 to 10` = 4). */
+	readonly count: number;
+	readonly parts: readonly FigurePart[];
+}
+
+/** The figure sections of `figures.md` and the parts shown in a figure. */
+interface FigureSections {
+	readonly figures: readonly FigureSection[];
+	/**
+	 * The parts under a figure heading, and the parts of a list with no heading above them. A part
+	 * under any other heading (`# Figures`, `## Parts named in the answers`) is shown in no figure.
+	 */
+	readonly drawnParts: readonly FigurePart[];
+}
+
+/** A heading that starts with a figure name, or a range or list of them: `FIGS. 7 to 10`, `Figs. 7-10`, `FIGS. 7 and 8`. */
+const figureHeadingPattern = new RegExp(String.raw`^${figureWord}(?<list>\d+[a-zA-Z]?(?:\s*(?:,|and|&|to|-|–|—)\s*\d+[a-zA-Z]?)*)`);
+
+/**
+ * The number of figures a heading names, or 0 when it names none: `FIG. 1` = 1, `FIGS. 7 to 10`
+ * and `Figs. 7-10` = 4, `FIGS. 7 and 8` = 2, `FIGS. 1, 3 and 5` = 3.
+ */
+export function figureHeadingCount(label: string): number {
+	const list = figureHeadingPattern.exec(label.trim())?.groups?.list;
+	if (!list) {
+		return 0;
+	}
+	return list.split(/\s*(?:,|and|&)\s*/).filter(Boolean).reduce((sum, item) => {
+		const range = /^(?<from>\d+)[a-zA-Z]?\s*(?:to|-|–|—)\s*(?<to>\d+)[a-zA-Z]?$/.exec(item);
+		const size = range?.groups ? Number(range.groups.to) - Number(range.groups.from) + 1 : 1;
+		return sum + (size > 0 ? size : 1);
+	}, 0);
+}
+
+/** Reads the figure headings of `figures.md` and the parts each one lists. */
+export function parseFigureSections(figures: string): FigureSections {
+	const { body, bodyStartLine } = parseDraftingFrontmatter(figures);
+	const headings = body.split('\n')
+		.map((content, index) => ({ label: /^#{1,6}\s+(?<label>.+?)\s*#*\s*$/.exec(content)?.groups?.label, line: bodyStartLine + index }))
+		.filter((heading): heading is { label: string; line: number } => heading.label !== undefined);
+	const parts = parseFigureParts(figures);
+	const sections: FigureSection[] = [];
+	const drawnParts = parts.filter(part => !headings.some(heading => heading.line < part.line));
+	headings.forEach((heading, index) => {
+		const count = figureHeadingCount(heading.label);
+		if (!count) {
+			return;
+		}
+		const end = headings[index + 1]?.line ?? Infinity;
+		const under = parts.filter(part => part.line > heading.line && part.line < end);
+		sections.push({ label: heading.label, line: heading.line, count, parts: under });
+		drawnParts.push(...under);
+	});
+	return { figures: sections, drawnParts: drawnParts.sort((a, b) => a.line - b.line) };
+}
+
+/**
+ * True when the application has figures: `figures.md` has a figure heading, or a parts list with
+ * no heading above it. A heading that names no figure (`# Figures`) is not a figure.
+ */
+export function hasFigures(figures: string): boolean {
+	const { figures: sections, drawnParts } = parseFigureSections(figures);
+	return sections.length > 0 || drawnParts.length > 0;
+}
+
+/**
+ * A figure name: the abbreviation `FIG.`, `Fig.` or `Figs.` (the period may be left out) or a
+ * capitalised `Figure`, then the figure number (`FIG. 3a`, `Figure 2`). Case-sensitive, so a
+ * lower-case `figure 8` in running text is not a figure name.
+ */
+export const figureNamePattern = new RegExp(String.raw`\b${figureWord}\d+[a-zA-Z]?\b`);
+
+/**
+ * EPO, Rule 47(4) EPC: Notes when the application has figures and the Abstract does not name the
+ * figure to publish with it (`Fig. 1`), or mentions a part shown in a figure of `figures.md`
+ * without its reference sign in parentheses (`housing (12)`). No finding without figures or
+ * without an Abstract.
+ */
+export function checkEpoAbstractFigure(paragraphs: readonly DraftParagraph[], figures: string): DraftFinding[] {
+	const abstract = readAbstract(paragraphs);
+	if (!abstract || !hasFigures(figures)) {
+		return [];
+	}
+	const line = abstract.heading.line;
+	const findings: DraftFinding[] = [];
+	if (!figureNamePattern.test(abstract.text)) {
+		findings.push({ severity: 'Note', rule: 'epo-abstract-figure', file: draftFile, line, message: 'The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".' });
+	}
+	const missing: FigurePart[] = [];
+	for (const part of parseFigureSections(figures).drawnParts) {
+		const name = part.part.split(/\s+/).map(escapeRegExp).join('\\s+');
+		const mentioned = new RegExp(`(?<![\\w-])${name}(?:s|es)?(?![\\w-])`, 'i').test(abstract.text);
+		const signed = new RegExp(`\\([^)]*(?<![\\w.])${escapeRegExp(part.numeral)}(?![\\w.])[^)]*\\)`).test(abstract.text);
+		if (mentioned && !signed && !missing.some(other => other.part.toLowerCase() === part.part.toLowerCase())) {
+			missing.push(part);
+		}
+	}
+	if (missing.length) {
+		const example = `${missing[0].part} (${missing[0].numeral})`;
+		findings.push({ severity: 'Note', rule: 'epo-abstract-figure', file: draftFile, line, message: `The Abstract mentions ${missing.map(part => `"${part.part}"`).join(', ')} without their reference signs in parentheses. Rule 47(4) EPC: follow each main feature shown in a figure by its reference sign in parentheses, e.g. "${example}".` });
+	}
+	return findings;
+}
+
+/**
+ * Error for each text paragraph outside the claims without a valid source marker, and for each
+ * `inventor:IQ-n` source whose question has no answer in `inventor-answers.md`.
+ */
+export function checkSourceMarkers(paragraphs: readonly DraftParagraph[], answers: readonly InventorAnswerSection[] = []): DraftFinding[] {
 	const findings: DraftFinding[] = [];
 	for (const paragraph of paragraphs) {
-		if (paragraph.kind !== 'text' || isClaimsParagraph(paragraph) || paragraph.sources) {
+		if (paragraph.kind !== 'text' || isClaimsParagraph(paragraph)) {
+			continue;
+		}
+		if (paragraph.sources) {
+			for (const source of paragraph.sources) {
+				if (source.kind === 'inventor' && !hasAnyAnswer(answers.find(section => section.id === source.ref))) {
+					findings.push({ severity: 'Error', rule: 'source-marker', file: draftFile, line: paragraph.line, message: `The paragraph at line ${paragraph.line} cites inventor:${source.ref}, but ${answersFile} has no answer to ${source.ref}.` });
+				}
+			}
 			continue;
 		}
 		const message = paragraph.markerError
@@ -210,13 +376,39 @@ export function checkSourceMarkers(paragraphs: readonly DraftParagraph[]): Draft
 	return findings;
 }
 
-/** Error for each open Inventor Question in the draft; export refuses until it is resolved or waived. */
-export function checkInventorQuestions(draft: string): DraftFinding[] {
-	return parseInventorQuestions(draft).map(question => ({
+/**
+ * Errors of the Inventor Questions; export refuses until each is resolved or waived:
+ *
+ * - each question still in the draft; when its current answer in `inventor-answers.md` is filled,
+ *   the message says to apply it;
+ * - each question of `inventor-answers.md` that is no longer in the draft while its current
+ *   answer (the narrowed question after a partial answer) is empty: a partial answer narrows a
+ *   question, it does not close it.
+ */
+export function checkInventorQuestions(draft: string, answers: readonly InventorAnswerSection[] = []): DraftFinding[] {
+	const questions = parseInventorQuestions(draft);
+	const inDraft: DraftFinding[] = questions.map(question => ({
 		severity: 'Error',
 		rule: INVENTOR_QUESTION,
 		file: draftFile,
 		line: question.line,
-		message: `Inventor Question ${question.id} is open: ${question.text}`,
+		question: question.id,
+		message: isAnswered(currentAnswer(answers.find(section => section.id === question.id)))
+			? `Inventor Question ${question.id} is answered in ${answersFile}; apply it to the draft: ${question.text}`
+			: `Inventor Question ${question.id} is open: ${question.text}`,
 	}));
+	const dropped: DraftFinding[] = answers
+		.filter(section => !questions.some(question => question.id === section.id) && !isAnswered(currentAnswer(section)))
+		.map(section => {
+			const round = currentRound(section);
+			return {
+				severity: 'Error',
+				rule: INVENTOR_QUESTION,
+				file: answersFile,
+				...(round?.answerLine !== undefined ? { line: round.answerLine } : {}),
+				question: section.id,
+				message: `Inventor Question ${section.id} is no longer in the draft, but its ${section.rounds.length > 1 ? 'narrowed question' : 'question'} has no answer in ${answersFile}. Put the question back in the draft, or waive it.${round?.question ? ` Question: ${round.question}` : ''}`,
+			};
+		});
+	return [...inDraft, ...dropped];
 }

@@ -42,6 +42,15 @@ export const VERSION_CLAIMS_HASH = 'Claims SHA-256 of this version';
 /** When a tool cleared `approved` because `claims.md` changed after approval. */
 export const APPROVAL_CLEARED = 'Approval cleared';
 
+/** The hash of the draft and claims the last validator run checked: `findings.md` is current while it matches. */
+export const VALIDATED_DRAFT_HASH = 'Validated draft and claims SHA-256';
+
+/** The hash of the draft and claims the last export was written from: the export is current while it matches. */
+export const EXPORTED_DRAFT_HASH = 'Exported draft and claims SHA-256';
+
+/** An inventor's answer the saved draft cites (`inventor:IQ-n`): which question, from which file, when. */
+export const INVENTOR_ANSWER_APPLIED = 'Inventor answer applied';
+
 /** When a later save of the same draft version refreshed the source map. */
 const RESAVED = 'Re-saved';
 

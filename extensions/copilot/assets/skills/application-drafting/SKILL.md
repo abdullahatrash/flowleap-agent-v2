@@ -12,8 +12,15 @@ technical gap is an **Inventor Question**. The attorney signs the application,
 so the draft shows what the model added.
 
 All files of one matter live in `drafting/<matter>/`: `feature-list.md`,
-`figures.md`, `claims.md`, `draft-application.md`, `findings.md`. The tools
-write the snapshot, the Working Record and the export beside them.
+`figures.md`, `claims.md`, `draft-application.md`, `findings.md`,
+`inventor-answers.md`. The tools write the snapshot, the Working Record, the
+export and `checklist.md` beside them.
+
+In a matter that has `checklist.md`, read it first. Code writes it after
+every drafting tool call, also after a refusal: it shows the steps that are
+done, the open steps with the file and the line to change, and the next step
+for the attorney. Its step numbers are the step numbers of this skill. When a
+tool refuses, report the items and the open steps it names.
 
 ## Gates
 
@@ -24,7 +31,7 @@ tools read it from the file:
 |------|------|------|-------|
 | Intake | `feature-list.md` | `confirmed: true` | Step 2 |
 | Claims | `claims.md` | `approved: true` | Step 3 |
-| Export | `findings.md` | no unwaived Error, no open Inventor Question | the export in Step 5 |
+| Export | `findings.md` | no unwaived Error, no open Inventor Question | the export in Step 6 |
 
 At a gate, stop, name the file and the flag, and ask the attorney to set it.
 Then wait. Every flag is the attorney's to write: an "I approve" or "looks
@@ -75,7 +82,9 @@ approval, the attorney sets the flag again.
 6. Write results only for experiments the disclosure says were run. A
    prophetic example is in present or future tense.
 7. Exemplars shape voice and structure only, per
-   [references/exemplar-rule.md](references/exemplar-rule.md).
+   [references/exemplar-rule.md](references/exemplar-rule.md). The tools
+   create `style/` with a README; when it has no exemplar, tell the attorney
+   once that they can put 1 to 5 of their own filed applications there.
 
 Done when every paragraph has a marker and every claim term appears in the
 specification.
@@ -94,7 +103,16 @@ specification.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 
-## Step 5: Report and export
+## Step 5: Resolve Inventor Questions
+
+The save writes each Inventor Question to `inventor-answers.md`; the attorney
+or the inventor fills the answers. When the attorney asks you to apply them,
+follow [references/resolve-inventor-questions.md](references/resolve-inventor-questions.md).
+
+Done when each filled answer is in the draft and `checklist.md` step 5 shows
+no answered question that is not applied.
+
+## Step 6: Report and export
 
 Report the findings by severity: Error, Note, Advisory, then the open
 Inventor Questions, each with its line reference. Report what the validators
@@ -102,14 +120,27 @@ found and what stays open. A run without Errors is "no Error findings", never
 "passed" or "ready to file".
 
 When the attorney asks for the Word file, call `export_draft_docx`. It
-refuses on an unwaived Error or an open Inventor Question: report each one.
-The attorney resolves it, or writes a waiver with a reason in `findings.md`.
+refuses on an unwaived Error or an open Inventor Question and lists each
+one: report each one, and the open steps of `checklist.md`. The attorney
+resolves it, or writes a waiver with a reason in `findings.md`.
+It writes the description, the claims and the abstract as three .docx files
+with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not
+draw figures: tell the attorney that the drawing sheets are prepared
+separately. Beside the files it writes `filing-manifest.md` with the values
+the attorney declares at filing: claims, drawing sheets, the proposed
+abstract figure and the pages. Report the page counts as estimates, and the
+abstract figure as a proposal. It also writes `draft-application.full.docx`,
+the whole application in one file for the attorney to read, not to file;
+report each `[MISSING: ...]` placeholder in it with the checklist step or
+note it names.
 
 ## Rules
 
 - Describe what the draft contains and what is open. State no time or effort
   saving anywhere.
-- The inventor or the attorney answers an Inventor Question. The model only
-  asks it.
+- The inventor or the attorney answers an Inventor Question, in
+  `inventor-answers.md`. The model only asks it and moves the written answer
+  into the draft. An answer in chat is an attorney instruction, not an
+  inventor answer.
 - Close every deliverable with: "AI-assisted analysis for review by a
   registered patent attorney — not legal advice."

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseClaims } from '../drafting/claims';
-import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkDependencyTargets, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from '../drafting/claimValidators';
+import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from '../drafting/claimValidators';
 
 function claims(...lines: string[]) {
 	return parseClaims(lines.join('\n'));
@@ -83,6 +83,43 @@ describe('Application Drafting claim validators', () => {
 		]);
 	});
 
+	it('antecedent basis: IDF-006 (EPO) claims verbatim: noun phrases, parent preambles, process steps and inherent properties need no "a" of their first word', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A photocurable dental composition comprising a polymerizable monomer and/or prepolymer, a polymerization initiator suitable for light curing, and a particulate composite filler, wherein the composite filler is present in an amount of 20-90 wt% of the overall composition, each composite filler particle is a composite granule containing inorganic filler in an organic polymer body, the composite granules have an average particle size of 20-50 µm, at most 10 wt% of the composite filler particles, based on the mass of the composite filler, have a particle size below 10 µm, and the overall composition is essentially free of filler having a particle size below 100 nm.',
+			'2. The composition of claim 1, wherein the overall composition contains less than 1 wt% of filler having a particle size below 100 nm, based on the total composition.',
+			'3. The composition of claim 1, wherein the polymerizable monomer comprises urethane dimethacrylate.',
+			'4. The composition of claim 1, wherein the polymerization initiator comprises camphorquinone and an amine reducing agent.',
+			'5. The composition of claim 1, wherein the inorganic filler comprises barium glass and/or strontium glass having a mean particle size of 0.4-1.5 µm.',
+			'6. The composition of claim 1, wherein at most 8 wt% of the composite filler particles, based on the mass of the composite filler, have a particle size below 10 µm.',
+			'7. The composition of claim 1, wherein the composite filler has a mean particle size of 30-40 µm and a maximum particle size of 70 µm.',
+			'8. A method for producing a photocurable dental composition, comprising: curing an organic-inorganic composite; milling the cured composite to form composite granules; classifying the milled granules to remove particles below 10 µm and particles above 70 µm; and incorporating the retained composite granules into a polymerizable composition with a light-curing initiator.',
+		))).toEqual([]);
+	});
+
+	it('antecedent basis: the head noun (the last noun of the phrase) must be introduced, not any noun of it', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A hinge comprising a lever.',
+			'2. The hinge of claim 1, wherein the lever housing is steel.',
+			'3. A door comprising a housing.',
+			'4. The door of claim 3, wherein the housing cover is plastic.',
+		))).toEqual([
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the lever housing" has no antecedent basis ("a lever housing") earlier in claim 2 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 4, claim: 4, message: 'Claim 4: "the housing cover" has no antecedent basis ("a housing cover") earlier in claim 4 or in the claims it depends on.' },
+		]);
+	});
+
+	it('antecedent basis: the head noun of the phrase must be introduced; an inherent property needs no antecedent, a missing part still errors', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A hinge comprising a lever of steel, wherein the total weight of the lever is low and the overall hinge is small.',
+			'2. The hinge of claim 1, wherein the housing holds the steel lever and the thickness of the housing is 2 mm.',
+			'3. The door of claim 1, wherein the second lever is long.',
+		))).toEqual([
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the housing" has no antecedent basis ("a housing") earlier in claim 2 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the door" has no antecedent basis ("a door") earlier in claim 3 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the second lever" has no antecedent basis ("a second lever") earlier in claim 3 or in the claims it depends on.' },
+		]);
+	});
+
 	it('literal basis: pass when every claim term appears in the description', () => {
 		expect(checkLiteralBasis(claims('1. A hinge comprising a housing and a plurality of arms.'), 'The hinge 10 has a housing 12 and an arm 14.')).toEqual([]);
 	});
@@ -119,7 +156,7 @@ describe('Application Drafting claim validators', () => {
 				{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '4 independent claims: the US fee covers 3; each further independent claim incurs an excess-claims fee (37 CFR 1.16(h)).' },
 			],
 			[
-				{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '16 claims in total: the EPO claims fee is due for each claim over 15 (Rule 45 EPC).' },
+				{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '16 claims in total: the EPO claims fee is due for each claim over 15, at a higher rate from the 51st claim (Rule 45(1) EPC; RFees Art. 2(1) item 15).' },
 			],
 		]);
 	});
@@ -132,5 +169,83 @@ describe('Application Drafting claim validators', () => {
 		expect(checkRelativeTerms(claims('1. A hinge comprising a substantially flat lever of about 5 mm.', '2. The hinge of claim 1.'))).toEqual([
 			{ severity: 'Note', rule: 'relative-term', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 uses relative terms: "substantially", "about". Check that the description gives them a definite meaning.' },
 		]);
+	});
+
+	it('one sentence: pass with abbreviations, decimal numbers and one final period', () => {
+		expect(checkClaimOneSentence(claims(
+			'1. A hinge, e.g. for a door, with a lever of approx. 2.5 mm and 5 wt.% carbon, i.e. a steel lever.',
+			'2. The hinge of claim 1, wherein the lever is of steel No. 3, cf. a known grade, etc.',
+			'3. A method comprising the steps (i). heating, ii. cooling and (iv). drying the lever.',
+			'4. A method comprising: 1. heating; 2. cooling, and (3). drying a lever of Acme Inc. or Foo Ltd. or Bar Co. or Baz Corp. in conc. acid, see pp. 3-4, of appr. 2.5 mm, resp. 3 mm, incl. a coating, eg. a steel lever.',
+		))).toEqual([]);
+	});
+
+	it('one sentence: Error for a period that ends a sentence before the end of the claim', () => {
+		expect(checkClaimOneSentence(claims('1. A hinge.', '2. The hinge of claim 1, comprising a housing. The housing is of steel.', '3. The hinge of claim 1, with a lever of length 12. The lever is of steel.'))).toEqual([
+			{ severity: 'Error', rule: 'claim-one-sentence', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 has a period inside the claim, after "comprising a housing". A claim is one sentence with one period at its end (Guidelines F-IV, 4.1; MPEP 608.01(m)).' },
+			{ severity: 'Error', rule: 'claim-one-sentence', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3 has a period inside the claim, after "of length 12". A claim is one sentence with one period at its end (Guidelines F-IV, 4.1; MPEP 608.01(m)).' },
+		]);
+	});
+
+	it('references to the description or drawings: pass for claims in words and references to other claims', () => {
+		const text = claims('1. A hinge comprising a housing (12).', '2. The hinge as described in claim 1, wherein the housing is shown to the user.');
+		expect([checkClaimReferencesToDescription(text, 'EPO'), checkClaimReferencesToDescription(text, 'US')]).toEqual([[], []]);
+	});
+
+	it('references to the description or drawings: pass for bare "as shown", "as represented", "as disclosed" and a lower-case figure word', () => {
+		expect(checkClaimReferencesToDescription(claims(
+			'1. A display showing a value as shown to the user.',
+			'2. The display of claim 1, wherein the value is a signal as represented by a voltage.',
+			'3. The display of claim 1, wherein the value is sent as disclosed to a server.',
+			'4. A vehicle moving on a figure 8 track.',
+		), 'EPO')).toEqual([]);
+	});
+
+	it('references to the description or drawings: Error for EPO (Rule 43(6) EPC), Note for US', () => {
+		const text = claims('1. A hinge as shown in Fig. 2.', '2. The hinge of claim 1, with a lever as illustrated, and a cam according to FIG. 3a.', '3. The hinge of claim 1, as described in the description.');
+		expect([checkClaimReferencesToDescription(text, 'EPO'), checkClaimReferencesToDescription(text, 'US')]).toEqual([
+			[
+				{ severity: 'Error', rule: 'claim-refers-to-description', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 relies on a reference to the description or drawings: "as shown in Fig. 2". Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.' },
+				{ severity: 'Error', rule: 'claim-refers-to-description', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 relies on a reference to the description or drawings: "as illustrated", "FIG. 3a". Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.' },
+				{ severity: 'Error', rule: 'claim-refers-to-description', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3 relies on a reference to the description or drawings: "as described in the description". Rule 43(6) EPC allows this only where absolutely necessary: state the feature in words, or waive with the reason.' },
+			],
+			[
+				{ severity: 'Note', rule: 'claim-refers-to-description', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 relies on a reference to the description or drawings: "as shown in Fig. 2". A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.' },
+				{ severity: 'Note', rule: 'claim-refers-to-description', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 relies on a reference to the description or drawings: "as illustrated", "FIG. 3a". A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.' },
+				{ severity: 'Note', rule: 'claim-refers-to-description', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3 relies on a reference to the description or drawings: "as described in the description". A US claim incorporates the description or drawings by reference only in exceptional cases (MPEP 2173.05(s)): state the feature in words.' },
+			],
+		]);
+	});
+
+	it('EPO reference signs: pass with signs in parentheses, and without figures', () => {
+		const figures = '- 10: hinge\n- 12: housing\n- 14: coil spring\n';
+		expect([
+			checkEpoClaimReferenceSigns(claims('1. A hinge (10) comprising a housing (12) and a coil spring (14) of 5 mm.', '2. The hinge (10) of claim 1, wherein the housing and spring (12, 14) are steel.'), figures),
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a housing 12.'), ''),
+		]).toEqual([[], []]);
+	});
+
+	it('EPO reference signs: Note for a sign without parentheses (Rule 43(7) EPC), and when no claim has a sign', () => {
+		const figures = '- 10: hinge\n- 12: housing\n- 14: coil spring\n';
+		expect([
+			checkEpoClaimReferenceSigns(claims('1. A hinge (10) comprising a housing 12 and a coil spring 14.', '2. The hinge of claim 1, wherein the housing 12 is steel.'), figures),
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a housing.'), figures),
+		]).toEqual([
+			[
+				{ severity: 'Note', rule: 'epo-claim-reference-signs', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 writes "housing 12", "spring 14": Rule 43(7) EPC puts reference signs in parentheses after the feature, e.g. "housing (12)".' },
+				{ severity: 'Note', rule: 'epo-claim-reference-signs', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 writes "housing 12": Rule 43(7) EPC puts reference signs in parentheses after the feature, e.g. "housing (12)".' },
+			],
+			[
+				{ severity: 'Note', rule: 'epo-claim-reference-signs', file: 'claims.md', message: 'No claim has a reference sign, but figures.md lists parts. Rule 43(7) EPC: technical features in the claims are preferably followed by their reference signs in parentheses, e.g. "hinge (10)".' },
+			],
+		]);
+	});
+
+	it('EPO reference signs: only parts shown in a figure count, not parts under a heading that names no figure', () => {
+		const figures = '# Figures\n\n## FIG. 1\n\n- 12: housing\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n';
+		expect([
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a housing (12) and a spring 16.'), figures),
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a spring.'), '# Figures\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n'),
+		]).toEqual([[], []]);
 	});
 });

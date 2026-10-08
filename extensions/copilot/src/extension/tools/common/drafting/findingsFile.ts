@@ -34,7 +34,7 @@ function oneLine(text: string): string {
 }
 
 function renderItem(finding: DraftFinding): string[] {
-	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
+	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined, finding.question].filter(Boolean).join(', ');
 	const item = `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${oneLine(finding.message)}`;
 	return finding.waived ? [item, `  - Waived: ${oneLine(finding.waived.reason)}`] : [item];
 }
@@ -53,39 +53,52 @@ export function renderFindingsFile(findings: readonly DraftFinding[]): string {
 	return lines.join('\n') + '\n';
 }
 
-/** Parses `findings.md`, including the attorney's waivers. */
-export function parseFindingsFile(text: string): DraftFinding[] {
-	const findings: DraftFinding[] = [];
+/** One item of `findings.md` with the 1-based line of its item in that file. */
+export interface FindingsFileItem {
+	readonly finding: DraftFinding;
+	readonly fileLine: number;
+}
+
+/** Parses `findings.md` with the line of each item, including the attorney's waivers. */
+export function parseFindingsFileItems(text: string): FindingsFileItem[] {
+	const items: { finding: DraftFinding; fileLine: number }[] = [];
 	let severity: DraftFinding['severity'] | undefined;
-	for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
+	text.replace(/\r\n/g, '\n').split('\n').forEach((line, index) => {
 		const heading = /^##\s+(?<title>.+?)\s*$/.exec(line);
 		if (heading?.groups) {
 			severity = sections.find(section => section.heading.toLowerCase() === heading.groups!.title.toLowerCase())?.severity;
-			continue;
+			return;
 		}
 		if (!severity) {
-			continue;
+			return;
 		}
 		const item = itemPattern.exec(line);
 		if (item?.groups) {
-			findings.push({ severity, rule: item.groups.rule, message: item.groups.message.trim(), ...readLocation(item.groups.location) });
-			continue;
+			items.push({ finding: { severity, rule: item.groups.rule, message: item.groups.message.trim(), ...readLocation(item.groups.location) }, fileLine: index + 1 });
+			return;
 		}
 		const waiver = waiverPattern.exec(line);
-		const last = findings.at(-1);
-		if (waiver?.groups?.reason && last && !last.waived) {
-			findings[findings.length - 1] = { ...last, waived: { reason: waiver.groups.reason } };
+		const last = items.at(-1);
+		if (waiver?.groups?.reason && last && !last.finding.waived) {
+			last.finding = { ...last.finding, waived: { reason: waiver.groups.reason } };
 		}
-	}
-	return findings;
+	});
+	return items;
 }
 
-function readLocation(location: string | undefined): Pick<DraftFinding, 'file' | 'line' | 'claim'> {
-	const result: { file?: string; line?: number; claim?: number } = {};
+/** Parses `findings.md`, including the attorney's waivers. */
+export function parseFindingsFile(text: string): DraftFinding[] {
+	return parseFindingsFileItems(text).map(item => item.finding);
+}
+
+function readLocation(location: string | undefined): Pick<DraftFinding, 'file' | 'line' | 'claim' | 'question'> {
+	const result: { file?: string; line?: number; claim?: number; question?: string } = {};
 	for (const part of (location ?? '').split(',').map(entry => entry.trim()).filter(Boolean)) {
 		const numbered = /^(?<kind>line|claim) (?<value>\d+)$/.exec(part);
 		if (numbered?.groups) {
 			result[numbered.groups.kind as 'line' | 'claim'] = Number(numbered.groups.value);
+		} else if (/^IQ-\d+$/.test(part)) {
+			result.question = part;
 		} else {
 			result.file = part;
 		}

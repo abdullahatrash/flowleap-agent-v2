@@ -4,11 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { parseClaims } from './claims';
-import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkDependencyTargets, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from './claimValidators';
+import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from './claimValidators';
+import { checkPageCount, filingManifest } from './filingManifest';
 import { DraftFinding } from './finding';
 import { DraftingOffice } from './frontmatter';
+import { parseInventorAnswers } from './inventorAnswers';
 import { parseDraftParagraphs } from './sourceMarkers';
-import { checkAbstractLength, checkDefinedTerms, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, isAbstractParagraph, isClaimsParagraph } from './specValidators';
+import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, isAbstractParagraph, isClaimsParagraph } from './specValidators';
 
 /** The file contents of one draft folder that the validators read. */
 export interface DraftValidationInput {
@@ -19,6 +21,8 @@ export interface DraftValidationInput {
 	readonly claims: string;
 	/** `figures.md`; absent or empty when the application has no figures. */
 	readonly figures?: string;
+	/** `inventor-answers.md`; absent when the draft has no Inventor Questions yet. */
+	readonly inventorAnswers?: string;
 }
 
 /**
@@ -33,19 +37,26 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		.filter(paragraph => paragraph.kind === 'text' && !isAbstractParagraph(paragraph) && !isClaimsParagraph(paragraph))
 		.map(paragraph => paragraph.text)
 		.join('\n\n');
+	const figures = input.figures ?? '';
+	const answers = parseInventorAnswers(input.inventorAnswers ?? '');
+	const epo = input.office === 'EPO';
 	const findings = [
 		...checkClaimNumbering(claims),
 		...checkDependencyTargets(claims),
-		...(input.office === 'US' ? checkUsMultipleDependency(claims) : checkEpoOneIndependentPerCategory(claims)),
+		...(epo ? checkEpoOneIndependentPerCategory(claims) : checkUsMultipleDependency(claims)),
+		...checkClaimOneSentence(claims),
+		...checkClaimReferencesToDescription(claims, input.office),
 		...checkAntecedentBasis(claims),
 		...checkLiteralBasis(claims, description),
-		...checkAbstractLength(paragraphs),
+		...checkAbstractLength(paragraphs, input.office),
 		...checkDefinedTerms(paragraphs),
-		...checkReferenceNumerals(paragraphs, input.figures ?? ''),
-		...checkSourceMarkers(paragraphs),
-		...checkInventorQuestions(input.draft),
+		...checkReferenceNumerals(paragraphs, figures),
+		...checkSourceMarkers(paragraphs, answers),
+		...checkInventorQuestions(input.draft, answers),
 		...checkClaimCount(claims, input.office),
+		...checkPageCount(filingManifest(input)),
 		...checkRelativeTerms(claims),
+		...(epo ? [...checkEpoClaimReferenceSigns(claims, figures), ...checkEpoAbstractFigure(paragraphs, figures)] : []),
 	];
 	return [...findings.filter(finding => finding.severity === 'Error'), ...findings.filter(finding => finding.severity !== 'Error')];
 }

@@ -8,6 +8,7 @@
  *
  * ```
  * style/                                 workspace-level style exemplars (voice only, never a source)
+ *   README.md                            how to use the folder; written by the tools when missing, never an exemplar
  * drafting/<matter>/
  *   feature-list.md                      Feature List; frontmatter: office, confirmed
  *   figures.md                           figure list with parts and reference numerals
@@ -16,7 +17,13 @@
  *   draft-application.generated.md       snapshot at generation, diffed at export
  *   draft-application.working-record.md  Working Record
  *   findings.md                          Findings, waivers with reasons, open Inventor Questions
- *   draft-application.docx               export, markers stripped
+ *   inventor-answers.md                  the inventor's answers to the Inventor Questions, one section each
+ *   checklist.md                         Drafting Checklist, written by code after every drafting tool call
+ *   draft-application.description.docx   export, markers stripped, one file per document type:
+ *   draft-application.claims.docx          description, claims, abstract (drawings are not generated)
+ *   draft-application.abstract.docx
+ *   draft-application.full.docx          export: full review copy, the whole application in one file, not for filing
+ *   filing-manifest.md                   export: claims, drawing sheets, abstract figure, estimated pages
  * ```
  *
  * All paths are workspace-relative and use `/`.
@@ -24,6 +31,15 @@
 
 /** The workspace-level folder of style exemplars. */
 export const DRAFTING_STYLE_FOLDER = 'style';
+
+/**
+ * The document types of the export, in filing order. Each is its own .docx: in the EPO Online
+ * Filing each is a separate upload, and each starts on a new page.
+ */
+export const DRAFT_DOCUMENT_TYPES = ['description', 'claims', 'abstract'] as const;
+
+/** One document type of the export. */
+export type DraftDocumentType = typeof DRAFT_DOCUMENT_TYPES[number];
 
 /** The file names of one matter's drafting files in its folder; also the `file` of a Finding. */
 export const DRAFTING_FILE_NAMES = {
@@ -34,7 +50,13 @@ export const DRAFTING_FILE_NAMES = {
 	generatedSnapshot: 'draft-application.generated.md',
 	workingRecord: 'draft-application.working-record.md',
 	findings: 'findings.md',
-	docx: 'draft-application.docx',
+	inventorAnswers: 'inventor-answers.md',
+	checklist: 'checklist.md',
+	descriptionDocx: 'draft-application.description.docx',
+	claimsDocx: 'draft-application.claims.docx',
+	abstractDocx: 'draft-application.abstract.docx',
+	fullReviewCopy: 'draft-application.full.docx',
+	filingManifest: 'filing-manifest.md',
 } as const;
 
 /** The workspace-relative paths of one matter's drafting files. */
@@ -48,7 +70,14 @@ export interface DraftingFolder {
 	readonly generatedSnapshot: string;
 	readonly workingRecord: string;
 	readonly findings: string;
-	readonly docx: string;
+	readonly inventorAnswers: string;
+	readonly checklist: string;
+	/** The export, one .docx per document type. */
+	readonly docx: Readonly<Record<DraftDocumentType, string>>;
+	/** The full review copy written beside the export: the whole application in one file, not for filing. */
+	readonly fullReviewCopy: string;
+	/** The filing manifest written beside the export. */
+	readonly filingManifest: string;
 }
 
 /**
@@ -71,7 +100,15 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 		generatedSnapshot: `${folder}/${DRAFTING_FILE_NAMES.generatedSnapshot}`,
 		workingRecord: `${folder}/${DRAFTING_FILE_NAMES.workingRecord}`,
 		findings: `${folder}/${DRAFTING_FILE_NAMES.findings}`,
-		docx: `${folder}/${DRAFTING_FILE_NAMES.docx}`,
+		inventorAnswers: `${folder}/${DRAFTING_FILE_NAMES.inventorAnswers}`,
+		checklist: `${folder}/${DRAFTING_FILE_NAMES.checklist}`,
+		docx: {
+			description: `${folder}/${DRAFTING_FILE_NAMES.descriptionDocx}`,
+			claims: `${folder}/${DRAFTING_FILE_NAMES.claimsDocx}`,
+			abstract: `${folder}/${DRAFTING_FILE_NAMES.abstractDocx}`,
+		},
+		fullReviewCopy: `${folder}/${DRAFTING_FILE_NAMES.fullReviewCopy}`,
+		filingManifest: `${folder}/${DRAFTING_FILE_NAMES.filingManifest}`,
 	};
 }
 

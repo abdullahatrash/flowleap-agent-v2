@@ -64,6 +64,33 @@ describe('Application Drafting validateDraft', () => {
 			'Error literal-basis claims.md:8 claim 5',
 			'Error inventor-question draft-application.md:16',
 			'Note relative-term claims.md:5 claim 2',
+			'Note epo-claim-reference-signs claims.md:-',
+			'Note epo-abstract-figure draft-application.md:9',
+			'Note epo-abstract-figure draft-application.md:9',
 		]);
+	});
+
+	it('gives the EPC claim and abstract rules their office severity', () => {
+		const formal = [
+			'1. A hinge comprising a housing 12. The housing is as shown in Fig. 1.',
+		].join('\n');
+		const longAbstract = draft.replace('A hinge with a door frame.', Array.from({ length: 151 }, () => 'hinge').join(' '));
+		const severities = (office: 'US' | 'EPO') => summary(validateDraft({ office, draft: longAbstract, claims: formal, figures }))
+			.filter(line => /one-sentence|refers-to-description|reference-signs|abstract/.test(line));
+		expect({ US: severities('US'), EPO: severities('EPO') }).toEqual({
+			US: [
+				'Error claim-one-sentence claims.md:1 claim 1',
+				'Error abstract-length draft-application.md:9',
+				'Note claim-refers-to-description claims.md:1 claim 1',
+			],
+			EPO: [
+				'Error claim-one-sentence claims.md:1 claim 1',
+				'Error claim-refers-to-description claims.md:1 claim 1',
+				'Note abstract-length draft-application.md:9',
+				'Note epo-claim-reference-signs claims.md:1 claim 1',
+				'Note epo-abstract-figure draft-application.md:9',
+				'Note epo-abstract-figure draft-application.md:9',
+			],
+		});
 	});
 });

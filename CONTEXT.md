@@ -397,9 +397,31 @@ _Avoid_: "approved" said in chat — the flag is read from the file by code.
 **Draft Application**:
 The Markdown deliverable of Application Drafting: the specification in the chosen office's
 section order, the abstract, the brief description of the drawings, each paragraph carrying
-its source marker, and an **Inventor Questions** list at the end. Exported to .docx without
-markers; its **Working Record** and findings stay beside it.
+its source marker, and an **Inventor Questions** list at the end. Exported without markers to
+one .docx per document type (description, claims, abstract) with the office page setup; its
+**Working Record** and findings stay beside it. The export also writes a full review copy
+(`draft-application.full.docx`): the whole application in one file like a published patent,
+marked not for filing, with a `[MISSING: ...]` placeholder naming the **Drafting Checklist** step
+or note for each missing part.
 _Avoid_: calling the .docx the deliverable — it is the export; "Draft" as a Project Status.
+
+**Filing Manifest**:
+The `filing-manifest.md` the export writes beside the .docx files: the values the applicant
+declares at filing (title, language, office, claims in total and independent, drawing sheets,
+the proposed abstract figure, pages per document and in total). Page counts are an estimate
+from the text under the office page setup, labelled as such.
+_Avoid_: calling the page counts measured — only Word (or the office) renders the pages.
+
+**Drafting Checklist**:
+The `checklist.md` of a drafting matter. Code, not the model, writes it from the files after
+every drafting tool call (start, save, validate, export), also after a refusal: six steps with
+the numbers of the application-drafting skill steps (1 Feature List confirmed, 2 Claims approved,
+3 draft written, 4 Errors fixed or waived, 5 Inventor Questions answered and applied, 6 export of
+the current draft), each checked only when the files say so, each open step naming the file, the
+line and the text to write; notes that never block (figures, required sections, style
+exemplars); and one "Next step for you:" line. Tool refusals list the blocking items and point to
+its open steps. The agent reads it first in a matter.
+_Avoid_: the model writing or ticking it; a step checked from a statement in chat.
 
 **Model-Proposed**:
 The source marker for text the model wrote in this draft without a source in the Feature List,
@@ -411,14 +433,21 @@ Model-Proposed (that source is **Template**).
 
 **Inventor Question**:
 An open item the model raises when a claim element, example or embodiment has no source in the
-disclosure. Listed at the end of the Draft Application and in the findings file. Export refuses
-while one is unresolved and unwaived.
-_Avoid_: resolving one by letting the model answer it; dropping one without a recorded waiver.
+disclosure. Listed at the end of the Draft Application and in the findings file. Each save also
+writes it to `inventor-answers.md`, one section per question with an empty **Answer:** slot for
+the attorney or the inventor; a re-save adds new questions and never overwrites a filled answer.
+The agent moves a filled answer into the draft with the marker `inventor:IQ-n` and deletes the
+question; a partial answer narrows the question, it does not close it. An empty answer, "Not
+stated" or "unknown" is no answer. Export refuses while one is unresolved and unwaived.
+_Avoid_: resolving one by letting the model answer it; dropping one without a recorded waiver;
+an answer given in chat (the answer is read from the file).
 
 **Finding**:
 One result of the draft validators or of the advisory review. An **Error** (antecedent basis,
 dependency target, numbering, numeral mismatch, missing literal basis, office claim-form rule,
-abstract length) blocks export until waived with a reason that is kept. A **Note** (claim count
-over the fee threshold, relative terms present) never blocks. An **Advisory** item comes from
+claim not one sentence, EPO claim that relies on the description or drawings, US abstract
+length) blocks export until waived with a reason that is kept. A **Note** (claim count or
+estimated EPO page count over the fee threshold, relative terms present, EPO abstract length,
+EPO reference signs not in parentheses, EPO abstract without its figure) never blocks. An **Advisory** item comes from
 the model review, cites a passage, and never says "passed".
 _Avoid_: an advisory item marked Error; a validator result without a line reference.

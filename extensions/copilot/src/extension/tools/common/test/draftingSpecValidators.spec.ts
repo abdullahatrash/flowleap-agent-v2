@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import { parseInventorAnswers } from '../drafting/inventorAnswers';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
-import { checkAbstractLength, checkDefinedTerms, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, parseFigureParts } from '../drafting/specValidators';
+import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, figureHeadingCount, hasFigures, parseFigureParts, parseFigureSections, readReferenceSigns } from '../drafting/specValidators';
 
 function draft(...lines: string[]) {
 	return parseDraftParagraphs(lines.join('\n'));
@@ -25,16 +26,34 @@ const figures = [
 describe('Application Drafting specification validators', () => {
 
 	it('abstract length: pass at 150 words', () => {
-		expect(checkAbstractLength(draft('# Abstract', '', `<!-- src: template --> ${words(150)}`))).toEqual([]);
+		const text = draft('# Abstract', '', `<!-- src: template --> ${words(150)}`);
+		expect([checkAbstractLength(text, 'US'), checkAbstractLength(text, 'EPO')]).toEqual([[], []]);
 	});
 
-	it('abstract length: Error over 150 words and when the Abstract is missing', () => {
+	it('abstract length: Error over 150 words for US, Note for EPO; Error when the Abstract is missing', () => {
+		const long = draft('# Abstract of the Disclosure', '', '<!-- src: template -->', words(100), '', `<!-- src: feature:F1 --> ${words(51)}`);
 		expect([
-			checkAbstractLength(draft('# Abstract of the Disclosure', '', '<!-- src: template -->', words(100), '', `<!-- src: feature:F1 --> ${words(51)}`)),
-			checkAbstractLength(draft('# Description', '', 'Text.')),
+			checkAbstractLength(long, 'US'),
+			checkAbstractLength(long, 'EPO'),
+			checkAbstractLength(draft('# Description', '', 'Text.'), 'EPO'),
 		]).toEqual([
-			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; it must have at most 150 (37 CFR 1.72(b); Rule 47(3) EPC).' }],
+			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; it must have at most 150 (37 CFR 1.72(b)).' }],
+			[{ severity: 'Note', rule: 'abstract-length', file: 'draft-application.md', line: 1, message: 'The Abstract has 151 words; Rule 47(3) EPC asks for preferably at most 150.' }],
 			[{ severity: 'Error', rule: 'abstract-length', file: 'draft-application.md', message: 'The draft has no Abstract section (a heading that contains "Abstract").' }],
+		]);
+	});
+
+	it('EPO abstract figure: pass when the Abstract names a figure and puts reference signs in parentheses, and without figures', () => {
+		expect([
+			checkEpoAbstractFigure(draft('# Abstract', '', '<!-- src: template -->', 'A hinge (10) has a housing (12) and a coil spring (14). (Fig. 1)'), figures),
+			checkEpoAbstractFigure(draft('# Abstract', '', '<!-- src: template -->', 'A hinge has a housing.'), ''),
+		]).toEqual([[], []]);
+	});
+
+	it('EPO abstract figure: Note when the Abstract names no figure or has features without signs in parentheses (Rule 47(4) EPC)', () => {
+		expect(checkEpoAbstractFigure(draft('# Abstract', '', '<!-- src: template -->', 'A hinge (10) has a housing 12 and a coil spring.'), figures)).toEqual([
+			{ severity: 'Note', rule: 'epo-abstract-figure', file: 'draft-application.md', line: 1, message: 'The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".' },
+			{ severity: 'Note', rule: 'epo-abstract-figure', file: 'draft-application.md', line: 1, message: 'The Abstract mentions "housing", "coil spring" without their reference signs in parentheses. Rule 47(4) EPC: follow each main feature shown in a figure by its reference sign in parentheses, e.g. "housing (12)".' },
 		]);
 	});
 
@@ -109,7 +128,7 @@ describe('Application Drafting specification validators', () => {
 	it('source markers: Error for a paragraph without a source or with an invalid marker', () => {
 		expect(checkSourceMarkers(draft('# Description', '', 'No source.', '', '<!-- src: feature -->', 'Bad marker.'))).toEqual([
 			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 3, message: 'The paragraph at line 3 has no source marker (<!-- src: ... -->).' },
-			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, instruction, template or model-proposed.' },
+			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.' },
 		]);
 	});
 
@@ -119,7 +138,71 @@ describe('Application Drafting specification validators', () => {
 
 	it('inventor questions: Error for each open Inventor Question', () => {
 		expect(checkInventorQuestions('## Inventor Questions\n\n> **Inventor Question IQ-1:** What is the spring made of?')).toEqual([
-			{ severity: 'Error', rule: 'inventor-question', file: 'draft-application.md', line: 3, message: 'Inventor Question IQ-1 is open: What is the spring made of?' },
+			{ severity: 'Error', rule: 'inventor-question', file: 'draft-application.md', line: 3, question: 'IQ-1', message: 'Inventor Question IQ-1 is open: What is the spring made of?' },
 		]);
+	});
+
+	it('inventor answers: the marker needs a filled answer, and an answered question still in the draft says to apply it', () => {
+		const answers = parseInventorAnswers([
+			'## IQ-1', '', '**Question:** What is the spring made of?', '', '**Answer:**', 'Spring steel.',
+			'', '## IQ-2', '', '**Question:** Is the hinge removable?', '', '**Answer:** Not stated.',
+		].join('\n'));
+		const text = [
+			'# Description', '',
+			'<!-- src: inventor:IQ-1 -->', 'The spring is spring steel.', '',
+			'<!-- src: inventor:IQ-2 -->', 'The hinge is removable.', '',
+			'## Inventor Questions', '',
+			'> **Inventor Question IQ-1:** What is the spring made of?', '',
+			'> **Inventor Question IQ-2:** Is the hinge removable?',
+		].join('\n');
+		expect({ markers: checkSourceMarkers(parseDraftParagraphs(text), answers), questions: checkInventorQuestions(text, answers).map(finding => finding.message) }).toEqual({
+			markers: [
+				{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 7, message: 'The paragraph at line 7 cites inventor:IQ-2, but inventor-answers.md has no answer to IQ-2.' },
+			],
+			questions: [
+				'Inventor Question IQ-1 is answered in inventor-answers.md; apply it to the draft: What is the spring made of?',
+				'Inventor Question IQ-2 is open: Is the hinge removable?',
+			],
+		});
+	});
+
+	it('figure headings: a range or list counts each figure; a heading without a figure name is no figure', () => {
+		const figures = '# Figures\n\n- 8: base\n\n## FIG. 1\n\n- 10: frame\n\n## FIGS. 7 to 10\n\n- 14: cam\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n';
+		expect({
+			counts: ['FIG. 1', 'FIGS. 7 to 10', 'Figs. 7-10', 'FIGS. 7 and 8', 'FIGS. 1, 3 and 5', 'Figure 2: side view', 'Figures', 'Parts named in the answers, figure not stated', 'a figure 8 track'].map(figureHeadingCount),
+			sections: parseFigureSections(figures).figures.map(section => [section.label, section.count, section.parts.map(part => part.numeral)]),
+			drawn: parseFigureSections(figures).drawnParts.map(part => part.numeral),
+			hasFigures: [hasFigures(figures), hasFigures('# Figures\n'), hasFigures('- 12: housing\n')],
+		}).toEqual({
+			counts: [1, 4, 4, 2, 3, 1, 0, 0, 0],
+			sections: [['FIG. 1', 1, ['10']], ['FIGS. 7 to 10', 4, ['14']]],
+			drawn: ['10', '14'],
+			hasFigures: [true, false, true],
+		});
+	});
+
+	it('EPO abstract figure: not fooled by headings that name no figure, nor by parts under them', () => {
+		const abstract = draft('# Title', '', '## Abstract', '', '<!-- src: feature:F1 -->', 'A frame (10) holds a spring.');
+		expect([
+			checkEpoAbstractFigure(abstract, '# Figures\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n'),
+			checkEpoAbstractFigure(abstract, '# Figures\n\n## FIG. 1\n\n- 10: frame\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n').map(finding => finding.message),
+		]).toEqual([
+			[],
+			['The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".'],
+		]);
+	});
+
+	it('inventor questions: a question removed from the draft while its narrowed question has no answer is an Error', () => {
+		const answers = parseInventorAnswers([
+			'## IQ-1', '', '**Question:** What is the spring made of?', '', '**Answer:**', 'Steel; the grade is not known.', '', '**Narrowed question:** What steel grade?', '', '**Answer:**',
+			'', '## IQ-2', '', '**Question:** Is the hinge removable?', '', '**Answer:** Yes.',
+		].join('\n'));
+		expect(checkInventorQuestions('# Description\n\n<!-- src: inventor:IQ-1 -->\nThe spring is steel.', answers)).toEqual([
+			{ severity: 'Error', rule: 'inventor-question', file: 'inventor-answers.md', line: 10, question: 'IQ-1', message: 'Inventor Question IQ-1 is no longer in the draft, but its narrowed question has no answer in inventor-answers.md. Put the question back in the draft, or waive it. Question: What steel grade?' },
+		]);
+	});
+
+	it('reference numerals: a number after a word such as grade, type or model is no reference sign', () => {
+		expect(readReferenceSigns('The lever 14 is grade 304 steel of type 2, model 7, series 300, class 8, size 10, sample 3 and the housing (12).').map(sign => `${sign.word} ${sign.numeral}`)).toEqual(['lever 14', 'housing 12']);
 	});
 });
