@@ -16,7 +16,7 @@
 import { DraftFinding, INVENTOR_QUESTION } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
-import { currentAnswer, hasAnyAnswer, InventorAnswerSection, isAnswered } from './inventorAnswers';
+import { currentAnswer, currentRound, hasAnyAnswer, InventorAnswerSection, isAnswered } from './inventorAnswers';
 import { DraftParagraph, parseInventorQuestions } from './sourceMarkers';
 
 const draftFile = DRAFTING_FILE_NAMES.draft;
@@ -150,7 +150,7 @@ export function parseFigureParts(figures: string): FigurePart[] {
 }
 
 /** Words that precede a number which is not a reference numeral (`claim 1`, `about 5`). */
-const notNumeralWords = new Set(['fig', 'figs', 'figure', 'figures', 'claim', 'claims', 'about', 'approximately', 'around', 'nearly', 'than', 'of', 'to', 'and', 'or', 'by', 'at', 'in', 'on', 'from', 'between', 'within', 'over', 'under', 'up', 'per', 'for', 'with', 'the', 'a', 'an', 'is', 'are', 'be', 'has', 'have', 'comprises', 'includes', 'each', 'every', 'all', 'only', 'least', 'most', 'paragraph', 'paragraphs', 'example', 'examples', 'embodiment', 'table', 'section', 'rule', 'article', 'cfr', 'usc', 'page', 'line', 'column', 'version', 'iq', 'times']);
+const notNumeralWords = new Set(['fig', 'figs', 'figure', 'figures', 'claim', 'claims', 'about', 'approximately', 'around', 'nearly', 'than', 'of', 'to', 'and', 'or', 'by', 'at', 'in', 'on', 'from', 'between', 'within', 'over', 'under', 'up', 'per', 'for', 'with', 'the', 'a', 'an', 'is', 'are', 'be', 'has', 'have', 'comprises', 'includes', 'each', 'every', 'all', 'only', 'least', 'most', 'paragraph', 'paragraphs', 'example', 'examples', 'embodiment', 'table', 'section', 'rule', 'article', 'cfr', 'usc', 'page', 'line', 'column', 'version', 'iq', 'times', 'no', 'nos', 'number', 'grade', 'type', 'model', 'series', 'class', 'size', 'sample', 'batch', 'lot', 'iso', 'din', 'astm']);
 
 const numeralPattern = /\b(?<word>[A-Za-z][A-Za-z-]*)\s+(?<open>\()?(?<numeral>\d{1,4}[a-z]?)\)?(?![\d.,]*\d)(?!\s*(?:%|°|(?:mm|cm|m|µm|um|nm|km|mg|g|kg|ml|l|s|ms|min|h|hz|khz|mhz|ghz|v|mv|kv|ma|w|kw|mw|n|pa|kpa|mpa|bar|rpm|ppm|wt|vol|degrees?|percent)\b))/g;
 
@@ -252,7 +252,7 @@ export interface FigureSection {
 }
 
 /** The figure sections of `figures.md` and the parts shown in a figure. */
-export interface FigureSections {
+interface FigureSections {
 	readonly figures: readonly FigureSection[];
 	/**
 	 * The parts under a figure heading, and the parts of a list with no heading above them. A part
@@ -377,17 +377,38 @@ export function checkSourceMarkers(paragraphs: readonly DraftParagraph[], answer
 }
 
 /**
- * Error for each Inventor Question still in the draft; export refuses until it is resolved or
- * waived. When its current answer in `inventor-answers.md` is filled, the message says to apply it.
+ * Errors of the Inventor Questions; export refuses until each is resolved or waived:
+ *
+ * - each question still in the draft; when its current answer in `inventor-answers.md` is filled,
+ *   the message says to apply it;
+ * - each question of `inventor-answers.md` that is no longer in the draft while its current
+ *   answer (the narrowed question after a partial answer) is empty: a partial answer narrows a
+ *   question, it does not close it.
  */
 export function checkInventorQuestions(draft: string, answers: readonly InventorAnswerSection[] = []): DraftFinding[] {
-	return parseInventorQuestions(draft).map(question => ({
+	const questions = parseInventorQuestions(draft);
+	const inDraft: DraftFinding[] = questions.map(question => ({
 		severity: 'Error',
 		rule: INVENTOR_QUESTION,
 		file: draftFile,
 		line: question.line,
+		question: question.id,
 		message: isAnswered(currentAnswer(answers.find(section => section.id === question.id)))
 			? `Inventor Question ${question.id} is answered in ${answersFile}; apply it to the draft: ${question.text}`
 			: `Inventor Question ${question.id} is open: ${question.text}`,
 	}));
+	const dropped: DraftFinding[] = answers
+		.filter(section => !questions.some(question => question.id === section.id) && !isAnswered(currentAnswer(section)))
+		.map(section => {
+			const round = currentRound(section);
+			return {
+				severity: 'Error',
+				rule: INVENTOR_QUESTION,
+				file: answersFile,
+				...(round?.answerLine !== undefined ? { line: round.answerLine } : {}),
+				question: section.id,
+				message: `Inventor Question ${section.id} is no longer in the draft, but its ${section.rounds.length > 1 ? 'narrowed question' : 'question'} has no answer in ${answersFile}. Put the question back in the draft, or waive it.${round?.question ? ` Question: ${round.question}` : ''}`,
+			};
+		});
+	return [...inDraft, ...dropped];
 }

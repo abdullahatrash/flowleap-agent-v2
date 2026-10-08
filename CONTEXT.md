@@ -402,7 +402,7 @@ one .docx per document type (description, claims, abstract) with the office page
 **Working Record** and findings stay beside it. The export also writes a full review copy
 (`draft-application.full.docx`): the whole application in one file like a published patent,
 marked not for filing, with a `[MISSING: ...]` placeholder naming the **Drafting Checklist** step
-for each missing part.
+or note for each missing part.
 _Avoid_: calling the .docx the deliverable — it is the export; "Draft" as a Project Status.
 
 **Filing Manifest**:
@@ -414,11 +414,13 @@ _Avoid_: calling the page counts measured — only Word (or the office) renders 
 
 **Drafting Checklist**:
 The `checklist.md` of a drafting matter. Code, not the model, writes it from the files after
-every drafting tool call (start, save, validate, export), also after a refusal: numbered steps
-that follow the skill steps and gates (Feature List confirmed, Claims approved, draft written,
-Inventor Questions answered and applied, Errors fixed or waived, export), each checked only when
-the files say so, each open step naming the file, the line and the text to write, and one "Next
-step for you:" line. Tool refusals point to its open steps. The agent reads it first in a matter.
+every drafting tool call (start, save, validate, export), also after a refusal: six steps with
+the numbers of the application-drafting skill steps (1 Feature List confirmed, 2 Claims approved,
+3 draft written, 4 Errors fixed or waived, 5 Inventor Questions answered and applied, 6 export of
+the current draft), each checked only when the files say so, each open step naming the file, the
+line and the text to write; notes that never block (figures, required sections, style
+exemplars); and one "Next step for you:" line. Tool refusals list the blocking items and point to
+its open steps. The agent reads it first in a matter.
 _Avoid_: the model writing or ticking it; a step checked from a statement in chat.
 
 **Model-Proposed**:

@@ -11,7 +11,7 @@
 
 import { INVENTOR_QUESTION } from './finding';
 import { DraftDocumentType } from './folderContract';
-import { DraftingOffice } from './frontmatter';
+import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
 import { DraftParagraph, parseDraftParagraphs, stripSourceMarkers } from './sourceMarkers';
 import { isAbstractParagraph, isClaimsParagraph } from './specValidators';
 
@@ -177,7 +177,7 @@ export const OFFICE_SECTIONS: Readonly<Record<DraftingOffice, readonly OfficeSec
 };
 
 /** The rank of the Claims and of the Abstract: after every description section. */
-export const CLAIMS_RANK = 1000;
+const CLAIMS_RANK = 1000;
 const ABSTRACT_RANK = 1001;
 
 /** The filing position of a section heading for the office, or `undefined` when it is not recognised. */
@@ -195,6 +195,12 @@ export function sectionRank(heading: DraftParagraph, office: DraftingOffice): nu
 
 interface DraftSection {
 	readonly rank: number | undefined;
+	readonly paragraphs: DraftParagraph[];
+}
+
+/** A section the office order recognises, with its rank. */
+interface RankedSection {
+	readonly rank: number;
 	readonly paragraphs: DraftParagraph[];
 }
 
@@ -222,10 +228,10 @@ export function orderSections(paragraphs: readonly DraftParagraph[], office: Dra
 		}
 	}
 
-	const body: { rank: number; paragraphs: DraftParagraph[] }[] = [];
-	const end: { rank: number; paragraphs: DraftParagraph[] }[] = [];
+	const body: RankedSection[] = [];
+	const end: RankedSection[] = [];
 	const beforeClaims: DraftParagraph[] = [];
-	let last: { rank: number; paragraphs: DraftParagraph[] } | undefined;
+	let last: RankedSection | undefined;
 	for (const section of sections) {
 		if (section.rank === undefined) {
 			const target = !last ? front : last.rank >= CLAIMS_RANK ? beforeClaims : last.paragraphs;
@@ -235,11 +241,38 @@ export function orderSections(paragraphs: readonly DraftParagraph[], office: Dra
 		last = { rank: section.rank, paragraphs: [...section.paragraphs] };
 		(section.rank >= CLAIMS_RANK ? end : body).push(last);
 	}
-	const byRank = (a: { rank: number }, b: { rank: number }) => a.rank - b.rank;
+	const byRank = (a: RankedSection, b: RankedSection) => a.rank - b.rank;
 	return [
 		...front,
 		...body.sort(byRank).flatMap(section => section.paragraphs),
 		...beforeClaims,
 		...end.sort(byRank).flatMap(section => section.paragraphs),
+	];
+}
+
+/**
+ * The required office sections ({@link OFFICE_SECTIONS}) that no heading of the draft names, in
+ * office order. The section on the drawings is required only when the application has figures.
+ */
+export function missingSections(draft: string, office: DraftingOffice, withFigures: boolean): OfficeSection[] {
+	const present = new Set(exportedParagraphs(draft).filter(paragraph => paragraph.kind === 'heading').map(paragraph => sectionRank(paragraph, office)));
+	return OFFICE_SECTIONS[office].filter((section, rank) => section.required && (withFigures || !section.drawings) && !present.has(rank));
+}
+
+/**
+ * The names of the parts a complete application has and the draft does not: the title (no `title`
+ * in the frontmatter and no heading), the required office sections ({@link missingSections}), then
+ * the claims and the abstract when the draft has no text under them.
+ */
+export function missingParts(draft: string, office: DraftingOffice, withFigures: boolean): string[] {
+	const paragraphs = exportedParagraphs(draft);
+	const documents = documentParagraphs(paragraphs);
+	const hasText = (type: DraftDocumentType) => documents[type].some(paragraph => paragraph.kind === 'text');
+	const title = parseDraftingFrontmatter(draft).fields.title;
+	return [
+		...(typeof title === 'string' && title.trim() || paragraphs.some(paragraph => paragraph.kind === 'heading') ? [] : ['Title']),
+		...missingSections(draft, office, withFigures).map(section => section.name),
+		...(hasText('claims') ? [] : ['Claims']),
+		...(hasText('abstract') ? [] : ['Abstract']),
 	];
 }

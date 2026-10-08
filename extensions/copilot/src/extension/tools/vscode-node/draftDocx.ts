@@ -66,10 +66,15 @@ async function packDocument(children: Paragraph[], type: DraftDocumentType | und
 	return new Uint8Array(await Packer.toBuffer(document));
 }
 
+/** A paragraph of `text`; a heading of the given level (1 for `#`) when `level` is set. */
+function textParagraph(text: string, level?: number, pageBreakBefore = false): Paragraph {
+	return level === undefined
+		? new Paragraph({ pageBreakBefore, children: runs(text) })
+		: new Paragraph({ pageBreakBefore, children: runs(text), heading: headingLevels[Math.min(level, headingLevels.length) - 1] });
+}
+
 function toDocx(filing: FilingParagraph): Paragraph {
-	return filing.kind === 'heading'
-		? new Paragraph({ children: runs(filing.text), heading: headingLevels[Math.min(filing.level ?? 1, headingLevels.length) - 1] })
-		: new Paragraph({ children: runs(filing.text) });
+	return textParagraph(filing.text, filing.kind === 'heading' ? filing.level ?? 1 : undefined);
 }
 
 /** The export of a Draft Application: one .docx per document type. */
@@ -104,12 +109,9 @@ export function buildFullReviewCopyDocx(blocks: readonly ReviewCopyBlock[], offi
 			breakBefore = true;
 			continue;
 		}
-		const paragraph = block.kind === 'missing'
+		children.push(block.kind === 'missing'
 			? new Paragraph({ pageBreakBefore: breakBefore, children: [new TextRun({ text: block.text, bold: true, highlight: 'yellow' })] })
-			: block.kind === 'heading'
-				? new Paragraph({ pageBreakBefore: breakBefore, children: runs(block.text), heading: headingLevels[Math.min(block.level, headingLevels.length) - 1] })
-				: new Paragraph({ pageBreakBefore: breakBefore, children: runs(block.text) });
-		children.push(paragraph);
+			: textParagraph(block.text, block.kind === 'heading' ? block.level : undefined, breakBefore));
 		breakBefore = false;
 	}
 	return packDocument(children, undefined, OFFICE_PAGE_SETUP[office], REVIEW_COPY_MARK);

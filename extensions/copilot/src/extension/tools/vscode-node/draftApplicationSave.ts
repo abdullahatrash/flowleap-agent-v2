@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DraftingFrontmatterFields, DraftingFrontmatterValue, parseDraftingFrontmatter, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
-import { appliedAnswerLabel, citedInventorAnswers, lastAnsweredRound, parseInventorAnswers, updateInventorAnswers } from '../common/drafting/inventorAnswers';
-import { parseDraftParagraphs, parseInventorQuestions } from '../common/drafting/sourceMarkers';
+import { appliedAnswerLabel, currentAnswer, isAnswered, newlyAppliedAnswers, parseInventorAnswers, updateInventorAnswers } from '../common/drafting/inventorAnswers';
+import { parseInventorQuestions } from '../common/drafting/sourceMarkers';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, INVENTOR_ANSWER_APPLIED, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { DraftingWorkspace } from './draftingWorkspace';
 
@@ -55,8 +55,8 @@ function versionedPath(path: string, version: number): string {
  * and the previous draft, snapshot and record are kept as `draft-application.v<n>.*`.
  *
  * The save writes the Inventor Questions of the draft to `inventor-answers.md` (new questions
- * added, filled answers kept) and records each inventor's answer the draft cites
- * (`inventor:IQ-n`) in the Working Record. After the save, also after a refusal, it writes the
+ * added, filled answers kept) and records in the Working Record each inventor's answer the save
+ * applies: the draft text that cites it (`inventor:IQ-n`) changed against the previous save. After the save, also after a refusal, it writes the
  * Drafting Checklist.
  */
 export async function saveDraftApplication(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftApplicationSaveResult> {
@@ -90,6 +90,7 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 
 	const currentHash = approval.hash;
 	const previousRecord = await workspace.read(folder.workingRecord) ?? '';
+	const previousDraft = await workspace.read(folder.draft);
 	const approvedHash = readRecordField(previousRecord, APPROVED_CLAIMS_HASH);
 	const versionHash = approvedHash ?? currentHash;
 	const snapshot = await workspace.read(folder.generatedSnapshot);
@@ -138,14 +139,14 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 		record = resaveWorkingRecord(previousRecord, document, savedAt);
 	}
 
-	// The inventor's answers the draft now cites, each recorded once per answer.
+	// The answers this save applies: the draft text that cites them changed. Each applied round is recorded once.
 	const previousAnswers = await workspace.read(folder.inventorAnswers);
 	const sections = parseInventorAnswers(previousAnswers ?? '');
-	const cited = citedInventorAnswers(parseDraftParagraphs(document));
+	const applied = newlyAppliedAnswers(previousDraft, document);
 	const recorded = readRecordFields(record, INVENTOR_ANSWER_APPLIED).map(value => value.replace(/ at \S+$/, ''));
-	for (const id of cited) {
-		const round = lastAnsweredRound(sections.find(section => section.id === id));
-		const label = round !== undefined ? appliedAnswerLabel(id, round) : undefined;
+	for (const id of applied) {
+		const section = sections.find(candidate => candidate.id === id);
+		const label = section && isAnswered(currentAnswer(section)) ? appliedAnswerLabel(id, section.rounds.length) : undefined;
 		if (label && !recorded.includes(label)) {
 			record = addRecordLine(record, INVENTOR_ANSWER_APPLIED, `${label} at ${savedAt}`);
 		}
@@ -155,7 +156,7 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 	const questions = parseInventorQuestions(document);
 	const newQuestions = questions.filter(question => !sections.some(section => section.id === question.id));
 	if (questions.length || previousAnswers !== undefined) {
-		await workspace.write(folder.inventorAnswers, updateInventorAnswers(previousAnswers, folder.matter, questions, cited));
+		await workspace.write(folder.inventorAnswers, updateInventorAnswers(previousAnswers, folder.matter, questions, applied));
 	}
 
 	const notes = [

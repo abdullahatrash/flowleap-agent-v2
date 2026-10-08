@@ -145,7 +145,7 @@ describe('buildFullReviewCopyDocx', () => {
 		};
 	}
 
-	it('EPO: front page, description in Rule 42 order with [0001] numbering and missing sections named with their checklist step, claims, abstract, one drawings page per figure, reference signs', async () => {
+	it('EPO: front page, description in Rule 42 order with [0001] numbering and missing sections naming the checklist note, claims, abstract, one drawings page per figure, reference signs of the drawn parts only', async () => {
 		expect(await readBack('EPO')).toEqual({
 			lines: [
 				'Draft for attorney review — not for filing',
@@ -158,13 +158,13 @@ describe('buildFullReviewCopyDocx', () => {
 				'[Abstract figure: FIG. 1, proposed]',
 				'Description',
 				'Technical Field',
-				'[MISSING: Technical Field — no such section in draft-application.md. See checklist.md step 3.]',
+				'[MISSING: Technical Field — no such section in draft-application.md. See checklist.md, "Required sections".]',
 				'Background',
 				'[0001] Text of Background.',
 				'Summary',
 				'[0002] Text of Summary.',
 				'Brief Description of the Drawings',
-				'[MISSING: Brief Description of the Drawings — no such section in draft-application.md. See checklist.md step 3.]',
+				'[MISSING: Brief Description of the Drawings — no such section in draft-application.md. See checklist.md, "Required sections".]',
 				'Detailed Description',
 				'[0003] The housing 12 holds the lever 14.',
 				'[0004] The lever 14 pivots.',
@@ -184,20 +184,18 @@ describe('buildFullReviewCopyDocx', () => {
 				'12 housing',
 				'14 lever',
 				'16 frame',
-				'18 spring',
 			],
 			pageBreaks: 6,
 			markInHeader: true,
 		});
 	});
 
-	it('US: no reference signs list; without figures the drawings and their description are missing, naming checklist step 1', async () => {
+	it('US: no reference signs list; without figures the drawings are missing, naming the checklist note "Figures"; no drawings section is due', async () => {
 		const { lines } = await readBack('US', false);
 		expect(lines.filter(line => line.startsWith('[MISSING') || line.startsWith('[Abstract figure') || /^(?:Drawings|Reference signs list)$/.test(line))).toEqual([
 			'[Abstract figure: none, no figures]',
-			'[MISSING: Brief Description of the Drawings — no figures in figures.md. See checklist.md step 1.]',
 			'Drawings',
-			'[MISSING: Drawings — no figures in figures.md. See checklist.md step 1.]',
+			'[MISSING: Drawings — no figures in figures.md. See checklist.md, "Figures".]',
 		]);
 	});
 });

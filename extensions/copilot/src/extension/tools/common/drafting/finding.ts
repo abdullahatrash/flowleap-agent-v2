@@ -24,6 +24,8 @@ export interface DraftFinding {
 	/** The 1-based line in `file`. */
 	readonly line?: number;
 	readonly claim?: number;
+	/** The Inventor Question the finding is about, e.g. `IQ-3`. */
+	readonly question?: string;
 	/** The attorney's waiver, kept in the findings file. */
 	readonly waived?: { readonly reason: string };
 }

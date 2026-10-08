@@ -25,6 +25,7 @@ import { ExportDraftDocxTool } from '../exportDraftDocxTool';
 import { StartApplicationDraftTool } from '../startApplicationDraftTool';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
+import { parseInventorAnswers } from '../../common/drafting/inventorAnswers';
 import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
@@ -390,7 +391,7 @@ describe('export_draft_docx', () => {
 			result: await tools.exportDocx(),
 			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
-			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Open in drafting/hinge/checklist.md: step 5 (Fix or waive the Errors).',
+			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors).',
 			docxWritten: false,
 		});
 	});
@@ -429,7 +430,7 @@ describe('Inventor Question answers', () => {
 		await tools.validate();
 		const answeredNotApplied = {
 			findings: (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g),
-			checklistStep4: (await read('drafting/hinge/checklist.md')).match(/- \[ \] 4\.[^\n]*/)?.[0],
+			checklistStep5: (await read('drafting/hinge/checklist.md')).match(/- \[ \] 5\.[^\n]*/)?.[0],
 		};
 		await tools.save(appliedIq1());
 		const exportResult = await tools.exportDocx();
@@ -453,6 +454,31 @@ describe('Inventor Question answers', () => {
 			answers: (await read('drafting/hinge/inventor-answers.md')).slice((await read('drafting/hinge/inventor-answers.md')).indexOf('## IQ-1')),
 			findings: (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g),
 		}).toMatchSnapshot();
+	});
+
+	it('a filled answer stays current until a save applies it, and the Working Record names the round applied', async () => {
+		const { tools, read, write } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		write('drafting/hinge/inventor-answers.md', fillAnswer(await read('drafting/hinge/inventor-answers.md'), 'IQ-1', 'Stainless steel; the hardness is not known.'));
+		const narrowedQuestion = '\n## Inventor Questions\n\n> **Inventor Question IQ-1:** What hardness has the stainless steel lever?\n\n> **Inventor Question IQ-2:** How thick is the lever?\n';
+		await tools.save(appliedIq1(narrowedQuestion));
+		write('drafting/hinge/inventor-answers.md', (await read('drafting/hinge/inventor-answers.md')).replace(/(\*\*Narrowed question:\*\* What hardness has the stainless steel lever\?\n\n\*\*Answer:\*\*\n)/, '$1Hardened to 40 HRC.\n'));
+		await tools.save(appliedIq1(narrowedQuestion));
+		const notYetApplied = parseInventorAnswers(await read('drafting/hinge/inventor-answers.md'))[0].rounds.length;
+		await tools.save(appliedIq1('\n## Inventor Questions\n\n> **Inventor Question IQ-2:** How thick is the lever?\n').replace('The lever 14 is stainless steel.', 'The lever 14 is stainless steel, hardened to 40 HRC.'));
+		expect({
+			notYetApplied,
+			rounds: parseInventorAnswers(await read('drafting/hinge/inventor-answers.md'))[0].rounds.map(round => round.answer),
+			recorded: (await read('drafting/hinge/draft-application.working-record.md')).match(/^- \*\*Inventor answer applied:\*\*.*$/gm)?.map(line => line.replace(/ at \S+$/, '')),
+		}).toEqual({
+			notYetApplied: 2,
+			rounds: ['Stainless steel; the hardness is not known.', 'Hardened to 40 HRC.'],
+			recorded: [
+				'- **Inventor answer applied:** IQ-1, answer 1, from inventor-answers.md',
+				'- **Inventor answer applied:** IQ-1, answer 2, from inventor-answers.md',
+			],
+		});
 	});
 
 	it('an inventor:IQ-n marker without a filled answer is an Error', async () => {
@@ -479,6 +505,23 @@ describe('Drafting Checklist', () => {
 	});
 });
 
+describe('Drafting Checklist export step', () => {
+	it('step 6 is checked only while the export was written from the current draft', async () => {
+		const { tools, read, edit } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft());
+		await tools.exportDocx();
+		const step6 = async () => (await read('drafting/hinge/checklist.md')).match(/^- \[.\] 6\..*$/m)?.[0];
+		const afterExport = await step6();
+		await edit('drafting/hinge/draft-application.md', 'A hinge joins a door to a frame.', 'A hinge pivotally joins a door to a frame.');
+		await tools.validate();
+		expect({ afterExport, afterEdit: await step6() }).toEqual({
+			afterExport: '- [x] 6. Exported to Word: draft-application.description.docx, draft-application.claims.docx, draft-application.abstract.docx',
+			afterEdit: '- [ ] 6. Export to Word: ready',
+		});
+	});
+});
+
 describe('style folder', () => {
 	it('every drafting tool creates style/README.md once, never overwrites it, never reads it as an exemplar; the checklist counts the exemplars', async () => {
 		const { tools, read, write, fileSystem } = setup(gatesOpen);
@@ -494,7 +537,7 @@ describe('style folder', () => {
 			firstSaysNoExemplar: first.includes('No exemplar in style/: use the office template style only. Tell the attorney: Put 1 to 5 of your own filed applications or claim sets in style/'),
 			readmeKept: await read('style/README.md'),
 			exemplarHeadings: second.match(/^### Style exemplar.*$/gm),
-			checklistStyleLine: (await read('drafting/hinge/checklist.md')).match(/^- Optional\. Style exemplars:.*$/m)?.[0],
+			checklistStyleLine: (await read('drafting/hinge/checklist.md')).match(/^- Style exemplars:.*$/m)?.[0],
 		}).toMatchSnapshot();
 	});
 });

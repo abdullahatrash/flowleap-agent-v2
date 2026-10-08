@@ -4,34 +4,43 @@ exports[`Drafting Checklist > every drafting tool rewrites checklist.md, also af
 {
   "afterRefusal": "# Drafting checklist: hinge (US)
 
-Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names.
+Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
 - [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`
 - [ ] 2. Approve the claims: claims.md has no \`approved: true\`
       → Review claims.md, then on line 2 write:   approved: true
 - [ ] 3. Write the draft: blocked by step 2
-- [ ] 4. Answer the Inventor Questions: blocked by step 3
-- [ ] 5. Fix or waive the Errors: blocked by step 3
+- [ ] 4. Fix or waive the Errors: blocked by step 3
+- [ ] 5. Answer the Inventor Questions: blocked by step 3
 - [ ] 6. Export to Word: blocked by steps 2, 3, 4 and 5
-- Optional. Style exemplars: 0 files in style/
+
+Not blocking:
+
+- Figures: 1 in figures.md
+- Style exemplars: 0 files in style/
       → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.
 
 Next step for you: step 2.
 ",
   "afterSave": "# Drafting checklist: hinge (US)
 
-Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names.
+Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
 - [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`
 - [x] 2. Claims approved: claims.md has \`approved: true\`
 - [x] 3. Draft written: draft-application.md
-- [ ] 4. Answer the Inventor Questions: 1 open
+- [ ] 4. Fix or waive the Errors: not checked yet
+      → Tell the agent: "Validate the draft"
+- [ ] 5. Answer the Inventor Questions: 1 open
       → Fill each **Answer:** in inventor-answers.md (line 11), or send the file to the inventor
       → Then tell the agent: "Apply the answers"
-- [ ] 5. Fix or waive the Errors: not checked yet
-      → Tell the agent: "Validate the draft"
 - [ ] 6. Export to Word: blocked by steps 4 and 5
-- Optional. Style exemplars: 0 files in style/
+
+Not blocking:
+
+- Figures: 1 in figures.md
+- Required sections: all in draft-application.md
+- Style exemplars: 0 files in style/
       → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.
 
 Next step for you: step 4.
@@ -64,7 +73,8 @@ Stainless steel; the hardness is not known.
 **Answer:**
 ",
   "findings": [
-    "- \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-1 is open: What hardness has the stainless steel lever?",
+    "- \`inventor-question\` (draft-application.md, line 44, IQ-1): Inventor Question IQ-1 is open: What hardness has the stainless steel lever?",
+    "- \`inventor-question\` (inventor-answers.md, line 24, IQ-2): Inventor Question IQ-2 is no longer in the draft, but its question has no answer in inventor-answers.md. Put the question back in the draft, or waive it. Question: How thick is the lever?",
   ],
 }
 `;
@@ -72,14 +82,16 @@ Stainless steel; the hardness is not known.
 exports[`Inventor Question answers > the save writes inventor-answers.md; an applied answer closes its question, is recorded, and the export blocks only on the rest 1`] = `
 {
   "answeredNotApplied": {
-    "checklistStep4": "- [ ] 4. Answer the Inventor Questions: 1 open, 1 answered but not yet in the draft (IQ-1)",
+    "checklistStep5": "- [ ] 5. Answer the Inventor Questions: 1 open, 1 answered but not yet in the draft (IQ-1)",
     "findings": [
-      "- \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is answered in inventor-answers.md; apply it to the draft: Which steel grade is the lever made of?",
-      "- \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-2 is open: How thick is the lever?",
+      "- \`inventor-question\` (draft-application.md, line 41, IQ-1): Inventor Question IQ-1 is answered in inventor-answers.md; apply it to the draft: Which steel grade is the lever made of?",
+      "- \`inventor-question\` (draft-application.md, line 44, IQ-2): Inventor Question IQ-2 is open: How thick is the lever?",
     ],
   },
   "answersKept": true,
-  "exportResult": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Open in drafting/hinge/checklist.md: step 4 (Answer the Inventor Questions).",
+  "exportResult": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
+- \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-2 is open: How thick is the lever?
+Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions).",
   "recorded": [
     "- **Inventor answer applied:** IQ-1, answer 1, from inventor-answers.md at <time>",
   ],
@@ -181,9 +193,11 @@ Estimated at 80 characters per line and 36 lines per page (12 pt, 1.5 line spaci
 
 exports[`export_draft_docx > refuses on an open Inventor Question and on claims changed after approval 1`] = `
 {
-  "claimsChanged": "The draft was not exported. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Answer the Inventor Questions).",
-  "openQuestionRefusal": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Open in drafting/hinge/checklist.md: step 4 (Answer the Inventor Questions).",
-  "unapproved": "The draft was not exported. \`approved\` in drafting/hinge/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Answer the Inventor Questions).",
+  "claimsChanged": "The draft was not exported. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Fix or waive the Errors), step 5 (Answer the Inventor Questions).",
+  "openQuestionRefusal": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
+- \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is open: Which steel grade is the lever made of?
+Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions).",
+  "unapproved": "The draft was not exported. \`approved\` in drafting/hinge/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Fix or waive the Errors), step 5 (Answer the Inventor Questions).",
 }
 `;
 
@@ -241,7 +255,7 @@ Text of the PDF exemplar.",
 
 exports[`style folder > every drafting tool creates style/README.md once, never overwrites it, never reads it as an exemplar; the checklist counts the exemplars 1`] = `
 {
-  "checklistStyleLine": "- Optional. Style exemplars: 1 file in style/",
+  "checklistStyleLine": "- Style exemplars: 1 file in style/",
   "created": "# Style exemplars
 
 Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.
@@ -268,7 +282,7 @@ None.
 
 ## Inventor Questions
 
-- \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is open: Which steel grade is the lever made of?
+- \`inventor-question\` (draft-application.md, line 41, IQ-1): Inventor Question IQ-1 is open: Which steel grade is the lever made of?
   - Waived: Grade is left to the manufacturer.
 
 ## Notes
@@ -289,13 +303,13 @@ Wrote drafting/hinge/checklist.md: the next step for the attorney is step 6 (Exp
 
 exports[`write_patent_results draft-application template > starts the next version when the claims changed and were approved again, keeping the previous draft and record 1`] = `
 {
-  "cleared": "Drafting did not start. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 5 (Fix or waive the Errors).",
+  "cleared": "Drafting did not start. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Fix or waive the Errors).",
   "previousDraftVersion": "1",
   "previousRecordKept": true,
   "result": "Saved drafting/hinge/draft-application.md (version 2, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.
 The claims changed since version 1: this is version 2; the previous files are kept as drafting/hinge/draft-application.v1.md, drafting/hinge/draft-application.v1.generated.md, drafting/hinge/draft-application.v1.working-record.md.
 Findings are not checked at save. Call validate_draft next.
-Wrote drafting/hinge/checklist.md: the next step for the attorney is step 5 (Fix or waive the Errors).",
+Wrote drafting/hinge/checklist.md: the next step for the attorney is step 4 (Fix or waive the Errors).",
   "version": "2",
 }
 `;
@@ -345,7 +359,7 @@ Each sentence of the draft as saved, at the line of its paragraph, with the sour
   "result": "Saved drafting/hinge/draft-application.md (version 1, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.
 Inventor Questions: 1 in the draft, 1 new; the answer slots are in drafting/hinge/inventor-answers.md.
 Findings are not checked at save. Call validate_draft next.
-Wrote drafting/hinge/checklist.md: the next step for the attorney is step 4 (Answer the Inventor Questions).",
+Wrote drafting/hinge/checklist.md: the next step for the attorney is step 4 (Fix or waive the Errors).",
   "snapshotIsDraft": true,
 }
 `;

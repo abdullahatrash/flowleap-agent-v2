@@ -34,7 +34,7 @@ function oneLine(text: string): string {
 }
 
 function renderItem(finding: DraftFinding): string[] {
-	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
+	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined, finding.question].filter(Boolean).join(', ');
 	const item = `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${oneLine(finding.message)}`;
 	return finding.waived ? [item, `  - Waived: ${oneLine(finding.waived.reason)}`] : [item];
 }
@@ -91,12 +91,14 @@ export function parseFindingsFile(text: string): DraftFinding[] {
 	return parseFindingsFileItems(text).map(item => item.finding);
 }
 
-function readLocation(location: string | undefined): Pick<DraftFinding, 'file' | 'line' | 'claim'> {
-	const result: { file?: string; line?: number; claim?: number } = {};
+function readLocation(location: string | undefined): Pick<DraftFinding, 'file' | 'line' | 'claim' | 'question'> {
+	const result: { file?: string; line?: number; claim?: number; question?: string } = {};
 	for (const part of (location ?? '').split(',').map(entry => entry.trim()).filter(Boolean)) {
 		const numbered = /^(?<kind>line|claim) (?<value>\d+)$/.exec(part);
 		if (numbered?.groups) {
 			result[numbered.groups.kind as 'line' | 'claim'] = Number(numbered.groups.value);
+		} else if (/^IQ-\d+$/.test(part)) {
+			result.question = part;
 		} else {
 			result.file = part;
 		}

@@ -19,7 +19,8 @@ export and `checklist.md` beside them.
 In a matter that has `checklist.md`, read it first. Code writes it after
 every drafting tool call, also after a refusal: it shows the steps that are
 done, the open steps with the file and the line to change, and the next step
-for the attorney. When a tool refuses, report the open steps it names.
+for the attorney. Its step numbers are the step numbers of this skill. When a
+tool refuses, report the items and the open steps it names.
 
 ## Gates
 
@@ -104,21 +105,12 @@ Done when `findings.md` holds the validator findings and the advisory items.
 
 ## Step 5: Resolve Inventor Questions
 
-The save writes each Inventor Question to `inventor-answers.md` with an empty
-`**Answer:**` slot. The attorney or the inventor fills it. When the attorney
-asks you to apply the answers:
+The save writes each Inventor Question to `inventor-answers.md`; the attorney
+or the inventor fills the answers. When the attorney asks you to apply them,
+follow [references/resolve-inventor-questions.md](references/resolve-inventor-questions.md).
 
-1. Read `inventor-answers.md`. Use only the filled answers; an empty answer,
-   "Not stated" or "unknown" is no answer.
-2. Write each answer at the place its question names, in the inventor's
-   words, with the marker `<!-- src: inventor:IQ-n -->`. Add no fact the
-   answer does not state.
-3. Delete the answered question. When the answer is partial, keep the
-   question and narrow it to the part that is still open.
-4. Save the draft and call `validate_draft` again.
-
-Done when each filled answer is in the draft and `checklist.md` shows no
-answered question that is not applied.
+Done when each filled answer is in the draft and `checklist.md` step 5 shows
+no answered question that is not applied.
 
 ## Step 6: Report and export
 
@@ -128,9 +120,9 @@ found and what stays open. A run without Errors is "no Error findings", never
 "passed" or "ready to file".
 
 When the attorney asks for the Word file, call `export_draft_docx`. It
-refuses on an unwaived Error or an open Inventor Question: report the open
-steps of `checklist.md` and each item of `findings.md` they name. The
-attorney resolves it, or writes a waiver with a reason in `findings.md`.
+refuses on an unwaived Error or an open Inventor Question and lists each
+one: report each one, and the open steps of `checklist.md`. The attorney
+resolves it, or writes a waiver with a reason in `findings.md`.
 It writes the description, the claims and the abstract as three .docx files
 with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not
 draw figures: tell the attorney that the drawing sheets are prepared
@@ -139,7 +131,8 @@ the attorney declares at filing: claims, drawing sheets, the proposed
 abstract figure and the pages. Report the page counts as estimates, and the
 abstract figure as a proposal. It also writes `draft-application.full.docx`,
 the whole application in one file for the attorney to read, not to file;
-report each `[MISSING: ...]` placeholder in it with its checklist step.
+report each `[MISSING: ...]` placeholder in it with the checklist step or
+note it names.
 
 ## Rules
 

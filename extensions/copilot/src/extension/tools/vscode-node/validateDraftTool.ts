@@ -58,10 +58,7 @@ export class ValidateDraftTool implements ICopilotTool<IValidateDraftParams> {
 			return textResult(`The draft was not validated. ${workspace}`);
 		}
 		const { folder } = workspace;
-		const refusal = async (reason: string) => {
-			const pointer = await workspace.checklistLine(true);
-			return textResult(`The draft was not validated. ${reason}${pointer ? ` ${pointer}` : ''}`);
-		};
+		const refusal = (reason: string) => workspace.refusal('The draft was not validated.', reason);
 		const draft = await workspace.read(folder.draft);
 		if (draft === undefined) {
 			return refusal(`${folder.draft} does not exist: save the draft with write_patent_results, template draft-application, first.`);

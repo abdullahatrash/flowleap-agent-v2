@@ -19,7 +19,7 @@ import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, Draft
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README } from '../common/drafting/styleFolder';
 import { validateDraft } from '../common/drafting/validateDraft';
-import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
+import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, EXPORTED_DRAFT_HASH, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
@@ -66,8 +66,12 @@ function claimsHash(claims: string): string {
 	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
 }
 
-function draftHash(draft: string): string {
-	return createHash('sha256').update(draft).digest('hex');
+/**
+ * The SHA-256 of a draft text together with the claims body it was checked or exported with: a
+ * validator run or an export is current while the hash of the current files matches.
+ */
+function draftHash(draft: string, claims: string): string {
+	return createHash('sha256').update(`${draft}\0${claimsHash(claims)}`).digest('hex');
 }
 
 /** The frontmatter field of `claims.md` that ties `approved: true` to the claims body it approved. */
@@ -282,8 +286,14 @@ export class DraftingWorkspace {
 		const merged = mergeFindings(current, previous);
 		await this.write(this.folder.findings, renderFindingsFile(merged));
 		const record = await this.read(this.folder.workingRecord) ?? emptyWorkingRecord(this.folder.matter);
-		await this.write(this.folder.workingRecord, setRecordField(record, VALIDATED_DRAFT_HASH, draftHash(draft)));
+		await this.write(this.folder.workingRecord, setRecordField(record, VALIDATED_DRAFT_HASH, draftHash(draft, claims)));
 		return merged;
+	}
+
+	/** Records in the Working Record the hash of the draft and claims an export was written from. */
+	async recordExport(draft: string, claims: string): Promise<void> {
+		const record = await this.read(this.folder.workingRecord) ?? emptyWorkingRecord(this.folder.matter);
+		await this.write(this.folder.workingRecord, setRecordField(record, EXPORTED_DRAFT_HASH, draftHash(draft, claims)));
 	}
 
 	private async exists(path: string): Promise<boolean> {
@@ -300,31 +310,47 @@ export class DraftingWorkspace {
 	 * Every drafting tool calls it after it runs, also after a refusal. Nothing is written while the
 	 * matter has no folder and no drafting input.
 	 */
-	async writeChecklist(): Promise<DraftingChecklist | undefined> {
+	private async writeChecklist(): Promise<DraftingChecklist | undefined> {
 		const { folder } = this;
 		const [featureList, claims, draft] = [await this.read(folder.featureList), await this.read(folder.claims), await this.read(folder.draft)];
 		if (featureList === undefined && claims === undefined && draft === undefined && !await this.exists(folder.folder)) {
 			return undefined;
 		}
 		const findings = await this.read(folder.findings);
-		const validatedHash = readRecordField(await this.read(folder.workingRecord) ?? '', VALIDATED_DRAFT_HASH);
-		let exported = true;
+		const record = await this.read(folder.workingRecord) ?? '';
+		const currentHash = draft !== undefined && claims !== undefined ? draftHash(draft, claims) : undefined;
+		let exported = !!currentHash && readRecordField(record, EXPORTED_DRAFT_HASH) === currentHash;
 		for (const type of DRAFT_DOCUMENT_TYPES) {
 			exported &&= await this.exists(folder.docx[type]);
 		}
+		const claimsFields = claims !== undefined ? parseDraftingFrontmatter(claims).fields : {};
+		const approvedHash = claimsFields[APPROVED_HASH_FIELD];
+		const versionHash = readRecordField(record, VERSION_CLAIMS_HASH);
 		const checklist = readDraftingChecklist({
 			matter: folder.matter,
 			featureList,
 			claims,
+			claimsChangedSinceApproval: claims !== undefined && readGateFlag(claimsFields, 'approved') === 'set' && approvedHash !== undefined && approvedHash !== claimsHash(claims),
 			draft,
+			draftStale: draft !== undefined && claims !== undefined && !!versionHash && versionHash !== claimsHash(claims),
+			figures: await this.read(folder.figures),
 			inventorAnswers: await this.read(folder.inventorAnswers),
 			findings,
-			findingsCurrent: findings !== undefined && draft !== undefined && validatedHash === draftHash(draft),
+			findingsCurrent: findings !== undefined && !!currentHash && readRecordField(record, VALIDATED_DRAFT_HASH) === currentHash,
 			exported,
 			styleExemplars: await this.countStyleExemplars(),
 		});
 		await this.write(folder.checklist, renderChecklist(checklist));
 		return checklist;
+	}
+
+	/**
+	 * The result of a refused tool call: the reason, then the open steps of the Drafting Checklist,
+	 * which is written first. `prefix` says what did not happen, e.g. "The draft was not exported.".
+	 */
+	async refusal(prefix: string, reason: string): Promise<LanguageModelToolResult> {
+		const pointer = await this.checklistLine(true);
+		return textResult(`${prefix} ${reason}${pointer ? `${reason.includes('\n') ? '\n' : ' '}${pointer}` : ''}`);
 	}
 
 	/**
@@ -349,7 +375,7 @@ export class DraftingWorkspace {
 	 * Creates the workspace `style/` folder with its `README.md` when the README is missing. Never
 	 * overwrites the README or any other file.
 	 */
-	async ensureStyleFolder(): Promise<void> {
+	private async ensureStyleFolder(): Promise<void> {
 		const readme = `${DRAFTING_STYLE_FOLDER}/${STYLE_README}`;
 		if (!await this.exists(readme)) {
 			await this.write(readme, renderStyleReadme());
@@ -357,7 +383,7 @@ export class DraftingWorkspace {
 	}
 
 	/** The number of style exemplars in the workspace `style/` folder (the README is none). */
-	async countStyleExemplars(): Promise<number> {
+	private async countStyleExemplars(): Promise<number> {
 		try {
 			return (await this.fileSystemService.readDirectory(this.uri(DRAFTING_STYLE_FOLDER))).filter(([name, type]) => type === FileType.File && isStyleExemplar(name)).length;
 		} catch {

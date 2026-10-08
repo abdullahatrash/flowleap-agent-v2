@@ -10,7 +10,6 @@ import { IWorkspaceService } from '../../../platform/workspace/common/workspaceS
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { LanguageModelToolResult } from '../../../vscodeTypes';
 import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontmatter';
 import { STYLE_INSTRUCTION } from '../common/drafting/styleFolder';
 import { ToolName } from '../common/toolNames';
@@ -23,10 +22,7 @@ interface IStartApplicationDraftParams {
 	matter: string;
 }
 
-async function refusal(reason: string, workspace?: DraftingWorkspace): Promise<LanguageModelToolResult> {
-	const pointer = await workspace?.checklistLine(true);
-	return textResult(`Drafting did not start. ${reason}${pointer ? ` ${pointer}` : ''}`);
-}
+const refused = 'Drafting did not start.';
 
 /**
  * Starts an Application Drafting run (ADR 0012): reads the `confirmed` gate of `feature-list.md`
@@ -61,20 +57,20 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IStartApplicationDraftParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
 		if (typeof workspace === 'string') {
-			return refusal(workspace);
+			return textResult(`${refused} ${workspace}`);
 		}
 		const { folder } = workspace;
 		const featureList = await workspace.requireConfirmedFeatureList();
 		if (typeof featureList === 'string') {
-			return refusal(featureList, workspace);
+			return workspace.refusal(refused, featureList);
 		}
 		const approval = await workspace.requireApprovedClaims();
 		if (typeof approval === 'string') {
-			return refusal(approval, workspace);
+			return workspace.refusal(refused, approval);
 		}
 		const office = readOffice(featureList.fields);
 		if (!office) {
-			return refusal(`${folder.featureList} names no office. Its frontmatter needs \`office: US\` or \`office: EPO\`.`, workspace);
+			return workspace.refusal(refused, `${folder.featureList} names no office. Its frontmatter needs \`office: US\` or \`office: EPO\`.`);
 		}
 		await workspace.recordApprovedClaims(approval.hash);
 		const figures = await workspace.read(folder.figures);

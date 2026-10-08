@@ -9,7 +9,6 @@ import { IFileSystemService } from '../../../platform/filesystem/common/fileSyst
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { LanguageModelToolResult } from '../../../vscodeTypes';
 import { diffDraftParagraphs } from '../common/drafting/draftDiff';
 import { OFFICE_PAGE_SETUP } from '../common/drafting/filingDocuments';
 import { filingManifest, renderFilingManifest } from '../common/drafting/filingManifest';
@@ -20,17 +19,14 @@ import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workin
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildDraftDocx, buildFullReviewCopyDocx } from './draftDocx';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingWorkspace, findingLine, textResult } from './draftingWorkspace';
 
 interface IExportDraftDocxParams {
 	/** The matter folder name under `drafting/`. */
 	matter: string;
 }
 
-async function refusal(reason: string, workspace?: DraftingWorkspace): Promise<LanguageModelToolResult> {
-	const pointer = await workspace?.checklistLine(true);
-	return textResult(`The draft was not exported. ${reason}${pointer ? ` ${pointer}` : ''}`);
-}
+const refused = 'The draft was not exported.';
 
 /**
  * Exports a Draft Application to one .docx per document type (`draft-application.description.docx`,
@@ -65,30 +61,30 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IExportDraftDocxParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
 		if (typeof workspace === 'string') {
-			return refusal(workspace);
+			return textResult(`${refused} ${workspace}`);
 		}
 		const { folder } = workspace;
 		const approval = await workspace.requireApprovedClaims();
 		if (typeof approval === 'string') {
-			return refusal(approval, workspace);
+			return workspace.refusal(refused, approval);
 		}
 		if (approval.changed) {
-			return refusal(approval.changed, workspace);
+			return workspace.refusal(refused, approval.changed);
 		}
 		const draft = await workspace.read(folder.draft);
 		const snapshot = await workspace.read(folder.generatedSnapshot);
 		const claims = await workspace.read(folder.claims);
 		if (draft === undefined || snapshot === undefined || claims === undefined) {
-			return refusal(`${draft === undefined ? folder.draft : folder.generatedSnapshot} does not exist: save the draft with write_patent_results, template draft-application, first.`, workspace);
+			return workspace.refusal(refused, `${draft === undefined ? folder.draft : folder.generatedSnapshot} does not exist: save the draft with write_patent_results, template draft-application, first.`);
 		}
 		const office = await workspace.office(draft);
 		if (!office) {
-			return refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`, workspace);
+			return workspace.refusal(refused, `Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`);
 		}
 		const findings = await workspace.validate(office, draft, claims, approval, []);
 		const blocking = blockingFindings(findings);
 		if (blocking.length) {
-			return refusal(`${blocking.length} finding(s) in ${folder.findings} are open.`, workspace);
+			return workspace.refusal(refused, `${blocking.length} finding(s) in ${folder.findings} are open; each is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):\n${blocking.map(findingLine).join('\n')}`);
 		}
 		const diff = diffDraftParagraphs(snapshot, draft);
 		const record = await workspace.read(folder.workingRecord) ?? emptyWorkingRecord(folder.matter);
@@ -100,6 +96,7 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		const figures = await workspace.read(folder.figures);
 		const manifest = filingManifest({ office, draft, claims, figures });
 		await workspace.write(folder.filingManifest, renderFilingManifest(manifest, folder));
+		await workspace.recordExport(draft, claims);
 		await workspace.write(folder.fullReviewCopy, await buildFullReviewCopyDocx(composeFullReviewCopy({ office, draft, figures, manifest }), office));
 		const setup = OFFICE_PAGE_SETUP[office];
 		const count = (kind: string) => diff.changes.filter(change => change.kind === kind).length;

@@ -17,16 +17,16 @@
  * 5. Drawings: one page per figure of `figures.md`, with its label and parts.
  * 6. EPO only: the list of reference signs.
  *
- * A missing part is a visible `[MISSING: ...]` placeholder in its place that names the Drafting
- * Checklist step that fills it.
+ * A missing part is a visible `[MISSING: ...]` placeholder in its place that names where the
+ * attorney fills it: a Drafting Checklist note (figures, or the required sections and parts).
  */
 
-import { CHECKLIST_STEP } from './checklist';
-import { documentParagraphs, exportedParagraphs, FilingParagraph, OFFICE_SECTIONS, orderSections, sectionRank } from './filingDocuments';
+import { CHECKLIST_NOTE } from './checklist';
+import { documentTypeOf, exportedParagraphs, FilingParagraph, filingParagraphs, missingSections, OFFICE_SECTIONS, orderSections, sectionRank } from './filingDocuments';
 import { FilingManifest } from './filingManifest';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice } from './frontmatter';
-import { parseFigureParts, parseFigureSections } from './specValidators';
+import { parseFigureSections } from './specValidators';
 
 /** The mark on every page of the full review copy. */
 export const REVIEW_COPY_MARK = 'Draft for attorney review — not for filing';
@@ -51,103 +51,102 @@ export interface FullReviewCopyInput {
 
 const checklistFile = DRAFTING_FILE_NAMES.checklist;
 
-function missing(what: string, why: string, step: number): ReviewCopyBlock {
-	return { kind: 'missing', text: `[MISSING: ${what} — ${why}. See ${checklistFile} step ${step}.]` };
+function heading(level: number, text: string): ReviewCopyBlock {
+	return { kind: 'heading', level, text };
 }
 
-const draftMissing = (what: string) => missing(what, `no such section in ${DRAFTING_FILE_NAMES.draft}`, CHECKLIST_STEP.draft);
+function text(value: string): ReviewCopyBlock {
+	return { kind: 'text', text: value };
+}
+
+const pageBreak: ReviewCopyBlock = { kind: 'pageBreak' };
+
+/** A placeholder that names where the attorney fills the gap: a checklist step or note. */
+function missing(what: string, why: string, where: string): ReviewCopyBlock {
+	return { kind: 'missing', text: `[MISSING: ${what} — ${why}. See ${checklistFile}, ${where}.]` };
+}
+
+const sectionsNote = `"${CHECKLIST_NOTE.sections}"`;
+const figuresNote = `"${CHECKLIST_NOTE.figures}"`;
+const noSection = `no such section in ${DRAFTING_FILE_NAMES.draft}`;
+const noFigures = `no figures in ${DRAFTING_FILE_NAMES.figures}`;
 
 function toBlock(paragraph: FilingParagraph): ReviewCopyBlock {
-	return paragraph.kind === 'heading' ? { kind: 'heading', level: paragraph.level ?? 1, text: paragraph.text } : { kind: 'text', text: paragraph.text };
+	return paragraph.kind === 'heading' ? heading(paragraph.level ?? 1, paragraph.text) : text(paragraph.text);
 }
 
 /** Composes the blocks of the full review copy. */
 export function composeFullReviewCopy(input: FullReviewCopyInput): ReviewCopyBlock[] {
 	const { office, manifest } = input;
 	const ordered = orderSections(exportedParagraphs(input.draft), office);
-	const documents = documentParagraphs(ordered);
-	const { figures } = parseFigureSections(input.figures ?? '');
-	const noFigures = missing('Drawings', `no figures in ${DRAFTING_FILE_NAMES.figures}`, CHECKLIST_STEP.featureList);
-	const abstractText = documents.abstract.filter(paragraph => paragraph.kind === 'text').map(toBlock);
-	const abstract = abstractText.length ? abstractText : [draftMissing('Abstract')];
+	const { figures, drawnParts } = parseFigureSections(input.figures ?? '');
+	const ofType = (type: ReturnType<typeof documentTypeOf>) => ordered.filter(paragraph => documentTypeOf(paragraph) === type);
+	const abstractText = ofType('abstract').filter(paragraph => paragraph.kind === 'text').flatMap(filingParagraphs).map(toBlock);
+	const abstract = abstractText.length ? abstractText : [missing('Abstract', noSection, sectionsNote)];
+	const claims = ofType('claims').flatMap(filingParagraphs);
 	const blocks: ReviewCopyBlock[] = [];
 
 	// 1. Front page.
 	blocks.push(
-		{ kind: 'text', text: `**${REVIEW_COPY_MARK}**` },
-		manifest.title ? { kind: 'heading', level: 1, text: manifest.title } : draftMissing('Title'),
-		{ kind: 'text', text: `Office: ${office}` },
-		{ kind: 'text', text: 'Applicant: ______________________' },
-		{ kind: 'text', text: 'Inventor(s): ______________________' },
-		{ kind: 'heading', level: 2, text: 'Abstract' },
+		text(`**${REVIEW_COPY_MARK}**`),
+		manifest.title ? heading(1, manifest.title) : missing('Title', `no title heading in ${DRAFTING_FILE_NAMES.draft}`, sectionsNote),
+		text(`Office: ${office}`),
+		text('Applicant: ______________________'),
+		text('Inventor(s): ______________________'),
+		heading(2, 'Abstract'),
 		...abstract,
-		{ kind: 'text', text: manifest.abstractFigure ? `[Abstract figure: ${manifest.abstractFigure}, proposed]` : '[Abstract figure: none, no figures]' },
-		{ kind: 'pageBreak' },
+		text(manifest.abstractFigure ? `[Abstract figure: ${manifest.abstractFigure}, proposed]` : '[Abstract figure: none, no figures]'),
+		pageBreak,
 	);
 
-	// 2. Description, with the missing office sections in their place and numbered paragraphs.
-	blocks.push({ kind: 'heading', level: 1, text: 'Description' });
-	const due = OFFICE_SECTIONS[office].map((section, rank) => ({ section, rank })).filter(({ section }) => section.required);
-	const present = new Set(ordered.filter(paragraph => paragraph.kind === 'heading').map(paragraph => sectionRank(paragraph, office)));
-	let next = 0;
+	// 2. Description, each missing required section in its place, text paragraphs numbered.
+	blocks.push(heading(1, 'Description'));
+	const absent = missingSections(input.draft, office, figures.length > 0).map(section => ({ section, rank: OFFICE_SECTIONS[office].indexOf(section) }));
 	const placeholdersBefore = (rank: number) => {
-		for (; next < due.length && due[next].rank < rank; next++) {
-			const { section } = due[next];
-			if (!present.has(due[next].rank)) {
-				blocks.push({ kind: 'heading', level: 2, text: section.name }, section.drawings && !figures.length
-					? missing(section.name, `no figures in ${DRAFTING_FILE_NAMES.figures}`, CHECKLIST_STEP.featureList)
-					: draftMissing(section.name));
-			}
+		while (absent.length && absent[0].rank < rank) {
+			const { section } = absent[0];
+			absent.shift();
+			blocks.push(heading(2, section.name), missing(section.name, noSection, sectionsNote));
 		}
 	};
 	let number = 0;
-	for (const paragraph of documents.description) {
-		if (paragraph.kind === 'heading' && paragraph.level === 1 && paragraph.text === manifest.title) {
-			continue;
-		}
+	for (const paragraph of ofType('description')) {
 		if (paragraph.kind === 'heading') {
-			const rank = OFFICE_SECTIONS[office].findIndex(section => section.pattern.test(paragraph.text.toLowerCase()));
-			if (rank >= 0) {
+			if (paragraph.section === manifest.title && /^#\s/.test(paragraph.text)) {
+				continue;
+			}
+			const rank = sectionRank(paragraph, office);
+			if (rank !== undefined) {
 				placeholdersBefore(rank);
 			}
-			blocks.push(toBlock(paragraph));
-		} else {
-			blocks.push({ kind: 'text', text: `[${String(++number).padStart(4, '0')}] ${paragraph.text}` });
+		}
+		for (const filing of filingParagraphs(paragraph)) {
+			blocks.push(filing.kind === 'heading' ? toBlock(filing) : text(`[${String(++number).padStart(4, '0')}] ${filing.text}`));
 		}
 	}
 	placeholdersBefore(Infinity);
-	blocks.push({ kind: 'pageBreak' });
+	blocks.push(pageBreak);
 
 	// 3. Claims.
-	blocks.push(...(documents.claims.some(paragraph => paragraph.kind === 'text') ? documents.claims.map(toBlock) : [{ kind: 'heading', level: 1, text: 'Claims' } as const, draftMissing('Claims')]));
-	blocks.push({ kind: 'pageBreak' });
+	blocks.push(...(claims.some(paragraph => paragraph.kind === 'text') ? claims.map(toBlock) : [heading(1, 'Claims'), missing('Claims', noSection, sectionsNote)]));
+	blocks.push(pageBreak);
 
 	// 4. Abstract.
-	blocks.push({ kind: 'heading', level: 1, text: 'Abstract' }, ...abstract);
+	blocks.push(heading(1, 'Abstract'), ...abstract);
 
 	// 5. Drawings, one page per figure.
 	if (!figures.length) {
-		blocks.push({ kind: 'pageBreak' }, { kind: 'heading', level: 1, text: 'Drawings' }, noFigures);
+		blocks.push(pageBreak, heading(1, 'Drawings'), missing('Drawings', noFigures, figuresNote));
 	}
 	for (const figure of figures) {
-		blocks.push(
-			{ kind: 'pageBreak' },
-			{ kind: 'heading', level: 1, text: figure.label },
-			...figure.parts.map(part => ({ kind: 'text' as const, text: `${part.numeral} — ${part.part}` })),
-			{ kind: 'text', text: '[Drawing sheet to be supplied]' },
-		);
+		blocks.push(pageBreak, heading(1, figure.label), ...figure.parts.map(part => text(`${part.numeral} — ${part.part}`)), text('[Drawing sheet to be supplied]'));
 	}
 
-	// 6. EPO: the list of reference signs.
+	// 6. EPO: the list of reference signs of the parts shown in the figures.
 	if (office === 'EPO') {
-		const parts = parseFigureParts(input.figures ?? '');
-		const signs = parts.filter((part, index) => parts.findIndex(other => other.numeral === part.numeral) === index)
+		const signs = drawnParts.filter((part, index) => drawnParts.findIndex(other => other.numeral === part.numeral) === index)
 			.sort((a, b) => parseInt(a.numeral, 10) - parseInt(b.numeral, 10) || a.numeral.localeCompare(b.numeral));
-		blocks.push(
-			{ kind: 'pageBreak' },
-			{ kind: 'heading', level: 1, text: 'Reference signs list' },
-			...(signs.length ? signs.map(part => ({ kind: 'text' as const, text: `${part.numeral} ${part.part}` })) : [missing('Reference signs', `no parts in ${DRAFTING_FILE_NAMES.figures}`, CHECKLIST_STEP.featureList)]),
-		);
+		blocks.push(pageBreak, heading(1, 'Reference signs list'), ...(signs.length ? signs.map(part => text(`${part.numeral} ${part.part}`)) : [missing('Reference signs', `no parts under a figure in ${DRAFTING_FILE_NAMES.figures}`, figuresNote)]));
 	}
 	return blocks;
 }

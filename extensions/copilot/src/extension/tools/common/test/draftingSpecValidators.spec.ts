@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseInventorAnswers } from '../drafting/inventorAnswers';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
-import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, figureHeadingCount, hasFigures, parseFigureParts, parseFigureSections } from '../drafting/specValidators';
+import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, figureHeadingCount, hasFigures, parseFigureParts, parseFigureSections, readReferenceSigns } from '../drafting/specValidators';
 
 function draft(...lines: string[]) {
 	return parseDraftParagraphs(lines.join('\n'));
@@ -138,7 +138,7 @@ describe('Application Drafting specification validators', () => {
 
 	it('inventor questions: Error for each open Inventor Question', () => {
 		expect(checkInventorQuestions('## Inventor Questions\n\n> **Inventor Question IQ-1:** What is the spring made of?')).toEqual([
-			{ severity: 'Error', rule: 'inventor-question', file: 'draft-application.md', line: 3, message: 'Inventor Question IQ-1 is open: What is the spring made of?' },
+			{ severity: 'Error', rule: 'inventor-question', file: 'draft-application.md', line: 3, question: 'IQ-1', message: 'Inventor Question IQ-1 is open: What is the spring made of?' },
 		]);
 	});
 
@@ -190,5 +190,19 @@ describe('Application Drafting specification validators', () => {
 			[],
 			['The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".'],
 		]);
+	});
+
+	it('inventor questions: a question removed from the draft while its narrowed question has no answer is an Error', () => {
+		const answers = parseInventorAnswers([
+			'## IQ-1', '', '**Question:** What is the spring made of?', '', '**Answer:**', 'Steel; the grade is not known.', '', '**Narrowed question:** What steel grade?', '', '**Answer:**',
+			'', '## IQ-2', '', '**Question:** Is the hinge removable?', '', '**Answer:** Yes.',
+		].join('\n'));
+		expect(checkInventorQuestions('# Description\n\n<!-- src: inventor:IQ-1 -->\nThe spring is steel.', answers)).toEqual([
+			{ severity: 'Error', rule: 'inventor-question', file: 'inventor-answers.md', line: 10, question: 'IQ-1', message: 'Inventor Question IQ-1 is no longer in the draft, but its narrowed question has no answer in inventor-answers.md. Put the question back in the draft, or waive it. Question: What steel grade?' },
+		]);
+	});
+
+	it('reference numerals: a number after a word such as grade, type or model is no reference sign', () => {
+		expect(readReferenceSigns('The lever 14 is grade 304 steel of type 2, model 7, series 300, class 8, size 10, sample 3 and the housing (12).').map(sign => `${sign.word} ${sign.numeral}`)).toEqual(['lever 14', 'housing 12']);
 	});
 });
