@@ -409,7 +409,7 @@
       "terminal.integrated.cursorBlinking": true,
       "terminal.integrated.cursorStyle": "line",
       "workbench.editorAssociations": {
-        "*.md": "vscode.markdown.preview.editor"
+        "*.md": "vscode.markdown.editor"
       }
     }
   },
