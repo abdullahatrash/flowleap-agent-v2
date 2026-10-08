@@ -724,13 +724,16 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			canSignOut = false;
 		}
 
-		const existingAccount = accounts.find(a => a.label === account.label);
+		// Match by id first: a provider can relabel the same account (e.g. a placeholder
+		// label replaced once the user profile resolves). The label is only a fallback.
+		const existingAccount = accounts.find(a => a.id === account.id) ?? accounts.find(a => a.label === account.label);
 		if (existingAccount) {
 			// if we have an existing account and we discover that we
 			// can't sign out of it, update the account to mark it as "can't sign out"
 			if (!canSignOut) {
 				existingAccount.canSignOut = canSignOut;
 			}
+			existingAccount.label = account.label;
 			existingAccount.icon = account.icon;
 		} else {
 			accounts.push({ ...account, canSignOut });

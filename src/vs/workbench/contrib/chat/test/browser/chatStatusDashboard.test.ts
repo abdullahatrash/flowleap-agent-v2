@@ -15,6 +15,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IInlineCompletionsService } from '../../../../../editor/browser/services/inlineCompletionsService.js';
 import { ConfigurationTarget, type IConfigurationOverrides, type IConfigurationValue } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -251,9 +252,13 @@ suite('ChatStatusDashboard', () => {
 		defaultAccountService?: IDefaultAccountService;
 		openerService?: IOpenerService;
 		notificationService?: INotificationService;
+		flowLeapSignedIn?: boolean;
 	} = {}): ChatStatusDashboard {
 		const configurationService = options.configurationService;
 		const instantiationService = workbenchInstantiationService(configurationService ? { configurationService: () => configurationService } : undefined, store);
+		if (options.flowLeapSignedIn !== undefined) {
+			instantiationService.get(IContextKeyService).createKey<boolean>('flowleap.signedIn', options.flowLeapSignedIn);
+		}
 
 		instantiationService.stub(IChatEntitlementService, entitlementService);
 		instantiationService.stub(IChatStatusItemService, {
@@ -547,6 +552,22 @@ suite('ChatStatusDashboard', () => {
 			ariaChecked: 'mixed',
 			overriddenHint: '',
 			configuredValue: { '*': true },
+		});
+	});
+
+	// --- FLOWLEAP SESSION ---
+
+	test('FlowLeap Session decides the sign-in block when the Copilot entitlement is unknown', () => {
+		const getSetupSection = (dashboard: ChatStatusDashboard) => dashboard.element.querySelector('.setup-section .description')?.textContent ?? null;
+		const signedIn = createDashboard(createEntitlementService({ entitlement: ChatEntitlement.Unknown }), { flowLeapSignedIn: true });
+		const signedOut = createDashboard(createEntitlementService({ entitlement: ChatEntitlement.Unknown }), { flowLeapSignedIn: false });
+
+		assert.deepStrictEqual({
+			signedIn: getSetupSection(signedIn),
+			signedOut: getSetupSection(signedOut),
+		}, {
+			signedIn: null,
+			signedOut: 'Sign in to use FlowLeap AI features.',
 		});
 	});
 

@@ -17,6 +17,12 @@ import { IChatEntitlementService } from '../../../../../services/chat/common/cha
 import { IChatErrorDetailsPart, IChatRendererContent } from '../../../common/model/chatViewModel.js';
 import { IChatContentPart } from './chatContentParts.js';
 
+/**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
+
 export class ChatAnonymousRateLimitedPart extends Disposable implements IChatContentPart {
 
 	readonly domNode: HTMLElement;
@@ -44,7 +50,7 @@ export class ChatAnonymousRateLimitedPart extends Disposable implements IChatCon
 		signInButton.element.classList.add('chat-rate-limited-button');
 
 		this._register(signInButton.onDidClick(async () => {
-			const commandId = 'workbench.action.chat.triggerSetup';
+			const commandId = FLOWLEAP_SIGN_IN_COMMAND_ID;
 			telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: commandId, from: 'chat-response' });
 
 			await commandService.executeCommand(commandId);

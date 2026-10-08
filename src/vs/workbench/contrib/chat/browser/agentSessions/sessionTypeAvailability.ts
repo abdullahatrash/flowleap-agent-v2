@@ -10,6 +10,12 @@ import { IChatSessionsService, SessionType } from '../../common/chatSessionsServ
 import { ILanguageModelsService } from '../../common/languageModels.js';
 
 /**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
+
+/**
  * Why a session type cannot currently be selected, or
  * {@link SessionTypeAvailability.Available} when it can.
  */
@@ -152,8 +158,8 @@ export function getSessionTypeUnavailableDescription(availability: SessionTypeAv
 	switch (availability) {
 		case SessionTypeAvailability.SignInRequired:
 			return new MarkdownString(
-				localize('chat.sessionType.signInLink', "[Sign in](command:workbench.action.chat.triggerSetup)"),
-				{ isTrusted: { enabledCommands: ['workbench.action.chat.triggerSetup'] } }
+				localize('chat.sessionType.signInLink', "[Sign in](command:{0})", FLOWLEAP_SIGN_IN_COMMAND_ID),
+				{ isTrusted: { enabledCommands: [FLOWLEAP_SIGN_IN_COMMAND_ID] } }
 			);
 		case SessionTypeAvailability.UpgradeRequired:
 			return new MarkdownString(
@@ -175,8 +181,8 @@ export function getSessionTypeUnavailableDescription(availability: SessionTypeAv
 export function getSessionTypeUnavailableHover(availability: SessionTypeAvailability): IMarkdownString | undefined {
 	switch (availability) {
 		case SessionTypeAvailability.SignInRequired: {
-			const hover = new MarkdownString('', { isTrusted: { enabledCommands: ['workbench.action.chat.triggerSetup'] }, supportThemeIcons: true });
-			hover.appendMarkdown(localize('chat.sessionType.signInHover', "[Sign in to FlowLeap](command:workbench.action.chat.triggerSetup) to use this agent."));
+			const hover = new MarkdownString('', { isTrusted: { enabledCommands: [FLOWLEAP_SIGN_IN_COMMAND_ID] }, supportThemeIcons: true });
+			hover.appendMarkdown(localize('chat.sessionType.signInHover', "[Sign in to FlowLeap](command:{0}) to use this agent.", FLOWLEAP_SIGN_IN_COMMAND_ID));
 			return hover;
 		}
 		case SessionTypeAvailability.UpgradeRequired: {
