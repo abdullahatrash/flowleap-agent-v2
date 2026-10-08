@@ -82,6 +82,9 @@
 		{ "bundledPath": "extensions/copilot/assets/skills/upc-division-router", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; typed-tool-only Unified Patent Court routing workflow native to this app." },
 		{ "bundledPath": "extensions/copilot/assets/skills/upc-opt-out-actions", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; typed-tool-only UPC opt-out workflow native to this app." },
 		{ "bundledPath": "extensions/copilot/assets/skills/upc-opt-out-check", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; typed-tool-only UPC opt-out workflow native to this app." },
-		{ "bundledPath": "extensions/copilot/assets/skills/upc-rop-explainer", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; typed-tool-only UPC Rules of Procedure explainer native to this app." }
+		{ "bundledPath": "extensions/copilot/assets/skills/upc-rop-explainer", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; typed-tool-only UPC Rules of Procedure explainer native to this app." },
+		{ "bundledPath": "extensions/copilot/assets/skills/upc-case-navigator", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; UPC Case Navigation native to this app (PRD 0021)." },
+		{ "bundledPath": "extensions/copilot/assets/skills/upc-filing-prep", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; UPC Filing Preparation native to this app (PRD 0021)." },
+		{ "bundledPath": "extensions/copilot/assets/skills/upc-representative-start", "classification": "app-only", "reason": "No canonical counterpart in flowleap-cli; UPC representative first steps native to this app (PRD 0021)." }
 	]
 }
