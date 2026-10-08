@@ -2561,42 +2561,37 @@ suite('PromptsService', () => {
 	});
 
 	suite('getSourceFolders - skills', () => {
-		test('includes user-level skill source folders', async () => {
+		test('offers only .flowleap/ folders for new skills, prompts, instructions and agents', async () => {
 			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
 			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
 
 			const rootFolderUri = URI.file('/skills-source-folders');
 			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
 
-			const folders = await service.getSourceFolders(PromptsType.skill);
-
-			const userFolders = folders.filter(f => f.storage === PromptsStorage.user);
-			const localFolders = folders.filter(f => f.storage === PromptsStorage.local);
-
-			assert.ok(userFolders.length > 0, 'Should include user-level skill source folders');
-			assert.ok(localFolders.length > 0, 'Should include workspace-level skill source folders');
-			assert.ok(
-				userFolders.some(f => f.uri.path === '/home/user/.copilot/skills'),
-				'Should include ~/.copilot/skills as a user source folder'
-			);
+			const result: Record<string, { path: string; storage: PromptsStorage }[]> = {};
+			for (const type of [PromptsType.skill, PromptsType.prompt, PromptsType.instructions, PromptsType.agent]) {
+				result[type] = (await service.getSourceFolders(type)).map(f => ({ path: f.uri.path, storage: f.storage }));
+			}
+			assert.deepStrictEqual(result, {
+				skill: [{ path: '/skills-source-folders/.flowleap/skills', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/skills', storage: PromptsStorage.user }],
+				prompt: [{ path: '/skills-source-folders/.flowleap/prompts', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/prompts', storage: PromptsStorage.user }],
+				instructions: [{ path: '/skills-source-folders/.flowleap/instructions', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/instructions', storage: PromptsStorage.user }],
+				agent: [{ path: '/skills-source-folders/.flowleap/agents', storage: PromptsStorage.local }, { path: '/home/user/.flowleap/agents', storage: PromptsStorage.user }],
+			});
 		});
 
-		test('excludes defaults explicitly disabled via configuration', async () => {
+		test('excludes defaults explicitly disabled via configuration and keeps configured folders', async () => {
 			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
 			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {
-				'.github/skills': false,
-				'~/.copilot/skills': false,
+				'.flowleap/skills': false,
+				'~/my-skills': true,
 			});
 
 			const rootFolderUri = URI.file('/skills-disabled-defaults');
 			workspaceContextService.setWorkspace(testWorkspace(rootFolderUri));
 
 			const folders = await service.getSourceFolders(PromptsType.skill);
-			const paths = folders.map(f => f.uri.path);
-
-			assert.ok(!paths.some(p => p.endsWith('/.github/skills')), 'Disabled .github/skills must not appear');
-			assert.ok(!paths.includes('/home/user/.copilot/skills'), 'Disabled ~/.copilot/skills must not appear');
-			assert.ok(paths.includes('/home/user/.agents/skills'), 'Non-disabled ~/.agents/skills must still appear');
+			assert.deepStrictEqual(folders.map(f => f.uri.path), ['/home/user/.flowleap/skills', '/home/user/my-skills']);
 		});
 	});
 
@@ -3758,6 +3753,63 @@ suite('PromptsService', () => {
 
 			const uniqueSkill = result.find(s => s.name === 'Unique Skill');
 			assert.ok(uniqueSkill, 'Should find the unique skill');
+		});
+
+		test('should prefer .flowleap/ skills over developer-folder skills with the same name', async () => {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+
+			const rootFolder = '/flowleap-precedence-test';
+			workspaceContextService.setWorkspace(testWorkspace(URI.file(rootFolder)));
+
+			const skillFile = (path: string, name: string, description: string) => ({
+				path,
+				contents: ['---', `name: "${name}"`, `description: "${description}"`, '---', 'content'],
+			});
+			await mockFiles(fileService, [
+				skillFile(`${rootFolder}/.github/skills/upc-revocation/SKILL.md`, 'upc-revocation', 'developer folder'),
+				skillFile(`${rootFolder}/.flowleap/skills/upc-revocation/SKILL.md`, 'upc-revocation', 'flowleap workspace'),
+				skillFile(`${rootFolder}/.claude/skills/claim-chart/SKILL.md`, 'claim-chart', 'developer folder'),
+				skillFile('/home/user/.flowleap/skills/claim-chart/SKILL.md', 'claim-chart', 'flowleap personal'),
+			]);
+
+			const skills = await service.findAgentSkills(CancellationToken.None);
+			assert.deepStrictEqual(
+				skills?.map(s => ({ name: s.name, description: s.description })).sort((a, b) => a.name.localeCompare(b.name)),
+				[
+					{ name: 'claim-chart', description: 'flowleap personal' },
+					{ name: 'upc-revocation', description: 'flowleap workspace' },
+				],
+			);
+		});
+
+		test('should keep a built-in skill over a .flowleap/ skill with the same name', async () => {
+			testConfigService.setUserConfiguration(PromptsConfig.USE_AGENT_SKILLS, true);
+			testConfigService.setUserConfiguration(PromptsConfig.SKILLS_LOCATION_KEY, {});
+
+			const rootFolder = '/flowleap-builtin-test';
+			workspaceContextService.setWorkspace(testWorkspace(URI.file(rootFolder)));
+
+			const builtinUri = URI.file('/app/extensions/patent-ai/assets/skills/prior-art/SKILL.md');
+			const userUri = URI.file(`${rootFolder}/.flowleap/skills/prior-art/SKILL.md`);
+			const skillFile = (uri: URI, description: string) => ({
+				path: uri.path,
+				contents: ['---', 'name: "prior-art"', `description: "${description}"`, '---', 'content'],
+			});
+			await mockFiles(fileService, [skillFile(builtinUri, 'built-in'), skillFile(userUri, 'user')]);
+			const extension = { identifier: new ExtensionIdentifier('flowleap.patent-ai'), isBuiltin: true } as IExtensionDescription;
+			const registered = service.registerContributedFile(PromptsType.skill, builtinUri, extension, 'prior-art', 'built-in');
+
+			const skills = await service.findAgentSkills(CancellationToken.None);
+			const discovery = await service.getDiscoveryInfo(PromptsType.skill, CancellationToken.None);
+			assert.deepStrictEqual({
+				loaded: skills?.map(s => ({ name: s.name, description: s.description })),
+				skipped: discovery.files.filter(f => f.status === 'skipped').map(f => ({ path: f.promptPath.uri.path, reason: f.skipReason, duplicateOf: f.duplicateOf?.path })),
+			}, {
+				loaded: [{ name: 'prior-art', description: 'built-in' }],
+				skipped: [{ path: userUri.path, reason: 'duplicate-name', duplicateOf: builtinUri.path }],
+			});
+			registered.dispose();
 		});
 
 		test('should prioritize skills by source: workspace > user > extension', async () => {

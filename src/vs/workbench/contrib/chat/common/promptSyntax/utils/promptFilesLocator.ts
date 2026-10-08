@@ -12,7 +12,7 @@ import { getPromptFileLocationsConfigKey, isTildePath, PromptsConfig } from '../
 import { basename, dirname, isEqual, isEqualOrParent, joinPath } from '../../../../../../base/common/resources.js';
 import { IWorkspaceContextService, IWorkspaceFolder } from '../../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, COPILOT_CONFIG_FOLDER, GITHUB_CONFIG_FOLDER, getPromptFileExtension, getPromptFileType, LEGACY_MODE_FILE_EXTENSION, getCleanPromptName, AGENT_FILE_EXTENSION, getPromptFileDefaultLocations, SKILL_FILENAME, IPromptSourceFolder, IResolvedPromptSourceFolder } from '../config/promptFileLocations.js';
+import { AGENTS_SOURCE_FOLDER, CLAUDE_CONFIG_FOLDER, COPILOT_CONFIG_FOLDER, GITHUB_CONFIG_FOLDER, getPromptFileExtension, getPromptFileType, LEGACY_MODE_FILE_EXTENSION, getCleanPromptName, AGENT_FILE_EXTENSION, getPromptFileDefaultLocations, SKILL_FILENAME, IPromptSourceFolder, IResolvedPromptSourceFolder, isFlowLeapSource } from '../config/promptFileLocations.js';
 import { PromptFileSource, PromptsType } from '../promptTypes.js';
 import { IWorkbenchEnvironmentService } from '../../../../../services/environment/common/environmentService.js';
 import { Schemas } from '../../../../../../base/common/network.js';
@@ -507,7 +507,10 @@ export class PromptFilesLocator {
 	 * @returns List of resolved source folders with metadata.
 	 */
 	public async getResolvedSourceFolders(type: PromptsType): Promise<readonly IResolvedPromptSourceFolder[]> {
-		const absoluteLocations = await this.getLocalStorageFolders(type);
+		// FlowLeap: offer only `.flowleap/` and user-configured folders as locations for
+		// new files. Developer folders (`.github/`, `.claude/`, `.agents/`, `~/.copilot/`)
+		// and the profile folder still load, but are not offered (see `isCreationSourceFolder`).
+		const absoluteLocations = (await this.getLocalStorageFolders(type)).filter(isCreationSourceFolder);
 
 		const localFolders = absoluteLocations.filter(loc => loc.storage === PromptsStorage.local);
 		const userFolders = absoluteLocations.filter(loc => loc.storage === PromptsStorage.user);
@@ -913,6 +916,14 @@ export class PromptFilesLocator {
 	}
 }
 
+
+/**
+ * FlowLeap: checks if a source folder may be offered as the location for a new
+ * file. Only `.flowleap/` folders and folders from the user's settings qualify.
+ */
+function isCreationSourceFolder(folder: IResolvedPromptSourceFolder): boolean {
+	return isFlowLeapSource(folder.source) || folder.source === PromptFileSource.ConfigWorkspace || folder.source === PromptFileSource.ConfigPersonal;
+}
 
 /**
  * Checks if the provided path contains a glob pattern (* or **).
