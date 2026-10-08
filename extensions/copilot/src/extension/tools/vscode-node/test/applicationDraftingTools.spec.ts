@@ -408,9 +408,11 @@ describe('export_draft_docx', () => {
 			docxParagraphs[type] = (await mammoth.extractRawText({ buffer: Buffer.from(docx) })).value.split('\n').filter(Boolean);
 		}
 		const record = await read('drafting/hinge/draft-application.working-record.md');
+		const fullCopy = (await mammoth.extractRawText({ buffer: Buffer.from(await fileSystem.readFile(URI.file(`${root}/draft-application.full.docx`))) })).value.split('\n').filter(Boolean);
 		expect({
 			result,
 			docxParagraphs,
+			fullCopyStart: fullCopy.slice(0, 3),
 			filingManifest: await read('drafting/hinge/filing-manifest.md'),
 			attorneyEdits: record.slice(record.indexOf('## Attorney edits')).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>'),
 		}).toMatchSnapshot();

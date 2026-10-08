@@ -21,6 +21,7 @@
  *   draft-application.description.docx   export, markers stripped, one file per document type:
  *   draft-application.claims.docx          description, claims, abstract (drawings are not generated)
  *   draft-application.abstract.docx
+ *   draft-application.full.docx          export: full review copy, the whole application in one file, not for filing
  *   filing-manifest.md                   export: claims, drawing sheets, abstract figure, estimated pages
  * ```
  *
@@ -53,6 +54,7 @@ export const DRAFTING_FILE_NAMES = {
 	descriptionDocx: 'draft-application.description.docx',
 	claimsDocx: 'draft-application.claims.docx',
 	abstractDocx: 'draft-application.abstract.docx',
+	fullReviewCopy: 'draft-application.full.docx',
 	filingManifest: 'filing-manifest.md',
 } as const;
 
@@ -71,6 +73,8 @@ export interface DraftingFolder {
 	readonly checklist: string;
 	/** The export, one .docx per document type. */
 	readonly docx: Readonly<Record<DraftDocumentType, string>>;
+	/** The full review copy written beside the export: the whole application in one file, not for filing. */
+	readonly fullReviewCopy: string;
 	/** The filing manifest written beside the export. */
 	readonly filingManifest: string;
 }
@@ -102,6 +106,7 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 			claims: `${folder}/${DRAFTING_FILE_NAMES.claimsDocx}`,
 			abstract: `${folder}/${DRAFTING_FILE_NAMES.abstractDocx}`,
 		},
+		fullReviewCopy: `${folder}/${DRAFTING_FILE_NAMES.fullReviewCopy}`,
 		filingManifest: `${folder}/${DRAFTING_FILE_NAMES.filingManifest}`,
 	};
 }

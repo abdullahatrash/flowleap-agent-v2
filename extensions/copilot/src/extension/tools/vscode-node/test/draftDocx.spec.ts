@@ -6,7 +6,9 @@
 import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { describe, expect, it } from 'vitest';
-import { buildDraftDocx } from '../draftDocx';
+import { filingManifest } from '../../common/drafting/filingManifest';
+import { composeFullReviewCopy } from '../../common/drafting/fullReviewCopy';
+import { buildDraftDocx, buildFullReviewCopyDocx } from '../draftDocx';
 
 /** A draft of the given section headings, each with one marked paragraph naming its section. */
 function draft(...headings: string[]): string {
@@ -121,5 +123,81 @@ describe('buildDraftDocx page setup', () => {
 			claims: await pageSetup(documents.claims),
 			abstract: await pageSetup(documents.abstract),
 		}).toEqual({ description: letter, claims: letter, abstract: letter });
+	});
+});
+
+describe('buildFullReviewCopyDocx', () => {
+	const claims = '---\napproved: true\n---\n1. A hinge comprising a housing 12.\n2. The hinge of claim 1, wherein the housing is steel.\n';
+	const figures = '# Figures\n\n## FIG. 1\n\n- 12: housing\n- 14: lever\n\n## FIGS. 2 to 3\n\n- 16: frame\n\n## Parts named in the answers, figure not stated\n\n- 18: spring\n';
+	const text = (office: 'US' | 'EPO') => `---\noffice: ${office}\n---\n# Door hinge\n\n${draft('## Detailed Description', '## Background', '## Summary').replace('Text of Detailed Description.', 'The housing 12 holds the lever 14.\n\n<!-- src: template -->\nThe lever 14 pivots.')}\n\n## Claims\n\n1. A hinge comprising a housing 12.\n2. The hinge of claim 1, wherein the housing is steel.\n\n## Abstract\n\n<!-- src: feature:F1 -->\nA hinge with a housing (12).\n`;
+
+	/** The paragraphs of the full review copy as Word reads them, and the text of its headers. */
+	async function readBack(office: 'US' | 'EPO', withFigures = true) {
+		const draftText = text(office);
+		const manifest = filingManifest({ office, draft: draftText, claims, figures: withFigures ? figures : undefined });
+		const docx = await buildFullReviewCopyDocx(composeFullReviewCopy({ office, draft: draftText, figures: withFigures ? figures : undefined, manifest }), office);
+		const zip = await JSZip.loadAsync(docx);
+		const headers = await Promise.all(Object.keys(zip.files).filter(path => /^word\/header\d+\.xml$/.test(path)).map(async path => (await zip.file(path)!.async('string')).replace(/<[^>]+>/g, '')));
+		return {
+			lines: (await mammoth.extractRawText({ buffer: Buffer.from(docx) })).value.split('\n').filter(Boolean),
+			pageBreaks: ((await zip.file('word/document.xml')!.async('string')).match(/<w:pageBreakBefore\/>/g) ?? []).length,
+			markInHeader: headers.some(header => header.includes('Draft for attorney review — not for filing')),
+		};
+	}
+
+	it('EPO: front page, description in Rule 42 order with [0001] numbering and missing sections named with their checklist step, claims, abstract, one drawings page per figure, reference signs', async () => {
+		expect(await readBack('EPO')).toEqual({
+			lines: [
+				'Draft for attorney review — not for filing',
+				'Door hinge',
+				'Office: EPO',
+				'Applicant: ______________________',
+				'Inventor(s): ______________________',
+				'Abstract',
+				'A hinge with a housing (12).',
+				'[Abstract figure: FIG. 1, proposed]',
+				'Description',
+				'Technical Field',
+				'[MISSING: Technical Field — no such section in draft-application.md. See checklist.md step 3.]',
+				'Background',
+				'[0001] Text of Background.',
+				'Summary',
+				'[0002] Text of Summary.',
+				'Brief Description of the Drawings',
+				'[MISSING: Brief Description of the Drawings — no such section in draft-application.md. See checklist.md step 3.]',
+				'Detailed Description',
+				'[0003] The housing 12 holds the lever 14.',
+				'[0004] The lever 14 pivots.',
+				'Claims',
+				'1. A hinge comprising a housing 12.',
+				'2. The hinge of claim 1, wherein the housing is steel.',
+				'Abstract',
+				'A hinge with a housing (12).',
+				'FIG. 1',
+				'12 — housing',
+				'14 — lever',
+				'[Drawing sheet to be supplied]',
+				'FIGS. 2 to 3',
+				'16 — frame',
+				'[Drawing sheet to be supplied]',
+				'Reference signs list',
+				'12 housing',
+				'14 lever',
+				'16 frame',
+				'18 spring',
+			],
+			pageBreaks: 6,
+			markInHeader: true,
+		});
+	});
+
+	it('US: no reference signs list; without figures the drawings and their description are missing, naming checklist step 1', async () => {
+		const { lines } = await readBack('US', false);
+		expect(lines.filter(line => line.startsWith('[MISSING') || line.startsWith('[Abstract figure') || /^(?:Drawings|Reference signs list)$/.test(line))).toEqual([
+			'[Abstract figure: none, no figures]',
+			'[MISSING: Brief Description of the Drawings — no figures in figures.md. See checklist.md step 1.]',
+			'Drawings',
+			'[MISSING: Drawings — no figures in figures.md. See checklist.md step 1.]',
+		]);
 	});
 });

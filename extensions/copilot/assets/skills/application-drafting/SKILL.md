@@ -135,7 +135,9 @@ draw figures: tell the attorney that the drawing sheets are prepared
 separately. Beside the files it writes `filing-manifest.md` with the values
 the attorney declares at filing: claims, drawing sheets, the proposed
 abstract figure and the pages. Report the page counts as estimates, and the
-abstract figure as a proposal.
+abstract figure as a proposal. It also writes `draft-application.full.docx`,
+the whole application in one file for the attorney to read, not to file;
+report each `[MISSING: ...]` placeholder in it with its checklist step.
 
 ## Rules
 

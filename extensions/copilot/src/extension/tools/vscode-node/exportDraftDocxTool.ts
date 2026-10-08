@@ -15,10 +15,11 @@ import { OFFICE_PAGE_SETUP } from '../common/drafting/filingDocuments';
 import { filingManifest, renderFilingManifest } from '../common/drafting/filingManifest';
 import { blockingFindings } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES } from '../common/drafting/folderContract';
+import { composeFullReviewCopy } from '../common/drafting/fullReviewCopy';
 import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workingRecord';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { buildDraftDocx } from './draftDocx';
+import { buildDraftDocx, buildFullReviewCopyDocx } from './draftDocx';
 import { DraftingWorkspace, textResult } from './draftingWorkspace';
 
 interface IExportDraftDocxParams {
@@ -38,7 +39,8 @@ async function refusal(reason: string, workspace?: DraftingWorkspace): Promise<L
  * `approved` is not `true` in `claims.md`, or while `claims.md` differs from the claims the draft
  * was generated against. Otherwise it logs the attorney's edits against the generated snapshot in
  * the Working Record, strips the source markers, writes the .docx files and writes the filing
- * manifest (`filing-manifest.md`) beside them. Drawings are not generated.
+ * manifest (`filing-manifest.md`) and the full review copy (`draft-application.full.docx`, the whole
+ * application in one file, not for filing) beside them. Drawings are not generated.
  */
 export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams> {
 
@@ -95,11 +97,13 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		for (const type of DRAFT_DOCUMENT_TYPES) {
 			await workspace.write(folder.docx[type], documents[type]);
 		}
-		const manifest = filingManifest({ office, draft, claims, figures: await workspace.read(folder.figures) });
+		const figures = await workspace.read(folder.figures);
+		const manifest = filingManifest({ office, draft, claims, figures });
 		await workspace.write(folder.filingManifest, renderFilingManifest(manifest, folder));
+		await workspace.write(folder.fullReviewCopy, await buildFullReviewCopyDocx(composeFullReviewCopy({ office, draft, figures, manifest }), office));
 		const setup = OFFICE_PAGE_SETUP[office];
 		const count = (kind: string) => diff.changes.filter(change => change.kind === kind).length;
-		return textResult(`Exported the description, the claims and the abstract as separate files: ${DRAFT_DOCUMENT_TYPES.map(type => folder.docx[type]).join(', ')} (${setup.rule} page setup, ${setup.paper}; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for ${folder.figures} are prepared outside FlowLeap. Wrote ${folder.filingManifest}: ${manifest.claims.total} claim(s), ${manifest.claims.independent} independent; ${manifest.drawingSheets} drawing sheet(s); about ${manifest.pages.total} page(s) in total (estimated). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing. ${await workspace.checklistLine(false)}`);
+		return textResult(`Exported the description, the claims and the abstract as separate files: ${DRAFT_DOCUMENT_TYPES.map(type => folder.docx[type]).join(', ')} (${setup.rule} page setup, ${setup.paper}; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for ${folder.figures} are prepared outside FlowLeap. Wrote ${folder.filingManifest}: ${manifest.claims.total} claim(s), ${manifest.claims.independent} independent; ${manifest.drawingSheets} drawing sheet(s); about ${manifest.pages.total} page(s) in total (estimated). Wrote the full review copy ${folder.fullReviewCopy}: the whole application in one file for reading, marked not for filing; each [MISSING: ...] placeholder in it names its checklist step. Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing. ${await workspace.checklistLine(false)}`);
 	}
 }
 

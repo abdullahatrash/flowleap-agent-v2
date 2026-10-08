@@ -399,7 +399,10 @@ The Markdown deliverable of Application Drafting: the specification in the chose
 section order, the abstract, the brief description of the drawings, each paragraph carrying
 its source marker, and an **Inventor Questions** list at the end. Exported without markers to
 one .docx per document type (description, claims, abstract) with the office page setup; its
-**Working Record** and findings stay beside it.
+**Working Record** and findings stay beside it. The export also writes a full review copy
+(`draft-application.full.docx`): the whole application in one file like a published patent,
+marked not for filing, with a `[MISSING: ...]` placeholder naming the **Drafting Checklist** step
+for each missing part.
 _Avoid_: calling the .docx the deliverable — it is the export; "Draft" as a Project Status.
 
 **Filing Manifest**:

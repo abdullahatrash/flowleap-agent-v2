@@ -166,7 +166,12 @@ Estimated at 80 characters per line and 36 lines per page (12 pt, 1.5 line spaci
 | Drawings | Not generated: prepared outside FlowLeap | 1 |
 | Total | | 4 |
 ",
-  "result": "Exported the description, the claims and the abstract as separate files: drafting/hinge/draft-application.description.docx, drafting/hinge/draft-application.claims.docx, drafting/hinge/draft-application.abstract.docx (37 CFR 1.52 page setup, Letter; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for drafting/hinge/figures.md are prepared outside FlowLeap. Wrote drafting/hinge/filing-manifest.md: 2 claim(s), 1 independent; 1 drawing sheet(s); about 4 page(s) in total (estimated). Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing. Wrote drafting/hinge/checklist.md: every step is done.",
+  "fullCopyStart": [
+    "Draft for attorney review — not for filing",
+    "Hinge",
+    "Office: US",
+  ],
+  "result": "Exported the description, the claims and the abstract as separate files: drafting/hinge/draft-application.description.docx, drafting/hinge/draft-application.claims.docx, drafting/hinge/draft-application.abstract.docx (37 CFR 1.52 page setup, Letter; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for drafting/hinge/figures.md are prepared outside FlowLeap. Wrote drafting/hinge/filing-manifest.md: 2 claim(s), 1 independent; 1 drawing sheet(s); about 4 page(s) in total (estimated). Wrote the full review copy drafting/hinge/draft-application.full.docx: the whole application in one file for reading, marked not for filing; each [MISSING: ...] placeholder in it names its checklist step. Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing. Wrote drafting/hinge/checklist.md: every step is done.",
 }
 `;
 

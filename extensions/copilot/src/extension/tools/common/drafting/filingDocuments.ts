@@ -135,3 +135,111 @@ export function documentParagraphs(paragraphs: readonly DraftParagraph[]): Recor
 	}
 	return documents;
 }
+
+/** One top-level section of the office section order. */
+export interface OfficeSection {
+	/** Matches the lower-case heading text. */
+	readonly pattern: RegExp;
+	/** The section name the full review copy writes when the section is missing. */
+	readonly name: string;
+	readonly required?: boolean;
+	/** True for the section that describes the drawings: it is due only when figures.md has figures. */
+	readonly drawings?: boolean;
+}
+
+/**
+ * The recognised top-level sections of each office, in filing order: US 37 CFR 1.77(b) and EPO
+ * Rule 42(1) EPC, as the application-drafting skill references list them. Claims and Abstract
+ * are always last (see {@link sectionRank}). A `required` section is one the full review copy
+ * shows as missing when the draft has none.
+ */
+export const OFFICE_SECTIONS: Readonly<Record<DraftingOffice, readonly OfficeSection[]>> = {
+	US: [
+		{ pattern: /cross[- ]?reference/, name: 'Cross-Reference to Related Applications' },
+		{ pattern: /federally sponsored|government (?:interest|rights|support)/, name: 'Statement Regarding Federally Sponsored Research' },
+		{ pattern: /joint research/, name: 'Names of the Parties to a Joint Research Agreement' },
+		{ pattern: /sequence listing|program listing|table appendix/, name: 'Sequence Listing' },
+		{ pattern: /prior disclosures?/, name: 'Statement Regarding Prior Disclosures' },
+		{ pattern: /\bfield\b/, name: 'Field' },
+		{ pattern: /background/, name: 'Background', required: true },
+		{ pattern: /summary/, name: 'Summary', required: true },
+		{ pattern: /brief description|drawings/, name: 'Brief Description of the Drawings', required: true, drawings: true },
+		{ pattern: /detailed description|description of (?:the )?(?:preferred )?embodiments?/, name: 'Detailed Description', required: true },
+	],
+	EPO: [
+		{ pattern: /\bfield\b/, name: 'Technical Field', required: true },
+		{ pattern: /background|prior art/, name: 'Background Art', required: true },
+		{ pattern: /summary|disclosure of the invention|technical problem|problem and (?:its )?solution/, name: 'Summary of the Invention', required: true },
+		{ pattern: /brief description|drawings/, name: 'Brief Description of the Drawings', required: true, drawings: true },
+		{ pattern: /detailed description|embodiments?|carrying out/, name: 'Description of Embodiments', required: true },
+		{ pattern: /industrial applica/, name: 'Industrial Applicability' },
+	],
+};
+
+/** The rank of the Claims and of the Abstract: after every description section. */
+export const CLAIMS_RANK = 1000;
+const ABSTRACT_RANK = 1001;
+
+/** The filing position of a section heading for the office, or `undefined` when it is not recognised. */
+export function sectionRank(heading: DraftParagraph, office: DraftingOffice): number | undefined {
+	if (isClaimsParagraph(heading)) {
+		return CLAIMS_RANK;
+	}
+	if (isAbstractParagraph(heading)) {
+		return ABSTRACT_RANK;
+	}
+	const title = (heading.section ?? '').toLowerCase();
+	const index = OFFICE_SECTIONS[office].findIndex(section => section.pattern.test(title));
+	return index < 0 ? undefined : index;
+}
+
+interface DraftSection {
+	readonly rank: number | undefined;
+	readonly paragraphs: DraftParagraph[];
+}
+
+/**
+ * Puts the top-level sections of a draft in the office section order. A section the office list
+ * does not name keeps its place after the recognised section it followed (at the front when none
+ * did; before the Claims when it followed the Claims or the Abstract). The text before the first
+ * section (the title) stays first.
+ */
+export function orderSections(paragraphs: readonly DraftParagraph[], office: DraftingOffice): DraftParagraph[] {
+	const headings = paragraphs.filter(paragraph => paragraph.kind === 'heading');
+	const titleIsHeading = headings.length > 1 && headingLevel(headings[0]) === 1 && headings.slice(1).every(heading => headingLevel(heading) > 1);
+	const sectionHeadings = titleIsHeading ? headings.slice(1) : headings;
+	if (!sectionHeadings.length) {
+		return [...paragraphs];
+	}
+	const sectionLevel = Math.min(...sectionHeadings.map(headingLevel));
+	const front: DraftParagraph[] = [];
+	const sections: DraftSection[] = [];
+	for (const paragraph of paragraphs) {
+		if (paragraph.kind === 'heading' && sectionHeadings.includes(paragraph) && headingLevel(paragraph) === sectionLevel) {
+			sections.push({ rank: sectionRank(paragraph, office), paragraphs: [paragraph] });
+		} else {
+			(sections.at(-1)?.paragraphs ?? front).push(paragraph);
+		}
+	}
+
+	const body: { rank: number; paragraphs: DraftParagraph[] }[] = [];
+	const end: { rank: number; paragraphs: DraftParagraph[] }[] = [];
+	const beforeClaims: DraftParagraph[] = [];
+	let last: { rank: number; paragraphs: DraftParagraph[] } | undefined;
+	for (const section of sections) {
+		if (section.rank === undefined) {
+			const target = !last ? front : last.rank >= CLAIMS_RANK ? beforeClaims : last.paragraphs;
+			target.push(...section.paragraphs);
+			continue;
+		}
+		last = { rank: section.rank, paragraphs: [...section.paragraphs] };
+		(section.rank >= CLAIMS_RANK ? end : body).push(last);
+	}
+	const byRank = (a: { rank: number }, b: { rank: number }) => a.rank - b.rank;
+	return [
+		...front,
+		...body.sort(byRank).flatMap(section => section.paragraphs),
+		...beforeClaims,
+		...end.sort(byRank).flatMap(section => section.paragraphs),
+	];
+}
