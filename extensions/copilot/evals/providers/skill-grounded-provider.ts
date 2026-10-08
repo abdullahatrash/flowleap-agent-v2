@@ -7,20 +7,23 @@ import type { ApiProvider, ProviderResponse, CallApiContextParams } from 'prompt
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { ChatCompletionError, requestChatCompletion, systemMessage, type CachedTextPart, type ChoiceStatus } from './chat-completions';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EVALS_DIR = path.resolve(__dirname, '..');
 
-const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 /** Same pin as the other suites: the gate must move with the skill, not with the model. */
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
 /** The bundled skills, whether or not `chatSkills` registers them — unregistered skills are measured here first. */
 const DEFAULT_SKILLS_DIR = path.join(EVALS_DIR, '..', 'assets', 'skills');
 
 const SKILL_FILENAME = 'SKILL.md';
-/** Directories the app's skill tool does not list (`SKILL_SKIP_DIRS` in skillTool.ts). */
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', 'out', '.cache', 'coverage', '__pycache__', 'target', 'bin', 'obj', '.venv', 'venv']);
+/**
+ * Directories the app's skill tool does not list: a copy of `SKILL_SKIP_DIRS` in skillTool.ts,
+ * which the evals cannot import. The provider spec fails when the two differ.
+ */
+export const SKILL_SKIP_DIRS: ReadonlySet<string> = new Set(['.git', 'node_modules', 'dist', 'build', 'out', '.cache', 'coverage', '__pycache__', 'target', 'bin', 'obj', '.venv', 'venv']);
 
 /** The two app tools whose calls the provider replays. Names and argument shapes match the app's. */
 const SKILL_TOOLS = [
@@ -76,7 +79,7 @@ function listFolderFiles(baseDir: string, currentDir: string, depth = 0): string
 	for (const entry of fs.readdirSync(currentDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
 		const entryPath = path.join(currentDir, entry.name);
 		if (entry.isDirectory()) {
-			if (!SKIP_DIRS.has(entry.name)) {
+			if (!SKILL_SKIP_DIRS.has(entry.name)) {
 				files.push(...listFolderFiles(baseDir, entryPath, depth + 1));
 			}
 		} else if (entry.isFile() && entry.name.toLowerCase() !== SKILL_FILENAME.toLowerCase()) {
@@ -126,9 +129,9 @@ export function loadSkillFolder(skillsDir: string, name: string): LoadedSkill {
 	return { name, folder, skillMd, folderFiles, linkedFiles };
 }
 
-/** The skill tool's result text, byte for byte the shape of `SkillTool.invokeInline` in the app. */
+/** The skill tool's result text, byte for byte the shape of `SkillTool.invokeInline` in the app (the provider spec checks it). */
 function renderSkillContext(skill: LoadedSkill): string {
-	const relatedFiles = skill.folderFiles.map(f => f.relativePath);
+	const relatedFiles = skill.folderFiles.map(file => file.relativePath);
 	const relatedFilesSection = relatedFiles.length > 0
 		? `\nRelated files (use read_file tool to read):\n${relatedFiles.map(f => `  - ${f}`).join('\n')}\n`
 		: '';
@@ -147,7 +150,7 @@ interface ToolCall {
 
 interface ChatMessage {
 	readonly role: 'system' | 'user' | 'assistant' | 'tool';
-	readonly content: string | null | ReadonlyArray<{ type: 'text'; text: string; cache_control: { type: 'ephemeral' } }>;
+	readonly content: string | null | readonly CachedTextPart[];
 	readonly tool_calls?: readonly ToolCall[];
 	readonly tool_call_id?: string;
 }
@@ -182,10 +185,8 @@ export interface SkillGroundedProviderDeps {
 	readonly env?: NodeJS.ProcessEnv;
 }
 
-interface ChatChoice {
+interface ChatChoice extends ChoiceStatus {
 	readonly message: { readonly content?: string | null };
-	readonly finish_reason?: string;
-	readonly error?: { readonly message?: string };
 }
 
 /**
@@ -243,30 +244,23 @@ export default class SkillGroundedProvider implements ApiProvider {
 
 		const systemText = fs.readFileSync(path.join(EVALS_DIR, 'prompts', 'system-prompt.txt'), 'utf-8');
 		const messages: ChatMessage[] = [
-			{ role: 'system', content: this.env.EVAL_PROMPT_CACHE !== '0' ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }] : systemText },
+			systemMessage(systemText, this.env),
 			...buildSkillConversation(skill, prompt),
 		];
 
 		try {
-			const response = await this.fetchFn(`${(this.env.EVAL_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, '')}/chat/completions`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-				body: JSON.stringify({ model: this.resolveModel(), messages, tools: SKILL_TOOLS, tool_choice: 'none', stream: false, temperature: 0, max_tokens: 8192 }),
+			const choice = await requestChatCompletion<ChatChoice>({
+				fetch: this.fetchFn,
+				env: this.env,
+				apiKey,
+				body: { model: this.resolveModel(), messages, tools: SKILL_TOOLS, tool_choice: 'none', stream: false, temperature: 0, max_tokens: 8192 },
 			});
-			if (!response.ok) {
-				return { error: `API returned ${response.status}: ${await response.text()}` };
-			}
-			const choice = (await response.json() as { choices?: ChatChoice[] }).choices?.[0];
-			if (!choice) {
-				return { error: 'No choices in response' };
-			}
-			// OpenRouter reports an upstream failure inside a 200 body; never score it as an answer.
-			if (choice.finish_reason === 'error' || choice.error) {
-				return { error: `Upstream error in a 200 response (finish_reason=${choice.finish_reason}): ${choice.error?.message ?? 'no detail'}` };
-			}
-			const loadedFiles = [SKILL_FILENAME, ...skill.folderFiles.map(f => f.relativePath), ...skill.linkedFiles.map(f => f.relativePath)];
+			const loadedFiles = [SKILL_FILENAME, ...skill.folderFiles.map(file => file.relativePath), ...skill.linkedFiles.map(file => file.relativePath)];
 			return { output: JSON.stringify({ skill: skill.name, loadedFiles, finalText: choice.message.content ?? '' }) };
 		} catch (err) {
+			if (err instanceof ChatCompletionError) {
+				return { error: err.message };
+			}
 			return { error: `Skill-grounded run failed: ${err instanceof Error ? err.message : String(err)}` };
 		}
 	}

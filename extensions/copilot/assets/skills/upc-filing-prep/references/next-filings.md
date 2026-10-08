@@ -4,7 +4,7 @@
 
 **How to use:** find the Initial Filing, then the last event. Each row gives the next possible filing, the side that files it, the rule, the period and the trigger event. Give the representative the rule, the period and the trigger, **never a calendar date**. Periods start on the day after the event; for service, the event is receipt of the document (RoP 300(a)). A period that ends on a Saturday, Sunday or official holiday at the seat of the division moves to the next working day (RoP 301). Periods do not stop in judicial vacations (RoP 300(h)).
 
-The court's screens offer every follow-up filing to every party at any time. They check neither the side nor the order. This map is the check. For filing details, read the family file named in brackets.
+The court's screens offer every follow-up filing to every party at any time. This map gives the side that files each one and when. For filing details, read the family file named in brackets.
 
 ## Infringement action (Statement of claim) [`infringement.md`]
 

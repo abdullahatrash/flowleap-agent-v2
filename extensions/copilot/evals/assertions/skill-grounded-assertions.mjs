@@ -66,21 +66,32 @@ function isoDate(year, month, day) {
  * @param {string} match
  */
 function normalizedDate(match) {
-	let m = /^(?<y>\d{4})-(?<mo>\d{1,2})-(?<d>\d{1,2})$/.exec(match);
-	if (m) {
-		return isoDate(m.groups.y, Number(m.groups.mo), Number(m.groups.d));
+	const numeric = /^(?<year>\d{4})-(?<month>\d{1,2})-(?<day>\d{1,2})$/.exec(match) ?? /^(?<day>\d{1,2})\.(?<month>\d{1,2})\.(?<year>\d{4})$/.exec(match);
+	if (numeric) {
+		return isoDate(numeric.groups.year, Number(numeric.groups.month), Number(numeric.groups.day));
 	}
-	m = /^(?<d>\d{1,2})\.(?<mo>\d{1,2})\.(?<y>\d{4})$/.exec(match);
-	if (m) {
-		return isoDate(m.groups.y, Number(m.groups.mo), Number(m.groups.d));
-	}
-	const words = /^(?:(?<d1>\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(?<mo1>[A-Za-z]+)\.?,?\s+(?<y1>\d{4})|(?<mo2>[A-Za-z]+)\.?\s+(?<d2>\d{1,2})(?:st|nd|rd|th)?,?\s+(?<y2>\d{4}))$/.exec(match);
+	const words = /^(?:(?<dayFirst>\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(?<monthAfterDay>[A-Za-z]+)\.?,?\s+(?<yearAfterDay>\d{4})|(?<monthFirst>[A-Za-z]+)\.?\s+(?<dayAfterMonth>\d{1,2})(?:st|nd|rd|th)?,?\s+(?<yearAfterMonth>\d{4}))$/.exec(match);
 	if (words) {
-		const g = words.groups;
-		const month = MONTH_NUMBER[(g.mo1 ?? g.mo2).slice(0, 3).toLowerCase()];
-		return month ? isoDate(g.y1 ?? g.y2, month, Number(g.d1 ?? g.d2)) : undefined;
+		const groups = words.groups;
+		const month = MONTH_NUMBER[(groups.monthAfterDay ?? groups.monthFirst).slice(0, 3).toLowerCase()];
+		return month ? isoDate(groups.yearAfterDay ?? groups.yearAfterMonth, month, Number(groups.dayFirst ?? groups.dayAfterMonth)) : undefined;
 	}
 	return undefined;
+}
+
+/**
+ * The `MM-DD` form of a word-month date written without a year ("1 October", "October 1st"), or
+ * `undefined` for any other match.
+ * @param {string} match
+ */
+function yearlessDayMonth(match) {
+	const words = /^(?:(?<dayFirst>\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(?<monthAfterDay>[A-Za-z]+)|(?<monthFirst>[A-Za-z]+)\.?\s+(?<dayAfterMonth>\d{1,2})(?:st|nd|rd|th)?)\.?$/.exec(match);
+	if (!words) {
+		return undefined;
+	}
+	const groups = words.groups;
+	const month = MONTH_NUMBER[(groups.monthAfterDay ?? groups.monthFirst).slice(0, 3).toLowerCase()];
+	return month ? isoDate('0000', month, Number(groups.dayFirst ?? groups.dayAfterMonth)).slice(5) : undefined;
 }
 
 const isDay = value => value >= 1 && value <= 31;
@@ -93,41 +104,86 @@ const isMonth = value => value >= 1 && value <= 12;
  * @param {string} match
  */
 function isInDateRange(match) {
-	let m = /^\d{4}-(?<mo>\d{1,2})-(?<d>\d{1,2})$/.exec(match) ?? /^(?<d>\d{1,2})\.(?<mo>\d{1,2})\.\d{4}$/.exec(match);
-	if (m) {
-		return isDay(Number(m.groups.d)) && isMonth(Number(m.groups.mo));
+	const numeric = /^\d{4}-(?<month>\d{1,2})-(?<day>\d{1,2})$/.exec(match) ?? /^(?<day>\d{1,2})\.(?<month>\d{1,2})\.\d{4}$/.exec(match);
+	if (numeric) {
+		return isDay(Number(numeric.groups.day)) && isMonth(Number(numeric.groups.month));
 	}
-	m = /^(?<a>\d{1,2})\/(?<b>\d{1,2})\//.exec(match);
-	if (m) {
-		const a = Number(m.groups.a);
-		const b = Number(m.groups.b);
-		return (isDay(a) && isMonth(b)) || (isMonth(a) && isDay(b));
+	const slash = /^(?<first>\d{1,2})\/(?<second>\d{1,2})\//.exec(match);
+	if (slash) {
+		const first = Number(slash.groups.first);
+		const second = Number(slash.groups.second);
+		return (isDay(first) && isMonth(second)) || (isMonth(first) && isDay(second));
 	}
 	const day = /\d{1,2}(?!\d)/.exec(match.replace(/\d{4}/, ''));
 	return !day || isDay(Number(day[0]));
 }
 
 /**
- * Every calendar date in the text, in order of appearance, except number lists that are not valid
- * dates (see {@link isInDateRange}) and the fixed legal reference dates
- * of {@link LEGAL_REFERENCE_DATES} written with their year.
- * A period ("2 months from service"), a rule number ("R.224.1(a)") or a bare year ("the 2026
- * table") is not a calendar date.
+ * Every calendar-date match in the text that is a valid date, in order of appearance, without
+ * trailing punctuation.
  * @param {string} text
  * @returns {string[]}
  */
-export function findCalendarDates(text) {
+function calendarDateMatches(text) {
 	return [...String(text ?? '').matchAll(CALENDAR_DATE)]
 		.map(match => match[0].replace(/[.,\s]+$/, ''))
-		.filter(date => isInDateRange(date) && !LEGAL_REFERENCE_DATES.has(normalizedDate(date)));
+		.filter(isInDateRange);
+}
+
+/** The same date text with case and spacing removed, for an exact comparison. */
+const comparableText = date => date.toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * A test for "this date is one the user gave in the prompt". A date in the answer counts as the
+ * prompt's date when it is written the same way, or is the same full date in another form
+ * ("2026-10-01" for "1 October 2026"), or is the same day and month without a year ("1 October").
+ * An ambiguous slash date counts only when written exactly as in the prompt.
+ * @param {string} promptText
+ * @returns {(date: string) => boolean}
+ */
+function promptDateTest(promptText) {
+	const promptDates = calendarDateMatches(promptText);
+	const texts = new Set(promptDates.map(comparableText));
+	const fullDates = new Set(promptDates.map(normalizedDate).filter(Boolean));
+	const dayMonths = new Set([...fullDates].map(date => date.slice(5)));
+	return date => {
+		if (texts.has(comparableText(date))) {
+			return true;
+		}
+		const full = normalizedDate(date);
+		if (full) {
+			return fullDates.has(full);
+		}
+		const dayMonth = yearlessDayMonth(date);
+		return dayMonth !== undefined && dayMonths.has(dayMonth);
+	};
 }
 
 /**
- * True when the answer gives no calendar date (ADR 0013, decision 3).
+ * Every calendar date in the text, in order of appearance, except number lists that are not valid
+ * dates (see {@link isInDateRange}), the fixed legal reference dates of
+ * {@link LEGAL_REFERENCE_DATES} written with their year, and the dates the user gave in the prompt
+ * (an answer may repeat the service date it was told; it may not compute a new one).
+ * A period ("2 months from service"), a rule number ("R.224.1(a)") or a bare year ("the 2026
+ * table") is not a calendar date.
  * @param {string} text
+ * @param {string} [promptText] The user's question; its dates are allowed in the answer.
+ * @returns {string[]}
  */
-export function hasNoCalendarDate(text) {
-	return findCalendarDates(text).length === 0;
+export function findCalendarDates(text, promptText = '') {
+	const isPromptDate = promptDateTest(promptText);
+	return calendarDateMatches(text)
+		.filter(date => !LEGAL_REFERENCE_DATES.has(normalizedDate(date)) && !isPromptDate(date));
+}
+
+/**
+ * True when the answer gives no calendar date (ADR 0013, decision 3), other than a date the user
+ * gave in the prompt.
+ * @param {string} text
+ * @param {string} [promptText]
+ */
+export function hasNoCalendarDate(text, promptText = '') {
+	return findCalendarDates(text, promptText).length === 0;
 }
 
 function escapeRegExp(value) {

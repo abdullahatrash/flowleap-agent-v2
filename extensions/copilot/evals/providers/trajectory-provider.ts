@@ -7,13 +7,13 @@ import type { ApiProvider, ProviderResponse, CallApiContextParams, CallApiOption
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { requestChatCompletion, systemMessage, type CachedTextPart, type ChoiceStatus } from './chat-completions';
 import { createMockScriptState, resolveMock, type MockScript, type MockScriptState, type MockTag } from './mock-tool-table';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EVALS_DIR = path.resolve(__dirname, '..');
 
-const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 // Same pin as the single-turn suite (patent-ai-provider.ts): claude-sonnet-5, the app's
 // primary tested model. (Historical: gemini-2.5-pro obeyed the
 // prompt's skip rules where -flash does not. Holding the model fixed is the point — this
@@ -87,19 +87,6 @@ interface Trajectory {
 	readonly stoppedReason: 'no_more_tools' | 'max_rounds';
 }
 
-/**
- * A system-message content part carrying an Anthropic prompt-cache breakpoint. OpenRouter
- * forwards `cache_control` to Anthropic models and ignores it for the rest, so the fixed
- * prefix (tool definitions + system prompt, ~31k tokens, resent on every round of every
- * trajectory) is billed at the cache-read rate from the second round on. Measured need: the
- * 2026-09-02 gate spent ~$20 with the prefix at full input price on every round.
- */
-interface CachedTextPart {
-	readonly type: 'text';
-	readonly text: string;
-	readonly cache_control: { readonly type: 'ephemeral' };
-}
-
 /** OpenAI-shaped chat message the loop appends as it runs. */
 interface ChatMessage {
 	readonly role: 'system' | 'user' | 'assistant' | 'tool';
@@ -108,14 +95,11 @@ interface ChatMessage {
 	readonly tool_call_id?: string;
 }
 
-interface ChatChoice {
+interface ChatChoice extends ChoiceStatus {
 	readonly message: {
 		readonly content?: string;
 		readonly tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
 	};
-	/** OpenRouter reports an upstream failure (e.g. a 429) INSIDE a 200 body, as this pair. */
-	readonly finish_reason?: string;
-	readonly error?: { readonly code?: number; readonly message?: string };
 }
 
 /** Collaborators promptfoo never supplies — overridden only by tests, so production always gets the real fetch/env/loader. */
@@ -202,10 +186,6 @@ export default class TrajectoryProvider implements ApiProvider {
 		return this.configMaxRounds ?? (Number.isFinite(fromEnv) ? fromEnv! : DEFAULT_MAX_ROUNDS);
 	}
 
-	private resolveBaseUrl(): string {
-		return (this.env.EVAL_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, '');
-	}
-
 	private resolveApiKey(): string | undefined {
 		return this.env.EVAL_API_KEY || this.env.OPENROUTER_API_KEY;
 	}
@@ -222,27 +202,7 @@ export default class TrajectoryProvider implements ApiProvider {
 			body.tools = toolDefinitions;
 			body.tool_choice = 'auto';
 		}
-		const response = await this.fetchFn(`${this.resolveBaseUrl()}/chat/completions`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-			body: JSON.stringify(body),
-		});
-		if (!response.ok) {
-			throw new Error(`API returned ${response.status}: ${await response.text()}`);
-		}
-		const data = await response.json() as { choices: ChatChoice[] };
-		const choice = data.choices?.[0];
-		if (!choice) {
-			throw new Error('No choices in response');
-		}
-		// An upstream failure arrives as a 200 whose choice carries `finish_reason: 'error'` and a
-		// null message. Reading that as "the model answered nothing" would silently score a
-		// rate-limited round as a give-up; surface it so promptfoo reports an ERROR, not a verdict.
-		if (choice.finish_reason === 'error' || choice.error) {
-			const detail = choice.error?.message ?? 'no detail';
-			throw new Error(`Upstream error in a 200 response (finish_reason=${choice.finish_reason}): ${detail}`);
-		}
-		return choice;
+		return requestChatCompletion<ChatChoice>({ fetch: this.fetchFn, env: this.env, apiKey, body });
 	}
 
 	async callApi(
@@ -285,12 +245,7 @@ export default class TrajectoryProvider implements ApiProvider {
 		const followUp = context?.vars?.followUpPrompt;
 		const userTurns = [prompt, ...(typeof followUp === 'string' && followUp ? [followUp] : [])];
 
-		// Prompt caching is on unless EVAL_PROMPT_CACHE=0 (e.g. to measure the uncached cost).
-		const cachePrefix = this.env.EVAL_PROMPT_CACHE !== '0';
-		const messages: ChatMessage[] = [{
-			role: 'system',
-			content: cachePrefix ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }] : systemText,
-		}];
+		const messages: ChatMessage[] = [systemMessage(systemText, this.env)];
 		const rounds: Array<{ turn: number; toolCalls: TrajectoryToolCall[] }> = [];
 		const turnTexts: string[] = [];
 		let stoppedReason: Trajectory['stoppedReason'] = 'max_rounds';
