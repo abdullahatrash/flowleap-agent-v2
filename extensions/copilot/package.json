@@ -7758,6 +7758,8 @@
     "eval:trajectory:repeat": "npx tsx evals/scripts/repeat-gate.ts --config promptfooconfig.trajectory.yaml --baseline output/trajectory-baseline.json",
     "eval:key-gate": "npx tsx evals/scripts/promptfoo.ts eval -c promptfooconfig.key-gate.yaml",
     "eval:key-gate:repeat": "npx tsx evals/scripts/repeat-gate.ts --config promptfooconfig.key-gate.yaml --baseline output/key-gate-baseline.json",
+    "eval:skill-grounded": "npx tsx evals/scripts/promptfoo.ts eval -c promptfooconfig.skill-grounded.yaml",
+    "eval:skill-grounded:repeat": "npx tsx evals/scripts/repeat-gate.ts --config promptfooconfig.skill-grounded.yaml --baseline output/skill-grounded-baseline.json",
     "eval:view": "npx tsx evals/scripts/promptfoo.ts view",
     "eval:extract-tools": "npx tsx evals/prompts/extract-tools.ts",
     "eval:check-baseline": "npx tsx evals/scripts/compare-baseline.ts",

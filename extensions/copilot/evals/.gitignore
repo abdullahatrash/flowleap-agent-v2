@@ -6,3 +6,4 @@ output/*
 # per-case k-of-n repeat baselines (repeat-gate.ts / aggregate-repeats.ts)
 !output/trajectory-baseline.json
 !output/key-gate-baseline.json
+!output/skill-grounded-baseline.json

@@ -334,6 +334,40 @@ terms before running it; the working record keeps the version that ran.
 _Avoid_: "the query" when several statements exist per run; shipping a statement without its
 **Discriminating Term**.
 
+## UPC practice
+
+**UPC Case**:
+Proceedings before the Unified Patent Court that the court numbers and that have opposing
+parties — e.g. an infringement action, a revocation action, an appeal. A counterclaim opens its
+own UPC Case.
+_Avoid_: "dossier", "procedure" (words of the court's case-management system); calling an
+opt-out or a protective letter a case.
+
+**UPC Filing**:
+One submission that a party or representative makes to the Unified Patent Court.
+_Avoid_: "lodged action", "submission" (court-system words).
+
+**Initial Filing**:
+A UPC Filing that starts something new: a UPC Case (e.g. Statement of claim, Statement for
+revocation, Statement of appeal) or a stand-alone record without opposing parties (an opt-out,
+a protective letter).
+
+**Subsequent Filing**:
+A UPC Filing inside an existing UPC Case — e.g. a Statement of defence, a reply, a rejoinder, a
+preliminary objection, an application under a Rule of Procedure.
+_Avoid_: "follow-up action", "lodged action".
+
+**Filing Preparation**:
+The deliverable that tells a representative what one UPC Filing needs before they file it: who
+may file, the division and language, the mandatory content and attachments, the fee, the signing
+rule, and the RoP rule that sets its time limit. Stops at the court portal; never files.
+
+**Case Navigation**:
+The answer to "what can be filed next in this UPC Case, by which side, under which rule" from the
+case's last event. Names the time-limit rule, the period and its trigger event; never computes a
+calendar date.
+_Avoid_: "deadline calculation", "docketing".
+
 ## Application Drafting
 
 **Application Drafting**:

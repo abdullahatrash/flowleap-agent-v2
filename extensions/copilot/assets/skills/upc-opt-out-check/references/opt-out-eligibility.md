@@ -1,14 +1,15 @@
 # UPC Opt-Out Eligibility — Reference
 
-**Compiled:** 2026-07-10. Derived from a study of the Unified Patent Court case-management system's opt-out validation behaviour plus the UPC Agreement and Rules of Procedure. **Caveat:** the UPC Agreement, the Rules of Procedure, and the public UPC Registry govern; treat everything below as an analysis aid, not authority. The authoritative current opt-out status of any patent lives only in the public UPC Registry (https://www.unified-patent-court.org/en/registry) — confirm there, do not scrape it, and never assert live status from backend data.
+**Sources (checked 2026-10-08):** Article 83 UPC Agreement; Rules 5.6, 5.9 and 5.10 of the Rules of Procedure, consolidated text at https://www.unifiedpatentcourt.org/sites/default/files/upc_documents/Consolidated%20Rules%20of%20Procedure%20UPC_EN.pdf; the opt-out filing form as users see it. **Caveat:** the UPC Agreement, the Rules of Procedure, and the public UPC Registry govern; treat everything below as an analysis aid, not authority. The authoritative current opt-out status of any patent lives only in the public UPC Registry (https://www.unifiedpatentcourt.org/en/registry/opt-out) — confirm there, do not scrape it, and never assert live status from backend data.
 
 ## The hard blocker: unitary effect
 
 | Patent state | Opt-out eligible? | Why |
 |--------------|-------------------|-----|
-| Unitary effect registered (a European patent with unitary effect / "unitary patent") | **No** | The UPC has exclusive, non-derogable jurisdiction over unitary patents. Opt-out and unitary effect are mutually exclusive — the CMS rejects the opt-out. |
-| Classic bundle EP (validated nationally, no unitary effect) | **Yes, in principle** | During the transitional period a bundle EP may be opted out of UPC jurisdiction, subject to the no-pending-action gate. |
-| Pending UPC action already on the patent | **No (blocked)** | An opt-out cannot be entered once a UPC action has been brought. Docket state is not visible in backend data — confirm at the registry. |
+| Unitary effect registered (a European patent with unitary effect / "unitary patent") | **No** | The UPC has exclusive, non-derogable jurisdiction over unitary patents. Opt-out and unitary effect are mutually exclusive — the opt-out filing form refuses the patent number. |
+| Classic bundle EP (validated nationally, no unitary effect) | **Yes, in principle** | During the transitional period a bundle EP may be opted out of UPC jurisdiction, subject to the no-earlier-UPC-action gate (R.5.6). |
+| Opted-out application granted with unitary effect | **Opt-out ends** | The opt-out is deemed withdrawn and the Registrar enters the withdrawal (R.5.9). After that entry no new opt-out is possible (R.5.10). |
+| UPC action commenced on the patent before the opt-out is entered | **No (ineffective)** | The opt-out is ineffective, whether the action is pending or concluded (R.5.6). Docket state is not visible in backend data — confirm at the registry. |
 
 ## Where the unitary-effect signal comes from
 

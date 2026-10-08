@@ -1,0 +1,268 @@
+# Skill-grounded cases (#569, PRD 0021 U6).
+#
+# Each case names the skill folder to load (`vars.skill`, a folder under assets/skills) and the
+# user's question (`vars.prompt`). The provider puts the skill into context the way the app does
+# and returns `{ skill, loadedFiles, finalText }`; read the answer with `H.answerText(output)`.
+#
+# Every case gets the suite-wide `no_calendar_date` check (promptfooconfig.skill-grounded.yaml).
+# A date given in `vars.prompt` may appear in the answer; any other date fails.
+# Add the checks the case needs:
+#
+#   Exact rule numbers — fails and names each rule the answer does not cite (R.23, Rule 23, RoP 23):
+#     - type: javascript
+#       value: |
+#         return import('node:url')
+#           .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+#           .then(H => { const missing = H.missingRules(H.answerText(output), ['23', '19.1']);
+#             return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+#       metric: <case>_rules
+#
+#   Exact fee amounts (whole euros, from the official 2026 table) — same shape with
+#     H.missingFees(H.answerText(output), [11000, 200])
+#
+#   Completeness — an llm-rubric that lists the points the answer must cover. Give it
+#     `transform: JSON.parse(output).finalText` so the judge reads the answer, not the JSON.
+
+# ── S1 — smoke: an existing UPC skill, loaded with its reference file. ──
+- description: "S1 — smoke: infringement forum and language for a unitary patent (upc-division-router)"
+  vars:
+    skill: upc-division-router
+    prompt: "We act for the patentee of a European patent with unitary effect, granted in English. The infringer is a company seated in Milan that sells the infringing product in Germany and the Netherlands. Where can we bring the infringement action at the UPC, and in which language? If the defendant counterclaims for revocation, what can the division do with it?"
+  assert:
+    - type: javascript
+      value: JSON.parse(output).loadedFiles.includes('references/divisions.md');
+      metric: s1_reference_loaded
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer is about where a UPC infringement action can be brought and in which language. It is
+        complete only if it covers ALL of these points:
+        1. The action goes to a local or regional division, not the central division.
+        2. Eligible divisions include a division for the place of infringement (a German local division
+           and/or The Hague local division) AND the division for the defendant's seat (the Milan local
+           division); the claimant chooses between them.
+        3. The language depends on the division chosen (for example German or English at a German local
+           division), and English is available in the eligible divisions.
+        4. For the revocation counterclaim, the division may keep it and hear both, refer the revocation to
+           the central division (bifurcation), or refer the whole case with the parties' agreement.
+        Fail if any point is missing or contradicted. Do not grade style or length.
+      metric: s1_complete
+
+# ── S5 — PRD 0021 scenario 5: a new representative asks how to register. ──
+- description: "S5 — new representative: entitlement, registration, rejection and review (upc-representative-start)"
+  vars:
+    skill: upc-representative-start
+    prompt: "I am a European Patent Attorney. I do not have the European Patent Litigation Certificate, but I hold a master's degree in law from a German university. Can I represent clients at the UPC, and how do I register as a representative in the court's filing system? What can I do if the Registrar rejects my request? In our firm a trainee drafts the filings and the office manager pays the fees: do they need to register too?"
+  assert:
+    - type: javascript
+      value: |
+        const loaded = JSON.parse(output).loadedFiles;
+        const pass = loaded.includes('references/registration.md');
+        return { pass, score: pass ? 1 : 0, reason: pass ? 'Reference file loaded' : `Reference file not loaded: ${JSON.stringify(loaded)}` };
+      metric: s5_reference_loaded
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => {
+            const text = H.answerText(output);
+            const missing = H.missingRules(text, ['11', '18']);
+            if (!/Art(?:icle|\.)?\s?48\s?\(2\)/i.test(text)) { missing.push('Art. 48(2) UPCA'); }
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'Legal basis cited' : `Not cited: ${missing.join(', ')}` };
+          });
+      metric: s5_rules
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer tells a European Patent Attorney without the European Patent Litigation Certificate, who holds a
+        master's degree in law from an EU Member State, whether and how they can register as a UPC representative.
+        It is complete only if it covers ALL of these points:
+        1. A European Patent Attorney may represent under Art. 48(2) UPCA only with appropriate qualifications, and a
+           bachelor's or master's degree in law from an EU Member State is such a qualification (Rule 11 of the EPLC
+           Rules), so the user can apply for registration on the list of entitled representatives.
+        2. Registration is a request to the Registrar, made from the user's own account in the court's filing
+           system: the user selects the entitlement and attaches a copy of the diploma as evidence.
+        3. The Registrar examines the request: it enters the person on the list, or invites the person to correct a
+           deficiency (a non-extendable period of two months), or rejects the request.
+        4. Against a rejection the person can file a petition for review with the Registrar within one month of
+           notification of the decision, with the reasons (Rule 18 of the EPLC Rules); if the Registrar does not
+           rectify the decision, the President of the Court of Appeal decides.
+        5. The trainee who drafts and the office manager who pays do not need to register as representatives, but
+           a court filing must be signed by a registered representative.
+        Fail if any point is missing or contradicted. Do not grade style or length.
+      metric: s5_complete
+
+# ── #574 (PRD 0021 U3) — upc-case-navigator: PRD scenarios 1 and 4. ──
+# Rules and periods from upc-filing-prep/references/next-filings.md and appeal.md.
+- description: "N1 — U3 scenario 1, defendant served with a Statement of claim: next filings, rules, periods (upc-case-navigator)"
+  vars:
+    skill: upc-case-navigator
+    prompt: "We are the defendant in an infringement action and were served the Statement of claim on 1 October 2026: what can we file next, under which rule?"
+  assert:
+    - type: javascript
+      value: JSON.parse(output).loadedFiles.includes('../upc-filing-prep/references/next-filings.md');
+      metric: u3_1_next_filings_loaded
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['19.1', '23']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u3_1_rules
+    - type: javascript
+      value: |
+        const text = JSON.parse(output).finalText;
+        const periods = { '1 month': /\b(?:1|one)[\s-]+month\b/i, '3 months': /\b(?:3|three)[\s-]+months?\b/i };
+        const missing = Object.keys(periods).filter(p => !periods[p].test(text));
+        return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All periods stated' : `Periods not stated: ${missing.join(', ')}` };
+      metric: u3_1_periods
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer tells a UPC infringement defendant, just served with the Statement of claim, what it can
+        file next. It is complete only if it covers ALL of these points:
+        1. A Preliminary objection by the defendant (RoP 19.1), within 1 month of service of the Statement of claim.
+        2. The Statement of defence by the defendant (RoP 23), within 3 months of service of the Statement of
+           claim, and that a Counterclaim for revocation can be included in it (RoP 25).
+        3. Each period runs from service of the Statement of claim (the trigger event); the answer gives the
+           period and the trigger, not a calendar deadline date. Repeating the service date the user gave
+           (1 October 2026) is not a deadline date.
+        Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
+        Do not grade style or length.
+      metric: u3_1_complete
+
+- description: "N4 — U3 scenario 4, appeal against an order versus a final decision: rules, periods and fees (upc-case-navigator)"
+  vars:
+    skill: upc-case-navigator
+    prompt: "We are the patentee and lost a stand-alone revocation action at the UPC central division. Earlier, the Court rejected our Preliminary objection by an order. Appeal against that order versus against the final decision: what do we file at the UPC Court of Appeal, under which rule, in which period, and what is the court fee for each?"
+  assert:
+    - type: javascript
+      value: JSON.parse(output).loadedFiles.includes('../upc-filing-prep/references/appeal.md');
+      metric: u3_4_appeal_loaded
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['220.1', '220.2', '224.1', '224.2']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u3_4_rules
+    - type: javascript
+      value: |
+        const text = JSON.parse(output).finalText;
+        const periods = { '2 months': /\b(?:2|two)[\s-]+months?\b/i, '4 months': /\b(?:4|four)[\s-]+months?\b/i, '15 days': /\b(?:15|fifteen)[\s-]+(?:calendar[\s-]+)?days?\b/i };
+        const missing = Object.keys(periods).filter(p => !periods[p].test(text));
+        return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All periods stated' : `Periods not stated: ${missing.join(', ')}` };
+      metric: u3_4_periods
+    # Fees from upc-filing-prep/references/fees-2026.md §4: appeal against the final decision in a
+    # revocation action EUR 29,200; appeal with leave against another order (RoP 220.2) EUR 4,000.
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingFees(H.answerText(output), [29200, 4000]);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All fees stated' : `Fees not stated: ${missing.join(', ')}` }; });
+      metric: u3_4_fees
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer compares a UPC appeal against a final decision with an appeal against an order. It is
+        complete only if it covers ALL of these points:
+        1. Final decision (RoP 220.1(a), (b)): appeal as of right; Statement of appeal within 2 months and
+           Statement of grounds of appeal within 4 months, both from service of the decision (RoP 224.1(a), 224.2(a)).
+        2. Orders listed in RoP 220.1(c) (for example provisional measures or evidence orders): appeal as of
+           right; Statement of appeal and grounds within 15 days of service of the order (RoP 224.1(b), 224.2(b)).
+        3. Other orders (RoP 220.2): appeal only together with the appeal against the final decision, or with
+           leave of the Court of First Instance; then 15 days from service of the decision granting leave.
+        4. Periods run from service (the trigger event); the answer gives no calendar deadline date.
+        5. Court fees (2026 table): EUR 29,200 for the appeal against the final decision in a revocation
+           action; EUR 4,000 for an appeal with leave against an order under RoP 220.2.
+        Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
+        Do not grade style or length.
+      metric: u3_4_complete
+
+# ══ BEGIN #573 — upc-filing-prep (PRD 0021 scenarios 2 and 3) ══
+# Rules and fees are from assets/skills/upc-filing-prep/references/revocation.md,
+# protective-letters.md and fees-2026.md (official 2026 Table of Court Fees).
+
+# ── Scenario 2 — revocation action at the central division for an SME client. ──
+- description: "U2a — scenario 2: prepare a revocation action at the central division for an SME client (upc-filing-prep)"
+  vars:
+    skill: upc-filing-prep
+    prompt: "We act for a small German company (35 employees, EUR 8 million annual turnover, independent) that wants to revoke a competitor's European patent with unitary effect. The patent was granted in German. There is no infringement action between the parties. Prepare the revocation action at the central division: what do we need to file, and what will the court fee be?"
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['44', '45.1', '46', '370.8']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u2s2_rules
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingFees(H.answerText(output), [26500, 13250]);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All fees stated' : `Fees not stated: ${missing.join(', ')}` }; });
+      metric: u2s2_fees
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer prepares a stand-alone UPC revocation action (Statement for revocation) for an SME
+        client. It is complete only if it covers ALL of these points:
+        1. The action goes to the central division (Art. 33(4) UPCA), because no infringement action
+           between the same parties is pending.
+        2. The language of proceedings is the language in which the patent was granted, here German
+           (RoP 45.1).
+        3. It lists the mandatory content of the Statement for revocation under RoP 44 (for example the
+           extent of revocation requested, the grounds with arguments, the facts and the evidence).
+        4. The fee is a fixed fee of EUR 26,500 (RoP 46) with no value-based fee, and the 50% reduction
+           for a small or micro-enterprise (RoP 370.8) brings it to EUR 13,250.
+        5. The reduction needs an affirmation / notification, lodged with the Statement for revocation,
+           that the client is a small or micro-enterprise under Commission Recommendation 2003/361/EC.
+        6. The action is not deemed lodged until the fee is paid (RoP 15.2 applied by RoP 46).
+        7. It presents a checklist with a status per item (PASS / FIX / N/A or equivalent) and ends with
+           a go / not-ready verdict, without filing anything for the user.
+        Fail if any point is missing or contradicted, or if the answer gives a calendar deadline date.
+        Do not grade style or length.
+      metric: u2s2_complete
+
+# ── Scenario 3 — protective letter: fee, validity and extension. ──
+- description: "U2b — scenario 3: protective letter: fee, validity and extension (upc-filing-prep)"
+  vars:
+    skill: upc-filing-prep
+    prompt: "A competitor has written to our client, a large company, and threatened to apply for a preliminary injunction at the UPC over its European patent EP 1234567. We want to file a protective letter. What do we need, what does it cost, how long is it valid, and how do we extend it?"
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['207.2', '207.4', '207.9']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u2s3_rules
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingFees(H.answerText(output), [300, 130]);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All fees stated' : `Fees not stated: ${missing.join(', ')}` }; });
+      metric: u2s3_fees
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer prepares a UPC protective letter. It is complete only if it covers ALL of these points:
+        1. The letter is lodged with the Registry, not at a division, and needs no pending case.
+        2. The language is the language of the patent (RoP 207.2).
+        3. It lists the mandatory content under RoP 207.2 (for example the filing party and its
+           representative, the presumed applicant, addresses for service, the patent number, and the
+           statement that it is a protective letter).
+        4. The fee to file is EUR 300 (RoP 207.4, 2026 table).
+        5. The letter is valid for 6 months from the date of receipt; if no application for provisional
+           measures is lodged in that period it is removed from the register (RoP 207.9).
+        6. The filer can extend it for a further 6 months by applying before the period expires, for a
+           fee of EUR 130 (RoP 207.9), and further extensions are possible on further payment.
+        7. It presents a checklist with a status per item (PASS / FIX / N/A or equivalent) and ends with
+           a go / not-ready verdict, without filing anything for the user.
+        Fail if any point is missing or contradicted, or if the answer gives a calendar deadline or
+        expiry date. Do not grade style or length.
+      metric: u2s3_complete
+# ══ END #573 ══
