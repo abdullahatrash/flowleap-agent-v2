@@ -6,8 +6,8 @@ Reusable task templates triggered on-demand in chat. Single focused task with pa
 
 | Path | Scope |
 |------|-------|
-| `.github/prompts/*.prompt.md` | Workspace |
-| `<profile>/prompts/*.prompt.md` | User profile |
+| `.flowleap/prompts/*.prompt.md` | Workspace |
+| `~/.flowleap/prompts/*.prompt.md` | Personal |
 
 ## Frontmatter
 

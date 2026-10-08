@@ -24,15 +24,18 @@ Consult the reference docs for templates, domain examples, advanced frontmatter 
 
 | Type | File | Location | Reference |
 |------|------|----------|-----------|
-| agent instructions | `copilot-instructions.md`, `AGENTS.md` | `.github/` or root | [Link](./references/agent-instructions.md) |
-| File Instructions | `*.instructions.md` | `.github/instructions/` | [Link](./references/instructions.md) |
-| Prompts | `*.prompt.md` | `.github/prompts/` | [Link](./references/prompts.md) |
+| agent instructions | `instructions.md` | `.flowleap/` | [Link](./references/agent-instructions.md) |
+| File Instructions | `*.instructions.md` | `.flowleap/instructions/` | [Link](./references/instructions.md) |
+| Prompts | `*.prompt.md` | `.flowleap/prompts/` | [Link](./references/prompts.md) |
 | Hooks | `*.json` | `.github/hooks/` | [Link](./references/hooks.md) |
-| Custom Agents | `*.agent.md` | `.github/agents/` | [Link](./references/agents.md) |
-| Skills | `SKILL.md` | `.github/skills/<name>/`, `.agents/skills/<name>/`, `.claude/skills/<name>/` | [Link](./references/skills.md) |
+| Custom Agents | `*.agent.md` | `.flowleap/agents/` | [Link](./references/agents.md) |
+| Skills | `SKILL.md` | `.flowleap/skills/<name>/` | [Link](./references/skills.md) |
 
-**User-level**: `{{VSCODE_USER_PROMPTS_FOLDER}}/` (*.prompt.md, *.instructions.md, *.agent.md; not skills)
-Customizations roam with user's settings sync
+**User-level**: `~/.flowleap/<kind>/` (`skills/<name>/`, `instructions/`, `prompts/`, `agents/`)
+
+FlowLeap saves new customizations only in `.flowleap/` (workspace) or `~/.flowleap/` (personal). Do not offer other folders as a location. If an item with the same name exists in another folder, the `.flowleap/` item wins.
+
+**Built-in skills**: never give a new skill the name of a built-in skill. A built-in skill wins, so a same-name skill does not load. To add firm steps to a built-in workflow, create `.flowleap/instructions/<topic>.instructions.md` instead: with `applyTo: "**"` it applies to every request; with only a `description`, the agent reads it when the description matches the task.
 
 ## Creation Process
 
@@ -43,8 +46,8 @@ Follow these steps when creating any customization file.
 ### 1. Determine Scope
 
 Ask the user where they want the customization:
-- **Workspace**: For project-specific, team-shared customizations → `.github/` folder
-- **User profile**: For personal, cross-workspace customizations → `{{VSCODE_USER_PROMPTS_FOLDER}}/`
+- **Workspace**: For project-specific, team-shared customizations → `.flowleap/` folder
+- **Personal**: For personal, cross-workspace customizations → `~/.flowleap/` folder
 
 ### 2. Choose the Right Primitive
 

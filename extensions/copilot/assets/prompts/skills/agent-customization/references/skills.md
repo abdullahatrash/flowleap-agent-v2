@@ -5,7 +5,7 @@ Folders of instructions, scripts, and resources that agents load on-demand for s
 ## Structure
 
 ```
-.github/skills/<skill-name>/
+.flowleap/skills/<skill-name>/
 ├── SKILL.md           # Required (name must match folder)
 ├── scripts/           # Executable code
 ├── references/        # Docs loaded as needed
@@ -16,12 +16,8 @@ Folders of instructions, scripts, and resources that agents load on-demand for s
 
 | Path | Scope |
 |------|-------|
-| `.github/skills/<name>/` | Project |
-| `.agents/skills/<name>/` | Project |
-| `.claude/skills/<name>/` | Project |
-| `~/.copilot/skills/<name>/` | Personal |
-| `~/.agents/skills/<name>/` | Personal |
-| `~/.claude/skills/<name>/` | Personal |
+| `.flowleap/skills/<name>/` | Project |
+| `~/.flowleap/skills/<name>/` | Personal |
 
 ## SKILL.md Format
 

@@ -30,7 +30,7 @@ import { ITelemetryService } from '../../../../../../platform/telemetry/common/t
 import { IUserDataProfileService } from '../../../../../services/userDataProfile/common/userDataProfile.js';
 import { IVariableReference } from '../../chatModes.js';
 import { PromptsConfig } from '../config/config.js';
-import { AGENT_MD_FILENAME, CLAUDE_CONFIG_FOLDER, CLAUDE_LOCAL_MD_FILENAME, CLAUDE_MD_FILENAME, COPILOT_CONFIG_FOLDER, COPILOT_CUSTOM_INSTRUCTIONS_FILENAME, DICTATION_INSTRUCTIONS_FILENAME, getCleanPromptName, getSkillFolderName, GITHUB_CONFIG_FOLDER, IResolvedPromptSourceFolder, isInClaudeRulesFolder, VOICE_INSTRUCTIONS_FILENAME } from '../config/promptFileLocations.js';
+import { AGENT_MD_FILENAME, CLAUDE_CONFIG_FOLDER, CLAUDE_LOCAL_MD_FILENAME, CLAUDE_MD_FILENAME, COPILOT_CONFIG_FOLDER, COPILOT_CUSTOM_INSTRUCTIONS_FILENAME, DICTATION_INSTRUCTIONS_FILENAME, FLOWLEAP_CONFIG_FOLDER, FLOWLEAP_INSTRUCTIONS_FILENAME, getCleanPromptName, getSkillFolderName, GITHUB_CONFIG_FOLDER, IResolvedPromptSourceFolder, isFlowLeapSource, isInClaudeRulesFolder, VOICE_INSTRUCTIONS_FILENAME } from '../config/promptFileLocations.js';
 import { PROMPT_LANGUAGE_ID, PromptFileSource, PromptsType, Target, getPromptsTypeForLanguageId } from '../promptTypes.js';
 import { IWorkspaceInstructionFile, PromptFilesLocator } from '../utils/promptFilesLocator.js';
 import { evaluateApplyToPattern, PromptFileParser, ParsedPromptFile, PromptHeaderAttributes } from '../promptFileParser.js';
@@ -482,7 +482,9 @@ export class PromptsService extends Disposable implements IPromptsService {
 			return result;
 		}
 
-		if (type === PromptsType.skill) {
+		// FlowLeap: prompts, instructions and agents also use the resolved folders, so
+		// new files go to `.flowleap/<kind>/` (workspace) or `~/.flowleap/<kind>/` (user).
+		if (type === PromptsType.skill || type === PromptsType.prompt || type === PromptsType.instructions || type === PromptsType.agent) {
 			// Skills have both workspace and user-level source folders (e.g.
 			// ~/.copilot/skills). Use the resolved source folders so each
 			// location reports its actual storage (local vs user), otherwise
@@ -903,6 +905,7 @@ export class PromptsService extends Disposable implements IPromptsService {
 			const copilotInstructionsFile = { fileName: COPILOT_CUSTOM_INSTRUCTIONS_FILENAME, type: AgentInstructionFileType.copilotInstructionsMd };
 			promises.push(this.fileLocator.findFilesInRoots(rootFolders, GITHUB_CONFIG_FOLDER, [copilotInstructionsFile], token, resolvedAgentFiles)); // copilot-instructions.md in .github folder under workspace root
 			promises.push(this.fileLocator.findFilesInRoots([await this.pathService.userHome()], COPILOT_CONFIG_FOLDER, [copilotInstructionsFile], token, resolvedAgentFiles)); // copilot-instructions.md in ~/.copilot folder
+			promises.push(this.fileLocator.findFilesInRoots(rootFolders, FLOWLEAP_CONFIG_FOLDER, [{ fileName: FLOWLEAP_INSTRUCTIONS_FILENAME, type: AgentInstructionFileType.copilotInstructionsMd }], token, resolvedAgentFiles)); // instructions.md in .flowleap folder under workspace root
 		}
 
 		promises.push(this.fileLocator.findFilesInRoots(rootFolders, undefined, rootFiles, token, resolvedAgentFiles));
@@ -1470,10 +1473,17 @@ export class PromptsService extends Disposable implements IPromptsService {
 
 	/**
 	 * Precedence used when deduplicating skills that share the same canonical
-	 * name: workspace > personal > plugin > extension API > extension contribution.
+	 * name: built-in (shipped with the app) > FlowLeap (`.flowleap/` > `~/.flowleap/`) >
+	 * workspace > personal > plugin > extension API > extension contribution.
 	 * Lower numbers win.
 	 */
 	private getSkillPriority(skill: IPromptPath): number {
+		if (skill.storage === PromptsStorage.extension && skill.extension.isBuiltin) {
+			return -3; // FlowLeap: built-in skills carry the tool and doctrine rules, so a same-name user skill must not replace them
+		}
+		if (isFlowLeapSource(skill.source)) {
+			return skill.storage === PromptsStorage.local ? -2 : -1; // FlowLeap wins over developer folders
+		}
 		if (skill.storage === PromptsStorage.local) {
 			return 0; // workspace
 		}

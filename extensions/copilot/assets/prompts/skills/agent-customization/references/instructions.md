@@ -6,8 +6,8 @@ Guidelines loaded on-demand when relevant to the current task, or explicitly whe
 
 | Path | Scope |
 |------|-------|
-| `.github/instructions/*.instructions.md` | Workspace |
-| `<profile>/instructions/*.instructions.md` | User profile |
+| `.flowleap/instructions/*.instructions.md` | Workspace |
+| `~/.flowleap/instructions/*.instructions.md` | Personal |
 
 ## Frontmatter
 

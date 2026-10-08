@@ -6,7 +6,7 @@ Guidelines that automatically apply to all chat requests across your entire work
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `copilot-instructions.md` | `.github/` | Project-wide standards (recommended, cross-editor) |
+| `instructions.md` | `.flowleap/` | Project-wide standards (recommended) |
 | `AGENTS.md` | Root or subfolders | Open standard, monorepo hierarchy support |
 
 Use **only one**—not both.
@@ -48,7 +48,7 @@ For large repos, link to detailed docs instead of embedding: `See docs/TESTING.m
 
 ## Anti-patterns
 
-- **Using both file types**: Having both `copilot-instructions.md` and `AGENTS.md`
+- **Using both file types**: Having both `.flowleap/instructions.md` and `AGENTS.md`
 - **Kitchen sink**: Everything instead of what matters most
 - **Duplicating docs**: Copying README instead of linking
 - **Obvious instructions**: Conventions already enforced by linters
