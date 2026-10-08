@@ -32,7 +32,7 @@ Read the file for the filing and use its rules, periods and screen labels as wri
 | Fees (every filing) | [fees-2026.md](references/fees-2026.md) |
 | Which side files what, after which event | [next-filings.md](references/next-filings.md) |
 
-**Fees:** take every amount from `fees-2026.md` only, and give its rule and the table version ("2026 Table of Court Fees, in force from 1 January 2026"). Give the fixed fee and say whether a value-based fee applies. For a small or micro-enterprise, apply RoP 370.8: state the reduced amount (50%) and the condition (an affirmation, lodged with the filing, that the party is a small or micro-enterprise under Commission Recommendation 2003/361/EC). For an action filed before 1 January 2026, tell the user to use the previous (2023) table and give no 2026 amount for it. Say that the filing is not deemed lodged until the fee is paid where the file says so (RoP 15.2).
+**Fees:** take every amount from `fees-2026.md` only, and state it as its section "How to state a fee" says (rule, table version, SME reduction, pre-2026 actions, RoP 15.2).
 
 ## 3. Division and language
 Apply the division and language rules of the family file, then check them with `upc-division-router` ([its skill](../upc-division-router/SKILL.md), [division list](../upc-division-router/references/divisions.md)). For the central division, name the section by the patent's IPC class, or mark FIX and ask for the class. A protective letter goes to the Registry, not to a division.
