@@ -215,4 +215,12 @@ suite('AccountsActivityActionViewItem - addOrUpdateAccount', () => {
 			[URI.parse('https://example.com/fresh.png'), undefined]
 		);
 	});
+
+	test('relabels an account with the same id in place instead of adding a second one', async () => {
+		const harness = createAddOrUpdateHarness([{ id: 'user_123', label: 'FlowLeap User', canSignOut: true }]);
+
+		await addOrUpdateAccount.call(harness, 'github', { id: 'user_123', label: 'Jane Doe (jane@example.com)' });
+
+		assert.deepStrictEqual(harness.groupedAccounts.get('github'), [{ id: 'user_123', label: 'Jane Doe (jane@example.com)', icon: undefined, canSignOut: true }]);
+	});
 });

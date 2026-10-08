@@ -372,9 +372,9 @@ suite('SessionTypePickerActionItem', () => {
 			label: 'Codex',
 			checked: false,
 			enabled: false,
-			description: '[Sign in](command:workbench.action.chat.triggerSetup)',
+			description: '[Sign in](command:flowleap.signIn)',
 			ariaDescription: 'Sign in. Sign in to FlowLeap to use this agent.',
-			hover: '[Sign in to FlowLeap](command:workbench.action.chat.triggerSetup) to use this agent.',
+			hover: '[Sign in to FlowLeap](command:flowleap.signIn) to use this agent.',
 		});
 	});
 });

@@ -24,7 +24,6 @@ import { $ as h, disposableWindowInterval } from '../../../../../base/browser/do
 import { isNewUser } from './chatStatus.js';
 import product from '../../../../../platform/product/common/product.js';
 import { isCompletionsEnabled } from '../../../../../editor/common/services/completionsEnablement.js';
-import { CHAT_SETUP_ACTION_ID } from '../actions/chatActions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { isWeb } from '../../../../../base/common/platform.js';
 import { InEditorZenModeContext } from '../../../../common/contextkeys.js';
@@ -35,6 +34,18 @@ import { ChatStatusPromo } from './chatStatusPromo.js';
 import { ILifecycleService, LifecyclePhase } from '../../../../services/lifecycle/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { PatentIdeContextKeys } from '../../../../common/patent/patentIdeContextKeys.js';
+
+/**
+ * Context key (owned by the FlowLeap extension, PRD 0002 Issue 4) mirroring whether a FlowLeap
+ * Session exists. Referenced here by string on purpose so core never becomes a second owner of it.
+ */
+const FLOWLEAP_SIGNED_IN_CONTEXT_KEY = 'flowleap.signedIn';
+
+/**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
 
 /**
  * Tracks whether Copilot is currently blocked by a reached quota limit, has
@@ -112,7 +123,7 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
 
 	static readonly ID = 'workbench.contrib.chatStatusBarEntry';
 
-	private static readonly TITLE_BAR_CONTEXT_KEYS = new Set([...UpdateTitleBarEditorVisibleContext.keys(), ChatEntitlementContextKeys.hasByokModels.key]);
+	private static readonly TITLE_BAR_CONTEXT_KEYS = new Set([...UpdateTitleBarEditorVisibleContext.keys(), ChatEntitlementContextKeys.hasByokModels.key, FLOWLEAP_SIGNED_IN_CONTEXT_KEY]);
 
 	private static readonly QUOTA_RESUME_STATE_KEY = 'chat.quotaResumeState';
 	private static readonly QUOTA_RESET_RETRY_DELAY = 5 * 60 * 1000; // re-check 5 min after a passed reset time
@@ -374,9 +385,9 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
 				ariaLabel = localize('copilotDisabledStatus', "FlowLeap disabled");
 			}
 
-			// Signed out — keep showing Sign-in affordance even when BYOK models are present
-			// so air-gapped users can still authenticate to unlock the full Copilot experience.
-			else if (this.chatEntitlementService.entitlement === ChatEntitlement.Unknown) {
+			// Signed out — keep showing Sign-in affordance even when BYOK models are present.
+			// FlowLeap: the Copilot entitlement stays `Unknown` under BYOK, so a FlowLeap Session counts as signed in.
+			else if (this.chatEntitlementService.entitlement === ChatEntitlement.Unknown && !this.hasFlowLeapSession()) {
 				return this.getSetupEntryProps();
 			}
 
@@ -433,6 +444,11 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
 		return baseResult;
 	}
 
+	/** Whether the FlowLeap extension reports a FlowLeap Session (see {@link FLOWLEAP_SIGNED_IN_CONTEXT_KEY}). */
+	private hasFlowLeapSession(): boolean {
+		return this.contextKeyService.getContextKeyValue<boolean>(FLOWLEAP_SIGNED_IN_CONTEXT_KEY) === true;
+	}
+
 	private getSetupEntryProps(): IStatusbarEntry {
 		const showSignInLabel = !this.isSignInTitleBarAffordanceVisible();
 		const signInLabel = localize('signIn', "Sign In");
@@ -440,7 +456,7 @@ export class ChatStatusBarEntry extends Disposable implements IWorkbenchContribu
 			name: localize('chatStatus', "FlowLeap Status"),
 			text: showSignInLabel ? `$(copilot) ${signInLabel}` : '$(copilot)',
 			ariaLabel: showSignInLabel ? signInLabel : localize('chatStatusAria', "FlowLeap status"),
-			command: CHAT_SETUP_ACTION_ID,
+			command: FLOWLEAP_SIGN_IN_COMMAND_ID,
 			showInAllWindows: true,
 			kind: undefined,
 			content: this.entryAnchor,

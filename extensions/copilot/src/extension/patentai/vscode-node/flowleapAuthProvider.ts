@@ -94,9 +94,9 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		// Clock seam: defaults to the real wall clock. Tests inject a fake to exercise
 		// the token-expiry decision deterministically without stubbing globals.
 		private readonly _now: () => number = Date.now,
-		// Fetch seam for the subscription read: defaults to the real global fetch. Tests inject a
-		// fake to drive status transitions (and the change event they broadcast) without stubbing
-		// globals.
+		// Fetch seam for the subscription and profile reads: defaults to the real global fetch.
+		// Tests inject a fake to drive status transitions and the late account label (and the
+		// change events they broadcast) without stubbing globals.
 		private readonly _fetchImpl: typeof fetch = fetch,
 	) {
 		this._logService.info('[Patent AI Auth] Initializing authentication provider');
@@ -628,7 +628,8 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	}
 
 	/**
-	 * Fetch the user profile from the backend and refresh the session label.
+	 * Fetch the user profile from the backend and refresh the session label. The rebuilt session
+	 * keeps the same account id (the JWT `sub`), so the Accounts menu relabels the account in place.
 	 */
 	private async _fetchUserInfo(token: string): Promise<void> {
 		if (this._userInfoFetchInFlight) {
@@ -638,7 +639,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 		try {
 			const config = getPatentAIConfig();
 			const profileUrl = `${config.apiUrl.replace(/\/v1\/?$/, '')}/api/profile`;
-			const res = await fetch(profileUrl, {
+			const res = await this._fetchImpl(profileUrl, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			if (res.ok) {

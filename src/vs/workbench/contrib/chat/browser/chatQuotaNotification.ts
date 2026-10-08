@@ -19,6 +19,12 @@ const QUOTA_NOTIFICATION_ID = 'copilot.quotaStatus';
 const THRESHOLDS = [50, 75, 90, 95];
 const SWITCH_TO_AUTO_TREATMENT_NAME = 'config.chatQuotaWarningSwitchToAuto';
 
+/**
+ * Command id of the native FlowLeap sign-in flow, registered by the FlowLeap extension (ADR 0003).
+ * Referenced here by string on purpose so core does not take a dependency on the extension.
+ */
+const FLOWLEAP_SIGN_IN_COMMAND_ID = 'flowleap.signIn';
+
 function isAutoEligible(context: IChatInputNotificationContext): boolean {
 	return !isAutoLanguageModel(context.modelState.currentModel) && context.modelState.models.some(isAutoLanguageModel);
 }
@@ -264,7 +270,7 @@ export class ChatQuotaNotificationContribution extends Disposable implements IWo
 
 		if (entitlement === ChatEntitlement.Unknown) {
 			description = localize('quota.exhausted.anonymous', "Sign in to keep going.");
-			actions = [{ kind: ChatInputNotificationActionKind.Command, label: localize('signIn', "Sign In"), commandId: 'workbench.action.chat.triggerSetup' }];
+			actions = [{ kind: ChatInputNotificationActionKind.Command, label: localize('signIn', "Sign In"), commandId: FLOWLEAP_SIGN_IN_COMMAND_ID }];
 		} else if (entitlement === ChatEntitlement.Free) {
 			description = localize('quota.exhausted.free', "Upgrade to keep going.");
 			actions = [{ kind: ChatInputNotificationActionKind.Command, label: localize('upgrade', "Upgrade"), commandId: 'workbench.action.chat.upgradePlan' }];

@@ -366,6 +366,25 @@ describe('FlowLeapAuthenticationProvider session lifecycle', () => {
 		expect(changes.at(-1)?.removed).toHaveLength(1);
 	});
 
+	it('relabels the session from the backend profile under the same account id (one Accounts entry)', async () => {
+		const fetchImpl = (async () => ({
+			ok: true,
+			json: async () => ({ name: 'Jane Doe', email: 'jane@flowleap.co' }),
+		})) as unknown as typeof fetch;
+		const provider = new FlowLeapAuthenticationProvider(makeExtensionContext({ token: makeJwt({ sub: 'user_123' }), expiresAt: Date.now() + 60 * 60_000 }), makeLogService(), undefined, fetchImpl);
+		await provider.waitForInitialization();
+		const changed: import('vscode').AuthenticationSession[] = [];
+		provider.onDidChangeSessions(e => changed.push(...(e.changed ?? [])));
+
+		const [initial] = await provider.getSessions();
+		await tick();
+
+		expect({ initial: initial.account, changed: changed.map(s => s.account) }).toEqual({
+			initial: { id: 'user_123', label: 'FlowLeap User' },
+			changed: [{ id: 'user_123', label: 'Jane Doe (jane@flowleap.co)' }],
+		});
+	});
+
 	it('getSessions returns [] and deletes the secret once the token has expired', async () => {
 		const clock = fakeClock(1_700_000_000_000);
 		const { provider } = await createSessionViaFlow(clock);

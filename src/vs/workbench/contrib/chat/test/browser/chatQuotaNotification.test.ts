@@ -435,7 +435,7 @@ suite('ChatQuotaNotificationContribution', () => {
 			assert.ok(notificationMock.getNotification());
 			assert.strictEqual(notificationMock.getNotification()!.description, 'Sign in to keep going.');
 			assert.strictEqual(notificationMock.getNotification()!.actions.length, 1);
-			assert.strictEqual(getCommandAction(notificationMock.getNotification()!).commandId, 'workbench.action.chat.triggerSetup');
+			assert.strictEqual(getCommandAction(notificationMock.getNotification()!).commandId, 'flowleap.signIn');
 		});
 
 		test('free user gets upgrade action', () => {
