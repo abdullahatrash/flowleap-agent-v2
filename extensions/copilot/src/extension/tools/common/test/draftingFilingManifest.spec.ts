@@ -5,7 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { OFFICE_PAGE_SETUP } from '../drafting/filingDocuments';
-import { checkPageCount, estimatePages, filingManifest, pageEstimateBasis } from '../drafting/filingManifest';
+import { checkPageCount, estimatePages, filingManifest, pageEstimateBasis, renderFilingManifest } from '../drafting/filingManifest';
+import { resolveDraftingFolder } from '../drafting/folderContract';
 
 const claims = `---
 approved: true
@@ -95,6 +96,7 @@ describe('filingManifest', () => {
 			drawingSheetsDeclared: false,
 			abstractFigure: 'FIG. 2',
 			pages: { description: 1, claims: 1, abstract: 1, drawings: 2, total: 5 },
+			pagesForPageFee: 5,
 		});
 	});
 
@@ -102,6 +104,38 @@ describe('filingManifest', () => {
 		const manifest = filingManifest({ office: 'US', draft: draft('title: Hinge for heavy doors\n', 'A hinge.'), claims, figures: '---\ndrawingSheets: 1\n---\n' });
 		expect({ title: manifest.title, language: manifest.language, figures: manifest.figures, drawingSheets: manifest.drawingSheets, drawingSheetsDeclared: manifest.drawingSheetsDeclared, abstractFigure: manifest.abstractFigure }).toEqual({
 			title: 'Hinge for heavy doors', language: undefined, figures: [], drawingSheets: 1, drawingSheetsDeclared: true, abstractFigure: undefined,
+		});
+	});
+});
+
+describe('renderFilingManifest', () => {
+
+	it('EPO: states the pages counted for the page fee, the abstract as one page; the US manifest has no such line', () => {
+		const pagesSection = (office: 'EPO' | 'US') => {
+			const rendered = renderFilingManifest(filingManifest({ office, draft: draft('', 'A hinge.'), claims, figures }), resolveDraftingFolder('hinge')!);
+			return rendered.slice(rendered.indexOf('| Document |')).trim().split('\n');
+		};
+		expect({ EPO: pagesSection('EPO'), US: pagesSection('US') }).toEqual({
+			EPO: [
+				'| Document | File | Pages |',
+				'| --- | --- | --- |',
+				'| Description | draft-application.description.docx | 1 |',
+				'| Claims | draft-application.claims.docx | 1 |',
+				'| Abstract | draft-application.abstract.docx | 1 |',
+				'| Drawings | Not generated: prepared outside FlowLeap | 2 |',
+				'| Total | | 5 |',
+				'',
+				'Pages counted for the page fee: 5 (the abstract counts as one page, Rule 38(3) EPC; the EPO page fee is due for each page over 35, RFees Art. 2(1) item 1a).',
+			],
+			US: [
+				'| Document | File | Pages |',
+				'| --- | --- | --- |',
+				'| Description | draft-application.description.docx | 1 |',
+				'| Claims | draft-application.claims.docx | 1 |',
+				'| Abstract | draft-application.abstract.docx | 1 |',
+				'| Drawings | Not generated: prepared outside FlowLeap | 2 |',
+				'| Total | | 5 |',
+			],
 		});
 	});
 });
@@ -117,9 +151,20 @@ describe('checkPageCount', () => {
 			findings: [{
 				severity: 'Note',
 				rule: 'page-count',
-				file: 'filing-manifest.md',
-				message: 'About 39 pages (estimated: description 35, claims 1, abstract 1, drawings 2): the EPO page fee is due for each page over 35 (RFees Art. 2(1) item 1a). The count is an estimate from the text; check the page count in Word before filing.',
+				file: 'draft-application.md',
+				message: 'About 39 pages count for the page fee (estimated from the draft text: description 35, claims 1, abstract 1, drawings 2): the EPO page fee is due for each page over 35 (Rule 38(3) EPC; RFees Art. 2(1) item 1a). Check the page count in Word before filing.',
 			}],
+		});
+	});
+
+	it('counts the abstract as one page for the page fee (Rule 38(3) EPC), whatever its estimated pages', () => {
+		const description = Array.from({ length: 30 * 13 }, () => paragraph(154)).join('\n\n<!-- src: template -->\n');
+		const longAbstract = draft('', description).replace('A door (18) hangs on a frame (16) by a hinge with a housing (12).', paragraph(40 * 77));
+		const manifest = filingManifest({ office: 'EPO', draft: longAbstract, claims, figures });
+		expect({ pages: manifest.pages, pagesForPageFee: manifest.pagesForPageFee, findings: checkPageCount(manifest) }).toEqual({
+			pages: { description: 31, claims: 1, abstract: 2, drawings: 2, total: 36 },
+			pagesForPageFee: 35,
+			findings: [],
 		});
 	});
 

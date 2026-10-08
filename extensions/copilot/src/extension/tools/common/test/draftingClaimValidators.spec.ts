@@ -119,7 +119,7 @@ describe('Application Drafting claim validators', () => {
 				{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '4 independent claims: the US fee covers 3; each further independent claim incurs an excess-claims fee (37 CFR 1.16(h)).' },
 			],
 			[
-				{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '16 claims in total: the EPO claims fee is due for each claim over 15 (Rule 45 EPC).' },
+				{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '16 claims in total: the EPO claims fee is due for each claim over 15, at a higher rate from the 51st claim (Rule 45(1) EPC; RFees Art. 2(1) item 15).' },
 			],
 		]);
 	});
@@ -138,18 +138,30 @@ describe('Application Drafting claim validators', () => {
 		expect(checkClaimOneSentence(claims(
 			'1. A hinge, e.g. for a door, with a lever of approx. 2.5 mm and 5 wt.% carbon, i.e. a steel lever.',
 			'2. The hinge of claim 1, wherein the lever is of steel No. 3, cf. a known grade, etc.',
+			'3. A method comprising the steps (i). heating, ii. cooling and (iv). drying the lever.',
+			'4. A method comprising: 1. heating; 2. cooling, and (3). drying a lever of Acme Inc. or Foo Ltd. or Bar Co. or Baz Corp. in conc. acid, see pp. 3-4, of appr. 2.5 mm, resp. 3 mm, incl. a coating, eg. a steel lever.',
 		))).toEqual([]);
 	});
 
 	it('one sentence: Error for a period that ends a sentence before the end of the claim', () => {
-		expect(checkClaimOneSentence(claims('1. A hinge.', '2. The hinge of claim 1, comprising a housing. The housing is of steel.'))).toEqual([
+		expect(checkClaimOneSentence(claims('1. A hinge.', '2. The hinge of claim 1, comprising a housing. The housing is of steel.', '3. The hinge of claim 1, with a lever of length 12. The lever is of steel.'))).toEqual([
 			{ severity: 'Error', rule: 'claim-one-sentence', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2 has a period inside the claim, after "comprising a housing". A claim is one sentence with one period at its end (Guidelines F-IV, 4.1; MPEP 608.01(m)).' },
+			{ severity: 'Error', rule: 'claim-one-sentence', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3 has a period inside the claim, after "of length 12". A claim is one sentence with one period at its end (Guidelines F-IV, 4.1; MPEP 608.01(m)).' },
 		]);
 	});
 
 	it('references to the description or drawings: pass for claims in words and references to other claims', () => {
 		const text = claims('1. A hinge comprising a housing (12).', '2. The hinge as described in claim 1, wherein the housing is shown to the user.');
 		expect([checkClaimReferencesToDescription(text, 'EPO'), checkClaimReferencesToDescription(text, 'US')]).toEqual([[], []]);
+	});
+
+	it('references to the description or drawings: pass for bare "as shown", "as represented", "as disclosed" and a lower-case figure word', () => {
+		expect(checkClaimReferencesToDescription(claims(
+			'1. A display showing a value as shown to the user.',
+			'2. The display of claim 1, wherein the value is a signal as represented by a voltage.',
+			'3. The display of claim 1, wherein the value is sent as disclosed to a server.',
+			'4. A vehicle moving on a figure 8 track.',
+		), 'EPO')).toEqual([]);
 	});
 
 	it('references to the description or drawings: Error for EPO (Rule 43(6) EPC), Note for US', () => {

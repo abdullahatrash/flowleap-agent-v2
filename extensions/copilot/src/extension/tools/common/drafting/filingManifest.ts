@@ -12,9 +12,9 @@
 
 import { parseClaims } from './claims';
 import { DraftFinding } from './finding';
-import { documentTypeOf, exportedParagraphs, FilingParagraph, filingParagraphs, OFFICE_PAGE_SETUP, OfficePageSetup } from './filingDocuments';
+import { documentParagraphs, exportedParagraphs, FilingParagraph, OFFICE_PAGE_SETUP, OfficePageSetup } from './filingDocuments';
 import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DraftDocumentType, DraftingFolder } from './folderContract';
-import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
+import { DraftingFrontmatterValue, DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
 import { isAbstractParagraph, parseFigureParts } from './specValidators';
 
 /** Average character width of body text, in ems (a conservative value for a serif font). */
@@ -22,8 +22,11 @@ const AVERAGE_CHARACTER_WIDTH_EM = 0.5;
 
 const MILLIMETRES_PER_POINT = 25.4 / 72;
 
-/** The EPO page fee is due for each page over this count (RFees Art. 2(1) item 1a). */
+/** The EPO page fee is due for each page over this count (Rule 38(2) EPC; RFees Art. 2(1) item 1a). */
 const EPO_PAGE_FEE_THRESHOLD = 35;
+
+/** The pages the abstract counts for the EPO page fee, whatever its length (Rule 38(3) EPC). */
+const EPO_ABSTRACT_FEE_PAGES = 1;
 
 /** The basis of the page estimate of one office page setup. */
 export interface PageEstimateBasis {
@@ -85,6 +88,11 @@ export interface FilingManifest {
 	readonly abstractFigure?: string;
 	/** Estimated pages per document type; the drawings are the drawing sheets; the total counts all. */
 	readonly pages: Readonly<Record<DraftDocumentType | 'drawings' | 'total', number>>;
+	/**
+	 * The estimated pages counted for the EPO page fee: the description, the claims and the
+	 * drawing sheets, and the abstract as one page when there is one (Rule 38(3) EPC).
+	 */
+	readonly pagesForPageFee: number;
 }
 
 interface FigureEntry {
@@ -116,7 +124,7 @@ function proposeAbstractFigure(figures: readonly FigureEntry[], abstract: string
 	return best?.label;
 }
 
-function frontmatterText(value: unknown): string | undefined {
+function frontmatterText(value: DraftingFrontmatterValue): string | undefined {
 	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
@@ -131,10 +139,7 @@ export function filingManifest(input: FilingManifestInput): FilingManifest {
 	const drawingSheets = drawingSheetsDeclared ? declaredSheets : figures.length;
 
 	const paragraphs = exportedParagraphs(input.draft);
-	const documents: Record<DraftDocumentType, FilingParagraph[]> = { description: [], claims: [], abstract: [] };
-	for (const paragraph of paragraphs) {
-		documents[documentTypeOf(paragraph)].push(...filingParagraphs(paragraph));
-	}
+	const documents = documentParagraphs(paragraphs);
 	const description = estimatePages(documents.description, setup);
 	const claimPages = estimatePages(documents.claims, setup);
 	const abstract = estimatePages(documents.abstract, setup);
@@ -153,24 +158,26 @@ export function filingManifest(input: FilingManifestInput): FilingManifest {
 		drawingSheetsDeclared,
 		abstractFigure: proposeAbstractFigure(figures, abstractText),
 		pages: { description, claims: claimPages, abstract, drawings: drawingSheets, total: description + claimPages + abstract + drawingSheets },
+		pagesForPageFee: description + claimPages + Math.min(abstract, EPO_ABSTRACT_FEE_PAGES) + drawingSheets,
 	};
 }
 
 /**
- * A Note when an EPO application has more than 35 pages, drawing sheets included: the page fee
- * is due for each further page (RFees Art. 2(1) item 1a). The page count is estimated. The claim
- * count Notes come from the claim validators.
+ * A Note when an EPO application has more than 35 pages for the page fee, drawing sheets included
+ * and the abstract counted as one page (Rule 38(2) and (3) EPC; RFees Art. 2(1) item 1a). The
+ * page count is estimated from the draft text, so the Note is reported against the draft. The
+ * claim count Notes come from the claim validators.
  */
 export function checkPageCount(manifest: FilingManifest): DraftFinding[] {
-	const { pages } = manifest;
-	if (manifest.office !== 'EPO' || pages.total <= EPO_PAGE_FEE_THRESHOLD) {
+	const { pages, pagesForPageFee } = manifest;
+	if (manifest.office !== 'EPO' || pagesForPageFee <= EPO_PAGE_FEE_THRESHOLD) {
 		return [];
 	}
 	return [{
 		severity: 'Note',
 		rule: 'page-count',
-		file: DRAFTING_FILE_NAMES.filingManifest,
-		message: `About ${pages.total} pages (estimated: description ${pages.description}, claims ${pages.claims}, abstract ${pages.abstract}, drawings ${pages.drawings}): the EPO page fee is due for each page over ${EPO_PAGE_FEE_THRESHOLD} (RFees Art. 2(1) item 1a). The count is an estimate from the text; check the page count in Word before filing.`,
+		file: DRAFTING_FILE_NAMES.draft,
+		message: `About ${pagesForPageFee} pages count for the page fee (estimated from the draft text: description ${pages.description}, claims ${pages.claims}, abstract ${Math.min(pages.abstract, EPO_ABSTRACT_FEE_PAGES)}, drawings ${pages.drawings}): the EPO page fee is due for each page over ${EPO_PAGE_FEE_THRESHOLD} (Rule 38(3) EPC; RFees Art. 2(1) item 1a). Check the page count in Word before filing.`,
 	}];
 }
 
@@ -211,6 +218,10 @@ export function renderFilingManifest(manifest: FilingManifest, folder: DraftingF
 		...DRAFT_DOCUMENT_TYPES.map(type => `| ${documentLabels[type]} | ${fileName(folder.docx[type])} | ${manifest.pages[type]} |`),
 		`| Drawings | Not generated: prepared outside FlowLeap | ${manifest.pages.drawings} |`,
 		`| Total | | ${manifest.pages.total} |`,
+		...(manifest.office === 'EPO' ? [
+			'',
+			`Pages counted for the page fee: ${manifest.pagesForPageFee} (the abstract counts as one page, Rule 38(3) EPC; the EPO page fee is due for each page over ${EPO_PAGE_FEE_THRESHOLD}, RFees Art. 2(1) item 1a).`,
+		] : []),
 	];
 	return lines.join('\n') + '\n';
 }

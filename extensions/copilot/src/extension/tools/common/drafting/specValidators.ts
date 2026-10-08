@@ -241,7 +241,12 @@ export function hasFigures(figures: string): boolean {
 	return parseDraftingFrontmatter(figures).body.trim().length > 0;
 }
 
-const figureNamePattern = /\b(?:figs?\.?|figures?)\s*\d+[a-z]?\b/i;
+/**
+ * A figure name: the abbreviation `FIG.`, `Fig.` or `Figs.` (the period may be left out) or a
+ * capitalised `Figure`, then the figure number (`FIG. 3a`, `Figure 2`). Case-sensitive, so a
+ * lower-case `figure 8` in running text is not a figure name.
+ */
+export const figureNamePattern = /\b(?:(?:FIGS?|Figs?)\.?|FIGURES?|Figures?)\s*\d+[a-zA-Z]?\b/;
 
 /**
  * EPO, Rule 47(4) EPC: Notes when the application has figures and the Abstract does not name the

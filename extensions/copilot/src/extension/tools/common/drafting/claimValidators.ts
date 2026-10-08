@@ -13,7 +13,7 @@ import { DraftClaim } from './claims';
 import { DraftFinding } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice } from './frontmatter';
-import { hasFigures, parseFigureParts, readReferenceSigns } from './specValidators';
+import { figureNamePattern, hasFigures, parseFigureParts, readReferenceSigns } from './specValidators';
 
 const claimsFile = DRAFTING_FILE_NAMES.claims;
 
@@ -243,7 +243,10 @@ export function checkLiteralBasis(claims: readonly DraftClaim[], description: st
 	return findings;
 }
 
-/** Note when the claim count passes the office fee threshold (US: 20 total, 3 independent; EPO: 15). */
+/**
+ * Note when the claim count passes the office fee threshold (US: 20 total, 3 independent; EPO: 15,
+ * with a higher claims fee from the 51st claim).
+ */
 export function checkClaimCount(claims: readonly DraftClaim[], office: 'US' | 'EPO'): DraftFinding[] {
 	const findings: DraftFinding[] = [];
 	const note = (message: string): DraftFinding => ({ severity: 'Note', rule: 'claim-count', file: claimsFile, message });
@@ -256,7 +259,7 @@ export function checkClaimCount(claims: readonly DraftClaim[], office: 'US' | 'E
 			findings.push(note(`${independent} independent claims: the US fee covers 3; each further independent claim incurs an excess-claims fee (37 CFR 1.16(h)).`));
 		}
 	} else if (claims.length > 15) {
-		findings.push(note(`${claims.length} claims in total: the EPO claims fee is due for each claim over 15 (Rule 45 EPC).`));
+		findings.push(note(`${claims.length} claims in total: the EPO claims fee is due for each claim over 15, at a higher rate from the 51st claim (Rule 45(1) EPC; RFees Art. 2(1) item 15).`));
 	}
 	return findings;
 }
@@ -279,19 +282,34 @@ export function checkRelativeTerms(claims: readonly DraftClaim[]): DraftFinding[
  * Abbreviations that end with a period inside a sentence (lower case, without the period).
  * `wt.%` and decimal numbers need no entry: a period followed by a non-space never ends a sentence.
  */
-const abbreviations = new Set(['e.g', 'i.e', 'u.s', 'etc', 'approx', 'ca', 'cf', 'vs', 'resp', 'incl', 'esp', 'max', 'min', 'fig', 'figs', 'no', 'nos', 'wt', 'vol', 'mol', 'temp', 'eq', 'ref', 'al']);
+const abbreviations = new Set(['e.g', 'eg', 'i.e', 'ie', 'u.s', 'etc', 'approx', 'appr', 'apprx', 'ca', 'cf', 'vs', 'resp', 'incl', 'esp', 'max', 'min', 'fig', 'figs', 'no', 'nos', 'wt', 'vol', 'mol', 'temp', 'eq', 'ref', 'al', 'conc', 'pp', 'inc', 'ltd', 'co', 'corp']);
+
+/**
+ * True when the word before a period is a step or item label, not the end of a sentence: a
+ * single letter (`a.`), a roman numeral with optional parentheses (`ii.`, `(iv).`), or a number
+ * of one or two digits (`1.`, `(2).`) at the start of the claim or after `;`, `:` or `(`.
+ */
+function isLabel(word: string, before: string): boolean {
+	const bare = word.replace(/^\(/, '').replace(/\)$/, '');
+	if (/^(?:[a-z]|[ivx]+)$/i.test(bare)) {
+		return true;
+	}
+	return /^\d{1,2}$/.test(bare) && (word.startsWith('(') || /(?:^|[;:(])\s*$/.test(before));
+}
 
 /**
  * Error when a claim has a period that ends a sentence before its final period: a period followed
- * by white space, after a word that is not an abbreviation (`e.g.`, `approx.`, `Fig.`, `No.`) and
- * not a single-letter label (`a.`). A claim is one sentence (Guidelines F-IV, 4.1; MPEP 608.01(m)).
+ * by white space, after a word that is not an abbreviation (`e.g.`, `approx.`, `Fig.`, `No.`,
+ * `Inc.`) and not a step or item label (`a.`, `(ii).`, `1. heating; 2. cooling`). A claim is one
+ * sentence (Guidelines F-IV, 4.1; MPEP 608.01(m)).
  */
 export function checkClaimOneSentence(claims: readonly DraftClaim[]): DraftFinding[] {
 	const findings: DraftFinding[] = [];
 	for (const claim of claims) {
 		for (const match of claim.text.matchAll(/(?<word>\S+)\.\s+\S/g)) {
-			const word = match.groups!.word.replace(/^[("'“]+/, '').toLowerCase();
-			if (abbreviations.has(word) || /^[a-z]$/.test(word)) {
+			const word = match.groups!.word.replace(/^["'“]+/, '');
+			const start = (match.index ?? 0) + match.groups!.word.length - word.length;
+			if (abbreviations.has(word.replace(/^\(+/, '').toLowerCase()) || isLabel(word, claim.text.slice(0, start))) {
 				continue;
 			}
 			const before = claim.text.slice(0, (match.index ?? 0) + match.groups!.word.length).split(/\s+/).slice(-3).join(' ');
@@ -302,16 +320,29 @@ export function checkClaimOneSentence(claims: readonly DraftClaim[]): DraftFindi
 	return findings;
 }
 
+/** What a claim refers to after `as shown in`: a figure, the drawings, the description or an example. */
+const descriptionTarget = String.raw`\s+(?:in|on|by|with\s+reference\s+to)\s+(?:the\s+)?(?:(?:[Ff]igs?\.?|[Ff]igures?|FIGS?\.?|FIGURES?)\s*\d+[a-zA-Z]?\b|(?:[Ff]igures|FIGURES|drawings?|description|specification)\b|examples?(?:\s+\d+)?\b)`;
+
+/** Not a reference to the description: `as described in claim 1`, `as set forth in any one of claims 1 to 3`. */
+const notClaimReference = String.raw`(?!\s+in\s+(?:any\s+(?:one\s+)?of\s+)?claims?\b)`;
+
 /**
- * Phrases by which a claim relies on the description or drawings: `as described`, `as shown in
- * Fig. 2`, `as illustrated`, and any figure reference `FIG. 3a`. `as described in claim 1` refers
- * to a claim and is left out.
+ * Phrases by which a claim relies on the description or drawings, Rule 43(6) EPC:
+ *
+ * - `as described`, `as illustrated`, `as depicted`, `as set forth`, and any verb after
+ *   `hereinbefore`, `herein` or `hereinafter`, also on their own; `as described in claim 1`
+ *   refers to a claim and is left out.
+ * - `as shown`, `as represented`, `as disclosed` only with what they refer to (`as shown in
+ *   Fig. 2`, `as disclosed in the description`): on their own they are ordinary words
+ *   (`as shown to the user`).
+ * - A figure name ({@link figureNamePattern}): `FIG. 3a`, `Figure 2`, not `a figure 8 track`.
  */
 const descriptionReferencePattern = new RegExp(
-	String.raw`\bas\s+(?:(?:substantially|hereinbefore|herein|hereinafter)\s+)*(?:described|shown|illustrated|depicted|disclosed|represented|set\s+forth)\b(?!\s+in\s+(?:any\s+(?:one\s+)?of\s+)?claims?\b)` +
-	String.raw`(?:\s+(?:in|on|by|with\s+reference\s+to)\s+(?:the\s+)?(?:(?:figs?\.?|figures?)\s*\d+[a-z]?\b|drawings?\b|description\b|specification\b|examples?(?:\s+\d+)?\b))?` +
-	String.raw`|\b(?:figs?\.?|figures?)\s*\d+[a-z]?\b`,
-	'gi');
+	String.raw`\b[Aa]s\s+(?:substantially\s+)?(?:hereinbefore|herein|hereinafter)\s+(?:substantially\s+)?(?:described|shown|illustrated|depicted|disclosed|represented|set\s+forth)\b${notClaimReference}(?:${descriptionTarget})?` +
+	String.raw`|\b[Aa]s\s+(?:substantially\s+)?(?:described|illustrated|depicted|set\s+forth)\b${notClaimReference}(?:${descriptionTarget})?` +
+	String.raw`|\b[Aa]s\s+(?:substantially\s+)?(?:shown|represented|disclosed)${descriptionTarget}` +
+	`|${figureNamePattern.source}`,
+	'g');
 
 /**
  * Finding per claim that relies on references to the description or drawings ("as shown in

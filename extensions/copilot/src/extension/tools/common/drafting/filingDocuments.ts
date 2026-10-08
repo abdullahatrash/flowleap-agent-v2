@@ -123,3 +123,15 @@ export function filingParagraphs(paragraph: DraftParagraph): FilingParagraph[] {
 	}
 	return [{ kind: 'text', text: paragraph.text.split('\n').map(line => line.trim()).filter(Boolean).join(' ') }];
 }
+
+/**
+ * The paragraphs of each filing document, in the order given: each paragraph of the draft goes to
+ * its document type ({@link documentTypeOf}) as its filing paragraphs ({@link filingParagraphs}).
+ */
+export function documentParagraphs(paragraphs: readonly DraftParagraph[]): Record<DraftDocumentType, FilingParagraph[]> {
+	const documents: Record<DraftDocumentType, FilingParagraph[]> = { description: [], claims: [], abstract: [] };
+	for (const paragraph of paragraphs) {
+		documents[documentTypeOf(paragraph)].push(...filingParagraphs(paragraph));
+	}
+	return documents;
+}

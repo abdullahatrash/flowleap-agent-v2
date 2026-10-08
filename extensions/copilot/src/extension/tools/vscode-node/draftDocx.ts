@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AlignmentType, Document, Footer, Header, HeadingLevel, ISectionOptions, LineNumberRestartFormat, Packer, PageNumber, Paragraph, TextRun } from 'docx';
-import { documentTypeOf, exportedParagraphs, filingParagraphs, headingLevel, OFFICE_PAGE_SETUP, OfficePageSetup } from '../common/drafting/filingDocuments';
+import { documentParagraphs, exportedParagraphs, FilingParagraph, headingLevel, OFFICE_PAGE_SETUP, OfficePageSetup } from '../common/drafting/filingDocuments';
 import { DRAFT_DOCUMENT_TYPES, DraftDocumentType } from '../common/drafting/folderContract';
 import { DraftingOffice } from '../common/drafting/frontmatter';
 import { DraftParagraph } from '../common/drafting/sourceMarkers';
@@ -136,7 +136,7 @@ async function packDocument(children: Paragraph[], type: DraftDocumentType, setu
 			default: {
 				document: {
 					run: { font: 'Times New Roman', size: setup.fontSize * 2 },
-					// 1.5 line spacing, and one such line between paragraphs.
+					// The office line spacing (`setup.lineSpacing`), and one such line between paragraphs.
 					paragraph: { spacing: { line: spacing, after: Math.round(setup.lineSpacing * setup.fontSize * 20) } },
 				},
 			},
@@ -169,13 +169,11 @@ export type DraftDocuments = Readonly<Record<DraftDocumentType, Uint8Array>>;
  * abstract file. Drawings are not generated.
  */
 export async function buildDraftDocx(draft: string, office: DraftingOffice): Promise<DraftDocuments> {
-	const children: Record<DraftDocumentType, Paragraph[]> = { description: [], claims: [], abstract: [] };
-	for (const paragraph of orderSections(exportedParagraphs(draft), office)) {
-		children[documentTypeOf(paragraph)].push(...filingParagraphs(paragraph).map(filing => filing.kind === 'heading'
-			? new Paragraph({ children: runs(filing.text), heading: headingLevels[Math.min(filing.level ?? 1, headingLevels.length) - 1] })
-			: new Paragraph({ children: runs(filing.text) })));
-	}
+	const documents = documentParagraphs(orderSections(exportedParagraphs(draft), office));
+	const toDocx = (filing: FilingParagraph) => filing.kind === 'heading'
+		? new Paragraph({ children: runs(filing.text), heading: headingLevels[Math.min(filing.level ?? 1, headingLevels.length) - 1] })
+		: new Paragraph({ children: runs(filing.text) });
 	const setup = OFFICE_PAGE_SETUP[office];
-	const [description, claims, abstract] = await Promise.all(DRAFT_DOCUMENT_TYPES.map(type => packDocument(children[type], type, setup)));
+	const [description, claims, abstract] = await Promise.all(DRAFT_DOCUMENT_TYPES.map(type => packDocument(documents[type].map(toDocx), type, setup)));
 	return { description, claims, abstract };
 }
