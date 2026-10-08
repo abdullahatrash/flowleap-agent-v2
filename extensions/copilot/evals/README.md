@@ -755,8 +755,10 @@ judge reads the answer, not the JSON. The dataset header shows the assertion sha
 | Case | Skill | Graded on |
 |---|---|---|
 | S1 | `upc-division-router` (smoke) | Reference file loaded, no calendar date, forum + language + counterclaim options complete |
+| S5 | `upc-representative-start` | Reference file loaded, Art. 48(2) + R.11 + R.18 cited, no calendar date, route + evidence + Registrar outcomes + petition for review + team roles complete |
 
 **Smoke (2026-10-08, `anthropic/claude-sonnet-5`, `--no-cache`): S1 3/3, verdict PASS, 0 voided.**
+**S5 (2026-10-08, `--filter-pattern S5`): 3/3, verdict PASS, 0 voided.**
 
 ## File Structure
 

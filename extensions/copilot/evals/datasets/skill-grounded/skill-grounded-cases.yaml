@@ -47,6 +47,50 @@
         Fail if any point is missing or contradicted. Do not grade style or length.
       metric: s1_complete
 
+# ── S5 — PRD 0021 scenario 5: a new representative asks how to register. ──
+- description: "S5 — new representative: entitlement, registration, rejection and review (upc-representative-start)"
+  vars:
+    skill: upc-representative-start
+    prompt: "I am a European Patent Attorney. I do not have the European Patent Litigation Certificate, but I hold a master's degree in law from a German university. Can I represent clients at the UPC, and how do I register as a representative in the court's filing system? What can I do if the Registrar rejects my request? In our firm a trainee drafts the filings and the office manager pays the fees: do they need to register too?"
+  assert:
+    - type: javascript
+      value: |
+        const loaded = JSON.parse(output).loadedFiles;
+        const pass = loaded.includes('references/registration.md');
+        return { pass, score: pass ? 1 : 0, reason: pass ? 'Reference file loaded' : `Reference file not loaded: ${JSON.stringify(loaded)}` };
+      metric: s5_reference_loaded
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => {
+            const text = H.answerText(output);
+            const missing = H.missingRules(text, ['11', '18']);
+            if (!/Art(?:icle|\.)?\s?48\s?\(2\)/i.test(text)) { missing.push('Art. 48(2) UPCA'); }
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'Legal basis cited' : `Not cited: ${missing.join(', ')}` };
+          });
+      metric: s5_rules
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer tells a European Patent Attorney without the European Patent Litigation Certificate, who holds a
+        master's degree in law from an EU Member State, whether and how they can register as a UPC representative.
+        It is complete only if it covers ALL of these points:
+        1. A European Patent Attorney may represent under Art. 48(2) UPCA only with appropriate qualifications, and a
+           bachelor's or master's degree in law from an EU Member State is such a qualification (Rule 11 of the EPLC
+           Rules), so the user can apply for registration on the list of entitled representatives.
+        2. Registration is a request to the Registrar, made from the user's own account in the court's filing
+           system: the user selects the entitlement and attaches a copy of the diploma as evidence.
+        3. The Registrar examines the request: it enters the person on the list, or invites the person to correct a
+           deficiency (a non-extendable period of two months), or rejects the request.
+        4. Against a rejection the person can file a petition for review with the Registrar within one month of
+           notification of the decision, with the reasons (Rule 18 of the EPLC Rules); if the Registrar does not
+           rectify the decision, the President of the Court of Appeal decides.
+        5. The trainee who drafts and the office manager who pays do not need to register as representatives, but
+           a court filing must be signed by a registered representative.
+        Fail if any point is missing or contradicted. Do not grade style or length.
+      metric: s5_complete
+
 # ── #574 (PRD 0021 U3) — upc-case-navigator: PRD scenarios 1 and 4. ──
 # Rules and periods from upc-filing-prep/references/next-filings.md and appeal.md.
 - description: "N1 — U3 scenario 1, defendant served with a Statement of claim: next filings, rules, periods (upc-case-navigator)"
