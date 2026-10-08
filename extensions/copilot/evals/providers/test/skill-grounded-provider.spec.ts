@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import SkillGroundedProvider, { SKILL_SKIP_DIRS } from '../skill-grounded-provider';
+import SkillGroundedProvider, { renderInstructionsAttachment, SKILL_SKIP_DIRS } from '../skill-grounded-provider';
 
 /** A skills folder on disk with two skills: one links to a reference file of the other. */
 let skillsDir: string;
@@ -91,6 +91,23 @@ describe('SkillGroundedProvider', () => {
 		});
 	});
 
+	it('attaches the instruction files of a case in a system message after the main system prompt, the way the app does', async () => {
+		const instructionsFile = path.join(skillsDir, 'firm.instructions.md');
+		fs.writeFileSync(instructionsFile, '---\napplyTo: \'**\'\n---\nAlso search DE utility models.\n');
+		const { bodies } = await runCase({ skill: 'demo', instructions: instructionsFile });
+		const missing = await runCase({ skill: 'demo', instructions: 'no-such.instructions.md' });
+		const messages = bodies[0].messages;
+		expect({
+			roles: messages.slice(0, 3).map(message => message.role),
+			instructions: messages[1].content,
+			missingError: /Instruction file not found/.test(String(missing.result.error)),
+		}).toEqual({
+			roles: ['system', 'system', 'user'],
+			instructions: `<instructions>\n<attachment filePath=${JSON.stringify(instructionsFile)}>\n---\napplyTo: '**'\n---\nAlso search DE utility models.\n</attachment>\n</instructions>`,
+			missingError: true,
+		});
+	});
+
 	it('reports a missing skill or key as a provider error, not as an answer', async () => {
 		const missingSkill = await runCase({ skill: 'no-such-skill' });
 		const noSkillVar = await runCase({});
@@ -139,6 +156,27 @@ describe('SkillGroundedProvider matches the app skill tool', () => {
 		const literal = /const SKILL_SKIP_DIRS = new Set\(\[(?<entries>[^\]]*)\]\)/.exec(appSource)?.groups?.entries ?? '';
 		const appDirs = [...literal.matchAll(/'(?<name>[^']+)'/g)].map(match => match.groups!.name);
 		expect([...SKILL_SKIP_DIRS].sort()).toEqual(appDirs.sort());
+	});
+
+	it('attaches instructions in the shape of CustomInstructions in a system message', () => {
+		const extensionSrc = path.join(__dirname, '..', '..', '..', 'src');
+		const customInstructions = fs.readFileSync(path.join(extensionSrc, 'extension', 'prompts', 'node', 'panel', 'customInstructions.tsx'), 'utf-8');
+		const configuration = fs.readFileSync(path.join(extensionSrc, 'platform', 'configuration', 'common', 'configurationService.ts'), 'utf-8');
+		expect({
+			instructionsTag: customInstructions.includes('<Tag name=\'instructions\'>'),
+			attachmentTag: customInstructions.includes('<Tag name=\'attachment\' attrs={attrs}>'),
+			filePathAttr: customInstructions.includes('const attrs: Record<string, string> = { filePath:'),
+			wholeFileTrimmed: customInstructions.includes('content = content.trim();'),
+			inSystemMessageByDefault: /CustomInstructionsInSystemMessage = defineSetting<boolean>\('chat\.customInstructionsInSystemMessage', ConfigType\.Simple, true\)/.test(configuration),
+			rendered: renderInstructionsAttachment([{ absolutePath: '/w/a.instructions.md', content: ' A \n' }]),
+		}).toEqual({
+			instructionsTag: true,
+			attachmentTag: true,
+			filePathAttr: true,
+			wholeFileTrimmed: true,
+			inSystemMessageByDefault: true,
+			rendered: '<instructions>\n<attachment filePath="/w/a.instructions.md">\nA\n</attachment>\n</instructions>',
+		});
 	});
 
 	it('renders the same <skill-context> text as SkillTool.invokeInline', () => {

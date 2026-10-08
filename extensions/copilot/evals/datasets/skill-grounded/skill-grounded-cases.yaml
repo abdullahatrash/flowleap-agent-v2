@@ -266,3 +266,45 @@
         expiry date. Do not grade style or length.
       metric: u2s3_complete
 # ══ END #573 ══
+
+# ══ #577 — firm instructions next to a built-in skill ══
+# Decision 6: firms customize a built-in workflow through `.flowleap/instructions/*.instructions.md`.
+# `vars.instructions` names instruction files (relative to evals/, comma-separated) that the provider
+# attaches the way the app attaches an `applyTo: '**'` instruction file. The answer must keep the
+# built-in skill's tool and method rules AND add the firm steps. The prompt asks for a plan only: the
+# Discriminating Term is shown per search statement that RAN (prior-art SKILL.md step 1c), so a plan does
+# not reliably carry it, and asking for a statement makes the model want to run the count probe, which
+# `tool_choice: 'none'` turns into an empty answer. The mandatory concept-synonym table is checked instead.
+- description: "F1 — firm instructions with the built-in prior-art skill (prior-art + prior-art-practice.instructions.md)"
+  vars:
+    skill: prior-art
+    instructions: fixtures/skill-grounded/prior-art-practice.instructions.md
+    prompt: "Plan the prior-art search for this invention; list the steps and the tool calls you will make. Invention: a bicycle helmet with a collar airbag that inflates when an accelerometer and gyroscope detect a fall. Our client is VeloSafe GmbH. Do not run the searches yet: answer with the plan only."
+  assert:
+    - type: javascript
+      value: |
+        const text = JSON.parse(output).finalText;
+        const checks = {
+          search_tool: /search_patents/.test(text),
+          concept_synonym_table: /synonym/i.test(text),
+          utility_models: /utility model|gebrauchsmuster/i.test(text),
+        };
+        const missing = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+        return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'Built-in rules and firm step present' : `Missing: ${missing.join(', ')}` };
+      metric: f1_rules
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer plans a prior-art search for a bicycle-helmet airbag invention. It is complete only if it
+        covers ALL of these points:
+        1. It lists concrete search steps with the tool calls it will make (for example search_patents with
+           CQL, patent_api_request for USPTO, search_academic for non-patent literature).
+        2. It builds or plans the concept-synonym table before searching (the built-in skill's mandatory
+           step 1c).
+        3. It plans a separate search of German utility models (Gebrauchsmuster / DE U documents) — the
+           firm's step.
+        4. It puts the client's (VeloSafe GmbH's) own patents in a separate table, apart from the
+           third-party prior art — the firm's step.
+        Fail if any point is missing or contradicted. Do not grade style or length.
+      metric: f1_complete
+# ══ END #577 ══

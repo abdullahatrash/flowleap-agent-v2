@@ -142,6 +142,32 @@ ${skill.skillMd}
 </skill-context>`;
 }
 
+/**
+ * An instruction file as the app attaches it when its `applyTo` matches (`applyTo: '**'` matches
+ * every request): `CustomInstructions` in the extension reads the WHOLE file (front matter included),
+ * trims it, wraps it in an `<attachment filePath=...>` tag inside one `<instructions>` tag, and the
+ * agent prompt puts that block in a system message after the main system prompt
+ * (`chat.customInstructionsInSystemMessage`, default true). The provider spec checks the app source.
+ */
+export function renderInstructionsAttachment(files: readonly { readonly absolutePath: string; readonly content: string }[]): string {
+	const attachments = files.map(file => `<attachment filePath=${JSON.stringify(file.absolutePath)}>\n${file.content.trim()}\n</attachment>`);
+	return `<instructions>\n${attachments.join('\n')}\n</instructions>`;
+}
+
+/** Instruction files named by a case (`vars.instructions`, comma-separated paths relative to evals/). */
+function loadInstructionFiles(value: unknown): { absolutePath: string; content: string }[] {
+	if (typeof value !== 'string' || !value.trim()) {
+		return [];
+	}
+	return value.split(',').map(entry => entry.trim()).filter(Boolean).map(entry => {
+		const absolutePath = path.resolve(EVALS_DIR, entry);
+		if (!fs.existsSync(absolutePath)) {
+			throw new Error(`Instruction file not found: ${entry}`);
+		}
+		return { absolutePath, content: fs.readFileSync(absolutePath, 'utf-8') };
+	});
+}
+
 interface ToolCall {
 	readonly id: string;
 	readonly type: 'function';
@@ -199,6 +225,9 @@ interface ChatChoice extends ChoiceStatus {
  * answer rests on the skill text alone. Routing (does the model pick the skill?) is out of scope:
  * the live acceptance run checks that.
  *
+ * A case may also name instruction files in `vars.instructions` (#577): the provider attaches them
+ * the way the app attaches an `applyTo: '**'` instruction file, next to the skill.
+ *
  * Returns a JSON string `{ skill, loadedFiles, finalText }`.
  *
  * Configuration: `config.skillsDir` (default: the bundled `assets/skills`), `config.model`, and the
@@ -236,8 +265,10 @@ export default class SkillGroundedProvider implements ApiProvider {
 			return { error: 'Skill-grounded case is missing a `skill` var naming a folder under the skills directory.' };
 		}
 		let skill: LoadedSkill;
+		let instructionFiles: { absolutePath: string; content: string }[];
 		try {
 			skill = loadSkillFolder(this.skillsDir, skillName);
+			instructionFiles = loadInstructionFiles(context?.vars?.instructions);
 		} catch (err) {
 			return { error: err instanceof Error ? err.message : String(err) };
 		}
@@ -245,6 +276,7 @@ export default class SkillGroundedProvider implements ApiProvider {
 		const systemText = fs.readFileSync(path.join(EVALS_DIR, 'prompts', 'system-prompt.txt'), 'utf-8');
 		const messages: ChatMessage[] = [
 			systemMessage(systemText, this.env),
+			...(instructionFiles.length > 0 ? [{ role: 'system' as const, content: renderInstructionsAttachment(instructionFiles) }] : []),
 			...buildSkillConversation(skill, prompt),
 		];
 

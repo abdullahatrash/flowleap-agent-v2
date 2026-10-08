@@ -739,6 +739,13 @@ Each case names a skill folder under `assets/skills` in `vars.skill`. The provid
 Then the model answers with `tool_choice: 'none'`, so the answer rests on the skill alone. The
 output is `{ skill, loadedFiles, finalText }`.
 
+A case can also name instruction files in `vars.instructions` (comma-separated paths relative to
+`evals/`, #577). The provider attaches them the way the app attaches an instruction file whose
+`applyTo` matches: the whole file (front matter included) in an `<attachment filePath=...>` tag
+inside one `<instructions>` block, in a system message after the main system prompt
+(`CustomInstructions` with `chat.customInstructionsInSystemMessage`, default true). This measures
+firm customization: a built-in skill plus a firm's `.flowleap/instructions/*.instructions.md`.
+
 Deterministic checks (`assertions/skill-grounded-assertions.mjs`, proven offline by
 `assertions/test/skill-grounded-assertions.spec.ts`):
 
@@ -760,10 +767,12 @@ judge reads the answer, not the JSON. The dataset header shows the assertion sha
 | N4 | `upc-case-navigator` | `appeal.md` loaded, RoP 220.1 + 220.2 + 224.1 + 224.2 cited, 2 months + 4 months + 15 days stated, fees EUR 29,200 + EUR 4,000, routes complete |
 | U2a | `upc-filing-prep` | RoP 44 + 45.1 + 46 + 370.8 cited, fees EUR 26,500 + EUR 13,250, checklist and verdict complete |
 | U2b | `upc-filing-prep` | RoP 207.2 + 207.4 + 207.9 cited, fees EUR 300 + EUR 130, checklist and verdict complete |
+| F1 | `prior-art` + `fixtures/skill-grounded/prior-art-practice.instructions.md` | Built-in rules kept (`search_patents`, concept-synonym table) AND firm steps added (German utility models, client's own patents in a separate table) |
 
 The provider replays the app's skill tool from a copy, because the evals cannot import
 `skillTool.ts` (it needs the `vscode` module). `providers/test/skill-grounded-provider.spec.ts`
-reads the app source and fails when the skipped folders or the `<skill-context>` text drift.
+reads the app source and fails when the skipped folders, the `<skill-context>` text or the
+instruction-attachment shape (`customInstructions.tsx`, the system-message setting) drift.
 
 ### Baseline: skill-grounded suite (2026-10-08, `anthropic/claude-sonnet-5`, no cache)
 
@@ -778,6 +787,7 @@ Recorded in `output/skill-grounded-baseline.json`; every case is expected to PAS
 | N4 | P P P | 3/3 | 0 | PASS |
 | U2a | P P P | 3/3 | 0 | PASS |
 | U2b | P P P | 3/3 | 0 | PASS |
+| F1 | P P P | 3/3 | 0 | PASS (added #577; the same 3 runs showed N4 at 0/3 on point 2, RoP 220.1(c) orders: a skill-content regression on main, not caused by #577, which does not change N4's input) |
 
 ## File Structure
 
@@ -814,7 +824,7 @@ evals/
 │   ├── search-strategy.yaml      # 5 tests — API syntax correctness
 │   ├── frontier.yaml             # 5 probes — NON-GATING (failures are findings)
 │   ├── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
-│   └── skill-grounded/           # Skill-content cases (S1, S5, N1, N4, U2a, U2b)
+│   └── skill-grounded/           # Skill-content cases (S1, S5, N1, N4, U2a, U2b, F1)
 ├── scripts/
 │   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
