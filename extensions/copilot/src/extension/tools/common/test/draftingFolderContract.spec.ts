@@ -21,7 +21,11 @@ describe('Application Drafting folder contract', () => {
 				generatedSnapshot: 'drafting/acme-hinge/draft-application.generated.md',
 				workingRecord: 'drafting/acme-hinge/draft-application.working-record.md',
 				findings: 'drafting/acme-hinge/findings.md',
-				docx: 'drafting/acme-hinge/draft-application.docx',
+				docx: {
+					description: 'drafting/acme-hinge/draft-application.description.docx',
+					claims: 'drafting/acme-hinge/draft-application.claims.docx',
+					abstract: 'drafting/acme-hinge/draft-application.abstract.docx',
+				},
 			},
 		});
 	});

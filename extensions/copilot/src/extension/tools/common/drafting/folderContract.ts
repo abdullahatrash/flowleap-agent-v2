@@ -16,7 +16,9 @@
  *   draft-application.generated.md       snapshot at generation, diffed at export
  *   draft-application.working-record.md  Working Record
  *   findings.md                          Findings, waivers with reasons, open Inventor Questions
- *   draft-application.docx               export, markers stripped
+ *   draft-application.description.docx   export, markers stripped, one file per document type:
+ *   draft-application.claims.docx          description, claims, abstract (drawings are not generated)
+ *   draft-application.abstract.docx
  * ```
  *
  * All paths are workspace-relative and use `/`.
@@ -24,6 +26,15 @@
 
 /** The workspace-level folder of style exemplars. */
 export const DRAFTING_STYLE_FOLDER = 'style';
+
+/**
+ * The document types of the export, in filing order. Each is its own .docx: in the EPO Online
+ * Filing each is a separate upload, and each starts on a new page.
+ */
+export const DRAFT_DOCUMENT_TYPES = ['description', 'claims', 'abstract'] as const;
+
+/** One document type of the export. */
+export type DraftDocumentType = typeof DRAFT_DOCUMENT_TYPES[number];
 
 /** The file names of one matter's drafting files in its folder; also the `file` of a Finding. */
 export const DRAFTING_FILE_NAMES = {
@@ -34,7 +45,9 @@ export const DRAFTING_FILE_NAMES = {
 	generatedSnapshot: 'draft-application.generated.md',
 	workingRecord: 'draft-application.working-record.md',
 	findings: 'findings.md',
-	docx: 'draft-application.docx',
+	descriptionDocx: 'draft-application.description.docx',
+	claimsDocx: 'draft-application.claims.docx',
+	abstractDocx: 'draft-application.abstract.docx',
 } as const;
 
 /** The workspace-relative paths of one matter's drafting files. */
@@ -48,7 +61,8 @@ export interface DraftingFolder {
 	readonly generatedSnapshot: string;
 	readonly workingRecord: string;
 	readonly findings: string;
-	readonly docx: string;
+	/** The export, one .docx per document type. */
+	readonly docx: Readonly<Record<DraftDocumentType, string>>;
 }
 
 /**
@@ -71,7 +85,11 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 		generatedSnapshot: `${folder}/${DRAFTING_FILE_NAMES.generatedSnapshot}`,
 		workingRecord: `${folder}/${DRAFTING_FILE_NAMES.workingRecord}`,
 		findings: `${folder}/${DRAFTING_FILE_NAMES.findings}`,
-		docx: `${folder}/${DRAFTING_FILE_NAMES.docx}`,
+		docx: {
+			description: `${folder}/${DRAFTING_FILE_NAMES.descriptionDocx}`,
+			claims: `${folder}/${DRAFTING_FILE_NAMES.claimsDocx}`,
+			abstract: `${folder}/${DRAFTING_FILE_NAMES.abstractDocx}`,
+		},
 	};
 }
 

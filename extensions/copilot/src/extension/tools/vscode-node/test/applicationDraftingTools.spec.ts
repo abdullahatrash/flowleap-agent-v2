@@ -371,26 +371,29 @@ describe('export_draft_docx', () => {
 		await tools.save(draft().replace('<!-- src: disclosure:§1 -->\n', ''));
 		expect({
 			result: await tools.exportDocx(),
-			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.docx`)).then(() => true, () => false),
+			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
 			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).',
 			docxWritten: false,
 		});
 	});
 
-	it('appends the attorney edits to the Working Record and writes the .docx without markers', async () => {
+	it('appends the attorney edits to the Working Record and writes the description, claims and abstract .docx files without markers', async () => {
 		const { tools, read, fileSystem, write } = setup(gatesOpen);
 		await tools.start();
 		await tools.save(draft());
 		const saved = await read('drafting/hinge/draft-application.md');
 		write('drafting/hinge/draft-application.md', saved.replace('A hinge joins a door to a frame.', 'A hinge pivotally joins a door to a frame.'));
 		const result = await tools.exportDocx();
-		const docx = await fileSystem.readFile(URI.file(`${root}/draft-application.docx`));
-		const text = (await mammoth.extractRawText({ buffer: Buffer.from(docx) })).value;
+		const docxParagraphs: Record<string, string[]> = {};
+		for (const type of ['description', 'claims', 'abstract']) {
+			const docx = await fileSystem.readFile(URI.file(`${root}/draft-application.${type}.docx`));
+			docxParagraphs[type] = (await mammoth.extractRawText({ buffer: Buffer.from(docx) })).value.split('\n').filter(Boolean);
+		}
 		const record = await read('drafting/hinge/draft-application.working-record.md');
 		expect({
 			result,
-			docxParagraphs: text.split('\n').filter(Boolean),
+			docxParagraphs,
 			attorneyEdits: record.slice(record.indexOf('## Attorney edits')).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>'),
 		}).toMatchSnapshot();
 	});

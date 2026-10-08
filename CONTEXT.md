@@ -397,8 +397,9 @@ _Avoid_: "approved" said in chat — the flag is read from the file by code.
 **Draft Application**:
 The Markdown deliverable of Application Drafting: the specification in the chosen office's
 section order, the abstract, the brief description of the drawings, each paragraph carrying
-its source marker, and an **Inventor Questions** list at the end. Exported to .docx without
-markers; its **Working Record** and findings stay beside it.
+its source marker, and an **Inventor Questions** list at the end. Exported without markers to
+one .docx per document type (description, claims, abstract) with the office page setup; its
+**Working Record** and findings stay beside it.
 _Avoid_: calling the .docx the deliverable — it is the export; "Draft" as a Project Status.
 
 **Model-Proposed**:

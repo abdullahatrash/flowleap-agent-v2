@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`export_draft_docx > appends the attorney edits to the Working Record and writes the .docx without markers 1`] = `
+exports[`export_draft_docx > appends the attorney edits to the Working Record and writes the description, claims and abstract .docx files without markers 1`] = `
 {
   "attorneyEdits": "## Attorney edits
 
@@ -16,23 +16,29 @@ Attorney:
 
 > A hinge pivotally joins a door to a frame.
 ",
-  "docxParagraphs": [
-    "Hinge",
-    "BACKGROUND",
-    "A hinge pivotally joins a door to a frame.",
-    "SUMMARY",
-    "A hinge has a housing and a lever. The lever is steel.",
-    "BRIEF DESCRIPTION OF THE DRAWINGS",
-    "FIG. 1 is a side view of the hinge.",
-    "DETAILED DESCRIPTION",
-    "The housing 12 holds the lever 14. The lever 14 is steel.",
-    "CLAIMS",
-    "1. A hinge comprising a housing and a lever.",
-    "2. The hinge of claim 1, wherein the lever is steel.",
-    "ABSTRACT",
-    "A hinge has a housing and a lever of steel.",
-  ],
-  "result": "Exported drafting/hinge/draft-application.docx (source markers and Inventor Questions section removed). Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing.",
+  "docxParagraphs": {
+    "abstract": [
+      "ABSTRACT",
+      "A hinge has a housing and a lever of steel.",
+    ],
+    "claims": [
+      "CLAIMS",
+      "1. A hinge comprising a housing and a lever.",
+      "2. The hinge of claim 1, wherein the lever is steel.",
+    ],
+    "description": [
+      "Hinge",
+      "BACKGROUND",
+      "A hinge pivotally joins a door to a frame.",
+      "SUMMARY",
+      "A hinge has a housing and a lever. The lever is steel.",
+      "BRIEF DESCRIPTION OF THE DRAWINGS",
+      "FIG. 1 is a side view of the hinge.",
+      "DETAILED DESCRIPTION",
+      "The housing 12 holds the lever 14. The lever 14 is steel.",
+    ],
+  },
+  "result": "Exported the description, the claims and the abstract as separate files: drafting/hinge/draft-application.description.docx, drafting/hinge/draft-application.claims.docx, drafting/hinge/draft-application.abstract.docx (37 CFR 1.52 page setup, Letter; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for drafting/hinge/figures.md are prepared outside FlowLeap. Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing.",
 }
 `;
 

@@ -104,6 +104,10 @@ found and what stays open. A run without Errors is "no Error findings", never
 When the attorney asks for the Word file, call `export_draft_docx`. It
 refuses on an unwaived Error or an open Inventor Question: report each one.
 The attorney resolves it, or writes a waiver with a reason in `findings.md`.
+It writes the description, the claims and the abstract as three .docx files
+with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not
+draw figures: tell the attorney that the drawing sheets are prepared
+separately.
 
 ## Rules
 

@@ -3,15 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
-import { INVENTOR_QUESTION } from '../common/drafting/finding';
+import { AlignmentType, Document, Footer, Header, HeadingLevel, ISectionOptions, LineNumberRestartFormat, Packer, PageNumber, Paragraph, TextRun } from 'docx';
+import { documentTypeOf, exportedParagraphs, filingParagraphs, headingLevel, OFFICE_PAGE_SETUP, OfficePageSetup } from '../common/drafting/filingDocuments';
+import { DRAFT_DOCUMENT_TYPES, DraftDocumentType } from '../common/drafting/folderContract';
 import { DraftingOffice } from '../common/drafting/frontmatter';
-import { DraftParagraph, parseDraftParagraphs, stripSourceMarkers } from '../common/drafting/sourceMarkers';
+import { DraftParagraph } from '../common/drafting/sourceMarkers';
 import { isAbstractParagraph, isClaimsParagraph } from '../common/drafting/specValidators';
 
 const headingLevels = [HeadingLevel.TITLE, HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5];
-
-const claimStart = /^\s*\d+\s*[.)]\s+/;
 
 /**
  * The recognised top-level sections of each office, in filing order: US 37 CFR 1.77(b) and EPO
@@ -55,10 +54,6 @@ function sectionRank(heading: DraftParagraph, office: DraftingOffice): number | 
 	const title = (heading.section ?? '').toLowerCase();
 	const index = officeSections[office].findIndex(pattern => pattern.test(title));
 	return index < 0 ? undefined : index;
-}
-
-function headingLevel(paragraph: DraftParagraph): number {
-	return /^(?<hashes>#+)/.exec(paragraph.text)?.groups?.hashes.length ?? 1;
 }
 
 interface DraftSection {
@@ -117,43 +112,70 @@ function runs(text: string): TextRun[] {
 	return text.split(/(?<bold>\*\*[^*]+\*\*)/g).filter(Boolean).map(part => /^\*\*[^*]+\*\*$/.test(part) ? new TextRun({ text: part.slice(2, -2), bold: true }) : new TextRun(part));
 }
 
-function joinLines(text: string): string {
-	return text.split('\n').map(line => line.trim()).filter(Boolean).join(' ');
+/** Millimetres in twentieths of a point, the unit of the .docx page setup. */
+function twips(millimetres: number): number {
+	return Math.round(millimetres / 25.4 * 1440);
+}
+
+/** The centred page number, in the header or the footer the office names. */
+function pageNumberBlock(setup: OfficePageSetup): Pick<ISectionOptions, 'headers' | 'footers'> {
+	const children = [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT] })] })];
+	return setup.pageNumbers === 'top' ? { headers: { default: new Header({ children }) } } : { footers: { default: new Footer({ children }) } };
 }
 
 /**
- * Builds the .docx of a Draft Application: source markers stripped, frontmatter, Inventor
- * Question blocks and the `Inventor Questions` section left out. The top-level sections are put
- * in the office section order (US 37 CFR 1.77(b), EPO Rule 42(1) EPC), with their headings as the
- * draft writes them; the Claims and the Abstract come last and start on a new page, and each
- * claim is its own numbered paragraph.
+ * One filing document with the office page setup. The header and the footer sit at the margin
+ * edge, so the page number is not in the margin and the text starts below or ends above it.
  */
-export async function buildDraftDocx(draft: string, office: DraftingOffice): Promise<Uint8Array> {
-	const paragraphs = parseDraftParagraphs(stripSourceMarkers(draft))
-		.filter(paragraph => paragraph.kind !== INVENTOR_QUESTION && !/^inventor questions?$/i.test(paragraph.section ?? ''));
-	const children: Paragraph[] = [];
-	for (const paragraph of orderSections(paragraphs, office)) {
-		if (paragraph.kind === 'heading') {
-			children.push(new Paragraph({
-				children: runs(paragraph.section ?? ''),
-				heading: headingLevels[Math.min(headingLevel(paragraph), headingLevels.length) - 1],
-				pageBreakBefore: isClaimsParagraph(paragraph) || isAbstractParagraph(paragraph),
-			}));
-			continue;
-		}
-		if (isClaimsParagraph(paragraph)) {
-			const claims: string[] = [];
-			for (const line of paragraph.text.split('\n')) {
-				if (claimStart.test(line) || !claims.length) {
-					claims.push(line.trim());
-				} else {
-					claims[claims.length - 1] += ` ${line.trim()}`;
-				}
-			}
-			children.push(...claims.map(claim => new Paragraph({ children: runs(claim) })));
-			continue;
-		}
-		children.push(new Paragraph({ children: runs(joinLines(paragraph.text)) }));
+async function packDocument(children: Paragraph[], type: DraftDocumentType, setup: OfficePageSetup): Promise<Uint8Array> {
+	const { margins } = setup;
+	const lineNumbers = setup.lineNumbers?.documents.includes(type) ? { countBy: setup.lineNumbers.every, restart: LineNumberRestartFormat.NEW_PAGE } : undefined;
+	const spacing = Math.round(setup.lineSpacing * 240);
+	const document = new Document({
+		styles: {
+			default: {
+				document: {
+					run: { font: 'Times New Roman', size: setup.fontSize * 2 },
+					// 1.5 line spacing, and one such line between paragraphs.
+					paragraph: { spacing: { line: spacing, after: Math.round(setup.lineSpacing * setup.fontSize * 20) } },
+				},
+			},
+		},
+		sections: [{
+			properties: {
+				page: {
+					size: { width: twips(setup.width), height: twips(setup.height) },
+					margin: { top: twips(margins.top), right: twips(margins.right), bottom: twips(margins.bottom), left: twips(margins.left), header: twips(margins.top), footer: twips(margins.bottom) },
+				},
+				lineNumbers,
+			},
+			...pageNumberBlock(setup),
+			children,
+		}],
+	});
+	return new Uint8Array(await Packer.toBuffer(document));
+}
+
+/** The export of a Draft Application: one .docx per document type. */
+export type DraftDocuments = Readonly<Record<DraftDocumentType, Uint8Array>>;
+
+/**
+ * Builds the .docx files of a Draft Application, one per document type (description, claims,
+ * abstract), with the office page setup ({@link OFFICE_PAGE_SETUP}: EPO Rule 49 EPC, US 37 CFR
+ * 1.52). Source markers are stripped; frontmatter, Inventor Question blocks and the
+ * `Inventor Questions` section are left out. The top-level sections are put in the office section
+ * order (US 37 CFR 1.77(b), EPO Rule 42(1) EPC), with their headings as the draft writes them;
+ * the Claims go to the claims file, one paragraph per numbered claim, and the Abstract to the
+ * abstract file. Drawings are not generated.
+ */
+export async function buildDraftDocx(draft: string, office: DraftingOffice): Promise<DraftDocuments> {
+	const children: Record<DraftDocumentType, Paragraph[]> = { description: [], claims: [], abstract: [] };
+	for (const paragraph of orderSections(exportedParagraphs(draft), office)) {
+		children[documentTypeOf(paragraph)].push(...filingParagraphs(paragraph).map(filing => filing.kind === 'heading'
+			? new Paragraph({ children: runs(filing.text), heading: headingLevels[Math.min(filing.level ?? 1, headingLevels.length) - 1] })
+			: new Paragraph({ children: runs(filing.text) })));
 	}
-	return new Uint8Array(await Packer.toBuffer(new Document({ sections: [{ children }] })));
+	const setup = OFFICE_PAGE_SETUP[office];
+	const [description, claims, abstract] = await Promise.all(DRAFT_DOCUMENT_TYPES.map(type => packDocument(children[type], type, setup)));
+	return { description, claims, abstract };
 }
