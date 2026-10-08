@@ -19,6 +19,7 @@
  *   draft-application.description.docx   export, markers stripped, one file per document type:
  *   draft-application.claims.docx          description, claims, abstract (drawings are not generated)
  *   draft-application.abstract.docx
+ *   filing-manifest.md                   export: claims, drawing sheets, abstract figure, estimated pages
  * ```
  *
  * All paths are workspace-relative and use `/`.
@@ -48,6 +49,7 @@ export const DRAFTING_FILE_NAMES = {
 	descriptionDocx: 'draft-application.description.docx',
 	claimsDocx: 'draft-application.claims.docx',
 	abstractDocx: 'draft-application.abstract.docx',
+	filingManifest: 'filing-manifest.md',
 } as const;
 
 /** The workspace-relative paths of one matter's drafting files. */
@@ -63,6 +65,8 @@ export interface DraftingFolder {
 	readonly findings: string;
 	/** The export, one .docx per document type. */
 	readonly docx: Readonly<Record<DraftDocumentType, string>>;
+	/** The filing manifest written beside the export. */
+	readonly filingManifest: string;
 }
 
 /**
@@ -90,6 +94,7 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 			claims: `${folder}/${DRAFTING_FILE_NAMES.claimsDocx}`,
 			abstract: `${folder}/${DRAFTING_FILE_NAMES.abstractDocx}`,
 		},
+		filingManifest: `${folder}/${DRAFTING_FILE_NAMES.filingManifest}`,
 	};
 }
 

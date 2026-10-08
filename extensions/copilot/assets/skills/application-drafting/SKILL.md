@@ -107,7 +107,10 @@ The attorney resolves it, or writes a waiver with a reason in `findings.md`.
 It writes the description, the claims and the abstract as three .docx files
 with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not
 draw figures: tell the attorney that the drawing sheets are prepared
-separately.
+separately. Beside the files it writes `filing-manifest.md` with the values
+the attorney declares at filing: claims, drawing sheets, the proposed
+abstract figure and the pages. Report the page counts as estimates, and the
+abstract figure as a proposal.
 
 ## Rules
 

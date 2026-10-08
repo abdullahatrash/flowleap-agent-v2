@@ -5,6 +5,7 @@
 
 import { parseClaims } from './claims';
 import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from './claimValidators';
+import { checkPageCount, filingManifest } from './filingManifest';
 import { DraftFinding } from './finding';
 import { DraftingOffice } from './frontmatter';
 import { parseDraftParagraphs } from './sourceMarkers';
@@ -49,6 +50,7 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		...checkSourceMarkers(paragraphs),
 		...checkInventorQuestions(input.draft),
 		...checkClaimCount(claims, input.office),
+		...checkPageCount(filingManifest(input)),
 		...checkRelativeTerms(claims),
 		...(epo ? [...checkEpoClaimReferenceSigns(claims, figures), ...checkEpoAbstractFigure(paragraphs, figures)] : []),
 	];

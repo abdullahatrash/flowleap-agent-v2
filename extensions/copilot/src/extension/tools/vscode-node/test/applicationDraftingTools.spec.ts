@@ -394,6 +394,7 @@ describe('export_draft_docx', () => {
 		expect({
 			result,
 			docxParagraphs,
+			filingManifest: await read('drafting/hinge/filing-manifest.md'),
 			attorneyEdits: record.slice(record.indexOf('## Attorney edits')).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>'),
 		}).toMatchSnapshot();
 	});

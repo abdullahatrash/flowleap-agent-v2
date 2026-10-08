@@ -38,7 +38,33 @@ Attorney:
       "The housing 12 holds the lever 14. The lever 14 is steel.",
     ],
   },
-  "result": "Exported the description, the claims and the abstract as separate files: drafting/hinge/draft-application.description.docx, drafting/hinge/draft-application.claims.docx, drafting/hinge/draft-application.abstract.docx (37 CFR 1.52 page setup, Letter; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for drafting/hinge/figures.md are prepared outside FlowLeap. Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing.",
+  "filingManifest": "# Filing manifest — hinge
+
+Written by export_draft_docx from the exported files: the values the applicant declares at filing. The page counts are **estimated** from the text under the page setup, not measured in Word; check them in Word before filing. A draft for attorney review, not a filing.
+
+| Item | Value |
+| --- | --- |
+| Title | Hinge |
+| Language | Not set (\`language\` in the draft frontmatter) |
+| Office | US (37 CFR 1.52 page setup, Letter) |
+| Claims | 2 in total, 1 independent |
+| Drawing sheets | 1 (one sheet per figure in figures.md; set \`drawingSheets\` in its frontmatter when figures share a sheet) |
+| Figures | FIG. 1 |
+| Abstract figure | FIG. 1 (proposed: the figure whose reference numerals the abstract names most; the attorney confirms it) |
+
+## Pages (estimated)
+
+Estimated at 80 characters per line and 36 lines per page (12 pt, 1.5 line spacing, one line between paragraphs).
+
+| Document | File | Pages |
+| --- | --- | --- |
+| Description | draft-application.description.docx | 1 |
+| Claims | draft-application.claims.docx | 1 |
+| Abstract | draft-application.abstract.docx | 1 |
+| Drawings | Not generated: prepared outside FlowLeap | 1 |
+| Total | | 4 |
+",
+  "result": "Exported the description, the claims and the abstract as separate files: drafting/hinge/draft-application.description.docx, drafting/hinge/draft-application.claims.docx, drafting/hinge/draft-application.abstract.docx (37 CFR 1.52 page setup, Letter; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for drafting/hinge/figures.md are prepared outside FlowLeap. Wrote drafting/hinge/filing-manifest.md: 2 claim(s), 1 independent; 1 drawing sheet(s); about 4 page(s) in total (estimated). Attorney edits against the generated snapshot: 12 paragraph(s) kept, 1 changed, 0 deleted, 0 added; logged in drafting/hinge/draft-application.working-record.md. The export is a draft for attorney review, not a filing.",
 }
 `;
 

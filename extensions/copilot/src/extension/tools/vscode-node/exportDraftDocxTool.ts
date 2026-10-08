@@ -12,6 +12,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { LanguageModelToolResult } from '../../../vscodeTypes';
 import { diffDraftParagraphs } from '../common/drafting/draftDiff';
 import { OFFICE_PAGE_SETUP } from '../common/drafting/filingDocuments';
+import { filingManifest, renderFilingManifest } from '../common/drafting/filingManifest';
 import { blockingFindings } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES } from '../common/drafting/folderContract';
 import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workingRecord';
@@ -35,8 +36,8 @@ function refusal(reason: string): LanguageModelToolResult {
  * validators and refuses while an Error or an Inventor Question is open and unwaived, while
  * `approved` is not `true` in `claims.md`, or while `claims.md` differs from the claims the draft
  * was generated against. Otherwise it logs the attorney's edits against the generated snapshot in
- * the Working Record, strips the source markers and writes the .docx files. Drawings are not
- * generated.
+ * the Working Record, strips the source markers, writes the .docx files and writes the filing
+ * manifest (`filing-manifest.md`) beside them. Drawings are not generated.
  */
 export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams> {
 
@@ -93,9 +94,11 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		for (const type of DRAFT_DOCUMENT_TYPES) {
 			await workspace.write(folder.docx[type], documents[type]);
 		}
+		const manifest = filingManifest({ office, draft, claims, figures: await workspace.read(folder.figures) });
+		await workspace.write(folder.filingManifest, renderFilingManifest(manifest, folder));
 		const setup = OFFICE_PAGE_SETUP[office];
 		const count = (kind: string) => diff.changes.filter(change => change.kind === kind).length;
-		return textResult(`Exported the description, the claims and the abstract as separate files: ${DRAFT_DOCUMENT_TYPES.map(type => folder.docx[type]).join(', ')} (${setup.rule} page setup, ${setup.paper}; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for ${folder.figures} are prepared outside FlowLeap. Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing.`);
+		return textResult(`Exported the description, the claims and the abstract as separate files: ${DRAFT_DOCUMENT_TYPES.map(type => folder.docx[type]).join(', ')} (${setup.rule} page setup, ${setup.paper}; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for ${folder.figures} are prepared outside FlowLeap. Wrote ${folder.filingManifest}: ${manifest.claims.total} claim(s), ${manifest.claims.independent} independent; ${manifest.drawingSheets} drawing sheet(s); about ${manifest.pages.total} page(s) in total (estimated). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing.`);
 	}
 }
 

@@ -402,6 +402,13 @@ one .docx per document type (description, claims, abstract) with the office page
 **Working Record** and findings stay beside it.
 _Avoid_: calling the .docx the deliverable — it is the export; "Draft" as a Project Status.
 
+**Filing Manifest**:
+The `filing-manifest.md` the export writes beside the .docx files: the values the applicant
+declares at filing (title, language, office, claims in total and independent, drawing sheets,
+the proposed abstract figure, pages per document and in total). Page counts are an estimate
+from the text under the office page setup, labelled as such.
+_Avoid_: calling the page counts measured — only Word (or the office) renders the pages.
+
 **Model-Proposed**:
 The source marker for text the model wrote in this draft without a source in the Feature List,
 the disclosure, an attorney instruction or the office template. Allowed for structure
@@ -420,8 +427,8 @@ _Avoid_: resolving one by letting the model answer it; dropping one without a re
 One result of the draft validators or of the advisory review. An **Error** (antecedent basis,
 dependency target, numbering, numeral mismatch, missing literal basis, office claim-form rule,
 claim not one sentence, EPO claim that relies on the description or drawings, US abstract
-length) blocks export until waived with a reason that is kept. A **Note** (claim count over the
-fee threshold, relative terms present, EPO abstract length, EPO reference signs not in
-parentheses, EPO abstract without its figure) never blocks. An **Advisory** item comes from
+length) blocks export until waived with a reason that is kept. A **Note** (claim count or
+estimated EPO page count over the fee threshold, relative terms present, EPO abstract length,
+EPO reference signs not in parentheses, EPO abstract without its figure) never blocks. An **Advisory** item comes from
 the model review, cites a passage, and never says "passed".
 _Avoid_: an advisory item marked Error; a validator result without a line reference.
