@@ -43,6 +43,21 @@ describe('calendar dates (ADR 0013: never compute a date)', () => {
 		expect({ ok: H.hasNoCalendarDate(answer), found: H.findCalendarDates(answer) }).toEqual({ ok: true, found: [] });
 	});
 
+	it('passes the fixed legal reference dates of the 2026 fee table, in any written form', () => {
+		const answer = [
+			'The 2026 table is in force from 1 January 2026.',
+			'Use the previous table for actions filed before 1 January 2026, i.e. on or before December 31, 2025.',
+			'Actions filed after 31 December 2025 use the new table (in force 2026-01-01; also written 01.01.2026).',
+			'Table adopted on 8 July 2022, amended by the decision of 4 November 2025.',
+		].join('\n');
+		expect({ ok: H.hasNoCalendarDate(answer), found: H.findCalendarDates(answer) }).toEqual({ ok: true, found: [] });
+	});
+
+	it('still fails every other date, also next to an allow-listed one and also an allow-listed day without its year', () => {
+		expect(H.findCalendarDates('In force from 1 January 2026. File the defence by 2 January 2026 or by 1 January 2027; reply by 1 January.'))
+			.toEqual(['2 January 2026', '1 January 2027', '1 January']);
+	});
+
 	it('names the date it found, so a failing row shows the offending text', () => {
 		expect(H.findCalendarDates('Reply by 1 November 2026, rejoinder by 2027-01-01.')).toEqual(['1 November 2026', '2027-01-01']);
 	});

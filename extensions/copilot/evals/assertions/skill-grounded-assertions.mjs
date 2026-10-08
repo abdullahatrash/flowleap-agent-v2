@@ -39,14 +39,62 @@ const CALENDAR_DATE = new RegExp([
 ].join('|'), 'g');
 
 /**
- * Every calendar date in the text, in order of appearance.
+ * Fixed legal reference dates that an answer may state, as `YYYY-MM-DD`. They are not deadlines:
+ * each is a date of the official fee table, taken from
+ * `assets/skills/upc-filing-prep/references/fees-2026.md`. A fee answer must be able to say "in
+ * force from 1 January 2026" and "actions filed before 1 January 2026" (ADR 0013, decision 4).
+ * Add a date here only when it is a fixed date of the law or of an official table, never a date
+ * that depends on the case.
+ */
+const LEGAL_REFERENCE_DATES = new Set([
+	'2026-01-01', // 2026 Table of Court Fees in force; actions filed before it keep the previous table
+	'2025-12-31', // "filed after 31 December 2025" (decision D-AC/08/02072025, Art. 5)
+	'2025-11-04', // amending decision of the Administrative Committee
+	'2022-07-08', // Table of Court Fees adopted by the Administrative Committee
+]);
+
+const MONTH_NUMBER = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+
+function isoDate(year, month, day) {
+	return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * The `YYYY-MM-DD` form of a matched date, or `undefined` when the match has no year or is
+ * ambiguous (a slash date can be day-first or month-first). Only a full, unambiguous date can be
+ * an allow-listed reference date.
+ * @param {string} match
+ */
+function normalizedDate(match) {
+	let m = /^(?<y>\d{4})-(?<mo>\d{1,2})-(?<d>\d{1,2})$/.exec(match);
+	if (m) {
+		return isoDate(m.groups.y, Number(m.groups.mo), Number(m.groups.d));
+	}
+	m = /^(?<d>\d{1,2})\.(?<mo>\d{1,2})\.(?<y>\d{4})$/.exec(match);
+	if (m) {
+		return isoDate(m.groups.y, Number(m.groups.mo), Number(m.groups.d));
+	}
+	const words = /^(?:(?<d1>\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(?<mo1>[A-Za-z]+)\.?,?\s+(?<y1>\d{4})|(?<mo2>[A-Za-z]+)\.?\s+(?<d2>\d{1,2})(?:st|nd|rd|th)?,?\s+(?<y2>\d{4}))$/.exec(match);
+	if (words) {
+		const g = words.groups;
+		const month = MONTH_NUMBER[(g.mo1 ?? g.mo2).slice(0, 3).toLowerCase()];
+		return month ? isoDate(g.y1 ?? g.y2, month, Number(g.d1 ?? g.d2)) : undefined;
+	}
+	return undefined;
+}
+
+/**
+ * Every calendar date in the text, in order of appearance, except the fixed legal reference dates
+ * of {@link LEGAL_REFERENCE_DATES} written with their year.
  * A period ("2 months from service"), a rule number ("R.224.1(a)") or a bare year ("the 2026
  * table") is not a calendar date.
  * @param {string} text
  * @returns {string[]}
  */
 export function findCalendarDates(text) {
-	return [...String(text ?? '').matchAll(CALENDAR_DATE)].map(match => match[0].replace(/[.,\s]+$/, ''));
+	return [...String(text ?? '').matchAll(CALENDAR_DATE)]
+		.map(match => match[0].replace(/[.,\s]+$/, ''))
+		.filter(date => !LEGAL_REFERENCE_DATES.has(normalizedDate(date)));
 }
 
 /**
