@@ -166,3 +166,90 @@
         Fail if any point is missing or contradicted, or if the answer states a calendar deadline date.
         Do not grade style or length.
       metric: u3_4_complete
+
+# ══ BEGIN #573 — upc-filing-prep (PRD 0021 scenarios 2 and 3) ══
+# Rules and fees are from assets/skills/upc-filing-prep/references/revocation.md,
+# protective-letters.md and fees-2026.md (official 2026 Table of Court Fees).
+
+# ── Scenario 2 — revocation action at the central division for an SME client. ──
+- description: "U2a — scenario 2: prepare a revocation action at the central division for an SME client (upc-filing-prep)"
+  vars:
+    skill: upc-filing-prep
+    prompt: "We act for a small German company (35 employees, EUR 8 million annual turnover, independent) that wants to revoke a competitor's European patent with unitary effect. The patent was granted in German. There is no infringement action between the parties. Prepare the revocation action at the central division: what do we need to file, and what will the court fee be?"
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['44', '45.1', '46', '370.8']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u2s2_rules
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingFees(H.answerText(output), [26500, 13250]);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All fees stated' : `Fees not stated: ${missing.join(', ')}` }; });
+      metric: u2s2_fees
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer prepares a stand-alone UPC revocation action (Statement for revocation) for an SME
+        client. It is complete only if it covers ALL of these points:
+        1. The action goes to the central division (Art. 33(4) UPCA), because no infringement action
+           between the same parties is pending.
+        2. The language of proceedings is the language in which the patent was granted, here German
+           (RoP 45.1).
+        3. It lists the mandatory content of the Statement for revocation under RoP 44 (for example the
+           extent of revocation requested, the grounds with arguments, the facts and the evidence).
+        4. The fee is a fixed fee of EUR 26,500 (RoP 46) with no value-based fee, and the 50% reduction
+           for a small or micro-enterprise (RoP 370.8) brings it to EUR 13,250.
+        5. The reduction needs an affirmation / notification, lodged with the Statement for revocation,
+           that the client is a small or micro-enterprise under Commission Recommendation 2003/361/EC.
+        6. The action is not deemed lodged until the fee is paid (RoP 15.2 applied by RoP 46).
+        7. It presents a checklist with a status per item (PASS / FIX / N/A or equivalent) and ends with
+           a go / not-ready verdict, without filing anything for the user.
+        Fail if any point is missing or contradicted, or if the answer gives a calendar deadline date.
+        Do not grade style or length.
+      metric: u2s2_complete
+
+# ── Scenario 3 — protective letter: fee, validity and extension. ──
+- description: "U2b — scenario 3: protective letter: fee, validity and extension (upc-filing-prep)"
+  vars:
+    skill: upc-filing-prep
+    prompt: "A competitor has written to our client, a large company, and threatened to apply for a preliminary injunction at the UPC over its European patent EP 1234567. We want to file a protective letter. What do we need, what does it cost, how long is it valid, and how do we extend it?"
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingRules(H.answerText(output), ['207.2', '207.4', '207.9']);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All rules cited' : `Rules not cited: ${missing.join(', ')}` }; });
+      metric: u2s3_rules
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/skill-grounded-assertions.mjs').href))
+          .then(H => { const missing = H.missingFees(H.answerText(output), [300, 130]);
+            return { pass: missing.length === 0, score: missing.length === 0 ? 1 : 0, reason: missing.length === 0 ? 'All fees stated' : `Fees not stated: ${missing.join(', ')}` }; });
+      metric: u2s3_fees
+    - type: llm-rubric
+      transform: JSON.parse(output).finalText
+      value: |
+        The answer prepares a UPC protective letter. It is complete only if it covers ALL of these points:
+        1. The letter is lodged with the Registry, not at a division, and needs no pending case.
+        2. The language is the language of the patent (RoP 207.2).
+        3. It lists the mandatory content under RoP 207.2 (for example the filing party and its
+           representative, the presumed applicant, addresses for service, the patent number, and the
+           statement that it is a protective letter).
+        4. The fee to file is EUR 300 (RoP 207.4, 2026 table).
+        5. The letter is valid for 6 months from the date of receipt; if no application for provisional
+           measures is lodged in that period it is removed from the register (RoP 207.9).
+        6. The filer can extend it for a further 6 months by applying before the period expires, for a
+           fee of EUR 130 (RoP 207.9), and further extensions are possible on further payment.
+        7. It presents a checklist with a status per item (PASS / FIX / N/A or equivalent) and ends with
+           a go / not-ready verdict, without filing anything for the user.
+        Fail if any point is missing or contradicted, or if the answer gives a calendar deadline or
+        expiry date. Do not grade style or length.
+      metric: u2s3_complete
+# ══ END #573 ══
