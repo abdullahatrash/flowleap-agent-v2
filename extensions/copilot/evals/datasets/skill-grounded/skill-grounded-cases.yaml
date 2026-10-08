@@ -52,7 +52,7 @@
 # protective-letters.md and fees-2026.md (official 2026 Table of Court Fees).
 
 # ── Scenario 2 — revocation action at the central division for an SME client. ──
-- description: "U2-S2 — prepare a revocation action at the central division for an SME client (upc-filing-prep)"
+- description: "U2a — scenario 2: prepare a revocation action at the central division for an SME client (upc-filing-prep)"
   vars:
     skill: upc-filing-prep
     prompt: "We act for a small German company (35 employees, EUR 8 million annual turnover, independent) that wants to revoke a competitor's European patent with unitary effect. The patent was granted in German. There is no infringement action between the parties. Prepare the revocation action at the central division: what do we need to file, and what will the court fee be?"
@@ -94,7 +94,7 @@
       metric: u2s2_complete
 
 # ── Scenario 3 — protective letter: fee, validity and extension. ──
-- description: "U2-S3 — protective letter: fee, validity and extension (upc-filing-prep)"
+- description: "U2b — scenario 3: protective letter: fee, validity and extension (upc-filing-prep)"
   vars:
     skill: upc-filing-prep
     prompt: "A competitor has written to our client, a large company, and threatened to apply for a preliminary injunction at the UPC over its European patent EP 1234567. We want to file a protective letter. What do we need, what does it cost, how long is it valid, and how do we extend it?"
