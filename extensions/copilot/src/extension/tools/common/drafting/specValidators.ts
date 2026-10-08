@@ -23,6 +23,9 @@ const draftFile = DRAFTING_FILE_NAMES.draft;
 const figuresFile = DRAFTING_FILE_NAMES.figures;
 const answersFile = DRAFTING_FILE_NAMES.inventorAnswers;
 
+/** The word of a figure name before its number: `FIG.`, `Figs.`, `Figure` (see {@link figureNamePattern}). */
+const figureWord = String.raw`(?:(?:FIGS?|Figs?)\.?|FIGURES?|Figures?)\s*`;
+
 /** One part of `figures.md` with its reference numeral. */
 export interface FigurePart {
 	readonly numeral: string;
@@ -238,9 +241,74 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 	return findings;
 }
 
-/** True when `figures.md` has content after its frontmatter, i.e. the application has figures. */
+/** One figure heading of `figures.md` (`## FIG. 1`, `## FIGS. 7 to 10`) with the parts listed under it. */
+export interface FigureSection {
+	/** The heading as written, without the `#` characters. */
+	readonly label: string;
+	readonly line: number;
+	/** The figures the heading names: 1, or the size of a range or list (`FIGS. 7 to 10` = 4). */
+	readonly count: number;
+	readonly parts: readonly FigurePart[];
+}
+
+/** The figure sections of `figures.md` and the parts shown in a figure. */
+export interface FigureSections {
+	readonly figures: readonly FigureSection[];
+	/**
+	 * The parts under a figure heading, and the parts of a list with no heading above them. A part
+	 * under any other heading (`# Figures`, `## Parts named in the answers`) is shown in no figure.
+	 */
+	readonly drawnParts: readonly FigurePart[];
+}
+
+/** A heading that starts with a figure name, or a range or list of them: `FIGS. 7 to 10`, `Figs. 7-10`, `FIGS. 7 and 8`. */
+const figureHeadingPattern = new RegExp(String.raw`^${figureWord}(?<list>\d+[a-zA-Z]?(?:\s*(?:,|and|&|to|-|–|—)\s*\d+[a-zA-Z]?)*)`);
+
+/**
+ * The number of figures a heading names, or 0 when it names none: `FIG. 1` = 1, `FIGS. 7 to 10`
+ * and `Figs. 7-10` = 4, `FIGS. 7 and 8` = 2, `FIGS. 1, 3 and 5` = 3.
+ */
+export function figureHeadingCount(label: string): number {
+	const list = figureHeadingPattern.exec(label.trim())?.groups?.list;
+	if (!list) {
+		return 0;
+	}
+	return list.split(/\s*(?:,|and|&)\s*/).filter(Boolean).reduce((sum, item) => {
+		const range = /^(?<from>\d+)[a-zA-Z]?\s*(?:to|-|–|—)\s*(?<to>\d+)[a-zA-Z]?$/.exec(item);
+		const size = range?.groups ? Number(range.groups.to) - Number(range.groups.from) + 1 : 1;
+		return sum + (size > 0 ? size : 1);
+	}, 0);
+}
+
+/** Reads the figure headings of `figures.md` and the parts each one lists. */
+export function parseFigureSections(figures: string): FigureSections {
+	const { body, bodyStartLine } = parseDraftingFrontmatter(figures);
+	const headings = body.split('\n')
+		.map((content, index) => ({ label: /^#{1,6}\s+(?<label>.+?)\s*#*\s*$/.exec(content)?.groups?.label, line: bodyStartLine + index }))
+		.filter((heading): heading is { label: string; line: number } => heading.label !== undefined);
+	const parts = parseFigureParts(figures);
+	const sections: FigureSection[] = [];
+	const drawnParts = parts.filter(part => !headings.some(heading => heading.line < part.line));
+	headings.forEach((heading, index) => {
+		const count = figureHeadingCount(heading.label);
+		if (!count) {
+			return;
+		}
+		const end = headings[index + 1]?.line ?? Infinity;
+		const under = parts.filter(part => part.line > heading.line && part.line < end);
+		sections.push({ label: heading.label, line: heading.line, count, parts: under });
+		drawnParts.push(...under);
+	});
+	return { figures: sections, drawnParts: drawnParts.sort((a, b) => a.line - b.line) };
+}
+
+/**
+ * True when the application has figures: `figures.md` has a figure heading, or a parts list with
+ * no heading above it. A heading that names no figure (`# Figures`) is not a figure.
+ */
 export function hasFigures(figures: string): boolean {
-	return parseDraftingFrontmatter(figures).body.trim().length > 0;
+	const { figures: sections, drawnParts } = parseFigureSections(figures);
+	return sections.length > 0 || drawnParts.length > 0;
 }
 
 /**
@@ -248,12 +316,13 @@ export function hasFigures(figures: string): boolean {
  * capitalised `Figure`, then the figure number (`FIG. 3a`, `Figure 2`). Case-sensitive, so a
  * lower-case `figure 8` in running text is not a figure name.
  */
-export const figureNamePattern = /\b(?:(?:FIGS?|Figs?)\.?|FIGURES?|Figures?)\s*\d+[a-zA-Z]?\b/;
+export const figureNamePattern = new RegExp(String.raw`\b${figureWord}\d+[a-zA-Z]?\b`);
 
 /**
  * EPO, Rule 47(4) EPC: Notes when the application has figures and the Abstract does not name the
- * figure to publish with it (`Fig. 1`), or mentions a part of `figures.md` without its reference
- * sign in parentheses (`housing (12)`). No finding without figures or without an Abstract.
+ * figure to publish with it (`Fig. 1`), or mentions a part shown in a figure of `figures.md`
+ * without its reference sign in parentheses (`housing (12)`). No finding without figures or
+ * without an Abstract.
  */
 export function checkEpoAbstractFigure(paragraphs: readonly DraftParagraph[], figures: string): DraftFinding[] {
 	const abstract = readAbstract(paragraphs);
@@ -266,7 +335,7 @@ export function checkEpoAbstractFigure(paragraphs: readonly DraftParagraph[], fi
 		findings.push({ severity: 'Note', rule: 'epo-abstract-figure', file: draftFile, line, message: 'The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".' });
 	}
 	const missing: FigurePart[] = [];
-	for (const part of parseFigureParts(figures)) {
+	for (const part of parseFigureSections(figures).drawnParts) {
 		const name = part.part.split(/\s+/).map(escapeRegExp).join('\\s+');
 		const mentioned = new RegExp(`(?<![\\w-])${name}(?:s|es)?(?![\\w-])`, 'i').test(abstract.text);
 		const signed = new RegExp(`\\([^)]*(?<![\\w.])${escapeRegExp(part.numeral)}(?![\\w.])[^)]*\\)`).test(abstract.text);

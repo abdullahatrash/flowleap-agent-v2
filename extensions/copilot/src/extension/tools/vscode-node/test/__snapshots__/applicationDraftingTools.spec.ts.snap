@@ -150,9 +150,9 @@ Written by export_draft_docx from the exported files: the values the applicant d
 | Language | Not set (\`language\` in the draft frontmatter) |
 | Office | US (37 CFR 1.52 page setup, Letter) |
 | Claims | 2 in total, 1 independent |
-| Drawing sheets | 1 (one sheet per figure in figures.md; set \`drawingSheets\` in its frontmatter when figures share a sheet) |
-| Figures | FIG. 1 |
-| Abstract figure | FIG. 1 (proposed: the figure whose reference numerals the abstract names most; the attorney confirms it) |
+| Drawing sheets | 1 (estimated: one sheet per figure in figures.md; set \`drawingSheets\` in its frontmatter to the real count) |
+| Figures | 1: FIG. 1 |
+| Abstract figure | FIG. 1 (proposed: the first figure, because the abstract names no reference numeral of any figure; the attorney confirms it) |
 
 ## Pages (estimated)
 

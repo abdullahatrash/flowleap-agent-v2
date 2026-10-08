@@ -13,7 +13,7 @@ import { DraftClaim } from './claims';
 import { DraftFinding } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice } from './frontmatter';
-import { figureNamePattern, hasFigures, parseFigureParts, readReferenceSigns } from './specValidators';
+import { figureNamePattern, hasFigures, parseFigureSections, readReferenceSigns } from './specValidators';
 
 const claimsFile = DRAFTING_FILE_NAMES.claims;
 
@@ -365,13 +365,13 @@ export function checkClaimReferencesToDescription(claims: readonly DraftClaim[],
 }
 
 /**
- * EPO, Rule 43(7) EPC: Notes when `figures.md` lists parts and a claim writes a reference sign of
- * `figures.md` without parentheses (`housing 12`), or no claim has a reference sign at all. A
+ * EPO, Rule 43(7) EPC: Notes when `figures.md` lists parts shown in a figure and a claim writes
+ * the reference sign of such a part without parentheses (`housing 12`), or no claim has a reference sign at all. A
  * reference sign is a number after a word, as `readReferenceSigns` reads it; only numerals that
  * `figures.md` lists count, so `claim 1` and quantities never do.
  */
 export function checkEpoClaimReferenceSigns(claims: readonly DraftClaim[], figures: string): DraftFinding[] {
-	const parts = parseFigureParts(figures);
+	const parts = parseFigureSections(figures).drawnParts;
 	const numerals = new Set(parts.map(part => part.numeral));
 	if (!hasFigures(figures) || !parts.length) {
 		return [];

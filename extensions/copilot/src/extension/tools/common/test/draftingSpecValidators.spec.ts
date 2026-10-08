@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseInventorAnswers } from '../drafting/inventorAnswers';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
-import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, parseFigureParts } from '../drafting/specValidators';
+import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, figureHeadingCount, hasFigures, parseFigureParts, parseFigureSections } from '../drafting/specValidators';
 
 function draft(...lines: string[]) {
 	return parseDraftParagraphs(lines.join('\n'));
@@ -164,5 +164,31 @@ describe('Application Drafting specification validators', () => {
 				'Inventor Question IQ-2 is open: Is the hinge removable?',
 			],
 		});
+	});
+
+	it('figure headings: a range or list counts each figure; a heading without a figure name is no figure', () => {
+		const figures = '# Figures\n\n- 8: base\n\n## FIG. 1\n\n- 10: frame\n\n## FIGS. 7 to 10\n\n- 14: cam\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n';
+		expect({
+			counts: ['FIG. 1', 'FIGS. 7 to 10', 'Figs. 7-10', 'FIGS. 7 and 8', 'FIGS. 1, 3 and 5', 'Figure 2: side view', 'Figures', 'Parts named in the answers, figure not stated', 'a figure 8 track'].map(figureHeadingCount),
+			sections: parseFigureSections(figures).figures.map(section => [section.label, section.count, section.parts.map(part => part.numeral)]),
+			drawn: parseFigureSections(figures).drawnParts.map(part => part.numeral),
+			hasFigures: [hasFigures(figures), hasFigures('# Figures\n'), hasFigures('- 12: housing\n')],
+		}).toEqual({
+			counts: [1, 4, 4, 2, 3, 1, 0, 0, 0],
+			sections: [['FIG. 1', 1, ['10']], ['FIGS. 7 to 10', 4, ['14']]],
+			drawn: ['10', '14'],
+			hasFigures: [true, false, true],
+		});
+	});
+
+	it('EPO abstract figure: not fooled by headings that name no figure, nor by parts under them', () => {
+		const abstract = draft('# Title', '', '## Abstract', '', '<!-- src: feature:F1 -->', 'A frame (10) holds a spring.');
+		expect([
+			checkEpoAbstractFigure(abstract, '# Figures\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n'),
+			checkEpoAbstractFigure(abstract, '# Figures\n\n## FIG. 1\n\n- 10: frame\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n').map(finding => finding.message),
+		]).toEqual([
+			[],
+			['The Abstract names no figure to publish with it. Rule 47(4) EPC: name the figure, e.g. "(Fig. 1)".'],
+		]);
 	});
 });

@@ -15,7 +15,7 @@ import { DraftFinding } from './finding';
 import { documentParagraphs, exportedParagraphs, FilingParagraph, OFFICE_PAGE_SETUP, OfficePageSetup } from './filingDocuments';
 import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DraftDocumentType, DraftingFolder } from './folderContract';
 import { DraftingFrontmatterValue, DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
-import { isAbstractParagraph, parseFigureParts } from './specValidators';
+import { FigureSection, isAbstractParagraph, parseFigureSections } from './specValidators';
 
 /** Average character width of body text, in ems (a conservative value for a serif font). */
 const AVERAGE_CHARACTER_WIDTH_EM = 0.5;
@@ -79,13 +79,17 @@ export interface FilingManifest {
 	/** The `language` of the draft frontmatter; absent when the draft does not set it. */
 	readonly language?: string;
 	readonly claims: { readonly total: number; readonly independent: number };
-	/** The figure headings of `figures.md`, in order. */
+	/** The figure headings of `figures.md` as written, in order; a range heading (`FIGS. 7 to 10`) is one entry. */
 	readonly figures: readonly string[];
-	/** `drawingSheets` of `figures.md` when set, else one sheet per figure. */
+	/** The number of figures: a range heading counts each figure it names. */
+	readonly figureCount: number;
+	/** `drawingSheets` of `figures.md` when set, else an estimate of one sheet per figure. */
 	readonly drawingSheets: number;
 	readonly drawingSheetsDeclared: boolean;
-	/** The figure whose reference numerals the abstract names most, else the first figure. */
+	/** The figure entry whose reference numerals the abstract names most, else the first figure. */
 	readonly abstractFigure?: string;
+	/** Why the abstract figure was proposed: the abstract names its numerals, or it names none and the first figure is taken. */
+	readonly abstractFigureBasis?: 'numerals' | 'first';
 	/** Estimated pages per document type; the drawings are the drawing sheets; the total counts all. */
 	readonly pages: Readonly<Record<DraftDocumentType | 'drawings' | 'total', number>>;
 	/**
@@ -95,33 +99,19 @@ export interface FilingManifest {
 	readonly pagesForPageFee: number;
 }
 
-interface FigureEntry {
-	readonly label: string;
-	readonly numerals: readonly string[];
-}
-
-/** The figures of `figures.md`: each heading, with the numerals of the parts listed under it. */
-function parseFigures(figures: string): FigureEntry[] {
-	const { body, bodyStartLine } = parseDraftingFrontmatter(figures);
-	const headings = body.split('\n')
-		.map((content, index) => ({ label: /^#{1,6}\s+(?<label>.+?)\s*#*\s*$/.exec(content)?.groups?.label, line: bodyStartLine + index }))
-		.filter((heading): heading is { label: string; line: number } => heading.label !== undefined);
-	const parts = parseFigureParts(figures);
-	return headings.map((heading, index) => {
-		const end = headings[index + 1]?.line ?? Infinity;
-		return { label: heading.label, numerals: parts.filter(part => part.line > heading.line && part.line < end).map(part => part.numeral) };
-	});
-}
-
-function proposeAbstractFigure(figures: readonly FigureEntry[], abstract: string): string | undefined {
+/**
+ * The figure entry whose reference numerals the abstract names most (the first on a tie); the
+ * first figure when the abstract names no numeral of any figure.
+ */
+function proposeAbstractFigure(figures: readonly FigureSection[], abstract: string): Pick<FilingManifest, 'abstractFigure' | 'abstractFigureBasis'> {
 	let best: { label: string; count: number } | undefined;
 	for (const figure of figures) {
-		const count = figure.numerals.filter(numeral => new RegExp(`(?<![\\w.])${numeral}(?!\\w|\\.\\d)`).test(abstract)).length;
+		const count = figure.parts.filter(part => new RegExp(`(?<![\\w.])${part.numeral}(?!\\w|\\.\\d)`).test(abstract)).length;
 		if (!best || count > best.count) {
 			best = { label: figure.label, count };
 		}
 	}
-	return best?.label;
+	return best ? { abstractFigure: best.label, abstractFigureBasis: best.count ? 'numerals' : 'first' } : {};
 }
 
 function frontmatterText(value: DraftingFrontmatterValue): string | undefined {
@@ -133,10 +123,11 @@ export function filingManifest(input: FilingManifestInput): FilingManifest {
 	const setup = OFFICE_PAGE_SETUP[input.office];
 	const { fields } = parseDraftingFrontmatter(input.draft);
 	const claims = parseClaims(input.claims);
-	const figures = parseFigures(input.figures ?? '');
+	const figures = parseFigureSections(input.figures ?? '').figures;
+	const figureCount = figures.reduce((sum, figure) => sum + figure.count, 0);
 	const declaredSheets = parseDraftingFrontmatter(input.figures ?? '').fields.drawingSheets;
 	const drawingSheetsDeclared = typeof declaredSheets === 'number' && Number.isInteger(declaredSheets) && declaredSheets >= 0;
-	const drawingSheets = drawingSheetsDeclared ? declaredSheets : figures.length;
+	const drawingSheets = drawingSheetsDeclared ? declaredSheets : figureCount;
 
 	const paragraphs = exportedParagraphs(input.draft);
 	const documents = documentParagraphs(paragraphs);
@@ -154,9 +145,10 @@ export function filingManifest(input: FilingManifestInput): FilingManifest {
 		language: frontmatterText(fields.language),
 		claims: { total: claims.length, independent: claims.filter(claim => !claim.dependsOn.length).length },
 		figures: figures.map(figure => figure.label),
+		figureCount,
 		drawingSheets,
 		drawingSheetsDeclared,
-		abstractFigure: proposeAbstractFigure(figures, abstractText),
+		...proposeAbstractFigure(figures, abstractText),
 		pages: { description, claims: claimPages, abstract, drawings: drawingSheets, total: description + claimPages + abstract + drawingSheets },
 		pagesForPageFee: description + claimPages + Math.min(abstract, EPO_ABSTRACT_FEE_PAGES) + drawingSheets,
 	};
@@ -190,10 +182,12 @@ export function renderFilingManifest(manifest: FilingManifest, folder: DraftingF
 	const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 	const sheets = manifest.drawingSheetsDeclared
 		? `${manifest.drawingSheets} (\`drawingSheets\` in ${DRAFTING_FILE_NAMES.figures})`
-		: `${manifest.drawingSheets} (one sheet per figure in ${DRAFTING_FILE_NAMES.figures}; set \`drawingSheets\` in its frontmatter when figures share a sheet)`;
-	const abstractFigure = manifest.abstractFigure
-		? `${manifest.abstractFigure} (proposed: the figure whose reference numerals the abstract names most; the attorney confirms it)`
-		: 'None (no figures)';
+		: `${manifest.drawingSheets} (estimated: one sheet per figure in ${DRAFTING_FILE_NAMES.figures}; set \`drawingSheets\` in its frontmatter to the real count)`;
+	const abstractFigure = !manifest.abstractFigure
+		? 'None (no figures)'
+		: manifest.abstractFigureBasis === 'first'
+			? `${manifest.abstractFigure} (proposed: the first figure, because the abstract names no reference numeral of any figure; the attorney confirms it)`
+			: `${manifest.abstractFigure} (proposed: the figure whose reference numerals the abstract names most; the attorney confirms it)`;
 	const lines = [
 		`# Filing manifest — ${folder.matter}`,
 		'',
@@ -206,7 +200,7 @@ export function renderFilingManifest(manifest: FilingManifest, folder: DraftingF
 		`| Office | ${manifest.office} (${setup.rule} page setup, ${setup.paper}) |`,
 		`| Claims | ${manifest.claims.total} in total, ${manifest.claims.independent} independent |`,
 		`| Drawing sheets | ${sheets} |`,
-		`| Figures | ${manifest.figures.length ? manifest.figures.join(', ') : 'None'} |`,
+		`| Figures | ${manifest.figures.length ? `${manifest.figureCount}: ${manifest.figures.join(', ')}` : 'None'} |`,
 		`| Abstract figure | ${abstractFigure} |`,
 		'',
 		'## Pages (estimated)',

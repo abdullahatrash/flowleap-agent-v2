@@ -92,9 +92,11 @@ describe('filingManifest', () => {
 			language: 'English',
 			claims: { total: 4, independent: 2 },
 			figures: ['FIG. 1', 'FIG. 2'],
+			figureCount: 2,
 			drawingSheets: 2,
 			drawingSheetsDeclared: false,
 			abstractFigure: 'FIG. 2',
+			abstractFigureBasis: 'numerals',
 			pages: { description: 1, claims: 1, abstract: 1, drawings: 2, total: 5 },
 			pagesForPageFee: 5,
 		});
@@ -105,6 +107,58 @@ describe('filingManifest', () => {
 		expect({ title: manifest.title, language: manifest.language, figures: manifest.figures, drawingSheets: manifest.drawingSheets, drawingSheetsDeclared: manifest.drawingSheetsDeclared, abstractFigure: manifest.abstractFigure }).toEqual({
 			title: 'Hinge for heavy doors', language: undefined, figures: [], drawingSheets: 1, drawingSheetsDeclared: true, abstractFigure: undefined,
 		});
+	});
+});
+
+/** The headings of figures.md in the IDF-005 live test (2026-10-08). */
+const idf005Figures = `# Figures
+
+## FIG. 1
+
+- 10: bicycle frame
+
+## FIG. 2
+
+- 12: quick-release lever
+
+## FIG. 3
+
+## FIG. 4
+
+## FIG. 5
+
+## FIG. 6
+
+## FIGS. 7 to 10
+
+- 14: cam
+
+## Parts named in the answers, figure not stated
+
+- 16: spring
+`;
+
+describe('filingManifest figures', () => {
+
+	it('counts only figure headings: a range counts each figure, other headings are no figure, and the sheets are an estimate', () => {
+		const manifest = filingManifest({ office: 'EPO', draft: draft('', 'A hinge.').replace('A door (18) hangs on a frame (16) by a hinge with a housing (12).', 'A hinge with a spring (16).'), claims, figures: idf005Figures });
+		const rendered = renderFilingManifest(manifest, resolveDraftingFolder('idf-005')!).split('\n').filter(line => /^\| (?:Drawing sheets|Figures|Abstract figure) /.test(line));
+		expect({ figures: manifest.figures, figureCount: manifest.figureCount, drawingSheets: manifest.drawingSheets, abstractFigure: manifest.abstractFigure, rendered }).toEqual({
+			figures: ['FIG. 1', 'FIG. 2', 'FIG. 3', 'FIG. 4', 'FIG. 5', 'FIG. 6', 'FIGS. 7 to 10'],
+			figureCount: 10,
+			drawingSheets: 10,
+			abstractFigure: 'FIG. 1',
+			rendered: [
+				'| Drawing sheets | 10 (estimated: one sheet per figure in figures.md; set `drawingSheets` in its frontmatter to the real count) |',
+				'| Figures | 10: FIG. 1, FIG. 2, FIG. 3, FIG. 4, FIG. 5, FIG. 6, FIGS. 7 to 10 |',
+				'| Abstract figure | FIG. 1 (proposed: the first figure, because the abstract names no reference numeral of any figure; the attorney confirms it) |',
+			],
+		});
+	});
+
+	it('proposes a range heading as one entry, as written, when the abstract names its numerals', () => {
+		const manifest = filingManifest({ office: 'EPO', draft: draft('', 'A hinge.').replace('A door (18) hangs on a frame (16) by a hinge with a housing (12).', 'A lever with a cam (14).'), claims, figures: idf005Figures });
+		expect({ abstractFigure: manifest.abstractFigure, basis: manifest.abstractFigureBasis }).toEqual({ abstractFigure: 'FIGS. 7 to 10', basis: 'numerals' });
 	});
 });
 

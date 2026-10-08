@@ -203,4 +203,12 @@ describe('Application Drafting claim validators', () => {
 			],
 		]);
 	});
+
+	it('EPO reference signs: only parts shown in a figure count, not parts under a heading that names no figure', () => {
+		const figures = '# Figures\n\n## FIG. 1\n\n- 12: housing\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n';
+		expect([
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a housing (12) and a spring 16.'), figures),
+			checkEpoClaimReferenceSigns(claims('1. A hinge comprising a spring.'), '# Figures\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n'),
+		]).toEqual([[], []]);
+	});
 });
