@@ -16,10 +16,12 @@
 import { DraftFinding, INVENTOR_QUESTION } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
+import { currentAnswer, hasAnyAnswer, InventorAnswerSection, isAnswered } from './inventorAnswers';
 import { DraftParagraph, parseInventorQuestions } from './sourceMarkers';
 
 const draftFile = DRAFTING_FILE_NAMES.draft;
 const figuresFile = DRAFTING_FILE_NAMES.figures;
+const answersFile = DRAFTING_FILE_NAMES.inventorAnswers;
 
 /** One part of `figures.md` with its reference numeral. */
 export interface FigurePart {
@@ -279,11 +281,22 @@ export function checkEpoAbstractFigure(paragraphs: readonly DraftParagraph[], fi
 	return findings;
 }
 
-/** Error for each text paragraph outside the claims without a valid source marker. */
-export function checkSourceMarkers(paragraphs: readonly DraftParagraph[]): DraftFinding[] {
+/**
+ * Error for each text paragraph outside the claims without a valid source marker, and for each
+ * `inventor:IQ-n` source whose question has no answer in `inventor-answers.md`.
+ */
+export function checkSourceMarkers(paragraphs: readonly DraftParagraph[], answers: readonly InventorAnswerSection[] = []): DraftFinding[] {
 	const findings: DraftFinding[] = [];
 	for (const paragraph of paragraphs) {
-		if (paragraph.kind !== 'text' || isClaimsParagraph(paragraph) || paragraph.sources) {
+		if (paragraph.kind !== 'text' || isClaimsParagraph(paragraph)) {
+			continue;
+		}
+		if (paragraph.sources) {
+			for (const source of paragraph.sources) {
+				if (source.kind === 'inventor' && !hasAnyAnswer(answers.find(section => section.id === source.ref))) {
+					findings.push({ severity: 'Error', rule: 'source-marker', file: draftFile, line: paragraph.line, message: `The paragraph at line ${paragraph.line} cites inventor:${source.ref}, but ${answersFile} has no answer to ${source.ref}.` });
+				}
+			}
 			continue;
 		}
 		const message = paragraph.markerError
@@ -294,13 +307,18 @@ export function checkSourceMarkers(paragraphs: readonly DraftParagraph[]): Draft
 	return findings;
 }
 
-/** Error for each open Inventor Question in the draft; export refuses until it is resolved or waived. */
-export function checkInventorQuestions(draft: string): DraftFinding[] {
+/**
+ * Error for each Inventor Question still in the draft; export refuses until it is resolved or
+ * waived. When its current answer in `inventor-answers.md` is filled, the message says to apply it.
+ */
+export function checkInventorQuestions(draft: string, answers: readonly InventorAnswerSection[] = []): DraftFinding[] {
 	return parseInventorQuestions(draft).map(question => ({
 		severity: 'Error',
 		rule: INVENTOR_QUESTION,
 		file: draftFile,
 		line: question.line,
-		message: `Inventor Question ${question.id} is open: ${question.text}`,
+		message: isAnswered(currentAnswer(answers.find(section => section.id === question.id)))
+			? `Inventor Question ${question.id} is answered in ${answersFile}; apply it to the draft: ${question.text}`
+			: `Inventor Question ${question.id} is open: ${question.text}`,
 	}));
 }

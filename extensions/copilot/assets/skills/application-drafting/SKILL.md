@@ -12,8 +12,9 @@ technical gap is an **Inventor Question**. The attorney signs the application,
 so the draft shows what the model added.
 
 All files of one matter live in `drafting/<matter>/`: `feature-list.md`,
-`figures.md`, `claims.md`, `draft-application.md`, `findings.md`. The tools
-write the snapshot, the Working Record and the export beside them.
+`figures.md`, `claims.md`, `draft-application.md`, `findings.md`,
+`inventor-answers.md`. The tools write the snapshot, the Working Record and
+the export beside them.
 
 ## Gates
 
@@ -24,7 +25,7 @@ tools read it from the file:
 |------|------|------|-------|
 | Intake | `feature-list.md` | `confirmed: true` | Step 2 |
 | Claims | `claims.md` | `approved: true` | Step 3 |
-| Export | `findings.md` | no unwaived Error, no open Inventor Question | the export in Step 5 |
+| Export | `findings.md` | no unwaived Error, no open Inventor Question | the export in Step 6 |
 
 At a gate, stop, name the file and the flag, and ask the attorney to set it.
 Then wait. Every flag is the attorney's to write: an "I approve" or "looks
@@ -94,7 +95,25 @@ specification.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 
-## Step 5: Report and export
+## Step 5: Resolve Inventor Questions
+
+The save writes each Inventor Question to `inventor-answers.md` with an empty
+`**Answer:**` slot. The attorney or the inventor fills it. When the attorney
+asks you to apply the answers:
+
+1. Read `inventor-answers.md`. Use only the filled answers; an empty answer,
+   "Not stated" or "unknown" is no answer.
+2. Write each answer at the place its question names, in the inventor's
+   words, with the marker `<!-- src: inventor:IQ-n -->`. Add no fact the
+   answer does not state.
+3. Delete the answered question. When the answer is partial, keep the
+   question and narrow it to the part that is still open.
+4. Save the draft and call `validate_draft` again.
+
+Done when each filled answer is in the draft and `validate_draft` reports no
+question as answered but not applied.
+
+## Step 6: Report and export
 
 Report the findings by severity: Error, Note, Advisory, then the open
 Inventor Questions, each with its line reference. Report what the validators
@@ -116,7 +135,9 @@ abstract figure as a proposal.
 
 - Describe what the draft contains and what is open. State no time or effort
   saving anywhere.
-- The inventor or the attorney answers an Inventor Question. The model only
-  asks it.
+- The inventor or the attorney answers an Inventor Question, in
+  `inventor-answers.md`. The model only asks it and moves the written answer
+  into the draft. An answer in chat is an attorney instruction, not an
+  inventor answer.
 - Close every deliverable with: "AI-assisted analysis for review by a
   registered patent attorney — not legal advice."

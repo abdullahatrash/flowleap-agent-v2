@@ -21,6 +21,8 @@
  * - `feature:<row id>` — a row of the Feature List, e.g. `feature:F3`.
  * - `disclosure:<span>` — a span of the invention disclosure, e.g. `disclosure:§2.1`.
  * - `instruction` — an attorney instruction.
+ * - `inventor:<question id>` — the inventor's answer to an Inventor Question in
+ *   `inventor-answers.md`, e.g. `inventor:IQ-3`.
  * - `template` — the office template (boilerplate).
  * - `model-proposed` — Model-Proposed text: structure only, never technical content.
  *
@@ -30,15 +32,18 @@
  *
  * ```
  * > **Inventor Question IQ-1:** What material is the spring made of?
+ * > Belongs: Detailed Description, after the paragraph on the housing 12.
  * ```
+ *
+ * The optional last `Belongs:` line names the place in the draft where the answer goes.
  */
 
 import { parseDraftingFrontmatter } from './frontmatter';
 
 /** The kind of source a paragraph traces to. */
-export type DraftSourceKind = 'feature' | 'disclosure' | 'instruction' | 'template' | 'model-proposed';
+export type DraftSourceKind = 'feature' | 'disclosure' | 'inventor' | 'instruction' | 'template' | 'model-proposed';
 
-/** One source named by a paragraph marker. `ref` is set for `feature` and `disclosure`. */
+/** One source named by a paragraph marker. `ref` is set for `feature`, `disclosure` and `inventor`. */
 export interface DraftSource {
 	readonly kind: DraftSourceKind;
 	readonly ref?: string;
@@ -63,12 +68,14 @@ export interface DraftParagraph {
 export interface InventorQuestion {
 	readonly id: string;
 	readonly line: number;
-	/** The question text, joined to one line, without the blockquote and label. */
+	/** The question text, joined to one line, without the blockquote, the label and the `Belongs:` line. */
 	readonly text: string;
+	/** The place in the draft where the answer goes, from the `Belongs:` line. */
+	readonly belongs?: string;
 }
 
 const markerPattern = /^[ \t]*<!--\s*src:(?<sources>[\s\S]*?)-->[ \t]*\n?/;
-const sourcePattern = /^(?<kind>feature|disclosure|instruction|template|model-proposed)(?:\s*:\s*(?<ref>.+))?$/;
+const sourcePattern = /^(?<kind>feature|disclosure|inventor|instruction|template|model-proposed)(?:\s*:\s*(?<ref>.+))?$/;
 const inventorQuestionPattern = /^>\s*\*\*Inventor Question (?<id>IQ-\d+):\*\*\s*(?<text>[\s\S]*)$/;
 
 /**
@@ -125,9 +132,9 @@ function readParagraph(raw: string, blockLine: number, section: string | undefin
 		const source = sourcePattern.exec(entry);
 		const kind = source?.groups?.kind as DraftSourceKind | undefined;
 		const ref = source?.groups?.ref?.trim();
-		const needsRef = kind === 'feature' || kind === 'disclosure';
-		if (!kind || needsRef !== Boolean(ref)) {
-			return { line, kind: 'text', section, text, markerError: `Unknown source "${entry}". Use feature:<row>, disclosure:<span>, instruction, template or model-proposed.` };
+		const needsRef = kind === 'feature' || kind === 'disclosure' || kind === 'inventor';
+		if (!kind || needsRef !== Boolean(ref) || (kind === 'inventor' && !/^IQ-\d+$/.test(ref ?? ''))) {
+			return { line, kind: 'text', section, text, markerError: `Unknown source "${entry}". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.` };
 		}
 		sources.push(ref ? { kind, ref } : { kind });
 	}
@@ -147,7 +154,10 @@ export function parseInventorQuestions(text: string): InventorQuestion[] {
 		const joined = paragraph.text.split('\n').map(content => content.replace(/^>\s?/, '').trim()).join(' ');
 		const match = inventorQuestionPattern.exec(`> ${joined}`);
 		if (match?.groups) {
-			questions.push({ id: match.groups.id, line: paragraph.line, text: match.groups.text.trim() });
+			const place = /^(?<question>[\s\S]*?)\s*\bBelongs:\s*(?<belongs>.+)$/.exec(match.groups.text.trim());
+			questions.push(place?.groups
+				? { id: match.groups.id, line: paragraph.line, text: place.groups.question, belongs: place.groups.belongs.trim() }
+				: { id: match.groups.id, line: paragraph.line, text: match.groups.text.trim() });
 		}
 	}
 	return questions;

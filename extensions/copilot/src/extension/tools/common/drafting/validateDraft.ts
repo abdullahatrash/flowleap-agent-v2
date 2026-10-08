@@ -8,6 +8,7 @@ import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimO
 import { checkPageCount, filingManifest } from './filingManifest';
 import { DraftFinding } from './finding';
 import { DraftingOffice } from './frontmatter';
+import { parseInventorAnswers } from './inventorAnswers';
 import { parseDraftParagraphs } from './sourceMarkers';
 import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, isAbstractParagraph, isClaimsParagraph } from './specValidators';
 
@@ -20,6 +21,8 @@ export interface DraftValidationInput {
 	readonly claims: string;
 	/** `figures.md`; absent or empty when the application has no figures. */
 	readonly figures?: string;
+	/** `inventor-answers.md`; absent when the draft has no Inventor Questions yet. */
+	readonly inventorAnswers?: string;
 }
 
 /**
@@ -35,6 +38,7 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		.map(paragraph => paragraph.text)
 		.join('\n\n');
 	const figures = input.figures ?? '';
+	const answers = parseInventorAnswers(input.inventorAnswers ?? '');
 	const epo = input.office === 'EPO';
 	const findings = [
 		...checkClaimNumbering(claims),
@@ -47,8 +51,8 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		...checkAbstractLength(paragraphs, input.office),
 		...checkDefinedTerms(paragraphs),
 		...checkReferenceNumerals(paragraphs, figures),
-		...checkSourceMarkers(paragraphs),
-		...checkInventorQuestions(input.draft),
+		...checkSourceMarkers(paragraphs, answers),
+		...checkInventorQuestions(input.draft, answers),
 		...checkClaimCount(claims, input.office),
 		...checkPageCount(filingManifest(input)),
 		...checkRelativeTerms(claims),

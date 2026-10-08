@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import { parseInventorAnswers } from '../drafting/inventorAnswers';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
 import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, parseFigureParts } from '../drafting/specValidators';
 
@@ -127,7 +128,7 @@ describe('Application Drafting specification validators', () => {
 	it('source markers: Error for a paragraph without a source or with an invalid marker', () => {
 		expect(checkSourceMarkers(draft('# Description', '', 'No source.', '', '<!-- src: feature -->', 'Bad marker.'))).toEqual([
 			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 3, message: 'The paragraph at line 3 has no source marker (<!-- src: ... -->).' },
-			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, instruction, template or model-proposed.' },
+			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.' },
 		]);
 	});
 
@@ -139,5 +140,29 @@ describe('Application Drafting specification validators', () => {
 		expect(checkInventorQuestions('## Inventor Questions\n\n> **Inventor Question IQ-1:** What is the spring made of?')).toEqual([
 			{ severity: 'Error', rule: 'inventor-question', file: 'draft-application.md', line: 3, message: 'Inventor Question IQ-1 is open: What is the spring made of?' },
 		]);
+	});
+
+	it('inventor answers: the marker needs a filled answer, and an answered question still in the draft says to apply it', () => {
+		const answers = parseInventorAnswers([
+			'## IQ-1', '', '**Question:** What is the spring made of?', '', '**Answer:**', 'Spring steel.',
+			'', '## IQ-2', '', '**Question:** Is the hinge removable?', '', '**Answer:** Not stated.',
+		].join('\n'));
+		const text = [
+			'# Description', '',
+			'<!-- src: inventor:IQ-1 -->', 'The spring is spring steel.', '',
+			'<!-- src: inventor:IQ-2 -->', 'The hinge is removable.', '',
+			'## Inventor Questions', '',
+			'> **Inventor Question IQ-1:** What is the spring made of?', '',
+			'> **Inventor Question IQ-2:** Is the hinge removable?',
+		].join('\n');
+		expect({ markers: checkSourceMarkers(parseDraftParagraphs(text), answers), questions: checkInventorQuestions(text, answers).map(finding => finding.message) }).toEqual({
+			markers: [
+				{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 7, message: 'The paragraph at line 7 cites inventor:IQ-2, but inventor-answers.md has no answer to IQ-2.' },
+			],
+			questions: [
+				'Inventor Question IQ-1 is answered in inventor-answers.md; apply it to the draft: What is the spring made of?',
+				'Inventor Question IQ-2 is open: Is the hinge removable?',
+			],
+		});
 	});
 });

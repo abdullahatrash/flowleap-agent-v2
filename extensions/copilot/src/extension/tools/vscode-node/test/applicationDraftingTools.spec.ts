@@ -119,6 +119,23 @@ const openQuestion = `
 > **Inventor Question IQ-1:** Which steel grade is the lever made of?
 `;
 
+const twoQuestions = `
+## Inventor Questions
+
+> **Inventor Question IQ-1:** Which steel grade is the lever made of?
+> Belongs: Detailed Description, after the paragraph on the housing 12.
+
+> **Inventor Question IQ-2:** How thick is the lever?
+`;
+
+/** The draft after the agent applied the answer to IQ-1: the answer at its place with its marker, the question deleted. */
+const appliedIq1 = (questions = '\n## Inventor Questions\n\n> **Inventor Question IQ-2:** How thick is the lever?\n') => draft(questions).replace(
+	'The housing 12 holds the lever 14. The lever 14 is steel.\n',
+	'The housing 12 holds the lever 14. The lever 14 is steel.\n\n<!-- src: inventor:IQ-1 -->\nThe lever 14 is stainless steel.\n');
+
+/** Fills the answer slot of one question in inventor-answers.md, the way the attorney or the inventor does. */
+const fillAnswer = (answers: string, id: string, answer: string) => answers.replace(new RegExp(`(## ${id}\\n[\\s\\S]*?\\*\\*Answer:\\*\\*\\n)`), `$1${answer}\n`);
+
 function setup(files: Record<string, string> = {}) {
 	const fileSystem = new BinaryFileSystem();
 	for (const [path, contents] of Object.entries(files)) {
@@ -397,5 +414,50 @@ describe('export_draft_docx', () => {
 			filingManifest: await read('drafting/hinge/filing-manifest.md'),
 			attorneyEdits: record.slice(record.indexOf('## Attorney edits')).replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>'),
 		}).toMatchSnapshot();
+	});
+});
+
+describe('Inventor Question answers', () => {
+	it('the save writes inventor-answers.md; an applied answer closes its question, is recorded, and the export blocks only on the rest', async () => {
+		const { tools, read, write } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		const written = await read('drafting/hinge/inventor-answers.md');
+		write('drafting/hinge/inventor-answers.md', fillAnswer(written, 'IQ-1', 'Stainless steel.'));
+		await tools.validate();
+		const answeredNotApplied = (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g);
+		await tools.save(appliedIq1());
+		const exportResult = await tools.exportDocx();
+		expect({
+			written,
+			answeredNotApplied,
+			exportResult,
+			answersKept: (await read('drafting/hinge/inventor-answers.md')).includes('**Answer:**\nStainless steel.\n'),
+			recorded: (await read('drafting/hinge/draft-application.working-record.md')).match(/^- \*\*Inventor answer applied:\*\*.*$/gm)?.map(line => line.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/, '<time>')),
+		}).toMatchSnapshot();
+	});
+
+	it('a partial answer narrows the question: the save adds a new empty slot and the question stays open', async () => {
+		const { tools, read, write } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		write('drafting/hinge/inventor-answers.md', fillAnswer(await read('drafting/hinge/inventor-answers.md'), 'IQ-1', 'Stainless steel; the hardness is not known.'));
+		await tools.save(appliedIq1('\n## Inventor Questions\n\n> **Inventor Question IQ-1:** What hardness has the stainless steel lever?\n'));
+		await tools.validate();
+		expect({
+			answers: (await read('drafting/hinge/inventor-answers.md')).slice((await read('drafting/hinge/inventor-answers.md')).indexOf('## IQ-1')),
+			findings: (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g),
+		}).toMatchSnapshot();
+	});
+
+	it('an inventor:IQ-n marker without a filled answer is an Error', async () => {
+		const { tools, read } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(twoQuestions));
+		await tools.save(appliedIq1());
+		await tools.validate();
+		expect((await read('drafting/hinge/findings.md')).match(/- `source-marker`[^\n]*/g)).toEqual([
+			'- `source-marker` (draft-application.md, line 30): The paragraph at line 30 cites inventor:IQ-1, but inventor-answers.md has no answer to IQ-1.',
+		]);
 	});
 });

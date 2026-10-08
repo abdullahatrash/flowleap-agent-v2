@@ -16,6 +16,7 @@
  *   draft-application.generated.md       snapshot at generation, diffed at export
  *   draft-application.working-record.md  Working Record
  *   findings.md                          Findings, waivers with reasons, open Inventor Questions
+ *   inventor-answers.md                  the inventor's answers to the Inventor Questions, one section each
  *   draft-application.description.docx   export, markers stripped, one file per document type:
  *   draft-application.claims.docx          description, claims, abstract (drawings are not generated)
  *   draft-application.abstract.docx
@@ -46,6 +47,7 @@ export const DRAFTING_FILE_NAMES = {
 	generatedSnapshot: 'draft-application.generated.md',
 	workingRecord: 'draft-application.working-record.md',
 	findings: 'findings.md',
+	inventorAnswers: 'inventor-answers.md',
 	descriptionDocx: 'draft-application.description.docx',
 	claimsDocx: 'draft-application.claims.docx',
 	abstractDocx: 'draft-application.abstract.docx',
@@ -63,6 +65,7 @@ export interface DraftingFolder {
 	readonly generatedSnapshot: string;
 	readonly workingRecord: string;
 	readonly findings: string;
+	readonly inventorAnswers: string;
 	/** The export, one .docx per document type. */
 	readonly docx: Readonly<Record<DraftDocumentType, string>>;
 	/** The filing manifest written beside the export. */
@@ -89,6 +92,7 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 		generatedSnapshot: `${folder}/${DRAFTING_FILE_NAMES.generatedSnapshot}`,
 		workingRecord: `${folder}/${DRAFTING_FILE_NAMES.workingRecord}`,
 		findings: `${folder}/${DRAFTING_FILE_NAMES.findings}`,
+		inventorAnswers: `${folder}/${DRAFTING_FILE_NAMES.inventorAnswers}`,
 		docx: {
 			description: `${folder}/${DRAFTING_FILE_NAMES.descriptionDocx}`,
 			claims: `${folder}/${DRAFTING_FILE_NAMES.claimsDocx}`,

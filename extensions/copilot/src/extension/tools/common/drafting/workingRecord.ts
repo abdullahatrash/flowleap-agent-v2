@@ -42,6 +42,9 @@ export const VERSION_CLAIMS_HASH = 'Claims SHA-256 of this version';
 /** When a tool cleared `approved` because `claims.md` changed after approval. */
 export const APPROVAL_CLEARED = 'Approval cleared';
 
+/** An inventor's answer the saved draft cites (`inventor:IQ-n`): which question, from which file, when. */
+export const INVENTOR_ANSWER_APPLIED = 'Inventor answer applied';
+
 /** When a later save of the same draft version refreshed the source map. */
 const RESAVED = 'Re-saved';
 

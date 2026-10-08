@@ -51,7 +51,6 @@ export interface StyleExemplar {
 	readonly error?: string;
 }
 
-/** The SHA-256 of the claims body of a `claims.md` text. */
 /**
  * A Note, never an Error, when the claims file still carries the "not searched" status the
  * claim-drafting skill writes for claims drafted without a prior-art search. The attorney may
@@ -65,6 +64,7 @@ function unsearchedClaimsNote(claims: string): DraftFinding[] {
 	return [{ severity: 'Note', rule: 'claims-unsearched', file: DRAFTING_FILE_NAMES.claims, message: `The Approved Claims carry status "${status.trim()}": they were drafted without a prior-art search. Run the prior-art step and re-approve, or record in the review that the claims are deliberately unsearched.` }];
 }
 
+/** The SHA-256 of the claims body of a `claims.md` text. */
 function claimsHash(claims: string): string {
 	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
 }
@@ -268,10 +268,11 @@ export class DraftingWorkspace {
 	 */
 	async validate(office: DraftingOffice, draft: string, claims: string, approval: ClaimsApproval, advisory: readonly DraftFinding[]): Promise<DraftFinding[]> {
 		const figures = await this.read(this.folder.figures);
+		const inventorAnswers = await this.read(this.folder.inventorAnswers);
 		const current: DraftFinding[] = [
 			...(approval.changed ? [{ severity: 'Error' as const, rule: 'claims-changed', file: DRAFTING_FILE_NAMES.claims, message: approval.changed }] : []),
 			...unsearchedClaimsNote(claims),
-			...validateDraft({ office, draft, claims, figures }),
+			...validateDraft({ office, draft, claims, figures, inventorAnswers }),
 			...advisory,
 		];
 		const previous = parseFindingsFile(await this.read(this.folder.findings) ?? '');

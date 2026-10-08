@@ -419,9 +419,14 @@ Model-Proposed (that source is **Template**).
 
 **Inventor Question**:
 An open item the model raises when a claim element, example or embodiment has no source in the
-disclosure. Listed at the end of the Draft Application and in the findings file. Export refuses
-while one is unresolved and unwaived.
-_Avoid_: resolving one by letting the model answer it; dropping one without a recorded waiver.
+disclosure. Listed at the end of the Draft Application and in the findings file. Each save also
+writes it to `inventor-answers.md`, one section per question with an empty **Answer:** slot for
+the attorney or the inventor; a re-save adds new questions and never overwrites a filled answer.
+The agent moves a filled answer into the draft with the marker `inventor:IQ-n` and deletes the
+question; a partial answer narrows the question, it does not close it. An empty answer, "Not
+stated" or "unknown" is no answer. Export refuses while one is unresolved and unwaived.
+_Avoid_: resolving one by letting the model answer it; dropping one without a recorded waiver;
+an answer given in chat (the answer is read from the file).
 
 **Finding**:
 One result of the draft validators or of the advisory review. An **Error** (antecedent basis,

@@ -1,5 +1,69 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`Inventor Question answers > a partial answer narrows the question: the save adds a new empty slot and the question stays open 1`] = `
+{
+  "answers": "## IQ-1
+
+**Question:** Which steel grade is the lever made of?
+
+**Belongs:** Detailed Description, after the paragraph on the housing 12.
+
+**Answer:**
+Stainless steel; the hardness is not known.
+
+**Narrowed question:** What hardness has the stainless steel lever?
+
+**Answer:**
+
+## IQ-2
+
+**Question:** How thick is the lever?
+
+**Belongs:** see the question
+
+**Answer:**
+",
+  "findings": [
+    "- \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-1 is open: What hardness has the stainless steel lever?",
+  ],
+}
+`;
+
+exports[`Inventor Question answers > the save writes inventor-answers.md; an applied answer closes its question, is recorded, and the export blocks only on the rest 1`] = `
+{
+  "answeredNotApplied": [
+    "- \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is answered in inventor-answers.md; apply it to the draft: Which steel grade is the lever made of?",
+    "- \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-2 is open: How thick is the lever?",
+  ],
+  "answersKept": true,
+  "exportResult": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
+- \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-2 is open: How thick is the lever?",
+  "recorded": [
+    "- **Inventor answer applied:** IQ-1, answer 1, from inventor-answers.md at <time>",
+  ],
+  "written": "# Inventor answers: hinge
+
+Write the inventor's answer under each **Answer:**. Leave it empty, or write "Not stated", when the inventor does not know. Then tell the agent: "Apply the answers". The agent copies each answer into the draft; it never answers a question itself.
+
+## IQ-1
+
+**Question:** Which steel grade is the lever made of?
+
+**Belongs:** Detailed Description, after the paragraph on the housing 12.
+
+**Answer:**
+
+## IQ-2
+
+**Question:** How thick is the lever?
+
+**Belongs:** see the question
+
+**Answer:**
+",
+}
+`;
+
 exports[`export_draft_docx > appends the attorney edits to the Working Record and writes the description, claims and abstract .docx files without markers 1`] = `
 {
   "attorneyEdits": "## Attorney edits
@@ -214,6 +278,7 @@ Each sentence of the draft as saved, at the line of its paragraph, with the sour
 | 41 | Inventor Questions | Inventor Question | > **Inventor Question IQ-1:** Which steel grade is the lever made of? |
 ",
   "result": "Saved drafting/hinge/draft-application.md (version 1, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.
+Inventor Questions: 1 in the draft, 1 new; the answer slots are in drafting/hinge/inventor-answers.md.
 Findings are not checked at save. Call validate_draft next.",
   "snapshotIsDraft": true,
 }

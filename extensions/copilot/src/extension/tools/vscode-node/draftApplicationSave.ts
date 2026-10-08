@@ -4,7 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DraftingFrontmatterFields, DraftingFrontmatterValue, parseDraftingFrontmatter, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
-import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
+import { appliedAnswerLabel, citedInventorAnswers, lastAnsweredRound, parseInventorAnswers, updateInventorAnswers } from '../common/drafting/inventorAnswers';
+import { parseDraftParagraphs, parseInventorQuestions } from '../common/drafting/sourceMarkers';
+import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, INVENTOR_ANSWER_APPLIED, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { DraftingWorkspace } from './draftingWorkspace';
 
 /** The `write_patent_results` input of a `draft-application` save. */
@@ -51,6 +53,10 @@ function versionedPath(path: string, version: number): string {
  * was generated, and updates the Working Record (a `Re-saved` line and a fresh source map). When
  * the draft is generated against other claims than the snapshot was, the version goes up by one
  * and the previous draft, snapshot and record are kept as `draft-application.v<n>.*`.
+ *
+ * The save writes the Inventor Questions of the draft to `inventor-answers.md` (new questions
+ * added, filled answers kept) and records each inventor's answer the draft cites
+ * (`inventor:IQ-n`) in the Working Record.
  */
 export async function saveDraftApplication(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftApplicationSaveResult> {
 	const { folder } = workspace;
@@ -102,8 +108,9 @@ export async function saveDraftApplication(workspace: DraftingWorkspace, input: 
 	if (firstSaveOfVersion) {
 		await workspace.write(folder.generatedSnapshot, document);
 	}
+	let record: string;
 	if (firstSaveOfVersion || !previousRecord.trim()) {
-		const record = renderDraftWorkingRecord({
+		record = renderDraftWorkingRecord({
 			matter: folder.matter,
 			office,
 			model,
@@ -116,16 +123,36 @@ export async function saveDraftApplication(workspace: DraftingWorkspace, input: 
 			versionClaimsHash: versionHash,
 		}, document);
 		// The approval history of the claims stays with the record of the draft built on them.
-		const cleared = readRecordFields(previousRecord, APPROVAL_CLEARED);
-		await workspace.write(folder.workingRecord, cleared.reduce((updated, value) => addRecordLine(updated, APPROVAL_CLEARED, value), record));
+		record = readRecordFields(previousRecord, APPROVAL_CLEARED).reduce((updated, value) => addRecordLine(updated, APPROVAL_CLEARED, value), record);
 	} else {
-		await workspace.write(folder.workingRecord, resaveWorkingRecord(previousRecord, document, savedAt));
+		record = resaveWorkingRecord(previousRecord, document, savedAt);
+	}
+
+	// The inventor's answers the draft now cites, each recorded once per answer.
+	const previousAnswers = await workspace.read(folder.inventorAnswers);
+	const sections = parseInventorAnswers(previousAnswers ?? '');
+	const cited = citedInventorAnswers(parseDraftParagraphs(document));
+	const recorded = readRecordFields(record, INVENTOR_ANSWER_APPLIED).map(value => value.replace(/ at \S+$/, ''));
+	for (const id of cited) {
+		const round = lastAnsweredRound(sections.find(section => section.id === id));
+		const label = round !== undefined ? appliedAnswerLabel(id, round) : undefined;
+		if (label && !recorded.includes(label)) {
+			record = addRecordLine(record, INVENTOR_ANSWER_APPLIED, `${label} at ${savedAt}`);
+		}
+	}
+	await workspace.write(folder.workingRecord, record);
+
+	const questions = parseInventorQuestions(document);
+	const newQuestions = questions.filter(question => !sections.some(section => section.id === question.id));
+	if (questions.length || previousAnswers !== undefined) {
+		await workspace.write(folder.inventorAnswers, updateInventorAnswers(previousAnswers, folder.matter, questions, cited));
 	}
 
 	const notes = [
 		`Saved ${folder.draft} (version ${version}, office ${office}). Generated snapshot: ${folder.generatedSnapshot}${firstSaveOfVersion ? '' : ` (kept from the first save of version ${version})`}. Working record: ${folder.workingRecord}.`,
 		archived.length ? `${claimsChanged ? `The claims changed since version ${previousVersion}: this` : 'This'} is version ${version}; the previous files are kept as ${archived.join(', ')}.` : undefined,
 		!approvedHash ? `No approved claims were recorded: call start_application_draft before drafting, so the draft is tied to the approved ${folder.claims}.` : undefined,
+		questions.length ? `Inventor Questions: ${questions.length} in the draft${newQuestions.length ? `, ${newQuestions.length} new` : ''}; the answer slots are in ${folder.inventorAnswers}.` : undefined,
 		approvedHash && approvedHash !== currentHash ? `${folder.claims} was approved again after start_application_draft: this draft is tied to the claims start_application_draft returned. Call start_application_draft, regenerate and save to draft against the current claims.` : undefined,
 		'Findings are not checked at save. Call validate_draft next.',
 	];
