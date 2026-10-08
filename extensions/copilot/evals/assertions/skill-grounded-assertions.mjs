@@ -83,8 +83,33 @@ function normalizedDate(match) {
 	return undefined;
 }
 
+const isDay = value => value >= 1 && value <= 31;
+const isMonth = value => value >= 1 && value <= 12;
+
 /**
- * Every calendar date in the text, in order of appearance, except the fixed legal reference dates
+ * True when the day and month of a numeric match are in range, so that a number list such as
+ * "Art. 60/61/62" or "RoP 13/14/15" is not read as a date. A slash date passes when it is valid
+ * day-first or month-first. Word-month forms are always in range for the month; their day is checked.
+ * @param {string} match
+ */
+function isInDateRange(match) {
+	let m = /^\d{4}-(?<mo>\d{1,2})-(?<d>\d{1,2})$/.exec(match) ?? /^(?<d>\d{1,2})\.(?<mo>\d{1,2})\.\d{4}$/.exec(match);
+	if (m) {
+		return isDay(Number(m.groups.d)) && isMonth(Number(m.groups.mo));
+	}
+	m = /^(?<a>\d{1,2})\/(?<b>\d{1,2})\//.exec(match);
+	if (m) {
+		const a = Number(m.groups.a);
+		const b = Number(m.groups.b);
+		return (isDay(a) && isMonth(b)) || (isMonth(a) && isDay(b));
+	}
+	const day = /\d{1,2}(?!\d)/.exec(match.replace(/\d{4}/, ''));
+	return !day || isDay(Number(day[0]));
+}
+
+/**
+ * Every calendar date in the text, in order of appearance, except number lists that are not valid
+ * dates (see {@link isInDateRange}) and the fixed legal reference dates
  * of {@link LEGAL_REFERENCE_DATES} written with their year.
  * A period ("2 months from service"), a rule number ("R.224.1(a)") or a bare year ("the 2026
  * table") is not a calendar date.
@@ -94,7 +119,7 @@ function normalizedDate(match) {
 export function findCalendarDates(text) {
 	return [...String(text ?? '').matchAll(CALENDAR_DATE)]
 		.map(match => match[0].replace(/[.,\s]+$/, ''))
-		.filter(date => !LEGAL_REFERENCE_DATES.has(normalizedDate(date)));
+		.filter(date => isInDateRange(date) && !LEGAL_REFERENCE_DATES.has(normalizedDate(date)));
 }
 
 /**

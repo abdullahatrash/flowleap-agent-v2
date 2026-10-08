@@ -58,6 +58,15 @@ describe('calendar dates (ADR 0013: never compute a date)', () => {
 			.toEqual(['2 January 2026', '1 January 2027', '1 January']);
 	});
 
+	it('passes number lists that are not valid dates, such as article lists', () => {
+		const answer = 'Orders under Art. 60/61/62 UPCA; Art. 32/33 UPCA; RoP 13/14/15; sections 0.12.2026 and 2026-13-40; 32.1.2026.';
+		expect({ ok: H.hasNoCalendarDate(answer), found: H.findCalendarDates(answer) }).toEqual({ ok: true, found: [] });
+	});
+
+	it('still fails numeric dates in the valid day and month range, day-first or month-first', () => {
+		expect(H.findCalendarDates('By 31/12/2027, by 12/31/27, by 1.2.2027 or by 2027-02-28.')).toEqual(['31/12/2027', '12/31/27', '1.2.2027', '2027-02-28']);
+	});
+
 	it('names the date it found, so a failing row shows the offending text', () => {
 		expect(H.findCalendarDates('Reply by 1 November 2026, rejoinder by 2027-01-01.')).toEqual(['1 November 2026', '2027-01-01']);
 	});
