@@ -103,7 +103,7 @@ const exemptReferences = new Set(['same', 'other', 'like', 'invention', 'plurali
  */
 const inherentProperties = new Set(['mass', 'weight', 'volume', 'amount', 'total', 'sum', 'surface', 'length', 'width', 'height', 'depth', 'thickness', 'size', 'diameter', 'area', 'shape', 'end', 'ends', 'side', 'sides', 'number', 'proportion', 'content', 'concentration', 'temperature', 'pressure', 'remainder', 'rest', 'balance']);
 
-/** Words that say "the whole of": `the total composition`, `the overall composition` refer to the composition. */
+/** Words that say "the whole of": with `of` after them they are an inherent property (`the total of`). */
 const wholeWords = new Set(['total', 'overall', 'entire', 'whole']);
 
 /** Words that introduce a claim term: `a lever`, `each particle`, `two disks`, `at least three positions`. */
@@ -189,12 +189,14 @@ function stem(word: string): string {
 	return word.replace(/(?<!s)s$/, '');
 }
 
-/** True when an introduced phrase gives a reference its antecedent: the same distinguishing words and a shared noun. */
+/**
+ * True when an introduced phrase gives a reference its antecedent: the introduction has the head
+ * noun of the reference (its last word, plural-insensitive) and every distinguishing word of it.
+ */
 function introducesReference(introduction: ClaimPhrase, reference: ClaimPhrase): boolean {
 	const introduced = new Set(introduction.words.map(stem));
-	const modifiers = reference.words.filter(word => termModifiers.has(word));
-	const nouns = reference.words.filter(word => !termModifiers.has(word) && !wholeWords.has(word));
-	return modifiers.every(word => introduced.has(word)) && nouns.some(word => introduced.has(stem(word)));
+	const head = reference.words.at(-1);
+	return !!head && introduced.has(stem(head)) && reference.words.filter(word => termModifiers.has(word)).every(word => introduced.has(word));
 }
 
 /** True for a reference that needs no antecedent: `the same`, or an inherent property such as "the mass of". */
@@ -213,7 +215,7 @@ function dependencyPaths(claim: DraftClaim, byNumber: Map<number, DraftClaim>, d
 
 /**
  * Error when a claim refers to "the X" or "said X" and no earlier introduced phrase in the claim
- * or along any of its dependency paths shares a noun of X: `a particulate composite filler` for
+ * or along any of its dependency paths has the head noun of X (its last word): `a particulate composite filler` for
  * `the composite filler`, `containing inorganic filler` for `the inorganic filler`, `curing an
  * organic-inorganic composite` for `the cured composite`, the parent preamble `A dental
  * composition` for `The composition of claim 1`. A distinguishing word (`second`, `upper`) must be

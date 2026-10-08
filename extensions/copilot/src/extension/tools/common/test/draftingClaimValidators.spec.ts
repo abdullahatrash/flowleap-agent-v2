@@ -96,6 +96,18 @@ describe('Application Drafting claim validators', () => {
 		))).toEqual([]);
 	});
 
+	it('antecedent basis: the head noun (the last noun of the phrase) must be introduced, not any noun of it', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A hinge comprising a lever.',
+			'2. The hinge of claim 1, wherein the lever housing is steel.',
+			'3. A door comprising a housing.',
+			'4. The door of claim 3, wherein the housing cover is plastic.',
+		))).toEqual([
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the lever housing" has no antecedent basis ("a lever housing") earlier in claim 2 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 4, claim: 4, message: 'Claim 4: "the housing cover" has no antecedent basis ("a housing cover") earlier in claim 4 or in the claims it depends on.' },
+		]);
+	});
+
 	it('antecedent basis: the head noun of the phrase must be introduced; an inherent property needs no antecedent, a missing part still errors', () => {
 		expect(checkAntecedentBasis(claims(
 			'1. A hinge comprising a lever of steel, wherein the total weight of the lever is low and the overall hinge is small.',
