@@ -1,0 +1,88 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * The folder contract of Application Drafting (PRD 0020):
+ *
+ * ```
+ * style/                                 workspace-level style exemplars (voice only, never a source)
+ * drafting/<matter>/
+ *   feature-list.md                      Feature List; frontmatter: office, confirmed
+ *   figures.md                           figure list with parts and reference numerals
+ *   claims.md                            Approved Claims; frontmatter: approved
+ *   draft-application.md                 Draft Application; frontmatter: office, model, provider, version
+ *   draft-application.generated.md       snapshot at generation, diffed at export
+ *   draft-application.working-record.md  Working Record
+ *   findings.md                          Findings, waivers with reasons, open Inventor Questions
+ *   draft-application.docx               export, markers stripped
+ * ```
+ *
+ * All paths are workspace-relative and use `/`.
+ */
+
+/** The workspace-level folder of style exemplars. */
+export const DRAFTING_STYLE_FOLDER = 'style';
+
+/** The file names of one matter's drafting files in its folder; also the `file` of a Finding. */
+export const DRAFTING_FILE_NAMES = {
+	featureList: 'feature-list.md',
+	figures: 'figures.md',
+	claims: 'claims.md',
+	draft: 'draft-application.md',
+	generatedSnapshot: 'draft-application.generated.md',
+	workingRecord: 'draft-application.working-record.md',
+	findings: 'findings.md',
+	docx: 'draft-application.docx',
+} as const;
+
+/** The workspace-relative paths of one matter's drafting files. */
+export interface DraftingFolder {
+	readonly matter: string;
+	readonly folder: string;
+	readonly featureList: string;
+	readonly figures: string;
+	readonly claims: string;
+	readonly draft: string;
+	readonly generatedSnapshot: string;
+	readonly workingRecord: string;
+	readonly findings: string;
+	readonly docx: string;
+}
+
+/**
+ * Resolves the drafting folder of a matter. Returns `undefined` when the matter name is empty,
+ * starts with a dot, or contains a path separator (the folder must stay under `drafting/`).
+ */
+export function resolveDraftingFolder(matter: string): DraftingFolder | undefined {
+	const name = matter.trim();
+	if (!name || name.startsWith('.') || /[\/\\]/.test(name)) {
+		return undefined;
+	}
+	const folder = `drafting/${name}`;
+	return {
+		matter: name,
+		folder,
+		featureList: `${folder}/${DRAFTING_FILE_NAMES.featureList}`,
+		figures: `${folder}/${DRAFTING_FILE_NAMES.figures}`,
+		claims: `${folder}/${DRAFTING_FILE_NAMES.claims}`,
+		draft: `${folder}/${DRAFTING_FILE_NAMES.draft}`,
+		generatedSnapshot: `${folder}/${DRAFTING_FILE_NAMES.generatedSnapshot}`,
+		workingRecord: `${folder}/${DRAFTING_FILE_NAMES.workingRecord}`,
+		findings: `${folder}/${DRAFTING_FILE_NAMES.findings}`,
+		docx: `${folder}/${DRAFTING_FILE_NAMES.docx}`,
+	};
+}
+
+/**
+ * The matter of a workspace-relative Draft Application path (`drafting/<matter>/draft-application.md`),
+ * or `undefined` for any other path and for a matter name {@link resolveDraftingFolder} refuses.
+ */
+export function matchDraftPath(path: string): string | undefined {
+	const [top, matter, file, ...rest] = path.split('/');
+	if (top !== 'drafting' || file !== DRAFTING_FILE_NAMES.draft || rest.length || matter === undefined) {
+		return undefined;
+	}
+	return resolveDraftingFolder(matter)?.matter === matter ? matter : undefined;
+}

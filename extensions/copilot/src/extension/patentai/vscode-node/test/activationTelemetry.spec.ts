@@ -17,6 +17,7 @@ import {
 	MAX_BATCH,
 	reportedPlatform,
 	reportedSkillId,
+	reportedTemplateKind,
 } from '../../common/activationTelemetry';
 
 function event(overrides: Partial<ActivationTelemetryEvent> = {}): ActivationTelemetryEvent {
@@ -57,6 +58,16 @@ describe('activationTelemetry', () => {
 			extraInTheSet: [...BUNDLED_SKILL_IDS].filter(id => !onDisk.includes(id)).sort(),
 			malformedIds: [...BUNDLED_SKILL_IDS].filter(id => !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)).sort(),
 		}).toEqual({ missingFromTheSet: [], extraInTheSet: [], malformedIds: [] });
+	});
+
+	it('reports only the template kinds the backend accepts; a free-form save is free-form', () => {
+		expect([
+			reportedTemplateKind('prior-art-report'),
+			reportedTemplateKind('portfolio-due-diligence-memo'),
+			reportedTemplateKind(''),
+			reportedTemplateKind('draft-application'),
+			reportedTemplateKind('find-better-report'),
+		]).toEqual(['prior-art-report', 'portfolio-due-diligence-memo', 'free-form', undefined, undefined]);
 	});
 
 	it('maps platforms onto the three the contract accepts', () => {

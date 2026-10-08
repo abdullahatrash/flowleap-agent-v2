@@ -49,8 +49,9 @@ _Avoid_: conflating with Patent Skill.
 **Project Type**:
 The investigation kind a Patent Project was created as — one of **Patent Analysis** (a specific
 patent/application is the subject, including invalidity work), **Prior-Art Search**,
-**Freedom-to-Operate**, **Patent Landscape**, **Claim Analysis**, or **Custom**. An
-organizational label and notes-template seed only; it does not change agent behavior.
+**Freedom-to-Operate**, **Patent Landscape**, **Claim Analysis**, **Application Drafting**
+(ADR 0012), or **Custom**. An organizational label and notes-template seed only; it does not
+change agent behavior.
 _Avoid_: adding an "Invalidity" type (that's Patent Analysis); coupling type to skill/recipe
 invocation.
 
@@ -332,3 +333,58 @@ one-click hand-off (copy, or open in Espacenet). The user may add, remove or edi
 terms before running it; the working record keeps the version that ran.
 _Avoid_: "the query" when several statements exist per run; shipping a statement without its
 **Discriminating Term**.
+
+## Application Drafting
+
+**Application Drafting**:
+The deliverable that turns a confirmed **Feature List** and **Approved Claims** into a **Draft
+Application** (specification, abstract, brief description of the drawings) for one office (US
+or EPO), with every sentence traced to a source, deterministic validators run as code, and a
+human gate before each step (ADR 0012). Also the seventh **Project Type**. It drafts the text;
+it does not draw figures and it does not file.
+_Avoid_: "AI drafting" as a one-shot generator — the gates and the record are the feature;
+"drafting" for claim-only work — that is the `claim-drafting` skill, which this deliverable
+calls.
+
+**Feature List**:
+The attorney-confirmed inventory of the invention's elements, embodiments and figures that
+drafting starts from. It is the contract between intake and drafting: a sentence in the draft
+traces to a row here or to a disclosure span. Carries the attorney's `confirmed` flag; nothing
+is drafted before it.
+_Avoid_: letting the model extend the list during drafting — a missed feature is an
+**Inventor Question**, never a silent addition.
+
+**Approved Claims**:
+The claims file for a draft after the attorney has set its `approved` flag. The specification
+is generated against these claims and only after this flag exists. Editing the claims clears
+the flag and starts a new draft version.
+_Avoid_: "approved" said in chat — the flag is read from the file by code.
+
+**Draft Application**:
+The Markdown deliverable of Application Drafting: the specification in the chosen office's
+section order, the abstract, the brief description of the drawings, each paragraph carrying
+its source marker, and an **Inventor Questions** list at the end. Exported to .docx without
+markers; its **Working Record** and findings stay beside it.
+_Avoid_: calling the .docx the deliverable — it is the export; "Draft" as a Project Status.
+
+**Model-Proposed**:
+The source marker for text the model wrote in this draft without a source in the Feature List,
+the disclosure, an attorney instruction or the office template. Allowed for structure
+(transitions, boilerplate not in the template). Not allowed for technical content: a technical
+gap becomes an **Inventor Question**.
+_Avoid_: using it to hide filled technical gaps; counting template boilerplate as
+Model-Proposed (that source is **Template**).
+
+**Inventor Question**:
+An open item the model raises when a claim element, example or embodiment has no source in the
+disclosure. Listed at the end of the Draft Application and in the findings file. Export refuses
+while one is unresolved and unwaived.
+_Avoid_: resolving one by letting the model answer it; dropping one without a recorded waiver.
+
+**Finding**:
+One result of the draft validators or of the advisory review. An **Error** (antecedent basis,
+dependency target, numbering, numeral mismatch, missing literal basis, office claim-form rule,
+abstract length) blocks export until waived with a reason that is kept. A **Note** (claim count
+over the fee threshold, relative terms present) never blocks. An **Advisory** item comes from
+the model review, cites a passage, and never says "passed".
+_Avoid_: an advisory item marked Error; a validator result without a line reference.
