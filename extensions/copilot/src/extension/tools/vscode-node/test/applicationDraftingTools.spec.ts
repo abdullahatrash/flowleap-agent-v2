@@ -199,11 +199,11 @@ describe('start_application_draft', () => {
 			results.push(await setup(files).tools.start());
 		}
 		expect(results).toEqual([
-			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney sets `confirmed: true` in its frontmatter after review.',
-			'Drafting did not start. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate.',
-			'Drafting did not start. drafting/hinge/feature-list.md has no `confirmed` flag in its frontmatter. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate.',
-			'Drafting did not start. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate.',
-			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney sets `approved: true` in its frontmatter after review.',
+			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney sets `confirmed: true` in its frontmatter after review. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. drafting/hinge/feature-list.md has no `confirmed` flag in its frontmatter. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney sets `approved: true` in its frontmatter after review. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 		]);
 	});
 
@@ -282,7 +282,7 @@ describe('write_patent_results draft-application template', () => {
 			await tools.save(draft().replace('model: claude-sonnet-5\nprovider: anthropic\n', '')),
 			await tools.save(draft(), {}, 'outputs/draft-application.md'),
 		]).toEqual([
-			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider.',
+			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider. Open in drafting/hinge/checklist.md: step 3 (Write the draft).',
 			'Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.',
 		]);
 	});
@@ -292,8 +292,8 @@ describe('write_patent_results draft-application template', () => {
 			await setup({ ...gatesOpen, 'drafting/hinge/feature-list.md': featureList('false') }).tools.save(draft()),
 			await setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false') }).tools.save(draft()),
 		]).toEqual([
-			'Draft was not saved. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate.',
-			'Draft was not saved. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate.',
+			'Draft was not saved. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Draft was not saved. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 		]);
 	});
 
@@ -390,7 +390,7 @@ describe('export_draft_docx', () => {
 			result: await tools.exportDocx(),
 			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
-			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).',
+			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open. Open in drafting/hinge/checklist.md: step 5 (Fix or waive the Errors).',
 			docxWritten: false,
 		});
 	});
@@ -425,7 +425,10 @@ describe('Inventor Question answers', () => {
 		const written = await read('drafting/hinge/inventor-answers.md');
 		write('drafting/hinge/inventor-answers.md', fillAnswer(written, 'IQ-1', 'Stainless steel.'));
 		await tools.validate();
-		const answeredNotApplied = (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g);
+		const answeredNotApplied = {
+			findings: (await read('drafting/hinge/findings.md')).match(/- `inventor-question`[^\n]*/g),
+			checklistStep4: (await read('drafting/hinge/checklist.md')).match(/- \[ \] 4\.[^\n]*/)?.[0],
+		};
 		await tools.save(appliedIq1());
 		const exportResult = await tools.exportDocx();
 		expect({
@@ -459,5 +462,17 @@ describe('Inventor Question answers', () => {
 		expect((await read('drafting/hinge/findings.md')).match(/- `source-marker`[^\n]*/g)).toEqual([
 			'- `source-marker` (draft-application.md, line 30): The paragraph at line 30 cites inventor:IQ-1, but inventor-answers.md has no answer to IQ-1.',
 		]);
+	});
+});
+
+describe('Drafting Checklist', () => {
+	it('every drafting tool rewrites checklist.md, also after a refusal', async () => {
+		const { tools, read, edit } = setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false') });
+		const refused = await tools.start();
+		const afterRefusal = await read('drafting/hinge/checklist.md');
+		await edit('drafting/hinge/claims.md', 'approved: false', 'approved: true');
+		await tools.start();
+		await tools.save(draft(openQuestion));
+		expect({ refused, afterRefusal, afterSave: await read('drafting/hinge/checklist.md') }).toMatchSnapshot();
 	});
 });

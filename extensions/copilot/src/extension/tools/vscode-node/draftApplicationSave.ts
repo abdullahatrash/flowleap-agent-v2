@@ -56,9 +56,19 @@ function versionedPath(path: string, version: number): string {
  *
  * The save writes the Inventor Questions of the draft to `inventor-answers.md` (new questions
  * added, filled answers kept) and records each inventor's answer the draft cites
- * (`inventor:IQ-n`) in the Working Record.
+ * (`inventor:IQ-n`) in the Working Record. After the save, also after a refusal, it writes the
+ * Drafting Checklist.
  */
 export async function saveDraftApplication(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftApplicationSaveResult> {
+	const result = await save(workspace, input);
+	const checklist = await workspace.checklistLine(!result.saved);
+	if (!checklist) {
+		return result;
+	}
+	return result.saved ? { saved: true, message: `${result.message}\n${checklist}` } : { saved: false, reason: `${result.reason} ${checklist}` };
+}
+
+async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftApplicationSaveResult> {
 	const { folder } = workspace;
 	const { fields } = parseDraftingFrontmatter(input.content);
 	const office = readOffice({ office: text(fields.office) ?? input.office });

@@ -22,8 +22,9 @@ interface IStartApplicationDraftParams {
 	matter: string;
 }
 
-function refusal(reason: string): LanguageModelToolResult {
-	return textResult(`Drafting did not start. ${reason}`);
+async function refusal(reason: string, workspace?: DraftingWorkspace): Promise<LanguageModelToolResult> {
+	const pointer = await workspace?.checklistLine(true);
+	return textResult(`Drafting did not start. ${reason}${pointer ? ` ${pointer}` : ''}`);
 }
 
 /**
@@ -64,15 +65,15 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		const { folder } = workspace;
 		const featureList = await workspace.requireConfirmedFeatureList();
 		if (typeof featureList === 'string') {
-			return refusal(featureList);
+			return refusal(featureList, workspace);
 		}
 		const approval = await workspace.requireApprovedClaims();
 		if (typeof approval === 'string') {
-			return refusal(approval);
+			return refusal(approval, workspace);
 		}
 		const office = readOffice(featureList.fields);
 		if (!office) {
-			return refusal(`${folder.featureList} names no office. Its frontmatter needs \`office: US\` or \`office: EPO\`.`);
+			return refusal(`${folder.featureList} names no office. Its frontmatter needs \`office: US\` or \`office: EPO\`.`, workspace);
 		}
 		await workspace.recordApprovedClaims(approval.hash);
 		const figures = await workspace.read(folder.figures);
@@ -82,7 +83,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 
 		const sections = [
 			`Drafting started for matter "${folder.matter}". Office: ${office}. Gates read from the files: \`confirmed: true\` in ${folder.featureList}, \`approved: true\` in ${folder.claims}. The approved claims are recorded (SHA-256 ${approval.hash}) in ${folder.workingRecord}: when ${folder.claims} changes, the drafting tools set \`approved\` to \`false\` and refuse until the attorney approves again.`,
-			`Save the draft with write_patent_results, template draft-application, to ${folder.draft}; then call validate_draft.`,
+			`Save the draft with write_patent_results, template draft-application, to ${folder.draft}; then call validate_draft. ${await workspace.checklistLine(false)}`,
 			'',
 			`## Feature List (${folder.featureList})`,
 			'',

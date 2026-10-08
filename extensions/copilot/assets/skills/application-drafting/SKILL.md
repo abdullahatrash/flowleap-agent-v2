@@ -13,8 +13,13 @@ so the draft shows what the model added.
 
 All files of one matter live in `drafting/<matter>/`: `feature-list.md`,
 `figures.md`, `claims.md`, `draft-application.md`, `findings.md`,
-`inventor-answers.md`. The tools write the snapshot, the Working Record and
-the export beside them.
+`inventor-answers.md`. The tools write the snapshot, the Working Record, the
+export and `checklist.md` beside them.
+
+In a matter that has `checklist.md`, read it first. Code writes it after
+every drafting tool call, also after a refusal: it shows the steps that are
+done, the open steps with the file and the line to change, and the next step
+for the attorney. When a tool refuses, report the open steps it names.
 
 ## Gates
 
@@ -110,8 +115,8 @@ asks you to apply the answers:
    question and narrow it to the part that is still open.
 4. Save the draft and call `validate_draft` again.
 
-Done when each filled answer is in the draft and `validate_draft` reports no
-question as answered but not applied.
+Done when each filled answer is in the draft and `checklist.md` shows no
+answered question that is not applied.
 
 ## Step 6: Report and export
 
@@ -121,8 +126,9 @@ found and what stays open. A run without Errors is "no Error findings", never
 "passed" or "ready to file".
 
 When the attorney asks for the Word file, call `export_draft_docx`. It
-refuses on an unwaived Error or an open Inventor Question: report each one.
-The attorney resolves it, or writes a waiver with a reason in `findings.md`.
+refuses on an unwaived Error or an open Inventor Question: report the open
+steps of `checklist.md` and each item of `findings.md` they name. The
+attorney resolves it, or writes a waiver with a reason in `findings.md`.
 It writes the description, the claims and the abstract as three .docx files
 with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not
 draw figures: tell the attorney that the drawing sheets are prepared

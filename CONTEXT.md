@@ -409,6 +409,15 @@ the proposed abstract figure, pages per document and in total). Page counts are 
 from the text under the office page setup, labelled as such.
 _Avoid_: calling the page counts measured — only Word (or the office) renders the pages.
 
+**Drafting Checklist**:
+The `checklist.md` of a drafting matter. Code, not the model, writes it from the files after
+every drafting tool call (start, save, validate, export), also after a refusal: numbered steps
+that follow the skill steps and gates (Feature List confirmed, Claims approved, draft written,
+Inventor Questions answered and applied, Errors fixed or waived, export), each checked only when
+the files say so, each open step naming the file, the line and the text to write, and one "Next
+step for you:" line. Tool refusals point to its open steps. The agent reads it first in a matter.
+_Avoid_: the model writing or ticking it; a step checked from a statement in chat.
+
 **Model-Proposed**:
 The source marker for text the model wrote in this draft without a source in the Feature List,
 the disclosure, an attorney instruction or the office template. Allowed for structure

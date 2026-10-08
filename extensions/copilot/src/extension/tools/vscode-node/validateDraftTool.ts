@@ -58,17 +58,21 @@ export class ValidateDraftTool implements ICopilotTool<IValidateDraftParams> {
 			return textResult(`The draft was not validated. ${workspace}`);
 		}
 		const { folder } = workspace;
+		const refusal = async (reason: string) => {
+			const pointer = await workspace.checklistLine(true);
+			return textResult(`The draft was not validated. ${reason}${pointer ? ` ${pointer}` : ''}`);
+		};
 		const draft = await workspace.read(folder.draft);
 		if (draft === undefined) {
-			return textResult(`The draft was not validated. ${folder.draft} does not exist: save the draft with write_patent_results, template draft-application, first.`);
+			return refusal(`${folder.draft} does not exist: save the draft with write_patent_results, template draft-application, first.`);
 		}
 		const claims = await workspace.read(folder.claims);
 		if (claims === undefined) {
-			return textResult(`The draft was not validated. ${folder.claims} does not exist.`);
+			return refusal(`${folder.claims} does not exist.`);
 		}
 		const office = await workspace.office(draft);
 		if (!office) {
-			return textResult(`The draft was not validated. Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`);
+			return refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`);
 		}
 		const approval = await workspace.checkClaimsApproval();
 		const advisory: DraftFinding[] = (options.input.advisory ?? []).filter(item => item.message?.trim()).map(item => ({
@@ -82,7 +86,7 @@ export class ValidateDraftTool implements ICopilotTool<IValidateDraftParams> {
 		// Read again: checkClaimsApproval may have rewritten the frontmatter of claims.md (`approved`,
 		// `approvedHash`), which moves the claim line numbers the findings refer to.
 		const findings = await workspace.validate(office, draft, await workspace.read(folder.claims) ?? claims, approval, advisory);
-		return textResult(`Wrote ${folder.findings} (${office} validators${advisory.length ? `, ${advisory.length} advisory item(s)` : ''}; waivers kept).\n${findingsSummary(findings)}\nReport these by severity with their line references. Do not call the draft passed or ready to file.`);
+		return textResult(`Wrote ${folder.findings} (${office} validators${advisory.length ? `, ${advisory.length} advisory item(s)` : ''}; waivers kept).\n${findingsSummary(findings)}\nReport these by severity with their line references. Do not call the draft passed or ready to file.\n${await workspace.checklistLine(false)}`);
 	}
 }
 

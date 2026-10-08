@@ -12,12 +12,13 @@ import { dirname } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
+import { checklistPointer, DraftingChecklist, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
 import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
-import { DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
+import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { validateDraft } from '../common/drafting/validateDraft';
-import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
+import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
@@ -67,6 +68,10 @@ function unsearchedClaimsNote(claims: string): DraftFinding[] {
 /** The SHA-256 of the claims body of a `claims.md` text. */
 function claimsHash(claims: string): string {
 	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
+}
+
+function draftHash(draft: string): string {
+	return createHash('sha256').update(draft).digest('hex');
 }
 
 /** The frontmatter field of `claims.md` that ties `approved: true` to the claims body it approved. */
@@ -264,7 +269,9 @@ export class DraftingWorkspace {
 
 	/**
 	 * Runs the validators over the draft, adds the claims-change Error and the advisory items, and
-	 * writes `findings.md` merged with the previous one (waivers kept). Returns the merged findings.
+	 * writes `findings.md` merged with the previous one (waivers kept). Records the hash of the
+	 * validated draft in the Working Record, so the Drafting Checklist knows when `findings.md` is
+	 * older than the draft. Returns the merged findings.
 	 */
 	async validate(office: DraftingOffice, draft: string, claims: string, approval: ClaimsApproval, advisory: readonly DraftFinding[]): Promise<DraftFinding[]> {
 		const figures = await this.read(this.folder.figures);
@@ -278,7 +285,65 @@ export class DraftingWorkspace {
 		const previous = parseFindingsFile(await this.read(this.folder.findings) ?? '');
 		const merged = mergeFindings(current, previous);
 		await this.write(this.folder.findings, renderFindingsFile(merged));
+		const record = await this.read(this.folder.workingRecord) ?? emptyWorkingRecord(this.folder.matter);
+		await this.write(this.folder.workingRecord, setRecordField(record, VALIDATED_DRAFT_HASH, draftHash(draft)));
 		return merged;
+	}
+
+	private async exists(path: string): Promise<boolean> {
+		try {
+			await this.fileSystemService.stat(this.uri(path));
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Writes the Drafting Checklist (`checklist.md`) from the files of the matter and returns it.
+	 * Every drafting tool calls it after it runs, also after a refusal. Nothing is written while the
+	 * matter has no folder and no drafting input.
+	 */
+	async writeChecklist(): Promise<DraftingChecklist | undefined> {
+		const { folder } = this;
+		const [featureList, claims, draft] = [await this.read(folder.featureList), await this.read(folder.claims), await this.read(folder.draft)];
+		if (featureList === undefined && claims === undefined && draft === undefined && !await this.exists(folder.folder)) {
+			return undefined;
+		}
+		const findings = await this.read(folder.findings);
+		const validatedHash = readRecordField(await this.read(folder.workingRecord) ?? '', VALIDATED_DRAFT_HASH);
+		let exported = true;
+		for (const type of DRAFT_DOCUMENT_TYPES) {
+			exported &&= await this.exists(folder.docx[type]);
+		}
+		const checklist = readDraftingChecklist({
+			matter: folder.matter,
+			featureList,
+			claims,
+			draft,
+			inventorAnswers: await this.read(folder.inventorAnswers),
+			findings,
+			findingsCurrent: findings !== undefined && draft !== undefined && validatedHash === draftHash(draft),
+			exported,
+		});
+		await this.write(folder.checklist, renderChecklist(checklist));
+		return checklist;
+	}
+
+	/**
+	 * Writes the Drafting Checklist and returns the sentence a tool result ends with: after a
+	 * refusal the open steps, else the next step. Empty when no checklist was written.
+	 */
+	async checklistLine(refused: boolean): Promise<string> {
+		const checklist = await this.writeChecklist();
+		if (!checklist) {
+			return '';
+		}
+		if (refused) {
+			return checklistPointer(checklist, this.folder.checklist);
+		}
+		const next = nextChecklistStep(checklist);
+		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).` : 'every step is done.'}`;
 	}
 
 	/** Reads up to five style exemplars from the workspace `style/` folder, in name order. */

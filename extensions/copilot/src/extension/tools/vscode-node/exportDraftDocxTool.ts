@@ -19,15 +19,16 @@ import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workin
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildDraftDocx } from './draftDocx';
-import { DraftingWorkspace, findingLine, textResult } from './draftingWorkspace';
+import { DraftingWorkspace, textResult } from './draftingWorkspace';
 
 interface IExportDraftDocxParams {
 	/** The matter folder name under `drafting/`. */
 	matter: string;
 }
 
-function refusal(reason: string): LanguageModelToolResult {
-	return textResult(`The draft was not exported. ${reason}`);
+async function refusal(reason: string, workspace?: DraftingWorkspace): Promise<LanguageModelToolResult> {
+	const pointer = await workspace?.checklistLine(true);
+	return textResult(`The draft was not exported. ${reason}${pointer ? ` ${pointer}` : ''}`);
 }
 
 /**
@@ -67,25 +68,25 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		const { folder } = workspace;
 		const approval = await workspace.requireApprovedClaims();
 		if (typeof approval === 'string') {
-			return refusal(approval);
+			return refusal(approval, workspace);
 		}
 		if (approval.changed) {
-			return refusal(approval.changed);
+			return refusal(approval.changed, workspace);
 		}
 		const draft = await workspace.read(folder.draft);
 		const snapshot = await workspace.read(folder.generatedSnapshot);
 		const claims = await workspace.read(folder.claims);
 		if (draft === undefined || snapshot === undefined || claims === undefined) {
-			return refusal(`${draft === undefined ? folder.draft : folder.generatedSnapshot} does not exist: save the draft with write_patent_results, template draft-application, first.`);
+			return refusal(`${draft === undefined ? folder.draft : folder.generatedSnapshot} does not exist: save the draft with write_patent_results, template draft-application, first.`, workspace);
 		}
 		const office = await workspace.office(draft);
 		if (!office) {
-			return refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`);
+			return refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`, workspace);
 		}
 		const findings = await workspace.validate(office, draft, claims, approval, []);
 		const blocking = blockingFindings(findings);
 		if (blocking.length) {
-			return refusal(`${blocking.length} finding(s) in ${folder.findings} are open. Each Error and Inventor Question is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):\n${blocking.map(findingLine).join('\n')}`);
+			return refusal(`${blocking.length} finding(s) in ${folder.findings} are open.`, workspace);
 		}
 		const diff = diffDraftParagraphs(snapshot, draft);
 		const record = await workspace.read(folder.workingRecord) ?? emptyWorkingRecord(folder.matter);
@@ -98,7 +99,7 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		await workspace.write(folder.filingManifest, renderFilingManifest(manifest, folder));
 		const setup = OFFICE_PAGE_SETUP[office];
 		const count = (kind: string) => diff.changes.filter(change => change.kind === kind).length;
-		return textResult(`Exported the description, the claims and the abstract as separate files: ${DRAFT_DOCUMENT_TYPES.map(type => folder.docx[type]).join(', ')} (${setup.rule} page setup, ${setup.paper}; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for ${folder.figures} are prepared outside FlowLeap. Wrote ${folder.filingManifest}: ${manifest.claims.total} claim(s), ${manifest.claims.independent} independent; ${manifest.drawingSheets} drawing sheet(s); about ${manifest.pages.total} page(s) in total (estimated). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing.`);
+		return textResult(`Exported the description, the claims and the abstract as separate files: ${DRAFT_DOCUMENT_TYPES.map(type => folder.docx[type]).join(', ')} (${setup.rule} page setup, ${setup.paper}; source markers and Inventor Questions section removed). Drawings are not generated: the drawing sheets for ${folder.figures} are prepared outside FlowLeap. Wrote ${folder.filingManifest}: ${manifest.claims.total} claim(s), ${manifest.claims.independent} independent; ${manifest.drawingSheets} drawing sheet(s); about ${manifest.pages.total} page(s) in total (estimated). Attorney edits against the generated snapshot: ${diff.kept} paragraph(s) kept, ${count('changed')} changed, ${count('deleted')} deleted, ${count('added')} added; logged in ${folder.workingRecord}. The export is a draft for attorney review, not a filing. ${await workspace.checklistLine(false)}`);
 	}
 }
 
