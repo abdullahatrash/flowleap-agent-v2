@@ -53,15 +53,6 @@ others). Query the spellings behind each name you quote. A family can have more 
 one declarant (1,578 4G families on 2026-10-09), so per-declarant shares can add up to
 more than 100%.
 
-On the fallback path, merge at least these by hand and scan `COMP_LEGAL_NAME` for
-near-matches of the name asked about:
-
-| Declarant | Spellings on the forms |
-| --- | --- |
-| Huawei | `Huawei Technologies Co., Ltd.`, `Huawei Technologies Co., Ltd`, `Huawei Technologies Co. Ltd.` |
-| Nokia | `Nokia Technologies Oy`, `Nokia Corporation` |
-| Qualcomm | `Qualcomm Incorporated`, `QUALCOMM Inc` |
-
 ## Known figures, for a sanity check
 
 From the export of 2026-10-09, 4G flag set, counted on the ETSI family:
