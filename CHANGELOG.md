@@ -7,6 +7,15 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 
 Add every user-visible change to `## [Unreleased]
 
+## [Unreleased]
+
+### Fixed
+
+- Hosted and web client: a source anchor in a saved report, such as
+  `US6265989B1:claims:1:en`, did nothing when clicked in the Markdown preview. It now
+  opens the patent reader at the claim or passage, after the same "Allow ... to open
+  this URI?" question as on desktop. (#549)
+
 ## [0.6.0] - 2026-10-06
 
 ### Added

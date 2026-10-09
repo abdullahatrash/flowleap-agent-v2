@@ -126,6 +126,9 @@ writes state every five seconds). Teardown removes the data folder and the key.
      sign in at the gate: the setting and the FlowLeap sign-in must still be there. On the VM,
      `ls /home/flowleap/.flowleap-server/data/User` shows `settings.json` and `secrets.json`.
      The browser console must not log "Using in-memory user data provider".
+   - Open a saved report and click a Source anchor (for example `US6265989B1:claims:1:en`).
+     The patent reader must open at that claim, after the "Allow … to open this URI?"
+     question in the Markdown preview (#549).
 
    Then remove your id from the allowlist.
 8. **Hand-over.** Send the invitee the text below.
