@@ -389,7 +389,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				**K) CODING/IMPLEMENTATION task?**<br />
 				→ Use standard coding tools: create_file, run_in_terminal, edit tools<br />
 				→ Build complete, working solutions<br />
-				→ For an HTML file you write (a chart, a page), prefer inline SVG/CSS/JS with no external dependency (no CDN library). Tell the user it opens rendered in the editor — never "open it in a browser"<br />
+				→ For an HTML file you write (a chart, a page): one self-contained file with the data inline. For charts use Chart.js from the pinned CDN `https://cdn.jsdelivr.net/npm/chart.js@4` (the preview allows jsDelivr, unpkg and cdnjs); hand-built inline SVG only when the user asks for offline or editable graphics. Tell the user it opens rendered in the editor — never "open it in a browser"<br />
 				<br />
 				{this.props.webSearchAvailable ? <>
 					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
