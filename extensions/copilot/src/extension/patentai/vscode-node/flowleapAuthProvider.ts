@@ -19,11 +19,25 @@ const SESSION_ID = 'flowleap-session';
 // Token storage keys
 const TOKEN_STORAGE_KEY = 'patent-ai-clerk-token';
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes buffer before expiry
+// Lifetime assumed when the backend sends no expires_in (or a token carries no `exp`).
+const DEFAULT_TOKEN_LIFETIME_S = 3600;
+
+/**
+ * The web-client command that reads the Hosted Workspace gate token (#548). It is registered by
+ * core in `src/vs/workbench/contrib/patent/browser/patentHostedSession.web.contribution.ts` and
+ * answers `undefined` everywhere except on a Hosted Workspace.
+ */
+const HOSTED_GATE_SESSION_COMMAND = '_flowleap.hostedGateSession';
+// Set when the user signs out on a Hosted Workspace, so the next load does not sign them in
+// again from the gate. A user-initiated sign-in clears it.
+const HOSTED_GATE_SIGNED_OUT_KEY = 'flowleap.hostedGate.signedOut';
 
 interface JwtUserClaims {
 	sub?: string;
 	email?: string;
 	name?: string;
+	/** Expiry, in seconds since the epoch. */
+	exp?: number;
 }
 
 /** The profile fields the provider reads from `GET <api>/api/profile`. */
@@ -198,6 +212,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	}
 
 	async removeSession(_sessionId: string): Promise<void> {
+		await this._markHostedGateSignedOut();
 		await this._clearToken();
 	}
 
@@ -263,6 +278,12 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	}
 
 	private async _doSignIn(): Promise<void> {
+		// Hosted Workspace (#548): the user already signed in at the gate. Use that token and
+		// open no browser. Everywhere else this returns false at once.
+		if (await this._importHostedGateSession(true)) {
+			return;
+		}
+
 		const config = getPatentAIConfig();
 		this._logService.info('[Patent AI Auth] Starting OAuth flow');
 
@@ -289,24 +310,79 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 
 		// Store token with actual expiry from backend.
 		// Default to 1 hour if expires_in not provided (typical Clerk token lifetime).
-		const expiresInMs = (tokenData.expiresIn || 3600) * 1000;
-		this._clerkToken = tokenData.token;
-		this._tokenExpiresAt = this._now() + expiresInMs;
-
-		this._logService.info(`[Patent AI Auth] Token expires in ${tokenData.expiresIn || 3600} seconds`);
-
-		// Persist token to secure storage
-		const storedData: StoredTokenData = {
-			token: tokenData.token,
-			expiresAt: this._tokenExpiresAt,
-		};
-		await this._context.secrets.store(TOKEN_STORAGE_KEY, JSON.stringify(storedData));
-
+		const expiresInS = tokenData.expiresIn || DEFAULT_TOKEN_LIFETIME_S;
+		this._logService.info(`[Patent AI Auth] Token expires in ${expiresInS} seconds`);
+		await this._storeToken(tokenData.token, this._now() + expiresInS * 1000);
 		this._logService.info('[Patent AI Auth] Successfully authenticated via Clerk');
+	}
 
-		// Build/cache the session from the freshly stored token and fire `{added}`. Gated on real
-		// validity, so a dead-on-arrival token produces no session (and createSession then throws).
+	/**
+	 * Keep a new token in memory and in SecretStorage, then build the session and fire `{added}`.
+	 * The session is gated on real validity, so a dead-on-arrival token produces no session (and
+	 * createSession then throws). A new sign-in also ends a Hosted Workspace sign-out.
+	 */
+	private async _storeToken(token: string, expiresAt: number): Promise<void> {
+		this._clerkToken = token;
+		this._tokenExpiresAt = expiresAt;
+		const storedData: StoredTokenData = { token, expiresAt };
+		await this._context.secrets.store(TOKEN_STORAGE_KEY, JSON.stringify(storedData));
+		if (this._context.globalState.get<boolean>(HOSTED_GATE_SIGNED_OUT_KEY)) {
+			await this._context.globalState.update(HOSTED_GATE_SIGNED_OUT_KEY, undefined);
+		}
 		this._refreshSession();
+	}
+
+	/**
+	 * Hosted Workspace single sign-in (#548, ADR 0011). The nginx gate in front of the workspace
+	 * already holds this user's FlowLeap token in an HttpOnly cookie. This extension runs on the
+	 * server and cannot read that cookie, so it asks the web client, which reads the token once
+	 * from the gate's same-origin `/_flowleap/session` endpoint ({@link HOSTED_GATE_SESSION_COMMAND}).
+	 * The token is then stored like a token from the browser sign-in, in SecretStorage, which on a
+	 * Hosted Workspace is a file on the server (#547).
+	 *
+	 * The extension pulls the token; nothing is pushed to it. So the callback route and its CSRF
+	 * `state` check stay exactly as they are, and no unsolicited callback can sign the user in.
+	 *
+	 * Returns false (and changes nothing) on desktop, on a web client that is not a Hosted
+	 * Workspace, when the gate gives no token, or when the token has expired. Unless
+	 * `userInitiated`, it also returns false after an explicit sign-out on this workspace.
+	 */
+	private async _importHostedGateSession(userInitiated: boolean): Promise<boolean> {
+		if (vscode.env.uiKind !== vscode.UIKind.Web) {
+			return false;
+		}
+		if (!userInitiated && this._context.globalState.get<boolean>(HOSTED_GATE_SIGNED_OUT_KEY)) {
+			this._logService.info('[Patent AI Auth] Hosted Workspace: signed out here before; not using the gate session');
+			return false;
+		}
+		let token: unknown;
+		try {
+			const session = await vscode.commands.executeCommand<{ token?: unknown } | undefined>(HOSTED_GATE_SESSION_COMMAND);
+			token = session?.token;
+		} catch (error) {
+			// An older web client without the command, or a desktop-like host: no gate session.
+			this._logService.trace(`[Patent AI Auth] No Hosted Workspace gate session: ${error}`);
+			return false;
+		}
+		if (typeof token !== 'string' || !token) {
+			return false;
+		}
+		const exp = this._parseJwtClaims(token).exp;
+		const expiresAt = typeof exp === 'number' ? exp * 1000 : this._now() + DEFAULT_TOKEN_LIFETIME_S * 1000;
+		if (expiresAt <= this._now()) {
+			this._logService.warn('[Patent AI Auth] Hosted Workspace gate token has expired; not using it');
+			return false;
+		}
+		this._logService.info('[Patent AI Auth] Signed in with the Hosted Workspace gate session');
+		await this._storeToken(token, expiresAt);
+		return true;
+	}
+
+	/** Remember an explicit sign-out on a Hosted Workspace (see {@link _importHostedGateSession}). */
+	private async _markHostedGateSignedOut(): Promise<void> {
+		if (vscode.env.uiKind === vscode.UIKind.Web) {
+			await this._context.globalState.update(HOSTED_GATE_SIGNED_OUT_KEY, true);
+		}
 	}
 
 	/**
@@ -456,6 +532,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	 */
 	async signOut(): Promise<void> {
 		this._logService.info('[Patent AI Auth] Signing out');
+		await this._markHostedGateSignedOut();
 		await this._clearToken();
 		this._logService.info('[Patent AI Auth] Signed out successfully');
 	}
@@ -467,6 +544,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 	/**
 	 * Initialize authentication by restoring a stored, unexpired token. The session itself is built
 	 * lazily on the first {@link getSessions} call so activation never blocks on the profile fetch.
+	 * With no stored token on a Hosted Workspace, the gate's token is used (#548).
 	 */
 	private async _initializeAuth(): Promise<void> {
 		try {
@@ -486,6 +564,14 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 			}
 		} catch (error) {
 			this._logService.error(`[Patent AI Auth] Failed to restore token: ${error}`);
+		}
+		if (!this._clerkToken) {
+			// Hosted Workspace (#548): the gate's sign-in also signs in this extension.
+			try {
+				await this._importHostedGateSession(false);
+			} catch (error) {
+				this._logService.error(`[Patent AI Auth] Failed to use the Hosted Workspace gate session: ${error}`);
+			}
 		}
 		this._isInitialized = true;
 	}
@@ -713,6 +799,7 @@ export class FlowLeapAuthenticationProvider implements vscode.AuthenticationProv
 				sub: payload.sub,
 				email: payload.email,
 				name: payload.name,
+				exp: typeof payload.exp === 'number' ? payload.exp : undefined,
 			};
 		} catch {
 			return {};

@@ -190,4 +190,7 @@ import './contrib/processExplorer/browser/processExplorer.web.contribution.js';
 // Browser View
 import './contrib/browserView/browser/browserView.contribution.js';
 
+// FlowLeap Hosted Workspace single sign-in (#548)
+import './contrib/patent/browser/patentHostedSession.web.contribution.js';
+
 //#endregion
