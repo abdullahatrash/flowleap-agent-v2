@@ -5,34 +5,106 @@ All notable changes to FlowLeap Patent AI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and version numbers follow [Semantic Versioning](https://semver.org/).
 
-Add every user-visible change to `## [Unreleased]
+Add every user-visible change to `## [Unreleased]` in the same pull request that
+makes it. Cutting a release renames that heading to `## [X.Y.Z] - YYYY-MM-DD` and
+opens a fresh empty one — the release workflow copies the section verbatim into
+the GitHub release notes, so write for the person downloading the app, not for
+the person who wrote the patch. Changes with no user-visible effect (refactors,
+test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-09
+
+### Added
+
+- **Application Drafting.** The Patent Agent drafts a full patent application for the
+  US or the EPO from an invention disclosure. Each matter lives in
+  `drafting/<matter>/`: a feature list and a figures list that you confirm, the claims
+  that you approve, and `draft-application.md`. Every paragraph names its source, and
+  every technical gap becomes an Inventor Question. Code checks the draft (antecedent
+  basis, claim dependencies and numbering, reference numerals, abstract length,
+  literal basis) and writes `findings.md`. Export to Word is blocked while an Error is
+  not waived or an Inventor Question is open. Start it from the new Application
+  Drafting card on the home dashboard. (#562)
+- **Filing formalities for drafts.** Inventor Questions get an answer slot in
+  `inventor-answers.md`, and `checklist.md` names your next step after each drafting
+  step. Export writes separate description, claims and abstract .docx files in the
+  office page layout (Rule 49 EPC, A4 with line numbers; 37 CFR 1.52, Letter), a full
+  review copy, and `filing-manifest.md` with the claim count, estimated pages,
+  drawing sheets and a proposed abstract figure. New checks: one sentence per claim,
+  EPC Rules 43(6), 43(7) and 47(4), and an estimated page count over 35. (#582)
+- **Unified Patent Court: filing preparation and case navigation.** Three new skills:
+  `upc-filing-prep` gives a checklist and a go / not-ready verdict for a filing and
+  stops at the court portal; `upc-case-navigator` lists the next filings for a case,
+  with the side that files, the rule, the period and the trigger, but never a calendar
+  date; `upc-representative-start` covers registration and first steps. The skills
+  include reference files for the seven filing families and the 2026 court fee table.
+  (#576, #581, #584)
+- **UPC seed prompts in the Prompts view:** UPC: which division, UPC: opt-out check,
+  UPC: what to file next, UPC: prepare a filing, UPC: court fee, UPC: register as
+  representative. (#583, #584)
+- **Unified Patent Court links in the integrated browser.** A new section in the
+  Browser launcher opens the UPC CMS Front Office and the UPC CMS Portfolio. (#587)
+- **Mistral as a model provider.** Mistral is now in Manage Models with its own API
+  key field, beside Anthropic, OpenAI and the others. Before, it was available only
+  through a Custom Endpoint. Use a paid Mistral key: the free tier is refused. (#555)
+- **The `.flowleap/` folder.** FlowLeap reads skills, instructions, prompts and agents
+  from `.flowleap/` in the workspace and from `~/.flowleap/` for your own files. It has
+  the same layout as `.github/`: `skills/<name>/SKILL.md`,
+  `instructions/*.instructions.md`, `prompts/*.prompt.md`, `agents/*.agent.md`, and
+  `.flowleap/instructions.md` for instructions that apply to every request. The New
+  Skill, Prompt, Instructions and Agent commands now create the file in `.flowleap/`.
+  `.flowleap/` wins over `.github/` and `.claude/`. A built-in skill wins over your
+  skill with the same name; to add firm steps to a built-in workflow, use an
+  instructions file with `applyTo: "**"`. (#579)
+- **Your profile picture as the account avatar.** The Accounts icon in the activity
+  bar and the Agents Window title bar show the profile picture of your FlowLeap
+  account. Without a picture, the default icon stays. (#586)
+
 ### Changed
 
+- **Markdown files open in the Markdown Editor.** A `.md` file now opens rendered and
+  ready to edit in place, not as a read-only preview. Reopen With still gives the
+  source text. (#563)
+- **HTML files open rendered.** A single click on an `.html` or `.htm` file in the
+  Explorer opens the rendered page in the editor. It reloads when the file changes.
+  Open HTML Source in the editor title bar shows the source. (#554)
 - **Hosted Workspace: one sign-in.** The sign-in at the workspace gate now also signs in
-  the Patent Agent sidebar. The sidebar no longer asks for a second sign-in. (#548)
+  the Patent Agent sidebar. The sidebar no longer asks for a second sign-in. (#548, #592)
 - Hosted Workspace: the server package now bundles the FlowLeap CLI version that the app
-  vendors its skills from (`scripts/skills-drift-manifest.json`), not a fixed v0.9.1. (#599)
+  vendors its skills from (`scripts/skills-drift-manifest.json`), not a fixed v0.9.1.
+  (#599, #600)
+- Hosted Workspace: new `update.sh` and `reset.sh` scripts. An update checks the
+  package hash, keeps the previous package and rolls back if the server does not
+  start; it does not touch user data. A reset clears one workspace for the next
+  user. The nginx gate now resolves the backend at run time. (#588)
 - HTML reports and dashboards: the agent now builds charts with Chart.js from the pinned
   jsDelivr CDN (data stays inline in one file) instead of hand-built inline SVG. Inline SVG
-  is reserved for graphics the user wants offline or editable. (follow-up to #589)
+  is reserved for graphics the user wants offline or editable. (#601)
+- Unified Patent Court skills: `upc-rop-explainer` gave wrong meanings for 13 Rules of
+  Procedure and missed some periods; they are corrected against the official
+  consolidated text. `upc-opt-out-actions`, `upc-opt-out-check` and
+  `upc-division-router` are corrected too. (#567, #576)
 
 ### Fixed
 
+- The status popup and status bar said "Sign in to use FlowLeap AI features" when you
+  were signed in to FlowLeap. Sign-in buttons opened the GitHub setup dialog; they
+  now open FlowLeap sign-in. The Accounts menu showed the FlowLeap account twice.
+  (#585)
 - Hosted Workspace: Install on an MCP server in the gallery showed "Not supported". The
   browser cannot run a server, so the install now goes to the server: the server is added
   to the remote user `mcp.json` and starts there. "Install in Workspace" is unchanged.
-  (#593)
+  (#593, #598)
 - Hosted and web client: a source anchor in a saved report, such as
   `US6265989B1:claims:1:en`, did nothing when clicked in the Markdown preview. It now
   opens the patent reader at the claim or passage, after the same "Allow ... to open
-  this URI?" question as on desktop. (#549)
+  this URI?" question as on desktop. (#549, #591)
 - An HTML file that loads a chart library from a common CDN (cdn.jsdelivr.net, unpkg.com,
   cdnjs.cloudflare.com, Google Fonts) now renders in the editor. The page still cannot
-  send network requests. The Patent Agent now prefers charts with no external library and
-  tells you that the file opens rendered in the editor, not "open it in a browser". (#589)
+  send network requests. The Patent Agent tells you that the file opens rendered in the
+  editor, not "open it in a browser". (#589, #597)
 
 ## [0.6.0] - 2026-10-06
 
