@@ -31,6 +31,12 @@ const QUICK_LINKS: ReadonlyArray<{ label: string; url: string; description: stri
 	{ label: 'EPO Register', url: 'https://register.epo.org/', description: 'EP legal status and prosecution' }
 ];
 
+/** The Unified Patent Court's case management system (CMS), where representatives file. */
+const UPC_LINKS: ReadonlyArray<{ label: string; url: string; description: string }> = [
+	{ label: 'UPC CMS Front Office', url: 'https://cms.unifiedpatentcourt.org/', description: 'User profile, organisation and legal teams' },
+	{ label: 'UPC CMS Portfolio', url: 'https://cms.unifiedpatentcourt.org/portfolio', description: 'Your UPC cases and new filings' }
+];
+
 /**
  * Activity-bar launcher for the integrated browser. The browser renders as an
  * editor tab (a native web layer over the editor area) and cannot be embedded
@@ -204,6 +210,12 @@ function renderLauncher(webview: vscode.Webview): string {
 	</div>`).join('')}
 	<div class="section-title">Patent Research</div>
 	${QUICK_LINKS.map(link => `
+	<div class="quick-link" data-url="${link.url}">
+		<div class="quick-link-label">${link.label}</div>
+		<div class="quick-link-desc">${link.description}</div>
+	</div>`).join('')}
+	<div class="section-title">Unified Patent Court</div>
+	${UPC_LINKS.map(link => `
 	<div class="quick-link" data-url="${link.url}">
 		<div class="quick-link-label">${link.label}</div>
 		<div class="quick-link-desc">${link.description}</div>
