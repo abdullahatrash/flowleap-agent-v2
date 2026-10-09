@@ -20,6 +20,10 @@ Add every user-visible change to `## [Unreleased]
   `US6265989B1:claims:1:en`, did nothing when clicked in the Markdown preview. It now
   opens the patent reader at the claim or passage, after the same "Allow ... to open
   this URI?" question as on desktop. (#549)
+- An HTML file that loads a chart library from a common CDN (cdn.jsdelivr.net, unpkg.com,
+  cdnjs.cloudflare.com, Google Fonts) now renders in the editor. The page still cannot
+  send network requests. The Patent Agent now prefers charts with no external library and
+  tells you that the file opens rendered in the editor, not "open it in a browser". (#589)
 
 ## [0.6.0] - 2026-10-06
 
