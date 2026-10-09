@@ -13,21 +13,51 @@ import { localize } from '../../../nls.js';
 import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../platform/product/common/productService.js';
+import { IURLService } from '../../../platform/url/common/url.js';
 import { IWebview, WebviewContentOptions, WebviewExtensionDescription } from '../../contrib/webview/browser/webview.js';
 import { IExtHostContext } from '../../services/extensions/common/extHostCustomers.js';
 import { SerializableObjectWithBuffers } from '../../services/extensions/common/proxyIdentifier.js';
 import * as extHostProtocol from '../common/extHost.protocol.js';
 import { deserializeWebviewMessage, serializeWebviewMessage } from '../common/extHostWebviewMessaging.js';
 
-export class MainThreadWebviews extends Disposable implements extHostProtocol.MainThreadWebviewsShape {
+const standardSupportedLinkSchemes = new Set([
+	Schemas.http,
+	Schemas.https,
+	Schemas.mailto,
+	Schemas.vscode,
+	'vscode-insider',
+]);
 
-	private static readonly standardSupportedLinkSchemes = new Set([
-		Schemas.http,
-		Schemas.https,
-		Schemas.mailto,
-		Schemas.vscode,
-		'vscode-insider',
-	]);
+/**
+ * How a link clicked in an extension webview is opened:
+ * - `opener`: through the opener service.
+ * - `urlHandler`: a link in the product's own URL scheme (for example `flowleap://<extension id>/…`)
+ *   in the web client. It goes to the URL service as untrusted, so the extension URL handler asks
+ *   before it opens the link, as it does on desktop. The web opener for that scheme marks every link
+ *   as trusted, which would let a link in any webview reach any extension without that question.
+ * - `undefined`: the link is refused.
+ */
+export function getWebviewLinkRoute(link: URI, contentOptions: WebviewContentOptions, productUrlProtocol: string | undefined, web: boolean): 'opener' | 'urlHandler' | undefined {
+	if (standardSupportedLinkSchemes.has(link.scheme)) {
+		return 'opener';
+	}
+
+	if (productUrlProtocol === link.scheme) {
+		return web ? 'urlHandler' : 'opener';
+	}
+
+	if (link.scheme === Schemas.command) {
+		if (Array.isArray(contentOptions.enableCommandUris)) {
+			return contentOptions.enableCommandUris.includes(link.path) ? 'opener' : undefined;
+		}
+
+		return contentOptions.enableCommandUris === true ? 'opener' : undefined;
+	}
+
+	return undefined;
+}
+
+export class MainThreadWebviews extends Disposable implements extHostProtocol.MainThreadWebviewsShape {
 
 	private readonly _proxy: extHostProtocol.ExtHostWebviewsShape;
 
@@ -37,6 +67,7 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 		context: IExtHostContext,
 		@IOpenerService private readonly _openerService: IOpenerService,
 		@IProductService private readonly _productService: IProductService,
+		@IURLService private readonly _urlService: IURLService,
 	) {
 		super();
 
@@ -92,29 +123,15 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 
 	private onDidClickLink(handle: extHostProtocol.WebviewHandle, link: string): void {
 		const webview = this.getWebview(handle);
-		if (this.isSupportedLink(webview, URI.parse(link))) {
-			this._openerService.open(link, { fromUserGesture: true, allowContributedOpeners: true, allowCommands: Array.isArray(webview.contentOptions.enableCommandUris) || webview.contentOptions.enableCommandUris === true, fromWorkspace: true });
+		const uri = URI.parse(link);
+		switch (getWebviewLinkRoute(uri, webview.contentOptions, this._productService.urlProtocol, isWeb)) {
+			case 'opener':
+				this._openerService.open(link, { fromUserGesture: true, allowContributedOpeners: true, allowCommands: Array.isArray(webview.contentOptions.enableCommandUris) || webview.contentOptions.enableCommandUris === true, fromWorkspace: true });
+				break;
+			case 'urlHandler':
+				this._urlService.open(uri, { trusted: false });
+				break;
 		}
-	}
-
-	private isSupportedLink(webview: IWebview, link: URI): boolean {
-		if (MainThreadWebviews.standardSupportedLinkSchemes.has(link.scheme)) {
-			return true;
-		}
-
-		if (!isWeb && this._productService.urlProtocol === link.scheme) {
-			return true;
-		}
-
-		if (link.scheme === Schemas.command) {
-			if (Array.isArray(webview.contentOptions.enableCommandUris)) {
-				return webview.contentOptions.enableCommandUris.includes(link.path);
-			}
-
-			return webview.contentOptions.enableCommandUris === true;
-		}
-
-		return false;
 	}
 
 	private tryGetWebview(handle: extHostProtocol.WebviewHandle): IWebview | undefined {
