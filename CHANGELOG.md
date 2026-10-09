@@ -7,6 +7,13 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 
 Add every user-visible change to `## [Unreleased]
 
+## [Unreleased]
+
+### Changed
+
+- **Hosted Workspace: one sign-in.** The sign-in at the workspace gate now also signs in
+  the Patent Agent sidebar. The sidebar no longer asks for a second sign-in. (#548)
+
 ## [0.6.0] - 2026-10-06
 
 ### Added

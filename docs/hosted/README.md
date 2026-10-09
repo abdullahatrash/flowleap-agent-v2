@@ -30,6 +30,43 @@ Sign-in to the workspace (the gate in nginx):
 4. On each request, nginx sends `fl_hosted` to the backend as `Authorization: Bearer`:
    `204` lets the request through, `403` shows "not invited".
 
+**One sign-in (#548).** The same token also signs in the Patent Agent sidebar, so the user
+does not sign in a second time:
+
+5. When the Patent Agent extension starts with no FlowLeap session (or the user clicks Sign In),
+   it runs the core command `_flowleap.hostedGateSession`. That command runs in the browser,
+   only when the server has `--hosted-user-data`. It sends
+   `GET /_flowleap/session` with `X-FlowLeap-Hosted: 1` on the same origin.
+6. nginx answers `{"token":"<fl_hosted>"}` with `Cache-Control: no-store`, only if all of
+   these are true: the header is there; `Sec-Fetch-Site` is absent or `same-origin`; the
+   `fl_hosted` cookie is there; and `auth_request` lets it through (an allowlisted session).
+   Otherwise: `403` (header or cross-site), `401` (no cookie, or the backend refused the token).
+7. The extension keeps the token in its secret storage, which on a Hosted Workspace is
+   `data/User/secrets.json` on the VM (#547). The expiry is the token's `exp` claim.
+
+Threat model of `/_flowleap/session`:
+
+- The answer is the token that this browser already holds in `fl_hosted`. The endpoint gives
+  it to no one who does not already send it in the cookie. It moves the token from the HttpOnly
+  cookie into the app's secret store on the server; the web client keeps it only in memory
+  while it passes it to the extension, never in `localStorage` or IndexedDB.
+- A page on another site cannot read it. The browser does not send the `SameSite=Lax` cookie
+  with a cross-site `fetch`; the custom header forces a CORS preflight, which nginx refuses
+  (`403`) and which carries no `Access-Control-Allow-*` headers; and a request whose
+  `Sec-Fetch-Site` is `cross-site` or `same-site` gets `403` even with a cookie. `same-site`
+  matters: another `*.app.flowleap.co` workspace is same-site, not same-origin.
+- Any script that runs on this origin (the workbench, and through it the user's own terminal
+  and extensions) can read the token. That is the same trust as before: that code already acts
+  as the user through the gate cookie, and the user can read `secrets.json` on the VM.
+- The extension pulls the token; nothing pushes a token into it. The deep-link callback still
+  needs the CSRF `state` of a sign-in that this extension started, so no link can sign the user
+  in to someone else's account.
+- Sign out in the sidebar is kept: after it, the next load does not use the gate token again
+  until the user clicks Sign In. The gate cookie itself stays until it expires (30 days).
+- Known limit, not new: another workspace on `*.app.flowleap.co` could set an `fl_hosted`
+  cookie for the parent domain (cookie tossing). The gate then checks that token, and this
+  endpoint would return it. Both are covered by the "allowlist is not ownership" limit below.
+
 We do not use the website's Clerk `__session` cookie. It expires in about one minute. nginx
 does **not** forward any browser cookie to the backend (#542). Clerk sets client cookies on the
 root domain `flowleap.co`, so the browser sends them to `*.app.flowleap.co` too. If nginx
@@ -116,12 +153,14 @@ writes state every five seconds). Teardown removes the data folder and the key.
    still gives the sign-in redirect (never `500`), swap is present, and user data is kept on
    the server (the page has `hostedUserData`, the secrets key is 32 bytes and `flowleap`/0400). With
    `FLOWLEAP_VERIFY_TOKEN=<allowlisted token>` it also checks that three consecutive requests
-   do not fail.
+   do not fail. The single sign-in endpoint must give `403` without its header, `401` without
+   a cookie and `403` to a cross-site request; with the token it must give the token, not cached.
 7. **Try it yourself first.** Temporarily add your own user id to the allowlist (step 5).
    Open `https://<name>.app.flowleap.co`, sign in, and do these steps:
    - In the terminal, `echo $ANTHROPIC_API_KEY` must print `hosted-dummy`.
    - In the Agents view, start an Agent Session with Claude. It must answer.
-   - In the editor chat, "FlowLeap: Sign In" must work, and a Patent-data tool call must work.
+   - The FlowLeap sidebar must show you as signed in without a second sign-in (#548), and a
+     Patent-data tool call in the editor chat must work.
    - Change a setting and reload. Then open the URL in a private window (or another browser),
      sign in at the gate: the setting and the FlowLeap sign-in must still be there. On the VM,
      `ls /home/flowleap/.flowleap-server/data/User` shows `settings.json` and `secrets.json`.
