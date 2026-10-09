@@ -55,6 +55,16 @@ else
 	check "nginx is running" sh -c "pgrep -x nginx >/dev/null"
 fi
 
+echo "== nginx hardening (2026-10-06 outage)"
+# The vhost must resolve the backend name at request time; otherwise nginx cannot start
+# while DNS is down.
+check "vhost carries a resolver (no backend name resolved at startup)" grep -qE '^[[:space:]]*resolver ' "/etc/nginx/sites-available/$host"
+check "authorize proxy_pass uses a variable (runtime DNS)" grep -qE 'proxy_pass \$flowleap_authorize;' "/etc/nginx/sites-available/$host"
+check "no backup file in sites-enabled" sh -c "! ls /etc/nginx/sites-enabled/*.bak* /etc/nginx/sites-enabled/*~ >/dev/null 2>&1"
+if [ "$FLOWLEAP_INIT" = systemd ]; then
+	check "nginx drop-in restarts nginx on failure" grep -q '^Restart=on-failure' /etc/systemd/system/nginx.service.d/flowleap-restart.conf
+fi
+
 echo "== Vhost (signed out)"
 host_args=()
 [ "${FLOWLEAP_VERIFY_LOCAL:-0}" = 1 ] && host_args+=(--resolve "$host:443:127.0.0.1")
