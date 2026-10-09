@@ -5,11 +5,11 @@
 
 import 'mocha';
 import * as assert from 'assert';
-import { buildPreviewHtml } from '../htmlPreview/htmlPreviewDocument';
+import { buildPreviewHtml, previewContentSecurityPolicy } from '../htmlPreview/htmlPreviewDocument';
 
 /**
- * Unit tests for the HTML file preview document (issue #520). They import no `vscode` API, so
- * they run under plain mocha on the compiled output:
+ * Unit tests for the HTML file preview document (issues #520, #589). They import no `vscode`
+ * API, so they run under plain mocha on the compiled output:
  *
  *   npx tsc -p extensions/flowleap
  *   npx mocha extensions/flowleap/out/test/htmlPreviewDocument.test.js --ui tdd
@@ -18,7 +18,7 @@ suite('htmlPreviewDocument', () => {
 
 	const csp = 'https://*.vscode-cdn.net';
 	const base = 'https://file+.vscode-resource.vscode-cdn.net/root/outputs/dash/';
-	const injected = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' ${csp}; img-src ${csp} data: blob:; font-src ${csp} data:; media-src ${csp} data: blob:"><base href="${base}">`;
+	const injected = `<meta http-equiv="Content-Security-Policy" content="${previewContentSecurityPolicy(csp)}"><base href="${base}">`;
 
 	test('policy and base go first in <head>, or in front of a document without one', () => {
 		assert.deepStrictEqual(
@@ -33,5 +33,20 @@ suite('htmlPreviewDocument', () => {
 				quoteInBase: true,
 			}
 		);
+	});
+
+	test('policy allows the common CDNs for code and assets, but no network requests and no frames', () => {
+		const cdn = 'https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com';
+		const directives = previewContentSecurityPolicy(csp).split('; ');
+		assert.deepStrictEqual(directives, [
+			`default-src 'none'`,
+			`script-src 'unsafe-inline' ${cdn}`,
+			`style-src 'unsafe-inline' ${csp} ${cdn}`,
+			`img-src ${csp} ${cdn} data: blob:`,
+			`font-src ${csp} ${cdn} data:`,
+			`media-src ${csp} data: blob:`,
+			`connect-src 'none'`,
+		]);
+		assert.deepStrictEqual(directives.filter(d => /^(connect|frame|child)-src\b/.test(d)), [`connect-src 'none'`]);
 	});
 });

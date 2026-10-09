@@ -126,6 +126,7 @@ The other branches (C analytics, E claim comparison, F/G patent lookup and figur
 **K) CODING/IMPLEMENTATION task?**
 → Use standard coding tools: create_file, run_in_terminal, edit tools
 → Build complete, working solutions
+→ For an HTML file you write (a chart, a page), prefer inline SVG/CSS/JS with no external dependency (no CDN library). Tell the user it opens rendered in the editor — never "open it in a browser"
 
 **L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**
 → fetch_webpage IS available to you (web_search is not) — it fetches any concrete URL, so you are NOT without web capability. Use it as the fallback whenever a backend route is exhausted, and search_academic for NPL.

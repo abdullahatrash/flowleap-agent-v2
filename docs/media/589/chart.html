@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Filings per year</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>body { font-family: sans-serif; background: #fff; color: #111; margin: 24px; } #status { margin-top: 12px; font-size: 16px; }</style>
+</head>
+<body>
+<h2>Filings per year (sample)</h2>
+<div style="width: 560px; height: 320px"><canvas id="c"></canvas></div>
+<div id="status"></div>
+<script>
+	const status = document.getElementById('status');
+	if (typeof Chart === 'undefined') {
+		status.textContent = 'Chart.js NOT loaded (blocked)';
+	} else {
+		new Chart(document.getElementById('c'), {
+			type: 'bar',
+			data: { labels: ['2020', '2021', '2022', '2023', '2024'], datasets: [{ label: 'Filings', data: [12, 19, 7, 15, 22], backgroundColor: '#3b6fd8' }] },
+			options: { animation: false, maintainAspectRatio: false }
+		});
+		status.textContent = 'Chart.js ' + Chart.version + ' loaded from cdn.jsdelivr.net';
+	}
+</script>
+</body>
+</html>

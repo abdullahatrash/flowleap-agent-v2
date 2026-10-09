@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fetch test</title>
+<style>body { font-family: sans-serif; background: #fff; color: #111; margin: 24px; font-size: 18px; }</style></head>
+<body>
+<h2>fetch() to a third party (api.github.com)</h2>
+<div id="out">running...</div>
+<div id="csp" style="margin-top: 12px">no CSP violation reported</div>
+<script>
+	const out = document.getElementById('out');
+	const csp = document.getElementById('csp');
+	document.addEventListener('securitypolicyviolation', e => {
+		csp.textContent = 'CSP violation: ' + e.violatedDirective + ' blocked ' + e.blockedURI;
+	});
+	try {
+		fetch('https://api.github.com/zen').then(
+			r => { out.textContent = 'fetch ALLOWED: HTTP ' + r.status; },
+			e => { out.textContent = 'fetch BLOCKED: ' + e; }
+		);
+	} catch (e) {
+		out.textContent = 'fetch BLOCKED (sync): ' + e;
+	}
+</script>
+</body>
+</html>
