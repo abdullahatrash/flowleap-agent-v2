@@ -7,7 +7,8 @@
 # process of the workspace user (the server tree and so the browser terminal) sees only
 # the dummy ANTHROPIC_API_KEY and never the real key; that user cannot read the key file
 # or the proxy's environment; the proxy adds the key (an Anthropic call with the dummy key
-# succeeds through it); the server sends enableWorkspaceTrust=false to the web client.
+# succeeds through it); the server sends enableWorkspaceTrust=false to the web client;
+# /_flowleap/session gives the gate token only to a same-origin request with the header (#548).
 #
 # FLOWLEAP_VERIFY_LOCAL=1 resolves <name>.<domain> to 127.0.0.1 (no DNS yet).
 set -uo pipefail
@@ -65,9 +66,10 @@ if [ "$FLOWLEAP_INIT" = systemd ]; then
 fi
 
 echo "== Vhost (signed out)"
-curl_args=(-sS -o /dev/null --max-time 20 -w '%{http_code} %{redirect_url}')
-[ "${FLOWLEAP_VERIFY_LOCAL:-0}" = 1 ] && curl_args+=(--resolve "$host:443:127.0.0.1")
-[ "$FLOWLEAP_TLS" = self-signed ] && curl_args+=(-k)
+host_args=()
+[ "${FLOWLEAP_VERIFY_LOCAL:-0}" = 1 ] && host_args+=(--resolve "$host:443:127.0.0.1")
+[ "$FLOWLEAP_TLS" = self-signed ] && host_args+=(-k)
+curl_args=(-sS -o /dev/null --max-time 20 -w '%{http_code} %{redirect_url}' "${host_args[@]}")
 answer="$(curl "${curl_args[@]}" "https://$host/")"
 echo "      GET https://$host/ -> $answer"
 case "$answer" in
@@ -96,6 +98,24 @@ if [ -n "$token" ]; then
 	check "the first request with a valid token is served (not 302/401/403)" sh -c "echo '$codes' | grep -qE '^ (200|204|304|404)'"
 else
 	echo "      SKIP  consecutive-request check: set FLOWLEAP_VERIFY_TOKEN to an allowlisted fl_pat_ or FlowLeap token"
+fi
+
+echo "== Single sign-in endpoint (#548)"
+session_url="https://$host/_flowleap/session"
+code="$(curl "${curl_args[@]}" "$session_url" | cut -d' ' -f1)"
+echo "      GET /_flowleap/session without X-FlowLeap-Hosted -> $code"
+check "/_flowleap/session refuses a request without X-FlowLeap-Hosted (403)" test "$code" = 403
+code="$(curl "${curl_args[@]}" -H 'X-FlowLeap-Hosted: 1' "$session_url" | cut -d' ' -f1)"
+echo "      GET /_flowleap/session with the header, no cookie -> $code"
+check "/_flowleap/session refuses a request without the fl_hosted cookie (401)" test "$code" = 401
+code="$(curl "${curl_args[@]}" -H 'X-FlowLeap-Hosted: 1' -H 'Sec-Fetch-Site: cross-site' -H 'Cookie: fl_hosted=abc.def.ghi' "$session_url" | cut -d' ' -f1)"
+echo "      GET /_flowleap/session from a cross-site page (Sec-Fetch-Site: cross-site) -> $code"
+check "/_flowleap/session refuses a cross-site request even with a cookie (403)" test "$code" = 403
+if [ -n "$token" ]; then
+	body="$(curl -sS --max-time 20 "${host_args[@]}" -D - -H 'X-FlowLeap-Hosted: 1' -H 'Sec-Fetch-Site: same-origin' -H "Cookie: fl_hosted=$token" "$session_url")"
+	check "/_flowleap/session gives the gate token to the workbench, not cached" sh -c "printf '%s' \"\$1\" | grep -q '^HTTP/[0-9.]* 200' && printf '%s' \"\$1\" | grep -qi '^cache-control: no-store' && printf '%s' \"\$1\" | grep -qF \"\$2\"" _ "$body" "{\"token\":\"$token\"}"
+else
+	echo "      SKIP  token answer check: set FLOWLEAP_VERIFY_TOKEN"
 fi
 if [ -n "$(swapon --show --noheadings 2>/dev/null)" ]; then
 	echo "      swap: $(swapon --show --noheadings | awk '{print $1, $3}' | paste -sd, -)"

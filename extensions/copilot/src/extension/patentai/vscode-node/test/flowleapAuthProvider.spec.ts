@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mocks captured for assertions. `vi.hoisted` runs before the hoisted `vi.mock`
 // factories below, so they can close over these.
@@ -112,9 +112,10 @@ function makeLogService(): ILogService {
 // Mirrors the provider's private TOKEN_STORAGE_KEY — used to seed a restorable token.
 const TOKEN_STORAGE_KEY = 'patent-ai-clerk-token';
 
-/** Minimal extension context: an in-memory secret store plus a subscriptions array. */
+/** Minimal extension context: an in-memory secret store and global state plus a subscriptions array. */
 function makeExtensionContext(seed?: { token: string; expiresAt: number }) {
 	const store = new Map<string, string>();
+	const state = new Map<string, unknown>();
 	if (seed) {
 		store.set(TOKEN_STORAGE_KEY, JSON.stringify(seed));
 	}
@@ -123,6 +124,10 @@ function makeExtensionContext(seed?: { token: string; expiresAt: number }) {
 			get: async (key: string) => store.get(key),
 			store: async (key: string, value: string) => { store.set(key, value); },
 			delete: async (key: string) => { store.delete(key); },
+		},
+		globalState: {
+			get: (key: string) => state.get(key),
+			update: async (key: string, value: unknown) => { if (value === undefined) { state.delete(key); } else { state.set(key, value); } },
 		},
 		subscriptions: [],
 		// Drives the callback authority used by the backend redirect_uri allow-list.
@@ -299,9 +304,10 @@ describe('FlowLeapAuthenticationProvider redirect_uri per client kind', () => {
 		await provider.waitForInitialization();
 		provider.signIn().catch(() => { /* canceled below */ });
 		await tick();
+		const openCall = executeCommandMock.mock.calls.find(([command]) => command === 'vscode.open');
 		const opened = openExternalMock.mock.calls.length
 			? { opener: 'openExternal', url: String(openExternalMock.mock.calls[0][0]) }
-			: { opener: String(executeCommandMock.mock.calls[0][0]), url: executeCommandMock.mock.calls[0][1] as string };
+			: { opener: String(openCall?.[0]), url: openCall?.[1] as string };
 		provider.cancelSignIn();
 		envState.uiKind = 1;
 		return {
@@ -517,5 +523,128 @@ describe('FlowLeapAuthenticationProvider subscription-change broadcast', () => {
 		} finally {
 			listener.dispose();
 		}
+	});
+});
+
+describe('FlowLeapAuthenticationProvider Hosted Workspace gate session (#548)', () => {
+	const T0 = 1_700_000_000_000;
+	const HOSTED_COMMAND = '_flowleap.hostedGateSession';
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		envState.uiKind = 2;
+	});
+
+	afterEach(() => {
+		envState.uiKind = 1;
+		executeCommandMock.mockImplementation(async () => undefined);
+	});
+
+	/** Make the web client's gate command answer `answer` (`vscode.open` and the rest answer undefined). */
+	function gateAnswers(answer: unknown): void {
+		executeCommandMock.mockImplementation(async (command: string) => command === HOSTED_COMMAND ? answer as undefined : undefined);
+	}
+
+	/** What a provider on this context did during initialization. */
+	async function initialize(ctx: ReturnType<typeof makeExtensionContext>) {
+		const provider = new FlowLeapAuthenticationProvider(ctx, makeLogService(), () => T0);
+		await provider.waitForInitialization();
+		return {
+			provider,
+			outcome: {
+				gateAsked: executeCommandMock.mock.calls.filter(([command]) => command === HOSTED_COMMAND).length,
+				token: provider.getAccessToken(),
+				expiresAt: provider.getSessionExpiry(),
+				stored: await ctx.secrets.get(TOKEN_STORAGE_KEY),
+				browserOpened: openExternalMock.mock.calls.length + executeCommandMock.mock.calls.filter(([command]) => command === 'vscode.open').length,
+			},
+		};
+	}
+
+	const gateToken = makeJwt({ sub: 'user_1', email: 'eval1@flowleap.co', exp: T0 / 1000 + 30 * 24 * 3600 });
+
+	it('signs in from the gate on first load in a hosted web client, with the token expiry, and opens no browser', async () => {
+		gateAnswers({ token: gateToken });
+		const { outcome } = await initialize(makeExtensionContext());
+
+		expect(outcome).toEqual({
+			gateAsked: 1,
+			token: gateToken,
+			expiresAt: T0 + 30 * 24 * 3600 * 1000,
+			stored: JSON.stringify({ token: gateToken, expiresAt: T0 + 30 * 24 * 3600 * 1000 }),
+			browserOpened: 0,
+		});
+	});
+
+	it('changes nothing on desktop, on plain web (no gate), with an expired gate token, or with a stored token', async () => {
+		const cases: Record<string, unknown> = {};
+
+		envState.uiKind = 1;
+		gateAnswers({ token: gateToken });
+		cases.desktop = (await initialize(makeExtensionContext())).outcome;
+
+		vi.clearAllMocks();
+		envState.uiKind = 2;
+		gateAnswers(undefined);
+		cases.plainWeb = (await initialize(makeExtensionContext())).outcome;
+
+		vi.clearAllMocks();
+		gateAnswers({ token: makeJwt({ sub: 'user_1', exp: T0 / 1000 - 1 }) });
+		cases.expiredGateToken = (await initialize(makeExtensionContext())).outcome;
+
+		vi.clearAllMocks();
+		gateAnswers({ token: gateToken });
+		const stored = { token: 'stored.jwt', expiresAt: T0 + 60_000 };
+		cases.storedToken = (await initialize(makeExtensionContext(stored))).outcome;
+
+		vi.clearAllMocks();
+		executeCommandMock.mockImplementation(async () => { throw new Error('command \'_flowleap.hostedGateSession\' not found'); });
+		cases.olderWebClient = (await initialize(makeExtensionContext())).outcome;
+
+		const signedOut = { gateAsked: 0, token: undefined, expiresAt: undefined, stored: undefined, browserOpened: 0 };
+		expect(cases).toEqual({
+			desktop: signedOut,
+			plainWeb: { ...signedOut, gateAsked: 1 },
+			expiredGateToken: { ...signedOut, gateAsked: 1 },
+			storedToken: { ...signedOut, token: 'stored.jwt', expiresAt: T0 + 60_000, stored: JSON.stringify(stored) },
+			olderWebClient: { ...signedOut, gateAsked: 1 },
+		});
+	});
+
+	it('after a sign-out the next load stays signed out; Sign In then uses the gate token without a browser', async () => {
+		gateAnswers({ token: gateToken });
+		const ctx = makeExtensionContext();
+		const first = await initialize(ctx);
+		await first.provider.signOut();
+
+		vi.clearAllMocks();
+		gateAnswers({ token: gateToken });
+		const second = await initialize(ctx);
+		const afterReload = second.outcome;
+
+		await second.provider.signIn();
+		const afterSignIn = { token: second.provider.getAccessToken(), browserOpened: openExternalMock.mock.calls.length + executeCommandMock.mock.calls.filter(([command]) => command === 'vscode.open').length };
+
+		// The Accounts menu signs out through removeSession: the same rule applies.
+		await second.provider.removeSession('flowleap-session');
+		vi.clearAllMocks();
+		gateAnswers({ token: gateToken });
+		const removedViaAccounts = (await initialize(ctx)).outcome.token;
+
+		expect({ afterReload, afterSignIn, removedViaAccounts }).toEqual({
+			afterReload: { gateAsked: 0, token: undefined, expiresAt: undefined, stored: undefined, browserOpened: 0 },
+			afterSignIn: { token: gateToken, browserOpened: 0 },
+			removedViaAccounts: undefined,
+		});
+	});
+
+	it('never accepts a token pushed through the callback route without the pending state', async () => {
+		gateAnswers(undefined);
+		const { provider } = await initialize(makeExtensionContext());
+
+		const handler = registerUriHandlerMock.mock.calls[0][0];
+		handler.handleUri({ path: '/callback', query: `token=${gateToken}&state=hosted&hosted=1` });
+
+		expect(provider.isAuthenticated).toBe(false);
 	});
 });

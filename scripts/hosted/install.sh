@@ -298,6 +298,15 @@ map $http_upgrade $connection_upgrade {
 	default upgrade;
 	""      close;
 }
+
+# /_flowleap/session (#548) answers only a request from the workbench itself: it must carry
+# X-FlowLeap-Hosted: 1 (a cross-site page cannot send it without a CORS preflight, which this
+# host refuses), and a browser that sends Sec-Fetch-Site must say same-origin.
+map "$http_x_flowleap_hosted:$http_sec_fetch_site" $fl_session_request_ok {
+	default        0;
+	"1:"           1;
+	"1:same-origin" 1;
+}
 EOF
 
 api_host="$(printf '%s' "$authorize_url" | sed -E 's#^[a-z]+://([^/:]+).*#\1#')"
@@ -374,6 +383,39 @@ server {
 		add_header Set-Cookie "fl_hosted=\$arg_token; Path=/; Max-Age=2592000; Secure; HttpOnly; SameSite=Lax" always;
 		add_header Set-Cookie "fl_state=; Path=/_flowleap/; Max-Age=0; Secure; HttpOnly; SameSite=Lax" always;
 		return 302 /;
+	}
+
+	# --- Single sign-in (#548) ----------------------------------------------------------
+	# The workbench reads the gate token here once, and the Patent Agent extension keeps it
+	# in its secret storage, which is a file on this VM (#547). So the user signs in once.
+	# The token is the one this browser already holds in fl_hosted; the answer is never
+	# cached. Order: the header check (403) and the cookie check (401) run in the rewrite
+	# phase, then auth_request (only an allowlisted session), then try_files hands the
+	# request to @hosted_session_body, which writes the JSON.
+	location = /_flowleap/session {
+		access_log off;
+		default_type application/json;
+		add_header Cache-Control "no-store" always;
+		if (\$fl_session_request_ok = 0) { return 403 '{"error":"forbidden"}\n'; }
+		if (\$cookie_fl_hosted !~ "^[A-Za-z0-9._-]+\$") { return 401 '{"error":"no session"}\n'; }
+		auth_request /_hosted_authorize;
+		error_page 401 = @hosted_session_unauthorized;
+		error_page 403 = @hosted_forbidden;
+		root /nonexistent;
+		try_files /nonexistent @hosted_session_body;
+	}
+
+	location @hosted_session_body {
+		access_log off;
+		default_type application/json;
+		add_header Cache-Control "no-store" always;
+		return 200 '{"token":"\$cookie_fl_hosted"}\n';
+	}
+
+	location @hosted_session_unauthorized {
+		default_type application/json;
+		add_header Cache-Control "no-store" always;
+		return 401 '{"error":"no session"}\n';
 	}
 
 	location @hosted_forbidden {
