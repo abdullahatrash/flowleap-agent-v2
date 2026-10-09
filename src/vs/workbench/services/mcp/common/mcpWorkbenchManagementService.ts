@@ -345,8 +345,34 @@ export class WorkbenchMcpManagementService extends AbstractMcpManagementService 
 		return 'unknown';
 	}
 
+	/**
+	 * Whether this window can install MCP servers in the local user configuration.
+	 * The web client returns `false`: it has no process that can run a stdio server.
+	 */
+	protected canInstallInLocalUser(): boolean {
+		return true;
+	}
+
+	/**
+	 * When the local user configuration cannot hold an install but a remote is connected
+	 * (for example a Hosted Workspace), the user-scope install goes to the remote user configuration.
+	 */
+	private resolveUserTarget(options: IWorkbencMcpServerInstallOptions): IWorkbencMcpServerInstallOptions {
+		if (this.remoteMcpManagementService && !this.canInstallInLocalUser() && (options.target === undefined || options.target === ConfigurationTarget.USER)) {
+			return { ...options, target: ConfigurationTarget.USER_REMOTE };
+		}
+		return options;
+	}
+
+	override canInstall(server: IGalleryMcpServer | IInstallableMcpServer): true | IMarkdownString {
+		if (this.remoteMcpManagementService && !this.canInstallInLocalUser()) {
+			return this.remoteMcpManagementService.canInstall(server);
+		}
+		return super.canInstall(server);
+	}
+
 	async install(server: IInstallableMcpServer, options?: IWorkbencMcpServerInstallOptions): Promise<IWorkbenchLocalMcpServer> {
-		options = options ?? {};
+		options = this.resolveUserTarget(options ?? {});
 		this.validateWorkspaceConfigOptions(options);
 
 		if (options.target === ConfigurationTarget.WORKSPACE || isWorkspaceFolder(options.target)) {
@@ -380,7 +406,7 @@ export class WorkbenchMcpManagementService extends AbstractMcpManagementService 
 	}
 
 	async installFromGallery(server: IGalleryMcpServer, options?: IWorkbencMcpServerInstallOptions): Promise<IWorkbenchLocalMcpServer> {
-		options = options ?? {};
+		options = this.resolveUserTarget(options ?? {});
 		this.validateWorkspaceConfigOptions(options);
 		if (options.workspaceConfig === WorkspaceMcpConfigKind.Root || options.mcpResource && this.isWorkspaceRootResource(options.mcpResource)) {
 			throw new Error(localize('rootGalleryUnsupported', "Gallery MCP servers cannot be installed in .mcp.json."));

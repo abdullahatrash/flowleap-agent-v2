@@ -16,6 +16,10 @@ Add every user-visible change to `## [Unreleased]
 
 ### Fixed
 
+- Hosted Workspace: Install on an MCP server in the gallery showed "Not supported". The
+  browser cannot run a server, so the install now goes to the server: the server is added
+  to the remote user `mcp.json` and starts there. "Install in Workspace" is unchanged.
+  (#593)
 - Hosted and web client: a source anchor in a saved report, such as
   `US6265989B1:claims:1:en`, did nothing when clicked in the Markdown preview. It now
   opens the patent reader at the claim or passage, after the same "Allow ... to open
