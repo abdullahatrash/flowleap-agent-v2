@@ -92,10 +92,13 @@ the same as any other deliverable on this skill:
    `patstat_portfolio`, `search_patents`, or `patent_api_request` call already
    made in this conversation. Never invent or round a number while writing the
    HTML.
-2. **Self-contained, no external requests.** Inline all CSS and chart markup
-   directly in the file. No `<script src=...>` or `<link>` to a CDN, no
-   external fonts or images — inline SVG (bars/lines built from the `<svg>`
-   element with `<rect>`/`<path>`) for the filing-trend and top-filer charts.
+2. **One file, data inline, Chart.js for the charts.** Put all CSS and the
+   chart data in the file itself. Build the filing-trend and top-filer charts
+   with Chart.js loaded from the pinned CDN
+   `<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>` (the
+   HTML preview allows jsDelivr, unpkg and cdnjs). No other external script,
+   font or image. Use hand-built inline SVG only when the user asks for an
+   offline or editable graphic.
 3. **Provenance footer.** End the page with the queries/tool calls run, the
    date, and the same counting-basis caveats used in Phase 4's Methodology
    section (applications-by-filing-year vs publication-level counts, plus the
