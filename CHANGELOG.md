@@ -13,6 +13,8 @@ Add every user-visible change to `## [Unreleased]
 
 - **Hosted Workspace: one sign-in.** The sign-in at the workspace gate now also signs in
   the Patent Agent sidebar. The sidebar no longer asks for a second sign-in. (#548)
+- Hosted Workspace: the server package now bundles the FlowLeap CLI version that the app
+  vendors its skills from (`scripts/skills-drift-manifest.json`), not a fixed v0.9.1. (#599)
 
 ### Fixed
 

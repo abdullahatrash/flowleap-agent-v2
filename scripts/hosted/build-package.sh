@@ -22,7 +22,8 @@
 #   FLOWLEAP_REPO_URL        git URL to clone (default: the public GitHub repo)
 #   FLOWLEAP_VERSION         version in the file name (default: <ref> without a leading v,
 #                            or the short commit when <ref> is not a version tag)
-#   FLOWLEAP_CLI_VERSION     FlowLeap CLI release tag (default: v0.9.1)
+#   FLOWLEAP_CLI_VERSION     FlowLeap CLI release tag (default: refDisplayName, else ref,
+#                            from scripts/skills-drift-manifest.json at <ref>, #599)
 #   FLOWLEAP_BUILD_DIR       work directory (default: a new temporary directory)
 #   FLOWLEAP_PREBUILT_SERVER an existing vscode-reh-web-linux-x64 folder: skip the clone
 #                            and the gulp build, only vendor the SDK and CLI and pack.
@@ -32,7 +33,6 @@ set -euo pipefail
 ref="${1:?usage: build-package.sh <git-ref> [out-dir]}"
 out_dir="$(mkdir -p "${2:-$PWD}" && cd "${2:-$PWD}" && pwd)"
 repo_url="${FLOWLEAP_REPO_URL:-https://github.com/abdullahatrash/flowleap-agent-v2.git}"
-cli_version="${FLOWLEAP_CLI_VERSION:-v0.9.1}"
 work="${FLOWLEAP_BUILD_DIR:-$(mktemp -d)}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -53,6 +53,9 @@ if [ -n "${FLOWLEAP_PREBUILT_SERVER:-}" ]; then
 	mkdir -p "$src/build/agent-sdk/agents" "$src/scripts"
 	cp -R "$script_dir/../../build/agent-sdk/agents/claude" "$src/build/agent-sdk/agents/claude"
 	cp -R "$script_dir" "$src/scripts/hosted"
+	if [ -f "$script_dir/../skills-drift-manifest.json" ]; then
+		cp "$script_dir/../skills-drift-manifest.json" "$src/scripts/"
+	fi
 	commit="$(git -C "$script_dir" rev-parse --short HEAD 2>/dev/null || echo prebuilt)"
 else
 	log "Installing build prerequisites"
@@ -120,6 +123,14 @@ log "Vendoring the pinned Claude agent SDK"
 cp -R "$src/build/agent-sdk/agents/claude" "$stage/claude-sdk"
 (cd "$stage/claude-sdk" && npm ci --omit=dev --no-audit --no-fund >/dev/null)
 [ -f "$stage/claude-sdk/node_modules/@anthropic-ai/claude-agent-sdk/package.json" ] || die "Claude agent SDK install failed"
+
+# The CLI matches the version the app vendors its skills from (#599).
+manifest="$src/scripts/skills-drift-manifest.json"
+cli_version="${FLOWLEAP_CLI_VERSION:-}"
+if [ -z "$cli_version" ] && [ -f "$manifest" ]; then
+	cli_version="$(node -p 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); m.refDisplayName || m.ref || ""' "$manifest")"
+fi
+[ -n "$cli_version" ] || die "no FlowLeap CLI version: set FLOWLEAP_CLI_VERSION, or build from a tree with refDisplayName or ref in $manifest"
 
 log "Adding the FlowLeap CLI $cli_version"
 mkdir -p "$stage/flowleap-cli"
