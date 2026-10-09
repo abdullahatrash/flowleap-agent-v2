@@ -133,7 +133,7 @@ chmod 755 "$stage/flowleap-cli/flowleap"
 log "Adding the hosted scripts"
 mkdir -p "$stage/hosted"
 hosted_src="$src/scripts/hosted"
-cp "$hosted_src/install.sh" "$hosted_src/teardown.sh" "$hosted_src/verify.sh" "$hosted_src/anthropic-proxy.ts" "$stage/hosted/"
+cp "$hosted_src/install.sh" "$hosted_src/teardown.sh" "$hosted_src/verify.sh" "$hosted_src/update.sh" "$hosted_src/reset.sh" "$hosted_src/anthropic-proxy.ts" "$stage/hosted/"
 printf '%s\n' "$version ($commit), CLI $cli_version" > "$stage/hosted/VERSION"
 
 tarball="$out_dir/$name.tar.gz"
