@@ -294,7 +294,13 @@ export class WorkbenchMcpManagementService extends AbstractMcpManagementService 
 			this.workspaceMcpManagementService?.getInstalled() ?? Promise.resolve<ILocalMcpServer[]>([]),
 		]);
 
+		// A window that cannot install locally runs a user server on the remote. On a Hosted
+		// Workspace both user configurations are the same file, so drop the local duplicate.
+		const remoteServerNames = this.canInstallInLocalUser() ? undefined : new Set(remoteServers.map(server => server.name));
 		for (const server of userServers) {
+			if (remoteServerNames?.has(server.name)) {
+				continue;
+			}
 			installed.push(this.toWorkspaceMcpServer(server, LocalMcpServerScope.User));
 		}
 		for (const server of remoteServers) {
