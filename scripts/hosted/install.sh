@@ -231,6 +231,30 @@ else
 fi
 
 rm -f /etc/nginx/sites-enabled/default
+# nginx loads every file in sites-enabled, so a stray backup there gives "conflicting server
+# name" warnings. Backups go to $etc/backup/, never beside the vhost.
+install -d -m 0755 "$etc/backup"
+stamp="$(date +%Y%m%d%H%M%S)"
+for stray in /etc/nginx/sites-enabled/*.bak* /etc/nginx/sites-enabled/*~; do
+	[ -e "$stray" ] && mv "$stray" "$etc/backup/$(basename "$stray").$stamp"
+done
+if [ -f "/etc/nginx/sites-available/$host" ]; then
+	cp -p "/etc/nginx/sites-available/$host" "$etc/backup/$host.$stamp"
+fi
+if [ "$init" = systemd ]; then
+	# Self-heal: a failed start (for example unattended-upgrades restarting nginx during a
+	# DNS outage, 2026-10-06) must not leave the host down. Retry every 5 s, no rate limit.
+	install -d -m 0755 /etc/systemd/system/nginx.service.d
+	cat > /etc/systemd/system/nginx.service.d/flowleap-restart.conf <<'EOF'
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+EOF
+	systemctl daemon-reload
+fi
 nginx_reload() {
 	nginx -t -q
 	if [ "$init" = systemd ]; then
@@ -299,10 +323,15 @@ server {
 
 	client_max_body_size 100m;
 
+	# Resolve the backend name at request time, never at startup (2026-10-06 outage: nginx
+	# refused to start with "host not found in upstream" while DNS was down).
+	resolver 185.12.64.1 185.12.64.2 1.1.1.1 valid=300s ipv6=off;
+
 	# --- Gate: backend PR #550, docs/runbooks/hosted-workspace-authorize.md ---------
 	location = /_hosted_authorize {
 		internal;
-		proxy_pass $authorize_url;
+		set \$flowleap_authorize $authorize_url;
+		proxy_pass \$flowleap_authorize;
 		proxy_pass_request_body off;
 		proxy_set_header Content-Length "";
 		proxy_set_header Host $api_host;

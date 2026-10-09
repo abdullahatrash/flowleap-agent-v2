@@ -137,6 +137,84 @@ writes state every five seconds). Teardown removes the data folder and the key.
 > for, the data-handling page (the hosted section), how long the workspace stays, and who to
 > contact._
 
+## Update a workspace
+
+Use this to put a new server package on a running VM. User state stays.
+
+```sh
+scp flowleap-server-web-<new>-linux-x64.tar.gz{,.sha256} root@<ip>:/root/
+ssh root@<ip> sudo flowleap-server-web-<old>/hosted/update.sh /root/flowleap-server-web-<new>-linux-x64.tar.gz
+```
+
+`update.sh` does these steps:
+
+1. Compares the SHA-256 of the tarball with the `.sha256` file beside it (only the hash; the
+   file names the path in the build container).
+2. Unpacks to `/opt/flowleap-server.new` and checks it: `bin/flowleap-server`, `claude-sdk/`,
+   and no `"when": "!isWeb"` entry in `extensions/copilot/package.json`.
+3. Stops `flowleap-server`, moves the old package to `/opt/flowleap-server.prev` (one
+   generation), moves the new one in, and links `/usr/local/bin/flowleap`.
+4. Starts the server and waits up to 60 s for `Extension host agent started` in the journal.
+5. Runs `verify.sh`.
+
+If a step after the stop fails, the script puts `.prev` back, starts the server, and exits 1.
+When it succeeds it prints the installed product path (`oss-<commit>`). The new
+package has newer `hosted/` scripts. Run those for the next update.
+
+### What survives an update, a reset, and a reinstall
+
+| Data | Update | Reset | Reinstall (`teardown.sh` then `install.sh`) |
+|---|---|---|---|
+| Server package `/opt/flowleap-server` | replaced (`.prev` kept) | kept | replaced |
+| `/etc/flowleap` (env files, key files, `hosted-secret.key`), Anthropic key | kept | kept | removed, made again |
+| nginx vhost, certificate, nginx drop-in | kept | kept | removed, made again |
+| `data/User/settings.json`, `browserState*.json`, `secrets.json` | kept | **wiped** | wiped |
+| `data/User/workspaceStorage` (chat history) | kept | **wiped** | wiped |
+| `data/User/globalStorage` | kept | **wiped**, except `agent-host-*.json`, `agent-host.db`, SDK cache folders | wiped |
+| `/home/flowleap/workspace`, `FlowLeap Projects` | kept | **wiped**, empty workspace made | wiped |
+| Allowlist entry and the evaluator's 30-day tokens | kept | kept (**you** rotate them) | kept (**you** rotate them) |
+
+## Hand the instance to the next evaluator
+
+The VM is a standing demo instance. One evaluator uses it at a time. Do these steps between two
+evaluators:
+
+1. Run `sudo flowleap-server-web-*/hosted/reset.sh <name>` on the VM. It asks you to type the
+   name. Use `--yes` to skip the question. It stops the server, wipes the user data and the
+   workspace folders (table above), makes the empty workspace, and starts the server. You can
+   run it again with the same result.
+2. **Rotate the allowlist entry.** On the backend (`ssh flowleap`), in
+   `/opt/flowleap-backend/.env`, remove the old Clerk user id from `HOSTED_ALLOWLIST` and add
+   the new one. Then run `docker compose up -d` (never `restart`). A password change does
+   **not** revoke the 30-day `fl_hosted` and sign-in tokens, so removing the id is the only
+   way to lock the previous evaluator out.
+3. **One account per evaluator.** Do not share a login. Each evaluator signs in with their own
+   Clerk account, so step 2 can remove one person without affecting another.
+4. **Rotate BYOK keys.** If the evaluator entered a key on the instance (EPO, USPTO, OpenRouter,
+   and so on), rotate it at its provider. `reset.sh` deletes `secrets.json`, but the key was
+   readable on the VM while it was in use. Rotate the Anthropic key of the workspace too if it
+   was exposed.
+5. Run `verify.sh <name>`, then send the next evaluator the hand-over text.
+
+## Keep nginx up (hardening from the 2026-10-06 outage)
+
+`unattended-upgrades` restarted nginx while DNS was briefly down. nginx could not resolve
+`api.flowleap.co` at startup ("host not found in upstream") and stayed down from 06:57 to
+08:30 UTC. `install.sh` now makes these changes, and `verify.sh` checks them:
+
+- The vhost has `resolver 185.12.64.1 185.12.64.2 1.1.1.1 valid=300s ipv6=off;`, and the gate
+  uses `set $flowleap_authorize https://…/v1/hosted/authorize; proxy_pass $flowleap_authorize;`.
+  nginx now resolves the name when a request arrives, never at startup.
+- A systemd drop-in `/etc/systemd/system/nginx.service.d/flowleap-restart.conf` has
+  `Restart=on-failure`, `RestartSec=5s` and `StartLimitIntervalSec=0`.
+- Backups of the vhost go to `/etc/flowleap/backup/`. Never leave a `.bak` file in
+  `sites-enabled`: nginx loads every file there and warns about "conflicting server name".
+
+**Monitor.** Make an UptimeRobot **KEYWORD** monitor for each hosted host. It checks
+`https://<name>.app.flowleap.co/` for the keyword `FlowLeap`, which is on the sign-in redirect
+page. (eval1: monitor id 804186095.) A plain HTTP monitor is not enough: a redirect or a
+default nginx page can still answer `200`.
+
 ## Remove a workspace
 
 ```sh
