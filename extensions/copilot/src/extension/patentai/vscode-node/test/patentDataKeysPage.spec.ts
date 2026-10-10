@@ -144,7 +144,7 @@ describe('renderPatentDataKeysPageHtml', () => {
 		// public getting-started page is the one both this page and the CLI point at.
 		expect(html).not.toContain('data.uspto.gov/myodp');
 		// Masked inputs only; no value attributes — key material never reaches the markup.
-		expect(html.match(/type="password"/g)).toHaveLength(3);
+		expect(html.match(/type="password"/g)).toHaveLength(4);
 		// Scoped to <input> because the Privacy row's <option value="…"> entries are static
 		// verdict names, not user data.
 		expect(html).not.toMatch(/<input[^>]*\svalue=/);
@@ -180,6 +180,22 @@ describe('signup URLs (E3)', () => {
 		// The signed-in My ODP dashboard is a sign-in wall for a user who has no key yet.
 		expect(SIGNUP_URLS.uspto).toBe('https://data.uspto.gov/apis/getting-started');
 		expect(SIGNUP_URLS.epo).toBe('https://developers.epo.org/');
+	});
+});
+
+describe('Semantic Scholar card', () => {
+
+	it('offers an optional key with save and clear but no connection test', () => {
+		const html = renderPatentDataKeysPageHtml('test-nonce');
+
+		expect(html).toContain('id="card-s2"');
+		expect(html).toContain('id="s2-key"');
+		expect(html).toContain('id="save-s2"');
+		expect(html).toContain('id="clear-s2"');
+		// The backend has no S2 verdict, so a Test button would have nothing true to say.
+		expect(html).not.toContain('id="test-s2"');
+		expect(html).toContain('>Optional</span>');
+		expect(SIGNUP_URLS.s2).toBe('https://www.semanticscholar.org/product/api#api-key-form');
 	});
 });
 

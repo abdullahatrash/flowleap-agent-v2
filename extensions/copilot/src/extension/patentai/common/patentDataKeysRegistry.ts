@@ -13,6 +13,8 @@
 export const EPO_OPS_KEY_HEADER = 'X-EPO-OPS-Key';
 export const EPO_OPS_SECRET_HEADER = 'X-EPO-OPS-Secret';
 export const USPTO_ODP_KEY_HEADER = 'X-USPTO-ODP-Key';
+/** The user's own Semantic Scholar API key (optional): academic search uses it over FlowLeap's shared rate limit. */
+export const SEMANTIC_SCHOLAR_KEY_HEADER = 'X-Semantic-Scholar-Key';
 
 export interface PatentEpoCredentials {
 	readonly key: string;
@@ -23,6 +25,8 @@ export interface PatentEpoCredentials {
 export interface PatentDataKeys {
 	readonly epo?: PatentEpoCredentials;
 	readonly usptoOdp?: string;
+	/** Not a patent-office key: lifts academic search off Semantic Scholar's shared public rate limit. */
+	readonly semanticScholar?: string;
 }
 
 let _registeredDataKeysProvider: (() => PatentDataKeys | undefined) | undefined;

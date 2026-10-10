@@ -70,12 +70,17 @@ const SHOW_SETUP_ON_STARTUP_SETTING = 'flowleap.showSetupOnStartup';
 export const SIGNUP_URLS = {
 	epo: 'https://developers.epo.org/',
 	uspto: 'https://data.uspto.gov/apis/getting-started',
+	s2: 'https://www.semanticscholar.org/product/api#api-key-form',
 } as const;
 
 /** The purpose-built key-validation endpoint: reports, per provider, the key source and verdict. */
 const KEY_VALIDATION_PATH = '/keys/validate';
 
 type Provider = 'epo' | 'uspto';
+
+/** A card with a key the view can save and clear: the two patent offices, plus the optional
+ *  Semantic Scholar key. The backend has no verdict for S2, so it has no Test Connection. */
+type KeyCard = Provider | 's2';
 
 /** Where a provider's credentials came from, as the backend reports it. */
 type KeySource = 'user' | 'server' | 'none';
@@ -164,21 +169,11 @@ export async function testPatentDataConnection(client: IPatentBackendClient, pro
 	}
 }
 
-interface ProviderSpec {
-	readonly provider: Provider;
-	readonly label: string;
-	readonly signupUrl: string;
-}
-
-const PROVIDERS: readonly ProviderSpec[] = [
-	{ provider: 'epo', label: 'EPO OPS (European Patent Office)', signupUrl: SIGNUP_URLS.epo },
-	{ provider: 'uspto', label: 'USPTO ODP (US Patent Office)', signupUrl: SIGNUP_URLS.uspto },
-];
-
 /** Presence-only view state — the ONLY key-related data that ever reaches the webview. */
 export interface DataKeysPageState {
 	readonly epoConfigured: boolean;
 	readonly usptoConfigured: boolean;
+	readonly s2Configured: boolean;
 }
 
 /** Messages the webview posts to the extension. */
@@ -186,9 +181,10 @@ type PageInMessage =
 	| { readonly type: 'ready' }
 	| { readonly type: 'saveEpo'; readonly key: string; readonly secret: string }
 	| { readonly type: 'saveUspto'; readonly key: string }
+	| { readonly type: 'saveS2'; readonly key: string }
 	| { readonly type: 'test'; readonly provider: Provider }
-	| { readonly type: 'clear'; readonly provider: Provider }
-	| { readonly type: 'openSignup'; readonly provider: Provider }
+	| { readonly type: 'clear'; readonly provider: KeyCard }
+	| { readonly type: 'openSignup'; readonly provider: KeyCard }
 	| { readonly type: 'openModelPicker' }
 	| { readonly type: 'openPreferences' }
 	| { readonly type: 'accountSignIn' }
@@ -315,7 +311,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 
 	private _postState(focus?: Provider): void {
 		const keys = this._store.getKeys();
-		const state: DataKeysPageState = { epoConfigured: !!keys?.epo, usptoConfigured: !!keys?.usptoOdp };
+		const state: DataKeysPageState = { epoConfigured: !!keys?.epo, usptoConfigured: !!keys?.usptoOdp, s2Configured: !!keys?.semanticScholar };
 		this._post({ type: 'state', ...state, focus });
 	}
 
@@ -335,7 +331,7 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 		this._post({ type: 'activationConsent', verdict: this._activationTelemetryService.getVerdict() ?? 'ask' });
 	}
 
-	private _postStatus(provider: Provider, kind: 'testing' | 'ok' | 'error' | 'warn' | 'info', message: string): void {
+	private _postStatus(provider: KeyCard, kind: 'testing' | 'ok' | 'error' | 'warn' | 'info', message: string): void {
 		this._post({ type: 'status', provider, kind, message });
 	}
 
@@ -422,17 +418,26 @@ export class PatentDataKeysViewProvider implements vscode.WebviewViewProvider {
 					await this._afterSave('uspto');
 					return;
 				}
+				case 'saveS2': {
+					const key = message.key.trim();
+					if (!key) {
+						this._postStatus('s2', 'error', 'Enter the API key.');
+						return;
+					}
+					await this._store.setSemanticScholarKey(key);
+					this._postStatus('s2', 'info', 'Saved to secure storage. Academic search now uses your key.');
+					return;
+				}
 				case 'test':
 					await this._runTest(message.provider);
 					return;
 				case 'clear':
 					// Confirmation is the view's two-step Clear button — no native dialog here.
-					await this._store.clearProvider(message.provider);
+					await this._store.clearProvider(message.provider === 's2' ? 'semanticScholar' : message.provider);
 					this._postStatus(message.provider, 'info', 'Removed from secure storage.');
 					return;
 				case 'openSignup': {
-					const spec = PROVIDERS.find(s => s.provider === message.provider)!;
-					await vscode.env.openExternal(vscode.Uri.parse(spec.signupUrl));
+					await vscode.env.openExternal(vscode.Uri.parse(SIGNUP_URLS[message.provider]));
 					return;
 				}
 				case 'openModelPicker':
@@ -717,13 +722,32 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			<div class="get-key">Don't have a key yet? <a href="#" id="signup-uspto">Get one free at data.uspto.gov</a></div>
 		</div>
 
+		<div class="card" id="card-s2">
+			<div class="card-header">
+				<div class="card-title">Semantic Scholar (academic literature)</div>
+				<span class="badge" id="badge-s2">Optional</span>
+			</div>
+			<p class="card-desc">Optional. Academic search works without it on Semantic Scholar's shared public rate limit, which is often busy. With your own key, searches use your key's limit instead. Stays on this machine in secure storage and is only used to reach Semantic Scholar.</p>
+			<div class="field">
+				<label for="s2-key">API Key</label>
+					<span class="field-hint">Semantic Scholar emails it to you after you request one.</span>
+				<input type="password" id="s2-key" placeholder="Paste your API key">
+			</div>
+			<div class="buttons">
+				<button id="save-s2" disabled>Save</button>
+				<button class="secondary" id="clear-s2" disabled>Clear</button>
+			</div>
+			<div class="status" id="status-s2"></div>
+			<div class="get-key">Don't have a key? <a href="#" id="signup-s2">Request one free at semanticscholar.org</a></div>
+		</div>
+
 		<div class="footer">Looking for chat mode, projects folder and other preferences? <a href="#" id="open-preferences">All FlowLeap preferences…</a></div>
 	</div>
 
 	<script nonce="${nonce}">
 		const vscode = acquireVsCodeApi();
 		const $ = id => document.getElementById(id);
-		const configured = { epo: false, uspto: false };
+		const configured = { epo: false, uspto: false, s2: false };
 
 		function refreshButtons() {
 			$('save-epo').disabled = !($('epo-key').value.trim() && $('epo-secret').value.trim());
@@ -735,6 +759,10 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 				badge.textContent = configured[p] ? 'Configured' : 'Not configured';
 				badge.classList.toggle('configured', configured[p]);
 			}
+			$('save-s2').disabled = !$('s2-key').value.trim();
+			$('clear-s2').disabled = !configured.s2;
+			$('badge-s2').textContent = configured.s2 ? 'Configured' : 'Optional';
+			$('badge-s2').classList.toggle('configured', configured.s2);
 		}
 
 		function setStatus(provider, kind, message) {
@@ -791,8 +819,10 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			if (m.type === 'state') {
 				configured.epo = m.epoConfigured;
 				configured.uspto = m.usptoConfigured;
+				configured.s2 = m.s2Configured;
 				disarmClear('epo');
 				disarmClear('uspto');
+				disarmClear('s2');
 				refreshButtons();
 				if (m.focus) { focusCard(m.focus); }
 			} else if (m.type === 'status') {
@@ -828,8 +858,15 @@ export function renderPatentDataKeysPageHtml(nonce: string): string {
 			$('uspto-key').value = '';
 			refreshButtons();
 		});
+		$('save-s2').addEventListener('click', () => {
+			vscode.postMessage({ type: 'saveS2', key: $('s2-key').value });
+			$('s2-key').value = '';
+			refreshButtons();
+		});
 		for (const p of ['epo', 'uspto']) {
 			$('test-' + p).addEventListener('click', () => vscode.postMessage({ type: 'test', provider: p }));
+		}
+		for (const p of ['epo', 'uspto', 's2']) {
 			$('signup-' + p).addEventListener('click', e => { e.preventDefault(); vscode.postMessage({ type: 'openSignup', provider: p }); });
 			$('clear-' + p).addEventListener('click', () => {
 				if (clearTimers[p] !== undefined) {
