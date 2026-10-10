@@ -15,6 +15,7 @@ import { LanguageModelToolsService } from '../../../browser/tools/languageModelT
 import { createToolSetFileContents, deleteToolSetFromFileContents, getEnabledSelectionReferences } from '../../../browser/tools/toolSetsContribution.js';
 import { IAICustomizationWorkspaceService } from '../../../common/aiCustomizationWorkspaceService.js';
 import { IToolData, ToolDataSource, ToolAndToolSetEnablementMap } from '../../../common/tools/languageModelToolsService.js';
+import { patentChatToolReferenceNames } from '../../../common/tools/patentChatToolReferenceNames.js';
 
 suite('ToolSetsContribution', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -89,6 +90,40 @@ suite('ToolSetsContribution', () => {
 		}, {
 			sessionsMembers: ['listAutomations', 'configureAutomation', 'runAutomation', 'deleteAutomation'],
 			coreHasSet: false,
+		});
+	});
+
+	test('ClientToolSetsContribution groups the Patent Agent tools in both windows so agent hosts receive them', () => {
+		const makeTool = (name: string): IToolData => ({
+			id: `copilot_${name}`,
+			modelDescription: name,
+			displayName: name,
+			toolReferenceName: name,
+			source: ToolDataSource.Internal,
+		});
+		const createContribution = (isSessionsWindow: boolean) => {
+			const toolsService = createToolsService();
+			for (const tool of patentChatToolReferenceNames.map(makeTool)) {
+				store.add(toolsService.registerToolData(tool));
+			}
+			const workspaceService = new class extends mock<IAICustomizationWorkspaceService>() {
+				override readonly isSessionsWindow = isSessionsWindow;
+			}();
+			store.add(new ClientToolSetsContribution(toolsService, workspaceService));
+			return toolsService;
+		};
+
+		const sessionsSet = createContribution(true).getToolSet('flowleap-patent');
+		const coreSet = createContribution(false).getToolSet('flowleap-patent');
+
+		assert.deepStrictEqual({
+			sessionsMembers: Array.from(sessionsSet?.getTools() ?? [], tool => tool.toolReferenceName),
+			coreMembers: Array.from(coreSet?.getTools() ?? [], tool => tool.toolReferenceName),
+			deprecated: [sessionsSet?.deprecated ?? false, coreSet?.deprecated ?? false],
+		}, {
+			sessionsMembers: [...patentChatToolReferenceNames],
+			coreMembers: [...patentChatToolReferenceNames],
+			deprecated: [false, false],
 		});
 	});
 
