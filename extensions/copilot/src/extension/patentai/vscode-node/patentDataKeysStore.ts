@@ -60,8 +60,9 @@ export class PatentDataKeysStore {
 			this._keys = {
 				...(parsed.epo?.key && parsed.epo.secret ? { epo: { key: parsed.epo.key, secret: parsed.epo.secret } } : {}),
 				...(typeof parsed.usptoOdp === 'string' && parsed.usptoOdp ? { usptoOdp: parsed.usptoOdp } : {}),
+				...(typeof parsed.semanticScholar === 'string' && parsed.semanticScholar ? { semanticScholar: parsed.semanticScholar } : {}),
 			};
-			this._logService.info(`[Patent AI] Data keys loaded (epo=${!!this._keys.epo}, usptoOdp=${!!this._keys.usptoOdp})`);
+			this._logService.info(`[Patent AI] Data keys loaded (epo=${!!this._keys.epo}, usptoOdp=${!!this._keys.usptoOdp}, semanticScholar=${!!this._keys.semanticScholar})`);
 			this._onDidChange.fire();
 		} catch (error) {
 			this._logService.error(`[Patent AI] Failed to load data keys: ${error instanceof Error ? error.message : String(error)}`);
@@ -85,18 +86,26 @@ export class PatentDataKeysStore {
 		this._logService.info('[Patent AI] USPTO ODP key stored');
 	}
 
-	async clearProvider(provider: 'epo' | 'uspto'): Promise<void> {
-		const { epo, usptoOdp } = this._keys ?? {};
+	async setSemanticScholarKey(key: string): Promise<void> {
+		this._keys = { ...this._keys, semanticScholar: key };
+		await this._persist();
+		this._logService.info('[Patent AI] Semantic Scholar key stored');
+	}
+
+	async clearProvider(provider: 'epo' | 'uspto' | 'semanticScholar'): Promise<void> {
+		const { epo, usptoOdp, semanticScholar } = this._keys ?? {};
 		this._keys = {
 			...(provider !== 'epo' && epo ? { epo } : {}),
 			...(provider !== 'uspto' && usptoOdp ? { usptoOdp } : {}),
+			...(provider !== 'semanticScholar' && semanticScholar ? { semanticScholar } : {}),
 		};
 		await this._persist();
-		this._logService.info(`[Patent AI] ${provider === 'epo' ? 'EPO OPS credentials' : 'USPTO ODP key'} cleared`);
+		const label = provider === 'epo' ? 'EPO OPS credentials' : provider === 'uspto' ? 'USPTO ODP key' : 'Semantic Scholar key';
+		this._logService.info(`[Patent AI] ${label} cleared`);
 	}
 
 	private async _persist(): Promise<void> {
-		if (this._keys && (this._keys.epo || this._keys.usptoOdp)) {
+		if (this._keys && (this._keys.epo || this._keys.usptoOdp || this._keys.semanticScholar)) {
 			await this._context.secrets.store(DATA_KEYS_STORAGE_KEY, JSON.stringify(this._keys));
 		} else {
 			this._keys = undefined;

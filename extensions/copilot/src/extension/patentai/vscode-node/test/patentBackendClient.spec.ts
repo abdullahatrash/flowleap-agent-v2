@@ -265,6 +265,7 @@ describe('BYO patent-data key forwarding (#31)', () => {
 			{ epo: { key: 'ek', secret: 'es' }, usptoOdp: 'uk' },
 			{ epo: { key: 'ek', secret: 'es' } },
 			{ usptoOdp: 'uk' },
+			{ semanticScholar: 's2k' },
 			undefined,
 		];
 
@@ -275,11 +276,12 @@ describe('BYO patent-data key forwarding (#31)', () => {
 			await client.post('/patent-search', { i }, makeToken());
 		}
 
-		expect(captured.map(h => [h?.['X-EPO-OPS-Key'], h?.['X-EPO-OPS-Secret'], h?.['X-USPTO-ODP-Key']])).toEqual([
-			['ek', 'es', 'uk'],
-			['ek', 'es', undefined],
-			[undefined, undefined, 'uk'],
-			[undefined, undefined, undefined],
+		expect(captured.map(h => [h?.['X-EPO-OPS-Key'], h?.['X-EPO-OPS-Secret'], h?.['X-USPTO-ODP-Key'], h?.['X-Semantic-Scholar-Key']])).toEqual([
+			['ek', 'es', 'uk', undefined],
+			['ek', 'es', undefined, undefined],
+			[undefined, undefined, 'uk', undefined],
+			[undefined, undefined, undefined, 's2k'],
+			[undefined, undefined, undefined, undefined],
 		]);
 	});
 });

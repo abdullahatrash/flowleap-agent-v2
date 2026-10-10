@@ -13,7 +13,7 @@ import { ITelemetryService } from '../../../platform/telemetry/common/telemetry'
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { createServiceIdentifier } from '../../../util/common/services';
 import { URI } from '../../../util/vs/base/common/uri';
-import { EPO_OPS_KEY_HEADER, EPO_OPS_SECRET_HEADER, getPatentDataKeys, USPTO_ODP_KEY_HEADER } from '../common/patentDataKeysRegistry';
+import { EPO_OPS_KEY_HEADER, EPO_OPS_SECRET_HEADER, getPatentDataKeys, SEMANTIC_SCHOLAR_KEY_HEADER, USPTO_ODP_KEY_HEADER } from '../common/patentDataKeysRegistry';
 import { getPatentAccessToken } from '../common/patentTokenRegistry';
 import { getPatentAIConfig } from './configService';
 
@@ -563,6 +563,9 @@ export class PatentBackendClient implements IPatentBackendClient {
 		}
 		if (dataKeys?.usptoOdp) {
 			headers[USPTO_ODP_KEY_HEADER] = dataKeys.usptoOdp;
+		}
+		if (dataKeys?.semanticScholar) {
+			headers[SEMANTIC_SCHOLAR_KEY_HEADER] = dataKeys.semanticScholar;
 		}
 		return headers;
 	}

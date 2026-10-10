@@ -58,6 +58,20 @@ describe('PatentDataKeysStore', () => {
 		expect(secrets.has('patent-ai-data-keys')).toBe(false);
 	});
 
+	it('stores and clears the optional Semantic Scholar key beside the patent-office keys', async () => {
+		const { context, secrets } = makeContext();
+		const store = PatentDataKeysStore.register(context, makeLogService());
+		await store.whenReady;
+
+		await store.setSemanticScholarKey('s2k');
+		expect(store.getKeys()).toEqual({ semanticScholar: 's2k' });
+		expect(JSON.parse(secrets.get('patent-ai-data-keys')!)).toEqual({ semanticScholar: 's2k' });
+
+		await store.clearProvider('semanticScholar');
+		expect(store.getKeys()).toBeUndefined();
+		expect(secrets.has('patent-ai-data-keys')).toBe(false);
+	});
+
 	it('drops a malformed half EPO pair on load instead of forwarding it', async () => {
 		const { context } = makeContext({
 			'patent-ai-data-keys': JSON.stringify({ epo: { key: 'ek' }, usptoOdp: 'uk' }),
