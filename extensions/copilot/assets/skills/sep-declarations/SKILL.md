@@ -6,10 +6,12 @@ user-invocable: true
 
 # ETSI SEP declarations
 
-Declarations are self-reported. ETSI checks no essentiality, and over-declaration is documented: a share of declarations is never a share of essential patents.
+Declarations are self-reported. ETSI checks no essentiality, and over-declaration is documented: a share of declarations is never a share of essential patents. Say "declared", never "essential".
 
-1. Download the export to the workspace analysis folder and read its `Last-Modified` header as the data edition: `curl -sSLD headers.txt -A "Mozilla/5.0" -o ISLD-export.zip https://docbox.etsi.org/IPR/Open/ISLD-export.zip` (~148 MB; one semicolon-separated CSV of ~5 million rows). Cloudflare answers 403 to the default curl agent, so the browser agent is required, not optional. Done when the zip is on disk and the edition date is written down.
-2. Stream the CSV out of the zip row by row and never load it whole. Done when a row count is printed.
-3. Count on the key the question asks for, and report the groups that carry no family id on their own line — the keys, the column dictionary and the declarant spellings are in [references/etsi-isld-columns.md](references/etsi-isld-columns.md). Done when the chosen key is named in the output alongside every count.
-4. Filter a generation on its flag column, never on the standard text, and merge the declarant spellings from the reference file. Done when the merged names are listed with the count they produced.
-5. Save the script beside the artifact and state the edition date, the rows processed, the key, the merged names and the no-family-id count in the report itself. Delete the download when the counts are in, and keep everything else: the scripts, their printed output, the response headers that carry the edition date. Done when a reader could rerun the number from the report alone.
+The ETSI export is loaded weekly into the `flowleap.sep_*` views that `patstat_query` reads. They are not PATSTAT: their edition is the export_date column. View columns and a sanity-check table: [references/etsi-isld-columns.md](references/etsi-isld-columns.md).
+
+1. Fetch `patstat_api_guide` action="section" section="semantic-model" and apply interpretation_conventions.sep_declarations; fetch section="examples" and reuse the verified query sep_share_of_4g_families_by_declarant. Done when you have named the counting key the question asks for.
+2. Query the views with `patstat_query`, and select MAX(export_date) in each query. Done when every figure has its key and its export date, and the declared groups with no family id are on their own line.
+3. For each declarant you quote, query the raw spellings that declarant_merged combined. Done when each quoted declarant lists its spellings.
+4. Take the fallback path when `patstat_query` is unavailable, the views give an error or no rows, or MAX(export_date) is more than 9 days old: follow [references/fallback-download.md](references/fallback-download.md). Done when the fallback gives a row count and an edition date, or when the views were used.
+5. Save the SQL (or the script) beside the artifact and state in the report: the export date, the key, the merged spellings and the no-family-id count. Done when a reader could rerun the number from the report alone.
