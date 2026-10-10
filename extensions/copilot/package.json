@@ -7350,7 +7350,14 @@
         "enableForWorkspaceTypeScriptVersions": true
       }
     ],
-    "chatAgents": [],
+    "chatAgents": [
+      {
+        "path": "./assets/agents/patent-ai.agent.md",
+        "sessionTypes": [
+          "agent-host-claude"
+        ]
+      }
+    ],
     "chatPromptFiles": [
       {
         "path": "./assets/prompts/flowleap/read-a-claim.prompt.md",
