@@ -32,6 +32,7 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.CitationApiGuide,
 	ToolName.SearchLegal,
 	ToolName.LegalSearchGuide,
+	ToolName.SearchNpl,
 	ToolName.SearchAcademic,
 	ToolName.WritePatentResults,
 	ToolName.CompareClaims,
@@ -341,14 +342,36 @@ suite('PatentAIInstructions key-gate doctrine', () => {
 
 	test('omits the keyless-pivot rule when no keyless tool is available', async () => {
 		// Every tool that needs no Patent-Data Key — PATSTAT (all four surfaces, graph included),
-		// legal search and academic search. A new keyless tool missing here fails this test.
-		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatGraph, ToolName.PatstatApiGuide, ToolName.SearchLegal, ToolName.SearchAcademic];
+		// legal search, NPL search and academic search. A new keyless tool missing here fails this test.
+		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatGraph, ToolName.PatstatApiGuide, ToolName.SearchLegal, ToolName.SearchNpl, ToolName.SearchAcademic];
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => !keylessTools.includes(t)));
 		expect({
 			pivotOffered: output.includes('KEYLESS PIVOT'),
 			doctrineStillRenders: output.includes('KEY-GATE DOCTRINE'),
 			resumeRuleStillRenders: output.includes('RESUME RULE'),
 		}).toEqual({ pivotOffered: false, doctrineStillRenders: true, resumeRuleStillRenders: true });
+	});
+});
+
+suite('PatentAIInstructions NPL routing', () => {
+	test('branch N makes search_npl the primary NPL source, with search_academic as the second pass', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		expect({
+			branch: output.includes('N) NON-PATENT LITERATURE (NPL)'),
+			primary: output.includes('PRIMARY: `search_npl`'),
+			secondPass: output.includes('SECOND PASS: `search_academic`'),
+			webAfterNpl: output.includes('NPL that `search_npl` (branch N) does not reach'),
+			keylessPivot: output.includes('`search_npl` — scholarly LITERATURE (OpenAlex)'),
+		}).toEqual({ branch: true, primary: true, secondPass: true, webAfterNpl: true, keylessPivot: true });
+	});
+
+	test('without search_npl, branch N is absent and NPL stays on search_academic', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.SearchNpl));
+		expect({
+			branch: output.includes('N) NON-PATENT LITERATURE'),
+			mentionsSearchNpl: output.includes('search_npl'),
+			academicPivot: output.includes('`search_academic` — scholarly LITERATURE'),
+		}).toEqual({ branch: false, mentionsSearchNpl: false, academicPivot: true });
 	});
 });
 

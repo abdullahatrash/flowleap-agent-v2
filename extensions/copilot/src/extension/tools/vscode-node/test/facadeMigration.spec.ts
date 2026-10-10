@@ -30,6 +30,7 @@ import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 import { GetPatentDetailsTool } from '../getPatentDetailsTool';
 import { GetPatentFiguresTool } from '../getPatentFiguresTool';
 import { SearchAcademicTool } from '../searchAcademicTool';
+import { SearchNplTool } from '../searchNplTool';
 import { SearchLegalTool } from '../searchLegalTool';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
@@ -292,6 +293,54 @@ describe('search_academic', () => {
 			tool: 'search_academic',
 			input: { query: 'perovskite', sources: ['semantic-scholar', 'arxiv'], max_results: 5 },
 		}));
+	});
+});
+
+describe('search_npl', () => {
+
+	it('maps the camelCase filters onto the facade\'s snake_case filter object', async () => {
+		const { client, calls } = makeBackendClient({ search_npl: { total: 0, page: 1, perPage: 5, results: [], query: 'sulfide electrolyte' } });
+		const tool = new SearchNplTool(makeLogService(), client);
+
+		await tool.invoke(makeOptions({ query: 'sulfide electrolyte', fromYear: 2015, toYear: 2019, openAccess: true, type: 'journal-article' as const, limit: 5 }), makeToken());
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0]).toEqual(expect.objectContaining({
+			tool: 'search_npl',
+			input: { query: 'sulfide electrolyte', limit: 5, page: 1, filter: { from_year: 2015, to_year: 2019, open_access: true, type: 'journal-article' } },
+		}));
+	});
+
+	it('sends no filter object when none is asked for', async () => {
+		const { client, calls } = makeBackendClient({ search_npl: { total: 0, results: [] } });
+		const tool = new SearchNplTool(makeLogService(), client);
+
+		await tool.invoke(makeOptions({ query: 'perovskite' }), makeToken());
+
+		expect(calls[0].input).toEqual({ query: 'perovskite', limit: 10, page: 1 });
+	});
+
+	it('renders each work with its date, venue, DOI and the next page', async () => {
+		const { client } = makeBackendClient({
+			search_npl: {
+				total: 120, page: 1, perPage: 1, query: 'perovskite',
+				results: [{
+					id: 'W1', doi: '10.1000/x', title: 'A paper', abstract: 'Stable cells.', publicationDate: '2018-05-01',
+					type: 'article', citedByCount: 7, isOpenAccess: true, openAccessUrl: 'https://oa.example/x.pdf', authors: ['Ada'], source: 'Nature Energy',
+				}],
+			},
+		});
+		const tool = new SearchNplTool(makeLogService(), client);
+
+		const text = textOf(await tool.invoke(makeOptions({ query: 'perovskite' }), makeToken()));
+
+		expect({
+			total: text.includes('OpenAlex: 120 works match "perovskite"'),
+			dated: text.includes('Published: 2018-05-01 in Nature Energy'),
+			doi: text.includes('DOI: https://doi.org/10.1000/x'),
+			openAccess: text.includes('Open access: https://oa.example/x.pdf'),
+			nextPage: text.includes('page=2'),
+		}).toEqual({ total: true, dated: true, doi: true, openAccess: true, nextPage: true });
 	});
 });
 

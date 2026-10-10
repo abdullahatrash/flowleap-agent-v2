@@ -77,9 +77,10 @@ Use `web_search` for coverage the APIs miss (if `web_search` is not available on
 
 ### 2e. Non-Patent Literature (NPL)
 Prior art is NOT limited to patents:
-1. `search_academic` for papers (Scholar, arXiv, PubMed)
-2. `web_search` targeted: `site:arxiv.org`, `site:pubmed.gov`, `site:ieee.org` (if unavailable, `search_academic` in step 1 is the NPL source — note any remaining gap)
-3. Consider conference proceedings, standards, product manuals, YouTube demos
+1. `search_npl` first: OpenAlex, 250M+ scholarly works (journal articles, proceedings, book chapters, preprints, theses, reports, standards). Reuse the discriminating terms from the concept-synonym table in paper wording, run a variant per essential feature, and set `toYear` to the critical-date year; check each `publicationDate` against the exact date. Narrow with `type` (e.g. `proceedings-article`, `dissertation`, `standard`) when a track calls for it. Record each query and its hit count in the audit trail
+2. `search_academic` as a second pass (Semantic Scholar, arXiv) for preprints and CS/physics work; deduplicate against step 1 by DOI or title
+3. `web_search` for what neither reaches: product manuals, web disclosures, standards bodies' sites, `site:ieee.org` (if unavailable, steps 1-2 are the NPL sources — note any remaining gap)
+4. Read past the abstract via `fetch_webpage` on the open-access URL or DOI before relying on a paper; cite it by authors, title, venue, date and DOI
 
 ### 2f. Family & Citation Expansion
 - **Known source or family patent first**: when the disclosure names a source, parent or family publication (even a post-cutoff one), retrieve it with `get_patent_details` and work its listed cited references before widening the search. For an EP family the citations sit on the A3 search-report publication, not on the A1/A2 or the B1 grant, so retrieve `EPnnnnnnnA3` when the named publication shows none. Record the source publication itself as post-cutoff context, not as a candidate.

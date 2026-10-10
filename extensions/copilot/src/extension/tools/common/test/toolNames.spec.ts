@@ -101,6 +101,7 @@ describe('ToolNames', () => {
 		const PATENT_TOOL_KEYS = [
 			'SearchPatents',
 			'SearchAcademic',
+			'SearchNpl',
 			'GetPatentDetails',
 			'GetPatentFigures',
 			'ReadPdf',
@@ -138,7 +139,7 @@ describe('ToolNames', () => {
 		}).filter(entry => entry.issues.length > 0);
 
 		expect({ count: PATENT_TOOL_KEYS.length, duplicates: PATENT_TOOL_KEYS.length - new Set(PATENT_TOOL_KEYS).size, problems })
-			.toEqual({ count: 19, duplicates: 0, problems: [] });
+			.toEqual({ count: 20, duplicates: 0, problems: [] });
 	});
 
 	it('returns original name for unmapped core tools', () => {

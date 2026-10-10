@@ -30,6 +30,7 @@ import './patstatPortfolioTool';
 import './patstatQueryTool';
 import './readPdfTool';
 import './searchAcademicTool';
+import './searchNplTool';
 import './searchCitationsTool';
 import './searchForwardCitationsTool';
 import './searchLegalTool';
