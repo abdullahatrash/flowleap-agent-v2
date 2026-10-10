@@ -294,6 +294,43 @@ describe('search_academic', () => {
 			input: { query: 'perovskite', sources: ['semantic-scholar', 'arxiv'], max_results: 5 },
 		}));
 	});
+
+	it('sends the year bounds as the facade filter', async () => {
+		const { client, calls } = makeBackendClient({ search_academic: { total: 0, papers: [] } });
+		const tool = new SearchAcademicTool(makeLogService(), client);
+
+		await tool.invoke(makeOptions({ query: 'perovskite', toYear: 2019 }), makeToken());
+
+		expect(calls[0].input).toEqual({
+			query: 'perovskite',
+			sources: ['semantic-scholar', 'arxiv'],
+			max_results: 10,
+			filter: { to_year: 2019 },
+		});
+	});
+
+	it('names a failed source instead of letting its silence read as no literature', async () => {
+		const { client } = makeBackendClient({
+			search_academic: {
+				query: 'perovskite',
+				total: 1,
+				papers: [{ title: 'A paper', authors: ['Ada'], url: 'https://arxiv.org/abs/1', source: 'arxiv', doi: '10.1/x', alsoIn: ['scholar'] }],
+				sources: [
+					{ source: 'scholar', status: 'rate_limited', returned: 0, message: 'Semantic Scholar rate limit exceeded' },
+					{ source: 'arxiv', status: 'ok', returned: 1, totalHits: 42 },
+				],
+			},
+		});
+		const tool = new SearchAcademicTool(makeLogService(), client);
+
+		const result = await tool.invoke(makeOptions({ query: 'perovskite' }), makeToken());
+		const text = textOf(result);
+
+		expect(text).toContain('Semantic Scholar: rate limited, no results from this source');
+		expect(text).toContain('arXiv: 42 matches');
+		expect(text).toContain('Source: arXiv (also in Semantic Scholar)');
+		expect(text).toContain('DOI: 10.1/x');
+	});
 });
 
 describe('search_npl', () => {
