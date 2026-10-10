@@ -139,11 +139,26 @@ function examinerBaselineSummary(baseline: ExaminerBaseline, publication: string
 		`Members walked: ${members.length}.`,
 		...members.map(member => `- ${member.office ?? '?'} ${member.representativePublication ?? '?'}: ${(member.publications ?? []).map(read => `${read.publication ?? '?'} ${read.status ?? 'unknown'}${read.status === 'read' ? ` (citedCount ${read.citedCount ?? 0}, examinerCount ${read.examinerCount ?? 0})` : ''}`).join('; ') || 'no publication read'}${member.usptoEnriched ? `; USPTO enriched ${member.usptoEnriched.status ?? 'unknown'}${member.usptoEnriched.status === 'read' ? ` (${member.usptoEnriched.rows ?? 0} rows)` : ''}` : ''}`),
 		`Documents: ${documents}. Gaps: ${gaps.length}.`,
+		...nplSummary(baseline),
 		...gaps.slice(0, LISTED_GAPS).map(gap => `- Gap: ${gap.message?.trim() || `no citation record from ${gap.office ?? '?'} (${gap.member ?? '?'})`}`),
 		...(gaps.length > LISTED_GAPS ? [`- …and ${gaps.length - LISTED_GAPS} more gap(s), all in the file.`] : []),
 		'Provenance: every category, claim list and count was copied from the offices\' records by code, never inferred by a model. A gap means that office returned no citation record or could not be read; it is not "nothing cited".',
 		`Read documents[] and the categories from ${path} with read_file. Pass "${path}" as baselinePath to write_patent_results; do not paste the matrix inline and do not edit the file.`,
 	].join('\n');
+}
+
+/**
+ * The cited-literature line: how many rows are papers and how many the backend resolved to an
+ * OpenAlex record, so the model knows the cited papers are readable from the file.
+ */
+function nplSummary(baseline: ExaminerBaseline): string[] {
+	const nplRows = (baseline.documents ?? []).filter(document => document.npl).length;
+	if (!nplRows) {
+		return [];
+	}
+	const r = baseline.nplResolution;
+	const counts = r ? ` OpenAlex lookup: ${r.matched ?? 0} matched, ${r.candidates ?? 0} with candidates only, ${r.notFound ?? 0} not found, ${r.failed ?? 0} failed, ${r.skipped ?? 0} skipped.` : '';
+	return [`Non-patent literature: ${nplRows} cited paper row(s).${counts} Each NPL row's nplWork in the file carries the cited paper's title, DOI, date and abstract preview when matched; candidates are possible matches only. For a row that is not matched, call get_npl_work with its npl string.`];
 }
 
 ToolRegistry.registerTool(ExaminerBaselineTool);

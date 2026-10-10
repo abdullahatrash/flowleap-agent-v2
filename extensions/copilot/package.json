@@ -1540,7 +1540,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(references)",
         "userDescription": "Every document the examining offices cited across a patent family, saved in full to the workspace",
-        "modelDescription": "Examiner Baseline: every document cited across a granted patent's family, by office; computed in code, not assembled. One call walks the INPADOC family, reads the references-cited block of every publication of every member (EPO OPS bibliography) and, for each US grant, the USPTO office-action citations, and writes the FULL, unedited, untruncated Baseline JSON (publication, offices[], membersWalked[], documents[] with per-office cells and their citations[], gaps[], dedupe) to <saveDir>/<publication>.examiner-baseline.json in the workspace (saveDir defaults to 'references'). Provenance: every category, claim list and count is copied from the offices' records by code, never inferred by a model; a gaps[] row means that office returned no citation record or could not be read for that member: report it as a gap, never as \"nothing cited\". The tool returns only a short summary (offices, members walked with their citedCount/examinerCount, document and gap counts) and the file path, never the matrix: read documents[] from the file with read_file. USE FIRST in a Find Better run (find-better skill, Step 1), before any search. Pass the returned path as baselinePath to write_patent_results; never paste the matrix inline, never edit the file, and never rebuild the Baseline from family, bibliography or citation calls or from patent_api_request (a tool result with a character budget drops rows).",
+        "modelDescription": "Examiner Baseline: every document cited across a granted patent's family, by office; computed in code, not assembled. One call walks the INPADOC family, reads the references-cited block of every publication of every member (EPO OPS bibliography) and, for each US grant, the USPTO office-action citations, and writes the FULL, unedited, untruncated Baseline JSON (publication, offices[], membersWalked[], documents[] with per-office cells and their citations[]; each non-patent row carries `npl` (the printed string) and `nplWork` (its OpenAlex record: title, DOI, date, abstract preview, or candidates / not_found), gaps[], dedupe) to <saveDir>/<publication>.examiner-baseline.json in the workspace (saveDir defaults to 'references'). Provenance: every category, claim list and count is copied from the offices' records by code, never inferred by a model; a gaps[] row means that office returned no citation record or could not be read for that member: report it as a gap, never as \"nothing cited\". The tool returns only a short summary (offices, members walked with their citedCount/examinerCount, document and gap counts) and the file path, never the matrix: read documents[] from the file with read_file. USE FIRST in a Find Better run (find-better skill, Step 1), before any search. Pass the returned path as baselinePath to write_patent_results; never paste the matrix inline, never edit the file, and never rebuild the Baseline from family, bibliography or citation calls or from patent_api_request (a tool result with a character budget drops rows).",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1703,7 +1703,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(file-text)",
         "userDescription": "Get full patent details including claims and description",
-        "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use search_patents (with CQL you write) to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request). For previously retrieved sources, use evidenceLookup: {} to recover exact source anchor IDs locally, evidenceLookup.query for literal matches anywhere in the stored text, or evidenceLookup.anchor plus start for paginated source lines. These lookups do not call the backend. Inspect later relevant passages before absence claims; include full dependent claims and keep every constituent in the original quantity basis. When the result lists cited references, the examiner-cited X/Y entries are the closest art on record for that document; retrieve them before running broader searches.",
+        "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use search_patents (with CQL you write) to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request). For previously retrieved sources, use evidenceLookup: {} to recover exact source anchor IDs locally, evidenceLookup.query for literal matches anywhere in the stored text, or evidenceLookup.anchor plus start for paginated source lines. These lookups do not call the backend. Inspect later relevant passages before absence claims; include full dependent claims and keep every constituent in the original quantity basis. When the result lists cited references, the examiner-cited X/Y entries are the closest art on record for that document; retrieve them before running broader searches. Cited non-patent literature appears as [NPL] strings as the office printed them; pass resolveNpl: true when the user asks about the papers or literature cited against a patent (or the cited NPL matters to the analysis), and each [NPL] entry is resolved to its OpenAlex record (title, DOI, publication date, abstract preview, open-access link). A 'matched' record is the cited paper; 'candidates' are possible matches only.",
         "tags": [],
         "inputSchema": {
           "type": "object",
@@ -1735,6 +1735,10 @@
                 }
               },
               "additionalProperties": false
+            },
+            "resolveNpl": {
+              "type": "boolean",
+              "description": "Resolve each cited non-patent reference ([NPL] entry) to its OpenAlex record: title, DOI, date, abstract preview. Off by default (one OpenAlex lookup per cited paper); set it when the cited literature is the question."
             }
           },
           "required": [
@@ -2223,6 +2227,28 @@
           },
           "required": [
             "action"
+          ]
+        }
+      },
+      {
+        "name": "copilot_getNplWork",
+        "displayName": "Look Up Cited Paper",
+        "toolReferenceName": "nplWork",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(book)",
+        "userDescription": "Resolve a cited paper (citation string, DOI or OpenAlex id) to its OpenAlex record",
+        "modelDescription": "Resolves ONE cited non-patent literature reference to its OpenAlex record: title, authors, venue, publication date, DOI, full abstract and open-access link. Use it when the user asks about a paper cited against a patent (an examiner- or applicant-cited [NPL] entry of get_patent_details, an NPL row of the examiner_baseline file, an NPL citation of a US office action) or gives a DOI. Pass the reference EXACTLY as the office printed it (e.g. 'CONG L. ET AL: \"MULTIPLEX GENOME ENGINEERING USING CRISPR/CAS SYSTEMS\", SCIENCE, vol. 339, ... XP055102030'), or a bare DOI (10.1126/science.1231143) or OpenAlex id (W2064815984). Lookup order: OpenAlex id, then any DOI in the string, then the quoted title. Status 'matched' = the cited work; 'candidates' = similar works, none certain: report them as possible matches, never as the cited paper; 'not found' = OpenAlex has no similar work (standards, manuals, web pages and many conference abstracts are absent). For all the cited papers of one patent at once, use get_patent_details with resolveNpl: true instead. To FIND new literature, use search_npl.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string",
+              "description": "A cited-NPL string exactly as printed, a DOI, or an OpenAlex work id (W...)"
+            }
+          },
+          "required": [
+            "reference"
           ]
         }
       },

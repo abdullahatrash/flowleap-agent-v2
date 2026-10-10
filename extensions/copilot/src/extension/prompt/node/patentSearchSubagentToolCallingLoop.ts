@@ -134,6 +134,7 @@ export class PatentSearchSubagentToolCallingLoop extends ToolCallingLoop<IPatent
 		const allowedPatentTools = new Set([
 			ToolName.SearchPatents,
 			ToolName.SearchNpl,
+			ToolName.GetNplWork,
 			ToolName.SearchAcademic,
 			ToolName.FetchWebPage,
 			ToolName.ReadPdf,

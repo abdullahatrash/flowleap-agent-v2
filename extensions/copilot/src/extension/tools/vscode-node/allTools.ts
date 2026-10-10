@@ -31,6 +31,7 @@ import './patstatQueryTool';
 import './readPdfTool';
 import './searchAcademicTool';
 import './searchNplTool';
+import './getNplWorkTool';
 import './searchCitationsTool';
 import './searchForwardCitationsTool';
 import './searchLegalTool';

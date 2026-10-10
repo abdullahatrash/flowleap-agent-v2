@@ -31,6 +31,7 @@ import { GetPatentDetailsTool } from '../getPatentDetailsTool';
 import { GetPatentFiguresTool } from '../getPatentFiguresTool';
 import { SearchAcademicTool } from '../searchAcademicTool';
 import { SearchNplTool } from '../searchNplTool';
+import { GetNplWorkTool } from '../getNplWorkTool';
 import { SearchLegalTool } from '../searchLegalTool';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
@@ -378,6 +379,60 @@ describe('search_npl', () => {
 			openAccess: text.includes('Open access: https://oa.example/x.pdf'),
 			nextPage: text.includes('page=2'),
 		}).toEqual({ total: true, dated: true, doi: true, openAccess: true, nextPage: true });
+	});
+});
+
+describe('get_npl_work', () => {
+
+	const reference = 'CONG L. ET AL: "MULTIPLEX GENOME ENGINEERING USING CRISPR/CAS SYSTEMS", SCIENCE, vol. 339, 2013, XP055102030';
+
+	it('sends the printed string as the facade\'s reference and renders the matched record', async () => {
+		const { client, calls } = makeBackendClient({
+			get_npl_work: {
+				reference,
+				parsed: { doi: null, openalexId: null, title: 'MULTIPLEX GENOME ENGINEERING USING CRISPR/CAS SYSTEMS', year: 2013, xpNumber: 'XP055102030' },
+				status: 'matched', method: 'title', confidence: 1,
+				work: {
+					id: 'W2064815984', doi: '10.1126/science.1231143', title: 'Multiplex Genome Engineering Using CRISPR/Cas Systems', abstract: 'We engineered two type II CRISPR/Cas systems.',
+					publicationDate: '2013-01-04', type: 'article', citedByCount: 15354, isOpenAccess: true, openAccessUrl: 'https://www.ncbi.nlm.nih.gov/pmc/articles/3795411', authors: ['Le Cong'], source: 'Science',
+				},
+				candidates: [],
+			},
+		});
+
+		const text = textOf(await new GetNplWorkTool(makeLogService(), client).invoke(makeOptions({ reference: ` ${reference} ` }), makeToken()));
+
+		expect(calls.map(c => ({ tool: c.tool, input: c.input }))).toEqual([{ tool: 'get_npl_work', input: { reference } }]);
+		expect({
+			matched: text.includes('Status: matched (title match, similarity 1). This is the cited work.'),
+			xp: text.includes('EPO NPL accession number: XP055102030'),
+			dated: text.includes('Published: 2013-01-04 in Science'),
+			doi: text.includes('DOI: https://doi.org/10.1126/science.1231143'),
+			abstract: text.includes('Abstract: We engineered two type II CRISPR/Cas systems.'),
+		}).toEqual({ matched: true, xp: true, dated: true, doi: true, abstract: true });
+	});
+
+	it('renders candidates as possible matches, never as the cited work', async () => {
+		const { client } = makeBackendClient({
+			get_npl_work: {
+				reference: 'SMITH: "A FILLER"', status: 'candidates', method: null, confidence: null, work: null,
+				candidates: [{ work: { id: 'W1', doi: '10.1/a', title: 'A dental filler', publicationDate: '1998-01-01', source: 'J Dent' }, score: 0.7 }],
+			},
+		});
+
+		const text = textOf(await new GetNplWorkTool(makeLogService(), client).invoke(makeOptions({ reference: 'SMITH: "A FILLER"' }), makeToken()));
+
+		expect({
+			status: text.includes('Status: candidates.'),
+			candidate: text.includes('1. A dental filler (1998-01-01, J Dent, DOI 10.1/a, title similarity 0.7)'),
+			noCitedWork: text.includes('This is the cited work'),
+		}).toEqual({ status: true, candidate: true, noCitedWork: false });
+	});
+
+	it('refuses an empty reference without calling the backend', async () => {
+		const { client, calls } = makeBackendClient({});
+		const text = textOf(await new GetNplWorkTool(makeLogService(), client).invoke(makeOptions({ reference: '  ' }), makeToken()));
+		expect({ calls: calls.length, error: text.startsWith('Error: No reference provided') }).toEqual({ calls: 0, error: true });
 	});
 });
 

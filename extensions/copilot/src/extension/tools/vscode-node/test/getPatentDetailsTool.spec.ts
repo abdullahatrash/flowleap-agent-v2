@@ -51,8 +51,9 @@ function recordedPatentLedger(executions: readonly PatentExecution[]): IPatentEx
 	return { ...unrecordedPatentLedger, read: async () => ({ executions, limitation: 'Recorded in this test.' }) };
 }
 
-async function detailsText(backendClient: IPatentBackendClient, requested = publication, ledger = unrecordedPatentLedger): Promise<string> {
-	const result = await new GetPatentDetailsTool(logService(), backendClient, ledger).invoke({ input: { publicationNumber: requested }, toolInvocationToken: undefined } as vscode.LanguageModelToolInvocationOptions<{ publicationNumber: string }>, CancellationToken.None);
+async function detailsText(backendClient: IPatentBackendClient, requested = publication, ledger = unrecordedPatentLedger, resolveNpl?: boolean): Promise<string> {
+	const input = resolveNpl === undefined ? { publicationNumber: requested } : { publicationNumber: requested, resolveNpl };
+	const result = await new GetPatentDetailsTool(logService(), backendClient, ledger).invoke({ input, toolInvocationToken: undefined } as vscode.LanguageModelToolInvocationOptions<{ publicationNumber: string; resolveNpl?: boolean }>, CancellationToken.None);
 	return (result.content[0] as LanguageModelTextPart).value;
 }
 
@@ -147,5 +148,62 @@ describe('GetPatentDetailsTool priority dates', () => {
 		}();
 		const text = await detailsText(client);
 		expect(text.split('\n').find(line => line.startsWith('**Priority Date(s):**'))).toBe('**Priority Date(s):** 2008-04-16 (US20080103744)');
+	});
+});
+
+describe('GetPatentDetailsTool cited papers (resolveNpl)', () => {
+	const cong = 'CONG L. ET AL: "MULTIPLEX GENOME ENGINEERING USING CRISPR/CAS SYSTEMS", SCIENCE, 2013, XP055102030';
+	const matched = {
+		status: 'matched', method: 'title', confidence: 1,
+		work: { openalexId: 'W2064815984', doi: '10.1126/science.1231143', title: 'Multiplex Genome Engineering Using CRISPR/Cas Systems', abstract: 'We engineered two type II CRISPR/Cas systems.', publicationDate: '2013-01-04', source: 'Science', openAccessUrl: null },
+	};
+
+	function recordingBackend(citedReferences: object[]): { client: IPatentBackendClient; bodies: unknown[] } {
+		const bodies: unknown[] = [];
+		const inner = backend(noClaims, citedReferences, 'WO2014093661A2');
+		const client = new class extends mock<IPatentBackendClient>() {
+			override async post<T>(path: string, body?: unknown): Promise<T> {
+				if (path.endsWith('get_bibliography')) { bodies.push(body); }
+				return inner.post<T>(path, body, CancellationToken.None);
+			}
+		}();
+		return { client, bodies };
+	}
+
+	it('asks get_bibliography for resolve_npl only when resolveNpl is set', async () => {
+		const off = recordingBackend([{ docId: '', citedBy: 'examiner', category: 'X', npl: cong }]);
+		await detailsText(off.client, 'WO2014093661A2');
+		const on = recordingBackend([{ docId: '', citedBy: 'examiner', category: 'X', npl: cong, nplWork: matched }]);
+		await detailsText(on.client, 'WO2014093661A2', unrecordedPatentLedger, true);
+		expect({ off: off.bodies, on: on.bodies }).toEqual({
+			off: [{ patent_number: 'WO2014093661A2' }],
+			on: [{ patent_number: 'WO2014093661A2', resolve_npl: true }],
+		});
+	});
+
+	it('renders the matched cited paper under its [NPL] entry', async () => {
+		const text = await detailsText(recordingBackend([{ docId: '', citedBy: 'examiner', category: 'X', npl: cong, nplWork: matched }]).client, 'WO2014093661A2', unrecordedPatentLedger, true);
+		expect({
+			paper: text.includes(`- [NPL] ${cong} — examiner, category X\n  - Cited paper (OpenAlex, matched by title): Multiplex Genome Engineering Using CRISPR/Cas Systems (published 2013-01-04, Science, DOI https://doi.org/10.1126/science.1231143)`),
+			abstract: text.includes('    Abstract: We engineered two type II CRISPR/Cas systems.'),
+			legend: text.includes('a "matched" record is the cited work'),
+			hint: text.includes('resolveNpl: true'),
+		}).toEqual({ paper: true, abstract: true, legend: true, hint: false });
+	});
+
+	it('points at resolveNpl when the cited papers are printed strings only', async () => {
+		const text = await detailsText(recordingBackend([{ docId: '', citedBy: 'applicant', npl: cong }]).client, 'WO2014093661A2');
+		expect(text).toContain('1 non-patent reference(s) above are printed strings only. To read the cited papers, call get_patent_details again with resolveNpl: true');
+	});
+
+	it('names candidates as possible matches and an unresolved paper as such', async () => {
+		const text = await detailsText(recordingBackend([
+			{ docId: '', citedBy: 'examiner', npl: 'SMITH: "A FILLER"', nplWork: { status: 'candidates', method: null, confidence: null, work: null, candidates: [{ work: { id: 'W1', doi: '10.1/a', title: 'A dental filler', publicationDate: '1998', source: null }, score: 0.7 }] } },
+			{ docId: '', citedBy: 'examiner', npl: 'ISO 9001', nplWork: { status: 'not_found', method: null, confidence: null, work: null } },
+		]).client, 'WO2014093661A2', unrecordedPatentLedger, true);
+		expect({
+			candidates: text.includes('  - Possible matches (OpenAlex, none certain): A dental filler (DOI 10.1/a)'),
+			notFound: text.includes('- [NPL] ISO 9001 — examiner\n  - Cited paper: not found in OpenAlex'),
+		}).toEqual({ candidates: true, notFound: true });
 	});
 });

@@ -149,6 +149,7 @@ The other branches (C analytics, E claim comparison, F/G patent lookup and figur
 → NUMBER FORMATS: given an APPLICATION number (e.g. 16/123,456), call `search_citations` directly — separators are normalized for you, no lookup call first. Given a PUBLICATION number (US YYYY/NNNNNNN), resolve the application number first (get_patent_details or the USPTO application endpoint), then `search_citations`.
 → `search_citations` also takes `dateFrom`/`dateTo` to bound the office-action date window. Use `citation_api_guide` ONLY for aggregate citation statistics
 → Citation categories: X=novelty-destroying (102), Y=obviousness (103), A=background
+→ CITED PAPERS (NPL): offices print cited literature as one free-text string, not a document number. To say what a cited paper is or discloses, resolve it: `get_patent_details` with resolveNpl: true resolves every [NPL] entry of a patent's cited references at once; `get_npl_work` resolves one string (or a DOI) to its OpenAlex record with the full abstract. Only a "matched" record is the cited paper; "candidates" are possible matches, never the cited one
 → NOT this branch: the applicant's own parent/child chain or a prosecution/legal-event chronology is branch M (`get_continuity` / `get_prosecution_timeline`), not citations.
 → Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited
 
@@ -191,6 +192,7 @@ The other branches (C analytics, E claim comparison, F/G patent lookup and figur
 → SECOND PASS: `search_academic` (Semantic Scholar, arXiv) for preprints and CS/physics work, then deduplicate against the `search_npl` hits by DOI or title
 → READ BEYOND THE ABSTRACT: fetch_webpage the open-access URL or DOI. Cite NPL by authors, title, venue, publication date and DOI — never as a patent number
 → ZERO HITS: reformulate (synonyms, broader terms, drop filters) before reporting that no NPL exists; a filtered zero is not a clean zero
+→ PAPERS ALREADY CITED AGAINST A PATENT (examiner or applicant): do not search for them, resolve them: `get_patent_details` with resolveNpl: true for all of one patent's cited papers, `get_npl_work` for one citation string or DOI. Start a novelty or invalidity NPL search from these: their titles and venues are the examiner's own NPL terms
 → Keywords: papers, articles, scientific literature, journal, conference, thesis, NPL, non-patent literature, academic prior art
 
 

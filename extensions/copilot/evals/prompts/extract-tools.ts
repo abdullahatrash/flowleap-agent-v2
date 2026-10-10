@@ -52,6 +52,7 @@ export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.SearchLegal,
 	ToolName.LegalSearchGuide,
 	ToolName.SearchNpl,
+	ToolName.GetNplWork,
 	ToolName.SearchAcademic,
 	ToolName.ReadPdf,
 	ToolName.WritePatentResults,
