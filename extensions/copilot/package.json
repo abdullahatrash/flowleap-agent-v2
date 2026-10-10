@@ -2232,15 +2232,15 @@
         "toolReferenceName": "academic",
         "canBeReferencedInPrompt": true,
         "icon": "$(book)",
-        "userDescription": "Search academic sources like Google Scholar and arXiv",
-        "modelDescription": "Searches academic research papers (Google Scholar, arXiv, PubMed) for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (uspto_api_guide + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. Input: query (free text, e.g. 'CRISPR gene editing off-target effects'); sources (['scholar','arxiv','pubmed'], default ['scholar','arxiv']); maxResults (default 10, max 50).",
+        "userDescription": "Search academic papers on Semantic Scholar and arXiv",
+        "modelDescription": "Searches academic research papers on Semantic Scholar and arXiv for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (uspto_api_guide + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. It does not search Google Scholar or PubMed; for biomedical literature use web search (site:pubmed.gov). Results are relevance-ranked with the two sources interleaved and duplicates merged. The result reports each source's status: if a source was rate limited or failed, say so and retry later rather than concluding no literature exists. Input: query (free text; wrap an exact phrase in double quotes, e.g. '\"solid state electrolyte\" lithium'); sources (['scholar','arxiv'], default both; 'scholar' is Semantic Scholar); maxResults (default 10, max 50); fromYear / toYear (inclusive publication-year bounds, e.g. toYear = the priority year to keep to art published before it).",
         "tags": [],
         "inputSchema": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "Search query for academic papers (e.g., 'neural networks image classification', 'CRISPR gene editing')"
+              "description": "Search query for academic papers (e.g., 'neural networks image classification', '\"CRISPR\" off-target'). Wrap an exact phrase in double quotes."
             },
             "sources": {
               "type": "array",
@@ -2248,11 +2248,10 @@
                 "type": "string",
                 "enum": [
                   "scholar",
-                  "arxiv",
-                  "pubmed"
+                  "arxiv"
                 ]
               },
-              "description": "Which academic sources to search (default: ['scholar', 'arxiv'])",
+              "description": "Which academic sources to search: 'scholar' (Semantic Scholar) and/or 'arxiv' (default: both)",
               "default": [
                 "scholar",
                 "arxiv"
@@ -2264,6 +2263,18 @@
               "default": 10,
               "minimum": 1,
               "maximum": 50
+            },
+            "fromYear": {
+              "type": "number",
+              "description": "Only papers published in or after this year (inclusive)",
+              "minimum": 1000,
+              "maximum": 9999
+            },
+            "toYear": {
+              "type": "number",
+              "description": "Only papers published in or before this year (inclusive)",
+              "minimum": 1000,
+              "maximum": 9999
             }
           },
           "required": [
