@@ -81,6 +81,7 @@ Prior art is NOT limited to patents:
 2. `search_academic` as a second pass (Semantic Scholar, arXiv) for preprints and CS/physics work; deduplicate against step 1 by DOI or title
 3. `web_search` for what neither reaches: product manuals, web disclosures, standards bodies' sites, `site:ieee.org` (if unavailable, steps 1-2 are the NPL sources — note any remaining gap)
 4. Read past the abstract via `fetch_webpage` on the open-access URL or DOI before relying on a paper; cite it by authors, title, venue, date and DOI
+5. Papers an office already cited (the [NPL] entries of a source or family publication's cited references) are resolved, not searched: `get_patent_details` with `resolveNpl: true` resolves all of them to their OpenAlex record, `get_npl_work` one citation string or DOI. Only a `matched` record is the cited paper
 
 ### 2f. Family & Citation Expansion
 - **Known source or family patent first**: when the disclosure names a source, parent or family publication (even a post-cutoff one), retrieve it with `get_patent_details` and work its listed cited references before widening the search. For an EP family the citations sit on the A3 search-report publication, not on the A1/A2 or the B1 grant, so retrieve `EPnnnnnnnA3` when the named publication shows none. Record the source publication itself as post-cutoff context, not as a candidate.

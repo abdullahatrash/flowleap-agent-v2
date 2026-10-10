@@ -37,12 +37,12 @@ const baseline = {
 	dedupe: 'docdb-number',
 };
 
-function tool(written: Map<string, string>, requests: unknown[]) {
+function tool(written: Map<string, string>, requests: unknown[], data: object = baseline) {
 	const { ledger, executions } = recordingPatentLedger();
 	const client = new class extends mock<IPatentBackendClient>() {
 		override async post<T>(path: string, body?: unknown): Promise<T> {
 			requests.push({ path, body });
-			return { success: true, data: baseline } as T;
+			return { success: true, data } as T;
 		}
 	}();
 	const fileSystem = new class extends mock<IFileSystemService>() {
@@ -63,10 +63,10 @@ function tool(written: Map<string, string>, requests: unknown[]) {
 	return { executions, tool: new ExaminerBaselineTool(log, client, fileSystem, paths, workspace, instantiation, ledger) };
 }
 
-async function run(input: { publication: string; saveDir?: string }) {
+async function run(input: { publication: string; saveDir?: string }, data: object = baseline) {
 	const written = new Map<string, string>();
 	const requests: unknown[] = [];
-	const { tool: baselineTool, executions } = tool(written, requests);
+	const { tool: baselineTool, executions } = tool(written, requests, data);
 	const result = await baselineTool.invoke({ input } as vscode.LanguageModelToolInvocationOptions<typeof input>, CancellationToken.None);
 	const text = result.content.filter((part): part is LanguageModelTextPart => part instanceof LanguageModelTextPart).map(part => part.value).join('');
 	return { text, written, requests, executions };
@@ -108,5 +108,17 @@ describe('ExaminerBaselineTool', () => {
 			requests: 0,
 			executions: [{ kind: 'analytics', status: 'failed', tool: 'examiner_baseline', request: 'EP2110298B1', purpose: 'Examiner Baseline of EP2110298B1 (Find Better Step 1)' }],
 		});
+	});
+});
+
+describe('ExaminerBaselineTool cited papers', () => {
+	it('tells the model how many NPL rows were resolved and where to read them', async () => {
+		const withNpl = {
+			...baseline,
+			documents: [...baseline.documents, { document: 'NPL: CONG L. ET AL', npl: 'CONG L. ET AL: "MULTIPLEX GENOME ENGINEERING"', cells: {}, nplWork: { status: 'matched', work: { title: 'Multiplex', doi: '10.1126/science.1231143' } } }],
+			nplResolution: { references: 1, matched: 1, candidates: 0, notFound: 0, failed: 0, skipped: 0 },
+		};
+		const { text } = await run({ publication: 'EP2110298B1' }, withNpl);
+		expect(text).toContain('Non-patent literature: 1 cited paper row(s). OpenAlex lookup: 1 matched, 0 with candidates only, 0 not found, 0 failed, 0 skipped. Each NPL row\'s nplWork in the file carries');
 	});
 });

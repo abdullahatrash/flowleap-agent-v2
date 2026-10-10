@@ -27,6 +27,26 @@ const maxCitedReferences = 40;
 interface IGetPatentDetailsParams {
 	publicationNumber: string;
 	evidenceLookup?: PatentEvidenceLookup;
+	/** Resolve each cited non-patent reference to its OpenAlex record (get_bibliography `resolve_npl`). */
+	resolveNpl?: boolean;
+}
+
+/** What get_bibliography `resolve_npl` attaches to a non-patent reference: the record in brief, or why there is none. */
+interface NplWorkSummary {
+	status: 'matched' | 'candidates' | 'not_found' | 'lookup_failed' | 'skipped';
+	method?: 'openalex_id' | 'doi' | 'title' | null;
+	confidence?: number | null;
+	work: {
+		openalexId: string;
+		doi: string | null;
+		title: string;
+		abstract: string | null;
+		publicationDate: string | null;
+		source: string | null;
+		openAccessUrl: string | null;
+	} | null;
+	candidates?: { work: { id: string; doi: string | null; title: string; publicationDate: string | null; source: string | null }; score: number }[];
+	error?: string;
 }
 
 /**
@@ -43,6 +63,7 @@ interface CitedReference {
 	relevantClaims?: string;
 	relevantPassages?: string[];
 	npl?: string;
+	nplWork?: NplWorkSummary;
 }
 
 /** `data` payload of the `get_bibliography` facade tool. */
@@ -122,7 +143,7 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IGetPatentDetailsParams>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		this.logService.trace('[GetPatentDetailsTool] Invoking patent details fetch');
 
-		const { publicationNumber } = options.input;
+		const { publicationNumber, resolveNpl } = options.input;
 		const doc = this.normalizePublicationNumber(publicationNumber);
 		this.logService.info(`[GetPatentDetailsTool] Normalized: ${publicationNumber} -> ${doc}`);
 
@@ -131,12 +152,14 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 		}
 
 		try {
-			const biblioPromise = callFacadeTool<BiblioData>(this.patentBackendClient, 'get_bibliography', { patent_number: doc }, token);
+			// resolve_npl costs one OpenAlex read per cited NPL string, so it is sent only when asked for.
+			const biblioOptions = resolveNpl ? { resolve_npl: true } : {};
+			const biblioPromise = callFacadeTool<BiblioData>(this.patentBackendClient, 'get_bibliography', { patent_number: doc, ...biblioOptions }, token);
 			const claimsPromise = this.fetchOptionalSection<ClaimsData>('get_claims', doc, token);
 			const descriptionPromise = this.fetchOptionalSection<DescriptionData>('get_description', doc, token);
 
 			const biblio = await biblioPromise;
-			const searchReport = await this.fetchSearchReportCitations(biblio, doc, token);
+			const searchReport = await this.fetchSearchReportCitations(biblio, doc, biblioOptions, token);
 			const [claims, description] = await Promise.all([claimsPromise, descriptionPromise]);
 
 			const sources: PatentEvidenceSource[] = [];
@@ -189,18 +212,18 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 	 * none (verified live 2026-09-11). A live run showed the model ignoring a pointer to the A3, so the
 	 * tool fetches that record itself; the cost is one cached bibliography read per EP retrieval.
 	 */
-	private async fetchSearchReportCitations(biblio: BiblioData, doc: string, token: CancellationToken): Promise<{ readonly docId: string; readonly references: readonly CitedReference[] } | undefined> {
+	private async fetchSearchReportCitations(biblio: BiblioData, doc: string, biblioOptions: Record<string, unknown>, token: CancellationToken): Promise<{ readonly docId: string; readonly references: readonly CitedReference[] } | undefined> {
 		if (biblio.citedReferences?.length) { return undefined; }
 		const ep = /^EP(?<number>\d+)\.?(?:A[12]|B\d)$/i.exec(biblio.docId || doc);
 		if (!ep) { return undefined; }
 		const a3 = `EP${ep.groups?.number}A3`;
-		const report = await this.fetchOptionalSection<BiblioData>('get_bibliography', a3, token);
+		const report = await this.fetchOptionalSection<BiblioData>('get_bibliography', a3, token, biblioOptions);
 		return report?.citedReferences?.length ? { docId: a3, references: report.citedReferences } : undefined;
 	}
 
-	private async fetchOptionalSection<T>(toolName: string, doc: string, token: CancellationToken): Promise<T | null> {
+	private async fetchOptionalSection<T>(toolName: string, doc: string, token: CancellationToken, extraInput: Record<string, unknown> = {}): Promise<T | null> {
 		try {
-			return await callFacadeTool<T>(this.patentBackendClient, toolName, { patent_number: doc }, token);
+			return await callFacadeTool<T>(this.patentBackendClient, toolName, { patent_number: doc, ...extraInput }, token);
 		} catch (error) {
 			if (error instanceof PatentBackendError && error.message === 'Request cancelled.') {
 				throw error;
@@ -227,11 +250,15 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			return ep ? ['', `**Cited references:** none on this ${ep.groups?.kind} publication, and the ${docId.replace(/\.?(A[12]|B\d)$/i, '')}A3 search-report record returned none or was unavailable.`] : [];
 		}
 		const shown = entries.slice(0, maxCitedReferences);
+		const nplCount = references.filter(reference => reference.npl?.trim()).length;
+		const resolved = references.some(reference => reference.nplWork);
 		return [
 			`## Cited references (${origin})`,
 			'Examiner-cited X/Y entries are the closest art on record for this document. Retrieve only the in-scope, pre-cutoff ones, one at a time, and read each with evidenceLookup before retrieving the next; a retrieved document that is never cited is disclosed in the report as unreviewed.',
 			...shown,
 			...(entries.length > shown.length ? [`… and ${entries.length - shown.length} more`] : []),
+			...(nplCount && !resolved ? [`${nplCount} non-patent reference(s) above are printed strings only. To read the cited papers, call get_patent_details again with resolveNpl: true (all of them, OpenAlex title, DOI and abstract) or get_npl_work with one [NPL] string.`] : []),
+			...(resolved ? ['Cited papers: a "matched" record is the cited work; "candidates" are possible matches only, never cite one as the cited paper; for "not found", "skipped" or "lookup failed", call get_npl_work with the [NPL] string or search_npl with its title words.'] : []),
 			'',
 		];
 	}
@@ -327,7 +354,32 @@ function formatCitedReference(reference: CitedReference, jurisdictions: readonly
 		reference.relevantClaims?.trim() ? `claims ${reference.relevantClaims.trim()}` : '',
 	].filter(Boolean);
 	const passages = (reference.relevantPassages ?? []).map(formatCitedPassage).filter(Boolean);
-	return `- ${label}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''} — ${facts.join(', ')}${passages.length ? `; passages: ${passages.join('; ')}` : ''}${formatCitedScope(reference, jurisdictions)}`;
+	const paper = reference.npl?.trim() && reference.nplWork ? formatNplWork(reference.nplWork) : [];
+	return [`- ${label}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''} — ${facts.join(', ')}${passages.length ? `; passages: ${passages.join('; ')}` : ''}${formatCitedScope(reference, jurisdictions)}`, ...paper].join('\n');
+}
+
+/** Abstract characters shown under a cited paper; get_npl_work returns it whole. */
+const NPL_ABSTRACT_PREVIEW_CHARS = 600;
+
+/** The indented lines under an [NPL] bullet: its OpenAlex record, the possible matches, or why there is none. */
+function formatNplWork(summary: NplWorkSummary): string[] {
+	const work = summary.work;
+	if (summary.status === 'matched' && work) {
+		const facts = [work.publicationDate && `published ${work.publicationDate}`, work.source, work.doi && `DOI https://doi.org/${work.doi}`].filter(Boolean).join(', ');
+		const abstract = work.abstract
+			? (work.abstract.length > NPL_ABSTRACT_PREVIEW_CHARS ? work.abstract.substring(0, NPL_ABSTRACT_PREVIEW_CHARS) + '...' : work.abstract)
+			: undefined;
+		return [
+			`  - Cited paper (OpenAlex, matched by ${summary.method === 'title' ? 'title' : summary.method === 'openalex_id' ? 'OpenAlex id' : 'DOI'}): ${work.title}${facts ? ` (${facts})` : ''}`,
+			...(work.openAccessUrl ? [`    Open access: ${work.openAccessUrl}`] : []),
+			...(abstract ? [`    Abstract: ${abstract}`] : []),
+		];
+	}
+	if (summary.status === 'candidates' && summary.candidates?.length) {
+		return [`  - Possible matches (OpenAlex, none certain): ${summary.candidates.map(candidate => `${candidate.work.title}${candidate.work.doi ? ` (DOI ${candidate.work.doi})` : ''}`).join('; ')}`];
+	}
+	const why = summary.status === 'skipped' ? 'not looked up (over the per-call cap)' : summary.status === 'lookup_failed' ? `lookup failed${summary.error ? ` (${summary.error})` : ''}` : 'not found in OpenAlex';
+	return [`  - Cited paper: ${why}`];
 }
 
 ToolRegistry.registerTool(GetPatentDetailsTool);

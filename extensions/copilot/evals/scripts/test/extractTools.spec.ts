@@ -30,6 +30,7 @@ describe('extract-tools', () => {
 			'fetch_webpage',
 			'get_continuity',
 			'get_legal_status',
+			'get_npl_work',
 			'get_patent_details',
 			'get_patent_family',
 			'get_patent_figures',

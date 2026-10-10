@@ -73,6 +73,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasLegalSearchGuide: toolNames.has(ToolName.LegalSearchGuide),
 		hasSearchAcademic: toolNames.has(ToolName.SearchAcademic),
 		hasSearchNpl: toolNames.has(ToolName.SearchNpl),
+		hasGetNplWork: toolNames.has(ToolName.GetNplWork),
 		hasWritePatentResults: toolNames.has(ToolName.WritePatentResults),
 		hasCompareClaims: toolNames.has(ToolName.CompareClaims),
 		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
@@ -101,6 +102,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasLegalSearchGuide,
 		base.hasSearchAcademic,
 		base.hasSearchNpl,
+		base.hasGetNplWork,
 		base.hasWritePatentResults,
 		base.hasCompareClaims,
 		base.hasPatentAnalyticsViz,
@@ -380,6 +382,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				→ NUMBER FORMATS: given an APPLICATION number (e.g. 16/123,456), call `search_citations` directly — separators are normalized for you, no lookup call first. Given a PUBLICATION number (US YYYY/NNNNNNN), resolve the application number first (get_patent_details or the USPTO application endpoint), then `search_citations`.<br />
 				→ `search_citations` also takes `dateFrom`/`dateTo` to bound the office-action date window. Use `citation_api_guide` ONLY for aggregate citation statistics<br />
 				→ Citation categories: X=novelty-destroying (102), Y=obviousness (103), A=background<br />
+				{tools.hasGetNplWork && <>→ CITED PAPERS (NPL): offices print cited literature as one free-text string, not a document number. To say what a cited paper is or discloses, resolve it: {tools.hasGetPatentDetails && <>`get_patent_details` with resolveNpl: true resolves every [NPL] entry of a patent's cited references at once; </>}`get_npl_work` resolves one string (or a DOI) to its OpenAlex record with the full abstract. Only a "matched" record is the cited paper; "candidates" are possible matches, never the cited one<br /></>}
 				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>→ NOT this branch: the applicant's own parent/child chain or a prosecution/legal-event chronology is branch M (`get_continuity` / `get_prosecution_timeline`), not citations.<br /></>}
 				→ Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited<br />
 				<br />
@@ -431,6 +434,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					{tools.hasSearchAcademic && <>→ SECOND PASS: `search_academic` (Semantic Scholar, arXiv) for preprints and CS/physics work, then deduplicate against the `search_npl` hits by DOI or title<br /></>}
 					→ READ BEYOND THE ABSTRACT: fetch_webpage the open-access URL or DOI. Cite NPL by authors, title, venue, publication date and DOI — never as a patent number<br />
 					→ ZERO HITS: reformulate (synonyms, broader terms, drop filters) before reporting that no NPL exists; a filtered zero is not a clean zero<br />
+					{tools.hasGetNplWork && <>→ PAPERS ALREADY CITED AGAINST A PATENT (examiner or applicant): do not search for them, resolve them: {tools.hasGetPatentDetails && <>`get_patent_details` with resolveNpl: true for all of one patent's cited papers, </>}`get_npl_work` for one citation string or DOI. Start a novelty or invalidity NPL search from these: their titles and venues are the examiner's own NPL terms<br /></>}
 					→ Keywords: papers, articles, scientific literature, journal, conference, thesis, NPL, non-patent literature, academic prior art<br />
 					<br />
 				</>}

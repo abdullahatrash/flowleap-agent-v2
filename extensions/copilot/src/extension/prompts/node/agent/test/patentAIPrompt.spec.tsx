@@ -33,6 +33,7 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.SearchLegal,
 	ToolName.LegalSearchGuide,
 	ToolName.SearchNpl,
+	ToolName.GetNplWork,
 	ToolName.SearchAcademic,
 	ToolName.WritePatentResults,
 	ToolName.CompareClaims,
@@ -363,6 +364,16 @@ suite('PatentAIInstructions NPL routing', () => {
 			webAfterNpl: output.includes('NPL that `search_npl` (branch N) does not reach'),
 			keylessPivot: output.includes('`search_npl` — scholarly LITERATURE (OpenAlex)'),
 		}).toEqual({ branch: true, primary: true, secondPass: true, webAfterNpl: true, keylessPivot: true });
+	});
+
+	test('papers cited against a patent are resolved with get_npl_work or resolveNpl, not searched', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		const without = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.GetNplWork));
+		expect({
+			citationsBranch: output.includes('CITED PAPERS (NPL)') && output.includes('`get_patent_details` with resolveNpl: true resolves every [NPL] entry'),
+			nplBranch: output.includes('PAPERS ALREADY CITED AGAINST A PATENT (examiner or applicant): do not search for them, resolve them'),
+			absentWithoutTool: without.includes('get_npl_work'),
+		}).toEqual({ citationsBranch: true, nplBranch: true, absentWithoutTool: false });
 	});
 
 	test('without search_npl, branch N is absent and NPL stays on search_academic', async () => {

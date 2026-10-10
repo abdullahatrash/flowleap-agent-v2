@@ -41,7 +41,19 @@ interface ExaminerBaselineDocument {
 	readonly document: string;
 	readonly kinds?: readonly string[];
 	readonly npl?: string;
+	/** NPL rows only: the cited paper's OpenAlex record (backend get_npl_work), or why there is none. */
+	readonly nplWork?: { readonly status?: string; readonly work?: { readonly title?: string; readonly doi?: string | null } | null };
 	readonly cells?: Readonly<Record<string, ExaminerBaselineCell>>;
+}
+
+/** How many NPL rows the backend looked up in OpenAlex, by outcome. */
+interface ExaminerBaselineNplResolution {
+	readonly references?: number;
+	readonly matched?: number;
+	readonly candidates?: number;
+	readonly notFound?: number;
+	readonly failed?: number;
+	readonly skipped?: number;
 }
 
 /** A member or source with no citation record. A gap is not "nothing cited". */
@@ -80,6 +92,7 @@ export interface ExaminerBaseline {
 	readonly documents?: readonly ExaminerBaselineDocument[];
 	readonly gaps?: readonly ExaminerBaselineGap[];
 	readonly dedupe?: string;
+	readonly nplResolution?: ExaminerBaselineNplResolution;
 	/**
 	 * Never in a Baseline the CLI or the backend computed: `patent_api_request` adds it when it cuts a
 	 * result at its character budget. A Baseline that carries it is refused (#526).
@@ -585,7 +598,8 @@ export function renderBaseline(review: FindBetterFields): string[] {
 			'| --- | ' + offices.map(() => '---').join(' | ') + ' |',
 			...documents.map(document => {
 				const claims = bestArtClaims(review, document);
-				const name = (document.npl ? `NPL: ${document.npl}` : `${document.document}${document.kinds?.length ? ' ' + document.kinds.join(', ') : ''}`) + (claims.length ? ` (examiner's best art, claim ${claims.join(', ')})` : '');
+				const doi = document.nplWork?.status === 'matched' ? document.nplWork.work?.doi : undefined;
+				const name = (document.npl ? `NPL: ${document.npl}${doi ? ` (DOI ${doi})` : ''}` : `${document.document}${document.kinds?.length ? ' ' + document.kinds.join(', ') : ''}`) + (claims.length ? ` (examiner's best art, claim ${claims.join(', ')})` : '');
 				return '| ' + [name, ...offices.map(office => baselineCell(document.cells?.[office]))].map(cell).join(' | ') + ' |';
 			}),
 			'',

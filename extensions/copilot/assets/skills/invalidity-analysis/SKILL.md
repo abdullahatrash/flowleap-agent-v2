@@ -33,6 +33,7 @@ Run the **prior-art** skill's broad-to-narrow engine with these overrides:
 - Hard date filter: publication before the priority date
 - **De-prioritize art of record** (from Phase 1.4) — log it, but the prize is art the examiner never considered
 - NPL hits hard here (`search_npl` first, then `search_academic`): printed publications are fully usable in IPR, and examiners rarely searched them
+- Papers already of record: resolve the target's cited [NPL] entries (`get_patent_details` with `resolveNpl: true`, or `get_npl_work` for one string) before searching, so the NPL sweep logs them as art of record and aims past them
 - Check the applicant's own earlier filings and the inventors' own papers — self-collision is common
 - Aim at the allowance-winning feature identified in Phase 1.4
 
