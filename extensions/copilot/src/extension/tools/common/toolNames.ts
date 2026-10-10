@@ -107,6 +107,7 @@ export enum ToolName {
 	SearchLegal = 'search_legal',
 	LegalSearchGuide = 'legal_search_guide',
 	SearchAcademic = 'search_academic',
+	SearchNpl = 'search_npl',
 	ReadPdf = 'read_pdf',
 	WritePatentResults = 'write_patent_results',
 	PatentSearchSubagent = 'patent_search_subagent',
@@ -183,6 +184,7 @@ export enum ContributedToolName {
 	// internal ToolName (same enum key), so `search_patents` reaches SearchPatentsTool.
 	SearchPatents = 'copilot_searchPatents',
 	SearchAcademic = 'copilot_searchAcademic',
+	SearchNpl = 'copilot_searchNpl',
 	WritePatentResults = 'copilot_writePatentResults',
 	PatentSearchSubagent = 'copilot_patentSearchSubagent',
 	CompareClaims = 'copilot_compareClaims',
@@ -359,6 +361,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.SearchLegal]: ToolCategory.WebInteraction,
 	[ToolName.LegalSearchGuide]: ToolCategory.WebInteraction,
 	[ToolName.SearchAcademic]: ToolCategory.WebInteraction,
+	[ToolName.SearchNpl]: ToolCategory.WebInteraction,
 	[ToolName.ReadPdf]: ToolCategory.Core,
 	[ToolName.WritePatentResults]: ToolCategory.Core,
 	[ToolName.PatentSearchSubagent]: ToolCategory.Core,

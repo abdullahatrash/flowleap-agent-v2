@@ -72,6 +72,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasSearchLegal: toolNames.has(ToolName.SearchLegal),
 		hasLegalSearchGuide: toolNames.has(ToolName.LegalSearchGuide),
 		hasSearchAcademic: toolNames.has(ToolName.SearchAcademic),
+		hasSearchNpl: toolNames.has(ToolName.SearchNpl),
 		hasWritePatentResults: toolNames.has(ToolName.WritePatentResults),
 		hasCompareClaims: toolNames.has(ToolName.CompareClaims),
 		hasPatentAnalyticsViz: toolNames.has(ToolName.PatentAnalyticsViz),
@@ -99,6 +100,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasSearchLegal,
 		base.hasLegalSearchGuide,
 		base.hasSearchAcademic,
+		base.hasSearchNpl,
 		base.hasWritePatentResults,
 		base.hasCompareClaims,
 		base.hasPatentAnalyticsViz,
@@ -393,7 +395,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				{this.props.webSearchAvailable ? <>
 					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
-					→ Two web tools: fetch_webpage (ALWAYS available; fetches any concrete URL) and web_search (available to this model). Use them (a) for offices with no dedicated tool (CN/JP/KR) and NPL, AND (b) when a BACKEND ROUTE IS EXHAUSTED — a US/EP/WO document whose dedicated route is dead or returns no usable data after you reformulated and tried the alternate office (per the escalation ladder)<br />
+					→ Two web tools: fetch_webpage (ALWAYS available; fetches any concrete URL) and web_search (available to this model). Use them (a) for offices with no dedicated tool (CN/JP/KR) and {tools.hasSearchNpl ? <>NPL that `search_npl` (branch N) does not reach — product docs, web disclosures, standards bodies' own sites</> : <>NPL</>}, AND (b) when a BACKEND ROUTE IS EXHAUSTED — a US/EP/WO document whose dedicated route is dead or returns no usable data after you reformulated and tried the alternate office (per the escalation ladder)<br />
 					→ FIRST RESORT is always the dedicated tool — for US patents the USPTO path (uspto_api_guide → your Lucene query → search_patents with provider="uspto"), for EP/WO search_patents / ops_api_guide. Fall back to the web only once that route is exhausted (dead or empty after reformulation + alternate office), NOT instead of it<br />
 					→ Web search is configured for patent/academic domains only<br />
 					→ FETCH-AND-VERIFY sources for full text a backend route cannot return: Google Patents (patents.google.com/patent/NUMBER) and freepatentsonline.com — fetch_webpage the document page, then quote only the text actually returned (spot-check the number and title against the page)<br />
@@ -405,12 +407,12 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					{'• Medical papers: site:pubmed.gov "keywords"'}<br />
 					{'• CS/Physics: site:arxiv.org "keywords"'}<br />
 					{'• Engineering: site:ieee.org "keywords"'}<br />
-					→ USE FOR: CN/JP/KR patents, academic prior art, NPL<br />
-					→ COMBINE: EPO OPS (EP/WO) + USPTO (US) + Web Search (CN/JP/KR + NPL)<br />
+					→ USE FOR: CN/JP/KR patents, {tools.hasSearchNpl ? <>NPL beyond `search_npl`</> : <>academic prior art, NPL</>}<br />
+					→ COMBINE: EPO OPS (EP/WO) + USPTO (US) + {tools.hasSearchNpl && <>`search_npl` (NPL) + </>}Web Search (CN/JP/KR{tools.hasSearchNpl ? <> + remaining NPL</> : <> + NPL</>})<br />
 					→ CONFIDENTIALITY: the user's invention description may be unfiled and confidential. Before putting it into a web search, generalize the terms (e.g. specific mechanism → standard technical category). If a meaningful search requires the distinctive details themselves, tell the user web searches leave the Patent AI backend and ask before proceeding.<br />
 				</> : <>
 					**L) WEB FALLBACK — CN/JP/KR patents, NPL, OR any document a backend route cannot return?**<br />
-					→ fetch_webpage IS available to you (web_search is not) — it fetches any concrete URL, so you are NOT without web capability. Use it as the fallback whenever a backend route is exhausted, and search_academic for NPL.<br />
+					→ fetch_webpage IS available to you (web_search is not) — it fetches any concrete URL, so you are NOT without web capability. Use it as the fallback whenever a backend route is exhausted, and {tools.hasSearchNpl ? <>`search_npl` (branch N), then search_academic,</> : <>search_academic</>} for NPL.<br />
 					→ FETCH-AND-VERIFY: for full-text claims/description a backend route cannot return (US/EP/WO route dead or empty after the escalation ladder, or CN/JP/KR), fetch_webpage the document on Google Patents (patents.google.com/patent/NUMBER) or freepatentsonline.com, then quote only the text the page actually returned (spot-check the number and title). State a specific coverage gap only after that also fails — never assert you "have no web search capabilities".<br />
 				</>}
 				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>
@@ -420,6 +422,16 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 					{tools.hasGetProsecutionTimeline && <>→ PROSECUTION / LEGAL-EVENT TIMELINE: `get_prosecution_timeline` (input: publicationNumber) for a dated chronology of filing, grant, oppositions, assignments, renewals/maintenance and lapse (EP Register + INPADOC legal events; most complete for EP/WO, INPADOC-only for US).<br /></>}
 					→ DISAMBIGUATION: examiner-cited prior art (X/Y/A, "what was cited against this") → branch I (`search_citations`), NOT this branch. A patent's own claims/description text → branch F (`get_patent_details`).{tools.hasGetLegalStatus && <> The CURRENT status verdict ("is it still in force / has it lapsed or expired") → `get_legal_status` (branch F), NOT the timeline — use `get_prosecution_timeline` only when the user wants the dated HISTORY of events.</>} Use these typed tools instead of the raw `uspto_api_guide` continuity / file-wrapper path for standard lookups.<br />
 					→ Keywords: continuity, parent application, child application, divisional, continuation, continuation-in-part, priority chain, double patenting, prosecution history, file wrapper, prosecution timeline, event history<br />
+					<br />
+				</>}
+				{tools.hasSearchNpl && <>
+					**N) NON-PATENT LITERATURE (NPL) — papers, proceedings, theses, reports, standards?**<br />
+					→ PRIMARY: `search_npl` — OpenAlex, 250M+ scholarly works across all disciplines, ranked by relevance, each with publication date, venue, DOI, citation count and abstract. Use it FIRST for every NPL need: a prior-art, novelty, invalidity or FTO search covers NPL alongside the patent offices unless the user excludes it<br />
+					→ QUERY: the same discriminating terms as the patent query, written as a paper would phrase them (drop claim language like "wherein", "plurality"); run 2-3 variants for distinct essential features. Set toYear to the year of the critical date and still check each publicationDate against the exact date. Narrow with type (journal-article, proceedings-article, review, dissertation, standard, …) or openAccess only when it serves the question<br />
+					{tools.hasSearchAcademic && <>→ SECOND PASS: `search_academic` (Semantic Scholar, arXiv) for preprints and CS/physics work, then deduplicate against the `search_npl` hits by DOI or title<br /></>}
+					→ READ BEYOND THE ABSTRACT: fetch_webpage the open-access URL or DOI. Cite NPL by authors, title, venue, publication date and DOI — never as a patent number<br />
+					→ ZERO HITS: reformulate (synonyms, broader terms, drop filters) before reporting that no NPL exists; a filtered zero is not a clean zero<br />
+					→ Keywords: papers, articles, scientific literature, journal, conference, thesis, NPL, non-patent literature, academic prior art<br />
 					<br />
 				</>}
 			</Tag>
@@ -609,7 +621,7 @@ class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
 		}
 
 		const hasPatstat = tools.hasPatstatPortfolio || tools.hasPatstatQuery || tools.hasPatstatGraph || tools.hasPatstatApiGuide;
-		const hasKeylessTool = hasPatstat || tools.hasSearchLegal || tools.hasSearchAcademic;
+		const hasKeylessTool = hasPatstat || tools.hasSearchLegal || tools.hasSearchNpl || tools.hasSearchAcademic;
 
 		return <Tag name='keyGateDoctrine'>
 			KEY-GATE DOCTRINE — what you do when an office answers data_keys_required:<br />
@@ -625,6 +637,7 @@ class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
 				**KEYLESS PIVOT — offer it as DIFFERENT data, never as a substitute.** While an office is gated, these need no Patent-Data Key and stay live; you may offer them to keep the work moving, each labeled for what it actually is:<br />
 				{hasPatstat && <>{'  '}• PATSTAT analytics — aggregate counts from a twice-yearly SNAPSHOT (portfolios, filing trends, landscapes). Aggregates, not documents, and not current: it does not answer "what prior art exists for this claim".<br /></>}
 				{tools.hasSearchLegal && <>{'  '}• `search_legal` — patent LAW (MPEP/EPC/guidelines). It tells you the legal standard, never what has been published or filed.<br /></>}
+				{tools.hasSearchNpl && <>{'  '}• `search_npl` — scholarly LITERATURE (OpenAlex). Papers are prior art in their own right, but they are not patent documents and cover a different corpus.<br /></>}
 				{tools.hasSearchAcademic && <>{'  '}• `search_academic` — scholarly LITERATURE. Papers are prior art in their own right, but they are not patent documents and cover a different corpus.<br /></>}
 				{'  '}• Say plainly that this is different data, not a stand-in for the gated office's live search. Never present a keyless result as if it closed the missing-key gap.<br />
 			</>}

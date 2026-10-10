@@ -66,6 +66,7 @@ export const DEFAULT_READ_TOOLS: readonly string[] = [
 export const PATENT_TOOLS: readonly string[] = [
 	// Search & query building
 	'patents',
+	'npl',
 	'academic',
 	'buildPatentQuery',
 	'buildUSPTOQuery',

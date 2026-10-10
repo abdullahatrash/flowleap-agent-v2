@@ -121,7 +121,7 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 
 - Search EPO via #tool:search_patents with CQL queries
 - Search USPTO with your own Lucene query via #tool:patent_api_request (endpoint shapes from #tool:uspto_api_guide)
-- Search academic via #tool:search_academic for papers and non-patent literature
+- Search non-patent literature via #tool:search_npl first (OpenAlex: journal articles, proceedings, theses, standards), then #tool:search_academic (Semantic Scholar, arXiv) as a second pass
 - Use #tool:fetch_webpage for web-based sources when needed
 
 ### 4. Analyze & Synthesize

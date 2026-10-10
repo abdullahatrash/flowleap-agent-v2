@@ -32,14 +32,14 @@ Run the **prior-art** skill's broad-to-narrow engine with these overrides:
 - Concept table built from the TARGET's independent claim elements (not an invention description)
 - Hard date filter: publication before the priority date
 - **De-prioritize art of record** (from Phase 1.4) — log it, but the prize is art the examiner never considered
-- NPL hits hard here (`search_academic`): printed publications are fully usable in IPR, and examiners rarely searched them
+- NPL hits hard here (`search_npl` first, then `search_academic`): printed publications are fully usable in IPR, and examiners rarely searched them
 - Check the applicant's own earlier filings and the inventors' own papers — self-collision is common
 - Aim at the allowance-winning feature identified in Phase 1.4
 
 ## When a search fails
 
 Prior art rarely sits in one office — before concluding the art isn't there, work the ladder in order:
-1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — rebuild the concept table from other claim elements, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty) and the NPL sweep (`search_academic`). A clean zero on the killer element is not "no invalidating art" until searched every way.
+1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — rebuild the concept table from other claim elements, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty) and the NPL sweep (`search_npl`, then `search_academic`). A clean zero on the killer element is not "no invalidating art" until searched every way.
 2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER report a gap in the art from an errored call.
 3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
 

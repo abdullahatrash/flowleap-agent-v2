@@ -52,6 +52,7 @@ describe('extract-tools', () => {
 			'search_citations',
 			'search_forward_citations',
 			'search_legal',
+			'search_npl',
 			'search_patents',
 			'start_application_draft',
 			'uspto_api_guide',

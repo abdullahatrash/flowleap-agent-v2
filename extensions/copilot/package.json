@@ -2227,6 +2227,69 @@
         }
       },
       {
+        "name": "copilot_searchNpl",
+        "displayName": "Search Non-Patent Literature",
+        "toolReferenceName": "npl",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(library)",
+        "userDescription": "Search 250M+ scholarly works (OpenAlex) for non-patent literature",
+        "modelDescription": "Searches non-patent literature (NPL) in OpenAlex: 250M+ scholarly works across all disciplines (journal articles, conference proceedings, book chapters, preprints, reviews, theses, reports, standards), ranked by relevance. This is the PRIMARY NPL source: use it first whenever prior-art, novelty, invalidity or landscape work needs papers, or the user asks for scientific literature. Each work carries its publication date (check it against the critical date), venue, DOI, citation count, abstract and open-access link. Use search_academic as a second pass (Semantic Scholar, arXiv) and web search for what neither covers (product docs, web disclosures). Not a patent database: use the patent tools for patent documents. Input: query (free text, e.g. 'sulfide solid electrolyte lithium dendrite suppression'); optional fromYear/toYear (inclusive publication years); openAccess (true = only open-access works); type (journal-article, proceedings-article, book-chapter, preprint, review, book, dissertation, report, standard, dataset); limit (default 10, max 50); page (default 1).",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query for scholarly works (e.g., 'perovskite solar cell moisture stability')"
+            },
+            "fromYear": {
+              "type": "number",
+              "description": "Only works published in or after this year"
+            },
+            "toYear": {
+              "type": "number",
+              "description": "Only works published in or before this year (e.g. the year before the priority date)"
+            },
+            "openAccess": {
+              "type": "boolean",
+              "description": "Only return open-access works"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "journal-article",
+                "proceedings-article",
+                "book-chapter",
+                "preprint",
+                "review",
+                "book",
+                "dissertation",
+                "report",
+                "standard",
+                "dataset"
+              ],
+              "description": "Restrict to one publication type"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Results per page (default: 10, max: 50)",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 50
+            },
+            "page": {
+              "type": "number",
+              "description": "Page number (default: 1)",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      {
         "name": "copilot_searchAcademic",
         "displayName": "Search Academic Sources",
         "toolReferenceName": "academic",
