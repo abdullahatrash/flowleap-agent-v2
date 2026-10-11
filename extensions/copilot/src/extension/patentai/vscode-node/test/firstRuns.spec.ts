@@ -95,12 +95,16 @@ describe('the published first runs', () => {
 		]);
 	});
 
-	it('ships each one as a bundled prompt file whose body is the same prompt', () => {
+	// The claim seed in the prompt library names no patent: the user fills in their own. It is the
+	// published prompt with the demo number swapped for the placeholder, and nothing else.
+	const CLAIM_SEED = PUBLISHED_PROMPTS.claim.replace('WO1999051190A1', '{publication number}');
+
+	it('ships each one as a bundled prompt file whose body is the same prompt, the claim with a placeholder', () => {
 		expect(firstRuns().map(run => {
 			const file = path.join(BUNDLED_PROMPTS_DIR, `${run.promptFileName}.prompt.md`);
 			return { id: run.id, body: parsePromptFile(fs.readFileSync(file, 'utf8'), run.promptFileName).body };
 		})).toEqual([
-			{ id: 'claim', body: PUBLISHED_PROMPTS.claim },
+			{ id: 'claim', body: CLAIM_SEED },
 			{ id: 'priorArt', body: PUBLISHED_PROMPTS.priorArt },
 			{ id: 'officeAction', body: PUBLISHED_PROMPTS.officeAction },
 		]);
