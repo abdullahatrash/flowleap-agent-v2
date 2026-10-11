@@ -152,7 +152,7 @@ describe('GetPatentDetailsTool Euro-PCT fallback', () => {
 		const german = await detailsText(backend(woClaims, undefined, ep), ep);
 		const english = await detailsText(backend({ ...noClaims, unsegmentedText: unsegmented }));
 		expect({
-			german: german.includes('**Language:** de. The backend had no English text for this publication; any English wording of these claims is a translation, say so when you cite it.'),
+			german: german.includes('**Language:** de (English requested, none available). An English rendering of these claims is a translation.'),
 			english: english.includes('**Language:**'),
 		}).toEqual({ german: true, english: false });
 	});
@@ -171,7 +171,7 @@ describe('GetPatentDetailsTool Euro-PCT fallback', () => {
 		const text = await detailsText(withDescription, ep);
 		const descriptionSection = text.slice(text.indexOf('## [Description]'));
 		expect(descriptionSection).toContain(`**Served from ${wo}, not ${ep} (euro_pct_fulltext_in_wo):** ${descriptionNote}`);
-		expect(descriptionSection).toContain('**Language:** de.');
+		expect(descriptionSection).toContain('**Language:** de (English requested, none available). An English rendering of this description is a translation.');
 	});
 
 	it('prints no fallback line when the backend served the requested document', async () => {

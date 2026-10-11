@@ -328,8 +328,10 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 /**
  * What the reader must know before the text of a full-text section: which document it came from,
  * when that is not the one asked for, and its language, when that is not the English the tool
- * asked for. The backend's `fallback.note` is printed verbatim; a live run without these lines had
- * the model fetch a machine translation from the web and present it beside unlabelled WO text.
+ * asked for. Facts only, no instruction: the model chooses whether and where to get an English
+ * rendering (Google Patents is a fair, citable source) and labels it. The backend's `fallback.note`
+ * is printed verbatim; a live run without these lines had the model fetch a machine translation
+ * from the web and present it first, beside unlabelled WO text.
  */
 function formatSectionProvenance(section: { fallback?: FulltextFallback; language: string }, name: 'claims' | 'description'): string[] {
 	const lines: string[] = [];
@@ -337,7 +339,7 @@ function formatSectionProvenance(section: { fallback?: FulltextFallback; languag
 		lines.push(`**Served from ${section.fallback.servedDocId}, not ${section.fallback.requestedDocId} (${section.fallback.reason}):** ${section.fallback.note}`);
 	}
 	if (section.language && section.language.toLowerCase() !== 'en') {
-		lines.push(`**Language:** ${section.language}. The backend had no English text for this publication; any English wording of ${name === 'claims' ? 'these claims' : 'this description'} is a translation, say so when you cite it.`);
+		lines.push(`**Language:** ${section.language} (English requested, none available). An English rendering of ${name === 'claims' ? 'these claims' : 'this description'} is a translation.`);
 	}
 	return lines.length ? [...lines, ''] : [];
 }
