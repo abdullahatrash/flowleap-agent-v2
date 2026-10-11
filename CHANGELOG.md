@@ -59,11 +59,6 @@ test-only work, CI) belong in the commit message, not here.
 - Agents Window skills re-vendored at flowleap-cli v0.11.0: the NPL recall rules,
   `npl-work` and `biblio --resolve-npl` in the flowleap-patent and flowleap-npl skills, and
   the ASD-STE100 writing rule in the flowleap skill. (cli#141, cli#142)
-- The Patent Agent writes its own explanations in ASD-STE100 Simplified Technical
-  English style: short sentences, active voice, one meaning per word. This applies to
-  chat answers and to the prose of reports, memos and charts. Quoted claims, cited
-  passages and legal terms are not changed, and hedges such as "likely" and "may"
-  stay. (#617, #619)
 - In Patent IDE mode, the Changes view in the Agents Window no longer offers pull
   request, merge or checkout actions. Commit, Sync and Discard stay. Developer mode is
   unchanged. (#614)
