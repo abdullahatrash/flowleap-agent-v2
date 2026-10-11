@@ -14,6 +14,60 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-11
+
+### Added
+
+- **Patent AI in Agents Window Claude sessions.** A Claude session in the Agents
+  Window now gets a "Patent Data" tool set with every patent tool, including
+  `search_npl` and `get_npl_work`, and a **Patent AI** agent in the agent picker. The
+  agent file (`patent-ai.agent.md`) is generated from the editor Patent AI prompt. It
+  uses the tool names that Claude sees (`mcp__client__*`) and tells Claude to get
+  patent data only from these tools, not from other patent MCP servers. The tools use
+  your EPO and USPTO keys from FlowLeap Settings. The editor Patent Agent chat is
+  unchanged. (#609, #612, #613)
+- **Non-patent literature search with OpenAlex.** The new `search_npl` tool searches
+  more than 250 million works. It filters by year range, open access and publication
+  type, and shows the date, venue, DOI, citation count, abstract and open-access link
+  for each result. The Patent Agent now uses it first for literature, then
+  `search_academic` as a second pass. (#607)
+- **Examiner-cited papers resolved.** The new `get_npl_work` tool resolves one cited
+  paper, from the citation string or a DOI, to its OpenAlex record. `get_patent_details`
+  with `resolveNpl` resolves every cited paper of a patent at once. Only a matched
+  record is shown as the cited paper; other hits are shown as possible matches. (#611)
+- **Semantic Scholar key in FlowLeap Settings.** An optional third card stores your own
+  Semantic Scholar API key. Academic search then uses your key's rate limit, not the
+  shared public limit. (#610)
+- **Your own links in the Browser launcher.** A new **My links** section at the top of
+  the Browser view holds links that you add with **+ Add link** (name optional, URL
+  required). Remove a link with ×. The Unified Patent Court section also has a link to
+  the UPC Opt-out Registry. (#618, #620)
+- **Prior art on a patent** in the Prompts view: a prior-art search on a publication
+  number, with a recall check against the documents the examiners cited. The "Read a
+  claim properly" prompt now takes a publication number. (#615)
+
+### Changed
+
+- `search_academic` names its real sources (Semantic Scholar and arXiv), takes a year
+  filter, and shows one status line per source, for example when a source is rate
+  limited. (#608)
+- The `sep-declarations` skill counts ETSI SEP declarations from the ETSI views on the
+  PATSTAT server first. The download of the ETSI export is now only a fallback. (#606)
+- The prior-art and Find Better skills search with classification codes and citations
+  as well as keywords, read each result set in full, and report how many of the
+  examiner-cited documents the search found, with a reason for each miss. (#616)
+- The Patent Agent writes its own explanations in ASD-STE100 Simplified Technical
+  English style: short sentences, active voice, one meaning per word. This applies to
+  chat answers and to the prose of reports, memos and charts. Quoted claims, cited
+  passages and legal terms are not changed, and hedges such as "likely" and "may"
+  stay. (#617, #619)
+- In Patent IDE mode, the Changes view in the Agents Window no longer offers pull
+  request, merge or checkout actions. Commit, Sync and Discard stay. Developer mode is
+  unchanged. (#614)
+- `get_patent_details`: when a full-text section comes from another document than the
+  one requested (for example, WO text for a Euro-PCT EP publication) or is not in
+  English, the section now says which document and which language it is. (#621)
+
 ## [0.7.0] - 2026-10-09
 
 ### Added
