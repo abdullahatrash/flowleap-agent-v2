@@ -84,6 +84,19 @@ interface BiblioData {
 	citedReferences?: CitedReference[];
 }
 
+/**
+ * The backend served a full-text section from another publication than the one asked for, and
+ * says so (backend `fulltext-router.ts`, add-only). Today the one reason is `euro_pct_fulltext_in_wo`:
+ * a Euro-PCT EP A publication has no EPO full text, the text was published once, in the WO document.
+ * `note` is the backend's own sentence for the reader; it is printed verbatim.
+ */
+interface FulltextFallback {
+	reason: string;
+	requestedDocId: string;
+	servedDocId: string;
+	note: string;
+}
+
 /** `data` payload of the `get_claims` facade tool — numbered claims, not bare strings. */
 interface ClaimsData {
 	documentReference?: PatentDocumentReference | null;
@@ -92,12 +105,14 @@ interface ClaimsData {
 	totalClaims: number | null;
 	unsegmentedText?: string;
 	language: string;
+	fallback?: FulltextFallback;
 }
 
 /** `data` payload of the `get_description` facade tool. */
 interface DescriptionData {
 	documentReference?: PatentDocumentReference | null;
 	docId: string;
+	fallback?: FulltextFallback;
 	description: string | null;
 	language: string;
 }
@@ -294,10 +309,12 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 			biblio.abstract || 'No abstract available.',
 			'',
 			`## ${patentCitationLink('Claims', claims?.documentReference)}${anchorLabel(claims?.documentReference, claims?.language)}`,
+			...(claims && (claims.claims.length > 0 || claims.unsegmentedText) ? formatSectionProvenance(claims, 'claims') : []),
 			// Numbered claims are citable and unsegmented text is not, so prefer them whenever both arrive.
 			claims && claims.claims.length > 0 ? claims.claims.map(c => `${patentCitationLink(`Claim ${c.number}`, c.documentReference)}${anchorLabel(c.documentReference, claims.language)}\n${c.text}`).join('\n\n') : claims?.unsegmentedText ? `Individual claim numbers could not be established. Cite the claims section only.\n\n${claims.unsegmentedText}` : fulltextFallback,
 			'',
 			`## ${patentCitationLink('Description', description?.documentReference)}`,
+			...(description?.description ? formatSectionProvenance(description, 'description') : []),
 			description?.description ? description.description.split(/\r?\n/).map(line => line.trim() ? `${anchorLabel(description.documentReference, description.language).trim()} ${line}` : '').join('\n') : fulltextFallback,
 			'',
 			'---',
@@ -306,6 +323,25 @@ export class GetPatentDetailsTool implements ICopilotTool<IGetPatentDetailsParam
 
 		return lines.join('\n');
 	}
+}
+
+/**
+ * What the reader must know before the text of a full-text section: which document it came from,
+ * when that is not the one asked for, and its language, when that is not the English the tool
+ * asked for. Facts only, no instruction: the model chooses whether and where to get an English
+ * rendering (Google Patents is a fair, citable source) and labels it. The backend's `fallback.note`
+ * is printed verbatim; a live run without these lines had the model fetch a machine translation
+ * from the web and present it first, beside unlabelled WO text.
+ */
+function formatSectionProvenance(section: { fallback?: FulltextFallback; language: string }, name: 'claims' | 'description'): string[] {
+	const lines: string[] = [];
+	if (section.fallback) {
+		lines.push(`**Served from ${section.fallback.servedDocId}, not ${section.fallback.requestedDocId} (${section.fallback.reason}):** ${section.fallback.note}`);
+	}
+	if (section.language && section.language.toLowerCase() !== 'en') {
+		lines.push(`**Language:** ${section.language} (English requested, none available). An English rendering of ${name === 'claims' ? 'these claims' : 'this description'} is a translation.`);
+	}
+	return lines.length ? [...lines, ''] : [];
 }
 
 /** `19941018` in bibliographic data, `1994-10-18` everywhere a reader looks; anything else is passed through. */
