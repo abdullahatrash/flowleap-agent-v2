@@ -14,10 +14,6 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
-### Changed
-
-- Agents Window skills re-vendored at flowleap-cli v0.11.0: the NPL recall rules, `npl-work` and `biblio --resolve-npl` in the flowleap-patent and flowleap-npl skills, and the ASD-STE100 writing rule in the flowleap skill (cli#141, cli#142).
-
 ## [0.7.0] - 2026-10-09
 
 ### Added
