@@ -86,6 +86,8 @@ import { REVEAL_CI_CHECKS_COMMAND_ID } from './checksActions.js';
 // eslint-disable-next-line local/code-import-patterns -- TODO: move skill button constants out of providers
 import { AGENT_HOST_SKILL_BUTTON_UPDATE_PR_ID, isAgentHostSkillButtonId } from '../../providers/agentHost/browser/agentHostSkillButtons.js';
 import { AGENT_HOST_AUTO_MERGE_OPERATION_IDS, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID } from '../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
+import { isPatentHiddenChangesetOperation } from '../common/patentChangesetOperations.js';
 import { ActiveSessionContextKeys, CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID, ChangesContextKeys, ChangesViewMode, IsolationMode, SESSIONS_CHANGES_OPEN_SINGLE_FILE_DIFF_SETTING } from '../common/changes.js';
 import { buildTreeChildren, ChangesTreeElement, ChangesTreeRenderer, IChangesFileItem, IChangesTreeRootInfo, isChangesFileItem, isChangesFileResource, toIChangesFileItem } from './changesViewRenderer.js';
 import { ResourceTree } from '../../../../base/common/resourceTree.js';
@@ -381,6 +383,9 @@ class ChangesWorkbenchButtonBarWidget extends Disposable implements IChangesButt
 			SinglePaneChangesEditorTransitionContext.getValue(contextKeyService) === true);
 		const workspaceFoldersObs = observableFromEvent(workspaceContextService.onDidChangeWorkspaceFolders, () =>
 			workspaceContextService.getWorkspace().folders);
+		// FlowLeap Patent IDE (#471): no pull request, merge or checkout operations in Patent IDE mode.
+		const patentIdeModeObs = observableFromEvent(contextKeyService.onDidChangeContext, () =>
+			PatentIdeContextKeys.Mode.getValue(contextKeyService) === true);
 
 		// Client-side entries that belong *inside* the operations dropdown rather
 		// than beside it. The `primary` group is special: an action contributed
@@ -427,7 +432,8 @@ class ChangesWorkbenchButtonBarWidget extends Disposable implements IChangesButt
 			const changesetOperations = operations
 				.filter(op => op.scopes.includes(SessionChangesetOperationScope.Changeset))
 				.filter(op => !AGENT_HOST_AUTO_MERGE_OPERATION_IDS.has(op.id))
-				.filter(op => !excludedOperationIds.has(op.id));
+				.filter(op => !excludedOperationIds.has(op.id))
+				.filter(op => !patentIdeModeObs.read(reader) || !isPatentHiddenChangesetOperation(op.id));
 
 			const toOperationAction = (op: ISessionChangesetOperation) => toAction({
 				id: op.id,

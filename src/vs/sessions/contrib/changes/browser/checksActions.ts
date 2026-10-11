@@ -22,6 +22,7 @@ import { GitHubCheckConclusion, GitHubCheckStatus, IGitHubCICheck } from '../../
 import { SessionIsActiveContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { whenChatWidgetForSession } from '../../chat/browser/chatWidgetUtils.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
 export const hasActiveSessionFailedCIChecks = new RawContextKey<boolean>('sessions.hasActiveSessionFailedCIChecks', false);
 
 /**
@@ -205,7 +206,7 @@ class FixCIChecksAction extends Action2 {
 				id: MenuId.AgentsChangesPrimaryActionSubMenu,
 				group: '5_checks',
 				order: 4,
-				when: ContextKeyExpr.and(IsSessionsWindowContext, hasActiveSessionFailedCIChecks, activeSessionCIFixRequested.negate()),
+				when: ContextKeyExpr.and(IsSessionsWindowContext, hasActiveSessionFailedCIChecks, activeSessionCIFixRequested.negate(), PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: no CI checks in Patent IDE mode (#471)
 			}],
 		});
 	}

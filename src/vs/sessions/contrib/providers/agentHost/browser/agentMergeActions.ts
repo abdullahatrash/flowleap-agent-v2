@@ -29,6 +29,7 @@ import { Menus } from '../../../../browser/menus.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { getGlobalAgentMergeConfiguration, getSessionAgentMergeConfigurationObservable } from '../../../../browser/sessionAgentMerge.js';
+import { PatentIdeContextKeys } from '../../../../../workbench/common/patent/patentIdeContextKeys.js';
 
 const agentMergeCommandPrecondition = ContextKeyExpr.and(
 	IsSessionsWindowContext,
@@ -230,7 +231,7 @@ MenuRegistry.appendMenuItem(Menus.ChangesOperationsDropdown, {
 	icon: Codicon.gitMerge,
 	group: CHANGES_OPERATIONS_DROPDOWN_PRIMARY_GROUP,
 	order: 1,
-	when: ContextKeyExpr.and(agentMergeMenuPrecondition, agentMergeOwnsPrimaryButton),
+	when: ContextKeyExpr.and(agentMergeMenuPrecondition, agentMergeOwnsPrimaryButton, PatentIdeContextKeys.Mode.toNegated()), // FlowLeap Patent IDE: no Agent Merge in Patent IDE mode (#471)
 });
 
 /** Menus the top-level Agent Merge entries appear on: the operations dropdown, and their own context menu. */

@@ -42,6 +42,7 @@ import { IDiffEditorOptionsService, SESSIONS_DIFF_EDITOR_WORD_WRAP_SETTING, SESS
 import { CHANGES_HEADER_ACTIONS_ID } from './changesView.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
 import { isChangesFileResource } from './changesViewRenderer.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
 
 const openChangesViewActionOptions: IAction2Options = {
 	id: 'workbench.action.agentSessions.openChangesView',
@@ -114,7 +115,8 @@ class OpenPullRequestAction extends Action2 {
 				order: 9,
 				when: ContextKeyExpr.and(
 					IsSessionsWindowContext,
-					ActiveSessionContextKeys.HasPullRequest)
+					ActiveSessionContextKeys.HasPullRequest,
+					PatentIdeContextKeys.Mode.toNegated()) // FlowLeap Patent IDE: no pull requests in Patent IDE mode (#471)
 			}
 		});
 	}

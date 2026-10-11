@@ -17,12 +17,14 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { NullActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { createActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { isIMenuItem, MenuItemAction, MenuRegistry } from '../../../../../platform/actions/common/actions.js';
-import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
+import { AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID, AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, AGENT_HOST_MERGE_CHANGESET_OPERATION_ID, AGENT_HOST_SYNC_CHANGESET_OPERATION_ID } from '../../../../../platform/agentHost/common/agentHostChangesetOperationService.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { Context } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { ActiveEditorContext } from '../../../../../workbench/common/contextkeys.js';
+import { PatentIdeContextKeys } from '../../../../../workbench/common/patent/patentIdeContextKeys.js';
 import { workbenchInstantiationService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -73,7 +75,7 @@ suite('Changes Actions', () => {
 		const sessionsService = new class extends mock<ISessionsService>() {
 			override readonly activeSession = constObservable(undefined);
 		}();
-		disposables.add(new ChangesHeaderChangesetOperationsActionContribution(sessionsService, new class extends mock<IChangesViewService>() { }(), actionViewItemService));
+		disposables.add(new ChangesHeaderChangesetOperationsActionContribution(sessionsService, new class extends mock<IChangesViewService>() { }(), actionViewItemService, new MockContextKeyService()));
 
 		const commandId = 'workbench.contrib.sessions.changesHeaderChangesetOperation.commit';
 		assert.deepStrictEqual(register.getCalls().map(call => [call.args[0], call.args[1]]), [
@@ -210,7 +212,7 @@ suite('Changes Actions', () => {
 			override readonly activeSessionChangesetObs = constObservable(changeset);
 			override readonly activeSessionChangesetOperationsObs = operations;
 		}();
-		disposables.add(new ChangesHeaderChangesetOperationsActionContribution(sessionsService, changesViewService, new NullActionViewItemService()));
+		disposables.add(new ChangesHeaderChangesetOperationsActionContribution(sessionsService, changesViewService, new NullActionViewItemService(), new MockContextKeyService()));
 
 		const actionPrefix = 'workbench.contrib.sessions.changesHeaderChangesetOperation.';
 		const getActions = () => MenuRegistry.getMenuItems(Menus.SessionsEditorHeaderLayout)
@@ -310,6 +312,53 @@ suite('Changes Actions', () => {
 		}, {
 			menuActions: 0,
 			commitCommandRegistered: false,
+		});
+	});
+	test('Patent IDE mode drops pull request and merge operations from the draft Changes header (#471)', () => {
+		const operation = (id: string, label: string): ISessionChangesetOperation => ({
+			id,
+			label,
+			scopes: [SessionChangesetOperationScope.Changeset],
+			status: SessionChangesetOperationStatus.Idle,
+		});
+		const changeset = upcastPartial<ISessionChangeset>({
+			id: UNCOMMITTED_CHANGES_CHANGESET_ID,
+			isEnabled: constObservable(true),
+			operations: constObservable([
+				operation(AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, 'Commit'),
+				operation('create-pr', 'Create PR'),
+				operation(AGENT_HOST_MERGE_CHANGESET_OPERATION_ID, 'Merge Changes'),
+			]),
+		});
+		const chat = upcastPartial<IChat>({ changesets: constObservable([changeset]) });
+		const sessionsService = new class extends mock<ISessionsService>() {
+			override readonly activeSession = constObservable<IActiveSession | undefined>(upcastPartial<IActiveSession>({
+				resource: URI.parse('test-session:draft'),
+				status: constObservable(SessionStatus.Untitled),
+				workspace: constObservable(undefined),
+				mainChat: constObservable(chat),
+				activeChat: constObservable(chat),
+			}));
+		}();
+		const actionPrefix = 'workbench.contrib.sessions.changesHeaderChangesetOperation.';
+		const registeredOperations = (patentIdeMode: boolean) => {
+			const contextKeyService = new MockContextKeyService();
+			contextKeyService.createKey(PatentIdeContextKeys.Mode.key, patentIdeMode);
+			const contribution = new ChangesHeaderChangesetOperationsActionContribution(sessionsService, new class extends mock<IChangesViewService>() { }(), new NullActionViewItemService(), contextKeyService);
+			const ids = MenuRegistry.getMenuItems(Menus.SessionsEditorHeaderLayout)
+				.filter(isIMenuItem)
+				.filter(item => item.command.id.startsWith(actionPrefix))
+				.map(item => item.command.id.substring(actionPrefix.length));
+			contribution.dispose();
+			return ids;
+		};
+
+		assert.deepStrictEqual({
+			developer: registeredOperations(false),
+			patent: registeredOperations(true),
+		}, {
+			developer: [AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID, 'create-pr', AGENT_HOST_MERGE_CHANGESET_OPERATION_ID],
+			patent: [AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID],
 		});
 	});
 });
