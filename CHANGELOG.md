@@ -56,6 +56,9 @@ test-only work, CI) belong in the commit message, not here.
 - The prior-art and Find Better skills search with classification codes and citations
   as well as keywords, read each result set in full, and report how many of the
   examiner-cited documents the search found, with a reason for each miss. (#616)
+- Agents Window skills re-vendored at flowleap-cli v0.11.0: the NPL recall rules,
+  `npl-work` and `biblio --resolve-npl` in the flowleap-patent and flowleap-npl skills, and
+  the ASD-STE100 writing rule in the flowleap skill. (cli#141, cli#142)
 - The Patent Agent writes its own explanations in ASD-STE100 Simplified Technical
   English style: short sentences, active voice, one meaning per word. This applies to
   chat answers and to the prose of reports, memos and charts. Quoted claims, cited
