@@ -56,9 +56,9 @@ test-only work, CI) belong in the commit message, not here.
 - The prior-art and Find Better skills search with classification codes and citations
   as well as keywords, read each result set in full, and report how many of the
   examiner-cited documents the search found, with a reason for each miss. (#616)
-- Agents Window skills re-vendored at flowleap-cli v0.11.0: the NPL recall rules,
-  `npl-work` and `biblio --resolve-npl` in the flowleap-patent and flowleap-npl skills, and
-  the ASD-STE100 writing rule in the flowleap skill. (cli#141, cli#142)
+- Agents Window skills re-vendored at flowleap-cli v0.11.1: the NPL recall rules,
+  `npl-work` and `biblio --resolve-npl` in the flowleap-patent and flowleap-npl skills.
+  (cli#141, cli#145)
 - In Patent IDE mode, the Changes view in the Agents Window no longer offers pull
   request, merge or checkout actions. Commit, Sync and Discard stay. Developer mode is
   unchanged. (#614)
