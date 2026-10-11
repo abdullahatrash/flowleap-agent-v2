@@ -205,7 +205,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			BrowserLauncherViewProvider.viewType,
-			new BrowserLauncherViewProvider(),
+			new BrowserLauncherViewProvider(context.globalState),
 			{ webviewOptions: { retainContextWhenHidden: true } }
 		)
 	);
