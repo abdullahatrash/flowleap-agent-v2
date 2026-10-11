@@ -134,6 +134,52 @@ describe('GetPatentDetailsTool claims selection', () => {
 	});
 });
 
+describe('GetPatentDetailsTool Euro-PCT fallback', () => {
+	const wo = 'WO2025031952A1';
+	const ep = 'EP4758353A1';
+	const note = `${ep} is the European regional phase of a PCT application. EPO full text has no claims for it, so this is the claims text of ${wo}, as published in the international phase. The European-phase text can differ if the applicant amended it on entry or in examination.`;
+	const fallback = { reason: 'euro_pct_fulltext_in_wo', requestedDocId: ep, servedDocId: wo, note };
+	const woClaims = { documentReference: { publicationNumber: wo, section: 'claims' }, docId: wo, language: 'de', totalClaims: null, unsegmentedText: 'Ansprüche\n1. Hydraulischer Aktor (1 ) mit der Fähigkeit', claims: [], fallback };
+
+	it('says which document the claims came from, in the backend\'s words, before the text', async () => {
+		const text = await detailsText(backend(woClaims, undefined, ep), ep);
+		const claimsSection = text.slice(text.indexOf('## [Claims]'), text.indexOf('## [Description]'));
+		expect(claimsSection).toContain(`**Served from ${wo}, not ${ep} (euro_pct_fulltext_in_wo):** ${note}`);
+		expect(claimsSection.indexOf('Served from')).toBeLessThan(claimsSection.indexOf('Hydraulischer Aktor'));
+	});
+
+	it('says when the text is not in English, so a translation is never passed off as the record', async () => {
+		const german = await detailsText(backend(woClaims, undefined, ep), ep);
+		const english = await detailsText(backend({ ...noClaims, unsegmentedText: unsegmented }));
+		expect({
+			german: german.includes('**Language:** de. The backend had no English text for this publication; any English wording of these claims is a translation, say so when you cite it.'),
+			english: english.includes('**Language:**'),
+		}).toEqual({ german: true, english: false });
+	});
+
+	it('labels a description served from the WO publication the same way', async () => {
+		const descriptionNote = note.replace(/claims/g, 'description');
+		const client = backend(noClaims, undefined, ep);
+		const withDescription = new class extends mock<IPatentBackendClient>() {
+			override async post<T>(path: string, body?: unknown, token?: CancellationToken): Promise<T> {
+				if (path.endsWith('get_description')) {
+					return { success: true, data: { documentReference: { publicationNumber: wo, section: 'description' }, docId: wo, language: 'de', description: 'Beschreibung.', fallback: { ...fallback, note: descriptionNote } } } as T;
+				}
+				return client.post<T>(path, body, token as CancellationToken);
+			}
+		}();
+		const text = await detailsText(withDescription, ep);
+		const descriptionSection = text.slice(text.indexOf('## [Description]'));
+		expect(descriptionSection).toContain(`**Served from ${wo}, not ${ep} (euro_pct_fulltext_in_wo):** ${descriptionNote}`);
+		expect(descriptionSection).toContain('**Language:** de.');
+	});
+
+	it('prints no fallback line when the backend served the requested document', async () => {
+		const text = await detailsText(backend({ ...noClaims, unsegmentedText: unsegmented }));
+		expect(text).not.toContain('Served from');
+	});
+});
+
 describe('GetPatentDetailsTool priority dates', () => {
 	it('renders an object-shaped priority claim as an ISO date and its application id', async () => {
 		const inner = backend(noClaims);
