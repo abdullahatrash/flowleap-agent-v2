@@ -44,7 +44,8 @@ patent. Authors come from the X/Y non-patent documents.
 ## Track 3: classification co-occurrence
 
 Collect the CPC codes (from `get_patent_details`) of the target and of each
-X/Y document. Use the codes that the target shares with at least one X/Y
+X/Y document, including the 2000-series **indexing codes** (e.g.
+`F15B2211/7053`). Use the codes that the target shares with at least one X/Y
 document.
 
 - `search_patents` with
@@ -59,6 +60,32 @@ document.
 - US-only documents: write a Lucene query (`uspto_api_guide`) and run it with
   `patent_api_request`, with the same date limit.
 - Log: per code, each query and its count.
+
+### Indexing-code combinations (mandatory when the target has indexing codes)
+
+Indexing codes describe features independent of wording. Run the main group
+AND each combination of 2-3 indexing codes that the target shares with the
+examiner's documents, with the date limit and no terms, e.g.
+`cpc=F15B7/006 AND cpc=F15B2211/7053 AND cpc=F15B2211/785 AND pd<20230810`
+(45 hits, probed live 2026-10-11; it holds three of the four ISR documents of
+WO2025031952A1, one as a CA family member). Log each combination with its
+count and read every title.
+
+### Reading a result set
+
+Results come back newest first, not by relevance, 25 per call by default and
+at most 100. Read every title of a set you rely on by paging `range`
+(`1-100`, `101-200`, ...), or narrow the query until you can. Never judge a
+set from its first page. OPS returns one publication per family: match a hit
+to a Baseline document by family, not by number.
+
+### Recall check
+
+After Track 3, count how many Baseline documents (X, Y and A, by family) its
+queries returned, and log "Track 3 retrieved n of m Baseline documents". When
+the examiners' own art is missing from the classification sets, the queries
+are too narrow for new art too: add the missing documents' indexing codes or
+synonyms and run again before you trust a "no better art found".
 
 ### Term-drop pass (mandatory)
 
