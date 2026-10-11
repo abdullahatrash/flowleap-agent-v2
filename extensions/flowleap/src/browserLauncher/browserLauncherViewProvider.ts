@@ -327,15 +327,49 @@ function renderLauncher(webview: vscode.Webview, userLinks: readonly UserLink[])
 			margin-bottom: 8px;
 		}
 
+		.section-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 8px;
+		}
+
+		.section-header .section-title {
+			margin-bottom: 0;
+		}
+
+		.add-toggle,
+		.cancel-btn {
+			background: transparent;
+			color: var(--vscode-textLink-foreground);
+			border: none;
+			border-radius: 4px;
+			padding: 2px 6px;
+			font-size: 11px;
+			font-family: inherit;
+			cursor: pointer;
+		}
+
+		.add-toggle:hover,
+		.cancel-btn:hover {
+			background: var(--vscode-toolbar-hoverBackground);
+		}
+
 		.add-form {
 			display: flex;
 			flex-direction: column;
 			gap: 6px;
-			margin-bottom: 16px;
+			margin-bottom: 10px;
 		}
 
-		.add-form .open-btn {
-			align-self: flex-end;
+		.add-form[hidden] {
+			display: none;
+		}
+
+		.add-actions {
+			display: flex;
+			justify-content: flex-end;
+			gap: 6px;
 		}
 	</style>
 </head>
@@ -345,6 +379,27 @@ function renderLauncher(webview: vscode.Webview, userLinks: readonly UserLink[])
 		<button class="open-btn" id="open">Open</button>
 	</div>
 	<p class="hint">Opens as a tab in the editor area.</p>
+	<div class="section-header">
+		<div class="section-title">My links</div>
+		<button class="add-toggle" id="add-toggle" aria-expanded="false">+ Add link</button>
+	</div>
+	<div class="add-form" id="add-form" hidden>
+		<input class="url-input" id="link-label" type="text" placeholder="Name (optional)" />
+		<input class="url-input" id="link-url" type="text" placeholder="https://…" />
+		<div class="add-actions">
+			<button class="cancel-btn" id="cancel-link">Cancel</button>
+			<button class="open-btn" id="add-link">Add</button>
+		</div>
+	</div>
+	${userLinks.length ? userLinks.map(link => `
+	<div class="quick-link user-link" data-url="${escapeHtml(link.url)}">
+		<div class="quick-link-body">
+			<div class="quick-link-label">${escapeHtml(link.label)}</div>
+			<div class="quick-link-desc">${escapeHtml(link.url)}</div>
+		</div>
+		<button class="remove-btn" data-remove="${escapeHtml(link.url)}" title="Remove link" aria-label="Remove ${escapeHtml(link.label)}">×</button>
+	</div>`).join('') : `
+	<p class="empty">Add the sites you use most with + Add link.</p>`}
 	<div class="section-title">FlowLeap</div>
 	${FLOWLEAP_LINKS.map(link => `
 	<div class="quick-link" data-url="${link.url}">
@@ -363,21 +418,6 @@ function renderLauncher(webview: vscode.Webview, userLinks: readonly UserLink[])
 		<div class="quick-link-label">${link.label}</div>
 		<div class="quick-link-desc">${link.description}</div>
 	</div>`).join('')}
-	<div class="section-title">My links</div>
-	${userLinks.length ? userLinks.map(link => `
-	<div class="quick-link user-link" data-url="${escapeHtml(link.url)}">
-		<div class="quick-link-body">
-			<div class="quick-link-label">${escapeHtml(link.label)}</div>
-			<div class="quick-link-desc">${escapeHtml(link.url)}</div>
-		</div>
-		<button class="remove-btn" data-remove="${escapeHtml(link.url)}" title="Remove link" aria-label="Remove ${escapeHtml(link.label)}">×</button>
-	</div>`).join('') : `
-	<p class="empty">Add the sites you use most.</p>`}
-	<div class="add-form">
-		<input class="url-input" id="link-label" type="text" placeholder="Name (optional)" />
-		<input class="url-input" id="link-url" type="text" placeholder="https://…" />
-		<button class="open-btn" id="add-link">Add link</button>
-	</div>
 	<script nonce="${nonce}">
 		const vscode = acquireVsCodeApi();
 		const input = document.getElementById('url');
@@ -400,6 +440,18 @@ function renderLauncher(webview: vscode.Webview, userLinks: readonly UserLink[])
 			});
 		});
 
+		const addForm = document.getElementById('add-form');
+		const addToggle = document.getElementById('add-toggle');
+		const setFormOpen = (isOpen) => {
+			addForm.hidden = !isOpen;
+			addToggle.setAttribute('aria-expanded', String(isOpen));
+			if (isOpen) {
+				linkUrl.focus();
+			}
+		};
+		addToggle.addEventListener('click', () => setFormOpen(addForm.hidden));
+		document.getElementById('cancel-link').addEventListener('click', () => setFormOpen(false));
+
 		const linkLabel = document.getElementById('link-label');
 		const linkUrl = document.getElementById('link-url');
 		const addLink = () => vscode.postMessage({ command: 'addLink', label: linkLabel.value, url: linkUrl.value });
@@ -407,6 +459,8 @@ function renderLauncher(webview: vscode.Webview, userLinks: readonly UserLink[])
 		[linkLabel, linkUrl].forEach((el) => el.addEventListener('keydown', (e) => {
 			if (e.key === 'Enter') {
 				addLink();
+			} else if (e.key === 'Escape') {
+				setFormOpen(false);
 			}
 		}));
 	</script>
