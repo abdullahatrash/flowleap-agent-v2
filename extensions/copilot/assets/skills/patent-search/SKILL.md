@@ -34,7 +34,11 @@ invention.
 
 **Step 2 — write the query.** Every query needs at least one **discriminating** term —
 one that separates this invention from the millions of generic patents in its technology
-area. A CPC code is never discriminating: it names a neighbourhood, not a house.
+area. A CPC code is never discriminating: it names a neighbourhood, not a house. The one
+exception is a prior-art classification-only track: a main group AND two or three specific
+indexing codes (2000-series, e.g. `cpc=F15B7/006 AND cpc=F15B2211/7053 AND
+cpc=F15B2211/785`) is a set small enough to read in full, and it finds documents whose
+wording no keyword query matches (see the `prior-art` skill, 2a).
 
 For "AI for patent analysis", the discriminating term is `ta="patent analysis"` or
 `ta="prior art search"`. `ta="artificial intelligence"` is the neighbourhood, and
@@ -63,6 +67,12 @@ returning thousands of hits instead of tens means the closest art is never seen.
   reordered version of a query you already ran.
 - After a transient backend error, retry the SAME query at most once, then move on to a
   different query or report the gap — grinding retries is not persistence.
+
+**Reading the set.** Results come back newest first, not by relevance, 25 per call by
+default and at most 100: older art is at the end. A set you rely on is read in full by
+paging `range` (`1-100`, `101-200`, ...), or narrowed until it can be. Never judge a set
+from its first page. OPS returns one publication per family, so a document you expect may
+appear as another member (a CA or WO publication for a US one): compare by family.
 
 ## USPTO Search (US Patents)
 
