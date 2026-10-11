@@ -82,6 +82,7 @@ const BUNDLED_PROMPT_LABELS = new Map<string, string>([
 	['flowleap-search-for-prior-art', 'Search for prior art'],
 	['flowleap-read-an-office-action', 'Read an office action'],
 	['flowleap-prior-art-search', 'Prior-art search'],
+	['flowleap-prior-art-on-a-patent', 'Prior art on a patent'],
 	['flowleap-claim-analysis', 'Claim analysis'],
 	['flowleap-freedom-to-operate', 'Freedom-to-operate'],
 	['flowleap-patent-landscape', 'Patent landscape'],

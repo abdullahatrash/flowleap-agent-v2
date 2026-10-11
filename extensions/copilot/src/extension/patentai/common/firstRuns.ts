@@ -45,7 +45,12 @@ export interface FirstRun {
 	/** One-line identification of a document the prompt names, so a bare number is not unexplained. */
 	readonly note?: string;
 	readonly attachment?: FirstRunAttachment;
-	/** File stem of the bundled `.prompt.md` under `assets/prompts/flowleap/` carrying the same prompt. */
+	/**
+	 * File stem of the bundled `.prompt.md` under `assets/prompts/flowleap/` carrying the same prompt.
+	 * The claim run is the one exception: its seed is the general form, with `{publication number}`
+	 * in place of the demo number, because the prompt library is for the user's own patents while
+	 * the first run must work on one click.
+	 */
 	readonly promptFileName: string;
 }
 

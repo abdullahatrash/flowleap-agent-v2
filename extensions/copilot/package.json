@@ -7484,6 +7484,12 @@
         ]
       },
       {
+        "path": "./assets/prompts/flowleap/prior-art-on-a-patent.prompt.md",
+        "sessionTypes": [
+          "local"
+        ]
+      },
+      {
         "path": "./assets/prompts/flowleap/claim-analysis.prompt.md",
         "sessionTypes": [
           "local"
