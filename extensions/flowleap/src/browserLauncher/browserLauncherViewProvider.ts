@@ -11,7 +11,17 @@ import * as vscode from 'vscode';
 interface BrowserLauncherMessage {
 	command?: string;
 	url?: string;
+	label?: string;
 }
+
+/** A link the user added to the launcher, kept in global state. */
+export interface UserLink {
+	label: string;
+	url: string;
+}
+
+/** The global-state key of the user's own launcher links. */
+export const USER_LINKS_KEY = 'flowleap.browser.userLinks';
 
 /**
  * Patent research sites offered as one-click links. The integrated browser
@@ -34,7 +44,8 @@ const QUICK_LINKS: ReadonlyArray<{ label: string; url: string; description: stri
 /** The Unified Patent Court's case management system (CMS), where representatives file. */
 const UPC_LINKS: ReadonlyArray<{ label: string; url: string; description: string }> = [
 	{ label: 'UPC CMS Front Office', url: 'https://cms.unifiedpatentcourt.org/', description: 'User profile, organisation and legal teams' },
-	{ label: 'UPC CMS Portfolio', url: 'https://cms.unifiedpatentcourt.org/portfolio', description: 'Your UPC cases and new filings' }
+	{ label: 'UPC CMS Portfolio', url: 'https://cms.unifiedpatentcourt.org/portfolio', description: 'Your UPC cases and new filings' },
+	{ label: 'UPC Opt-out Registry', url: 'https://www.unifiedpatentcourt.org/en/registry/opt-out/', description: 'Check and search opt-out applications' }
 ];
 
 /**
@@ -49,6 +60,8 @@ export class BrowserLauncherViewProvider implements vscode.WebviewViewProvider {
 
 	private _view: vscode.WebviewView | undefined;
 	private _viewDisposables: vscode.Disposable[] = [];
+
+	constructor(private readonly _globalState: vscode.Memento) { }
 
 	public resolveWebviewView(webviewView: vscode.WebviewView): void {
 		this._view = webviewView;
@@ -69,11 +82,39 @@ export class BrowserLauncherViewProvider implements vscode.WebviewViewProvider {
 			webviewView.webview.onDidReceiveMessage((message: BrowserLauncherMessage) => {
 				if (message.command === 'open') {
 					vscode.commands.executeCommand('workbench.action.browser.open', normalizeUrl(message.url));
+				} else if (message.command === 'addLink') {
+					void this._addLink(message.label, message.url);
+				} else if (message.command === 'removeLink') {
+					void this._saveLinks(removeUserLink(this._userLinks(), message.url));
 				}
 			})
 		);
 
-		webviewView.webview.html = renderLauncher(webviewView.webview);
+		this._render();
+	}
+
+	private _userLinks(): UserLink[] {
+		return readUserLinks(this._globalState.get<unknown>(USER_LINKS_KEY));
+	}
+
+	private async _addLink(label: string | undefined, url: string | undefined): Promise<void> {
+		const result = addUserLink(this._userLinks(), label, url);
+		if (typeof result === 'string') {
+			vscode.window.showWarningMessage(result);
+			return;
+		}
+		await this._saveLinks(result);
+	}
+
+	private async _saveLinks(links: UserLink[]): Promise<void> {
+		await this._globalState.update(USER_LINKS_KEY, links);
+		this._render();
+	}
+
+	private _render(): void {
+		if (this._view) {
+			this._view.webview.html = renderLauncher(this._view.webview, this._userLinks());
+		}
 	}
 
 	private _disposeViewListeners(): void {
@@ -95,7 +136,59 @@ function normalizeUrl(url: string | undefined): string | undefined {
 	return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-function renderLauncher(webview: vscode.Webview): string {
+/**
+ * Read the stored user links, dropping any entry that is not a well-formed
+ * `{ label, url }` with an http(s) URL.
+ */
+export function readUserLinks(stored: unknown): UserLink[] {
+	if (!Array.isArray(stored)) {
+		return [];
+	}
+	return stored.filter((link): link is UserLink =>
+		typeof link?.label === 'string' && typeof link?.url === 'string' && isWebUrl(link.url));
+}
+
+/**
+ * Add a link to the list. Returns the new list, or a message saying why the
+ * link was refused. An empty label falls back to the URL's host.
+ */
+export function addUserLink(links: readonly UserLink[], label: string | undefined, url: string | undefined): UserLink[] | string {
+	const normalized = normalizeUrl(url);
+	if (!normalized || !isWebUrl(normalized)) {
+		return 'Enter a web address that starts with http:// or https://.';
+	}
+	const href = new URL(normalized).href;
+	if (links.some(link => link.url === href)) {
+		return 'This link is already in My links.';
+	}
+	const name = label?.trim() || new URL(href).host;
+	return [...links, { label: name, url: href }];
+}
+
+/** Remove the link with this URL from the list. */
+export function removeUserLink(links: readonly UserLink[], url: string | undefined): UserLink[] {
+	return links.filter(link => link.url !== url);
+}
+
+function isWebUrl(value: string): boolean {
+	try {
+		const { protocol } = new URL(value);
+		return protocol === 'http:' || protocol === 'https:';
+	} catch {
+		return false;
+	}
+}
+
+export function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+function renderLauncher(webview: vscode.Webview, userLinks: readonly UserLink[]): string {
 	const nonce = getNonce();
 
 	return `<!DOCTYPE html>
@@ -194,6 +287,56 @@ function renderLauncher(webview: vscode.Webview): string {
 			font-size: 11px;
 			margin-top: 2px;
 		}
+
+		.user-link {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+
+		.user-link .quick-link-body {
+			flex: 1;
+			min-width: 0;
+		}
+
+		.user-link .quick-link-desc {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.remove-btn {
+			background: transparent;
+			color: var(--vscode-descriptionForeground);
+			border: none;
+			border-radius: 4px;
+			padding: 2px 6px;
+			font-size: 14px;
+			line-height: 1;
+			cursor: pointer;
+		}
+
+		.remove-btn:hover {
+			color: var(--vscode-foreground);
+			background: var(--vscode-toolbar-hoverBackground);
+		}
+
+		.empty {
+			color: var(--vscode-descriptionForeground);
+			font-size: 11px;
+			margin-bottom: 8px;
+		}
+
+		.add-form {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			margin-bottom: 16px;
+		}
+
+		.add-form .open-btn {
+			align-self: flex-end;
+		}
 	</style>
 </head>
 <body>
@@ -220,6 +363,21 @@ function renderLauncher(webview: vscode.Webview): string {
 		<div class="quick-link-label">${link.label}</div>
 		<div class="quick-link-desc">${link.description}</div>
 	</div>`).join('')}
+	<div class="section-title">My links</div>
+	${userLinks.length ? userLinks.map(link => `
+	<div class="quick-link user-link" data-url="${escapeHtml(link.url)}">
+		<div class="quick-link-body">
+			<div class="quick-link-label">${escapeHtml(link.label)}</div>
+			<div class="quick-link-desc">${escapeHtml(link.url)}</div>
+		</div>
+		<button class="remove-btn" data-remove="${escapeHtml(link.url)}" title="Remove link" aria-label="Remove ${escapeHtml(link.label)}">×</button>
+	</div>`).join('') : `
+	<p class="empty">Add the sites you use most.</p>`}
+	<div class="add-form">
+		<input class="url-input" id="link-label" type="text" placeholder="Name (optional)" />
+		<input class="url-input" id="link-url" type="text" placeholder="https://…" />
+		<button class="open-btn" id="add-link">Add link</button>
+	</div>
 	<script nonce="${nonce}">
 		const vscode = acquireVsCodeApi();
 		const input = document.getElementById('url');
@@ -235,6 +393,22 @@ function renderLauncher(webview: vscode.Webview): string {
 		document.querySelectorAll('.quick-link').forEach((el) => {
 			el.addEventListener('click', () => open(el.dataset.url));
 		});
+		document.querySelectorAll('.remove-btn').forEach((el) => {
+			el.addEventListener('click', (e) => {
+				e.stopPropagation();
+				vscode.postMessage({ command: 'removeLink', url: el.dataset.remove });
+			});
+		});
+
+		const linkLabel = document.getElementById('link-label');
+		const linkUrl = document.getElementById('link-url');
+		const addLink = () => vscode.postMessage({ command: 'addLink', label: linkLabel.value, url: linkUrl.value });
+		document.getElementById('add-link').addEventListener('click', addLink);
+		[linkLabel, linkUrl].forEach((el) => el.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				addLink();
+			}
+		}));
 	</script>
 </body>
 </html>`;
