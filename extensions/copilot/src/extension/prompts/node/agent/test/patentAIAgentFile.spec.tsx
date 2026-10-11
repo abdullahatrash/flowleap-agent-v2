@@ -29,6 +29,22 @@ const CORE_TOOL_SET = fileURLToPath(new URL('../../../../../../../../src/vs/work
 /** Claude sees each client tool as `mcp__client__<toolReferenceName>` (claudeClientToolMcpServer.ts). */
 const CLAUDE_CLIENT_TOOL_PREFIX = 'mcp__client__';
 
+/** Editor tool names in the Patent AI prompt and the Claude Code built-in that replaces each. */
+const CLAUDE_BUILTIN_TOOL_NAMES: readonly (readonly [string, string])[] = [
+	['fetch_webpage', 'WebFetch'],
+	['web_search', 'WebSearch'],
+	['vscode_askQuestions', 'AskUserQuestion'],
+	['read_file', 'Read'],
+	['run_in_terminal', 'Bash'],
+];
+
+/** Replaces each whole-word tool name in `text`, longest names first. */
+function renameTools(text: string, names: ReadonlyMap<string, string>): string {
+	const sorted = [...names.keys()].sort((a, b) => b.length - a.length);
+	const pattern = new RegExp(`(?<![\\w])(${sorted.join('|')})(?![\\w])`, 'g');
+	return text.replace(pattern, name => names.get(name) ?? name);
+}
+
 interface ContributedTool {
 	readonly name: string;
 	readonly toolReferenceName: string;
@@ -73,9 +89,15 @@ suite('Patent AI agent for Claude sessions', () => {
 		const modelToolNames = tools.map(tool => getToolName(tool.name));
 		const prompt = await renderForClaudeSession(modelToolNames);
 
-		const toolMap = tools
-			.map((tool, i) => `- \`${modelToolNames[i]}\` → \`${CLAUDE_CLIENT_TOOL_PREFIX}${tool.toolReferenceName}\``)
-			.join('\n');
+		// Name every tool exactly as Claude sees it in this session. The editor names
+		// (`search_patents`, ...) match a FlowLeap MCP connector a user may also have
+		// connected to their Claude account, and Claude then calls that connector
+		// instead of the client tools, bypassing the user's keys and working record.
+		const sessionNames = new Map<string, string>(CLAUDE_BUILTIN_TOOL_NAMES);
+		tools.forEach((tool, i) => sessionNames.set(modelToolNames[i], `${CLAUDE_CLIENT_TOOL_PREFIX}${tool.toolReferenceName}`));
+		const promptWithSessionNames = renameTools(prompt, sessionNames);
+		// Skills and recipes are shared with the editor chat and keep the editor names.
+		const skillNameMap = [...sessionNames].map(([editorName, sessionName]) => `- \`${editorName}\` → \`${sessionName}\``).join('\n');
 
 		const content = [
 			'---',
@@ -85,15 +107,15 @@ suite('Patent AI agent for Claude sessions', () => {
 			'',
 			'<!-- Generated from extensions/copilot/src/extension/prompts/node/agent/patentAIPrompt.tsx by patentAIAgentFile.spec.tsx. Do not edit by hand; run `npx vitest -u patentAIAgentFile` to regenerate. -->',
 			'',
-			'## Tool names in this session',
+			'<patentDataSource>',
+			`Patent data comes ONLY from this session's \`${CLAUDE_CLIENT_TOOL_PREFIX}\` tools. If other MCP servers offer patent tools (for example a FlowLeap connector on the user's Claude account), do not call them, even when their tool names look like the ones you need: they bypass the user's Patent-Data Keys and the project's working record.`,
 			'',
-			'The instructions below name tools as the FlowLeap editor chat does. In this session the patent tools are MCP tools; call them by these names:',
+			'Skills and recipes name tools as the FlowLeap editor chat does. In this session, call them by these names:',
 			'',
-			toolMap,
+			skillNameMap,
+			'</patentDataSource>',
 			'',
-			'Where the instructions name `fetch_webpage`, use `WebFetch`; `web_search`, use `WebSearch`; `vscode_askQuestions`, use `AskUserQuestion`; `read_file`, use `Read`; `run_in_terminal`, use `Bash`.',
-			'',
-			prompt,
+			promptWithSessionNames,
 			'',
 		].join('\n');
 
