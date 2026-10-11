@@ -40,6 +40,8 @@ import { ChangesMultiDiffSourceResolver, SessionChangesReviewedFilesContext } fr
 import { ISessionChangesService } from './sessionChangesService.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../common/changes.js';
+import { isPatentHiddenChangesetOperation } from '../common/patentChangesetOperations.js';
+import { PatentIdeContextKeys } from '../../../../workbench/common/patent/patentIdeContextKeys.js';
 import { getChangesFileUri, isChangesFileResource } from './changesViewRenderer.js';
 
 function getWorkspaceResource(resource: URI, changes: readonly ISessionFileChange[]): URI {
@@ -450,8 +452,12 @@ export class ChangesHeaderChangesetOperationsActionContribution extends Disposab
 		@ISessionsService sessionsService: ISessionsService,
 		@IChangesViewService changesViewService: IChangesViewService,
 		@IActionViewItemService actionViewItemService: IActionViewItemService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
+
+		const patentIdeModeObs = observableFromEvent(contextKeyService.onDidChangeContext, () =>
+			PatentIdeContextKeys.Mode.getValue(contextKeyService) === true);
 
 		this._register(actionViewItemService.register(Menus.SessionsEditorHeaderLayout, `${CHANGES_HEADER_CHANGESET_OPERATION_ACTION_PREFIX}${AGENT_HOST_COMMIT_CHANGESET_OPERATION_ID}`, (action, options, instantiationService) => {
 			return action instanceof MenuItemAction
@@ -474,6 +480,8 @@ export class ChangesHeaderChangesetOperationsActionContribution extends Disposab
 				operations = changeset?.operations.read(reader)
 					.filter(operation => operation.id !== AGENT_HOST_SYNC_CHANGESET_OPERATION_ID)
 					.filter(operation => operation.id !== AGENT_HOST_CHECKOUT_CHANGESET_OPERATION_ID)
+					// FlowLeap Patent IDE (#471): no pull request or merge operations in Patent IDE mode.
+					.filter(operation => !patentIdeModeObs.read(reader) || !isPatentHiddenChangesetOperation(operation.id))
 					.filter(operation => operation.scopes.includes(SessionChangesetOperationScope.Changeset)) ?? [];
 				hasUncommittedChanges = (activeSession.workspace.read(reader)?.folders[0]?.gitRepository?.uncommittedChanges ?? 0) > 0;
 			} else {
