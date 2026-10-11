@@ -576,6 +576,9 @@ suite('PatentAIInstructions source attribution', () => {
 			nameTheSource: output.includes('NAME THE SOURCE BESIDE THE FACT'),
 			markQuotations: output.includes('MARK REPRODUCED WORDS AS A QUOTATION'),
 			organizeByQuestion: output.includes('ORGANIZE BY THE QUESTION, NOT BY THE DOCUMENT'),
+			// STE governs only the agent's own wording; quoted claims and legal terms stay verbatim.
+			steStyle: output.includes('WRITE IN ASD-STE100 STYLE'),
+			steNeverRewritesQuotes: output.includes('Never rewrite quoted claims, cited passages or legal terms'),
 			verbatimCarveOutKept: output.includes('governed by VERBATIM-COMPLETENESS'),
 			// The example is a template: templated calls to a real tool, then a rationale.
 			exampleUsesRealTool: output.includes('[get_patent_details: EP3477840B1]'),
@@ -587,6 +590,8 @@ suite('PatentAIInstructions source attribution', () => {
 			nameTheSource: true,
 			markQuotations: true,
 			organizeByQuestion: true,
+			steStyle: true,
+			steNeverRewritesQuotes: true,
 			verbatimCarveOutKept: true,
 			exampleUsesRealTool: true,
 			exampleHasRationale: true,
