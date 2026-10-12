@@ -77,7 +77,7 @@ describe('Application Drafting Draft Outline', () => {
 				office: 'US',
 				items: [],
 				errors: [
-					{ line: 4, message: 'draft-outline.md has no Outline table with the columns Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question.' },
+					{ line: 3, message: 'draft-outline.md has no Outline table with the columns Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question.' },
 				],
 			},
 		]);

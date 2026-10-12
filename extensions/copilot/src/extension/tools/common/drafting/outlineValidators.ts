@@ -10,7 +10,7 @@
  *
  * - `outline-claims`: the outline was made from the current Approved Claims.
  * - `outline-coverage`: every claim term is planned by a Technical item; every dependent claim is
- *   planned together with its independent claim.
+ *   planned by a Technical item together with its independent claim.
  * - `outline-sources`: every Technical item has a source or a question; a Template item has no
  *   claim terms; every source names a Feature List row, a figure or an answered Inventor Question
  *   that exists.
@@ -20,8 +20,8 @@
  */
 
 import { DraftClaim, parseClaims } from './claims';
-import { claimTermKey, introducedPhrases } from './claimValidators';
-import { DraftFinding } from './finding';
+import { claimTermKey, dependencyPaths, introducedPhrases } from './claimValidators';
+import { DraftFinding, errorsFirst } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { parseDraftingFrontmatter } from './frontmatter';
 import { hasAnyAnswer, InventorAnswerSection, parseInventorAnswers } from './inventorAnswers';
@@ -36,12 +36,8 @@ const draftFile = DRAFTING_FILE_NAMES.draft;
 /** A sentence shorter than this many words is never reported as a duplicate. */
 const minimumDuplicateWords = 6;
 
-function outlineFinding(severity: DraftFinding['severity'], rule: string, line: number | undefined, message: string, claim?: number): DraftFinding {
-	return { severity, rule, file: outlineFile, ...(line !== undefined ? { line } : {}), ...(claim !== undefined ? { claim } : {}), message };
-}
-
-function errorsFirst(findings: readonly DraftFinding[]): DraftFinding[] {
-	return [...findings.filter(finding => finding.severity === 'Error'), ...findings.filter(finding => finding.severity !== 'Error')];
+function outlineFinding(severity: DraftFinding['severity'], rule: string, line: number, message: string, claim?: number): DraftFinding {
+	return { severity, rule, file: outlineFile, line, ...(claim !== undefined ? { claim } : {}), message };
 }
 
 function shortHash(hash: string): string {
@@ -50,23 +46,20 @@ function shortHash(hash: string): string {
 
 /** Error when the outline's `claims` hash is missing or is not the given Approved Claims hash. */
 export function checkOutlineClaims(outline: DraftOutline, approvedClaimsHash: string): DraftFinding[] {
-	const again = 'Write the Draft Outline again for the current Approved Claims.';
+	const rewriteInstruction = 'Write the Draft Outline again for the current Approved Claims.';
 	if (!outline.claimsHash) {
-		return [outlineFinding('Error', 'outline-claims', 1, `${outlineFile} names no claims hash (claims: <SHA-256 of the Approved Claims>). ${again}`)];
+		return [outlineFinding('Error', 'outline-claims', 1, `${outlineFile} names no claims hash (claims: <SHA-256 of the Approved Claims>). ${rewriteInstruction}`)];
 	}
 	if (outline.claimsHash.toLowerCase() === approvedClaimsHash.trim().toLowerCase()) {
 		return [];
 	}
-	return [outlineFinding('Error', 'outline-claims', 1, `${outlineFile} was made from claims with SHA-256 ${shortHash(outline.claimsHash)}, but the Approved Claims have SHA-256 ${shortHash(approvedClaimsHash.trim())}. ${again}`)];
+	return [outlineFinding('Error', 'outline-claims', 1, `${outlineFile} was made from claims with SHA-256 ${shortHash(outline.claimsHash)}, but the Approved Claims have SHA-256 ${shortHash(approvedClaimsHash.trim())}. ${rewriteInstruction}`)];
 }
 
-/** The independent claims a claim depends on, directly or through other dependent claims. */
-function independentRoots(claim: DraftClaim, byNumber: ReadonlyMap<number, DraftClaim>, depth = 0): number[] {
-	const parents = claim.dependsOn.map(target => byNumber.get(target)).filter((parent): parent is DraftClaim => !!parent && parent.number < claim.number);
-	if (!parents.length || depth > 50) {
-		return claim.dependsOn.length ? [] : [claim.number];
-	}
-	return [...new Set(parents.flatMap(parent => independentRoots(parent, byNumber, depth + 1)))].sort((a, b) => a - b);
+/** The independent claims a dependent claim depends on, directly or through other dependent claims. */
+function independentRoots(claim: DraftClaim, byNumber: ReadonlyMap<number, DraftClaim>): number[] {
+	const roots = dependencyPaths(claim, byNumber).map(path => path[0]).filter(root => root !== claim && !root.dependsOn.length);
+	return [...new Set(roots.map(root => root.number))].sort((a, b) => a - b);
 }
 
 /**
@@ -75,18 +68,26 @@ function independentRoots(claim: DraftClaim, byNumber: ReadonlyMap<number, Draft
  * - each claim term (the phrases {@link introducedPhrases} reads, compared by {@link claimTermKey})
  *   that no Technical item lists in `Claim terms`, reported once, at the first claim that
  *   introduces it;
- * - each dependent claim that no item lists together with an independent claim it depends on,
- *   directly or through other dependent claims: the combination has no plan.
+ * - each dependent claim that no Technical item lists together with an independent claim it
+ *   depends on, directly or through other dependent claims: the combination has no plan.
+ *
+ * The findings are on the table header line. Without a table there are none: the
+ * `outline-format` error of the missing table is the finding.
  */
 export function checkOutlineCoverage(outline: DraftOutline, claims: readonly DraftClaim[]): DraftFinding[] {
-	const planned = new Set(outline.items.filter(item => item.kind === 'Technical').flatMap(item => item.claimTerms.map(claimTermKey)));
+	const line = outline.tableLine;
+	if (line === undefined) {
+		return [];
+	}
+	const technical = outline.items.filter(item => item.kind === 'Technical');
+	const planned = new Set(technical.flatMap(item => item.claimTerms.map(claimTermKey)));
 	const findings: DraftFinding[] = [];
 	const reported = new Set<string>();
 	for (const claim of claims) {
 		for (const phrase of introducedPhrases(claim.text)) {
 			const key = claimTermKey(phrase);
 			if (!reported.has(key) && !planned.has(key)) {
-				findings.push(outlineFinding('Error', 'outline-coverage', outline.tableLine, `The claim term "${phrase}" (claim ${claim.number}) is in the Claim terms of no Technical item of ${outlineFile}.`, claim.number));
+				findings.push(outlineFinding('Error', 'outline-coverage', line, `The claim term "${phrase}" (claim ${claim.number}) is in the Claim terms of no Technical item of ${outlineFile}.`, claim.number));
 			}
 			reported.add(key);
 		}
@@ -94,8 +95,8 @@ export function checkOutlineCoverage(outline: DraftOutline, claims: readonly Dra
 	const byNumber = new Map(claims.map(claim => [claim.number, claim]));
 	for (const claim of claims.filter(entry => entry.dependsOn.length)) {
 		for (const root of independentRoots(claim, byNumber)) {
-			if (!outline.items.some(item => item.claims.includes(claim.number) && item.claims.includes(root))) {
-				findings.push(outlineFinding('Error', 'outline-coverage', outline.tableLine, `Claim ${claim.number} depends on claim ${root}, but no item of ${outlineFile} lists claims ${root} and ${claim.number} together: the combination has no plan.`, claim.number));
+			if (!technical.some(item => item.claims.includes(claim.number) && item.claims.includes(root))) {
+				findings.push(outlineFinding('Error', 'outline-coverage', line, `Claim ${claim.number} depends on claim ${root}, but no Technical item of ${outlineFile} lists claims ${root} and ${claim.number} together: the combination has no plan.`, claim.number));
 			}
 		}
 	}
@@ -205,7 +206,7 @@ export function checkItemCoverage(outline: DraftOutline, paragraphs: readonly Dr
 	}
 	const ids = new Set(outline.items.map(item => item.id));
 	for (const paragraph of paragraphs) {
-		for (const id of paragraph.items ?? []) {
+		for (const id of new Set(paragraph.items ?? [])) {
 			if (!ids.has(id)) {
 				findings.push({ severity: 'Error', rule: 'item-coverage', file: draftFile, line: paragraph.line, message: `The paragraph at line ${paragraph.line} names item:${id}, which is not a row of ${outlineFile}.` });
 			}

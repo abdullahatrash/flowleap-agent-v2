@@ -92,14 +92,17 @@ table). Add `item` to the marker parser as a plan reference. Validators, each re
 Findings with a line and a severity:
 - `outline-claims`: Error when the outline's `claims` hash is not the Approved Claims hash.
 - `outline-coverage`: Error for every claim term (the phrases `checkLiteralBasis` already
-  extracts) that no Technical item lists; Error for every dependent claim that no item lists
-  together with the independent claim it depends on (the combination has no plan).
+  extracts) that no Technical item lists (Technical items only); Error for every dependent claim
+  that no item lists (Technical items only) together with the independent claim it depends on
+  (the combination has no plan).
 - `outline-sources`: Error for a Technical item with neither source nor question; Error for a
   source that names a Feature row, figure or `IQ-n` that does not exist or is unanswered.
-- `item-coverage`: Error for a Technical item no draft paragraph names with `item:`; Note for a
-  Template item nobody names; Error for an `item:` that names no row of the outline.
+- `item-coverage`: Error for a Technical item no draft paragraph names with `item:`, except an
+  item that carries a `Question` and no source, which yields an Inventor Question and no text:
+  Note; Note for a Template item nobody names; Error for an `item:` that names no row of the outline.
 - `duplicate-sentence`: Note when one sentence (the Working Record's sentence split, normalised)
   appears in two paragraphs.
+Parse errors of the outline are `outline-format` Errors with a line.
 Add **Draft Outline** and **Outline Item** to `CONTEXT.md` under Application Drafting.
 Guardrail: the outline carries no technical text, only references; a validator never reads a
 source's content. Acceptance: unit tests over synthetic outlines, claims and drafts, one

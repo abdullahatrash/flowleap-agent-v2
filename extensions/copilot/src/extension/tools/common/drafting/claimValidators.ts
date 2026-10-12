@@ -205,7 +205,7 @@ function needsNoAntecedent(reference: ClaimPhrase): boolean {
 }
 
 /** The dependency paths of a claim, root first, each ending with the claim itself. */
-function dependencyPaths(claim: DraftClaim, byNumber: Map<number, DraftClaim>, depth = 0): DraftClaim[][] {
+export function dependencyPaths(claim: DraftClaim, byNumber: ReadonlyMap<number, DraftClaim>, depth = 0): DraftClaim[][] {
 	const parents = claim.dependsOn.map(target => byNumber.get(target)).filter((parent): parent is DraftClaim => !!parent && parent.number < claim.number);
 	if (!parents.length || depth > 50) {
 		return [[claim]];

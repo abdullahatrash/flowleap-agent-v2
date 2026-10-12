@@ -43,16 +43,16 @@ import { DraftingOffice, parseDraftingFrontmatter, readOffice, writeDraftingFron
 import { figureNamePattern } from './specValidators';
 
 /** The columns of the Outline table, in order. */
-export const OUTLINE_COLUMNS = ['Item', 'Section', 'Kind', 'Claims', 'Claim terms', 'Sources', 'Explain', 'Question'] as const;
+const OUTLINE_COLUMNS = ['Item', 'Section', 'Kind', 'Claims', 'Claim terms', 'Sources', 'Explain', 'Question'] as const;
 
 /** The kind of an Outline Item: standard section text, or a concept of the claims. */
-export type OutlineItemKind = 'Template' | 'Technical';
+type OutlineItemKind = 'Template' | 'Technical';
 
 /**
  * The kind of a source an Outline Item names: a Feature List row (`F3`), a disclosure span
  * (`§2.1`), a figure (`FIG. 2`) or an answered Inventor Question (`IQ-4`).
  */
-export type OutlineSourceKind = 'feature' | 'disclosure' | 'figure' | 'answer';
+type OutlineSourceKind = 'feature' | 'disclosure' | 'figure' | 'answer';
 
 /** One source an Outline Item names. `ref` is `F3`, `§2.1`, the figure number `2`, or `IQ-4`. */
 export interface OutlineSource {
@@ -78,7 +78,7 @@ export interface OutlineItem {
 }
 
 /** A line of `draft-outline.md` that could not be read. */
-export interface OutlineParseError {
+interface OutlineParseError {
 	readonly line: number;
 	readonly message: string;
 }
@@ -99,7 +99,7 @@ export interface DraftOutline {
 }
 
 /** What {@link writeDraftOutline} writes. The `line` of each item is ignored. */
-export interface DraftOutlineContent {
+interface DraftOutlineContent {
 	readonly office: DraftingOffice;
 	readonly claimsHash: string;
 	readonly items: readonly OutlineItem[];
@@ -115,11 +115,15 @@ function readCells(content: string): string[] {
 	return inner.split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, '|'));
 }
 
+function isItemKind(kind: string): kind is OutlineItemKind {
+	return kind === 'Template' || kind === 'Technical';
+}
+
 function isHeader(content: string): boolean {
 	return content.trim().startsWith('|') && readCells(content).map(cell => cell.toLowerCase()).join('|') === OUTLINE_COLUMNS.map(column => column.toLowerCase()).join('|');
 }
 
-function list(cell: string): string[] {
+function readCommaList(cell: string): string[] {
 	return cell.split(',').map(entry => entry.trim()).filter(Boolean);
 }
 
@@ -148,10 +152,10 @@ function readRow(cells: readonly string[], line: number): { readonly item?: Outl
 		error(`Item "${id}" is not an Outline Item id (O1, O2, ...).`);
 	}
 	const prefix = label ? `${label}: ` : '';
-	if (kind !== 'Template' && kind !== 'Technical') {
+	if (!isItemKind(kind)) {
 		error(`${prefix}Kind "${kind}" is not Template or Technical.`);
 	}
-	const claimNumbers = list(claims);
+	const claimNumbers = readCommaList(claims);
 	if (claimNumbers.some(entry => !/^\d+$/.test(entry))) {
 		error(`${prefix}Claims "${claims}" is not a list of claim numbers (1, 3).`);
 	}
@@ -160,7 +164,7 @@ function readRow(cells: readonly string[], line: number): { readonly item?: Outl
 		error(`${prefix}Explain "${explain}" is not yes or no.`);
 	}
 	const readSources: OutlineSource[] = [];
-	for (const entry of list(sources)) {
+	for (const entry of readCommaList(sources)) {
 		const source = readSource(entry);
 		if (source) {
 			readSources.push(source);
@@ -168,16 +172,16 @@ function readRow(cells: readonly string[], line: number): { readonly item?: Outl
 			error(`${prefix}source "${entry}" is not a Feature List row (F3), a disclosure span (§2.1), a figure (FIG. 2) or an Inventor Question (IQ-4).`);
 		}
 	}
-	if (errors.length) {
+	if (errors.length || !isItemKind(kind)) {
 		return { errors };
 	}
 	const item: OutlineItem = {
 		id,
 		line,
 		section,
-		kind: kind as OutlineItemKind,
+		kind,
 		claims: claimNumbers.map(Number),
-		claimTerms: list(claimTerms),
+		claimTerms: readCommaList(claimTerms),
 		sources: readSources,
 		explain: explainValue === 'yes',
 		...(question ? { question } : {}),
@@ -189,7 +193,7 @@ function readRow(cells: readonly string[], line: number): { readonly item?: Outl
  * Parses `draft-outline.md`: the `office` and `claims` frontmatter fields and the rows of the
  * Outline table. Line numbers refer to the whole file. A row with an error is reported in
  * `errors` and left out of `items`. A missing `claims` hash is not a parse error: the
- * `outline-claims` rule reports it.
+ * `outline-claims` rule reports it. A missing table is one error on the last frontmatter line.
  */
 export function parseDraftOutline(text: string): DraftOutline {
 	const { fields, body, bodyStartLine } = parseDraftingFrontmatter(text);
@@ -202,7 +206,7 @@ export function parseDraftOutline(text: string): DraftOutline {
 	const lines = body.split('\n');
 	const header = lines.findIndex(isHeader);
 	if (header < 0) {
-		errors.push({ line: bodyStartLine, message: `${outlineFile} has no Outline table with the columns ${columnList}.` });
+		errors.push({ line: Math.max(1, bodyStartLine - 1), message: `${outlineFile} has no Outline table with the columns ${columnList}.` });
 		return { ...(office ? { office } : {}), ...(claimsHash ? { claimsHash } : {}), items: [], errors };
 	}
 	const items: OutlineItem[] = [];

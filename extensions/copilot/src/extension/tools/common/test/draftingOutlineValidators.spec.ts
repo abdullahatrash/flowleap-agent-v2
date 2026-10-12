@@ -86,17 +86,21 @@ describe('Application Drafting Draft Outline validators', () => {
 		expect([checkOutlineCoverage(outline('US', ...fullRows), claims), checkOutlineCoverage(outline('EPO', ...fullRows), claims)]).toEqual([[], []]);
 	});
 
-	it('outline-coverage: Error for a claim term no Technical item lists, and for a dependent claim not planned with its independent claim', () => {
+	it('outline-coverage: Error for a claim term no Technical item lists, and for a dependent claim no Technical item plans with its independent claim', () => {
 		const rows = [
-			'| O1 | Summary | Template | 1 | a sealing ring | | no | |',
+			'| O1 | Summary | Template | 1, 2, 3 | a sealing ring | | no | |',
 			'| O2 | Detailed Description | Technical | 1 | a hinge, a housing, a lever | F1 | yes | |',
 			'| O3 | Detailed Description | Technical | 1, 2 | a spring | IQ-1 | yes | |',
 			'| O4 | Detailed Description | Technical | 2, 3 | a coil | F2 | yes | |',
 		];
 		expect(checkOutlineCoverage(outline('EPO', ...rows), claims)).toEqual([
 			{ severity: 'Error', rule: 'outline-coverage', file: 'draft-outline.md', line: 5, claim: 1, message: 'The claim term "sealing ring" (claim 1) is in the Claim terms of no Technical item of draft-outline.md.' },
-			{ severity: 'Error', rule: 'outline-coverage', file: 'draft-outline.md', line: 5, claim: 3, message: 'Claim 3 depends on claim 1, but no item of draft-outline.md lists claims 1 and 3 together: the combination has no plan.' },
+			{ severity: 'Error', rule: 'outline-coverage', file: 'draft-outline.md', line: 5, claim: 3, message: 'Claim 3 depends on claim 1, but no Technical item of draft-outline.md lists claims 1 and 3 together: the combination has no plan.' },
 		]);
+	});
+
+	it('outline-coverage: no finding without an Outline table (the outline-format error is the finding)', () => {
+		expect(checkOutlineCoverage(parseDraftOutline(`---\noffice: US\nclaims: ${hash}\n---\nNo table.\n`), claims)).toEqual([]);
 	});
 
 	it('outline-sources: pass when each source names a Feature List row, a figure of figures.md (also in a range) or an answered Inventor Question', () => {
@@ -142,7 +146,7 @@ describe('Application Drafting Draft Outline validators', () => {
 			'<!-- src: feature:F1, item:O2 -->',
 			'The hinge 10 has a housing and a lever.',
 			'',
-			'<!-- src: model-proposed, item:O9 -->',
+			'<!-- src: model-proposed, item:O9, item:O9 -->',
 			'The following describes the seal.',
 		].join('\n'));
 		expect(checkItemCoverage(outline('US', ...fullRows), draft)).toEqual([

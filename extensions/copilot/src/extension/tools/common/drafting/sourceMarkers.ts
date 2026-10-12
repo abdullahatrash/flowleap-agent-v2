@@ -67,7 +67,8 @@ export interface DraftParagraph {
 	readonly sources?: readonly DraftSource[];
 	/**
 	 * The Outline Items (`O7`) the marker names with `item:`, in marker order: plan references, not
-	 * sources. Absent when the marker names none or is invalid.
+	 * sources. Absent when the marker names none or is invalid. A marker directly above a heading
+	 * is parsed as an empty text paragraph, so its items name no paragraph text.
 	 */
 	readonly items?: readonly string[];
 	/** Why the marker could not be read, when it is present but invalid. */
