@@ -1,52 +1,52 @@
 <!-- findings: [] -->
-<svg xmlns="http://www.w3.org/2000/svg" width="91.3mm" height="182.1mm" viewBox="0 0 91.3 182.1" data-figure="FIG-2" data-kind="flowchart">
-<rect width="91.3" height="182.1" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="111.1mm" height="203.1mm" viewBox="0 0 111.1 203.1" data-figure="FIG-2" data-kind="flowchart">
+<rect width="111.1" height="203.1" fill="#fff"/>
 <g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
-<path class="edge" data-node="start" data-role="terminal" stroke-width="0.4" d="M42.72 2 L56.13 2 A4.3 4.3 0 0 1 56.13 10.6 L42.72 10.6 A4.3 4.3 0 0 1 42.72 2 Z"/>
-<path class="edge" data-node="s1" data-role="process" stroke-width="0.4" d="M23.32 19.6 L75.53 19.6 L75.53 32.8 L23.32 32.8 Z"/>
-<path class="edge" data-node="s2" data-role="process" stroke-width="0.4" d="M14.62 41.8 L66.83 41.8 L66.83 55 L14.62 55 Z"/>
-<path class="edge" data-node="s3" data-role="process" stroke-width="0.4" d="M14.62 64 L66.83 64 L66.83 77.2 L14.62 77.2 Z"/>
-<path class="edge" data-node="s4" data-role="process" stroke-width="0.4" d="M14.62 86.2 L66.83 86.2 L66.83 99.4 L14.62 99.4 Z"/>
-<path class="edge" data-node="d1" data-role="decision" stroke-width="0.4" d="M40.73 108.4 L79.45 121.6 L40.73 134.8 L2 121.6 Z"/>
-<path class="edge" data-node="s5" data-role="process" stroke-width="0.4" d="M14.63 149.3 L66.83 149.3 L66.83 162.5 L14.63 162.5 Z"/>
-<path class="edge" data-node="end" data-role="terminal" stroke-width="0.4" d="M34.03 171.5 L47.43 171.5 A4.3 4.3 0 0 1 47.43 180.1 L34.03 180.1 A4.3 4.3 0 0 1 34.03 171.5 Z"/>
-<path class="edge" data-role="connector" data-from="start" data-to="s1" stroke-width="0.4" d="M49.43 10.6 L49.43 19.6"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M49.43 19.6 L48.63 17.6 L50.22 17.6 Z"/>
-<path class="edge" data-role="connector" data-from="s1" data-to="s2" stroke-width="0.4" d="M40.72 32.8 L40.72 41.8"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M40.72 41.8 L39.92 39.8 L41.52 39.8 Z"/>
-<path class="edge" data-role="connector" data-from="s2" data-to="s3" stroke-width="0.4" d="M40.72 55 L40.72 64"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M40.72 64 L39.92 62 L41.52 62 Z"/>
-<path class="edge" data-role="connector" data-from="s3" data-to="s4" stroke-width="0.4" d="M40.72 77.2 L40.72 86.2"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M40.72 86.2 L39.92 84.2 L41.52 84.2 Z"/>
-<path class="edge" data-role="connector" data-from="s4" data-to="d1" stroke-width="0.4" d="M40.72 99.4 L40.73 108.4"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M40.73 108.4 L39.93 106.4 L41.53 106.4 Z"/>
-<path class="edge" data-role="connector" data-from="d1" data-to="s5" stroke-width="0.4" d="M40.73 134.8 L40.73 149.3"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M40.73 149.3 L39.93 147.3 L41.53 147.3 Z"/>
-<path class="edge" data-role="connector" data-from="s5" data-to="end" stroke-width="0.4" d="M40.73 162.5 L40.73 171.5"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M40.73 171.5 L39.93 169.5 L41.53 169.5 Z"/>
-<path class="edge" data-role="connector" data-from="d1" data-to="s1" stroke-width="0.4" d="M79.45 121.6 L89.3 121.6 L89.3 36.8 L58.13 36.8 L58.13 32.8"/>
-<path class="arrow" fill="#000" stroke-width="0.2" d="M58.13 32.8 L58.93 34.8 L57.33 34.8 Z"/>
-<path class="lead" data-numeral="202" data-node="s1" stroke-width="0.2" d="M79.03 26.2 L75.53 26.2"/>
-<path class="lead" data-numeral="204" data-node="s2" stroke-width="0.2" d="M70.33 48.4 L66.83 48.4"/>
-<path class="lead" data-numeral="206" data-node="s3" stroke-width="0.2" d="M70.33 70.6 L66.83 70.6"/>
-<path class="lead" data-numeral="208" data-node="s4" stroke-width="0.2" d="M70.33 92.8 L66.83 92.8"/>
-<path class="lead" data-numeral="210" data-node="s5" stroke-width="0.2" d="M70.33 155.9 L66.83 155.9"/>
+<path class="edge" data-node="start" data-role="terminal" stroke-width="0.4" d="M54.9 2 L67.05 2 A4.93 4.93 0 0 1 67.05 11.85 L54.9 11.85 A4.93 4.93 0 0 1 54.9 2 Z"/>
+<path class="edge" data-node="s1" data-role="process" stroke-width="0.4" d="M28.28 20.85 L93.68 20.85 L93.68 36.55 L28.28 36.55 Z"/>
+<path class="edge" data-node="s2" data-role="process" stroke-width="0.4" d="M17.38 45.55 L82.78 45.55 L82.78 61.25 L17.38 61.25 Z"/>
+<path class="edge" data-node="s3" data-role="process" stroke-width="0.4" d="M17.38 70.25 L82.78 70.25 L82.78 85.95 L17.38 85.95 Z"/>
+<path class="edge" data-node="s4" data-role="process" stroke-width="0.4" d="M17.38 94.95 L82.78 94.95 L82.78 110.65 L17.38 110.65 Z"/>
+<path class="edge" data-node="d1" data-role="decision" stroke-width="0.4" d="M50.08 119.65 L98.15 135.35 L50.08 151.05 L2 135.35 Z"/>
+<path class="edge" data-node="s5" data-role="process" stroke-width="0.4" d="M17.38 166.55 L82.78 166.55 L82.78 182.25 L17.38 182.25 Z"/>
+<path class="edge" data-node="end" data-role="terminal" stroke-width="0.4" d="M44 191.25 L56.15 191.25 A4.93 4.93 0 0 1 56.15 201.1 L44 201.1 A4.93 4.93 0 0 1 44 191.25 Z"/>
+<path class="edge" data-role="connector" data-from="start" data-to="s1" stroke-width="0.4" d="M60.98 11.85 L60.98 20.85"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M60.98 20.85 L60.18 18.85 L61.78 18.85 Z"/>
+<path class="edge" data-role="connector" data-from="s1" data-to="s2" stroke-width="0.4" d="M50.08 36.55 L50.08 45.55"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M50.08 45.55 L49.28 43.55 L50.88 43.55 Z"/>
+<path class="edge" data-role="connector" data-from="s2" data-to="s3" stroke-width="0.4" d="M50.08 61.25 L50.08 70.25"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M50.08 70.25 L49.28 68.25 L50.88 68.25 Z"/>
+<path class="edge" data-role="connector" data-from="s3" data-to="s4" stroke-width="0.4" d="M50.08 85.95 L50.08 94.95"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M50.08 94.95 L49.28 92.95 L50.88 92.95 Z"/>
+<path class="edge" data-role="connector" data-from="s4" data-to="d1" stroke-width="0.4" d="M50.08 110.65 L50.08 119.65"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M50.08 119.65 L49.28 117.65 L50.88 117.65 Z"/>
+<path class="edge" data-role="connector" data-from="d1" data-to="s5" stroke-width="0.4" d="M50.08 151.05 L50.08 166.55"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M50.08 166.55 L49.28 164.55 L50.88 164.55 Z"/>
+<path class="edge" data-role="connector" data-from="s5" data-to="end" stroke-width="0.4" d="M50.08 182.25 L50.08 191.25"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M50.08 191.25 L49.28 189.25 L50.88 189.25 Z"/>
+<path class="edge" data-role="connector" data-from="d1" data-to="s1" stroke-width="0.4" d="M98.15 135.35 L109.1 135.35 L109.1 40.55 L71.88 40.55 L71.88 36.55"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M71.88 36.55 L72.68 38.55 L71.08 38.55 Z"/>
+<path class="lead" data-numeral="202" data-node="s1" stroke-width="0.2" d="M97.18 28.7 L93.68 28.7"/>
+<path class="lead" data-numeral="204" data-node="s2" stroke-width="0.2" d="M86.28 53.4 L82.78 53.4"/>
+<path class="lead" data-numeral="206" data-node="s3" stroke-width="0.2" d="M86.28 78.1 L82.78 78.1"/>
+<path class="lead" data-numeral="208" data-node="s4" stroke-width="0.2" d="M86.28 102.8 L82.78 102.8"/>
+<path class="lead" data-numeral="210" data-node="s5" stroke-width="0.2" d="M86.28 174.4 L82.78 174.4"/>
 </g>
-<text class="label" data-node="start" x="49.43" y="7.53" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">START</text>
-<text class="label" data-node="s1" x="49.43" y="27.43" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Receiving vibration data</text>
-<text class="label" data-node="s2" x="40.72" y="47.33" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Transforming vibration</text>
-<text class="label" data-node="s2" x="40.72" y="51.93" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">data</text>
-<text class="label" data-node="s3" x="40.72" y="71.82" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Comparing amplitude</text>
-<text class="label" data-node="s4" x="40.72" y="94.03" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Storing amplitude</text>
-<text class="label" data-node="d1" x="40.73" y="120.53" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Amplitude exceeds</text>
-<text class="label" data-node="d1" x="40.73" y="125.13" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">threshold?</text>
-<text class="label" data-node="s5" x="40.73" y="157.13" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Generating alert</text>
-<text class="label" data-node="end" x="40.73" y="177.03" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">END</text>
-<text class="label" data-edge="e6" x="46.11" y="139.28" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Yes</text>
-<text class="label" data-edge="e8" x="82.88" y="127.08" font-size="3.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">No</text>
-<text class="numeral" data-numeral="202" data-node="s1" x="83.24" y="27.55" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">202</text>
-<text class="numeral" data-numeral="204" data-node="s2" x="74.54" y="49.75" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">204</text>
-<text class="numeral" data-numeral="206" data-node="s3" x="74.54" y="71.95" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">206</text>
-<text class="numeral" data-numeral="208" data-node="s4" x="74.54" y="94.15" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">208</text>
-<text class="numeral" data-numeral="210" data-node="s5" x="74.54" y="157.25" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">210</text>
+<text class="label" data-node="start" x="60.98" y="8.5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">START</text>
+<text class="label" data-node="s1" x="60.98" y="30.28" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Receiving vibration data</text>
+<text class="label" data-node="s2" x="50.08" y="52.05" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Transforming vibration</text>
+<text class="label" data-node="s2" x="50.08" y="57.9" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">data</text>
+<text class="label" data-node="s3" x="50.08" y="79.68" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Comparing amplitude</text>
+<text class="label" data-node="s4" x="50.08" y="104.38" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Storing amplitude</text>
+<text class="label" data-node="d1" x="50.08" y="134" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Amplitude exceeds</text>
+<text class="label" data-node="d1" x="50.08" y="139.85" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">threshold?</text>
+<text class="label" data-node="s5" x="50.08" y="175.98" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Generating alert</text>
+<text class="label" data-node="end" x="50.08" y="197.75" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">END</text>
+<text class="label" data-edge="e6" x="56.29" y="156.38" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Yes</text>
+<text class="label" data-edge="e8" x="102.13" y="141.68" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">No</text>
+<text class="numeral" data-numeral="202" data-node="s1" x="101.39" y="30.05" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">202</text>
+<text class="numeral" data-numeral="204" data-node="s2" x="90.49" y="54.75" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">204</text>
+<text class="numeral" data-numeral="206" data-node="s3" x="90.49" y="79.45" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">206</text>
+<text class="numeral" data-numeral="208" data-node="s4" x="90.49" y="104.15" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">208</text>
+<text class="numeral" data-numeral="210" data-node="s5" x="90.49" y="175.75" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">210</text>
 </svg>

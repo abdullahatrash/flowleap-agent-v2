@@ -16,18 +16,20 @@ export type DiagramOffice = 'US' | 'EPO';
 export type DiagramNumeralScheme = 'even' | 'hundreds';
 
 /**
- * The label glyph size in mm at figure scale, as the 3D engine writes it. It stays above the
- * 0.32 cm minimum (37 CFR 1.84(p)(3); OJ EPO 2025 A49 Art. 1(2)(g)) when a sheet scales it.
+ * The font size in mm at figure scale of every label and numeral, the same as the 3D engine.
+ * The 0.32 cm minimum (37 CFR 1.84(p)(3); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h)) is a
+ * character HEIGHT, and Liberation Sans capitals and digits are 0.716 em tall: font size 3.2
+ * gives 2.29 mm glyphs that would not file, font size 4.5 gives 3.22 mm.
  */
-export const FONT_SIZE = 3.5;
-/** The numeral glyph size in mm at figure scale, the same as the 3D engine. */
-export const NUMERAL_FONT_SIZE = 4.5;
+export const FONT_SIZE = 4.5;
+/** The numeral font size in mm at figure scale, the same as the label size. */
+export const NUMERAL_FONT_SIZE = FONT_SIZE;
 /** The font family of all text, the same as the 3D engine. */
 export const FONT_FAMILY = 'Liberation Sans, Arial, Helvetica, sans-serif';
-/** The estimated advance of one label character in mm (a monospace-ish 0.55 em). */
+/** The estimated advance of one character in mm (a monospace-ish 0.55 em). */
 export const CHAR_WIDTH = 0.55 * FONT_SIZE;
-/** The distance between two label baselines in mm. */
-export const LINE_HEIGHT = 4.6;
+/** The distance between two text baselines in mm (1.3 em). */
+export const LINE_HEIGHT = 1.3 * FONT_SIZE;
 /** The most words of a US label: keywords only (37 CFR 1.84(o); MPEP 608.02). */
 export const US_MAX_WORDS = 4;
 /** The most words of an EPO step sentence: "a short sentence" (Guidelines A-IX 8). */
