@@ -412,6 +412,26 @@ the proposed abstract figure, pages per document and in total). Page counts are 
 from the text under the office page setup, labelled as such.
 _Avoid_: calling the page counts measured — only Word (or the office) renders the pages.
 
+**Figure**:
+One `FIG. N` of a matter: a view of the disclosed embodiment with its reference numerals and
+lead lines. Every numeral in a Figure is a numeral in the figures list, and every part drawn
+has one. A Figure is filing line art (black lines on white, no fills, hatching only) first; a
+presentation render of the same Figure is a derived view, never the deliverable.
+_Avoid_: "figure" for an explanatory illustration of an invented machine — that is never a
+FlowLeap term; "figure" for a number ("time-saved figure").
+
+**Drawing Sheet**:
+One page in the office page format (37 CFR 1.84; EPO: Decision of the President, OJ EPO 2025
+A49, which replaced the deleted Rule 46 EPC on 1 October 2025) holding one or more Figures
+with their `FIG. N` labels. The unit the **Filing Manifest** counts.
+_Avoid_: counting Figures as sheets — a sheet may hold several.
+
+**Drawing Set**:
+All Drawing Sheets of one matter, generated from the figures list and the disclosure (and the
+inventor's sketches when supplied). A part the disclosure does not state enters the figures
+list as a proposal the attorney confirms; it is never drawn silently.
+_Avoid_: "the drawings" when only one Figure is meant.
+
 **Drafting Checklist**:
 The `checklist.md` of a drafting matter. Code, not the model, writes it from the files after
 every drafting tool call (start, save, validate, export), also after a refusal: six steps with
