@@ -38,16 +38,26 @@ import { assertFileOkForTool } from '../node/toolUtils';
 import { DRAFTING_FILE_NAMES, matchDraftingPath, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { saveDraftApplication } from './draftApplicationSave';
 import { saveDraftOutline } from './draftOutlineSave';
-import { DraftingWorkspace } from './draftingWorkspace';
+import { DraftingSaveResult, DraftingWorkspace } from './draftingWorkspace';
 
 /** The templates that save a file of an Application Drafting matter, outside the report templates. */
 type DraftingTemplate = 'draft-application' | 'draft-outline';
 
-/** The file each drafting template saves, and the name of what it saves in a refusal. */
-const DRAFTING_TEMPLATES: Readonly<Record<DraftingTemplate, { readonly file: string; readonly label: string }>> = {
-	'draft-application': { file: DRAFTING_FILE_NAMES.draft, label: 'Draft' },
-	'draft-outline': { file: DRAFTING_FILE_NAMES.draftOutline, label: 'Draft Outline' },
+/** What a drafting template saves: the file, its name in a refusal, and the save. */
+interface DraftingTemplateSave {
+	readonly file: string;
+	readonly label: string;
+	readonly save: (workspace: DraftingWorkspace, input: IWritePatentResultsParams) => Promise<DraftingSaveResult>;
+}
+
+const DRAFTING_TEMPLATES: Readonly<Record<DraftingTemplate, DraftingTemplateSave>> = {
+	'draft-application': { file: DRAFTING_FILE_NAMES.draft, label: 'Draft', save: saveDraftApplication },
+	'draft-outline': { file: DRAFTING_FILE_NAMES.draftOutline, label: 'Draft Outline', save: (workspace, input) => saveDraftOutline(workspace, input.content) },
 };
+
+function isDraftingTemplate(template: string | undefined): template is DraftingTemplate {
+	return template !== undefined && template in DRAFTING_TEMPLATES;
+}
 
 interface IWritePatentResultsParams extends PatentCandidateReview {
 	filePath: string;
@@ -219,7 +229,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		this.logService.trace('[WritePatentResultsTool] Invoking write patent results');
 
 		const { filePath, content, template } = options.input;
-		if (template === 'draft-application' || template === 'draft-outline') {
+		if (isDraftingTemplate(template)) {
 			return this.saveDraftingFile(options.input, template);
 		}
 
@@ -382,7 +392,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 	 * Approved Claims hash in its frontmatter (PRD 0022).
 	 */
 	private async saveDraftingFile(input: IWritePatentResultsParams, template: DraftingTemplate): Promise<LanguageModelToolResult> {
-		const { file, label } = DRAFTING_TEMPLATES[template];
+		const { file, label, save } = DRAFTING_TEMPLATES[template];
 		const folders = this.workspaceService.getWorkspaceFolders();
 		const uri = this.resolveWorkspacePath(input.filePath, folders);
 		const root = uri && folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(uri, folder));
@@ -393,7 +403,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		}
 		try {
 			const workspace = new DraftingWorkspace(root, folder, this.fileSystemService, this.instantiationService);
-			const outcome = template === 'draft-application' ? await saveDraftApplication(workspace, input) : await saveDraftOutline(workspace, input.content);
+			const outcome = await save(workspace, input);
 			if (!outcome.saved) {
 				return new LanguageModelToolResult([new LanguageModelTextPart(`${label} was not saved. ${outcome.reason}`)]);
 			}

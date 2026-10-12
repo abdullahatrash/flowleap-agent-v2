@@ -45,6 +45,12 @@ export const VERSION_CLAIMS_HASH = 'Claims SHA-256 of this version';
  */
 export const OUTLINE_HASH = 'Outline SHA-256';
 
+/**
+ * A `draft-outline` save that replaced a different `draft-outline.md`, e.g. one the attorney
+ * edited: `<old 12 hex> → <new 12 hex>` (ADR 0012 decision 6, the trace of every change).
+ */
+export const OUTLINE_RESAVED = 'Outline re-saved';
+
 /** When a tool cleared `approved` because `claims.md` changed after approval. */
 export const APPROVAL_CLEARED = 'Approval cleared';
 

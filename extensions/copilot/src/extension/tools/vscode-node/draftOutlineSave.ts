@@ -4,9 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DraftFinding } from '../common/drafting/finding';
+import { DRAFT_OUTLINE_SAVE } from '../common/drafting/folderContract';
 import { parseDraftingFrontmatter, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { parseDraftOutline } from '../common/drafting/outline';
 import { checkOutline } from '../common/drafting/outlineValidators';
+import { addRecordLine, emptyWorkingRecord, OUTLINE_RESAVED } from '../common/drafting/workingRecord';
+import { sha256Hex } from '../../../util/node/crypto';
 import { DraftingSaveResult, DraftingWorkspace, findingLine } from './draftingWorkspace';
 
 /** Errors listed in the tool result; the rest are counted. */
@@ -35,7 +38,9 @@ function outlineFindingsSummary(findings: readonly DraftFinding[]): string {
  *
  * The save refuses while `confirmed` is not `true` in `feature-list.md` or `approved` is not `true`
  * in `claims.md`, and when the content has no Outline Item to read (no table, or no row that
- * parses): the refusal names the first parse error. The outline rules never block the save; their
+ * parses): the refusal names the first parse error. A save that replaces a different
+ * `draft-outline.md` (for example one the attorney edited) adds an `Outline re-saved` line with
+ * both hashes to the Working Record. The outline rules never block the save; their
  * Errors are listed in the result. After the save, also after a refusal, it writes the Drafting
  * Checklist.
  */
@@ -64,9 +69,14 @@ async function save(workspace: DraftingWorkspace, content: string): Promise<Draf
 	const outline = parseDraftOutline(document);
 	if (!outline.items.length) {
 		const [first] = outline.errors;
-		return { saved: false, reason: `The content has no Outline Item to save: ${first ? `line ${first.line}: ${first.message}` : 'the Outline table has no rows.'} Write the plan as one table, one row per Outline Item, and save it again.` };
+		return { saved: false, reason: `The content has no Outline Item to save: ${first ? `line ${first.line}: ${first.message}` : 'the Outline table has no rows.'} Write the plan as one table, one row per Outline Item, and save it again ${DRAFT_OUTLINE_SAVE}.` };
 	}
+	const previous = await workspace.read(folder.draftOutline);
 	await workspace.write(folder.draftOutline, document);
+	if (previous !== undefined && previous !== document) {
+		const record = await workspace.read(folder.workingRecord) ?? emptyWorkingRecord(folder.matter);
+		await workspace.write(folder.workingRecord, addRecordLine(record, OUTLINE_RESAVED, `${sha256Hex(previous).slice(0, 12)} → ${sha256Hex(document).slice(0, 12)}`));
+	}
 
 	// Read again: requireApprovedClaims may have rewritten the frontmatter of claims.md, which moves the claim lines.
 	const findings = checkOutline({

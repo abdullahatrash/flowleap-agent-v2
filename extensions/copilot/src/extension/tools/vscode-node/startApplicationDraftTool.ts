@@ -10,6 +10,7 @@ import { IWorkspaceService } from '../../../platform/workspace/common/workspaceS
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { DRAFT_OUTLINE_SAVE } from '../common/drafting/folderContract';
 import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontmatter';
 import { STYLE_INSTRUCTION } from '../common/drafting/styleFolder';
 import { ToolName } from '../common/toolNames';
@@ -79,7 +80,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		const exemplars = await workspace.styleExemplars(uri => this.readPdf(uri));
 		const outline = await workspace.readOutline(approval.hash);
 		const body = (text: string) => parseDraftingFrontmatter(text).body.trim();
-		const saveOutline = `save it with write_patent_results, template draft-outline, to ${folder.draftOutline}`;
+		const saveOutline = `save it ${DRAFT_OUTLINE_SAVE}, to ${folder.draftOutline}`;
 		const outlineSection = !outline
 			? `No ${folder.draftOutline} yet. Plan first: write the Draft Outline for the Approved Claims and ${saveOutline}. The draft save refuses without it.`
 			: outline.stale
@@ -88,7 +89,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 
 		const sections = [
 			`Drafting started for matter "${folder.matter}". Office: ${office}. Gates read from the files: \`confirmed: true\` in ${folder.featureList}, \`approved: true\` in ${folder.claims}. The approved claims are recorded (SHA-256 ${approval.hash}) in ${folder.workingRecord}: when ${folder.claims} changes, the drafting tools set \`approved\` to \`false\` and refuse until the attorney approves again.`,
-			`Save the Draft Outline with write_patent_results, template draft-outline, to ${folder.draftOutline}; then save the draft with template draft-application, to ${folder.draft}; then call validate_draft. ${await workspace.checklistLine(false)}`,
+			`Save the Draft Outline ${DRAFT_OUTLINE_SAVE}, to ${folder.draftOutline}; then save the draft with template draft-application, to ${folder.draft}; then call validate_draft. ${await workspace.checklistLine(false)}`,
 			'',
 			`## Feature List (${folder.featureList})`,
 			'',

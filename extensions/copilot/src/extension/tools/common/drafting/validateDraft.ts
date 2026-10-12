@@ -7,7 +7,7 @@ import { parseClaims } from './claims';
 import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from './claimValidators';
 import { checkPageCount, filingManifest } from './filingManifest';
 import { DraftFinding, errorsFirst } from './finding';
-import { DRAFTING_FILE_NAMES } from './folderContract';
+import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice } from './frontmatter';
 import { parseInventorAnswers } from './inventorAnswers';
 import { checkDraftAgainstOutline, checkOutline } from './outlineValidators';
@@ -46,7 +46,7 @@ export interface DraftValidationInput {
  */
 function outlineFindings(input: DraftValidationInput, outline: DraftOutlineRulesInput): DraftFinding[] {
 	if (outline.text === undefined) {
-		return [{ severity: 'Error', rule: 'outline-claims', file: DRAFTING_FILE_NAMES.draftOutline, message: `${DRAFTING_FILE_NAMES.draftOutline} does not exist: there is no Draft Outline for the Approved Claims. Save the outline with write_patent_results, template draft-outline.` }];
+		return [{ severity: 'Error', rule: 'outline-claims', file: DRAFTING_FILE_NAMES.draftOutline, message: `${DRAFTING_FILE_NAMES.draftOutline} does not exist: there is no Draft Outline for the Approved Claims. Save the outline ${DRAFT_OUTLINE_SAVE}.` }];
 	}
 	return [
 		...checkOutline({ outline: outline.text, claims: input.claims, approvedClaimsHash: outline.approvedClaimsHash, featureList: outline.featureList, figures: input.figures, inventorAnswers: input.inventorAnswers }),

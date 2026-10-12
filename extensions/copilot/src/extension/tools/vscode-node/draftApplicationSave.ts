@@ -6,8 +6,9 @@
 import { DraftingFrontmatterFields, DraftingFrontmatterValue, parseDraftingFrontmatter, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { appliedAnswerLabel, currentAnswer, isAnswered, newlyAppliedAnswers, parseInventorAnswers, updateInventorAnswers } from '../common/drafting/inventorAnswers';
 import { parseInventorQuestions } from '../common/drafting/sourceMarkers';
-import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, INVENTOR_ANSWER_APPLIED, OUTLINE_HASH, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, setRecordField, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
-import { DraftingSaveResult, DraftingWorkspace, sha256 } from './draftingWorkspace';
+import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, INVENTOR_ANSWER_APPLIED, OUTLINE_HASH, OUTLINE_RESAVED, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, setRecordField, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
+import { sha256Hex } from '../../../util/node/crypto';
+import { DraftingSaveResult, DraftingWorkspace } from './draftingWorkspace';
 
 /** The `write_patent_results` input of a `draft-application` save. */
 export interface DraftApplicationSaveInput {
@@ -83,7 +84,7 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 	if (typeof outline === 'string') {
 		return { saved: false, reason: outline };
 	}
-	const outlineHash = sha256(outline.text);
+	const outlineHash = sha256Hex(outline.text);
 
 	const currentHash = approval.hash;
 	const previousRecord = await workspace.read(folder.workingRecord) ?? '';
@@ -131,8 +132,10 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 			versionClaimsHash: versionHash,
 			outlineHash,
 		}, document);
-		// The approval history of the claims stays with the record of the draft built on them.
-		record = readRecordFields(previousRecord, APPROVAL_CLEARED).reduce((updated, value) => addRecordLine(updated, APPROVAL_CLEARED, value), record);
+		// The approval history of the claims and the outline re-saves stay with the record of the draft built on them.
+		for (const label of [APPROVAL_CLEARED, OUTLINE_RESAVED]) {
+			record = readRecordFields(previousRecord, label).reduce((updated, value) => addRecordLine(updated, label, value), record);
+		}
 	} else {
 		record = setRecordField(resaveWorkingRecord(previousRecord, document, savedAt), OUTLINE_HASH, outlineHash);
 	}

@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createHash } from 'crypto';
 import * as mammoth from 'mammoth';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { FileType } from '../../../platform/filesystem/common/fileTypes';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+import { sha256Hex } from '../../../util/node/crypto';
 import { dirname } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -15,7 +15,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { checklistPointer, DraftingChecklist, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
 import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
-import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
+import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { parseDraftOutline } from '../common/drafting/outline';
 import { checkOutlineClaims } from '../common/drafting/outlineValidators';
@@ -63,14 +63,9 @@ function unsearchedClaimsNote(claims: string): DraftFinding[] {
 	return [{ severity: 'Note', rule: 'claims-unsearched', file: DRAFTING_FILE_NAMES.claims, message: `The Approved Claims carry status "${status.trim()}": they were drafted without a prior-art search. Run the prior-art step and re-approve, or record in the review that the claims are deliberately unsearched.` }];
 }
 
-/** The SHA-256 of a text, hex. */
-export function sha256(text: string): string {
-	return createHash('sha256').update(text).digest('hex');
-}
-
 /** The SHA-256 of the claims body of a `claims.md` text: the Approved Claims hash. */
 function claimsHash(claims: string): string {
-	return sha256(parseDraftingFrontmatter(claims).body.trim());
+	return sha256Hex(parseDraftingFrontmatter(claims).body.trim());
 }
 
 /**
@@ -86,7 +81,7 @@ function outlineStaleReason(outline: string, approvedClaimsHash: string): string
  * validator run or an export is current while the hash of the current files matches.
  */
 function draftHash(draft: string, claims: string): string {
-	return sha256(`${draft}\0${claimsHash(claims)}`);
+	return sha256Hex(`${draft}\0${claimsHash(claims)}`);
 }
 
 /** The frontmatter field of `claims.md` that ties `approved: true` to the claims body it approved. */
@@ -311,9 +306,9 @@ export class DraftingWorkspace {
 		const outline = await this.readOutline(approvedClaimsHash);
 		const path = this.folder.draftOutline;
 		if (!outline) {
-			return `${path} does not exist. Save the Draft Outline for the Approved Claims with write_patent_results, template draft-outline, to ${path} first; then save the draft.`;
+			return `${path} does not exist. Save the Draft Outline for the Approved Claims ${DRAFT_OUTLINE_SAVE}, to ${path} first; then save the draft.`;
 		}
-		return outline.stale ? `${outline.stale} Save it with write_patent_results, template draft-outline, to ${path}; then save the draft.` : { text: outline.text };
+		return outline.stale ? `${outline.stale} Save it ${DRAFT_OUTLINE_SAVE}, to ${path}; then save the draft.` : { text: outline.text };
 	}
 
 	/**

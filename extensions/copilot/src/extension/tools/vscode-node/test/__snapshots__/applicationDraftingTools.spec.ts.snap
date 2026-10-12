@@ -416,7 +416,7 @@ Wrote drafting/hinge/checklist.md: the next step for the attorney is step 4 (Fix
 exports[`write_patent_results draft-outline template > refuses while the claims are not approved, when the content has no Outline table, and outside the drafting folder contract 1`] = `
 [
   "Draft Outline was not saved. \`approved\` in drafting/hinge/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).",
-  "Draft Outline was not saved. The content has no Outline Item to save: line 4: draft-outline.md has no Outline table with the columns Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question. Write the plan as one table, one row per Outline Item, and save it again. Open in drafting/hinge/checklist.md: step 3 (Write the outline).",
+  "Draft Outline was not saved. The content has no Outline Item to save: line 4: draft-outline.md has no Outline table with the columns Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question. Write the plan as one table, one row per Outline Item, and save it again with write_patent_results, template draft-outline. Open in drafting/hinge/checklist.md: step 3 (Write the outline).",
   "Draft Outline was not saved. The draft-outline template saves to drafting/<matter>/draft-outline.md inside a workspace folder.",
 ]
 `;

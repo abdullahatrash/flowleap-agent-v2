@@ -61,6 +61,12 @@ export const DRAFTING_FILE_NAMES = {
 	filingManifest: 'filing-manifest.md',
 } as const;
 
+/**
+ * How the Draft Outline is saved, for tool results, refusals and checklist actions:
+ * "Save the outline ${DRAFT_OUTLINE_SAVE}, to drafting/<matter>/draft-outline.md".
+ */
+export const DRAFT_OUTLINE_SAVE = 'with write_patent_results, template draft-outline';
+
 /** The workspace-relative paths of one matter's drafting files. */
 export interface DraftingFolder {
 	readonly matter: string;

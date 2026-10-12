@@ -30,7 +30,7 @@
 import { isInventorQuestion } from './finding';
 import { FindingsFileItem, parseFindingsFileItems } from './findingsFile';
 import { missingParts } from './filingDocuments';
-import { DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER } from './folderContract';
+import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER } from './folderContract';
 import { DraftingGateFlag, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice } from './frontmatter';
 import { currentAnswer, currentRound, isAnswered, parseInventorAnswers } from './inventorAnswers';
 import { parseInventorQuestions } from './sourceMarkers';
@@ -170,6 +170,8 @@ export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingCh
 	const draftTitle = 'Write the draft';
 	const draftStepOf = (detail: string, action: string) => draftBlockers.length || !outlineOpen
 		? step(draftStep, draftTitle, detail, [action], draftBlockers)
+		// Blocked by its own step number only so that the refusal pointer and the next step skip this line;
+		// the detail names the outline line, because "blocked by step 3" on a step-3 line reads as a loop.
 		: { ...step(draftStep, draftTitle, '', [], [draftStep]), detail: `blocked by the outline (${DRAFTING_FILE_NAMES.draftOutline})` };
 	if (input.draft === undefined) {
 		steps.push(draftStepOf(`${DRAFTING_FILE_NAMES.draft} does not exist`, '→ Tell the agent: "Draft the application"'));
@@ -219,7 +221,7 @@ function outlineStep(input: DraftingChecklistFiles, blockedBy: readonly number[]
 	const number = CHECKLIST_STEP.draft;
 	const file = DRAFTING_FILE_NAMES.draftOutline;
 	const title = 'Write the outline';
-	const plan = (request: string) => `→ Tell the agent: "${request}" (it saves ${file} with write_patent_results, template draft-outline)`;
+	const plan = (request: string) => `→ Tell the agent: "${request}" (it saves ${file} ${DRAFT_OUTLINE_SAVE})`;
 	if (blockedBy.length) {
 		return step(number, title, '', [], blockedBy);
 	}

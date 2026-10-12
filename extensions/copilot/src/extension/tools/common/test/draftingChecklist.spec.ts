@@ -263,7 +263,10 @@ describe('Application Drafting checklist', () => {
 		const answers = updateInventorAnswers(undefined, 'hinge', parseInventorQuestions(draft), new Set())
 			.replace('**Question:** Which steel grade?\n\n**Belongs:** see the question\n\n**Answer:**\n', '**Question:** Which steel grade?\n\n**Belongs:** see the question\n\n**Answer:**\nStainless; hardness unknown.\n\n**Narrowed question:** What hardness?\n\n**Answer:**\n');
 		const withoutIq1 = draft.replace('> **Inventor Question IQ-1:** Which steel grade?\n\n', '');
-		const step5 = readDraftingChecklist({ matter: 'hinge', featureList: featureList(), claims: claims(), draftOutline: outline, draft: withoutIq1, inventorAnswers: answers, findings: renderFindingsFile([]), findingsCurrent: true, exported: false }).steps.find(entry => entry.step === 5)!;
+		const step5 = readDraftingChecklist({ matter: 'hinge', featureList: featureList(), claims: claims(), draftOutline: outline, draft: withoutIq1, inventorAnswers: answers, findings: renderFindingsFile([]), findingsCurrent: true, exported: false }).steps.find(entry => entry.step === 5);
+		if (!step5) {
+			throw new Error('The checklist has no step 5.');
+		}
 		expect([step5.detail, ...step5.actions]).toEqual([
 			'2 open, 1 removed from the draft without an answer (IQ-1)',
 			'→ Fill each **Answer:** in inventor-answers.md (lines 24, 16), or send the file to the inventor',

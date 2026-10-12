@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import type * as vscode from 'vscode';
-import { createHash } from 'crypto';
 import { Document, Packer, Paragraph } from 'docx';
 import * as mammoth from 'mammoth';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,6 +16,7 @@ import { IPromptPathRepresentationService, PromptPathRepresentationService } fro
 import { TestWorkspaceService } from '../../../../platform/test/node/testWorkspaceService';
 import { IWorkspaceService } from '../../../../platform/workspace/common/workspaceService';
 import { mock } from '../../../../util/common/test/simpleMock';
+import { sha256Hex } from '../../../../util/node/crypto';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { URI } from '../../../../util/vs/base/common/uri';
 import { IInstantiationService, ServiceIdentifier, ServicesAccessor } from '../../../../util/vs/platform/instantiation/common/instantiation';
@@ -79,7 +79,7 @@ const figures = `## FIG. 1
 `;
 
 /** The SHA-256 of the claims body, as the drafting tools compute the Approved Claims hash. */
-const claimsHash = (text: string) => createHash('sha256').update(parseDraftingFrontmatter(text).body.trim()).digest('hex');
+const claimsHash = (text: string) => sha256Hex(parseDraftingFrontmatter(text).body.trim());
 
 /** The Outline table the model writes; the draft-outline save adds the frontmatter. */
 const outlineTable = `# Draft Outline
@@ -550,9 +550,6 @@ describe('Drafting Checklist export step', () => {
 /** The matter files without draft-outline.md. */
 const { 'drafting/hinge/draft-outline.md': _outline, ...noOutline } = gatesOpen;
 
-/** The SHA-256 of a whole file, as the Working Record names the outline. */
-const fileHash = (text: string) => createHash('sha256').update(text).digest('hex');
-
 describe('write_patent_results draft-outline template', () => {
 	it('writes draft-outline.md with the office of the Feature List and the Approved Claims hash, and reports the outline findings without blocking the save', async () => {
 		const { tools, read } = setup(noOutline);
@@ -575,6 +572,28 @@ describe('write_patent_results draft-outline template', () => {
 	});
 });
 
+describe('draft-outline save over an existing outline', () => {
+	it('records each save that replaces a different draft-outline.md in the Working Record, and the draft save keeps the lines', async () => {
+		const { tools, read, edit } = setup(noOutline);
+		await tools.start();
+		await tools.saveOutline();
+		await tools.saveOutline();
+		const before = await read('drafting/hinge/draft-outline.md');
+		await edit('drafting/hinge/draft-outline.md', '| F1, FIG. 1 |', '| F1 |');
+		const edited = await read('drafting/hinge/draft-outline.md');
+		await tools.saveOutline();
+		await tools.save(draft());
+		const short = (text: string) => sha256Hex(text).slice(0, 12);
+		expect({
+			attorneyEditChangedTheFile: edited !== before,
+			recorded: (await read('drafting/hinge/draft-application.working-record.md')).match(/^- \*\*Outline re-saved:\*\*.*$/gm),
+		}).toEqual({
+			attorneyEditChangedTheFile: true,
+			recorded: [`- **Outline re-saved:** ${short(edited)} → ${short(before)}`],
+		});
+	});
+});
+
 describe('draft-application save: Draft Outline precondition', () => {
 	it('refuses while draft-outline.md is missing or made for other claims; saves with a bound outline and records its SHA-256', async () => {
 		const missing = await setup(noOutline).tools.save(draft());
@@ -584,7 +603,7 @@ describe('draft-application save: Draft Outline precondition', () => {
 		const saved = await bound.tools.save(draft());
 		const resaved = await bound.tools.save(draft().replace('A hinge joins a door to a frame.', 'A hinge pivotally joins a door to a frame.'));
 		const record = await bound.read('drafting/hinge/draft-application.working-record.md');
-		const outlineFileHash = fileHash(await bound.read('drafting/hinge/draft-outline.md'));
+		const outlineFileHash = sha256Hex(await bound.read('drafting/hinge/draft-outline.md'));
 		expect({
 			missing,
 			stale: stale.replace(/[0-9a-f]{12}…/g, '<sha>…'),
@@ -611,6 +630,24 @@ describe('draft-application save: Draft Outline precondition', () => {
 			replanned: replanned.split('\n')[0].replace(/[0-9a-f]{64}/g, '<sha>'),
 			saved: saved.split('\n')[0],
 		}).toMatchSnapshot();
+	});
+
+	it('claims edited and then restored to the same body bind the old outline again: the binding is the hash of the claims body only', async () => {
+		const { tools, edit } = setup(gatesOpen);
+		await tools.start();
+		await edit('drafting/hinge/claims.md', 'wherein the lever is steel', 'wherein the lever is made of steel');
+		await tools.start();
+		await edit('drafting/hinge/claims.md', 'wherein the lever is made of steel', 'wherein the lever is steel');
+		await edit('drafting/hinge/claims.md', 'approved: false', 'approved: true');
+		const started = await tools.start();
+		const saved = await tools.save(draft());
+		expect({
+			startReturnsOutline: started.includes(`## Draft Outline (drafting/hinge/draft-outline.md)\n\n${outlineTable.trim()}`),
+			saved: saved.split('\n')[0],
+		}).toEqual({
+			startReturnsOutline: true,
+			saved: 'Saved drafting/hinge/draft-application.md (version 1, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.',
+		});
 	});
 });
 
