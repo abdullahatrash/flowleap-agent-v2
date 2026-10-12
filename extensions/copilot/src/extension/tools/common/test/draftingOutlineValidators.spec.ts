@@ -99,6 +99,16 @@ describe('Application Drafting Draft Outline validators', () => {
 		]);
 	});
 
+	it('outline-coverage: a listed phrase that contains the claim term as whole words covers it; a part of a word does not', () => {
+		const rows = [
+			'| O1 | Detailed Description | Technical | 1, 2, 3 | the hinge with a housing, a lever arm, an annular sealing ring for the door | F1 | yes | |',
+			'| O2 | Detailed Description | Technical | 1, 2, 3 | springs, a coiled wire | F2 | yes | |',
+		];
+		expect(checkOutlineCoverage(outline('US', ...rows), claims)).toEqual([
+			{ severity: 'Error', rule: 'outline-coverage', file: 'draft-outline.md', line: 5, claim: 3, message: 'The claim term "coil" (claim 3) is in the Claim terms of no Technical item of draft-outline.md.' },
+		]);
+	});
+
 	it('outline-coverage: no finding without an Outline table (the outline-format error is the finding)', () => {
 		expect(checkOutlineCoverage(parseDraftOutline(`---\noffice: US\nclaims: ${hash}\n---\nNo table.\n`), claims)).toEqual([]);
 	});

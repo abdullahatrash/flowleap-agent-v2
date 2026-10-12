@@ -43,7 +43,7 @@ describe('Application Drafting source markers', () => {
 			{ line: 9, kind: 'text', section: 'Detailed Description', text: 'In general terms, the following applies.', sources: [{ kind: 'model-proposed' }] },
 			{ line: 12, kind: 'text', section: 'Detailed Description', text: 'The lever is made of steel.', sources: [{ kind: 'instruction' }] },
 			{ line: 14, kind: 'text', section: 'Detailed Description', text: 'A paragraph without a source.' },
-			{ line: 17, kind: 'text', section: 'Detailed Description', text: 'A paragraph with an unknown source.', markerError: 'Unknown source "guess". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.' },
+			{ line: 17, kind: 'text', section: 'Detailed Description', text: 'A paragraph with an unknown source.', markerError: 'Unknown source "guess". Use feature:<row>, disclosure:<span>, figure:FIG. <n>, inventor:IQ-<n>, instruction, template or model-proposed.' },
 			{ line: 19, kind: 'heading', section: 'Inventor Questions', text: '## Inventor Questions' },
 			{ line: 21, kind: 'inventor-question', section: 'Inventor Questions', text: '> **Inventor Question IQ-1:** What material is the spring made of?\n> It is not stated in the disclosure.' },
 			{ line: 24, kind: 'inventor-question', section: 'Inventor Questions', text: '> **Inventor Question IQ-2:** Is the hinge removable?' },
@@ -71,7 +71,7 @@ describe('Application Drafting source markers', () => {
 		expect({ paragraphs: parseDraftParagraphs(text).map(paragraph => paragraph.sources ?? paragraph.markerError ?? paragraph.kind), questions: parseInventorQuestions(text) }).toEqual({
 			paragraphs: [
 				[{ kind: 'inventor', ref: 'IQ-2' }, { kind: 'feature', ref: 'F1' }],
-				'Unknown source "inventor:2". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.',
+				'Unknown source "inventor:2". Use feature:<row>, disclosure:<span>, figure:FIG. <n>, inventor:IQ-<n>, instruction, template or model-proposed.',
 				'inventor-question',
 			],
 			questions: [{ id: 'IQ-3', line: 7, text: 'How thick is the lever?', belongs: 'Detailed Description, after the paragraph on the lever 14.' }],
@@ -97,6 +97,24 @@ describe('Application Drafting source markers', () => {
 			{ line: 5, sources: [{ kind: 'model-proposed' }], items: ['O2'], markerError: undefined },
 			{ line: 8, sources: undefined, items: undefined, markerError: 'Invalid Outline Item "item:7". Use item:O<n>.' },
 			{ line: 11, sources: undefined, items: undefined, markerError: 'The marker names no source.' },
+		]);
+	});
+
+	it('reads a figure source as figure:<figure name>; a figure source without a name is a marker error', () => {
+		const text = [
+			'<!-- src: figure:FIG. 1, disclosure:§2, item:O3 -->',
+			'The housing 12 holds the lever 14.',
+			'',
+			'<!-- src: figure:Fig. 2a -->',
+			'The lever 14 turns.',
+			'',
+			'<!-- src: figure -->',
+			'A figure source without a figure.',
+		].join('\n');
+		expect(parseDraftParagraphs(text).map(({ sources, items, markerError }) => ({ sources, items, markerError }))).toEqual([
+			{ sources: [{ kind: 'figure', ref: 'FIG. 1' }, { kind: 'disclosure', ref: '§2' }], items: ['O3'], markerError: undefined },
+			{ sources: [{ kind: 'figure', ref: 'Fig. 2a' }], items: undefined, markerError: undefined },
+			{ sources: undefined, items: undefined, markerError: 'Unknown source "figure". Use feature:<row>, disclosure:<span>, figure:FIG. <n>, inventor:IQ-<n>, instruction, template or model-proposed.' },
 		]);
 	});
 

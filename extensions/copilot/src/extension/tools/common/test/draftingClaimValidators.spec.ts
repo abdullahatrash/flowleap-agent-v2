@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseClaims } from '../drafting/claims';
-import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from '../drafting/claimValidators';
+import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency, claimTermsToPlan } from '../drafting/claimValidators';
 
 function claims(...lines: string[]) {
 	return parseClaims(lines.join('\n'));
@@ -117,6 +117,20 @@ describe('Application Drafting claim validators', () => {
 			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the housing" has no antecedent basis ("a housing") earlier in claim 2 or in the claims it depends on.' },
 			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the door" has no antecedent basis ("a door") earlier in claim 3 or in the claims it depends on.' },
 			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the second lever" has no antecedent basis ("a second lever") earlier in claim 3 or in the claims it depends on.' },
+		]);
+	});
+
+	it('claim terms to plan: the terms each claim introduces, in order, and the independent claims a dependent claim depends on through a chain', () => {
+		expect(claimTermsToPlan(claims(
+			'1. A cable clamp comprising a channel and a damping insert.',
+			'2. The cable clamp of claim 1, wherein the damping insert has a plurality of ribs.',
+			'3. The cable clamp of claim 2, further comprising a sealing ring.',
+			'4. The cable clamp of claim 3, wherein the ribs are rubber.',
+		))).toEqual([
+			{ claim: 1, independentClaims: [], terms: ['cable clamp', 'channel', 'damping insert'] },
+			{ claim: 2, independentClaims: [1], terms: ['ribs'] },
+			{ claim: 3, independentClaims: [1], terms: ['sealing ring'] },
+			{ claim: 4, independentClaims: [1], terms: [] },
 		]);
 	});
 

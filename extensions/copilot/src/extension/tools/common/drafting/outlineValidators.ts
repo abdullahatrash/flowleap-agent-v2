@@ -20,14 +20,14 @@
  */
 
 import { DraftClaim, parseClaims } from './claims';
-import { claimTermKey, dependencyPaths, introducedPhrases } from './claimValidators';
+import { claimTermCovered, claimTermKey, independentRoots, introducedPhrases } from './claimValidators';
 import { DraftFinding, errorsFirst } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { parseDraftingFrontmatter } from './frontmatter';
 import { hasAnyAnswer, InventorAnswerSection, parseInventorAnswers } from './inventorAnswers';
 import { DraftOutline, OutlineItem, OutlineSource, parseDraftOutline } from './outline';
 import { DraftParagraph, parseDraftParagraphs } from './sourceMarkers';
-import { figureHeadingNumbers, isClaimsParagraph, parseFigureSections } from './specValidators';
+import { figureNumbers, hasFigure, isClaimsParagraph } from './specValidators';
 import { splitSentences } from './workingRecord';
 
 const outlineFile = DRAFTING_FILE_NAMES.draftOutline;
@@ -56,18 +56,13 @@ export function checkOutlineClaims(outline: DraftOutline, approvedClaimsHash: st
 	return [outlineFinding('Error', 'outline-claims', 1, `${outlineFile} was made from claims with SHA-256 ${shortHash(outline.claimsHash)}, but the Approved Claims have SHA-256 ${shortHash(approvedClaimsHash.trim())}. ${rewriteInstruction}`)];
 }
 
-/** The independent claims a dependent claim depends on, directly or through other dependent claims. */
-function independentRoots(claim: DraftClaim, byNumber: ReadonlyMap<number, DraftClaim>): number[] {
-	const roots = dependencyPaths(claim, byNumber).map(path => path[0]).filter(root => root !== claim && !root.dependsOn.length);
-	return [...new Set(roots.map(root => root.number))].sort((a, b) => a - b);
-}
-
 /**
  * Errors of the plan's coverage of the claims:
  *
  * - each claim term (the phrases {@link introducedPhrases} reads, compared by {@link claimTermKey})
  *   that no Technical item lists in `Claim terms`, reported once, at the first claim that
- *   introduces it;
+ *   introduces it. A listed term that contains the claim term as whole words covers it
+ *   ({@link claimTermCovered}): `a channel for a cable` covers `channel`;
  * - each dependent claim that no Technical item lists together with an independent claim it
  *   depends on, directly or through other dependent claims: the combination has no plan.
  *
@@ -80,13 +75,13 @@ export function checkOutlineCoverage(outline: DraftOutline, claims: readonly Dra
 		return [];
 	}
 	const technical = outline.items.filter(item => item.kind === 'Technical');
-	const planned = new Set(technical.flatMap(item => item.claimTerms.map(claimTermKey)));
+	const planned = technical.flatMap(item => item.claimTerms.map(claimTermKey));
 	const findings: DraftFinding[] = [];
 	const reported = new Set<string>();
 	for (const claim of claims) {
 		for (const phrase of introducedPhrases(claim.text)) {
 			const key = claimTermKey(phrase);
-			if (!reported.has(key) && !planned.has(key)) {
+			if (!reported.has(key) && !planned.some(listed => claimTermCovered(key, listed))) {
 				findings.push(outlineFinding('Error', 'outline-coverage', line, `The claim term "${phrase}" (claim ${claim.number}) is in the Claim terms of no Technical item of ${outlineFile}.`, claim.number));
 			}
 			reported.add(key);
@@ -119,26 +114,17 @@ function featureRowIds(featureList: string): Set<string> {
 	return ids;
 }
 
-/** True when a figure heading of `figures.md` names the figure; `FIG. 2` also matches `FIG. 2a`. */
-function hasFigure(numbers: readonly string[], figure: string): boolean {
-	const wanted = figure.toLowerCase();
-	return numbers.some(number => {
-		const named = number.toLowerCase();
-		return named === wanted || (/^\d+$/.test(wanted) && new RegExp(`^${wanted}[a-z]$`).test(named));
-	});
-}
-
 function quoteList(texts: readonly string[]): string {
 	return texts.map(text => `"${text}"`).join(', ');
 }
 
 /** The reason a source does not exist in the matter files, or `undefined` when it does. */
-function missingSource(source: OutlineSource, featureIds: ReadonlySet<string>, figureNumbers: readonly string[], answers: readonly InventorAnswerSection[]): string | undefined {
+function missingSource(source: OutlineSource, featureIds: ReadonlySet<string>, numbers: readonly string[], answers: readonly InventorAnswerSection[]): string | undefined {
 	switch (source.kind) {
 		case 'feature':
 			return featureIds.has(source.ref) ? undefined : `${source.ref}, which is not a row of ${DRAFTING_FILE_NAMES.featureList}`;
 		case 'figure':
-			return hasFigure(figureNumbers, source.ref) ? undefined : `FIG. ${source.ref}, which is not a figure of ${DRAFTING_FILE_NAMES.figures}`;
+			return hasFigure(numbers, source.ref) ? undefined : `FIG. ${source.ref}, which is not a figure of ${DRAFTING_FILE_NAMES.figures}`;
 		case 'answer':
 			return hasAnyAnswer(answers.find(section => section.id === source.ref)) ? undefined : `${source.ref}, which has no answer in ${DRAFTING_FILE_NAMES.inventorAnswers}`;
 		case 'disclosure':
@@ -155,7 +141,7 @@ function missingSource(source: OutlineSource, featureIds: ReadonlySet<string>, f
  */
 export function checkOutlineSources(outline: DraftOutline, featureList: string, figures: string, answers: readonly InventorAnswerSection[]): DraftFinding[] {
 	const featureIds = featureRowIds(featureList);
-	const figureNumbers = parseFigureSections(figures).figures.flatMap(section => figureHeadingNumbers(section.label));
+	const numbers = figureNumbers(figures);
 	const findings: DraftFinding[] = [];
 	for (const item of outline.items) {
 		if (item.kind === 'Template' && item.claimTerms.length) {
@@ -165,7 +151,7 @@ export function checkOutlineSources(outline: DraftOutline, featureList: string, 
 			findings.push(outlineFinding('Error', 'outline-sources', item.line, `Technical item ${item.id} names no source and no question. Name a Feature List row, a disclosure span, a figure or an answered Inventor Question, or write the open question.`));
 		}
 		for (const source of item.sources) {
-			const missing = missingSource(source, featureIds, figureNumbers, answers);
+			const missing = missingSource(source, featureIds, numbers, answers);
 			if (missing) {
 				findings.push(outlineFinding('Error', 'outline-sources', item.line, `Item ${item.id} names ${missing}.`));
 			}

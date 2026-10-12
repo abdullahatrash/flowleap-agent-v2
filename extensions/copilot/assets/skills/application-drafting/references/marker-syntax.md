@@ -19,10 +19,14 @@ An `item:O<n>` entry may follow the sources; it is a plan reference, see
 |--------|--------|---------|
 | `<!-- src: feature:F3 -->` | Row `F3` of `feature-list.md` | Technical content from a confirmed feature |
 | `<!-- src: disclosure:§2.1 -->` | A span of the disclosure (section, page or paragraph as the disclosure numbers it) | Technical content the Feature List row summarises |
+| `<!-- src: figure:FIG. 1 -->` | A figure of `figures.md` | Technical content the figure shows (parts, arrangement); the figure must be in `figures.md` |
 | `<!-- src: inventor:IQ-3 -->` | The filled answer to `IQ-3` in `inventor-answers.md` | Technical content from the inventor's answer |
 | `<!-- src: instruction -->` | An attorney instruction in this chat | Content the attorney dictated or asked for |
 | `<!-- src: template -->` | The office template | Standard statements the office template prescribes (for example the industrial-application statement) |
 | `<!-- src: model-proposed -->` | None | Transitions and boilerplate only |
+
+A figure is a source like a disclosure span, never for a value or result
+the figure does not show.
 
 One marker can name more than one source, separated by commas:
 

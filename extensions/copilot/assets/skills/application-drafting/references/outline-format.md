@@ -36,7 +36,7 @@ office: US
 | `Section` | The heading of the office order: [US](us-section-order.md) or [EPO](epo-section-order.md). | `DETAILED DESCRIPTION` |
 | `Kind` | `Template` for standard section text, `Technical` for a concept of the claims. | `Technical` |
 | `Claims` | The claim numbers the item realises, comma-separated. List a dependent claim with the independent claim it depends on. A Template item may list claims (for example the summary). | `1, 3` |
-| `Claim terms` | The claim terms the item explains, as the claims introduce them, comma-separated. Empty for a Template item. | `a sealing ring, an elastomer` |
+| `Claim terms` | The claim terms the item explains, comma-separated. Copy them from the "Claim terms to plan" list that `start_application_draft` returns, verbatim, one per concept; a longer phrase that contains the term is accepted. Empty for a Template item. | `sealing ring, elastomer` |
 | `Sources` | Comma-separated, in the forms below. Empty only when `Question` is filled. | `F3, §2.1, FIG. 2` |
 | `Explain` | `yes` when the item needs a mechanism, parameter or example; `no` for a statement. | `yes` |
 | `Question` | The open question of a Technical item that has no source, or no source for the part `Explain` asks for. Empty otherwise. An item with only a `Question` yields an Inventor Question in the draft and no technical text; an item with sources and a `Question` yields text from the sources and an Inventor Question for the rest. | `What force does the spring apply to the piston 14?` |

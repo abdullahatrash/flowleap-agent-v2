@@ -262,6 +262,13 @@ Save the Draft Outline with write_patent_results, template draft-outline, to dra
 1. A hinge comprising a housing and a lever.
 2. The hinge of claim 1, wherein the lever is steel.
 
+## Claim terms to plan
+
+Copy these terms verbatim into the \`Claim terms\` column of the Draft Outline; the outline-coverage rule checks these exact terms.
+
+Claim 1: hinge; housing; lever
+Claim 2 (with claim 1): no new claim term
+
 ## Draft Outline (drafting/hinge/draft-outline.md)
 
 # Draft Outline

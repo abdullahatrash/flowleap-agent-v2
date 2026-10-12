@@ -246,6 +246,23 @@ describe('start_application_draft', () => {
 		}).toMatchSnapshot();
 	});
 
+	it('lists the claim terms to plan after the Approved Claims, each dependent claim with its independent claim', async () => {
+		const chain = claims('true', 'wherein the lever has a plurality of springs') + '3. The hinge of claim 2, further comprising a sealing ring.\n';
+		const { tools } = setup({ ...gatesOpen, 'drafting/hinge/claims.md': chain });
+		const result = await tools.start();
+		expect(result.slice(result.indexOf('## Claim terms to plan'), result.indexOf('## Draft Outline'))).toBe([
+			'## Claim terms to plan',
+			'',
+			'Copy these terms verbatim into the `Claim terms` column of the Draft Outline; the outline-coverage rule checks these exact terms.',
+			'',
+			'Claim 1: hinge; housing; lever',
+			'Claim 2 (with claim 1): springs',
+			'Claim 3 (with claim 1): sealing ring',
+			'',
+			'',
+		].join('\n'));
+	});
+
 	it('clears an approval the claims no longer match, and accepts a fresh re-approval and an untouched approval', async () => {
 		const forgot = setup(gatesOpen);
 		await forgot.tools.start();

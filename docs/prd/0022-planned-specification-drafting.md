@@ -43,6 +43,11 @@ exist.
    against the Feature List, disclosure and answers. Reason: the two dropped dimensions score
    added content as quality and pull against ADR 0012 decision 2. PRD 0020 keeps its non-goal
    on academic-dataset benchmarks: the regression set is synthetic matters, not HUPD.
+3. **A figure of the confirmed figures list is a source for a paragraph (`figure:FIG. n`), like a
+   disclosure span.** Reason: the outline already plans items from figures; without a figure
+   source kind the model wrote `figure:` markers the parser rejected (E4 finding, #642). The
+   figure must be a heading of `figures.md`. This extends the source kinds of ADR 0012
+   decision 1.
 
 ## The pipeline, with the new stage
 

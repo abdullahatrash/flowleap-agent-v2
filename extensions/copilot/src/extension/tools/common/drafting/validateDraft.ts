@@ -81,7 +81,7 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		...checkAbstractLength(paragraphs, input.office),
 		...checkDefinedTerms(paragraphs),
 		...checkReferenceNumerals(paragraphs, figures),
-		...checkSourceMarkers(paragraphs, answers),
+		...checkSourceMarkers(paragraphs, answers, figures),
 		...checkInventorQuestions(input.draft, answers),
 		...checkClaimCount(claims, input.office),
 		...checkPageCount(filingManifest(input)),

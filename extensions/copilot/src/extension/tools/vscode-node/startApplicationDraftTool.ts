@@ -10,6 +10,8 @@ import { IWorkspaceService } from '../../../platform/workspace/common/workspaceS
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { parseClaims } from '../common/drafting/claims';
+import { claimTermsToPlan } from '../common/drafting/claimValidators';
 import { DRAFT_OUTLINE_SAVE } from '../common/drafting/folderContract';
 import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontmatter';
 import { STYLE_INSTRUCTION } from '../common/drafting/styleFolder';
@@ -28,8 +30,9 @@ const refused = 'Drafting did not start.';
 /**
  * Starts an Application Drafting run (ADR 0012): reads the `confirmed` gate of `feature-list.md`
  * and the `approved` gate of `claims.md` from the files, never from the chat, and returns the
- * Feature List, the figures, the Approved Claims, the Draft Outline when it was made for the
- * Approved Claims (PRD 0022), and up to five style exemplars as text. It
+ * Feature List, the figures, the Approved Claims, the claim terms to plan (the exact terms the
+ * outline-coverage rule checks), the Draft Outline when it was made for the Approved Claims
+ * (PRD 0022), and up to five style exemplars as text. It
  * records the hash of the approved claims in the Working Record; when `claims.md` changes later,
  * the drafting tools clear `approved` and refuse until the attorney approves again.
  */
@@ -103,6 +106,12 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 			'',
 			body(claims),
 			'',
+			'## Claim terms to plan',
+			'',
+			'Copy these terms verbatim into the `Claim terms` column of the Draft Outline; the outline-coverage rule checks these exact terms.',
+			'',
+			...claimTermLines(claims),
+			'',
 			`## Draft Outline (${folder.draftOutline})`,
 			'',
 			outlineSection,
@@ -121,6 +130,17 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		];
 		return textResult(sections.join('\n'));
 	}
+}
+
+/**
+ * One line per Approved Claim with the terms it introduces, `Claim 1: a; b`; a dependent claim
+ * names its independent claims, `Claim 3 (with claim 1): c`.
+ */
+function claimTermLines(claims: string): string[] {
+	return claimTermsToPlan(parseClaims(claims)).map(({ claim, independentClaims, terms }) => {
+		const roots = independentClaims.length ? ` (with claim${independentClaims.length > 1 ? 's' : ''} ${independentClaims.join(', ')})` : '';
+		return `Claim ${claim}${roots}: ${terms.length ? terms.join('; ') : 'no new claim term'}`;
+	});
 }
 
 ToolRegistry.registerTool(StartApplicationDraftTool);

@@ -128,7 +128,19 @@ describe('Application Drafting specification validators', () => {
 	it('source markers: Error for a paragraph without a source or with an invalid marker', () => {
 		expect(checkSourceMarkers(draft('# Description', '', 'No source.', '', '<!-- src: feature -->', 'Bad marker.'))).toEqual([
 			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 3, message: 'The paragraph at line 3 has no source marker (<!-- src: ... -->).' },
-			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.' },
+			{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 6, message: 'The paragraph at line 6 has an invalid source marker: Unknown source "feature". Use feature:<row>, disclosure:<span>, figure:FIG. <n>, inventor:IQ-<n>, instruction, template or model-proposed.' },
+		]);
+	});
+
+	it('source markers: a figure source must name a figure heading of figures.md (FIG. 2 also names FIG. 2a)', () => {
+		const figureHeadings = '# Figures\n\n## FIG. 1: perspective view\n- 10: hinge\n\n## FIG. 2a\n- 12: housing\n';
+		const text = draft('# Description', '', '<!-- src: figure:FIG. 1 -->', 'Shown.', '', '<!-- src: figure:Fig. 2 -->', 'Shown too.', '', '<!-- src: figure:FIG. 3, feature:F1 -->', 'Not a figure.', '', '<!-- src: figure:the side view -->', 'Not a figure name.');
+		expect([checkSourceMarkers(text, [], figureHeadings), checkSourceMarkers(text)]).toEqual([
+			[
+				{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 10, message: 'The paragraph at line 10 cites figure:FIG. 3, but figures.md has no figure heading FIG. 3.' },
+				{ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line: 13, message: 'The paragraph at line 13 cites figure:the side view, but figures.md has no figure heading the side view.' },
+			],
+			[4, 7, 10, 13].map(line => ({ severity: 'Error', rule: 'source-marker', file: 'draft-application.md', line, message: expect.stringContaining('but figures.md has no figure heading') })),
 		]);
 	});
 

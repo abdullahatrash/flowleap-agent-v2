@@ -80,7 +80,8 @@ other claims: after the attorney approves changed claims, plan again.
 1. From the Approved Claims, the Feature List and the figures, write the
    **Draft Outline** per [references/outline-format.md](references/outline-format.md):
    the Template items of the office order, and one Technical item per claim
-   concept with its claims, claim terms, sources and `Explain`. A concept
+   concept with its claims, claim terms (copy the claim terms from the start
+   tool's list), sources and `Explain`. A concept
    with no source gets a `Question`, never a source found outside the matter.
 2. Save with `write_patent_results`, template `draft-outline`, to
    `drafting/<matter>/draft-outline.md`. The save returns the Findings on the
