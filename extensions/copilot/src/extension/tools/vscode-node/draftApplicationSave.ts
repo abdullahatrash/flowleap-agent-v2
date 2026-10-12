@@ -6,8 +6,9 @@
 import { DraftingFrontmatterFields, DraftingFrontmatterValue, parseDraftingFrontmatter, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { appliedAnswerLabel, currentAnswer, isAnswered, newlyAppliedAnswers, parseInventorAnswers, updateInventorAnswers } from '../common/drafting/inventorAnswers';
 import { parseInventorQuestions } from '../common/drafting/sourceMarkers';
-import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, INVENTOR_ANSWER_APPLIED, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
-import { DraftingWorkspace } from './draftingWorkspace';
+import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, INVENTOR_ANSWER_APPLIED, OUTLINE_HASH, OUTLINE_RESAVED, readRecordField, readRecordFields, renderDraftWorkingRecord, resaveWorkingRecord, setRecordField, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
+import { sha256Hex } from '../../../util/node/crypto';
+import { DraftingSaveResult, DraftingWorkspace } from './draftingWorkspace';
 
 /** The `write_patent_results` input of a `draft-application` save. */
 export interface DraftApplicationSaveInput {
@@ -19,11 +20,6 @@ export interface DraftApplicationSaveInput {
 	readonly disclosureVersion?: string;
 	readonly promptsSummary?: string;
 }
-
-/** The outcome of a `draft-application` save: the refusal, or what was written. */
-export type DraftApplicationSaveResult =
-	| { readonly saved: false; readonly reason: string }
-	| { readonly saved: true; readonly message: string };
 
 function text(value: DraftingFrontmatterValue): string | undefined {
 	return typeof value === 'string' && value.trim() ? value.trim() : typeof value === 'number' ? String(value) : undefined;
@@ -45,8 +41,10 @@ function versionedPath(path: string, version: number): string {
  * snapshot, and the Working Record with its header and source map.
  *
  * The save refuses while `confirmed` is not `true` in `feature-list.md` or `approved` is not `true`
- * in `claims.md` (ADR 0012: the specification is generated only against approved claims).
- * Findings never block the save.
+ * in `claims.md` (ADR 0012: the specification is generated only against approved claims), and
+ * while `draft-outline.md` is missing or was made for other claims (PRD 0022 decision 1: a code
+ * precondition, not a gate). Findings never block the save. The Working Record names the SHA-256
+ * of the outline the draft was saved with (`Outline SHA-256`), set again at every save.
  *
  * The generated snapshot of a version is written once, at the first save of that version; a later
  * save of the same version keeps it, so the export still diffs the attorney's edits against what
@@ -59,16 +57,11 @@ function versionedPath(path: string, version: number): string {
  * applies: the draft text that cites it (`inventor:IQ-n`) changed against the previous save. After the save, also after a refusal, it writes the
  * Drafting Checklist.
  */
-export async function saveDraftApplication(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftApplicationSaveResult> {
-	const result = await save(workspace, input);
-	const checklist = await workspace.checklistLine(!result.saved);
-	if (!checklist) {
-		return result;
-	}
-	return result.saved ? { saved: true, message: `${result.message}\n${checklist}` } : { saved: false, reason: `${result.reason} ${checklist}` };
+export async function saveDraftApplication(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftingSaveResult> {
+	return workspace.withChecklistLine(await save(workspace, input));
 }
 
-async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftApplicationSaveResult> {
+async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInput): Promise<DraftingSaveResult> {
 	const { folder } = workspace;
 	const { fields } = parseDraftingFrontmatter(input.content);
 	const office = readOffice({ office: text(fields.office) ?? input.office });
@@ -87,6 +80,11 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 	if (typeof approval === 'string') {
 		return { saved: false, reason: approval };
 	}
+	const outline = await workspace.requireOutline(approval.hash);
+	if (typeof outline === 'string') {
+		return { saved: false, reason: outline };
+	}
+	const outlineHash = sha256Hex(outline.text);
 
 	const currentHash = approval.hash;
 	const previousRecord = await workspace.read(folder.workingRecord) ?? '';
@@ -132,11 +130,14 @@ async function save(workspace: DraftingWorkspace, input: DraftApplicationSaveInp
 			savedAt,
 			approvedClaimsHash: approvedHash,
 			versionClaimsHash: versionHash,
+			outlineHash,
 		}, document);
-		// The approval history of the claims stays with the record of the draft built on them.
-		record = readRecordFields(previousRecord, APPROVAL_CLEARED).reduce((updated, value) => addRecordLine(updated, APPROVAL_CLEARED, value), record);
+		// The approval history of the claims and the outline re-saves stay with the record of the draft built on them.
+		for (const label of [APPROVAL_CLEARED, OUTLINE_RESAVED]) {
+			record = readRecordFields(previousRecord, label).reduce((updated, value) => addRecordLine(updated, label, value), record);
+		}
 	} else {
-		record = resaveWorkingRecord(previousRecord, document, savedAt);
+		record = setRecordField(resaveWorkingRecord(previousRecord, document, savedAt), OUTLINE_HASH, outlineHash);
 	}
 
 	// The answers this save applies: the draft text that cites them changed. Each applied round is recorded once.

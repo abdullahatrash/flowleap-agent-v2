@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createHash } from 'crypto';
 import * as mammoth from 'mammoth';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { FileType } from '../../../platform/filesystem/common/fileTypes';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+import { sha256Hex } from '../../../util/node/crypto';
 import { dirname } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -15,8 +15,10 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeT
 import { checklistPointer, DraftingChecklist, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
 import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
-import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
+import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
+import { parseDraftOutline } from '../common/drafting/outline';
+import { checkOutlineClaims } from '../common/drafting/outlineValidators';
 import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README } from '../common/drafting/styleFolder';
 import { validateDraft } from '../common/drafting/validateDraft';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, EXPORTED_DRAFT_HASH, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
@@ -61,9 +63,17 @@ function unsearchedClaimsNote(claims: string): DraftFinding[] {
 	return [{ severity: 'Note', rule: 'claims-unsearched', file: DRAFTING_FILE_NAMES.claims, message: `The Approved Claims carry status "${status.trim()}": they were drafted without a prior-art search. Run the prior-art step and re-approve, or record in the review that the claims are deliberately unsearched.` }];
 }
 
-/** The SHA-256 of the claims body of a `claims.md` text. */
+/** The SHA-256 of the claims body of a `claims.md` text: the Approved Claims hash. */
 function claimsHash(claims: string): string {
-	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
+	return sha256Hex(parseDraftingFrontmatter(claims).body.trim());
+}
+
+/**
+ * Why a Draft Outline was not made for the claims with this hash, or `undefined` when it was:
+ * the `outline-claims` rule, whose message names both hashes.
+ */
+function outlineStaleReason(outline: string, approvedClaimsHash: string): string | undefined {
+	return checkOutlineClaims(parseDraftOutline(outline), approvedClaimsHash)[0]?.message;
 }
 
 /**
@@ -71,7 +81,7 @@ function claimsHash(claims: string): string {
  * validator run or an export is current while the hash of the current files matches.
  */
 function draftHash(draft: string, claims: string): string {
-	return createHash('sha256').update(`${draft}\0${claimsHash(claims)}`).digest('hex');
+	return sha256Hex(`${draft}\0${claimsHash(claims)}`);
 }
 
 /** The frontmatter field of `claims.md` that ties `approved: true` to the claims body it approved. */
@@ -91,6 +101,19 @@ function withApprovedHash(fields: DraftingFrontmatterFields, hash: string): Draf
 
 function withoutApprovedHash(fields: DraftingFrontmatterFields): DraftingFrontmatterFields {
 	return Object.fromEntries(Object.entries(fields).filter(([key]) => key !== APPROVED_HASH_FIELD));
+}
+
+/** The outcome of a save of a drafting file through `write_patent_results`: the refusal, or what was written. */
+export type DraftingSaveResult =
+	| { readonly saved: false; readonly reason: string }
+	| { readonly saved: true; readonly message: string };
+
+/** The Draft Outline of a matter and, when it was made for other claims, why it does not hold. */
+export interface DraftOutlineState {
+	/** `draft-outline.md`. */
+	readonly text: string;
+	/** Why the outline does not hold for the Approved Claims; absent when it was made for them. */
+	readonly stale?: string;
 }
 
 /** A tool result of one text part. */
@@ -257,6 +280,49 @@ export class DraftingWorkspace {
 		await this.write(this.folder.workingRecord, setRecordField(record, APPROVED_CLAIMS_HASH, hash));
 	}
 
+	/**
+	 * Reads `draft-outline.md` and checks that its `claims` hash is the given Approved Claims hash;
+	 * `undefined` when the file does not exist.
+	 *
+	 * Editing the claims clears the outline binding as it clears `approved`, with no edit of the
+	 * outline file: the claims body gets a new hash, so the outline's `claims` hash no longer
+	 * matches. The hash mismatch is the signal.
+	 */
+	async readOutline(approvedClaimsHash: string): Promise<DraftOutlineState | undefined> {
+		const text = await this.read(this.folder.draftOutline);
+		if (text === undefined) {
+			return undefined;
+		}
+		const stale = outlineStaleReason(text, approvedClaimsHash);
+		return stale ? { text, stale } : { text };
+	}
+
+	/**
+	 * The Draft Outline precondition of the draft save (PRD 0022 decision 1: a code precondition,
+	 * not a human gate): the outline text when `draft-outline.md` exists and was made for the given
+	 * Approved Claims hash, else the refusal naming the file and the template to save it with.
+	 */
+	async requireOutline(approvedClaimsHash: string): Promise<string | { readonly text: string }> {
+		const outline = await this.readOutline(approvedClaimsHash);
+		const path = this.folder.draftOutline;
+		if (!outline) {
+			return `${path} does not exist. Save the Draft Outline for the Approved Claims ${DRAFT_OUTLINE_SAVE}, to ${path} first; then save the draft.`;
+		}
+		return outline.stale ? `${outline.stale} Save it ${DRAFT_OUTLINE_SAVE}, to ${path}; then save the draft.` : { text: outline.text };
+	}
+
+	/**
+	 * The result of a save, ending with the checklist line: after a refusal the open steps, else the
+	 * next step. The checklist is written also after a refusal.
+	 */
+	async withChecklistLine(result: DraftingSaveResult): Promise<DraftingSaveResult> {
+		const checklist = await this.checklistLine(!result.saved);
+		if (!checklist) {
+			return result;
+		}
+		return result.saved ? { saved: true, message: `${result.message}\n${checklist}` } : { saved: false, reason: `${result.reason} ${checklist}` };
+	}
+
 	/** The office of the draft: the draft's frontmatter, else the Feature List's. */
 	async office(draft: string | undefined): Promise<DraftingOffice | undefined> {
 		const fromDraft = draft ? readOffice(parseDraftingFrontmatter(draft).fields) : undefined;
@@ -268,18 +334,20 @@ export class DraftingWorkspace {
 	}
 
 	/**
-	 * Runs the validators over the draft, adds the claims-change Error and the advisory items, and
-	 * writes `findings.md` merged with the previous one (waivers kept). Records the hash of the
-	 * validated draft in the Working Record, so the Drafting Checklist knows when `findings.md` is
-	 * older than the draft. Returns the merged findings.
+	 * Runs the validators over the draft, with the Draft Outline rules against the current claims
+	 * (an `outline-claims` Error when `draft-outline.md` does not exist), adds the claims-change
+	 * Error and the advisory items, and writes `findings.md` merged with the previous one (waivers
+	 * kept). Records the hash of the validated draft in the Working Record, so the Drafting
+	 * Checklist knows when `findings.md` is older than the draft. Returns the merged findings.
 	 */
 	async validate(office: DraftingOffice, draft: string, claims: string, approval: ClaimsApproval, advisory: readonly DraftFinding[]): Promise<DraftFinding[]> {
 		const figures = await this.read(this.folder.figures);
 		const inventorAnswers = await this.read(this.folder.inventorAnswers);
+		const outline = { text: await this.read(this.folder.draftOutline), approvedClaimsHash: claimsHash(claims), featureList: await this.read(this.folder.featureList) ?? '' };
 		const current: DraftFinding[] = [
 			...(approval.changed ? [{ severity: 'Error' as const, rule: 'claims-changed', file: DRAFTING_FILE_NAMES.claims, message: approval.changed }] : []),
 			...unsearchedClaimsNote(claims),
-			...validateDraft({ office, draft, claims, figures, inventorAnswers }),
+			...validateDraft({ office, draft, claims, figures, inventorAnswers, outline }),
 			...advisory,
 		];
 		const previous = parseFindingsFile(await this.read(this.folder.findings) ?? '');
@@ -312,8 +380,8 @@ export class DraftingWorkspace {
 	 */
 	private async writeChecklist(): Promise<DraftingChecklist | undefined> {
 		const { folder } = this;
-		const [featureList, claims, draft] = [await this.read(folder.featureList), await this.read(folder.claims), await this.read(folder.draft)];
-		if (featureList === undefined && claims === undefined && draft === undefined && !await this.exists(folder.folder)) {
+		const [featureList, claims, draftOutline, draft] = [await this.read(folder.featureList), await this.read(folder.claims), await this.read(folder.draftOutline), await this.read(folder.draft)];
+		if (featureList === undefined && claims === undefined && draftOutline === undefined && draft === undefined && !await this.exists(folder.folder)) {
 			return undefined;
 		}
 		const findings = await this.read(folder.findings);
@@ -331,6 +399,8 @@ export class DraftingWorkspace {
 			featureList,
 			claims,
 			claimsChangedSinceApproval: claims !== undefined && readGateFlag(claimsFields, 'approved') === 'set' && approvedHash !== undefined && approvedHash !== claimsHash(claims),
+			draftOutline,
+			outlineStale: draftOutline !== undefined && (claims === undefined || !!outlineStaleReason(draftOutline, claimsHash(claims))),
 			draft,
 			draftStale: draft !== undefined && claims !== undefined && !!versionHash && versionHash !== claimsHash(claims),
 			figures: await this.read(folder.figures),

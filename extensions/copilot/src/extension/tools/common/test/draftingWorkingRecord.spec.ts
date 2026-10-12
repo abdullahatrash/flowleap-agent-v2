@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { diffDraftParagraphs } from '../drafting/draftDiff';
-import { addRecordLine, APPROVAL_CLEARED, renderDraftWorkingRecord, resaveWorkingRecord, splitSentences, withAttorneyEdits } from '../drafting/workingRecord';
+import { addRecordLine, APPROVAL_CLEARED, OUTLINE_HASH, readRecordField, renderDraftWorkingRecord, resaveWorkingRecord, setRecordField, splitSentences, withAttorneyEdits } from '../drafting/workingRecord';
 
 const header = { matter: 'hinge', office: 'US', model: 'claude-sonnet-5', provider: 'anthropic', version: 1, savedAt: '2026-10-07T10:00:00.000Z' };
 
@@ -78,6 +78,18 @@ describe('Application Drafting Working Record', () => {
 			sourceMap: '| 6 | SUMMARY | feature:F1, disclosure:§2 | A hinge has a housing. |\n| 6 | SUMMARY | feature:F1, disclosure:§2 | It is new. |\n',
 			attorneyEditsKept: true,
 			attorneyEditsLast: true,
+		});
+	});
+
+	it('the header names the Outline SHA-256 of the save; a re-save keeps the field and sets its current value', () => {
+		const first = renderDraftWorkingRecord({ ...header, approvedClaimsHash: 'c1', versionClaimsHash: 'c1', outlineHash: 'o1' }, draft('A hinge has a housing.'));
+		const resaved = setRecordField(resaveWorkingRecord(first, draft('A hinge has a housing.'), '2026-10-07T12:00:00.000Z'), OUTLINE_HASH, 'o2');
+		expect({
+			header: first.slice(first.indexOf('- **Saved:**'), first.indexOf('## Source map')),
+			resaved: readRecordField(resaved, OUTLINE_HASH),
+		}).toEqual({
+			header: '- **Saved:** 2026-10-07T10:00:00.000Z\n- **Approved claims SHA-256:** c1\n- **Claims SHA-256 of this version:** c1\n- **Outline SHA-256:** o1\n\n',
+			resaved: 'o2',
 		});
 	});
 });

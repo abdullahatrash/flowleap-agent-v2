@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createHash } from 'crypto';
 import type { LanguageModelToolResult } from 'vscode';
 import { IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
+import { sha256Hex } from '../../../util/node/crypto';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IToolCallRound } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
@@ -25,10 +25,9 @@ const receiptPrefix = 'Prior-art artifact receipt: ';
 
 /** Bind the report and its evidence revision to the bytes the structured writer actually saved. */
 export function priorArtReportReceipt(report: URI, document: string, evidence: URI, snapshot: string): string {
-	return receiptPrefix + JSON.stringify({ reportUri: report.toString(), reportDigest: digest(document), evidenceUri: evidence.toString(), evidenceDigest: digest(snapshot) } satisfies ReportReceipt);
+	return receiptPrefix + JSON.stringify({ reportUri: report.toString(), reportDigest: sha256Hex(document), evidenceUri: evidence.toString(), evidenceDigest: sha256Hex(snapshot) } satisfies ReportReceipt);
 }
 
-function digest(value: string | Uint8Array): string { return createHash('sha256').update(value).digest('hex'); }
 
 /** Conservative routing for explicit English prior-art deliverable requests, not every patent question. */
 export function requestsPriorArtReport(message: string): boolean {
@@ -111,7 +110,7 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 		try {
 			const report = await files.readFile(URI.parse(receipt.reportUri));
 			const evidence = await files.readFile(URI.parse(receipt.evidenceUri));
-			if (digest(report) === receipt.reportDigest && digest(evidence) === receipt.evidenceDigest) { continue; }
+			if (sha256Hex(report) === receipt.reportDigest && sha256Hex(evidence) === receipt.evidenceDigest) { continue; }
 		} catch (error) {
 			// A removed artifact loses its validation, but a transient read failure must not block the user.
 			if (!isNotFound(error)) { continue; }

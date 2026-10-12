@@ -93,4 +93,25 @@ describe('Application Drafting validateDraft', () => {
 			],
 		});
 	});
+
+	it('runs the Draft Outline rules with the others when given the outline inputs; a missing outline is one outline-claims Error', () => {
+		const outline = [
+			'---',
+			'office: US',
+			'claims: c1',
+			'---',
+			'| Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question |',
+			'|---|---|---|---|---|---|---|---|',
+			'| O1 | Detailed Description | Technical | 1, 2, 3, 4 | a hinge, a housing, a lever, a spring | F1 | yes |  |',
+		].join('\n');
+		const run = (text: string | undefined) => summary(validateDraft({ office: 'US', draft, claims, figures, outline: { text, approvedClaimsHash: 'c1', featureList: '| F1 | A hinge. |' } })).filter(line => /outline|item-coverage|duplicate/.test(line));
+		expect({ withOutline: run(outline), withoutOutline: run(undefined) }).toEqual({
+			withOutline: [
+				'Error outline-coverage draft-outline.md:5 claim 5',
+				'Error outline-coverage draft-outline.md:5 claim 5',
+				'Error item-coverage draft-outline.md:7',
+			],
+			withoutOutline: ['Error outline-claims draft-outline.md:-'],
+		});
+	});
 });
