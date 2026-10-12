@@ -93,9 +93,9 @@ Claims: 1. A valve comprising a housing, a piston and a sealing ring.
 |------|---------|------|--------|-------------|---------|---------|----------|
 | O1 | BACKGROUND | Template |  |  | §1 | no |  |
 | O2 | BRIEF DESCRIPTION OF THE DRAWINGS | Template |  |  | FIG. 1, FIG. 2 | no |  |
-| O3 | DETAILED DESCRIPTION | Technical | 1 | a valve, a housing, a piston | F1, F2, FIG. 1 | yes |  |
-| O4 | DETAILED DESCRIPTION | Technical | 1, 2 | a sealing ring, an elastomer | F3, §2.1, FIG. 2 | yes |  |
-| O5 | DETAILED DESCRIPTION | Technical | 1, 3 | a spring |  | yes | Where does the spring sit, and what force does it apply to the piston 14? |
+| O3 | DETAILED DESCRIPTION | Technical | 1 | valve, housing, piston | F1, F2, FIG. 1 | yes |  |
+| O4 | DETAILED DESCRIPTION | Technical | 1, 2 | sealing ring, elastomer | F3, §2.1, FIG. 2 | yes |  |
+| O5 | DETAILED DESCRIPTION | Technical | 1, 3 | spring |  | yes | Where does the spring sit, and what force does it apply to the piston 14? |
 
 The title, summary and abstract rows are left out of this example.
 

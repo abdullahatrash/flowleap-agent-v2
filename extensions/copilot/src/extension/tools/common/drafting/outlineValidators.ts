@@ -119,12 +119,12 @@ function quoteList(texts: readonly string[]): string {
 }
 
 /** The reason a source does not exist in the matter files, or `undefined` when it does. */
-function missingSource(source: OutlineSource, featureIds: ReadonlySet<string>, numbers: readonly string[], answers: readonly InventorAnswerSection[]): string | undefined {
+function missingSource(source: OutlineSource, featureIds: ReadonlySet<string>, figureHeadingNumberList: readonly string[], answers: readonly InventorAnswerSection[]): string | undefined {
 	switch (source.kind) {
 		case 'feature':
 			return featureIds.has(source.ref) ? undefined : `${source.ref}, which is not a row of ${DRAFTING_FILE_NAMES.featureList}`;
 		case 'figure':
-			return hasFigure(numbers, source.ref) ? undefined : `FIG. ${source.ref}, which is not a figure of ${DRAFTING_FILE_NAMES.figures}`;
+			return hasFigure(figureHeadingNumberList, source.ref) ? undefined : `FIG. ${source.ref}, which is not a figure of ${DRAFTING_FILE_NAMES.figures}`;
 		case 'answer':
 			return hasAnyAnswer(answers.find(section => section.id === source.ref)) ? undefined : `${source.ref}, which has no answer in ${DRAFTING_FILE_NAMES.inventorAnswers}`;
 		case 'disclosure':
