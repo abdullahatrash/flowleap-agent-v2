@@ -1,6 +1,6 @@
-# PRD 0022 — Patent Drawings Generation
+# PRD 0023 — Patent Drawings Generation
 
-**Status:** READY 2026-10-12 — ADR 0014 accepted; spec issue #637 `ready-for-agent`; slice tickets E1–E7 to be filed
+**Status:** READY 2026-10-12 — ADR 0014 accepted; spec issue #637 `ready-for-agent`; slice tickets D1 #645, D2 #646, D3 #647, D4 #648, D5 #649, D6 #650, D7 #651 (number 0022 was taken by Planned Specification Drafting, merged first in #628)
 **Date:** 2026-10-12
 **Base:** main after #625 (`2b83c88853b`)
 **Decides:** nothing new — executes ADR 0014 (drawings from a geometry scene).
@@ -52,7 +52,7 @@ touching parts.
 
 ## Slices
 
-### E1 — Scene schema and geometry engine (extensions/copilot, node layer, no VS Code API)
+### D1 — Scene schema and geometry engine (extensions/copilot, node layer, no VS Code API)
 The scene schema with a validator: primitives (box, cylinder, extruded polygon, revolve, tube
 with straight segments and bends), seven library parts with named ports (fastener, spring, gear,
 bearing, shaft, pipe, motor), placements, camera presets (isometric, front, top, side), section
@@ -65,7 +65,7 @@ and the SVG before any model sees a render. Guardrail: no model call in this lay
 loads lazily and its license notice ships beside the file. Acceptance: fixture scenes render to
 snapshot SVG, one snapshot assertion per fixture; a fault fixture per check.
 
-### E2 — Sheets, rasterizer, PDF and the receipt (extensions/copilot, node layer)
+### D2 — Sheets, rasterizer, PDF and the receipt (extensions/copilot, node layer)
 Sheet layout from the rules file: A4 default (Letter when the attorney sets it), margins
 25/25/15/10 mm, no frame, landscape orientation flipped per office, FIG labels larger than
 numerals, no label for a single-figure set, partial figures as number plus capital letter, sheet
@@ -76,7 +76,7 @@ and the rounds the model saw. The two WebAssembly files enter the postinstall co
 Acceptance: sheet snapshots for both offices and both orientations; a PDF test that opens the
 file and reads page size, page count and embedded font.
 
-### E3 — 2D mode: flowcharts and block diagrams (extensions/copilot, node layer)
+### D3 — 2D mode: flowcharts and block diagrams (extensions/copilot, node layer)
 Nodes built one-to-one from numbered steps or an approved method claim by code; the model
 proposes branches and loops only; a node count that differs from the step count is rejected.
 Layout through elkjs, deterministic. Box shapes per convention, step numerals (102, 104, ...)
@@ -84,7 +84,7 @@ as reference numerals, START and END optional, one short sentence per box for EP
 unlabeled-box objection as a check for US. Block diagrams share the writer with named
 connections. Acceptance: snapshot per fixture; the invented-step fixture fails.
 
-### E4 — `figures.md` contract and validators (extensions/copilot, common drafting layer)
+### D4 — `figures.md` contract and validators (extensions/copilot, common drafting layer)
 Extend the parser and writer: `- 12: housing [F3]` links, `(proposed)` marker, frontmatter
 `numerals: even | hundreds` (default even), `pageSize: A4 | letter`, `drawingSheets` becomes
 measured when `drawings/` exists. New validators beside the existing numeral check: scheme
@@ -92,17 +92,17 @@ followed; no proposal at export; claimed-feature coverage (37 CFR 1.83(a)) throu
 List links; numeral set equality against description and, for EPO, claims. The Filing Manifest
 reads the measured sheet count. Acceptance: unit tests over synthetic files, both offices.
 
-### E5 — Typed tools (extensions/copilot, vscode-node)
+### D5 — Typed tools (extensions/copilot, vscode-node)
 `render_figure`: scene in, writes `FIG-N.scene.json` and `FIG-N.svg`, returns the review PNG
 as a data part plus the fault report; refuses a part without a numeral or a numeral outside
-`figures.md`; records the round. `build_drawing_set`: runs E2 over all Figures, refuses on a
+`figures.md`; records the round. `build_drawing_set`: runs D2 over all Figures, refuses on a
 proposal, an unwaived Error or a coverage gap, writes the PDF and the receipt, updates the
 manifest. `propose_figure_part`: appends a `(proposed)` line with the sketch it came from.
 Guardrail: three rounds per Figure, latest render only; a model without vision gets the fault
 report and the receipt records that no render was seen. Acceptance: tool tests on the in-memory
 filesystem pattern, including each refusal.
 
-### E6 — `patent-drawings` skill (assets/skills) and the Agents Window entry
+### D6 — `patent-drawings` skill (assets/skills) and the Agents Window entry
 About five steps with reference files (founder rule): read `figures.md` and the sketches, state
 the scope and refuse outside it; write the scene per Figure, numeral ports before geometry,
 library parts for standard parts; render, fix against the fault list, at most three rounds;
@@ -112,9 +112,9 @@ the scope and refusal rules, the office page rules with citations, the sketch-re
 (list says what, sketch says where). Registered in `chatSkills`. A CLI entry
 (`drawings-cli.js`) is copied into the skill folder at build time so the Agents Window skill
 runs the same engine. App-only: not synced to the plugin pack or the CLI. Acceptance: the live
-run in E7.
+run in D7.
 
-### E7 — Acceptance (founder + patent professional)
+### D7 — Acceptance (founder + patent professional)
 One real disclosure with at least two labelled inventor sketches and one method claim, US or
 EPO, through the whole pipeline. A patent professional compares the Drawing Set to what an
 illustrator would have returned for the same input. Pass: numeral set equals the description;
@@ -134,7 +134,7 @@ part. Record the run under `docs/reviews/`. No time-saved or cost-saved figure i
 
 ## Execution
 
-Two tracks. Track A (first live slice): E4, then E2 and E3 in parallel, then the 2D path of
-E5 and E6, so flowcharts from approved method claims reach an attorney first. Track B: E1 in
-parallel with Track A, then E5 and E6 extended to 3D Figures. E7 after both. One worktree per
+Two tracks. Track A (first live slice): D4, then D2 and D3 in parallel, then the 2D path of
+D5 and D6, so flowcharts from approved method claims reach an attorney first. Track B: D1 in
+parallel with Track A, then D5 and D6 extended to 3D Figures. D7 after both. One worktree per
 agent, stage only your own files, base every PR on main.
