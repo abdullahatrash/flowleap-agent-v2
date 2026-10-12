@@ -1,6 +1,6 @@
 # PRD 0022 — Planned Specification Drafting
 
-**Status:** READY 2026-10-12 — executes the accepted part of #627; tickets E1–E5 filed from this document
+**Status:** READY 2026-10-12 — executes the accepted part of #627; tickets E1 #629, E2 #630, E3 #631, E4 #632, E5 #633; parent #627
 **Date:** 2026-10-12
 **Base:** main after PR #626 (`876c8403797`); PRD 0020 complete (D5 live run passed 2026-10-12)
 **Decides:** two small things, recorded under *Decisions* below; no new ADR. Everything else
