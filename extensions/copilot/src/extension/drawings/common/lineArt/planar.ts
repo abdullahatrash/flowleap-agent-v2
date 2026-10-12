@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Vec2 } from './drawingScene';
+import type { Vec2 } from '../scene/drawingScene';
 
 /** A straight segment in drawing coordinates. */
 export type Segment = readonly [Vec2, Vec2];

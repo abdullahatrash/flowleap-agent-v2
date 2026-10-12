@@ -120,7 +120,7 @@ let loading: Promise<ReplicadApi> | undefined;
 function kernelFiles(): { glue: string; wasm: string } {
 	// From source (unit tests) the files are in node_modules; from the bundle they are beside it in dist/.
 	if (path.extname(__filename) === '.ts') {
-		const packageDir = path.join(__dirname, '..', '..', '..', '..', 'node_modules', 'replicad-opencascadejs', 'dist');
+		const packageDir = path.join(__dirname, '..', '..', '..', '..', '..', 'node_modules', 'replicad-opencascadejs', 'dist');
 		return { glue: path.join(packageDir, 'replicad_single.js'), wasm: path.join(packageDir, KERNEL_WASM) };
 	}
 	return { glue: path.join(__dirname, KERNEL_GLUE), wasm: path.join(__dirname, KERNEL_WASM) };

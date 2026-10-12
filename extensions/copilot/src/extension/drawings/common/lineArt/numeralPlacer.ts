@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Vec2 } from './drawingScene';
+import type { Vec2 } from '../scene/drawingScene';
 import { inflate, Rect, rectsOverlap, Segment, segmentHitsRect, segmentsIntersect } from './planar';
 
 /**

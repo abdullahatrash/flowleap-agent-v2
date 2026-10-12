@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vm from 'node:vm';
-import type { CodeShape, LibraryShape, PartShape, Placement, PrimitiveShape, ScenePart, Vec2, Vec3 } from '../common/drawingScene';
-import { add, BEARING_BALL, BEARING_RING, FASTENER_HEAD_HEIGHT, FASTENER_HEAD_RADIUS, MOTOR_BOSS_HEIGHT, MOTOR_BOSS_RADIUS, normalize, scale } from '../common/sceneGeometry';
+import type { CodeShape, LibraryShape, PartShape, Placement, PrimitiveShape, ScenePart, Vec2, Vec3 } from '../../common/scene/drawingScene';
+import { add, BEARING_BALL, BEARING_RING, FASTENER_HEAD_HEIGHT, FASTENER_HEAD_RADIUS, MOTOR_BOSS_HEIGHT, MOTOR_BOSS_RADIUS, normalize, scale } from '../../common/scene/sceneGeometry';
 import { KernelCurve, KernelShape, point3, ReplicadApi } from './drawingKernel';
 
 /** Time limit for one code escape hatch part, in milliseconds. */

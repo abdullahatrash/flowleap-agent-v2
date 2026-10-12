@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../common/drawingFaults';
-import type { DrawingScene, SectionPlane, Vec2, Vec3 } from '../common/drawingScene';
-import { layoutFigure, ProjectedPart, ProjectedPort, writeFigureSvg } from '../common/lineArt';
-import { flattenSvgPath, pointSegmentDistance, Segment, toSegments } from '../common/planar';
-import { CameraBasis, cameraBasis, dot, normalize, projectPoint, resolvePort } from '../common/sceneGeometry';
-import { SceneValidationOptions, validateScene } from '../common/sceneValidator';
+import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../../common/scene/drawingFaults';
+import type { DrawingScene, SectionPlane, Vec2, Vec3 } from '../../common/scene/drawingScene';
+import { layoutFigure, ProjectedPart, ProjectedPort, writeFigureSvg } from '../../common/lineArt/lineArt';
+import { flattenSvgPath, pointSegmentDistance, Segment, toSegments } from '../../common/lineArt/planar';
+import { CameraBasis, cameraBasis, dot, normalize, projectPoint, resolvePort } from '../../common/scene/sceneGeometry';
+import { SceneValidationOptions, validateScene } from '../../common/scene/sceneValidator';
 import { KernelDrawing, KernelObject, KernelShape, loadDrawingKernel, point3, ReplicadApi } from './drawingKernel';
 import { buildPart } from './sceneSolids';
 
@@ -177,6 +177,6 @@ export async function renderFigure(input: unknown, options: RenderFigureOptions 
 		return { numeral: port.numeral, part: port.part, surface: port.surface === true, anchor: point && projectPoint(camera, point) };
 	});
 	const svg = writeFigureSvg(layoutFigure({ figure: scene.figure, parts, ports, hiddenEdges: scene.hiddenEdges ?? 'omit', scale: scene.scale }));
-	findings.push(...checkFigureSvgFaults(svg, `${scene.figure}.svg`));
+	findings.push(...checkFigureSvgFaults(svg, { file: `${scene.figure}.svg` }));
 	return { svg, findings };
 }

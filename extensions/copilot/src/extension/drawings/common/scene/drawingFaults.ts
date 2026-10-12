@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DraftFinding } from '../../tools/common/drafting/finding';
+import type { DraftFinding } from '../../../tools/common/drafting/finding';
 import type { DrawingScene, Vec2 } from './drawingScene';
-import { DIGIT_HEIGHT_RATIO, numeralBox } from './numeralPlacer';
-import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentsIntersect, toSegments } from './planar';
+import { DIGIT_HEIGHT_RATIO, numeralBox } from '../lineArt/numeralPlacer';
+import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentsIntersect, toSegments } from '../lineArt/planar';
 import { cameraBasis, faceNames, resolvePort } from './sceneGeometry';
 
 /**
@@ -94,9 +94,9 @@ export function checkSceneFaults(scene: DrawingScene, allowedNumerals?: readonly
 	return findings;
 }
 
-/** A path element of a Figure SVG as the fault list reads it. */
+/** A path or line element of a Figure SVG as the fault list reads it. */
 interface SvgPath {
-	readonly className: string;
+	readonly classes: readonly string[];
 	readonly part?: string;
 	readonly numeral?: string;
 	readonly lines: Vec2[][];
@@ -129,9 +129,16 @@ function unescapeXml(text: string): string {
 /** Reads the paths and texts of a Figure SVG (the format `writeFigureSvg` writes, or an edited copy). */
 function readFigureSvg(svg: string): { paths: SvgPath[]; texts: SvgText[] } {
 	const paths: SvgPath[] = [];
-	for (const match of svg.matchAll(/<path\b(?<attrs>[^>]*)\/?>/g)) {
+	for (const match of svg.matchAll(/<(?<tag>path|line|polyline)\b(?<attrs>[^>]*)\/?>/g)) {
 		const attrs = attributes(match.groups!.attrs);
-		paths.push({ className: attrs.get('class') ?? '', part: attrs.get('data-part'), numeral: attrs.get('data-numeral'), lines: flattenSvgPath(attrs.get('d') ?? '') });
+		const coordinate = (name: string) => Number(attrs.get(name) ?? 0);
+		const points = (attrs.get('points') ?? '').trim().split(/[\s,]+/).filter(Boolean).map(Number);
+		const lines: Vec2[][] = match.groups!.tag === 'path'
+			? flattenSvgPath(attrs.get('d') ?? '')
+			: match.groups!.tag === 'line'
+				? [[[coordinate('x1'), coordinate('y1')], [coordinate('x2'), coordinate('y2')]]]
+				: [Array.from({ length: Math.floor(points.length / 2) }, (_, i): Vec2 => [points[2 * i], points[2 * i + 1]])];
+		paths.push({ classes: (attrs.get('class') ?? '').split(/\s+/).filter(Boolean), part: attrs.get('data-part'), numeral: attrs.get('data-numeral'), lines });
 	}
 	const texts: SvgText[] = [];
 	for (const match of svg.matchAll(/<text\b(?<attrs>[^>]*)>(?<content>[\s\S]*?)<\/text>/g)) {
@@ -150,18 +157,29 @@ function readFigureSvg(svg: string): { paths: SvgPath[]; texts: SvgText[] } {
 	return { paths, texts };
 }
 
+/** Options of the SVG fault list runner. */
+export interface FigureSvgCheckOptions {
+	/** The file name the Findings name, e.g. `FIG-1.svg`. */
+	readonly file?: string;
+	/** Run only these checks (a diagram has no parts, so it may skip `lead-line-off-part`). Default: all. */
+	readonly checks?: readonly DrawingRule[];
+}
+
 /**
  * The SVG half of the mechanical fault list, run on the written file before any model sees a
  * render: crossing lead lines, a lead line that ends off its part or starts far from its numeral,
  * a numeral without a lead line that is not underlined, a glyph under 3.2 mm, text beyond
- * keywords, and a numeral that overlaps another numeral or a line.
+ * keywords, and a numeral that overlaps another numeral or a line. It reads any SVG in the Figure
+ * contract (paths, lines, texts with `class` and `data-*`), imports no kernel, and so also runs on
+ * the 2D diagram mode's SVG. A lead line without `data-part` skips the on-part check.
  */
-export function checkFigureSvgFaults(svg: string, file?: string): DrawingFinding[] {
+export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions = {}): DrawingFinding[] {
 	const { paths, texts } = readFigureSvg(svg);
+	const file = options.file;
 	const findings: DrawingFinding[] = [];
 	const numerals = texts.filter(text => text.className === 'numeral' || NUMERAL_PATTERN.test(text.content));
 	const boxes = new Map<SvgText, Rect>(numerals.map(text => [text, numeralBox(text.content, text.x, text.y, text.fontSize)]));
-	const leads = paths.filter(path => path.className === 'lead').map(path => ({ path, segment: toSegments(path.lines)[0] })).filter((lead): lead is { path: SvgPath; segment: Segment } => lead.segment !== undefined);
+	const leads = paths.filter(path => path.classes.includes('lead')).map(path => ({ path, segment: toSegments(path.lines)[0] })).filter((lead): lead is { path: SvgPath; segment: Segment } => lead.segment !== undefined);
 
 	for (const text of texts) {
 		const glyph = text.fontSize * DIGIT_HEIGHT_RATIO;
@@ -185,12 +203,11 @@ export function checkFigureSvgFaults(svg: string, file?: string): DrawingFinding
 	}
 
 	const outlines = new Map<string, Vec2[]>();
-	for (const path of paths.filter(item => item.className === 'edge' && item.part)) {
+	for (const path of paths.filter(item => item.classes.includes('edge') && item.part)) {
 		outlines.set(path.part!, [...(outlines.get(path.part!) ?? []), ...path.lines.flat()]);
 	}
 	for (const { path, segment } of leads) {
-		const outline = path.part ? convexHull(outlines.get(path.part) ?? []) : [];
-		if (pointPolygonDistance(segment[1], outline) > LEAD_END_TOLERANCE) {
+		if (path.part && pointPolygonDistance(segment[1], convexHull(outlines.get(path.part) ?? [])) > LEAD_END_TOLERANCE) {
 			findings.push(fault('lead-line-off-part', `The lead line of numeral ${path.numeral} ends off part "${path.part}".`, { numeral: path.numeral, part: path.part, file }));
 		}
 		const text = numerals.find(item => item.numeral === path.numeral && item.part === path.part) ?? numerals.find(item => item.content === path.numeral);
@@ -200,7 +217,7 @@ export function checkFigureSvgFaults(svg: string, file?: string): DrawingFinding
 		}
 	}
 
-	const underlined = new Set(paths.filter(path => path.className === 'underline').map(path => path.numeral));
+	const underlined = new Set(paths.filter(path => path.classes.includes('underline')).map(path => path.numeral));
 	for (const text of numerals) {
 		const hasLead = leads.some(lead => lead.path.numeral === (text.numeral ?? text.content) && (text.part === undefined || lead.path.part === text.part));
 		if (!hasLead && !(text.surface && underlined.has(text.numeral ?? text.content))) {
@@ -208,7 +225,7 @@ export function checkFigureSvgFaults(svg: string, file?: string): DrawingFinding
 		}
 	}
 
-	const lineSegments = paths.filter(path => path.className !== 'lead' && path.className !== 'underline').flatMap(path => toSegments(path.lines));
+	const lineSegments = paths.filter(path => !path.classes.includes('lead') && !path.classes.includes('underline')).flatMap(path => toSegments(path.lines));
 	for (let i = 0; i < numerals.length; i++) {
 		const box = boxes.get(numerals[i])!;
 		for (let j = i + 1; j < numerals.length; j++) {
@@ -222,5 +239,6 @@ export function checkFigureSvgFaults(svg: string, file?: string): DrawingFinding
 			findings.push(fault('numeral-on-line', `Numeral ${numerals[i].content} sits on a drawn line.`, { numeral: numerals[i].content, file }));
 		}
 	}
-	return findings;
+	const checks = options.checks;
+	return checks ? findings.filter(finding => checks.includes(finding.rule as DrawingRule)) : findings;
 }

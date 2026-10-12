@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { DrawingScene } from '../../common/drawingScene';
+import type { DrawingScene } from '../../../common/scene/drawingScene';
 import { renderFigure } from '../figureRenderer';
 
 function fixture(name: string): DrawingScene {
