@@ -43,6 +43,11 @@ exist.
    against the Feature List, disclosure and answers. Reason: the two dropped dimensions score
    added content as quality and pull against ADR 0012 decision 2. PRD 0020 keeps its non-goal
    on academic-dataset benchmarks: the regression set is synthetic matters, not HUPD.
+3. **A figure of the confirmed figures list is a source for a paragraph (`figure:FIG. n`), like a
+   disclosure span.** Reason: the outline already plans items from figures; without a figure
+   source kind the model wrote `figure:` markers the parser rejected (E4 finding, #642). The
+   figure must be a heading of `figures.md`. This extends the source kinds of ADR 0012
+   decision 1.
 
 ## The pipeline, with the new stage
 
@@ -69,7 +74,7 @@ was made from). Body: one table, one row per Outline Item.
 | `Section` | A section name of the office order (`references/us-section-order.md` or the EPO file) |
 | `Kind` | `Template` (standard section text) or `Technical` (a concept of the claims) |
 | `Claims` | The claim numbers the item realises; a dependent claim is listed with the independent claim it depends on (`1, 3`) |
-| `Claim terms` | The claim terms the item explains, as the claims introduce them (`a sealing ring`) |
+| `Claim terms` | The claim terms the item explains, copied from the `Claim terms to plan` list `start_application_draft` returns (`sealing ring`) |
 | `Sources` | `F3`, `§2.1`, `FIG. 2`, `IQ-4`; empty only when `Question` is filled |
 | `Explain` | `yes` when the item needs a mechanism, parameter or example, `no` for a statement |
 | `Question` | The open question when a Technical item has no source; becomes an Inventor Question in the draft |
@@ -92,7 +97,7 @@ table). Add `item` to the marker parser as a plan reference. Validators, each re
 Findings with a line and a severity:
 - `outline-claims`: Error when the outline's `claims` hash is not the Approved Claims hash.
 - `outline-coverage`: Error for every claim term (the phrases `checkLiteralBasis` already
-  extracts) that no Technical item lists (Technical items only); Error for every dependent claim
+  extracts) that no Technical item lists (a listed term that contains the claim term as a whole word counts) (Technical items only); Error for every dependent claim
   that no item lists (Technical items only) together with the independent claim it depends on
   (the combination has no plan).
 - `outline-sources`: Error for a Technical item with neither source nor question; Error for a

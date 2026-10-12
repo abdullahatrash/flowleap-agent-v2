@@ -302,6 +302,38 @@ export function claimTermKey(term: string): string {
 	return words(term.trim().replace(leadingIntroducerPattern, '')).map(singular).join(' ');
 }
 
+/** The independent claims a claim depends on, directly or through other dependent claims; empty for an independent claim. */
+export function independentRoots(claim: DraftClaim, byNumber: ReadonlyMap<number, DraftClaim>): number[] {
+	const roots = dependencyPaths(claim, byNumber).map(path => path[0]).filter(root => root !== claim && !root.dependsOn.length);
+	return [...new Set(roots.map(root => root.number))].sort((a, b) => a - b);
+}
+
+/** The claim terms one claim introduces, for the `Claim terms` column of the Draft Outline. */
+export interface ClaimTermsToPlan {
+	readonly claim: number;
+	/** The independent claims it depends on (see {@link independentRoots}); empty for an independent claim. */
+	readonly independentClaims: readonly number[];
+	/** The phrases {@link introducedPhrases} reads from the claim, in claim order. */
+	readonly terms: readonly string[];
+}
+
+/**
+ * The claim terms to plan, per claim in claim order: the exact terms the `outline-coverage` rule
+ * checks, and for a dependent claim the independent claims the outline must plan it with.
+ */
+export function claimTermsToPlan(claims: readonly DraftClaim[]): ClaimTermsToPlan[] {
+	const byNumber = new Map(claims.map(claim => [claim.number, claim]));
+	return claims.map(claim => ({ claim: claim.number, independentClaims: independentRoots(claim, byNumber), terms: introducedPhrases(claim.text) }));
+}
+
+/**
+ * True when a listed claim term covers a claim term: their {@link claimTermKey}s are equal, or the
+ * claim term is whole words of the listed one (`a channel for a cable` covers `channel`).
+ */
+export function claimTermCovered(termKey: string, listedKey: string): boolean {
+	return termKey.length > 0 && ` ${listedKey} `.includes(` ${termKey} `);
+}
+
 /**
  * Error when a claim term phrase a claim introduces ("a lower lever arm that ...") does not appear
  * verbatim in the description (literal basis), case-insensitive and plural-normalised; reference

@@ -20,6 +20,8 @@
  *
  * - `feature:<row id>` — a row of the Feature List, e.g. `feature:F3`.
  * - `disclosure:<span>` — a span of the invention disclosure, e.g. `disclosure:§2.1`.
+ * - `figure:<figure name>` — a figure of `figures.md`, named as its heading names it, e.g.
+ *   `figure:FIG. 1` or `figure:Fig. 2a` (PRD 0022 decision 3).
  * - `instruction` — an attorney instruction.
  * - `inventor:<question id>` — the inventor's answer to an Inventor Question in
  *   `inventor-answers.md`, e.g. `inventor:IQ-3`.
@@ -46,9 +48,9 @@
 import { parseDraftingFrontmatter } from './frontmatter';
 
 /** The kind of source a paragraph traces to. */
-export type DraftSourceKind = 'feature' | 'disclosure' | 'inventor' | 'instruction' | 'template' | 'model-proposed';
+export type DraftSourceKind = 'feature' | 'disclosure' | 'figure' | 'inventor' | 'instruction' | 'template' | 'model-proposed';
 
-/** One source named by a paragraph marker. `ref` is set for `feature`, `disclosure` and `inventor`. */
+/** One source named by a paragraph marker. `ref` is set for `feature`, `disclosure`, `figure` and `inventor`. */
 export interface DraftSource {
 	readonly kind: DraftSourceKind;
 	readonly ref?: string;
@@ -86,7 +88,7 @@ export interface InventorQuestion {
 }
 
 const markerPattern = /^[ \t]*<!--\s*src:(?<sources>[\s\S]*?)-->[ \t]*\n?/;
-const sourcePattern = /^(?<kind>feature|disclosure|inventor|instruction|template|model-proposed)(?:\s*:\s*(?<ref>.+))?$/;
+const sourcePattern = /^(?<kind>feature|disclosure|figure|inventor|instruction|template|model-proposed)(?:\s*:\s*(?<ref>.+))?$/;
 const itemPattern = /^item\s*:\s*(?<id>.*)$/;
 const inventorQuestionPattern = /^>\s*\*\*Inventor Question (?<id>IQ-\d+):\*\*\s*(?<text>[\s\S]*)$/;
 
@@ -153,9 +155,9 @@ function readParagraph(raw: string, blockLine: number, section: string | undefin
 		const source = sourcePattern.exec(entry);
 		const kind = source?.groups?.kind as DraftSourceKind | undefined;
 		const ref = source?.groups?.ref?.trim();
-		const needsRef = kind === 'feature' || kind === 'disclosure' || kind === 'inventor';
+		const needsRef = kind === 'feature' || kind === 'disclosure' || kind === 'figure' || kind === 'inventor';
 		if (!kind || needsRef !== Boolean(ref) || (kind === 'inventor' && !/^IQ-\d+$/.test(ref ?? ''))) {
-			return { line, kind: 'text', section, text, markerError: `Unknown source "${entry}". Use feature:<row>, disclosure:<span>, inventor:IQ-<n>, instruction, template or model-proposed.` };
+			return { line, kind: 'text', section, text, markerError: `Unknown source "${entry}". Use feature:<row>, disclosure:<span>, figure:FIG. <n>, inventor:IQ-<n>, instruction, template or model-proposed.` };
 		}
 		sources.push(ref ? { kind, ref } : { kind });
 	}

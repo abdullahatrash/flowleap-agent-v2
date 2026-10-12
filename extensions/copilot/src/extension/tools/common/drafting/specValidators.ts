@@ -331,6 +331,23 @@ export function hasFigures(figures: string): boolean {
  */
 export const figureNamePattern = new RegExp(String.raw`\b${figureWord}\d+[a-zA-Z]?\b`);
 
+/** The figure numbers the figure headings of `figures.md` name (`FIGS. 7 to 10` = `7`, `8`, `9`, `10`). */
+export function figureNumbers(figures: string): string[] {
+	return parseFigureSections(figures).figures.flatMap(section => figureHeadingNumbers(section.label));
+}
+
+/** True when the figure numbers of `figures.md` name the figure; `2` also matches `2a`. */
+export function hasFigure(numbers: readonly string[], figure: string): boolean {
+	const wanted = figure.toLowerCase();
+	return numbers.some(number => {
+		const named = number.toLowerCase();
+		return named === wanted || (/^\d+$/.test(wanted) && new RegExp(`^${wanted}[a-z]$`).test(named));
+	});
+}
+
+/** A whole figure name, `FIG. 1` or `Fig. 2a`, with its number. */
+const figureRefPattern = new RegExp(String.raw`^${figureWord}(?<number>\d+[a-zA-Z]?)$`);
+
 /**
  * EPO, Rule 47(4) EPC: Notes when the application has figures and the Abstract does not name the
  * figure to publish with it (`Fig. 1`), or mentions a part shown in a figure of `figures.md`
@@ -364,10 +381,12 @@ export function checkEpoAbstractFigure(paragraphs: readonly DraftParagraph[], fi
 }
 
 /**
- * Error for each text paragraph outside the claims without a valid source marker, and for each
- * `inventor:IQ-n` source whose question has no answer in `inventor-answers.md`.
+ * Error for each text paragraph outside the claims without a valid source marker, for each
+ * `inventor:IQ-n` source whose question has no answer in `inventor-answers.md`, and for each
+ * `figure:FIG. n` source that names no figure heading of `figures.md`.
  */
-export function checkSourceMarkers(paragraphs: readonly DraftParagraph[], answers: readonly InventorAnswerSection[] = []): DraftFinding[] {
+export function checkSourceMarkers(paragraphs: readonly DraftParagraph[], answers: readonly InventorAnswerSection[] = [], figures = ''): DraftFinding[] {
+	const numbers = figureNumbers(figures);
 	const findings: DraftFinding[] = [];
 	for (const paragraph of paragraphs) {
 		if (paragraph.kind !== 'text' || isClaimsParagraph(paragraph)) {
@@ -377,6 +396,10 @@ export function checkSourceMarkers(paragraphs: readonly DraftParagraph[], answer
 			for (const source of paragraph.sources) {
 				if (source.kind === 'inventor' && !hasAnyAnswer(answers.find(section => section.id === source.ref))) {
 					findings.push({ severity: 'Error', rule: 'source-marker', file: draftFile, line: paragraph.line, message: `The paragraph at line ${paragraph.line} cites inventor:${source.ref}, but ${answersFile} has no answer to ${source.ref}.` });
+				}
+				const figure = source.kind === 'figure' ? figureRefPattern.exec(source.ref?.trim() ?? '')?.groups?.number : undefined;
+				if (source.kind === 'figure' && !(figure && hasFigure(numbers, figure))) {
+					findings.push({ severity: 'Error', rule: 'source-marker', file: draftFile, line: paragraph.line, message: `The paragraph at line ${paragraph.line} cites figure:${source.ref}, but ${figuresFile} has no figure heading ${source.ref}.` });
 				}
 			}
 			continue;
