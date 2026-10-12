@@ -1,0 +1,102 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`drafting fixtures > the outline prompt renders the claim terms to plan after the Approved Claims, as start_application_draft does 1`] = `
+"Draft the patent application of matter "cable-clamp" with the application-drafting skill. I set the gates; you called start_application_draft and it returned:
+
+Drafting started for matter "cable-clamp". Office: US. Gates read from the files: \`confirmed: true\` in drafting/cable-clamp/feature-list.md, \`approved: true\` in drafting/cable-clamp/claims.md. style/ has no exemplar, and drafting/cable-clamp/inventor-answers.md does not exist yet.
+
+## Feature List (drafting/cable-clamp/feature-list.md)
+
+# Feature List
+
+| ID | Feature | Source |
+| --- | --- | --- |
+| F1 | A one-piece clamp body 10 with a channel that receives an electrical cable. | disclosure:§3.1 |
+| F2 | A lid 12 joined to the clamp body 10 by a film hinge; the lid closes over the channel. | disclosure:§3.2 |
+| F3 | A latch 14 on the free end of the lid 12 snaps behind a catch 16 on the clamp body 10; closed by hand, without a tool. | disclosure:§3.3 |
+| F4 | A rail foot 18 under the clamp body 10 slides onto a standard mounting rail. | disclosure:§3.4 |
+| F5 | The lid 12 is made of polyamide; polypropylene is an alternative. | disclosure:§3.5 |
+| F6 | Working example: a batch of clamps closed on a cable with a diameter of 12 mm held a pull of 200 N; the latch 14 of every clamp stayed closed. | disclosure:§4.1 |
+| F7 | Prophetic example: a lid of polypropylene is expected to hold the cable at −30 °C. | disclosure:§4.2 |
+
+## Figures (drafting/cable-clamp/figures.md)
+
+# Figures
+
+## FIG. 1
+
+Perspective view of the cable clamp, closed, on a mounting rail.
+
+- 10: clamp body
+- 12: lid
+- 18: rail foot
+
+## FIG. 2
+
+Side view of the cable clamp with the lid open.
+
+- 14: latch
+- 16: catch
+
+## Approved Claims (drafting/cable-clamp/claims.md)
+
+# Claims
+
+1. A cable clamp comprising: a clamp body having a channel for a cable; a lid that is hinged to the clamp body and that closes over the channel; and a latch that is formed on the lid and that engages a catch that is formed on the clamp body.
+
+2. The cable clamp of claim 1, further comprising a rail foot that is arranged below the clamp body.
+
+3. The cable clamp of claim 1, wherein the lid is made of polyamide.
+
+4. The cable clamp of claim 1, wherein the channel has a damping insert.
+
+## Claim terms to plan
+
+Copy these terms verbatim into the \`Claim terms\` column of the Draft Outline; the outline-coverage rule checks these exact terms.
+
+Claim 1: cable clamp; clamp body; channel; cable; lid; latch; catch
+Claim 2 (with claim 1): rail foot
+Claim 3 (with claim 1): no new claim term
+Claim 4 (with claim 1): damping insert
+
+You also read the invention disclosure that the Feature List cites (drafting/cable-clamp/disclosure.md):
+
+# Invention disclosure: cable clamp with a hinged lid
+
+Invented matter for the drafting regression eval. Not a real invention.
+
+## §1 Field
+
+The invention relates to clamps that hold an electrical cable on a mounting rail in a control
+cabinet.
+
+## §2 Background
+
+Known cable clamps are two loose parts that the installer screws together around the cable.
+One part is easily dropped inside the cabinet, and the screw needs a tool.
+
+## §3 Description
+
+§3.1 The clamp has a clamp body 10 made in one piece. The clamp body 10 has a channel that
+receives the cable.
+
+§3.2 A lid 12 is joined to the clamp body 10 by a film hinge, so the lid 12 cannot be lost.
+The lid 12 closes over the channel.
+
+§3.3 A latch 14 on the free end of the lid 12 snaps behind a catch 16 on the clamp body 10.
+The installer closes the clamp by hand, without a tool.
+
+§3.4 A rail foot 18 under the clamp body 10 slides onto a standard mounting rail.
+
+§3.5 The lid 12 is made of polyamide. Polypropylene is an alternative material for the lid 12.
+
+## §4 Examples
+
+§4.1 Example 1 (we ran it): we closed a batch of clamps on a cable with a diameter of 12 mm
+and pulled the cable with a force of 200 N. The latch 14 of every clamp stayed closed.
+
+§4.2 Example 2 (not yet run): we expect that a clamp with a lid of polypropylene will hold the
+cable at −30 °C, because polypropylene stays flexible at that temperature.
+
+Now do Step 3a only: write the Draft Outline for drafting/cable-clamp/draft-outline.md. There is no tool to call in this run: your reply is the content of the save. Reply with the content of the file only, with no text before or after it."
+`;

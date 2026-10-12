@@ -112,7 +112,12 @@ describe('drafting fixtures', () => {
 			preOutlineDraftCase: hasOutline(buildDraftingPrompt(matter, 'draft', false)),
 			office: buildDraftingPrompt(matter, 'draft', true).includes('Office: EPO.'),
 			disclosure: buildDraftingPrompt(matter, 'outline', true).includes('§4.2 Example 2 (not yet run)'),
-		}).toEqual({ outlineCase: false, draftCase: true, preOutlineDraftCase: false, office: true, disclosure: true });
+			preOutlineClaimTerms: buildDraftingPrompt(matter, 'draft', false).includes('## Claim terms to plan'),
+		}).toEqual({ outlineCase: false, draftCase: true, preOutlineDraftCase: false, office: true, disclosure: true, preOutlineClaimTerms: false });
+	});
+
+	it('the outline prompt renders the claim terms to plan after the Approved Claims, as start_application_draft does', () => {
+		expect(buildDraftingPrompt(loadMatter('cable-clamp', 'US'), 'outline', true)).toMatchSnapshot();
 	});
 });
 

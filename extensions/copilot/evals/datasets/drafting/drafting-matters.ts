@@ -11,16 +11,19 @@
  * office, `draft-outline-us.md` and `draft-outline-epo.md`. The Feature List is written for the US;
  * {@link loadMatter} sets its `office` to the office of the case, so one folder serves both offices.
  *
- * The prompt is what `start_application_draft` returns (Feature List, figures, Approved Claims and,
- * for a draft case, the Draft Outline), plus the disclosure the rows cite, plus the instruction of
- * the case. The pre-outline baseline is the skill without `references/outline-format.md`: for it the
- * draft prompt has no outline (see README, "Drafting suite").
+ * The prompt is what `start_application_draft` returns (Feature List, figures, Approved Claims, the
+ * claim terms to plan and, for a draft case, the Draft Outline), plus the disclosure the rows cite,
+ * plus the instruction of the case. The pre-outline baseline is the skill without
+ * `references/outline-format.md`: for it the prompt has no claim terms to plan and the draft prompt
+ * has no outline (see README, "Drafting suite").
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DraftingOffice, parseDraftingFrontmatter, writeDraftingFrontmatter } from '../../../src/extension/tools/common/drafting/frontmatter';
+import { parseClaims } from '../../../src/extension/tools/common/drafting/claims';
+import { claimTermsToPlan } from '../../../src/extension/tools/common/drafting/claimValidators';
 import { sha256Hex } from '../../../src/util/node/crypto';
 import { resolveSkillsDir } from '../../providers/skill-grounded-provider';
 
@@ -88,12 +91,25 @@ function body(text: string): string {
 	return parseDraftingFrontmatter(text).body.trim();
 }
 
+/**
+ * The `## Claim terms to plan` section as `start_application_draft` renders it: the terms come from
+ * the app's `claimTermsToPlan`; the line format (`Claim 3 (with claim 1): c`, `no new claim term`)
+ * is a copy of the tool's private `claimTermLines`, which this module cannot import (vscode-node).
+ */
+function claimTermsSection(claims: string): string {
+	const lines = claimTermsToPlan(parseClaims(claims)).map(({ claim, independentClaims, terms }) => {
+		const roots = independentClaims.length ? ` (with claim${independentClaims.length > 1 ? 's' : ''} ${independentClaims.join(', ')})` : '';
+		return `Claim ${claim}${roots}: ${terms.length ? terms.join('; ') : 'no new claim term'}`;
+	});
+	return ['## Claim terms to plan', 'Copy these terms verbatim into the `Claim terms` column of the Draft Outline; the outline-coverage rule checks these exact terms.', lines.join('\n')].join('\n\n');
+}
+
 const replyRule = 'There is no tool to call in this run: your reply is the content of the save. Reply with the content of the file only, with no text before or after it.';
 
 /**
  * The user message of a case: the inputs as `start_application_draft` returns them, the disclosure,
- * and the instruction of the case kind. `withOutline` false is the pre-outline baseline: the draft
- * prompt then has no outline.
+ * and the instruction of the case kind. `withOutline` false is the pre-outline baseline: the prompt
+ * then has no claim terms to plan (the old tool did not return them) and the draft prompt no outline.
  */
 export function buildDraftingPrompt(matter: DraftingMatter, kind: DraftingCaseKind, withOutline: boolean): string {
 	const folder = `drafting/${matter.name}`;
@@ -104,6 +120,9 @@ export function buildDraftingPrompt(matter: DraftingMatter, kind: DraftingCaseKi
 		`## Figures (${folder}/figures.md)\n\n${body(matter.figures)}`,
 		`## Approved Claims (${folder}/claims.md)\n\n${body(matter.claims)}`,
 	];
+	if (withOutline) {
+		sections.push(claimTermsSection(matter.claims));
+	}
 	if (kind === 'draft' && withOutline) {
 		sections.push(`## Draft Outline (${folder}/draft-outline.md)\n\n${body(matter.outline)}`);
 	}

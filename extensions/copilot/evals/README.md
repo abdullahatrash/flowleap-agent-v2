@@ -830,7 +830,7 @@ EVAL_SKILLS_DIR=/tmp/pre-outline/extensions/copilot/assets/skills OPENROUTER_API
 
 | Kind | Cases | Input | Answer |
 |---|---|---|---|
-| Outline | O1–O6 | What `start_application_draft` returns (Feature List, figures, Approved Claims, office) and the disclosure | `draft-outline.md` |
+| Outline | O1–O6 | What `start_application_draft` returns (Feature List, figures, Approved Claims, claim terms to plan, office) and the disclosure | `draft-outline.md` |
 | Draft | D1–D6 | The same, plus the fixed outline `fixtures/<matter>/draft-outline-<office>.md` | `draft-application.md` |
 
 `datasets/drafting/drafting-matters.ts` builds the prompt from the fixture files. Each matter folder
@@ -879,38 +879,41 @@ with 12000 the first probe came back empty.
 
 ### Baseline: drafting suite (2026-10-12, `anthropic/claude-sonnet-5`, judge `anthropic/claude-haiku-5.5`, no cache)
 
-3 runs per column. Candidate = the skill at main `66d1f90bb6e` (with the Draft Outline), recorded in
-`output/drafting-baseline.json` (the gate compares against it; an expected FAIL records the
-observed state). Pre-outline = the skill at `7648ae7261c`, draft cases only, recorded in
-`output/drafting-pre-outline-baseline.json` (a record, not a gate). Cells are passes of 3.
+3 runs per column. Candidate = the skill at main `288e1d7a8d8` (with the Draft Outline, and after
+#642: the `figure` source kind and the claim terms to plan), recorded in
+`output/drafting-baseline.json` (the gate compares against it). The prompt builder renders the
+`## Claim terms to plan` section the way `start_application_draft` returns it (terms from
+`claimTermsToPlan`), for the candidate column only. Pre-outline = the skill at `7648ae7261c`, draft
+cases only, recorded in `output/drafting-pre-outline-baseline.json` (a record, not a gate; not
+re-run after #642, its prompt is unchanged). Cells are passes of 3.
 
 | Case | Pre-outline: validators · unsupported · missing support · prophetic · sections → case | Candidate: validators · unsupported · missing support · prophetic · sections → case |
 |---|---|---|
-| D1 cable-clamp US | 2 · 3 · 3 · 3 · 2 → 2/3 PASS | 1 · 3 · 3 · 3 · 3 → 1/3 FAIL |
-| D2 cable-clamp EPO | 3 · 2 · 3 · 3 · 3 → 2/3 PASS | 0 · 3 · 3 · 3 · 3 → 0/3 FAIL |
-| D3 sync-scheduler US | 0 · 3 · 3 · 3 · 3 → 0/3 FAIL | 2 · 2 · 3 · 3 · 3 → 1/3 FAIL |
+| D1 cable-clamp US | 2 · 3 · 3 · 3 · 2 → 2/3 PASS | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
+| D2 cable-clamp EPO | 3 · 2 · 3 · 3 · 3 → 2/3 PASS | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
+| D3 sync-scheduler US | 0 · 3 · 3 · 3 · 3 → 0/3 FAIL | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
 | D4 sync-scheduler EPO | 1 · 1 · 3 · 3 · 3 → 0/3 FAIL | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
-| D5 anti-fog-coating US | 3 · 3 · 3 · 3 · 3 → 3/3 PASS | 2 · 2 · 3 · 3 · 3 → 1/3 FAIL |
-| D6 anti-fog-coating EPO | 3 · 3 · 3 · 3 · 3 → 3/3 PASS | 1 · 2 · 3 · 3 · 3 → 0/3 FAIL |
+| D5 anti-fog-coating US | 3 · 3 · 3 · 3 · 3 → 3/3 PASS | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
+| D6 anti-fog-coating EPO | 3 · 3 · 3 · 3 · 3 → 3/3 PASS | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
 
-Outline cases, candidate only (`outline_coverage`): O1 0/3, O2 0/3, O3 0/3, O4 0/3, O5 0/3, O6 1/3.
+Outline cases, candidate only (`outline_coverage`): O1–O6 3/3 each.
 
-What the failures are:
-- All 9 candidate `draft_validators` failures are source markers that cite a figure
-  (`FIG. 1`, `figure:FIG. 1`): the outline allows figure sources, the marker syntax does not, and
-  the invalid marker also loses the paragraph's `item:` (`item-coverage`). The pre-outline column
-  has none; its failures are `literal-basis` (`metered network`, `method`) and paragraphs without
-  a marker (headings written without `#`).
-- The outline cases fail on `outline-coverage`: the model lists claim phrases ("a channel for a
-  cable", "the channel has a damping insert") instead of the claim terms `introducedPhrases` reads,
-  or leaves out a term such as `method` or `full charge`; twice an `outline-format` Error (an empty
-  `Explain`, a row with 7 cells, a `template` source).
-- `draft_missing_support`, `draft_prophetic` and `draft_sections` pass in both columns except one
-  pre-outline draft without `#` headings.
+Before #642 (the first record, skill at `66d1f90bb6e`) the candidate passed D4 only: D1 1/3,
+D2 0/3, D3 1/3, D5 1/3, D6 0/3, O1–O5 0/3, O6 1/3. The two causes were contract gaps, fixed in
+#643:
+- All 9 candidate `draft_validators` failures were source markers that cite a figure
+  (`figure:FIG. 1`): the outline allowed figure sources, the marker syntax did not. The marker
+  syntax now has a `figure` kind.
+- The outline cases failed on `outline-coverage`: the model listed claim phrases ("a channel for a
+  cable") instead of the claim terms `introducedPhrases` reads, or left out a term such as `method`.
+  The tool now returns the claim terms to plan, and the coverage match is containment-tolerant.
 
-Cost: the candidate column (3 × 12 cases) cost $5.26 on the OpenRouter usage counter, the
-pre-outline column (3 × 6 draft cases) about $1.70; re-grading all 54 answers with the judge cost
-$0.13.
+The pre-outline column's failures are `literal-basis` (`metered network`, `method`) and paragraphs
+without a marker (headings written without `#`).
+
+Cost: the candidate column (3 × 12 cases) cost $4.72 on the OpenRouter usage counter on
+2026-10-12 after #642 ($5.26 for the first record); the pre-outline column (3 × 6 draft cases)
+about $1.70; re-grading all 54 answers with the judge cost $0.13.
 
 ## File Structure
 
