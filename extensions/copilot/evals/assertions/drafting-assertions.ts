@@ -69,7 +69,7 @@ const disclaimerPattern = /^\s*[*_]*AI-assisted analysis for review by a registe
  */
 export function extractFileContent(answer: string): string {
 	const text = answer.replace(/\r\n/g, '\n');
-	const fenced = [...text.matchAll(/^```[a-z]*\n(?<content>[\s\S]*?)\n```\s*$/gm)].map(match => match.groups!.content);
+	const fenced = [...text.matchAll(/^```[a-z]*\n(?<content>[\s\S]*?)\n```\s*$/gm)].map(match => match.groups?.content ?? '');
 	const files = fenced.filter(block => !/^---\n[\s\S]*\n---\s*$/.test(block.trim()));
 	let content = files.length ? files.reduce((longest, block) => block.length > longest.length ? block : longest) : text;
 	const start = content.search(/^(?:---\s*$|#{1,6}\s|\|)/m);
@@ -139,7 +139,7 @@ const OUTLINE_GATE_RULES: ReadonlySet<string> = new Set(['outline-format', 'outl
  * Binds an outline answer to the Approved Claims the way the `draft-outline` save does: `office`
  * from the Feature List and `claims` set to the Approved Claims hash; other frontmatter fields kept.
  */
-export function bindOutline(content: string, matter: DraftingMatter): string {
+function bindOutline(content: string, matter: DraftingMatter): string {
 	const { fields } = parseDraftingFrontmatter(content);
 	const others = Object.fromEntries(Object.entries(fields).filter(([key]) => key !== 'office' && key !== 'claims'));
 	return writeDraftingFrontmatter({ office: matter.office, claims: matter.claimsHash, ...others }, content);
@@ -151,10 +151,10 @@ export function outlineGateErrors(content: string, matter: DraftingMatter): Draf
 		.filter(finding => finding.severity === 'Error' && OUTLINE_GATE_RULES.has(finding.rule));
 }
 
-/** `outline_coverage`: the outline answer has no `outline-format`, `outline-coverage` or `outline-sources` Error. The score is the Error count. */
+/** `outline_coverage`: the outline answer has no `outline-format`, `outline-coverage` or `outline-sources` Error. Score 1 for pass, 0 for fail; the Error count is in the reason. */
 export function gradeOutline(output: string, vars: DraftingCaseVars): GradingResult {
 	const errors = outlineGateErrors(extractFileContent(readAnswer(output).finalText), matterOf(vars));
-	return { pass: errors.length === 0, score: errors.length, reason: errors.length ? `${errors.length} outline Error(s): ${describeFindings(errors)}` : 'No outline-format, outline-coverage or outline-sources Error' };
+	return { pass: errors.length === 0, score: errors.length ? 0 : 1, reason: errors.length ? `${errors.length} outline Error(s): ${describeFindings(errors)}` : 'No outline-format, outline-coverage or outline-sources Error' };
 }
 
 /** The claim term of a `literal-basis` Error message. */
@@ -186,11 +186,11 @@ export function gradeDraftValidators(output: string, vars: DraftingCaseVars): Gr
 	const withOutline = answer.loadedFiles.includes(OUTLINE_REFERENCE);
 	const errors = draftGateErrors(extractFileContent(answer.finalText), matterOf(vars), withOutline, vars.gapTerm);
 	const rules = withOutline ? 'D1 and outline validators' : 'D1 validators (pre-outline skill: no outline rules)';
-	return { pass: errors.length === 0, score: errors.length, reason: errors.length ? `${errors.length} Error(s) of the ${rules}: ${describeFindings(errors)}` : `No Error of the ${rules}` };
+	return { pass: errors.length === 0, score: errors.length ? 0 : 1, reason: errors.length ? `${errors.length} Error(s) of the ${rules}: ${describeFindings(errors)}` : `No Error of the ${rules}` };
 }
 
 /** A pattern for a claim term in prose: its words in order, any case, hyphen or space between, an optional plural `s`. */
-export function termPattern(term: string): RegExp {
+function termPattern(term: string): RegExp {
 	const words = claimTermKey(term).split(' ').map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 	return new RegExp(`(?<![\\w-])${words.join('[\\s-]+')}(?:e?s)?(?![\\w-])`, 'i');
 }

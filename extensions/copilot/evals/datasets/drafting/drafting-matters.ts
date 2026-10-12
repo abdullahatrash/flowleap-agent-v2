@@ -17,11 +17,11 @@
  * draft prompt has no outline (see README, "Drafting suite").
  */
 
-import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { DraftingOffice, parseDraftingFrontmatter, writeDraftingFrontmatter } from '../../../src/extension/tools/common/drafting/frontmatter';
+import { sha256Hex } from '../../../src/util/node/crypto';
 import { resolveSkillsDir } from '../../providers/skill-grounded-provider';
 
 const FIXTURES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -45,9 +45,9 @@ export interface DraftingMatter {
 	readonly claimsHash: string;
 }
 
-/** The SHA-256 of the Approved Claims as `draftingWorkspace.ts` computes it: the body after the frontmatter, trimmed. */
+/** The SHA-256 of the Approved Claims as `draftingWorkspace.ts` computes it (`sha256Hex` of the body after the frontmatter, trimmed). */
 export function approvedClaimsHash(claims: string): string {
-	return createHash('sha256').update(parseDraftingFrontmatter(claims).body.trim()).digest('hex');
+	return sha256Hex(parseDraftingFrontmatter(claims).body.trim());
 }
 
 /** Reads a case var naming the office. */
@@ -77,7 +77,7 @@ export function loadMatter(name: string, office: DraftingOffice): DraftingMatter
 }
 
 /** True when the skill folder of this run plans with a Draft Outline (false for the pre-outline baseline). */
-export function skillHasOutline(skillsDir: string): boolean {
+function skillHasOutline(skillsDir: string): boolean {
 	return fs.existsSync(path.join(skillsDir, DRAFTING_SKILL, OUTLINE_REFERENCE));
 }
 

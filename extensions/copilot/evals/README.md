@@ -848,9 +848,12 @@ claim coverage, measured by the validators. Style is not graded (a style Note wo
 second judge call per case; not added). Elaboration and diversity are not measured, by decision:
 they score added content as quality.
 
+Every grader scores 1 for pass and 0 for fail (promptfoo reads a score as higher-is-better); an
+Error count is in the reason.
+
 | Metric | Kind | Fails when |
 |---|---|---|
-| `outline_coverage` | Outline | `checkOutline` reports an `outline-format`, `outline-coverage` or `outline-sources` Error. The answer is bound to the claims hash first, as the `draft-outline` save does. Score = Error count |
+| `outline_coverage` | Outline | `checkOutline` reports an `outline-format`, `outline-coverage` or `outline-sources` Error. The answer is bound to the claims hash first, as the `draft-outline` save does. The reason gives the Error count |
 | `draft_validators` | Draft | `validateDraft` (the D1 rules, and the E1 outline rules with the fixed outline) reports an Error. Numerals outside `figures.md` and a defined term used two ways are D1 Errors. The open Inventor Questions and the `literal-basis` Error of the gap term are the expected result of the gap and do not count. Notes never count |
 | `draft_unsupported` | Draft | The judge (`anthropic/claude-haiku-5.5`) returns a non-empty JSON array of sentences: a sentence of the description that brings in a part, material, value, step, mechanism, purpose, effect or result that no source states. It reads the Feature List, the disclosure, the figures and the Approved Claims (a restated claim is not an addition), then the description paragraph by paragraph with the sources each one cites (`judgeInput`) |
 | `draft_missing_support` | Draft | No Inventor Question names the gap term, or a description paragraph whose marker names a fact source (`feature`, `disclosure`, `inventor`, `instruction`) states it |

@@ -17,7 +17,7 @@ description: "Patent AI — Application Drafting regression (outline and draft c
 # Gate: OPENROUTER_API_KEY=sk-... npm run eval:drafting:repeat              (3 runs, k-of-n per case)
 # Pre-outline baseline (draft cases only, the skill as it was before the outline):
 #       EVAL_SKILLS_DIR=<exported skills dir> npm run eval:drafting:repeat -- \
-#         --output-prefix drafting-pre-outline -- --filter-pattern '^D\d'
+#         --output-prefix drafting-pre-outline -- --filter-pattern '^D[0-9] '
 # See README "Drafting suite".
 
 providers:

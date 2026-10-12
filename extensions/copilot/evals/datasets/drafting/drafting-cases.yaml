@@ -26,7 +26,7 @@
 #   draft_sections         every required section of the office order is present
 # Numerals outside figures.md and a defined term used two ways are D1 Errors (draft_validators).
 
-- description: O1 cable-clamp US outline
+- description: "O1 — cable-clamp US outline"
   vars: &cableClamp
     skill: application-drafting
     matter: cable-clamp
@@ -43,13 +43,13 @@
           .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
           .then(H => H.gradeOutline(output, context.vars));
 
-- description: O2 cable-clamp EPO outline
+- description: "O2 — cable-clamp EPO outline"
   vars:
     <<: *cableClamp
     office: EPO
   assert: *outlineAsserts
 
-- description: O3 sync-scheduler US outline
+- description: "O3 — sync-scheduler US outline"
   vars: &syncScheduler
     skill: application-drafting
     matter: sync-scheduler
@@ -60,13 +60,13 @@
     workingSources: feature:F6, disclosure:§4.1
   assert: *outlineAsserts
 
-- description: O4 sync-scheduler EPO outline
+- description: "O4 — sync-scheduler EPO outline"
   vars:
     <<: *syncScheduler
     office: EPO
   assert: *outlineAsserts
 
-- description: O5 anti-fog-coating US outline
+- description: "O5 — anti-fog-coating US outline"
   vars: &antiFogCoating
     skill: application-drafting
     matter: anti-fog-coating
@@ -77,13 +77,13 @@
     workingSources: feature:F6, disclosure:§4.1
   assert: *outlineAsserts
 
-- description: O6 anti-fog-coating EPO outline
+- description: "O6 — anti-fog-coating EPO outline"
   vars:
     <<: *antiFogCoating
     office: EPO
   assert: *outlineAsserts
 
-- description: D1 cable-clamp US draft
+- description: "D1 — cable-clamp US draft"
   vars:
     <<: *cableClamp
     kind: draft
@@ -132,33 +132,33 @@
 
         Your reason is only a JSON array of the unsupported sentences, each quoted word for word as a string, and [] when there is none: no scores, no other text, no opinion on style. Pass exactly when the array is empty.
 
-- description: D2 cable-clamp EPO draft
+- description: "D2 — cable-clamp EPO draft"
   vars:
     <<: *cableClamp
     office: EPO
     kind: draft
   assert: *draftAsserts
 
-- description: D3 sync-scheduler US draft
+- description: "D3 — sync-scheduler US draft"
   vars:
     <<: *syncScheduler
     kind: draft
   assert: *draftAsserts
 
-- description: D4 sync-scheduler EPO draft
+- description: "D4 — sync-scheduler EPO draft"
   vars:
     <<: *syncScheduler
     office: EPO
     kind: draft
   assert: *draftAsserts
 
-- description: D5 anti-fog-coating US draft
+- description: "D5 — anti-fog-coating US draft"
   vars:
     <<: *antiFogCoating
     kind: draft
   assert: *draftAsserts
 
-- description: D6 anti-fog-coating EPO draft
+- description: "D6 — anti-fog-coating EPO draft"
   vars:
     <<: *antiFogCoating
     office: EPO
