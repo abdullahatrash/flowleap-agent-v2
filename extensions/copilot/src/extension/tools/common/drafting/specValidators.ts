@@ -265,19 +265,32 @@ interface FigureSections {
 const figureHeadingPattern = new RegExp(String.raw`^${figureWord}(?<list>\d+[a-zA-Z]?(?:\s*(?:,|and|&|to|-|–|—)\s*\d+[a-zA-Z]?)*)`);
 
 /**
+ * The figure numbers a heading names, or none: `FIG. 1` = `1`, `FIGS. 7 to 10` and `Figs. 7-10` =
+ * `7`, `8`, `9`, `10`, `FIGS. 7 and 8` = `7`, `8`, `FIG. 3a` = `3a`. A range that runs backwards
+ * names its first figure only.
+ */
+export function figureHeadingNumbers(label: string): string[] {
+	const list = figureHeadingPattern.exec(label.trim())?.groups?.list;
+	if (!list) {
+		return [];
+	}
+	return list.split(/\s*(?:,|and|&)\s*/).filter(Boolean).flatMap(item => {
+		const range = /^(?<from>\d+)[a-zA-Z]?\s*(?:to|-|–|—)\s*(?<to>\d+)[a-zA-Z]?$/.exec(item);
+		if (!range?.groups) {
+			return [item.trim()];
+		}
+		const from = Number(range.groups.from);
+		const size = Number(range.groups.to) - from + 1;
+		return Array.from({ length: size > 0 ? size : 1 }, (_, index) => String(from + index));
+	});
+}
+
+/**
  * The number of figures a heading names, or 0 when it names none: `FIG. 1` = 1, `FIGS. 7 to 10`
  * and `Figs. 7-10` = 4, `FIGS. 7 and 8` = 2, `FIGS. 1, 3 and 5` = 3.
  */
 export function figureHeadingCount(label: string): number {
-	const list = figureHeadingPattern.exec(label.trim())?.groups?.list;
-	if (!list) {
-		return 0;
-	}
-	return list.split(/\s*(?:,|and|&)\s*/).filter(Boolean).reduce((sum, item) => {
-		const range = /^(?<from>\d+)[a-zA-Z]?\s*(?:to|-|–|—)\s*(?<to>\d+)[a-zA-Z]?$/.exec(item);
-		const size = range?.groups ? Number(range.groups.to) - Number(range.groups.from) + 1 : 1;
-		return sum + (size > 0 ? size : 1);
-	}, 0);
+	return figureHeadingNumbers(label).length;
 }
 
 /** Reads the figure headings of `figures.md` and the parts each one lists. */

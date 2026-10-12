@@ -13,6 +13,7 @@
  *   feature-list.md                      Feature List; frontmatter: office, confirmed
  *   figures.md                           figure list with parts and reference numerals
  *   claims.md                            Approved Claims; frontmatter: approved
+ *   draft-outline.md                     Draft Outline: the plan, one row per Outline Item; frontmatter: office, claims (SHA-256)
  *   draft-application.md                 Draft Application; frontmatter: office, model, provider, version
  *   draft-application.generated.md       snapshot at generation, diffed at export
  *   draft-application.working-record.md  Working Record
@@ -46,6 +47,7 @@ export const DRAFTING_FILE_NAMES = {
 	featureList: 'feature-list.md',
 	figures: 'figures.md',
 	claims: 'claims.md',
+	draftOutline: 'draft-outline.md',
 	draft: 'draft-application.md',
 	generatedSnapshot: 'draft-application.generated.md',
 	workingRecord: 'draft-application.working-record.md',

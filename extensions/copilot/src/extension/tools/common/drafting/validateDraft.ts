@@ -6,7 +6,7 @@
 import { parseClaims } from './claims';
 import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from './claimValidators';
 import { checkPageCount, filingManifest } from './filingManifest';
-import { DraftFinding } from './finding';
+import { DraftFinding, errorsFirst } from './finding';
 import { DraftingOffice } from './frontmatter';
 import { parseInventorAnswers } from './inventorAnswers';
 import { parseDraftParagraphs } from './sourceMarkers';
@@ -58,5 +58,5 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		...checkRelativeTerms(claims),
 		...(epo ? [...checkEpoClaimReferenceSigns(claims, figures), ...checkEpoAbstractFigure(paragraphs, figures)] : []),
 	];
-	return [...findings.filter(finding => finding.severity === 'Error'), ...findings.filter(finding => finding.severity !== 'Error')];
+	return errorsFirst(findings);
 }

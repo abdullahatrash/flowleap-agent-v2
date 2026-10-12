@@ -205,7 +205,7 @@ function needsNoAntecedent(reference: ClaimPhrase): boolean {
 }
 
 /** The dependency paths of a claim, root first, each ending with the claim itself. */
-function dependencyPaths(claim: DraftClaim, byNumber: Map<number, DraftClaim>, depth = 0): DraftClaim[][] {
+export function dependencyPaths(claim: DraftClaim, byNumber: ReadonlyMap<number, DraftClaim>, depth = 0): DraftClaim[][] {
 	const parents = claim.dependsOn.map(target => byNumber.get(target)).filter((parent): parent is DraftClaim => !!parent && parent.number < claim.number);
 	if (!parents.length || depth > 50) {
 		return [[claim]];
@@ -268,9 +268,9 @@ function singular(word: string): string {
  * The claim term phrases a claim introduces: after "a", "an", "a plurality of", ... all words up
  * to the next comma, semicolon or other punctuation, a stop word (`and`, `or`, `that`, `which`,
  * `wherein`, `configured`, `for`, `to`, `of`, `having`, `comprising`, `including`, an article),
- * a number or the end.
+ * a number or the end. These are the claim terms of the literal-basis and outline-coverage rules.
  */
-function introducedPhrases(text: string): string[] {
+export function introducedPhrases(text: string): string[] {
 	const phrases: string[] = [];
 	for (const match of text.matchAll(introducingPattern)) {
 		const phrase: string[] = [];
@@ -291,6 +291,17 @@ function introducedPhrases(text: string): string[] {
 	return phrases;
 }
 
+/** The introducing words at the start of a claim term as written: `a`, `the`, `a plurality of`. */
+const leadingIntroducerPattern = /^(?:(?:the|said|a plurality of|plurality of|at least one|one or more|an|a)\s+)+/i;
+
+/**
+ * The comparison key of a claim term: lower case, plural-normalised, without its introducing
+ * words, numbers and punctuation. `A sealing rings` and `sealing ring` have the same key.
+ */
+export function claimTermKey(term: string): string {
+	return words(term.trim().replace(leadingIntroducerPattern, '')).map(singular).join(' ');
+}
+
 /**
  * Error when a claim term phrase a claim introduces ("a lower lever arm that ...") does not appear
  * verbatim in the description (literal basis), case-insensitive and plural-normalised; reference
@@ -303,7 +314,7 @@ export function checkLiteralBasis(claims: readonly DraftClaim[], description: st
 	const findings: DraftFinding[] = [];
 	for (const claim of claims) {
 		for (const phrase of introducedPhrases(claim.text)) {
-			const normalised = phrase.split(' ').map(singular).join(' ');
+			const normalised = claimTermKey(phrase);
 			if (reported.has(normalised)) {
 				continue;
 			}

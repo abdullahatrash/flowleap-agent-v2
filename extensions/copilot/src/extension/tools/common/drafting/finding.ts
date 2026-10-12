@@ -30,6 +30,11 @@ export interface DraftFinding {
 	readonly waived?: { readonly reason: string };
 }
 
+/** The findings with the Errors first, each group in its given order. */
+export function errorsFirst(findings: readonly DraftFinding[]): DraftFinding[] {
+	return [...findings.filter(finding => finding.severity === 'Error'), ...findings.filter(finding => finding.severity !== 'Error')];
+}
+
 /** True for an Inventor Question Finding (an Error that blocks export like the other Errors). */
 export function isInventorQuestion(finding: DraftFinding): boolean {
 	return finding.rule === INVENTOR_QUESTION;
