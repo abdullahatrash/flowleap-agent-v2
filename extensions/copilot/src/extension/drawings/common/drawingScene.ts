@@ -1,0 +1,216 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * The scene of one Figure, `FIG-N.scene.json` (ADR 0014 decision 1). The scene is the source of
+ * truth: the SVG line art and the sheets are derived from it and regenerate.
+ *
+ * Coordinates are model millimetres, right-handed, Z up. The front of the object faces -Y, so
+ * the `front` camera looks along +Y. Every shape is built in its part-local frame and then moved
+ * by its placement.
+ */
+export interface DrawingScene {
+	/** The Figure the scene draws, e.g. `FIG-1`. */
+	readonly figure: string;
+	/** The view of the Figure. */
+	readonly camera: CameraPreset;
+	/** `omit` (the default) drops hidden edges; `dashed` draws them as thin dashed lines. */
+	readonly hiddenEdges?: 'omit' | 'dashed';
+	/** A section plane: the parts are cut, the cut faces are hatched at 45 degrees. */
+	readonly section?: SectionPlane;
+	/** Sheet millimetres per model millimetre. Omit it to fit the Figure to the default size. */
+	readonly scale?: number;
+	readonly parts: readonly ScenePart[];
+	readonly numerals: readonly NumeralPort[];
+}
+
+/** The camera presets. Isometric looks from the front, right and top corner. */
+export type CameraPreset = 'isometric' | 'front' | 'top' | 'side';
+
+/** All camera presets, in the order the schema documents them. */
+export const CAMERA_PRESETS: readonly CameraPreset[] = ['isometric', 'front', 'top', 'side'];
+
+export type Vec3 = readonly [number, number, number];
+
+export type Vec2 = readonly [number, number];
+
+/** A plane that cuts every part. The kept half is on the side the normal points to by default. */
+export interface SectionPlane {
+	/** A point on the plane, in model coordinates. */
+	readonly origin: Vec3;
+	/** The plane normal: an axis name or a vector. */
+	readonly normal: 'x' | 'y' | 'z' | Vec3;
+	/** The half of each part that stays. Default `positive` (the normal side). */
+	readonly keep?: 'positive' | 'negative';
+}
+
+/** Rotation in degrees about the X, then Y, then Z axis, then a translation. */
+export interface Placement {
+	readonly translate?: Vec3;
+	readonly rotate?: Vec3;
+}
+
+/** One drawn part. Every part must carry at least one numeral (CONTEXT.md, Figure). */
+export interface ScenePart {
+	/** A stable id the numeral ports refer to, e.g. `housing`. Never drawn. */
+	readonly id: string;
+	/** The part name from the figures list. Never drawn. */
+	readonly name?: string;
+	readonly shape: PartShape;
+	readonly placement?: Placement;
+	/** Primitives cut out of the shape, in the part-local frame (holes, slots, bores). */
+	readonly subtract?: readonly PlacedPrimitive[];
+}
+
+/** A primitive with its own placement in the part-local frame. */
+export interface PlacedPrimitive {
+	readonly shape: PrimitiveShape;
+	readonly placement?: Placement;
+}
+
+export type PartShape = PrimitiveShape | LibraryShape | CodeShape;
+
+export type PrimitiveShape = BoxShape | CylinderShape | ExtrudedPolygonShape | RevolveShape | TubeShape;
+
+export type LibraryShape = FastenerShape | SpringShape | GearShape | BearingShape | ShaftShape | PipeShape | MotorShape;
+
+/** A box from the origin to `size`. Faces: top, bottom, front, back, left, right. */
+export interface BoxShape {
+	readonly kind: 'box';
+	readonly size: Vec3;
+}
+
+/** A cylinder on the Z axis from z = 0 to z = height. Faces: top, bottom, side. */
+export interface CylinderShape {
+	readonly kind: 'cylinder';
+	readonly radius: number;
+	readonly height: number;
+}
+
+/** A polygon in the XY plane extruded along +Z. Faces: top, bottom, side-1 … side-N (edge i to i+1). */
+export interface ExtrudedPolygonShape {
+	readonly kind: 'extrudedPolygon';
+	readonly points: readonly Vec2[];
+	readonly height: number;
+}
+
+/**
+ * A profile of (radius, z) points revolved about the Z axis. The profile is closed from the last
+ * point back to the first. Faces: profile-1 … profile-N (segment i to i+1).
+ */
+export interface RevolveShape {
+	readonly kind: 'revolve';
+	readonly profile: readonly Vec2[];
+	/** Revolve angle in degrees, default 360. */
+	readonly degrees?: number;
+}
+
+/**
+ * A round tube through straight segments and bends. The path is a polyline; each inner corner
+ * is rounded with `bendRadius`. Faces: segment-1 … segment-N.
+ */
+export interface TubeShape {
+	readonly kind: 'tube';
+	readonly path: readonly Vec3[];
+	readonly radius: number;
+	readonly bendRadius: number;
+	/** Wall thickness. Omit it for a solid rod. */
+	readonly wall?: number;
+}
+
+/** A bolt on the Z axis: head from z = 0 up, shank from z = 0 down. Ports: head, shank, tip. */
+export interface FastenerShape {
+	readonly kind: 'fastener';
+	readonly diameter: number;
+	readonly length: number;
+	readonly head?: 'hex' | 'round';
+}
+
+/** A helical compression spring on the Z axis from z = 0. Ports: top, bottom, coil. */
+export interface SpringShape {
+	readonly kind: 'spring';
+	readonly coilDiameter: number;
+	readonly wireDiameter: number;
+	readonly pitch: number;
+	readonly length: number;
+}
+
+/** A spur gear on the Z axis from z = 0. Ports: teeth, face, bore. */
+export interface GearShape {
+	readonly kind: 'gear';
+	readonly teeth: number;
+	readonly module: number;
+	readonly width: number;
+	readonly bore?: number;
+}
+
+/** A ball bearing ring pair on the Z axis from z = 0. Ports: outer-race, inner-race, face. */
+export interface BearingShape {
+	readonly kind: 'bearing';
+	readonly innerDiameter: number;
+	readonly outerDiameter: number;
+	readonly width: number;
+}
+
+/**
+ * A stepped shaft on the Z axis from z = 0. The first step is the base diameter and length; more
+ * steps follow along +Z. Ports: end-1, end-2, step-1 … step-N.
+ */
+export interface ShaftShape {
+	readonly kind: 'shaft';
+	readonly steps: readonly { readonly diameter: number; readonly length: number }[];
+}
+
+/** A straight pipe on the Z axis from z = 0. Ports: outer, bore, end-1, end-2. */
+export interface PipeShape {
+	readonly kind: 'pipe';
+	readonly outerDiameter: number;
+	readonly wall: number;
+	readonly length: number;
+}
+
+/** A motor can on the Z axis from z = 0, the output shaft along +Z. Ports: body, face, shaft. */
+export interface MotorShape {
+	readonly kind: 'motor';
+	readonly diameter: number;
+	readonly length: number;
+	readonly shaftDiameter: number;
+	readonly shaftLength: number;
+}
+
+/**
+ * The per-part code escape hatch, for a shape the primitives cannot express. OPT-IN: the engine
+ * refuses it unless the caller passes `allowCode`. The code is the body of a function that gets
+ * only the replicad API as `replicad` and returns one solid; it runs in a separate VM context with
+ * no `require`, `process` or file system. A numeral port on a code part must give its `point`.
+ */
+export interface CodeShape {
+	readonly kind: 'code';
+	readonly code: string;
+}
+
+/**
+ * A reference numeral and the port it points at: a (part, face, point) triple. The renderer
+ * computes the lead line from the numeral to the projected point and keeps lead lines from
+ * crossing; the model never places a numeral by coordinates.
+ */
+export interface NumeralPort {
+	/** The reference numeral, e.g. `10`, `12a`. */
+	readonly numeral: string;
+	/** The part id. */
+	readonly part: string;
+	/** A face or port name of the part (see the shape kinds). */
+	readonly face: string;
+	/** A point on the face in the part-local frame. Omit it to use the face anchor. */
+	readonly point?: Vec3;
+	/** True when the numeral names a surface: it sits on the surface, underlined, without a lead line. */
+	readonly surface?: boolean;
+}
+
+/** The library part kinds, in schema order. */
+export const LIBRARY_KINDS: readonly LibraryShape['kind'][] = ['fastener', 'spring', 'gear', 'bearing', 'shaft', 'pipe', 'motor'];
+
+/** The primitive kinds, in schema order. */
+export const PRIMITIVE_KINDS: readonly PrimitiveShape['kind'][] = ['box', 'cylinder', 'extrudedPolygon', 'revolve', 'tube'];

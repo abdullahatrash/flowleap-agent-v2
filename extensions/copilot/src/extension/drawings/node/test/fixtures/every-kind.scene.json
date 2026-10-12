@@ -1,0 +1,33 @@
+{
+	"figure": "FIG-4",
+	"camera": "isometric",
+	"hiddenEdges": "dashed",
+	"parts": [
+		{ "id": "plate", "shape": { "kind": "box", "size": [40, 30, 5] } },
+		{ "id": "post", "shape": { "kind": "cylinder", "radius": 5, "height": 20 }, "placement": { "translate": [60, 0, 0] } },
+		{ "id": "bracket", "shape": { "kind": "extrudedPolygon", "points": [[0, 0], [20, 0], [20, 5], [5, 5], [5, 20], [0, 20]], "height": 10 }, "placement": { "translate": [100, 0, 0] } },
+		{ "id": "knob", "shape": { "kind": "revolve", "profile": [[0, 0], [8, 0], [8, 4], [4, 10], [0, 10]] }, "placement": { "translate": [0, 60, 0] } },
+		{ "id": "hose", "shape": { "kind": "tube", "path": [[0, 0, 0], [30, 0, 0], [30, 30, 0], [30, 30, 20]], "radius": 3, "bendRadius": 8, "wall": 1 }, "placement": { "translate": [50, 50, 0] } },
+		{ "id": "bolt", "shape": { "kind": "fastener", "diameter": 6, "length": 20 }, "placement": { "translate": [0, 120, 20] } },
+		{ "id": "coil", "shape": { "kind": "spring", "coilDiameter": 16, "wireDiameter": 2, "pitch": 5, "length": 30 }, "placement": { "translate": [40, 120, 0] } },
+		{ "id": "pinion", "shape": { "kind": "gear", "teeth": 12, "module": 2, "width": 6, "bore": 5 }, "placement": { "translate": [80, 120, 0] } },
+		{ "id": "race", "shape": { "kind": "bearing", "innerDiameter": 10, "outerDiameter": 26, "width": 8 }, "placement": { "translate": [120, 120, 0] } },
+		{ "id": "axle", "shape": { "kind": "shaft", "steps": [{ "diameter": 8, "length": 10 }, { "diameter": 12, "length": 15 }] }, "placement": { "translate": [0, 170, 0], "rotate": [0, 90, 0] } },
+		{ "id": "duct", "shape": { "kind": "pipe", "outerDiameter": 14, "wall": 2, "length": 30 }, "placement": { "translate": [60, 170, 0] } },
+		{ "id": "drive", "shape": { "kind": "motor", "diameter": 28, "length": 30, "shaftDiameter": 4, "shaftLength": 10 }, "placement": { "translate": [110, 170, 0] } }
+	],
+	"numerals": [
+		{ "numeral": "50", "part": "plate", "face": "top" },
+		{ "numeral": "52", "part": "post", "face": "side" },
+		{ "numeral": "54", "part": "bracket", "face": "side-1" },
+		{ "numeral": "56", "part": "knob", "face": "profile-2" },
+		{ "numeral": "58", "part": "hose", "face": "segment-2" },
+		{ "numeral": "60", "part": "bolt", "face": "head" },
+		{ "numeral": "62", "part": "coil", "face": "coil" },
+		{ "numeral": "64", "part": "pinion", "face": "teeth" },
+		{ "numeral": "66", "part": "race", "face": "outer-race" },
+		{ "numeral": "68", "part": "axle", "face": "step-2" },
+		{ "numeral": "70", "part": "duct", "face": "outer" },
+		{ "numeral": "72", "part": "drive", "face": "body" }
+	]
+}

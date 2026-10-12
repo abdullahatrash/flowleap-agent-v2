@@ -260,6 +260,29 @@ async function createClaudeSymlinks() {
 	}
 }
 
+/**
+ * Copies the kernel glue and its license beside the kernel wasm in `dist/`. The glue is an ES module,
+ * so it becomes `.mjs` in the CommonJS `dist/`. LGPL-2.1 asks that the user can replace the
+ * unmodified module and sees its license, so the notice ships next to the files.
+ */
+async function copyDrawingKernelFiles() {
+	const packageDir = path.join(REPO_ROOT, 'node_modules', 'replicad-opencascadejs');
+	const distDir = path.join(REPO_ROOT, 'dist');
+	await fs.promises.mkdir(distDir, { recursive: true });
+	await fs.promises.copyFile(path.join(packageDir, 'dist', 'replicad_single.js'), path.join(distDir, 'replicad_single.mjs'));
+	const license = await fs.promises.readFile(path.join(packageDir, 'LICENSE'), 'utf8');
+	const header = [
+		'replicad_single.wasm and replicad_single.mjs in this folder are an unmodified copy of',
+		'replicad-opencascadejs 1.1.0 (https://github.com/sgenoud/replicad), an OpenCascade',
+		'Technology build compiled to WebAssembly. They are licensed under the GNU Lesser General',
+		'Public License version 2.1 (LGPL-2.1-only), reproduced below. They are loaded as separate',
+		'files and can be replaced with another build of the same version.',
+		'',
+		'',
+	].join('\n');
+	await fs.promises.writeFile(path.join(distDir, 'LICENSE-opencascade.txt'), header + license);
+}
+
 async function main() {
 	// `--dist-assets-only` regenerates only the generated `dist/` build assets
 	// (compressed tiktoken files, tree-sitter wasm, the agent SDK cli) and skips
@@ -290,7 +313,10 @@ async function main() {
 		...treeSitterGrammars.map(grammar => `node_modules/@vscode/tree-sitter-wasm/wasm/${grammar.name}.wasm`),
 		'node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter.wasm',
 		'node_modules/@github/blackbird-external-ingest-utils/pkg/nodejs/external_ingest_utils_bg.wasm',
+		// Patent Drawings: the OpenCascade kernel (LGPL-2.1), loaded lazily by drawings/node/drawingKernel.ts.
+		'node_modules/replicad-opencascadejs/dist/replicad_single.wasm',
 	], 'dist');
+	await copyDrawingKernelFiles();
 
 	if (!distAssetsOnly) {
 		const copilotCliSourceDir = await materializeCopilotCliSdkLayout();
