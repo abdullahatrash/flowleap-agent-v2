@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import SkillGroundedProvider, { renderInstructionsAttachment, SKILL_SKIP_DIRS } from '../skill-grounded-provider';
+import SkillGroundedProvider, { renderInstructionsAttachment, resolveSkillsDir, SKILL_SKIP_DIRS } from '../skill-grounded-provider';
 
 /** A skills folder on disk with two skills: one links to a reference file of the other. */
 let skillsDir: string;
@@ -118,6 +118,23 @@ describe('SkillGroundedProvider', () => {
 			noKey: /API key/.test(String(noKey.result.error)),
 			requests: missingSkill.bodies.length + noSkillVar.bodies.length + noKey.bodies.length,
 		}).toEqual({ missingSkill: true, noSkillVar: true, noKey: true, requests: 0 });
+	});
+
+	it('reads the skills folder from EVAL_SKILLS_DIR when the config names none, and sends config.maxTokens as max_tokens', async () => {
+		const bodies: Array<{ max_tokens?: number }> = [];
+		const provider = new SkillGroundedProvider({ config: { maxTokens: 12000 } }, {
+			fetch: async (_url, init) => {
+				bodies.push(JSON.parse(String(init?.body)));
+				return jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: 'the answer' } }] });
+			},
+			env: { OPENROUTER_API_KEY: 'k', EVAL_SKILLS_DIR: skillsDir },
+		});
+		const result = await provider.callApi('which division?', { vars: { skill: 'demo' }, prompt: { raw: '', label: '' } });
+		expect({
+			skill: JSON.parse(String(result.output)).skill,
+			maxTokens: bodies[0].max_tokens,
+			configWins: resolveSkillsDir('fixtures', { EVAL_SKILLS_DIR: skillsDir }) === path.resolve(__dirname, '..', '..', 'fixtures'),
+		}).toEqual({ skill: 'demo', maxTokens: 12000, configWins: true });
 	});
 
 	it('reports an upstream error carried in a 200 body as a provider error, with the message the trajectory provider gives', async () => {

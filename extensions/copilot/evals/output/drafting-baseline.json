@@ -1,0 +1,77 @@
+{
+	"updated": "2026-10-12",
+	"config": "promptfooconfig.drafting.yaml",
+	"policy": {
+		"runs": 3,
+		"passThreshold": {
+			"numerator": 2,
+			"denominator": 3
+		},
+		"minValidSamples": 2
+	},
+	"model": "anthropic/claude-sonnet-5",
+	"judge": "anthropic/claude-haiku-5.5 (max_tokens 4096, no sampling parameters)",
+	"notes": "PRD 0022 E4 (#632). 3 runs, no cache. Subject answers drawn once per run; the deterministic graders and the judge were applied to the saved answers with the final graders (the judge moved from gemini-2.5-flash to claude-haiku-5.5 during the runs, so both columns were re-graded on the same answers with the same judge). Candidate column: the application-drafting skill at main 66d1f90bb6e (with the Draft Outline), all 12 cases. Expected FAIL records the observed state; a case that turns PASS is an improvement, a PASS case that fails is a regression. Re-baseline deliberately, in its own commit, when the skill, a fixture or a grader changes.",
+	"cases": {
+		"D1": {
+			"expected": "FAIL",
+			"observed": "1/3 (2026-10-12)",
+			"note": "D1 cable-clamp US draft. draft_validators 1/3, draft_missing_support 3/3, draft_prophetic 3/3, draft_sections 3/3, draft_unsupported 3/3"
+		},
+		"D2": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "D2 cable-clamp EPO draft. draft_validators 0/3, draft_missing_support 3/3, draft_prophetic 3/3, draft_sections 3/3, draft_unsupported 3/3"
+		},
+		"D3": {
+			"expected": "FAIL",
+			"observed": "1/3 (2026-10-12)",
+			"note": "D3 sync-scheduler US draft. draft_validators 2/3, draft_missing_support 3/3, draft_prophetic 3/3, draft_sections 3/3, draft_unsupported 2/3"
+		},
+		"D4": {
+			"expected": "PASS",
+			"observed": "3/3 (2026-10-12)",
+			"note": "D4 sync-scheduler EPO draft. draft_validators 3/3, draft_missing_support 3/3, draft_prophetic 3/3, draft_sections 3/3, draft_unsupported 3/3"
+		},
+		"D5": {
+			"expected": "FAIL",
+			"observed": "1/3 (2026-10-12)",
+			"note": "D5 anti-fog-coating US draft. draft_validators 2/3, draft_missing_support 3/3, draft_prophetic 3/3, draft_sections 3/3, draft_unsupported 2/3"
+		},
+		"D6": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "D6 anti-fog-coating EPO draft. draft_validators 1/3, draft_missing_support 3/3, draft_prophetic 3/3, draft_sections 3/3, draft_unsupported 2/3"
+		},
+		"O1": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "O1 cable-clamp US outline. outline_coverage 0/3"
+		},
+		"O2": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "O2 cable-clamp EPO outline. outline_coverage 0/3"
+		},
+		"O3": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "O3 sync-scheduler US outline. outline_coverage 0/3"
+		},
+		"O4": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "O4 sync-scheduler EPO outline. outline_coverage 0/3"
+		},
+		"O5": {
+			"expected": "FAIL",
+			"observed": "0/3 (2026-10-12)",
+			"note": "O5 anti-fog-coating US outline. outline_coverage 0/3"
+		},
+		"O6": {
+			"expected": "FAIL",
+			"observed": "1/3 (2026-10-12)",
+			"note": "O6 anti-fog-coating EPO outline. outline_coverage 1/3"
+		}
+	}
+}

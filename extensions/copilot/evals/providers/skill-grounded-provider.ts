@@ -17,6 +17,18 @@ const EVALS_DIR = path.resolve(__dirname, '..');
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
 /** The bundled skills, whether or not `chatSkills` registers them — unregistered skills are measured here first. */
 const DEFAULT_SKILLS_DIR = path.join(EVALS_DIR, '..', 'assets', 'skills');
+/** The answer budget when the config names none. A suite whose answers are long (the drafting suite) sets `config.maxTokens`. */
+const DEFAULT_MAX_TOKENS = 8192;
+
+/**
+ * The skills folder a run reads: `config.skillsDir` (relative to evals/), else the
+ * `EVAL_SKILLS_DIR` env var (absolute, or relative to evals/; used to run an older copy of a
+ * skill, for example a baseline exported with `git archive`), else the bundled `assets/skills`.
+ */
+export function resolveSkillsDir(configSkillsDir: string | undefined, env: NodeJS.ProcessEnv): string {
+	const chosen = configSkillsDir || env.EVAL_SKILLS_DIR;
+	return chosen ? path.resolve(EVALS_DIR, chosen) : DEFAULT_SKILLS_DIR;
+}
 
 const SKILL_FILENAME = 'SKILL.md';
 /**
@@ -230,21 +242,24 @@ interface ChatChoice extends ChoiceStatus {
  *
  * Returns a JSON string `{ skill, loadedFiles, finalText }`.
  *
- * Configuration: `config.skillsDir` (default: the bundled `assets/skills`), `config.model`, and the
- * env vars the other providers read — EVAL_API_BASE_URL, EVAL_API_KEY (falls back to
- * OPENROUTER_API_KEY), EVAL_MODEL, EVAL_PROMPT_CACHE=0 to send the system prompt uncached.
+ * Configuration: `config.skillsDir` (default: `EVAL_SKILLS_DIR`, else the bundled `assets/skills`),
+ * `config.model`, `config.maxTokens` (default 8192), and the env vars the other providers read —
+ * EVAL_API_BASE_URL, EVAL_API_KEY (falls back to OPENROUTER_API_KEY), EVAL_MODEL,
+ * EVAL_PROMPT_CACHE=0 to send the system prompt uncached.
  */
 export default class SkillGroundedProvider implements ApiProvider {
 	private readonly configModel: string | undefined;
 	private readonly skillsDir: string;
+	private readonly maxTokens: number;
 	private readonly fetchFn: typeof fetch;
 	private readonly env: NodeJS.ProcessEnv;
 
-	constructor(options?: { config?: { model?: string; skillsDir?: string }; id?: string; label?: string }, deps?: SkillGroundedProviderDeps) {
+	constructor(options?: { config?: { model?: string; skillsDir?: string; maxTokens?: number }; id?: string; label?: string }, deps?: SkillGroundedProviderDeps) {
 		this.configModel = options?.config?.model;
-		this.skillsDir = options?.config?.skillsDir ? path.resolve(EVALS_DIR, options.config.skillsDir) : DEFAULT_SKILLS_DIR;
 		this.fetchFn = deps?.fetch ?? globalThis.fetch;
 		this.env = deps?.env ?? process.env;
+		this.skillsDir = resolveSkillsDir(options?.config?.skillsDir, this.env);
+		this.maxTokens = options?.config?.maxTokens ?? DEFAULT_MAX_TOKENS;
 	}
 
 	id(): string {
@@ -285,7 +300,7 @@ export default class SkillGroundedProvider implements ApiProvider {
 				fetch: this.fetchFn,
 				env: this.env,
 				apiKey,
-				body: { model: this.resolveModel(), messages, tools: SKILL_TOOLS, tool_choice: 'none', stream: false, temperature: 0, max_tokens: 8192 },
+				body: { model: this.resolveModel(), messages, tools: SKILL_TOOLS, tool_choice: 'none', stream: false, temperature: 0, max_tokens: this.maxTokens },
 			});
 			const loadedFiles = [SKILL_FILENAME, ...skill.folderFiles.map(file => file.relativePath), ...skill.linkedFiles.map(file => file.relativePath)];
 			return { output: JSON.stringify({ skill: skill.name, loadedFiles, finalText: choice.message.content ?? '' }) };

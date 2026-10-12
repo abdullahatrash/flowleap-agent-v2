@@ -7,3 +7,5 @@ output/*
 !output/trajectory-baseline.json
 !output/key-gate-baseline.json
 !output/skill-grounded-baseline.json
+!output/drafting-baseline.json
+!output/drafting-pre-outline-baseline.json

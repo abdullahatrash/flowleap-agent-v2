@@ -1,0 +1,166 @@
+# Drafting regression cases (PRD 0022 E4, #632). Three invented matters x two offices x two kinds.
+#
+# Guardrail: every fixture under fixtures/ is invented for this eval. No HUPD, no Google Patents,
+# no text of a real patent.
+#
+# Each matter has one deliberate gap and one prophetic example:
+#   gapTerm            a claim term with no Feature List row and no disclosure span. The fixed
+#                      outline plans it as a Technical item with only a Question; the draft must
+#                      ask it as an Inventor Question and state no fact about it.
+#   propheticSources   the markers of the prophetic example (not run): no result in past tense.
+#   workingSources     the markers of the working example (run): left out of the prophetic check.
+#
+# Kinds: `outline` (O cases) asks for the Draft Outline; `draft` (D cases) gives the fixed
+# outline (fixtures/<matter>/draft-outline-<office>.md) and asks for the Draft Application.
+# The prompt is built by drafting-matters.ts from the fixture files; the judge reads the same files
+# (judgeInput in assertions/drafting-assertions.ts).
+#
+# Graders (assertions/drafting-assertions.ts unless noted), one metric each:
+#   outline_coverage       checkOutline: no outline-format, outline-coverage or outline-sources Error
+#   draft_validators       validateDraft (D1) with the fixed outline (E1): no Error (open Inventor
+#                          Questions and the literal-basis Error of the gap term are expected)
+#   draft_unsupported      llm-rubric (judge anthropic/claude-haiku-5.5): the JSON array of technical
+#                          sentences absent from the sources is empty
+#   draft_missing_support  the gap term is an Inventor Question and no sourced paragraph states it
+#   draft_prophetic        the prophetic example states no result in past tense
+#   draft_sections         every required section of the office order is present
+# Numerals outside figures.md and a defined term used two ways are D1 Errors (draft_validators).
+
+- description: "O1 — cable-clamp US outline"
+  vars: &cableClamp
+    skill: application-drafting
+    matter: cable-clamp
+    office: US
+    kind: outline
+    gapTerm: damping insert
+    propheticSources: feature:F7, disclosure:§4.2
+    workingSources: feature:F6, disclosure:§4.1
+  assert: &outlineAsserts
+    - type: javascript
+      metric: outline_coverage
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
+          .then(H => H.gradeOutline(output, context.vars));
+
+- description: "O2 — cable-clamp EPO outline"
+  vars:
+    <<: *cableClamp
+    office: EPO
+  assert: *outlineAsserts
+
+- description: "O3 — sync-scheduler US outline"
+  vars: &syncScheduler
+    skill: application-drafting
+    matter: sync-scheduler
+    office: US
+    kind: outline
+    gapTerm: session key
+    propheticSources: feature:F7, disclosure:§4.2
+    workingSources: feature:F6, disclosure:§4.1
+  assert: *outlineAsserts
+
+- description: "O4 — sync-scheduler EPO outline"
+  vars:
+    <<: *syncScheduler
+    office: EPO
+  assert: *outlineAsserts
+
+- description: "O5 — anti-fog-coating US outline"
+  vars: &antiFogCoating
+    skill: application-drafting
+    matter: anti-fog-coating
+    office: US
+    kind: outline
+    gapTerm: silica filler
+    propheticSources: feature:F7, disclosure:§4.2
+    workingSources: feature:F6, disclosure:§4.1
+  assert: *outlineAsserts
+
+- description: "O6 — anti-fog-coating EPO outline"
+  vars:
+    <<: *antiFogCoating
+    office: EPO
+  assert: *outlineAsserts
+
+- description: "D1 — cable-clamp US draft"
+  vars:
+    <<: *cableClamp
+    kind: draft
+  assert: &draftAsserts
+    - type: javascript
+      metric: draft_validators
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
+          .then(H => H.gradeDraftValidators(output, context.vars));
+    - type: javascript
+      metric: draft_missing_support
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
+          .then(H => H.gradeMissingSupport(output, context.vars));
+    - type: javascript
+      metric: draft_prophetic
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
+          .then(H => H.gradeProphetic(output, context.vars));
+    - type: javascript
+      metric: draft_sections
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
+          .then(H => H.gradeSections(output, context.vars));
+    # The one judge (PRD 0022 decision 2: factual accuracy = unsupported technical additions).
+    # Style is not graded; elaboration and diversity are not measured, by decision.
+    - type: llm-rubric
+      metric: draft_unsupported
+      # The judge reads the sources of the matter and the draft (judgeInput), not the JSON.
+      transform: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/drafting-assertions.ts').href))
+          .then(H => H.judgeInput(output, context.vars));
+      value: |
+        The output has two parts: SOURCES (the Feature List, the disclosure, the figures and the Approved Claims of a patent matter) and DRAFT DESCRIPTION (the description of a patent application written from them, one block per paragraph, each headed with its section and the sources it cites; its claims and Inventor Questions are left out). The sources are the only basis of technical fact.
+
+        Find the unsupported technical additions. An addition is a sentence that brings in something the SOURCES do not have: a part, material, value, dimension, step, mechanism, purpose, effect or result that appears nowhere in the SOURCES.
+        - Check each sentence against the sources its paragraph cites, then against all the SOURCES. A fact found anywhere in the SOURCES is not an addition, also when the paragraph cites another source.
+        - Not additions: the same fact in other words ("formed in one piece" = "made in one piece"); a summary, a combination or the plain converse of source facts; a sentence that restates a claim of the APPROVED CLAIMS, even when the Feature List lacks it; framing words around source facts ("the technical problem is", "the invention solves", "advantageously"); a figure description that matches the figures file; boilerplate with no technical content (scope statements, "in some embodiments", the meaning of "comprising"); a statement that a fact is not known or is asked as an Inventor Question.
+        - Do not judge style, length, wording or which source a paragraph cites.
+        - Before you list a sentence, name to yourself the new thing it brings in. When you cannot name one that is absent from all the SOURCES, do not list the sentence.
+
+        Your reason is only a JSON array of the unsupported sentences, each quoted word for word as a string, and [] when there is none: no scores, no other text, no opinion on style. Pass exactly when the array is empty.
+
+- description: "D2 — cable-clamp EPO draft"
+  vars:
+    <<: *cableClamp
+    office: EPO
+    kind: draft
+  assert: *draftAsserts
+
+- description: "D3 — sync-scheduler US draft"
+  vars:
+    <<: *syncScheduler
+    kind: draft
+  assert: *draftAsserts
+
+- description: "D4 — sync-scheduler EPO draft"
+  vars:
+    <<: *syncScheduler
+    office: EPO
+    kind: draft
+  assert: *draftAsserts
+
+- description: "D5 — anti-fog-coating US draft"
+  vars:
+    <<: *antiFogCoating
+    kind: draft
+  assert: *draftAsserts
+
+- description: "D6 — anti-fog-coating EPO draft"
+  vars:
+    <<: *antiFogCoating
+    office: EPO
+    kind: draft
+  assert: *draftAsserts

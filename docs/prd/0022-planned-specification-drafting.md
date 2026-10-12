@@ -156,7 +156,7 @@ Regression cases the issue asks for: changed claims (stale hash → refusal; too
 missing support (an element with no row → an Inventor Question, no invented text), hallucinated
 figures and results (a numeral not in `figures.md`, a past-tense result for a prophetic
 example), cross-section consistency (a defined term used two ways), end-to-end completion.
-Report style as a Note from the judge, never as a gate. Baseline is the same set run on main
+Style is not measured in v1: it would need a second judge call per case; revisit when a single judge call can return both. Baseline is the same set run on main
 before E3 merges; the PR reports both columns. Repeat-gate per the flake rule (3 runs).
 Guardrail: fixtures are invented matters, no HUPD or Google Patents text. Acceptance: the config
 runs green on the candidate and the report is in the PR.

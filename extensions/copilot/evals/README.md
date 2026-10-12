@@ -114,6 +114,9 @@ OPENROUTER_API_KEY=sk-or-... npm run eval:key-gate:repeat
 
 # Skill content, before the skill is registered (see Skill-grounded suite)
 OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded:repeat
+
+# Application Drafting regression, outline and draft cases (see Drafting suite)
+OPENROUTER_API_KEY=sk-or-... npm run eval:drafting:repeat
 ```
 
 ## Cost: prompt caching is on by default
@@ -728,7 +731,9 @@ OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded:repeat
 OPENROUTER_API_KEY=sk-or-... npm run eval:skill-grounded -- --no-cache
 ```
 
-Each case names a skill folder under `assets/skills` in `vars.skill`. The provider
+Each case names a skill folder under `assets/skills` in `vars.skill`. `EVAL_SKILLS_DIR` (absolute,
+or relative to `evals/`) points the provider at another skills folder, for example an older copy
+of a skill exported with `git archive` to measure a baseline; `config.skillsDir` wins over it. The provider
 (`providers/skill-grounded-provider.ts`) replays what the app does when a skill runs inline:
 
 1. a `skill` tool call whose result is the app's `<skill-context>` block (base directory, the
@@ -789,6 +794,124 @@ Recorded in `output/skill-grounded-baseline.json`; every case is expected to PAS
 | U2b | P P P | 3/3 | 0 | PASS |
 | F1 | P P P | 3/3 | 0 | PASS (added #577; the same 3 runs showed N4 at 0/3 on point 2, RoP 220.1(c) orders: a skill-content regression on main, not caused by #577, which does not change N4's input) |
 
+## Drafting suite (PRD 0022 E4, #632)
+
+`promptfooconfig.drafting.yaml` + `datasets/drafting/` grade the `application-drafting` skill on
+three invented matters, each for the US and the EPO: `cable-clamp` (mechanical),
+`sync-scheduler` (software) and `anti-fog-coating` (chemistry). The provider is the
+skill-grounded provider (the skill and its reference files in context, one answer, no tools).
+The graders import the app's Application Drafting validators
+(`src/extension/tools/common/drafting/`) through `assertions/drafting-assertions.ts`, so the eval
+grades with the rules the app runs. No model grades anything except one judge.
+
+Judge pinned 2026-10-12: `anthropic/claude-haiku-5.5` (same vendor as the subject Sonnet 5; the
+judge's only task is grounding — list technical sentences absent from the sources — so
+self-preference risk is low; the other six suites keep `google/gemini-2.5-flash` until
+re-baselined). OpenRouter price on that date: $0.10 / 1M input, $0.50 / 1M output tokens. Haiku 5.5
+rejects non-default sampling values, so the judge config sends no `temperature`
+(`omitDefaults: true`) and an explicit `max_tokens: 4096`.
+
+```bash
+# The verdict — 3 runs under the repeat policy, compared with output/drafting-baseline.json
+OPENROUTER_API_KEY=sk-or-... npm run eval:drafting:repeat
+
+# A single run (a probe while iterating)
+OPENROUTER_API_KEY=sk-or-... npm run eval:drafting -- --no-cache
+
+# The pre-outline baseline: the skill as it was before the Draft Outline (commit 7648ae7261c),
+# draft cases only. EVAL_SKILLS_DIR points the provider at another skills folder.
+git archive 7648ae7261c extensions/copilot/assets/skills/application-drafting | tar -x -C /tmp/pre-outline
+EVAL_SKILLS_DIR=/tmp/pre-outline/extensions/copilot/assets/skills OPENROUTER_API_KEY=sk-or-... \
+  npx tsx evals/scripts/repeat-gate.ts --config promptfooconfig.drafting.yaml \
+  --output-prefix drafting-pre-outline -- --filter-pattern '^D[0-9] '
+```
+
+**Cases.** Two single-turn kinds, each run per matter and office (`datasets/drafting/drafting-cases.yaml`):
+
+| Kind | Cases | Input | Answer |
+|---|---|---|---|
+| Outline | O1–O6 | What `start_application_draft` returns (Feature List, figures, Approved Claims, office) and the disclosure | `draft-outline.md` |
+| Draft | D1–D6 | The same, plus the fixed outline `fixtures/<matter>/draft-outline-<office>.md` | `draft-application.md` |
+
+`datasets/drafting/drafting-matters.ts` builds the prompt from the fixture files. Each matter folder
+holds `feature-list.md` (written for the US; the loader sets `office` per case), `figures.md`,
+`claims.md` (approved), `disclosure.md` and one hand-written outline per office, bound to the
+claims hash the way the tools compute it. `assertions/test/drafting-assertions.spec.ts` checks that
+every fixture outline is validator-clean.
+
+Each matter has one deliberate gap and one prophetic example: a claim term with no Feature List
+row (`damping insert`, `session key`, `silica filler`), and an example the inventor did not run.
+Guardrail: the matters are invented; no HUPD, no Google Patents, no text of a real patent.
+
+**Rubric** (PRD 0022 decision 2): factual accuracy, measured as unsupported technical additions;
+claim coverage, measured by the validators. Style is not graded (a style Note would need a
+second judge call per case; not added). Elaboration and diversity are not measured, by decision:
+they score added content as quality.
+
+Every grader scores 1 for pass and 0 for fail (promptfoo reads a score as higher-is-better); an
+Error count is in the reason.
+
+| Metric | Kind | Fails when |
+|---|---|---|
+| `outline_coverage` | Outline | `checkOutline` reports an `outline-format`, `outline-coverage` or `outline-sources` Error. The answer is bound to the claims hash first, as the `draft-outline` save does. The reason gives the Error count |
+| `draft_validators` | Draft | `validateDraft` (the D1 rules, and the E1 outline rules with the fixed outline) reports an Error. Numerals outside `figures.md` and a defined term used two ways are D1 Errors. The open Inventor Questions and the `literal-basis` Error of the gap term are the expected result of the gap and do not count. Notes never count |
+| `draft_unsupported` | Draft | The judge (`anthropic/claude-haiku-5.5`) returns a non-empty JSON array of sentences: a sentence of the description that brings in a part, material, value, step, mechanism, purpose, effect or result that no source states. It reads the Feature List, the disclosure, the figures and the Approved Claims (a restated claim is not an addition), then the description paragraph by paragraph with the sources each one cites (`judgeInput`) |
+| `draft_missing_support` | Draft | No Inventor Question names the gap term, or a description paragraph whose marker names a fact source (`feature`, `disclosure`, `inventor`, `instruction`) states it |
+| `draft_prophetic` | Draft | No paragraph cites the prophetic example alone, or one states a result in past tense. The check is a verb list (`was measured`, `showed`, `remained`, `stayed`, ...): a result in another verb passes, and a listed verb that is negated or is not a result fails. A paragraph that cites the working example too is not read |
+| `draft_sections` | Draft | A required part of the office order is missing (`missingParts`, the check of the export) |
+
+The answer is the file content only. The grader takes the largest fenced block when the model
+fences it, starts at the first frontmatter, heading or table line, and drops the skill's closing
+disclaimer line, which in the app goes to the chat and not to the file.
+
+**Baseline column.** The pre-outline skill has no `references/outline-format.md`. The prompt
+builder and the graders detect that (the prompt has no outline; `draft_validators` runs the D1
+rules only), so the same dataset runs both columns.
+
+**Judge limits.** Checked on saved drafts: the judge passed clean drafts and caught two injected
+inventions (a material and part, a processing step) and one real subtle one (an added effect,
+"without additional mounting hardware"). It still varies run to run on borderline inferences (an
+effect the background implies but does not state); the repeat gate absorbs that.
+
+**Budget.** The provider sends `max_tokens: 32000` (`config.maxTokens`). On
+`anthropic/claude-sonnet-5` a draft is about 4k tokens of text after about 10k reasoning tokens;
+with 12000 the first probe came back empty.
+
+### Baseline: drafting suite (2026-10-12, `anthropic/claude-sonnet-5`, judge `anthropic/claude-haiku-5.5`, no cache)
+
+3 runs per column. Candidate = the skill at main `66d1f90bb6e` (with the Draft Outline), recorded in
+`output/drafting-baseline.json` (the gate compares against it; an expected FAIL records the
+observed state). Pre-outline = the skill at `7648ae7261c`, draft cases only, recorded in
+`output/drafting-pre-outline-baseline.json` (a record, not a gate). Cells are passes of 3.
+
+| Case | Pre-outline: validators · unsupported · missing support · prophetic · sections → case | Candidate: validators · unsupported · missing support · prophetic · sections → case |
+|---|---|---|
+| D1 cable-clamp US | 2 · 3 · 3 · 3 · 2 → 2/3 PASS | 1 · 3 · 3 · 3 · 3 → 1/3 FAIL |
+| D2 cable-clamp EPO | 3 · 2 · 3 · 3 · 3 → 2/3 PASS | 0 · 3 · 3 · 3 · 3 → 0/3 FAIL |
+| D3 sync-scheduler US | 0 · 3 · 3 · 3 · 3 → 0/3 FAIL | 2 · 2 · 3 · 3 · 3 → 1/3 FAIL |
+| D4 sync-scheduler EPO | 1 · 1 · 3 · 3 · 3 → 0/3 FAIL | 3 · 3 · 3 · 3 · 3 → 3/3 PASS |
+| D5 anti-fog-coating US | 3 · 3 · 3 · 3 · 3 → 3/3 PASS | 2 · 2 · 3 · 3 · 3 → 1/3 FAIL |
+| D6 anti-fog-coating EPO | 3 · 3 · 3 · 3 · 3 → 3/3 PASS | 1 · 2 · 3 · 3 · 3 → 0/3 FAIL |
+
+Outline cases, candidate only (`outline_coverage`): O1 0/3, O2 0/3, O3 0/3, O4 0/3, O5 0/3, O6 1/3.
+
+What the failures are:
+- All 9 candidate `draft_validators` failures are source markers that cite a figure
+  (`FIG. 1`, `figure:FIG. 1`): the outline allows figure sources, the marker syntax does not, and
+  the invalid marker also loses the paragraph's `item:` (`item-coverage`). The pre-outline column
+  has none; its failures are `literal-basis` (`metered network`, `method`) and paragraphs without
+  a marker (headings written without `#`).
+- The outline cases fail on `outline-coverage`: the model lists claim phrases ("a channel for a
+  cable", "the channel has a damping insert") instead of the claim terms `introducedPhrases` reads,
+  or leaves out a term such as `method` or `full charge`; twice an `outline-format` Error (an empty
+  `Explain`, a row with 7 cells, a `template` source).
+- `draft_missing_support`, `draft_prophetic` and `draft_sections` pass in both columns except one
+  pre-outline draft without `#` headings.
+
+Cost: the candidate column (3 × 12 cases) cost $5.26 on the OpenRouter usage counter, the
+pre-outline column (3 × 6 draft cases) about $1.70; re-grading all 54 answers with the judge cost
+$0.13.
+
 ## File Structure
 
 ```
@@ -798,6 +921,7 @@ evals/
 ├── promptfooconfig.multi.yaml    # Multi-model comparison (all 9 models)
 ├── promptfooconfig.key-gate.yaml # Key-gate doctrine adherence (6 cases, #176)
 ├── promptfooconfig.skill-grounded.yaml # Skill content before registration (#569)
+├── promptfooconfig.drafting.yaml # Application Drafting regression, outline and draft cases (PRD 0022 E4)
 ├── package.json                  # Pins promptfoo to an EXACT version (see version policy)
 ├── package-lock.json             # Committed — the pin covers transitive deps too
 ├── README.md                     # This file
@@ -809,7 +933,8 @@ evals/
 ├── assertions/
 │   ├── trajectory-assertions.mjs # Structural predicates, trajectory gate
 │   ├── key-gate-assertions.mjs   # Structural predicates, key-gate suite
-│   └── skill-grounded-assertions.mjs # No calendar date (except prompt dates), exact rules, exact fees
+│   ├── skill-grounded-assertions.mjs # No calendar date (except prompt dates), exact rules, exact fees
+│   └── drafting-assertions.ts    # Drafting graders over the app's drafting validators (TypeScript: imports src)
 ├── prompts/
 │   ├── system-prompt.txt         # Static render of patentAIPrompt.tsx
 │   ├── key-state/                # Per-key-state prompt variants (same render script)
@@ -824,7 +949,8 @@ evals/
 │   ├── search-strategy.yaml      # 5 tests — API syntax correctness
 │   ├── frontier.yaml             # 5 probes — NON-GATING (failures are findings)
 │   ├── key-gate/                 # 6 cases — key-gate doctrine adherence (K1–K5)
-│   └── skill-grounded/           # Skill-content cases (S1, S5, N1, N4, U2a, U2b, F1)
+│   ├── skill-grounded/           # Skill-content cases (S1, S5, N1, N4, U2a, U2b, F1)
+│   └── drafting/                 # Drafting cases O1–O6, D1–D6; invented matters in fixtures/
 ├── scripts/
 │   ├── promptfoo.ts             # Launcher — runs the PINNED promptfoo, never a global one
 │   ├── run-evals.sh              # Convenience wrapper: checks for an API key, regenerates tools, runs promptfoo
@@ -836,6 +962,8 @@ evals/
     ├── baseline.json             # Committed pass-rate baseline, main suite (tracked in git)
     ├── trajectory-baseline.json  # Committed per-case repeat baseline, trajectory gate (tracked)
     ├── key-gate-baseline.json    # Committed per-case repeat baseline, key-gate suite (tracked)
+    ├── drafting-baseline.json    # Committed per-case repeat baseline, drafting suite (tracked)
+    ├── drafting-pre-outline-baseline.json # The pre-outline skill's column of PRD 0022 E4 (tracked, a record)
     ├── latest.json               # Last main-suite results (git-ignored)
     └── frontier-latest.json      # Last frontier-suite results (git-ignored)
 ```
