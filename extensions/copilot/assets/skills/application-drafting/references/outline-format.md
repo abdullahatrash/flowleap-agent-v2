@@ -14,7 +14,6 @@ never a source.
 ```markdown
 ---
 office: US
-claims: <SHA-256 of the Approved Claims>
 ---
 # Draft Outline
 
@@ -23,9 +22,9 @@ claims: <SHA-256 of the Approved Claims>
 ```
 
 - `office` is `US` or `EPO`, as in `feature-list.md`.
-- `claims` is the SHA-256 of the Approved Claims the plan was made from. The
-  `draft-outline` save writes it; do not compute it. The save refuses while
-  `approved` in `claims.md` is not true.
+- The `draft-outline` save writes `claims` (the SHA-256 of the Approved
+  Claims); do not write it. The save refuses while `approved` in `claims.md`
+  is not true.
 - Write the header row with these eight columns, in this order.
 - Write a `|` inside a cell as `\|`.
 
@@ -40,7 +39,7 @@ claims: <SHA-256 of the Approved Claims>
 | `Claim terms` | The claim terms the item explains, as the claims introduce them, comma-separated. Empty for a Template item. | `a sealing ring, an elastomer` |
 | `Sources` | Comma-separated, in the forms below. Empty only when `Question` is filled. | `F3, §2.1, FIG. 2` |
 | `Explain` | `yes` when the item needs a mechanism, parameter or example; `no` for a statement. | `yes` |
-| `Question` | The open question of a Technical item that has no source, or no source for the part `Explain` asks for. Empty otherwise. | `What force does the spring apply to the piston 14?` |
+| `Question` | The open question of a Technical item that has no source, or no source for the part `Explain` asks for. Empty otherwise. An item with only a `Question` yields an Inventor Question in the draft and no technical text; an item with sources and a `Question` yields text from the sources and an Inventor Question for the rest. | `What force does the spring apply to the piston 14?` |
 
 ## Source forms
 
@@ -81,10 +80,8 @@ The plan also covers the claims:
    the closing paragraph on equivalents and the abstract. The claims are not
    an item: the draft takes the Approved Claims unchanged.
 
-An item can have sources and a question: draft what the sources state, and
-write an Inventor Question for the rest. When the answer to a question is
-filled in `inventor-answers.md`, add its `IQ-n` to `Sources`, clear the
-`Question`, and save the outline again.
+When an Inventor Question of an item is answered, Step 5 updates the row:
+see [resolve-inventor-questions.md](resolve-inventor-questions.md).
 
 ## Example
 
@@ -100,20 +97,21 @@ Claims: 1. A valve comprising a housing, a piston and a sealing ring.
 | O4 | DETAILED DESCRIPTION | Technical | 1, 2 | a sealing ring, an elastomer | F3, §2.1, FIG. 2 | yes |  |
 | O5 | DETAILED DESCRIPTION | Technical | 1, 3 | a spring |  | yes | Where does the spring sit, and what force does it apply to the piston 14? |
 
-The title, summary and abstract rows are left out of this example. `O5`
-yields an Inventor Question in the draft and no technical text.
+The title, summary and abstract rows are left out of this example.
 
-## Outline findings
+## Findings on the outline
 
-The `draft-outline` save and `validate_draft` report these rules. Each
-finding names a line of `draft-outline.md` or `draft-application.md`.
+The `draft-outline` save returns the Findings of the first four rules.
+`validate_draft` reports them again with `item-coverage` and
+`duplicate-sentence`, which read the draft. Each Finding names a line of
+`draft-outline.md` or `draft-application.md`.
 
 | Rule | Severity | Means | What to do |
 |------|----------|-------|------------|
 | `outline-format` | Error | A line cannot be read: no `office`, no table with the eight columns, a row with the wrong number of cells, an id that is not `O<n>`, an id listed twice, a `Kind` other than `Template` or `Technical`, `Claims` that are not numbers, `Explain` other than `yes` or `no`, or a source in no known form. | Correct the line. |
 | `outline-claims` | Error | The outline names no claims hash, or was made from other claims than the Approved Claims. | Plan again from the current Approved Claims and save the outline. |
 | `outline-coverage` | Error | A claim term is in no Technical item, or a dependent claim is in no Technical item with its independent claim. | Add the term to the item that explains it, or list the claims together in the item that realises the combination. Add an item when none fits. |
-| `outline-sources` | Error | A Template item has claim terms, a Technical item has neither source nor question, or a source does not exist in the matter files. | Move the terms to a Technical item; name a source or write the question; correct or remove the source. Never take a source from outside the matter. |
+| `outline-sources` | Error | A Template item has claim terms, a Technical item has neither source nor question, or a source does not exist in the matter files. | Move the terms to a Technical item; name a source or write the question; correct or remove the source. |
 | `item-coverage` | Error | A Technical item with a source is in no paragraph (`item:O<n>`), or a paragraph names an item that is not a row. | Write the paragraph of the item, or correct the `item:` entry. |
 | `item-coverage` | Note | A Template item is in no paragraph, or an item with only a question is in no paragraph. | Write the Template text, or make sure the draft has the Inventor Question. |
-| `duplicate-sentence` | Note | One sentence is in two paragraphs. | Keep it in one place; see [integration-review.md](integration-review.md). |
+| `duplicate-sentence` | Note | One sentence is in two paragraphs. Sentences under 6 words and the claims section are skipped. The Note sits on the later paragraph and names the lines of both. | Keep it in one place; see [integration-review.md](integration-review.md). |

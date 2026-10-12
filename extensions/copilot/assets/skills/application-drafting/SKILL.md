@@ -83,25 +83,23 @@ other claims: after the attorney approves changed claims, plan again.
    concept with its claims, claim terms, sources and `Explain`. A concept
    with no source gets a `Question`, never a source found outside the matter.
 2. Save with `write_patent_results`, template `draft-outline`, to
-   `drafting/<matter>/draft-outline.md`. Fix each outline finding the save or
-   `validate_draft` reports before you draft.
+   `drafting/<matter>/draft-outline.md`. The save returns the Findings on the
+   outline. Fix every Error the save reports before 3b.
 3. Tell the attorney the outline is in the folder and they can edit it
    before drafting. It is not a gate: do not wait for a flag.
 
 ### 3b: Draft by item
 
-1. Write the specification in outline order, in the office's section order
-   ([US](references/us-section-order.md) or
-   [EPO](references/epo-section-order.md)): the Template items first, then
-   each Technical item in its place. An item with a `Question` and no source
-   yields an Inventor Question and no technical text.
+1. Write the specification in outline order, which follows the office's
+   section order ([US](references/us-section-order.md) or
+   [EPO](references/epo-section-order.md)). A claim element, example or
+   embodiment with no source, such as an item with only a `Question`, yields an
+   Inventor Question and no technical text.
 2. Put a source marker before every paragraph, with the `item:O<n>` it
    realises, per [references/marker-syntax.md](references/marker-syntax.md).
 3. Technical content comes only from a Feature List row, a disclosure span,
    an answered Inventor Question or an attorney instruction. Model-Proposed
-   is for structure: transitions and boilerplate. When a claim element,
-   example or embodiment has no source, leave the technical text out and
-   write an Inventor Question.
+   is for structure: transitions and boilerplate.
 4. Write results only for experiments the disclosure says were run. A
    prophetic example is in present or future tense.
 5. Exemplars shape voice and structure only, per
@@ -111,24 +109,23 @@ other claims: after the attorney approves changed claims, plan again.
 
 ### 3c: Integrate
 
-Read the whole draft once per
-[references/integration-review.md](references/integration-review.md):
-terminology, figures and numerals, contradictory embodiments, duplicated
-passages, and the support of each claimed combination the outline planned.
-Each point is an integration item that quotes the passage.
+1. Read the whole draft once per [references/integration-review.md](references/integration-review.md).
+2. Write one advisory item per check that finds something and one per planned
+   claimed combination, each quoting the passage with its line.
+3. Hand the advisory items to `validate_draft` in Step 4.
 
 Done when the outline is saved for the Approved Claims, every paragraph has
 a marker, every Technical item is in a paragraph or an Inventor Question,
-and the integration items are written.
+and the advisory items are written.
 
 ## Step 4: Save and validate
 
 1. Save with `write_patent_results`, template `draft-application`, to
    `drafting/<matter>/draft-application.md`, with `office`, `model`,
    `provider` and `version`. Findings never block a save.
-2. Call `validate_draft` on the matter folder, and pass the integration
-   items of Step 3c as advisory items, each with its line. It runs the code
-   validators, also the outline rules, and writes `findings.md`.
+2. Call `validate_draft` on the matter folder with the advisory items of
+   Step 3c. It runs the code validators, also the outline rules, and writes
+   `findings.md`.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 
@@ -148,20 +145,8 @@ Inventor Questions, each with its line reference. Report what the validators
 found and what stays open. A run without Errors is "no Error findings", never
 "passed" or "ready to file".
 
-When the attorney asks for the Word file, call `export_draft_docx`. It
-refuses on an unwaived Error or an open Inventor Question and lists each
-one: report each one, and the open steps of `checklist.md`. The attorney
-resolves it, or writes a waiver with a reason in `findings.md`.
-It writes the description, the claims and the abstract as three .docx files
-with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not
-draw figures: tell the attorney that the drawing sheets are prepared
-separately. Beside the files it writes `filing-manifest.md` with the values
-the attorney declares at filing: claims, drawing sheets, the proposed
-abstract figure and the pages. Report the page counts as estimates, and the
-abstract figure as a proposal. It also writes `draft-application.full.docx`,
-the whole application in one file for the attorney to read, not to file;
-report each `[MISSING: ...]` placeholder in it with the checklist step or
-note it names.
+When the attorney asks for the Word file, call `export_draft_docx` and
+report its result per [references/export.md](references/export.md).
 
 ## Rules
 

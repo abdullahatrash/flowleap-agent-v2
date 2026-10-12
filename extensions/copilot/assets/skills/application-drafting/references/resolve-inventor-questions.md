@@ -10,11 +10,17 @@ asks you to apply the answers:
 2. Write each answer at the place its question names, in the inventor's
    words, with the marker `<!-- src: inventor:IQ-n -->`. Add no fact the
    answer does not state.
-3. Delete the answered question. When the answer is partial, keep the
+3. When the question came from the `Question` of a row of
+   `draft-outline.md`, the answer paragraph's marker is
+   `<!-- src: inventor:IQ-n, item:O<n> -->`, with the item of that row. Then
+   add `IQ-n` to the row's `Sources`, clear its `Question` (narrow it when
+   the answer is partial), and save the outline again with
+   `write_patent_results`, template `draft-outline`.
+4. Delete the answered question. When the answer is partial, keep the
    question, with its number, and narrow it to the part that is still open:
    the save then adds the narrowed question to `inventor-answers.md` with a
    new empty slot.
-4. Save the draft and call `validate_draft` again.
+5. Save the draft and call `validate_draft` again.
 
 A question you delete while its current answer is empty stays an Error until
 the attorney waives it. Never edit `inventor-answers.md` yourself: the save

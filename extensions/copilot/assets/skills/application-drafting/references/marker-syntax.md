@@ -12,6 +12,9 @@ with the paragraph text on the next line and no blank line between:
 The housing 12 holds the battery 14 against the contact plate 16.
 ```
 
+An `item:O<n>` entry may follow the sources; it is a plan reference, see
+[Outline Item](#outline-item).
+
 | Marker | Source | Use for |
 |--------|--------|---------|
 | `<!-- src: feature:F3 -->` | Row `F3` of `feature-list.md` | Technical content from a confirmed feature |
@@ -20,7 +23,6 @@ The housing 12 holds the battery 14 against the contact plate 16.
 | `<!-- src: instruction -->` | An attorney instruction in this chat | Content the attorney dictated or asked for |
 | `<!-- src: template -->` | The office template | Standard statements the office template prescribes (for example the industrial-application statement) |
 | `<!-- src: model-proposed -->` | None | Transitions and boilerplate only |
-| `item:O7` (with a source, e.g. `<!-- src: feature:F3, item:O7 -->`) | None: a plan reference | The Outline Item of `draft-outline.md` the paragraph realises |
 
 One marker can name more than one source, separated by commas:
 
