@@ -15,20 +15,27 @@ export type DiagramOffice = 'US' | 'EPO';
  */
 export type DiagramNumeralScheme = 'even' | 'hundreds';
 
-/** The glyph height in mm: 0.32 cm (37 CFR 1.84(p)(3); OJ EPO 2025 A49 Art. 1(2)(g)). */
-export const FONT_SIZE = 3.2;
-/** The estimated advance of one character in mm (a monospace-ish 0.55 em). */
+/**
+ * The label glyph size in mm at figure scale, as the 3D engine writes it. It stays above the
+ * 0.32 cm minimum (37 CFR 1.84(p)(3); OJ EPO 2025 A49 Art. 1(2)(g)) when a sheet scales it.
+ */
+export const FONT_SIZE = 3.5;
+/** The numeral glyph size in mm at figure scale, the same as the 3D engine. */
+export const NUMERAL_FONT_SIZE = 4.5;
+/** The font family of all text, the same as the 3D engine. */
+export const FONT_FAMILY = 'Liberation Sans, Arial, Helvetica, sans-serif';
+/** The estimated advance of one label character in mm (a monospace-ish 0.55 em). */
 export const CHAR_WIDTH = 0.55 * FONT_SIZE;
-/** The distance between two text baselines in mm. */
-export const LINE_HEIGHT = 4.2;
+/** The distance between two label baselines in mm. */
+export const LINE_HEIGHT = 4.6;
 /** The most words of a US label: keywords only (37 CFR 1.84(o); MPEP 608.02). */
 export const US_MAX_WORDS = 4;
 /** The most words of an EPO step sentence: "a short sentence" (Guidelines A-IX 8). */
 export const EPO_MAX_WORDS = 12;
 
-/** The width in mm of a text line, estimated from its character count. */
-export function textWidth(text: string): number {
-	return [...text].length * CHAR_WIDTH;
+/** The width in mm of a text line at `fontSize`, estimated from its character count. */
+export function textWidth(text: string, fontSize = FONT_SIZE): number {
+	return [...text].length * 0.55 * fontSize;
 }
 
 /** The words of a label, as the fault check counts them. */

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { PlacedDiagram, PlacedNode, Point } from './diagramLayout';
-import { FONT_SIZE, LINE_HEIGHT, textWidth } from './diagramText';
+import { FONT_FAMILY, FONT_SIZE, LINE_HEIGHT, NUMERAL_FONT_SIZE, textWidth } from './diagramText';
 
 /** The padding in mm around the tight bounding box of the drawing. */
 const PADDING = 2;
@@ -12,12 +12,11 @@ const ARROW_LENGTH = 2;
 const ARROW_HALF_WIDTH = 0.8;
 /** The baseline offset from the vertical centre of a text line, for a cap height of about 0.7 em. */
 const BASELINE_OFFSET = FONT_SIZE * 0.35;
-const TEXT_ATTRS = `font-family="sans-serif" font-size="${FONT_SIZE}" fill="#000"`;
-const LINE_ATTRS = 'stroke="#000" stroke-width="0.4" fill="none"';
 
 /**
- * Writes the `FIG-N.svg` contract that the 3D engine also writes: user unit mm, the viewBox
- * the tight bounding box plus 2 mm, inline attributes only, no CSS and no external resource.
+ * Writes the `FIG-N.svg` contract of the 3D engine: user unit mm, the viewBox the tight
+ * bounding box plus 2 mm, a white background rect, all strokes in one group, the text after
+ * the group, inline attributes only, no CSS and no external resource.
  */
 export function writeDiagramSvg(diagram: PlacedDiagram): string {
 	const bounds = new Bounds();
@@ -25,8 +24,9 @@ export function writeDiagramSvg(diagram: PlacedDiagram): string {
 		bounds.add(node.x, node.y);
 		bounds.add(node.x + node.width, node.y + node.height);
 		if (node.numeralAt && node.numeral !== undefined) {
-			bounds.add(node.numeralAt.x + textWidth(String(node.numeral)), node.numeralAt.y + FONT_SIZE * 0.2);
-			bounds.add(node.numeralAt.x, node.numeralAt.y - FONT_SIZE * 0.8);
+			const half = textWidth(String(node.numeral), NUMERAL_FONT_SIZE) / 2;
+			bounds.add(node.numeralAt.x - half, node.numeralAt.y - NUMERAL_FONT_SIZE * 0.8);
+			bounds.add(node.numeralAt.x + half, node.numeralAt.y + NUMERAL_FONT_SIZE * 0.2);
 		}
 	}
 	for (const edge of diagram.edges) {
@@ -39,21 +39,24 @@ export function writeDiagramSvg(diagram: PlacedDiagram): string {
 	}
 	const dx = PADDING - bounds.minX;
 	const dy = PADDING - bounds.minY;
-	const width = bounds.maxX - bounds.minX + 2 * PADDING;
-	const height = bounds.maxY - bounds.minY + 2 * PADDING;
+	const width = num(bounds.maxX - bounds.minX + 2 * PADDING);
+	const height = num(bounds.maxY - bounds.minY + 2 * PADDING);
 	const p = (point: Point) => `${num(point.x + dx)} ${num(point.y + dy)}`;
+	const at = (point: Point) => `x="${num(point.x + dx)}" y="${num(point.y + dy)}"`;
 
 	const out: string[] = [
-		`<svg xmlns="http://www.w3.org/2000/svg" width="${num(width)}mm" height="${num(height)}mm" viewBox="0 0 ${num(width)} ${num(height)}" data-figure="${diagram.figure}" data-kind="${diagram.kind}">`,
+		`<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}" data-figure="FIG-${diagram.figure}" data-kind="${diagram.kind}">`,
+		`<rect width="${width}" height="${height}" fill="#fff"/>`,
+		'<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">',
 	];
 	for (const node of diagram.nodes) {
-		out.push(`<path class="edge" data-role="${node.kind}" data-node="${escape(node.id)}" d="${outline(node, p)}" ${LINE_ATTRS}/>`);
+		out.push(`<path class="edge" data-node="${escape(node.id)}" data-role="${node.kind}" stroke-width="0.4" d="${outline(node, p)}"/>`);
 	}
 	for (const edge of diagram.edges) {
 		if (edge.points.length < 2) {
 			continue;
 		}
-		out.push(`<path class="edge" data-role="connector" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" d="M ${edge.points.map(p).join(' L ')}" ${LINE_ATTRS}/>`);
+		out.push(`<path class="edge" data-role="connector" data-from="${escape(edge.from)}" data-to="${escape(edge.to)}" stroke-width="0.4" d="M${edge.points.map(p).join(' L')}"/>`);
 		if (edge.arrowEnd) {
 			out.push(arrowhead(edge.points[edge.points.length - 2], edge.points[edge.points.length - 1], p));
 		}
@@ -62,31 +65,32 @@ export function writeDiagramSvg(diagram: PlacedDiagram): string {
 		}
 	}
 	for (const node of diagram.nodes) {
+		if (node.numeral !== undefined && node.numeralAt) {
+			// The lead line runs straight from the numeral to the right side of its box.
+			const left = node.numeralAt.x - textWidth(String(node.numeral), NUMERAL_FONT_SIZE) / 2;
+			const leadY = node.numeralAt.y - NUMERAL_FONT_SIZE * 0.3;
+			out.push(`<path class="lead" data-numeral="${node.numeral}" data-node="${escape(node.id)}" stroke-width="0.2" d="M${p({ x: left - 0.5, y: leadY })} L${p({ x: node.x + node.width, y: leadY })}"/>`);
+		}
+	}
+	out.push('</g>');
+
+	const textAttrs = (size: number) => `font-size="${size}" font-family="${FONT_FAMILY}" text-anchor="middle" fill="#000"`;
+	for (const node of diagram.nodes) {
 		const cx = node.x + node.width / 2;
 		const top = node.y + node.height / 2 - node.lines.length * LINE_HEIGHT / 2;
 		node.lines.forEach((line, index) => {
-			const at = p({ x: cx, y: top + LINE_HEIGHT * (index + 0.5) + BASELINE_OFFSET });
-			const [x, y] = at.split(' ');
-			out.push(`<text class="label" data-node="${escape(node.id)}" x="${x}" y="${y}" text-anchor="middle" ${TEXT_ATTRS}>${escape(line)}</text>`);
+			out.push(`<text class="label" data-node="${escape(node.id)}" ${at({ x: cx, y: top + LINE_HEIGHT * (index + 0.5) + BASELINE_OFFSET })} ${textAttrs(FONT_SIZE)}>${escape(line)}</text>`);
 		});
 	}
 	for (const edge of diagram.edges) {
 		if (edge.labelAt && edge.label !== undefined) {
-			const [x, y] = p({ x: edge.labelAt.x, y: edge.labelAt.y + BASELINE_OFFSET }).split(' ');
-			out.push(`<text class="label" data-edge="${escape(edge.id)}" x="${x}" y="${y}" text-anchor="middle" ${TEXT_ATTRS}>${escape(edge.label)}</text>`);
+			out.push(`<text class="label" data-edge="${escape(edge.id)}" ${at({ x: edge.labelAt.x, y: edge.labelAt.y + BASELINE_OFFSET })} ${textAttrs(FONT_SIZE)}>${escape(edge.label)}</text>`);
 		}
 	}
 	for (const node of diagram.nodes) {
-		if (node.numeral === undefined || !node.numeralAt) {
-			continue;
+		if (node.numeral !== undefined && node.numeralAt) {
+			out.push(`<text class="numeral" data-numeral="${node.numeral}" data-node="${escape(node.id)}" ${at(node.numeralAt)} ${textAttrs(NUMERAL_FONT_SIZE)}>${node.numeral}</text>`);
 		}
-		const [x, y] = p(node.numeralAt).split(' ');
-		out.push(`<text class="numeral" data-numeral="${node.numeral}" x="${x}" y="${y}" ${TEXT_ATTRS}>${node.numeral}</text>`);
-		// The lead line runs straight from the numeral to the right side of its box.
-		const leadY = node.numeralAt.y - FONT_SIZE * 0.3;
-		const [x1, y1] = p({ x: node.numeralAt.x - 0.5, y: leadY }).split(' ');
-		const [x2, y2] = p({ x: node.x + node.width, y: leadY }).split(' ');
-		out.push(`<line class="lead" data-numeral="${node.numeral}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#000" stroke-width="0.2"/>`);
 	}
 	out.push('</svg>');
 	return out.join('\n') + '\n';
@@ -95,13 +99,13 @@ export function writeDiagramSvg(diagram: PlacedDiagram): string {
 function outline(node: PlacedNode, p: (point: Point) => string): string {
 	const { x, y, width: w, height: h } = node;
 	if (node.kind === 'decision') {
-		return `M ${p({ x: x + w / 2, y })} L ${p({ x: x + w, y: y + h / 2 })} L ${p({ x: x + w / 2, y: y + h })} L ${p({ x, y: y + h / 2 })} Z`;
+		return `M${p({ x: x + w / 2, y })} L${p({ x: x + w, y: y + h / 2 })} L${p({ x: x + w / 2, y: y + h })} L${p({ x, y: y + h / 2 })} Z`;
 	}
 	if (node.kind === 'terminal') {
 		const r = num(h / 2);
-		return `M ${p({ x: x + h / 2, y })} L ${p({ x: x + w - h / 2, y })} A ${r} ${r} 0 0 1 ${p({ x: x + w - h / 2, y: y + h })} L ${p({ x: x + h / 2, y: y + h })} A ${r} ${r} 0 0 1 ${p({ x: x + h / 2, y })} Z`;
+		return `M${p({ x: x + h / 2, y })} L${p({ x: x + w - h / 2, y })} A${r} ${r} 0 0 1 ${p({ x: x + w - h / 2, y: y + h })} L${p({ x: x + h / 2, y: y + h })} A${r} ${r} 0 0 1 ${p({ x: x + h / 2, y })} Z`;
 	}
-	return `M ${p({ x, y })} L ${p({ x: x + w, y })} L ${p({ x: x + w, y: y + h })} L ${p({ x, y: y + h })} Z`;
+	return `M${p({ x, y })} L${p({ x: x + w, y })} L${p({ x: x + w, y: y + h })} L${p({ x, y: y + h })} Z`;
 }
 
 /** A filled arrowhead with its tip on `tip`, pointing away from `from`. */
@@ -112,7 +116,7 @@ function arrowhead(from: Point, tip: Point, p: (point: Point) => string): string
 	const base = { x: tip.x - ux * ARROW_LENGTH, y: tip.y - uy * ARROW_LENGTH };
 	const left = { x: base.x - uy * ARROW_HALF_WIDTH, y: base.y + ux * ARROW_HALF_WIDTH };
 	const right = { x: base.x + uy * ARROW_HALF_WIDTH, y: base.y - ux * ARROW_HALF_WIDTH };
-	return `<path class="arrow" d="M ${p(tip)} L ${p(left)} L ${p(right)} Z" fill="#000" stroke="none"/>`;
+	return `<path class="arrow" fill="#000" stroke-width="0.2" d="M${p(tip)} L${p(left)} L${p(right)} Z"/>`;
 }
 
 /** A number in mm with at most two decimals, never `-0`. */

@@ -16,10 +16,9 @@ const tabletClaim = '1. A method of producing a coated tablet, comprising the st
 
 const fiveSteps: DiagramStep[] = stepsFromMethodClaim(windTurbineClaim);
 
-/** The SVG with the Findings appended as an XML comment, so one file snapshot holds both. */
+/** The rule ids of the Findings as a leading XML comment, then the SVG: the snapshot form of the 3D engine. */
 function snapshotText(result: DiagramResult): string {
-	const findings = result.findings.map(finding => `${finding.severity} ${finding.rule}: ${finding.message}`).join('\n');
-	return `${result.svg ?? ''}<!-- findings:\n${findings || '(none)'}\n-->\n`;
+	return `<!-- findings: ${JSON.stringify(result.findings.map(finding => finding.rule))} -->\n${result.svg ?? ''}`;
 }
 
 describe('stepsFromMethodClaim', () => {
@@ -120,13 +119,16 @@ describe('drawBlockDiagram', () => {
 describe('checkDiagramSvg', () => {
 	it('names the faults of a bad US diagram', () => {
 		const svg = [
-			'<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="40mm" viewBox="0 0 80 40" data-figure="1" data-kind="flowchart">',
-			'<path class="edge" data-role="connector" data-from="s1" data-to="s2" d="M 40 2 L 40 38" stroke="#000" stroke-width="0.4" fill="none"/>',
-			'<text class="label" data-node="s1" x="20" y="10" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Receiving the vibration data from sensor</text>',
-			'<text class="label" data-node="s2" x="22" y="11" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Alert</text>',
-			'<text class="numeral" data-numeral="2" x="42" y="30" font-family="sans-serif" font-size="3.2" fill="#000">2</text>',
-			'<line class="lead" data-numeral="2" x1="41.5" y1="29" x2="30" y2="29" stroke="#000" stroke-width="0.2"/>',
-			'<text class="numeral" data-numeral="12" x="60" y="30" font-family="sans-serif" font-size="3.2" fill="#000">12</text>',
+			'<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="40mm" viewBox="0 0 80 40" data-figure="FIG-1" data-kind="flowchart">',
+			'<rect width="80" height="40" fill="#fff"/>',
+			'<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">',
+			'<path class="edge" data-role="connector" data-from="s1" data-to="s2" stroke-width="0.4" d="M40 2 L40 38"/>',
+			'<path class="lead" data-numeral="2" stroke-width="0.2" d="M41.5 29 L30 29"/>',
+			'</g>',
+			'<text class="label" data-node="s1" x="20" y="10" font-size="3.5" font-family="sans-serif" text-anchor="middle" fill="#000">Receiving the vibration data from sensor</text>',
+			'<text class="label" data-node="s2" x="22" y="11" font-size="3.5" font-family="sans-serif" text-anchor="middle" fill="#000">Alert</text>',
+			'<text class="numeral" data-numeral="2" x="43" y="30" font-size="4.5" font-family="sans-serif" text-anchor="middle" fill="#000">2</text>',
+			'<text class="numeral" data-numeral="12" x="60" y="30" font-size="4.5" font-family="sans-serif" text-anchor="middle" fill="#000">12</text>',
 			'</svg>',
 		].join('\n');
 		expect(checkDiagramSvg(svg, { office: 'US', figure: 1, numerals: [2, 4] }).map(finding => finding.rule)).toEqual([

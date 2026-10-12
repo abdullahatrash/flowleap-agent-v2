@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import ElkConstructor, { type ELK, type ElkExtendedEdge, type ElkNode, type ElkPort, type LayoutOptions } from 'elkjs/lib/elk.bundled.js';
-import { CHAR_WIDTH, FONT_SIZE, LINE_HEIGHT, textWidth } from './diagramText';
+import { CHAR_WIDTH, FONT_SIZE, LINE_HEIGHT, NUMERAL_FONT_SIZE, textWidth } from './diagramText';
 
 /** The shape of a diagram node. */
 export type DiagramNodeKind = 'process' | 'decision' | 'terminal' | 'block';
@@ -47,7 +47,7 @@ export interface Point {
 export interface PlacedNode extends DiagramNode {
 	readonly x: number;
 	readonly y: number;
-	/** The baseline start of the numeral, when the node has one. */
+	/** The baseline middle of the numeral (`text-anchor="middle"`), when the node has one. */
 	readonly numeralAt?: Point;
 }
 
@@ -98,8 +98,8 @@ export async function layoutDiagram(graph: DiagramGraph): Promise<PlacedDiagram>
 		const labels = node.numeral === undefined ? undefined : [{
 			id: `${node.id}.numeral`,
 			text: String(node.numeral),
-			width: textWidth(String(node.numeral)),
-			height: FONT_SIZE,
+			width: textWidth(String(node.numeral), NUMERAL_FONT_SIZE),
+			height: NUMERAL_FONT_SIZE,
 			layoutOptions: { 'elk.nodeLabels.placement': 'OUTSIDE V_CENTER H_RIGHT' },
 		}];
 		if (node.kind !== 'decision') {
@@ -154,9 +154,10 @@ export async function layoutDiagram(graph: DiagramGraph): Promise<PlacedDiagram>
 			const x = child?.x ?? 0;
 			const y = child?.y ?? 0;
 			const label = child?.labels?.[0];
+			const numeralWidth = textWidth(String(node.numeral), NUMERAL_FONT_SIZE);
 			const numeralAt = node.numeral === undefined ? undefined : {
-				x: x + (label?.x ?? node.width + NUMERAL_GAP),
-				y: y + (label?.y ?? (node.height - FONT_SIZE) / 2) + FONT_SIZE * 0.8,
+				x: x + (label?.x ?? node.width + NUMERAL_GAP) + numeralWidth / 2,
+				y: y + (label?.y ?? (node.height - NUMERAL_FONT_SIZE) / 2) + NUMERAL_FONT_SIZE * 0.8,
 			};
 			return { ...node, x, y, numeralAt };
 		}),

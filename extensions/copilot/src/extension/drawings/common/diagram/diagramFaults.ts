@@ -45,9 +45,9 @@ export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DraftFin
 	const texts = [...svg.matchAll(/<text (?<attrs>[^>]*)>(?<content>[^<]*)<\/text>/g)].map(match => toText(match.groups?.attrs ?? '', match.groups?.content ?? ''));
 	const labels = texts.filter(text => text.attrs.get('class') === 'label');
 	const numerals = texts.filter(text => text.attrs.get('class') === 'numeral');
-	const leads = [...svg.matchAll(/<line (?<attrs>[^>]*)\/>/g)].map(match => parseAttrs(match.groups?.attrs ?? '')).filter(attrs => attrs.get('class') === 'lead');
-	const connectors = [...svg.matchAll(/<path (?<attrs>[^>]*)\/>/g)]
-		.map(match => parseAttrs(match.groups?.attrs ?? ''))
+	const paths = [...svg.matchAll(/<path (?<attrs>[^>]*)\/>/g)].map(match => parseAttrs(match.groups?.attrs ?? ''));
+	const leads = paths.filter(attrs => attrs.get('class') === 'lead');
+	const connectors = paths
 		.filter(attrs => attrs.get('data-role') === 'connector')
 		.flatMap(attrs => segmentsOf(attrs.get('d') ?? ''));
 
@@ -91,9 +91,9 @@ export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DraftFin
 			findings.push({ severity: 'Error', rule: 'lead-line', file, message: `Numeral ${numeral} has no lead line. A lead line connects each reference character to its item (37 CFR 1.84(q)).` });
 			continue;
 		}
-		const leadSegment = { x1: num(lead, 'x1'), y1: num(lead, 'y1'), x2: num(lead, 'x2'), y2: num(lead, 'y2') };
+		const leadSegments = segmentsOf(lead.get('d') ?? '');
 		const text = numerals.find(candidate => Number(candidate.attrs.get('data-numeral')) === numeral);
-		if (connectors.some(segment => crosses(segment, leadSegment) || (text && segmentInBox(segment, text.box)))) {
+		if (connectors.some(segment => leadSegments.some(leadSegment => crosses(segment, leadSegment)) || (text && segmentInBox(segment, text.box)))) {
 			findings.push({ severity: 'Error', rule: 'lead-crosses-edge', file, message: `Numeral ${numeral} or its lead line touches a connector. Lead lines must not cross each other or other lines (37 CFR 1.84(q)).` });
 		}
 	}
@@ -111,11 +111,12 @@ function num(attrs: ReadonlyMap<string, string>, name: string): number {
 function toText(attrSource: string, raw: string): SvgText {
 	const attrs = parseAttrs(attrSource);
 	const content = raw.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-	const width = textWidth(content);
+	const size = Number(attrs.get('font-size') ?? FONT_SIZE);
+	const width = textWidth(content, size);
 	const x = num(attrs, 'x');
 	const y = num(attrs, 'y');
 	const left = attrs.get('text-anchor') === 'middle' ? x - width / 2 : x;
-	return { attrs, content, box: { left, right: left + width, top: y - FONT_SIZE * 0.8, bottom: y + FONT_SIZE * 0.2 } };
+	return { attrs, content, box: { left, right: left + width, top: y - size * 0.8, bottom: y + size * 0.2 } };
 }
 
 /** The straight segments of an `M x y L x y ...` path. */
