@@ -5,6 +5,7 @@ assets/walkthroughs/**
 !dist/extension.js
 !dist/extension.js.LICENSE.txt
 !dist/*.wasm
+!dist/resvg.wasm.LICENSE.txt
 !dist/*.json
 !dist/*.bpe
 !dist/*.tiktoken
