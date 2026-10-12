@@ -6,7 +6,8 @@
 /**
  * The Drafting Checklist (`checklist.md`) of a matter: six numbered steps with the numbers and
  * names of the application-drafting skill steps (1 Intake, 2 Claims, 3 Draft, 4 Validate,
- * 5 Inventor Questions, 6 Export), each `[x]` only when the files say so, each open step with the
+ * 5 Inventor Questions, 6 Export), each `[x]` only when the files say so; step 3 has two lines, the
+ * Draft Outline for the Approved Claims and then the draft (PRD 0022); each open step with the
  * file, the line and the text to write, then the notes that never block (figures, required
  * sections, style exemplars), and one "Next step for you:" line. Code writes it from the files
  * after every drafting tool call; the model never writes it.
@@ -43,6 +44,10 @@ export interface DraftingChecklistFiles {
 	readonly claims?: string;
 	/** True when `claims.md` is approved but its body changed after the approval (`approvedHash`). */
 	readonly claimsChangedSinceApproval?: boolean;
+	/** `draft-outline.md`. */
+	readonly draftOutline?: string;
+	/** True when `draft-outline.md` was made for other claims than the current `claims.md` (its `claims` hash). */
+	readonly outlineStale?: boolean;
 	readonly draft?: string;
 	/** True when the saved draft was generated against other claims than the current `claims.md`. */
 	readonly draftStale?: boolean;
@@ -125,7 +130,8 @@ function gateStep(number: number, title: string, file: string, text: string, fla
 		: step(number, title, detail ?? `${file} has no \`${flag}: true\``, [`→ Review ${file}, then on line ${line} write:   ${flag}: true`]);
 }
 
-const openSteps = (steps: readonly DraftingChecklistStep[]) => steps.filter(entry => !entry.done).map(entry => entry.step);
+/** The numbers of the open steps, each once: step 3 has two lines. */
+const openSteps = (steps: readonly DraftingChecklistStep[]) => [...new Set(steps.filter(entry => !entry.done).map(entry => entry.step))];
 
 /** Reads the checklist of a matter from its files. */
 export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingChecklist {
@@ -156,11 +162,19 @@ export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingCh
 		steps.push(done(claimsStep, 'Claims approved', `${DRAFTING_FILE_NAMES.claims} has \`approved: true\``));
 	}
 
+	steps.push(outlineStep(input, openSteps(steps)));
+	const outlineOpen = !steps.at(-1)?.done;
+
+	// The draft line waits for the earlier steps; when only the outline is open, for the outline line above it.
+	const draftBlockers = openSteps(steps.slice(0, -1));
 	const draftTitle = 'Write the draft';
+	const draftStepOf = (detail: string, action: string) => draftBlockers.length || !outlineOpen
+		? step(draftStep, draftTitle, detail, [action], draftBlockers)
+		: { ...step(draftStep, draftTitle, '', [], [draftStep]), detail: `blocked by the outline (${DRAFTING_FILE_NAMES.draftOutline})` };
 	if (input.draft === undefined) {
-		steps.push(step(draftStep, draftTitle, `${DRAFTING_FILE_NAMES.draft} does not exist`, ['→ Tell the agent: "Draft the application"'], openSteps(steps)));
+		steps.push(draftStepOf(`${DRAFTING_FILE_NAMES.draft} does not exist`, '→ Tell the agent: "Draft the application"'));
 	} else if (input.draftStale) {
-		steps.push(step(draftStep, draftTitle, `${DRAFTING_FILE_NAMES.draft} was written for other claims than ${DRAFTING_FILE_NAMES.claims}`, ['→ Tell the agent: "Draft the application again"'], openSteps(steps)));
+		steps.push(draftStepOf(`${DRAFTING_FILE_NAMES.draft} was written for other claims than ${DRAFTING_FILE_NAMES.claims}`, '→ Tell the agent: "Draft the application again"'));
 	} else {
 		steps.push(done(draftStep, 'Draft written', DRAFTING_FILE_NAMES.draft));
 	}
@@ -193,6 +207,29 @@ export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingCh
 		: step(exportStep, 'Export to Word', 'ready', ['→ Tell the agent: "Export to Word"'], blockers));
 
 	return { matter: input.matter, ...(office ? { office } : {}), steps, notes: checklistNotes(input, office) };
+}
+
+/**
+ * The first line of step 3: the Draft Outline exists and was made for the current claims, which
+ * are approved. It waits for the earlier steps, also when an outline exists: without Approved
+ * Claims no outline is written for them. The draft save refuses without it (PRD 0022 decision 1),
+ * so the draft line after it waits for it.
+ */
+function outlineStep(input: DraftingChecklistFiles, blockedBy: readonly number[]): DraftingChecklistStep {
+	const number = CHECKLIST_STEP.draft;
+	const file = DRAFTING_FILE_NAMES.draftOutline;
+	const title = 'Write the outline';
+	const plan = (request: string) => `→ Tell the agent: "${request}" (it saves ${file} with write_patent_results, template draft-outline)`;
+	if (blockedBy.length) {
+		return step(number, title, '', [], blockedBy);
+	}
+	if (input.draftOutline === undefined) {
+		return step(number, title, `${file} does not exist`, [plan('Plan the draft')]);
+	}
+	if (input.outlineStale) {
+		return step(number, title, `${file} was made for other claims than ${DRAFTING_FILE_NAMES.claims}`, [plan('Plan the draft again')]);
+	}
+	return done(number, 'Outline written for the approved claims', file);
 }
 
 /** Step 5: the Inventor Questions open, answered but not yet applied, or removed from the draft without an answer. */

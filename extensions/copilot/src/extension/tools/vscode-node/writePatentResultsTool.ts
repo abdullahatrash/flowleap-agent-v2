@@ -35,18 +35,29 @@ import { buildPatentReport, contentRequirementError, PatentReportTemplate } from
 import { extractFigures, figureProvenance, figureSentence, ftoProvenanceResult, renderFtoAppendix, renderLandscapeAppendix } from '../common/patentReportProvenance';
 import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
-import { matchDraftPath, resolveDraftingFolder } from '../common/drafting/folderContract';
+import { DRAFTING_FILE_NAMES, matchDraftingPath, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { saveDraftApplication } from './draftApplicationSave';
+import { saveDraftOutline } from './draftOutlineSave';
 import { DraftingWorkspace } from './draftingWorkspace';
+
+/** The templates that save a file of an Application Drafting matter, outside the report templates. */
+type DraftingTemplate = 'draft-application' | 'draft-outline';
+
+/** The file each drafting template saves, and the name of what it saves in a refusal. */
+const DRAFTING_TEMPLATES: Readonly<Record<DraftingTemplate, { readonly file: string; readonly label: string }>> = {
+	'draft-application': { file: DRAFTING_FILE_NAMES.draft, label: 'Draft' },
+	'draft-outline': { file: DRAFTING_FILE_NAMES.draftOutline, label: 'Draft Outline' },
+};
 
 interface IWritePatentResultsParams extends PatentCandidateReview {
 	filePath: string;
 	content: string;
 	/**
 	 * Optional report template. Omitted = free-form save of `content` unchanged. `draft-application`
-	 * saves a Draft Application with its snapshot and Working Record, outside the report templates.
+	 * saves a Draft Application with its snapshot and Working Record, and `draft-outline` a Draft
+	 * Outline bound to the Approved Claims, outside the report templates.
 	 */
-	template?: PatentReportTemplate | 'draft-application';
+	template?: PatentReportTemplate | DraftingTemplate;
 	/** Matter/case reference or the document's identifying number, when the user provided one. */
 	matter?: string;
 	/** The technology/product/portfolio the report is about, in a short phrase. */
@@ -208,8 +219,8 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		this.logService.trace('[WritePatentResultsTool] Invoking write patent results');
 
 		const { filePath, content, template } = options.input;
-		if (template === 'draft-application') {
-			return this.saveDraft(options.input);
+		if (template === 'draft-application' || template === 'draft-outline') {
+			return this.saveDraftingFile(options.input, template);
 		}
 
 		// prior-art-report and find-better-report always generate their body from structured coverage;
@@ -365,30 +376,34 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 	}
 
 	/**
-	 * The `draft-application` save: written as the model gave it, with its frontmatter on line 1,
-	 * never wrapped in a report template and never blocked by findings (ADR 0012).
+	 * The saves of an Application Drafting matter, never wrapped in a report template and never
+	 * blocked by findings (ADR 0012): `draft-application` writes the draft as the model gave it, with
+	 * its frontmatter on line 1; `draft-outline` writes the Draft Outline with the office and the
+	 * Approved Claims hash in its frontmatter (PRD 0022).
 	 */
-	private async saveDraft(input: IWritePatentResultsParams): Promise<LanguageModelToolResult> {
+	private async saveDraftingFile(input: IWritePatentResultsParams, template: DraftingTemplate): Promise<LanguageModelToolResult> {
+		const { file, label } = DRAFTING_TEMPLATES[template];
 		const folders = this.workspaceService.getWorkspaceFolders();
 		const uri = this.resolveWorkspacePath(input.filePath, folders);
 		const root = uri && folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(uri, folder));
-		const matter = uri && root ? matchDraftPath(extUriBiasedIgnorePathCase.relativePath(root, uri) ?? '') : undefined;
+		const matter = uri && root ? matchDraftingPath(extUriBiasedIgnorePathCase.relativePath(root, uri) ?? '', file) : undefined;
 		const folder = matter ? resolveDraftingFolder(matter) : undefined;
 		if (!uri || !root || !folder) {
-			return new LanguageModelToolResult([new LanguageModelTextPart('Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.')]);
+			return new LanguageModelToolResult([new LanguageModelTextPart(`${label} was not saved. The ${template} template saves to drafting/<matter>/${file} inside a workspace folder.`)]);
 		}
 		try {
-			const outcome = await saveDraftApplication(new DraftingWorkspace(root, folder, this.fileSystemService, this.instantiationService), input);
+			const workspace = new DraftingWorkspace(root, folder, this.fileSystemService, this.instantiationService);
+			const outcome = template === 'draft-application' ? await saveDraftApplication(workspace, input) : await saveDraftOutline(workspace, input.content);
 			if (!outcome.saved) {
-				return new LanguageModelToolResult([new LanguageModelTextPart(`Draft was not saved. ${outcome.reason}`)]);
+				return new LanguageModelToolResult([new LanguageModelTextPart(`${label} was not saved. ${outcome.reason}`)]);
 			}
 			// Not counted until the backend's closed template-kind set names it: the service skips a
 			// kind outside REPORTED_TEMPLATE_KINDS rather than lose the whole batch.
-			this.activationTelemetryService.recordReportSaved('draft-application');
+			this.activationTelemetryService.recordReportSaved(template);
 			try {
 				await vscode.commands.executeCommand('vscode.open', vscode.Uri.from(uri));
 			} catch (openError) {
-				this.logService.warn(`[WritePatentResultsTool] Wrote the draft but failed to open it: ${openError instanceof Error ? openError.message : String(openError)}`);
+				this.logService.warn(`[WritePatentResultsTool] Wrote the ${template} file but failed to open it: ${openError instanceof Error ? openError.message : String(openError)}`);
 			}
 			return new LanguageModelToolResult([new LanguageModelTextPart(outcome.message)]);
 		} catch (error) {

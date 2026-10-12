@@ -68,6 +68,8 @@ export interface DraftingFolder {
 	readonly featureList: string;
 	readonly figures: string;
 	readonly claims: string;
+	/** The Draft Outline: the plan the draft is written from (PRD 0022). */
+	readonly draftOutline: string;
 	readonly draft: string;
 	readonly generatedSnapshot: string;
 	readonly workingRecord: string;
@@ -98,6 +100,7 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 		featureList: `${folder}/${DRAFTING_FILE_NAMES.featureList}`,
 		figures: `${folder}/${DRAFTING_FILE_NAMES.figures}`,
 		claims: `${folder}/${DRAFTING_FILE_NAMES.claims}`,
+		draftOutline: `${folder}/${DRAFTING_FILE_NAMES.draftOutline}`,
 		draft: `${folder}/${DRAFTING_FILE_NAMES.draft}`,
 		generatedSnapshot: `${folder}/${DRAFTING_FILE_NAMES.generatedSnapshot}`,
 		workingRecord: `${folder}/${DRAFTING_FILE_NAMES.workingRecord}`,
@@ -115,12 +118,13 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 }
 
 /**
- * The matter of a workspace-relative Draft Application path (`drafting/<matter>/draft-application.md`),
- * or `undefined` for any other path and for a matter name {@link resolveDraftingFolder} refuses.
+ * The matter of a workspace-relative path to one drafting file of a matter
+ * (`drafting/<matter>/<file>`), or `undefined` for any other path and for a matter name
+ * {@link resolveDraftingFolder} refuses.
  */
-export function matchDraftPath(path: string): string | undefined {
-	const [top, matter, file, ...rest] = path.split('/');
-	if (top !== 'drafting' || file !== DRAFTING_FILE_NAMES.draft || rest.length || matter === undefined) {
+export function matchDraftingPath(path: string, file: string): string | undefined {
+	const [top, matter, name, ...rest] = path.split('/');
+	if (top !== 'drafting' || name !== file || rest.length || matter === undefined) {
 		return undefined;
 	}
 	return resolveDraftingFolder(matter)?.matter === matter ? matter : undefined;

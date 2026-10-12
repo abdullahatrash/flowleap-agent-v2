@@ -27,7 +27,8 @@ const refused = 'Drafting did not start.';
 /**
  * Starts an Application Drafting run (ADR 0012): reads the `confirmed` gate of `feature-list.md`
  * and the `approved` gate of `claims.md` from the files, never from the chat, and returns the
- * Feature List, the figures, the Approved Claims and up to five style exemplars as text. It
+ * Feature List, the figures, the Approved Claims, the Draft Outline when it was made for the
+ * Approved Claims (PRD 0022), and up to five style exemplars as text. It
  * records the hash of the approved claims in the Working Record; when `claims.md` changes later,
  * the drafting tools clear `approved` and refuse until the attorney approves again.
  */
@@ -76,11 +77,18 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		const figures = await workspace.read(folder.figures);
 		const claims = await workspace.read(folder.claims) ?? '';
 		const exemplars = await workspace.styleExemplars(uri => this.readPdf(uri));
+		const outline = await workspace.readOutline(approval.hash);
 		const body = (text: string) => parseDraftingFrontmatter(text).body.trim();
+		const saveOutline = `save it with write_patent_results, template draft-outline, to ${folder.draftOutline}`;
+		const outlineSection = !outline
+			? `No ${folder.draftOutline} yet. Plan first: write the Draft Outline for the Approved Claims and ${saveOutline}. The draft save refuses without it.`
+			: outline.stale
+				? `The Draft Outline is stale: ${outline.stale} Plan from the Approved Claims above and ${saveOutline} before drafting; the draft save refuses until then.`
+				: body(outline.text);
 
 		const sections = [
 			`Drafting started for matter "${folder.matter}". Office: ${office}. Gates read from the files: \`confirmed: true\` in ${folder.featureList}, \`approved: true\` in ${folder.claims}. The approved claims are recorded (SHA-256 ${approval.hash}) in ${folder.workingRecord}: when ${folder.claims} changes, the drafting tools set \`approved\` to \`false\` and refuse until the attorney approves again.`,
-			`Save the draft with write_patent_results, template draft-application, to ${folder.draft}; then call validate_draft. ${await workspace.checklistLine(false)}`,
+			`Save the Draft Outline with write_patent_results, template draft-outline, to ${folder.draftOutline}; then save the draft with template draft-application, to ${folder.draft}; then call validate_draft. ${await workspace.checklistLine(false)}`,
 			'',
 			`## Feature List (${folder.featureList})`,
 			'',
@@ -93,6 +101,10 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 			`## Approved Claims (${folder.claims})`,
 			'',
 			body(claims),
+			'',
+			`## Draft Outline (${folder.draftOutline})`,
+			'',
+			outlineSection,
 			'',
 			'## Style exemplars (style only, never a source)',
 			'',

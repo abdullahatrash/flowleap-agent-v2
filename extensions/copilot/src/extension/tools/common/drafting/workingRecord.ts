@@ -39,6 +39,12 @@ export const APPROVED_CLAIMS_HASH = 'Approved claims SHA-256';
 /** The hash of the claims the saved draft version was generated against. */
 export const VERSION_CLAIMS_HASH = 'Claims SHA-256 of this version';
 
+/**
+ * The hash of `draft-outline.md` (the whole file) at the draft save: the Draft Outline the saved
+ * draft was written from (PRD 0022).
+ */
+export const OUTLINE_HASH = 'Outline SHA-256';
+
 /** When a tool cleared `approved` because `claims.md` changed after approval. */
 export const APPROVAL_CLEARED = 'Approval cleared';
 
@@ -68,6 +74,8 @@ export interface DraftRecordHeader {
 	readonly savedAt: string;
 	readonly approvedClaimsHash?: string;
 	readonly versionClaimsHash?: string;
+	/** The hash of `draft-outline.md` at the save ({@link OUTLINE_HASH}). */
+	readonly outlineHash?: string;
 }
 
 function escapeRegExp(text: string): string {
@@ -233,6 +241,7 @@ export function renderDraftWorkingRecord(header: DraftRecordHeader, draft: strin
 		['Saved', header.savedAt],
 		[APPROVED_CLAIMS_HASH, header.approvedClaimsHash],
 		[VERSION_CLAIMS_HASH, header.versionClaimsHash],
+		[OUTLINE_HASH, header.outlineHash],
 	];
 	return [
 		emptyWorkingRecord(header.matter).trimEnd(),

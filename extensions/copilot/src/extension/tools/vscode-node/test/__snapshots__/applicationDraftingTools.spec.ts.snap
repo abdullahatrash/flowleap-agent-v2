@@ -9,6 +9,7 @@ Code writes this file from the files of this folder after every drafting tool ca
 - [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`
 - [ ] 2. Approve the claims: claims.md has no \`approved: true\`
       → Review claims.md, then on line 2 write:   approved: true
+- [ ] 3. Write the outline: blocked by step 2
 - [ ] 3. Write the draft: blocked by step 2
 - [ ] 4. Fix or waive the Errors: blocked by step 3
 - [ ] 5. Answer the Inventor Questions: blocked by step 3
@@ -28,6 +29,7 @@ Code writes this file from the files of this folder after every drafting tool ca
 
 - [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`
 - [x] 2. Claims approved: claims.md has \`approved: true\`
+- [x] 3. Outline written for the approved claims: draft-outline.md
 - [x] 3. Draft written: draft-application.md
 - [ ] 4. Fix or waive the Errors: not checked yet
       → Tell the agent: "Validate the draft"
@@ -115,6 +117,31 @@ Write the inventor's answer under each **Answer:**. Leave it empty, or write "No
 
 **Answer:**
 ",
+}
+`;
+
+exports[`draft-application save: Draft Outline precondition > editing the claims leaves the outline stale: start says so, the save refuses until the outline is saved again 1`] = `
+{
+  "refused": "Draft was not saved. draft-outline.md was made from claims with SHA-256 <sha>…, but the Approved Claims have SHA-256 <sha>…. Write the Draft Outline again for the current Approved Claims. Save it with write_patent_results, template draft-outline, to drafting/hinge/draft-outline.md; then save the draft. Open in drafting/hinge/checklist.md: step 3 (Write the outline), step 4 (Fix or waive the Errors).",
+  "replanned": "Saved drafting/hinge/draft-outline.md (office US, 2 Outline Item(s), made for the Approved Claims with SHA-256 <sha>). Tell the attorney the outline is in the folder and may be edited before drafting; it is not a gate. The draft save refuses while the outline is missing or made for other claims.",
+  "saved": "Saved drafting/hinge/draft-application.md (version 2, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.",
+  "startOutlineSection": "## Draft Outline (drafting/hinge/draft-outline.md)
+
+The Draft Outline is stale: draft-outline.md was made from claims with SHA-256 <sha>…, but the Approved Claims have SHA-256 <sha>…. Write the Draft Outline again for the current Approved Claims. Plan from the Approved Claims above and save it with write_patent_results, template draft-outline, to drafting/hinge/draft-outline.md before drafting; the draft save refuses until then.
+
+",
+}
+`;
+
+exports[`draft-application save: Draft Outline precondition > refuses while draft-outline.md is missing or made for other claims; saves with a bound outline and records its SHA-256 1`] = `
+{
+  "missing": "Draft was not saved. drafting/hinge/draft-outline.md does not exist. Save the Draft Outline for the Approved Claims with write_patent_results, template draft-outline, to drafting/hinge/draft-outline.md first; then save the draft. Open in drafting/hinge/checklist.md: step 3 (Write the outline).",
+  "recordOutlineHash": [
+    "- **Outline SHA-256:** <sha of draft-outline.md>",
+  ],
+  "resaved": "Saved drafting/hinge/draft-application.md (version 1, office US). Generated snapshot: drafting/hinge/draft-application.generated.md (kept from the first save of version 1). Working record: drafting/hinge/draft-application.working-record.md.",
+  "saved": "Saved drafting/hinge/draft-application.md (version 1, office US). Generated snapshot: drafting/hinge/draft-application.generated.md. Working record: drafting/hinge/draft-application.working-record.md.",
+  "stale": "Draft was not saved. draft-outline.md was made from claims with SHA-256 <sha>…, but the Approved Claims have SHA-256 <sha>…. Write the Draft Outline again for the current Approved Claims. Save it with write_patent_results, template draft-outline, to drafting/hinge/draft-outline.md; then save the draft. Open in drafting/hinge/checklist.md: step 3 (Write the outline).",
 }
 `;
 
@@ -215,7 +242,7 @@ Companion to [draft-application.md](draft-application.md): how this Draft Applic
 - **Approved claims SHA-256:** <sha>
 ",
   "result": "Drafting started for matter "hinge". Office: US. Gates read from the files: \`confirmed: true\` in drafting/hinge/feature-list.md, \`approved: true\` in drafting/hinge/claims.md. The approved claims are recorded (SHA-256 <sha>) in drafting/hinge/draft-application.working-record.md: when drafting/hinge/claims.md changes, the drafting tools set \`approved\` to \`false\` and refuse until the attorney approves again.
-Save the draft with write_patent_results, template draft-application, to drafting/hinge/draft-application.md; then call validate_draft. Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the draft).
+Save the Draft Outline with write_patent_results, template draft-outline, to drafting/hinge/draft-outline.md; then save the draft with template draft-application, to drafting/hinge/draft-application.md; then call validate_draft. Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the draft).
 
 ## Feature List (drafting/hinge/feature-list.md)
 
@@ -234,6 +261,15 @@ Save the draft with write_patent_results, template draft-application, to draftin
 
 1. A hinge comprising a housing and a lever.
 2. The hinge of claim 1, wherein the lever is steel.
+
+## Draft Outline (drafting/hinge/draft-outline.md)
+
+# Draft Outline
+
+| Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question |
+|------|---------|------|--------|-------------|---------|---------|----------|
+| O1 | BACKGROUND | Template |  |  |  | no |  |
+| O2 | DETAILED DESCRIPTION | Technical | 1, 2 | a hinge, a housing, a lever | F1, FIG. 1 | yes |  |
 
 ## Style exemplars (style only, never a source)
 
@@ -301,6 +337,18 @@ Wrote drafting/hinge/checklist.md: the next step for the attorney is step 6 (Exp
 }
 `;
 
+exports[`validate_draft Draft Outline rules > writes the outline rules to findings.md with the others; without draft-outline.md, one outline-claims Error 1`] = `
+{
+  "withOutline": [
+    "- \`item-coverage\` (draft-outline.md, line 10): Technical item O2 (DETAILED DESCRIPTION; "a hinge", "a housing", "a lever") is realised by no paragraph of draft-application.md: no source marker names item:O2.",
+  ],
+  "withoutOutline": [
+    "- \`outline-claims\` (draft-outline.md): draft-outline.md does not exist: there is no Draft Outline for the Approved Claims. Save the outline with write_patent_results, template draft-outline.",
+  ],
+  "withoutOutlineCounts": "Errors: 1 (0 waived). Inventor Questions: 0 (0 waived). Notes: 0. Advisory: 0.",
+}
+`;
+
 exports[`write_patent_results draft-application template > starts the next version when the claims changed and were approved again, keeping the previous draft and record 1`] = `
 {
   "cleared": "Drafting did not start. drafting/hinge/claims.md changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Fix or waive the Errors).",
@@ -339,6 +387,7 @@ Companion to [draft-application.md](draft-application.md): how this Draft Applic
 - **Saved:** <time>
 - **Approved claims SHA-256:** <sha>
 - **Claims SHA-256 of this version:** <sha>
+- **Outline SHA-256:** <sha>
 
 ## Source map
 
@@ -361,5 +410,28 @@ Inventor Questions: 1 in the draft, 1 new; the answer slots are in drafting/hing
 Findings are not checked at save. Call validate_draft next.
 Wrote drafting/hinge/checklist.md: the next step for the attorney is step 4 (Fix or waive the Errors).",
   "snapshotIsDraft": true,
+}
+`;
+
+exports[`write_patent_results draft-outline template > refuses while the claims are not approved, when the content has no Outline table, and outside the drafting folder contract 1`] = `
+[
+  "Draft Outline was not saved. \`approved\` in drafting/hinge/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).",
+  "Draft Outline was not saved. The content has no Outline Item to save: line 4: draft-outline.md has no Outline table with the columns Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question. Write the plan as one table, one row per Outline Item, and save it again. Open in drafting/hinge/checklist.md: step 3 (Write the outline).",
+  "Draft Outline was not saved. The draft-outline template saves to drafting/<matter>/draft-outline.md inside a workspace folder.",
+]
+`;
+
+exports[`write_patent_results draft-outline template > writes draft-outline.md with the office of the Feature List and the Approved Claims hash, and reports the outline findings without blocking the save 1`] = `
+{
+  "boundToClaims": true,
+  "frontmatter": "
+office: US
+claims: <sha>
+author: agent
+",
+  "result": "Saved drafting/hinge/draft-outline.md (office US, 3 Outline Item(s), made for the Approved Claims with SHA-256 <sha>). Tell the attorney the outline is in the folder and may be edited before drafting; it is not a gate. The draft save refuses while the outline is missing or made for other claims.
+Outline check: 1 Error(s). Fix them in the outline and save it again before drafting:
+- \`outline-sources\` (draft-outline.md, line 12): Technical item O3 names no source and no question. Name a Feature List row, a disclosure span, a figure or an answered Inventor Question, or write the open question.
+Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the draft).",
 }
 `;

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { DRAFTING_STYLE_FOLDER, matchDraftPath, resolveDraftingFolder } from '../drafting/folderContract';
+import { DRAFTING_STYLE_FOLDER, matchDraftingPath, resolveDraftingFolder } from '../drafting/folderContract';
 
 describe('Application Drafting folder contract', () => {
 
@@ -17,6 +17,7 @@ describe('Application Drafting folder contract', () => {
 				featureList: 'drafting/acme-hinge/feature-list.md',
 				figures: 'drafting/acme-hinge/figures.md',
 				claims: 'drafting/acme-hinge/claims.md',
+				draftOutline: 'drafting/acme-hinge/draft-outline.md',
 				draft: 'drafting/acme-hinge/draft-application.md',
 				generatedSnapshot: 'drafting/acme-hinge/draft-application.generated.md',
 				workingRecord: 'drafting/acme-hinge/draft-application.working-record.md',
@@ -41,8 +42,14 @@ describe('Application Drafting folder contract', () => {
 	});
 
 	it('reads the matter of a draft path, and nothing from any other path', () => {
-		expect(['drafting/hinge/draft-application.md', 'drafting/hinge/claims.md', 'outputs/draft-application.md', 'drafting/a/b/draft-application.md', 'drafting/.hidden/draft-application.md'].map(matchDraftPath)).toEqual([
+		expect(['drafting/hinge/draft-application.md', 'drafting/hinge/claims.md', 'outputs/draft-application.md', 'drafting/a/b/draft-application.md', 'drafting/.hidden/draft-application.md'].map(path => matchDraftingPath(path, 'draft-application.md'))).toEqual([
 			'hinge', undefined, undefined, undefined, undefined,
+		]);
+	});
+
+	it('reads the matter of a path to a named drafting file, and nothing from another file of the folder', () => {
+		expect(['drafting/hinge/draft-outline.md', 'drafting/hinge/draft-application.md', 'drafting/../draft-outline.md'].map(path => matchDraftingPath(path, 'draft-outline.md'))).toEqual([
+			'hinge', undefined, undefined,
 		]);
 	});
 });
