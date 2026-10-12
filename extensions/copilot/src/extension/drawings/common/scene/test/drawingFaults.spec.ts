@@ -26,7 +26,7 @@ function numeral(text: string, x: number, y: number, options: { fontSize?: numbe
 }
 
 function svg(...elements: string[]): string {
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="80mm" viewBox="0 0 100 80" data-figure="1" data-kind="3d">\n${elements.join('\n')}\n</svg>\n`;
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="80mm" viewBox="0 0 100 80" data-figure="FIG-1" data-kind="3d">\n${elements.join('\n')}\n</svg>\n`;
 }
 
 /** Numeral 10 right of the square, its lead line from beside it to the right edge. */

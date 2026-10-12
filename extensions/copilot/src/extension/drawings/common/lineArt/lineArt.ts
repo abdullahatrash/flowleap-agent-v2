@@ -16,12 +16,8 @@ export const HATCH_SPACING = 2;
 /** Default size the drawing is fitted into, in sheet millimetres, when the scene sets no scale. */
 const FIT_WIDTH = 120;
 const FIT_HEIGHT = 150;
-/** Working space around the drawing for the numeral rings, in sheet millimetres. */
+/** Space around the drawing for numerals, in sheet millimetres. */
 const MARGIN = 24;
-/** Padding around the tight bounding box of the written Figure, in millimetres. */
-const PADDING = 2;
-/** Distance from the numeral baseline to its underline, in millimetres. */
-const UNDERLINE_OFFSET = 0.6;
 
 /**
  * One part as the kernel projected it, in model millimetres on the drawing plane (y down).
@@ -106,7 +102,7 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 	projected.parts.filter(part => part.cutFaces.length > 0).forEach((part, index) => {
 		const boundary = toSegments(part.cutFaces.map(loop => loop.map(toSheet)));
 		for (const line of hatch(boundary, index % 2 === 0 ? 45 : 135, HATCH_SPACING)) {
-			hatching.push({ part: part.id, line });
+			hatching.push({ part: part.id, line: [[round(line[0][0]), round(line[0][1])], [round(line[1][0]), round(line[1][1])]] });
 		}
 	});
 	const drawing: Rect = { x: MARGIN, y: MARGIN, width: spanX * scale, height: spanY * scale };
@@ -114,44 +110,13 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 		.filter((port): port is ProjectedPort & { anchor: Vec2 } => port.anchor !== undefined)
 		.map(port => ({ numeral: port.numeral, part: port.part, surface: port.surface, anchor: toSheet(port.anchor) }));
 	const obstacles = [...toSegments(edges.map(edge => edge.line)), ...toSegments(hidden.map(edge => edge.line)), ...hatching.map(item => item.line)];
-	const placed = placeNumerals(requests, obstacles, drawing);
-	return shiftToPadding({ figure: projected.figure, width: 0, height: 0, edges, hidden, hatching, numerals: placed, fontSize: NUMERAL_FONT_SIZE });
-}
-
-/**
- * Moves everything so the tight bounding box of the drawing, the lead lines and the numerals sits
- * `PADDING` from the origin, and sets the size to that box plus the padding on every side.
- */
-function shiftToPadding(layout: FigureLayout): FigureLayout {
-	const points: Vec2[] = [
-		...layout.edges.flatMap(edge => edge.line),
-		...layout.hidden.flatMap(edge => edge.line),
-		...layout.hatching.flatMap(item => item.line),
-		...layout.numerals.flatMap(numeral => [
-			[numeral.box.x, numeral.box.y] as Vec2,
-			[numeral.box.x + numeral.box.width, numeral.box.y + numeral.box.height + UNDERLINE_OFFSET] as Vec2,
-			...(numeral.lead ?? []),
-		]),
-	];
-	const minX = points.length ? Math.min(...points.map(point => point[0])) : 0;
-	const minY = points.length ? Math.min(...points.map(point => point[1])) : 0;
-	const maxX = points.length ? Math.max(...points.map(point => point[0])) : 0;
-	const maxY = points.length ? Math.max(...points.map(point => point[1])) : 0;
-	const move = (point: Vec2): Vec2 => [round(point[0] - minX + PADDING), round(point[1] - minY + PADDING)];
-	const moveLines = (lines: FigureLayout['edges']) => lines.map(item => ({ part: item.part, line: item.line.map(move) }));
-	return {
-		...layout,
-		width: round(maxX - minX + 2 * PADDING),
-		height: round(maxY - minY + 2 * PADDING),
-		edges: moveLines(layout.edges),
-		hidden: moveLines(layout.hidden),
-		hatching: layout.hatching.map(item => ({ part: item.part, line: [move(item.line[0]), move(item.line[1])] as Segment })),
-		numerals: layout.numerals.map(numeral => {
-			const [x, y] = move([numeral.x, numeral.y]);
-			const [boxX, boxY] = move([numeral.box.x, numeral.box.y]);
-			return { ...numeral, x, y, box: { ...numeral.box, x: boxX, y: boxY }, lead: numeral.lead && [move(numeral.lead[0]), move(numeral.lead[1])] as Segment };
-		}),
-	};
+	const numerals = placeNumerals(requests, obstacles, drawing).map(numeral => ({
+		...numeral,
+		x: round(numeral.x),
+		y: round(numeral.y),
+		lead: numeral.lead && [[round(numeral.lead[0][0]), round(numeral.lead[0][1])], [round(numeral.lead[1][0]), round(numeral.lead[1][1])]] as Segment,
+	}));
+	return { figure: projected.figure, width: round(spanX * scale + 2 * MARGIN), height: round(spanY * scale + 2 * MARGIN), edges, hidden, hatching, numerals, fontSize: NUMERAL_FONT_SIZE };
 }
 
 function pathData(line: readonly Vec2[]): string {
@@ -162,48 +127,38 @@ function escapeXml(text: string): string {
 	return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** The number part of a Figure id: `FIG-3` gives `3`. */
-function figureNumber(figure: string): string {
-	return figure.replace(/^FIG-/, '');
-}
-
 /**
- * Writes `FIG-N.svg` (contract shared with the sheet and diagram slices): user unit mm, black line
- * art on white with no background, no CSS and every attribute inline. Visible edges 0.4 mm,
- * dashed hidden edges, lead lines, underlines and hatching 0.2 mm. Numerals use a 4.5 mm font
- * size, which gives 3.22 mm digits (Liberation Sans metrics). The `class` and `data-*` attributes
- * let the sheets and the mechanical fault list read the file back.
+ * Writes `FIG-N.svg`: black line art on white, units in sheet millimetres. Visible edges 0.4 mm,
+ * lead lines, hatching and dashed hidden edges 0.2 mm, numerals at 4.5 mm font size (3.2 mm digit
+ * height), surface numerals underlined without a lead line. The `class` and `data-*` attributes let
+ * the mechanical fault list read the file back.
  */
 export function writeFigureSvg(layout: FigureLayout): string {
-	const stroke = (width: number) => `stroke="#000" stroke-width="${width}" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
-	const line = (segment: Segment) => `x1="${segment[0][0]}" y1="${segment[0][1]}" x2="${segment[1][0]}" y2="${segment[1][1]}"`;
 	const lines: string[] = [];
-	lines.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}mm" height="${layout.height}mm" viewBox="0 0 ${layout.width} ${layout.height}" data-figure="${escapeXml(figureNumber(layout.figure))}" data-kind="3d">`);
+	lines.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}mm" height="${layout.height}mm" viewBox="0 0 ${layout.width} ${layout.height}" data-figure="${escapeXml(layout.figure)}" data-kind="3d">`);
+	lines.push(`<rect width="${layout.width}" height="${layout.height}" fill="#fff"/>`);
+	lines.push(`<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">`);
 	for (const edge of layout.edges) {
-		lines.push(`<path class="edge" data-part="${escapeXml(edge.part)}" d="${pathData(edge.line)}" ${stroke(EDGE_WIDTH)}/>`);
+		lines.push(`<path class="edge" data-part="${escapeXml(edge.part)}" stroke-width="${EDGE_WIDTH}" d="${pathData(edge.line)}"/>`);
 	}
 	for (const edge of layout.hidden) {
-		lines.push(`<path class="edge hidden" data-part="${escapeXml(edge.part)}" d="${pathData(edge.line)}" ${stroke(THIN_WIDTH)} stroke-dasharray="1.5 1"/>`);
+		lines.push(`<path class="hidden" data-part="${escapeXml(edge.part)}" stroke-width="${THIN_WIDTH}" stroke-dasharray="1.5 1" d="${pathData(edge.line)}"/>`);
 	}
-	const hatchParts = [...new Set(layout.hatching.map(item => item.part))];
-	for (const part of hatchParts) {
-		lines.push(`<g class="hatch" data-part="${escapeXml(part)}">`);
-		for (const item of layout.hatching.filter(hatchLine => hatchLine.part === part)) {
-			lines.push(`<line ${line(item.line)} ${stroke(THIN_WIDTH)}/>`);
-		}
-		lines.push(`</g>`);
+	for (const item of layout.hatching) {
+		lines.push(`<path class="hatch" data-part="${escapeXml(item.part)}" stroke-width="${THIN_WIDTH}" d="${pathData(item.line)}"/>`);
 	}
 	for (const numeral of layout.numerals) {
 		if (numeral.lead) {
-			lines.push(`<line class="lead" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}" ${line(numeral.lead)} ${stroke(THIN_WIDTH)}/>`);
+			lines.push(`<path class="lead" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}" stroke-width="${THIN_WIDTH}" d="${pathData(numeral.lead)}"/>`);
 		}
 		if (numeral.surface) {
-			const underlineY = round(numeral.y + UNDERLINE_OFFSET);
-			lines.push(`<line class="underline" data-numeral="${escapeXml(numeral.numeral)}" ${line([[round(numeral.box.x), underlineY], [round(numeral.box.x + numeral.box.width), underlineY]])} ${stroke(THIN_WIDTH)}/>`);
+			const underlineY = round(numeral.y + 0.6);
+			lines.push(`<path class="underline" data-numeral="${escapeXml(numeral.numeral)}" stroke-width="${THIN_WIDTH}" d="M${round(numeral.box.x)} ${underlineY} L${round(numeral.box.x + numeral.box.width)} ${underlineY}"/>`);
 		}
 	}
+	lines.push(`</g>`);
 	for (const numeral of layout.numerals) {
-		lines.push(`<text class="numeral" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}"${numeral.surface ? ' data-surface="true"' : ''} x="${numeral.x}" y="${numeral.y}" font-family="sans-serif" font-size="${layout.fontSize}" text-anchor="middle" fill="#000">${escapeXml(numeral.numeral)}</text>`);
+		lines.push(`<text class="numeral" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}"${numeral.surface ? ' data-surface="true"' : ''} x="${numeral.x}" y="${numeral.y}" font-size="${layout.fontSize}" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">${escapeXml(numeral.numeral)}</text>`);
 	}
 	lines.push(`</svg>`);
 	return lines.join('\n') + '\n';
