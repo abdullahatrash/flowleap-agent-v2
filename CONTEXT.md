@@ -423,6 +423,25 @@ exemplars); and one "Next step for you:" line. Tool refusals list the blocking i
 its open steps. The agent reads it first in a matter.
 _Avoid_: the model writing or ticking it; a step checked from a statement in chat.
 
+**Draft Outline**:
+The `draft-outline.md` of a drafting matter: the plan between the **Approved Claims** and the
+**Draft Application**, one table row per **Outline Item** in draft order. Its frontmatter names
+the office and the SHA-256 of the Approved Claims it was made from; the draft save refuses while
+it is missing or made from other claims. Code checks that the plan covers every claim term and
+every claimed combination, and that the draft covers the plan. The attorney may edit it; it is
+not a gate (PRD 0022).
+_Avoid_: technical text in the outline — it holds only references; sources found outside the
+matter (web research is never a source); calling it a fourth gate.
+
+**Outline Item**:
+One row of the **Draft Outline** (`O1`, `O2`, ...): a section, a kind (Template for standard
+section text, Technical for a concept of the claims), the claims and claim terms it realises,
+its sources (a **Feature List** row, a disclosure span, a figure, an answered **Inventor
+Question**) and, when a Technical item has no source, the open question. A draft paragraph names
+the item it realises with `item:O<n>` in its source marker; that is a plan reference, not a
+source.
+_Avoid_: a Technical item with neither a source nor a question; claim terms on a Template item.
+
 **Model-Proposed**:
 The source marker for text the model wrote in this draft without a source in the Feature List,
 the disclosure, an attorney instruction or the office template. Allowed for structure

@@ -26,6 +26,11 @@
  * - `template` — the office template (boilerplate).
  * - `model-proposed` — Model-Proposed text: structure only, never technical content.
  *
+ * A marker may also name the Outline Item of `draft-outline.md` the paragraph realises:
+ * `<!-- src: feature:F3, disclosure:§2.1, item:O7 -->`. `item:O<n>` is a plan reference, not a
+ * source: it is not a {@link DraftSourceKind}, and a paragraph whose only entries are `item:O7`
+ * and `model-proposed` is still Model-Proposed. A marker with only `item` entries names no source.
+ *
  * Headings (`#` lines) carry no marker. An Inventor Question is a blockquote paragraph that
  * starts with `> **Inventor Question IQ-<n>:**`, listed under a final `## Inventor Questions`
  * heading:
@@ -60,6 +65,11 @@ export interface DraftParagraph {
 	readonly text: string;
 	/** The sources of the marker; absent when the paragraph has no valid marker. */
 	readonly sources?: readonly DraftSource[];
+	/**
+	 * The Outline Items (`O7`) the marker names with `item:`, in marker order: plan references, not
+	 * sources. Absent when the marker names none or is invalid.
+	 */
+	readonly items?: readonly string[];
 	/** Why the marker could not be read, when it is present but invalid. */
 	readonly markerError?: string;
 }
@@ -76,6 +86,7 @@ export interface InventorQuestion {
 
 const markerPattern = /^[ \t]*<!--\s*src:(?<sources>[\s\S]*?)-->[ \t]*\n?/;
 const sourcePattern = /^(?<kind>feature|disclosure|inventor|instruction|template|model-proposed)(?:\s*:\s*(?<ref>.+))?$/;
+const itemPattern = /^item\s*:\s*(?<id>.*)$/;
 const inventorQuestionPattern = /^>\s*\*\*Inventor Question (?<id>IQ-\d+):\*\*\s*(?<text>[\s\S]*)$/;
 
 /**
@@ -128,7 +139,16 @@ function readParagraph(raw: string, blockLine: number, section: string | undefin
 		return { line, kind: 'text', section, text };
 	}
 	const sources: DraftSource[] = [];
+	const items: string[] = [];
 	for (const entry of marker.groups.sources.split(',').map(part => part.trim()).filter(Boolean)) {
+		const item = itemPattern.exec(entry)?.groups?.id.trim();
+		if (item !== undefined) {
+			if (!/^O\d+$/.test(item)) {
+				return { line, kind: 'text', section, text, markerError: `Invalid Outline Item "${entry}". Use item:O<n>.` };
+			}
+			items.push(item);
+			continue;
+		}
 		const source = sourcePattern.exec(entry);
 		const kind = source?.groups?.kind as DraftSourceKind | undefined;
 		const ref = source?.groups?.ref?.trim();
@@ -141,7 +161,7 @@ function readParagraph(raw: string, blockLine: number, section: string | undefin
 	if (!sources.length) {
 		return { line, kind: 'text', section, text, markerError: 'The marker names no source.' };
 	}
-	return { line, kind: 'text', section, text, sources };
+	return items.length ? { line, kind: 'text', section, text, sources, items } : { line, kind: 'text', section, text, sources };
 }
 
 /** Lists the Inventor Question blocks of a Draft Application. */

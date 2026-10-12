@@ -78,6 +78,28 @@ describe('Application Drafting source markers', () => {
 		});
 	});
 
+	it('reads item:O<n> as a plan reference, not a source; a bad item id is a marker error', () => {
+		const text = [
+			'<!-- src: feature:F3, disclosure:§2.1, item:O7 -->',
+			'The housing 12 holds the lever 14.',
+			'',
+			'<!-- src: item:O2, model-proposed -->',
+			'In general terms, the following applies.',
+			'',
+			'<!-- src: item:7, feature:F1 -->',
+			'A bad item reference.',
+			'',
+			'<!-- src: item:O3 -->',
+			'A plan reference without a source.',
+		].join('\n');
+		expect(parseDraftParagraphs(text).map(({ line, sources, items, markerError }) => ({ line, sources, items, markerError }))).toEqual([
+			{ line: 2, sources: [{ kind: 'feature', ref: 'F3' }, { kind: 'disclosure', ref: '§2.1' }], items: ['O7'], markerError: undefined },
+			{ line: 5, sources: [{ kind: 'model-proposed' }], items: ['O2'], markerError: undefined },
+			{ line: 8, sources: undefined, items: undefined, markerError: 'Invalid Outline Item "item:7". Use item:O<n>.' },
+			{ line: 11, sources: undefined, items: undefined, markerError: 'The marker names no source.' },
+		]);
+	});
+
 	it('strips source markers for export and keeps the text', () => {
 		expect(stripSourceMarkers('# A\n\n<!-- src: template -->\nFirst.\n\n<!-- src: feature:F1 --> Second.\n')).toBe('# A\n\nFirst.\n\nSecond.\n');
 	});
