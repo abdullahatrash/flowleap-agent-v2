@@ -330,14 +330,14 @@ None.
 
 ## Notes
 
-None.
+- \`figure-coverage\` (figures.md): figures.md links no part to a Feature List row (\`- 12: housing [F3]\`), so the claimed-feature coverage was not checked. The Approved Claims cite F1.
 
 ## Advisory
 
 - \`advisory\` (draft-application.md, line 27, claim 2): Claim 2: "steel" has literal basis, but no passage supports steel in combination with the housing.
 ",
   "second": "Wrote drafting/hinge/findings.md (US validators, 1 advisory item(s); waivers kept).
-Errors: 0 (0 waived). Inventor Questions: 1 (1 waived). Notes: 0. Advisory: 1.
+Errors: 0 (0 waived). Inventor Questions: 1 (1 waived). Notes: 1. Advisory: 1.
 No unwaived Error and no open Inventor Question.
 Report these by severity with their line references. Do not call the draft passed or ready to file.
 Wrote drafting/hinge/checklist.md: the next step for the attorney is step 6 (Export to Word).",

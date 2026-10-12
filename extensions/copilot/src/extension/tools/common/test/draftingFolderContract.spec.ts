@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { DRAFTING_STYLE_FOLDER, matchDraftingPath, resolveDraftingFolder } from '../drafting/folderContract';
+import { DRAFTING_STYLE_FOLDER, isDrawingSheetFile, matchDraftingPath, resolveDraftingFolder } from '../drafting/folderContract';
 
 describe('Application Drafting folder contract', () => {
 
@@ -31,8 +31,15 @@ describe('Application Drafting folder contract', () => {
 				},
 				fullReviewCopy: 'drafting/acme-hinge/draft-application.full.docx',
 				filingManifest: 'drafting/acme-hinge/filing-manifest.md',
+				drawings: 'drafting/acme-hinge/drawings',
 			},
 		});
+	});
+
+	it('names a Drawing Sheet file sheet-N.svg, N from 1, and no other file of drawings/', () => {
+		expect(['sheet-1.svg', 'sheet-12.svg', 'sheet-0.svg', 'sheet-01.svg', 'sheet-1.png', 'FIG-1.svg', 'sheet-1.svg.bak', 'Sheet-1.svg'].map(isDrawingSheetFile)).toEqual([
+			true, true, false, false, false, false, false, false,
+		]);
 	});
 
 	it('refuses a matter name that is empty or leaves the drafting folder', () => {
