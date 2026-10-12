@@ -166,9 +166,11 @@ function parseFigure(input: FigureInput): ParsedFigure | string {
 			maxNumeralFont = Math.max(maxNumeralFont, size);
 		}
 	});
-	const open = /<svg\b[^>]*>/.exec(input.svg);
-	const close = input.svg.lastIndexOf('</svg>');
-	const inner = open && close > open.index ? input.svg.slice(open.index + open[0].length, close).trim() : '';
+	// A leading `<!-- findings: [...] -->` comment may precede the root; never read the root from it.
+	const source = input.svg.replace(/<!--[\s\S]*?-->/g, '');
+	const open = /<svg\b[^>]*>/.exec(source);
+	const close = source.lastIndexOf('</svg>');
+	const inner = open && close > open.index ? source.slice(open.index + open[0].length, close).trim() : '';
 	return { input, key: `${input.number}${input.partial ?? ''}`, width, height, viewBox, kind: root.attrs.get('data-kind') ?? '3d', inner, minFont, maxNumeralFont };
 }
 
