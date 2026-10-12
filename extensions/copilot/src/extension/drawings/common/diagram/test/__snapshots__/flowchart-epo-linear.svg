@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="61.52mm" height="178.4mm" viewBox="0 0 61.52 178.4" data-figure="3" data-kind="flowchart">
+<path class="edge" data-role="terminal" data-node="start" d="M 19.22 2 L 33.02 2 A 4.1 4.1 0 0 1 33.02 10.2 L 19.22 10.2 A 4.1 4.1 0 0 1 19.22 2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s1" d="M 2 19.2 L 50.24 19.2 L 50.24 40 L 2 40 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s2" d="M 2 49 L 50.24 49 L 50.24 69.8 L 2 69.8 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s3" d="M 2 78.8 L 50.24 78.8 L 50.24 99.6 L 2 99.6 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s4" d="M 2 108.6 L 50.24 108.6 L 50.24 129.4 L 2 129.4 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s5" d="M 2 138.4 L 50.24 138.4 L 50.24 159.2 L 2 159.2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="terminal" data-node="end" d="M 19.22 168.2 L 33.02 168.2 A 4.1 4.1 0 0 1 33.02 176.4 L 19.22 176.4 A 4.1 4.1 0 0 1 19.22 168.2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="connector" data-from="start" data-to="s1" d="M 26.12 10.2 L 26.12 19.2" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 26.12 19.2 L 25.32 17.2 L 26.92 17.2 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s1" data-to="s2" d="M 26.12 40 L 26.12 49" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 26.12 49 L 25.32 47 L 26.92 47 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s2" data-to="s3" d="M 26.12 69.8 L 26.12 78.8" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 26.12 78.8 L 25.32 76.8 L 26.92 76.8 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s3" data-to="s4" d="M 26.12 99.6 L 26.12 108.6" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 26.12 108.6 L 25.32 106.6 L 26.92 106.6 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s4" data-to="s5" d="M 26.12 129.4 L 26.12 138.4" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 26.12 138.4 L 25.32 136.4 L 26.92 136.4 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s5" data-to="end" d="M 26.12 159.2 L 26.12 168.2" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 26.12 168.2 L 25.32 166.2 L 26.92 166.2 Z" fill="#000" stroke="none"/>
+<text class="label" data-node="start" x="26.12" y="7.22" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">START</text>
+<text class="label" data-node="s1" x="26.12" y="24.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Receiving, by a</text>
+<text class="label" data-node="s1" x="26.12" y="28.62" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">processor, vibration</text>
+<text class="label" data-node="s1" x="26.12" y="32.82" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">data from a sensor</text>
+<text class="label" data-node="s1" x="26.12" y="37.02" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">mounted on a…</text>
+<text class="label" data-node="s2" x="26.12" y="56.32" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Transforming the</text>
+<text class="label" data-node="s2" x="26.12" y="60.52" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">vibration data into a</text>
+<text class="label" data-node="s2" x="26.12" y="64.72" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">frequency spectrum</text>
+<text class="label" data-node="s3" x="26.12" y="84.02" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Comparing an amplitude</text>
+<text class="label" data-node="s3" x="26.12" y="88.22" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">of the frequency</text>
+<text class="label" data-node="s3" x="26.12" y="92.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">spectrum at a gear-mesh</text>
+<text class="label" data-node="s3" x="26.12" y="96.62" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">frequency with…</text>
+<text class="label" data-node="s4" x="26.12" y="115.92" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Storing the amplitude in</text>
+<text class="label" data-node="s4" x="26.12" y="120.12" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">a maintenance log of the</text>
+<text class="label" data-node="s4" x="26.12" y="124.32" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">wind turbine</text>
+<text class="label" data-node="s5" x="26.12" y="145.72" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Generating an alert when</text>
+<text class="label" data-node="s5" x="26.12" y="149.92" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">the amplitude exceeds</text>
+<text class="label" data-node="s5" x="26.12" y="154.12" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">the threshold</text>
+<text class="label" data-node="end" x="26.12" y="173.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">END</text>
+<text class="numeral" data-numeral="302" x="54.24" y="30.56" font-family="sans-serif" font-size="3.2" fill="#000">302</text>
+<line class="lead" data-numeral="302" x1="53.74" y1="29.6" x2="50.24" y2="29.6" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="304" x="54.24" y="60.36" font-family="sans-serif" font-size="3.2" fill="#000">304</text>
+<line class="lead" data-numeral="304" x1="53.74" y1="59.4" x2="50.24" y2="59.4" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="306" x="54.24" y="90.16" font-family="sans-serif" font-size="3.2" fill="#000">306</text>
+<line class="lead" data-numeral="306" x1="53.74" y1="89.2" x2="50.24" y2="89.2" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="308" x="54.24" y="119.96" font-family="sans-serif" font-size="3.2" fill="#000">308</text>
+<line class="lead" data-numeral="308" x1="53.74" y1="119" x2="50.24" y2="119" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="310" x="54.24" y="149.76" font-family="sans-serif" font-size="3.2" fill="#000">310</text>
+<line class="lead" data-numeral="310" x1="53.74" y1="148.8" x2="50.24" y2="148.8" stroke="#000" stroke-width="0.2"/>
+</svg>
+<!-- findings:
+Note epo-short-sentence: The text of step s1 (302) was cut to 12 words. The EPO allows a short sentence per method step (Guidelines A-IX 8); put the full step in the description.
+Note epo-short-sentence: The text of step s3 (306) was cut to 12 words. The EPO allows a short sentence per method step (Guidelines A-IX 8); put the full step in the description.
+-->

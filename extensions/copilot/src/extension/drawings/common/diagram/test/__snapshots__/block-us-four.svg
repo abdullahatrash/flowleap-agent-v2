@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="83.8mm" height="77mm" viewBox="0 0 83.8 77" data-figure="4" data-kind="block">
+<path class="edge" data-role="block" data-node="sensor" d="M 7.69 2 L 41.85 2 L 41.85 10.2 L 7.69 10.2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="block" data-node="processor" d="M 7.69 32.4 L 41.85 32.4 L 41.85 40.6 L 7.69 40.6 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="block" data-node="memory" d="M 2 49.6 L 36.16 49.6 L 36.16 57.8 L 2 57.8 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="block" data-node="display" d="M 38.36 66.8 L 72.52 66.8 L 72.52 75 L 38.36 75 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="connector" data-from="sensor" data-to="processor" d="M 24.77 10.2 L 24.77 32.4" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 24.77 32.4 L 23.97 30.4 L 25.57 30.4 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="processor" data-to="memory" d="M 19.08 40.6 L 19.08 49.6" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 19.08 49.6 L 18.28 47.6 L 19.88 47.6 Z" fill="#000" stroke="none"/>
+<path class="arrow" d="M 19.08 40.6 L 19.88 42.6 L 18.28 42.6 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="processor" data-to="display" d="M 30.47 40.6 L 30.47 44.6 L 55.44 44.6 L 55.44 66.8" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 55.44 66.8 L 54.64 64.8 L 56.24 64.8 Z" fill="#000" stroke="none"/>
+<text class="label" data-node="sensor" x="24.77" y="7.22" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Vibration sensor</text>
+<text class="label" data-node="processor" x="24.77" y="37.62" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Processor</text>
+<text class="label" data-node="memory" x="19.08" y="54.82" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Memory</text>
+<text class="label" data-node="display" x="55.44" y="72.02" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Alert display</text>
+<text class="label" data-edge="c1" x="19.75" y="22.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Data</text>
+<text class="label" data-edge="c3" x="62.34" y="54.82" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Alert</text>
+<text class="numeral" data-numeral="402" x="45.85" y="7.06" font-family="sans-serif" font-size="3.2" fill="#000">402</text>
+<line class="lead" data-numeral="402" x1="45.35" y1="6.1" x2="41.85" y2="6.1" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="404" x="45.85" y="37.46" font-family="sans-serif" font-size="3.2" fill="#000">404</text>
+<line class="lead" data-numeral="404" x1="45.35" y1="36.5" x2="41.85" y2="36.5" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="406" x="40.16" y="54.66" font-family="sans-serif" font-size="3.2" fill="#000">406</text>
+<line class="lead" data-numeral="406" x1="39.66" y1="53.7" x2="36.16" y2="53.7" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="408" x="76.52" y="71.86" font-family="sans-serif" font-size="3.2" fill="#000">408</text>
+<line class="lead" data-numeral="408" x1="76.02" y1="70.9" x2="72.52" y2="70.9" stroke="#000" stroke-width="0.2"/>
+</svg>
+<!-- findings:
+(none)
+-->

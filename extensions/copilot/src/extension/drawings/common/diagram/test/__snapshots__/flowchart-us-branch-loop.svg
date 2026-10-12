@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="85.36mm" height="175.4mm" viewBox="0 0 85.36 175.4" data-figure="2" data-kind="flowchart">
+<path class="edge" data-role="terminal" data-node="start" d="M 39.06 2 L 52.86 2 A 4.1 4.1 0 0 1 52.86 10.2 L 39.06 10.2 A 4.1 4.1 0 0 1 39.06 2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s1" d="M 21.84 19.2 L 70.08 19.2 L 70.08 31.6 L 21.84 31.6 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s2" d="M 13.8 40.6 L 62.04 40.6 L 62.04 53 L 13.8 53 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s3" d="M 13.8 62 L 62.04 62 L 62.04 74.4 L 13.8 74.4 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s4" d="M 13.8 83.4 L 62.04 83.4 L 62.04 95.8 L 13.8 95.8 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="decision" data-node="d1" d="M 37.92 104.8 L 73.84 117.2 L 37.92 129.6 L 2 117.2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="process" data-node="s5" d="M 13.8 143.8 L 62.04 143.8 L 62.04 156.2 L 13.8 156.2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="terminal" data-node="end" d="M 31.02 165.2 L 44.82 165.2 A 4.1 4.1 0 0 1 44.82 173.4 L 31.02 173.4 A 4.1 4.1 0 0 1 31.02 165.2 Z" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="edge" data-role="connector" data-from="start" data-to="s1" d="M 45.96 10.2 L 45.96 19.2" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 45.96 19.2 L 45.16 17.2 L 46.76 17.2 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s1" data-to="s2" d="M 37.92 31.6 L 37.92 40.6" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 37.92 40.6 L 37.12 38.6 L 38.72 38.6 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s2" data-to="s3" d="M 37.92 53 L 37.92 62" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 37.92 62 L 37.12 60 L 38.72 60 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s3" data-to="s4" d="M 37.92 74.4 L 37.92 83.4" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 37.92 83.4 L 37.12 81.4 L 38.72 81.4 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s4" data-to="d1" d="M 37.92 95.8 L 37.92 104.8" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 37.92 104.8 L 37.12 102.8 L 38.72 102.8 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="d1" data-to="s5" d="M 37.92 129.6 L 37.92 143.8" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 37.92 143.8 L 37.12 141.8 L 38.72 141.8 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="s5" data-to="end" d="M 37.92 156.2 L 37.92 165.2" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 37.92 165.2 L 37.12 163.2 L 38.72 163.2 Z" fill="#000" stroke="none"/>
+<path class="edge" data-role="connector" data-from="d1" data-to="s1" d="M 73.84 117.2 L 83.36 117.2 L 83.36 35.6 L 54 35.6 L 54 31.6" stroke="#000" stroke-width="0.4" fill="none"/>
+<path class="arrow" d="M 54 31.6 L 54.8 33.6 L 53.2 33.6 Z" fill="#000" stroke="none"/>
+<text class="label" data-node="start" x="45.96" y="7.22" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">START</text>
+<text class="label" data-node="s1" x="45.96" y="26.52" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Receiving vibration data</text>
+<text class="label" data-node="s2" x="37.92" y="45.82" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Transforming vibration</text>
+<text class="label" data-node="s2" x="37.92" y="50.02" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">data</text>
+<text class="label" data-node="s3" x="37.92" y="69.32" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Comparing amplitude</text>
+<text class="label" data-node="s4" x="37.92" y="90.72" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Storing amplitude</text>
+<text class="label" data-node="d1" x="37.92" y="116.22" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Amplitude exceeds</text>
+<text class="label" data-node="d1" x="37.92" y="120.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">threshold?</text>
+<text class="label" data-node="s5" x="37.92" y="151.12" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Generating alert</text>
+<text class="label" data-node="end" x="37.92" y="170.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">END</text>
+<text class="label" data-edge="e6" x="43.06" y="133.82" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">Yes</text>
+<text class="label" data-edge="e8" x="77.1" y="122.42" text-anchor="middle" font-family="sans-serif" font-size="3.2" fill="#000">No</text>
+<text class="numeral" data-numeral="202" x="74.08" y="26.36" font-family="sans-serif" font-size="3.2" fill="#000">202</text>
+<line class="lead" data-numeral="202" x1="73.58" y1="25.4" x2="70.08" y2="25.4" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="204" x="66.04" y="47.76" font-family="sans-serif" font-size="3.2" fill="#000">204</text>
+<line class="lead" data-numeral="204" x1="65.54" y1="46.8" x2="62.04" y2="46.8" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="206" x="66.04" y="69.16" font-family="sans-serif" font-size="3.2" fill="#000">206</text>
+<line class="lead" data-numeral="206" x1="65.54" y1="68.2" x2="62.04" y2="68.2" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="208" x="66.04" y="90.56" font-family="sans-serif" font-size="3.2" fill="#000">208</text>
+<line class="lead" data-numeral="208" x1="65.54" y1="89.6" x2="62.04" y2="89.6" stroke="#000" stroke-width="0.2"/>
+<text class="numeral" data-numeral="210" x="66.04" y="150.96" font-family="sans-serif" font-size="3.2" fill="#000">210</text>
+<line class="lead" data-numeral="210" x1="65.54" y1="150" x2="62.04" y2="150" stroke="#000" stroke-width="0.2"/>
+</svg>
+<!-- findings:
+(none)
+-->
