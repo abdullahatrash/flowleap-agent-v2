@@ -116,4 +116,7 @@ stage only your own files, base every PR on main.
 
 ## Outcome
 
-(filled at completion)
+COMPLETE 2026-10-12. D1–D4 merged in PR #562 (2026-10-07). D5: the founder ran one real
+disclosure through the whole pipeline on 2026-10-12; it works end to end. No review record was
+written for that run. The next stage, a persisted Draft Outline between the claims and the
+text, is PRD 0022.
