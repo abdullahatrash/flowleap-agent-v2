@@ -13,7 +13,14 @@ export const EDGE_WIDTH = 0.4;
 export const THIN_WIDTH = 0.2;
 /** Hatch spacing in sheet millimetres (37 CFR 1.84(h)(3): regularly spaced oblique lines). */
 export const HATCH_SPACING = 2;
-/** Default size the drawing is fitted into, in sheet millimetres, when the scene sets no scale. */
+/**
+ * Default size the drawing is fitted into, in sheet millimetres, when the scene sets no `scale`
+ * (`scale` overrides it). The Figure is not drawn 1:1 from model millimetres: a large machine at
+ * 1:1 would force the sheet layout to shrink the Figure until its 4.5 mm numerals fall under the
+ * 3.2 mm character height of 37 CFR 1.84(p)(3). Fitted to 120 x 150 mm, the Figure lies inside
+ * the 170 x 262 mm sight with room for the numerals, so a sheet rarely needs to shrink it.
+ * Decision accepted for PRD 0023 slice D1 (#645).
+ */
 const FIT_WIDTH = 120;
 const FIT_HEIGHT = 150;
 /** Space around the drawing for numerals, in sheet millimetres. */
@@ -149,11 +156,12 @@ export function writeFigureSvg(layout: FigureLayout): string {
 	}
 	for (const numeral of layout.numerals) {
 		if (numeral.lead) {
-			lines.push(`<path class="lead" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}" stroke-width="${THIN_WIDTH}" d="${pathData(numeral.lead)}"/>`);
+			const [from, to] = numeral.lead;
+			lines.push(`<line class="lead" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}" stroke-width="${THIN_WIDTH}" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`);
 		}
 		if (numeral.surface) {
 			const underlineY = round(numeral.y + 0.6);
-			lines.push(`<path class="underline" data-numeral="${escapeXml(numeral.numeral)}" stroke-width="${THIN_WIDTH}" d="M${round(numeral.box.x)} ${underlineY} L${round(numeral.box.x + numeral.box.width)} ${underlineY}"/>`);
+			lines.push(`<line class="underline" data-numeral="${escapeXml(numeral.numeral)}" stroke-width="${THIN_WIDTH}" x1="${round(numeral.box.x)}" y1="${underlineY}" x2="${round(numeral.box.x + numeral.box.width)}" y2="${underlineY}"/>`);
 		}
 	}
 	lines.push(`</g>`);

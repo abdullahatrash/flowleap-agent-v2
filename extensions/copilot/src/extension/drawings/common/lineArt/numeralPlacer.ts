@@ -9,7 +9,9 @@ import { inflate, Rect, rectsOverlap, Segment, segmentHitsRect, segmentsIntersec
 /**
  * Numeral font size in sheet millimetres. Digit height in Liberation Sans and Arial is 0.716 of the
  * font size, so 4.5 mm gives 3.22 mm digits: over the 3.2 mm minimum of 37 CFR 1.84(p)(3),
- * OJ EPO 2025 A49 Art. 1(2)(g) and PCT Rule 11.13(h).
+ * OJ EPO 2025 A49 Art. 1(2)(g) and PCT Rule 11.13(h). The rules set a character height, not a font
+ * size: a 3.2 mm font size gives only 2.29 mm digits and does not file. A sheet that scales a
+ * Figure must keep font size x 0.716 x scale >= 3.2 mm. Decision accepted for PRD 0023 slice D1 (#645).
  */
 export const NUMERAL_FONT_SIZE = 4.5;
 

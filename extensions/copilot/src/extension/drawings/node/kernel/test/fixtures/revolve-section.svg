@@ -105,9 +105,9 @@
 <path class="hatch" data-part="bushing" stroke-width="0.2" d="M137.39 120 L144 113.39"/>
 <path class="hatch" data-part="bushing" stroke-width="0.2" d="M140.22 120 L144 116.22"/>
 <path class="hatch" data-part="bushing" stroke-width="0.2" d="M143.04 120 L144 119.04"/>
-<path class="lead" data-numeral="22" data-part="bushing" stroke-width="0.2" d="M147.7 48.57 L122.4 48"/>
-<path class="lead" data-numeral="20" data-part="bushing" stroke-width="0.2" d="M147.7 110.41 L144 110.4"/>
-<path class="lead" data-numeral="24" data-part="bushing" stroke-width="0.2" d="M20.3 72.7 L60 72"/>
+<line class="lead" data-numeral="22" data-part="bushing" stroke-width="0.2" x1="147.7" y1="48.57" x2="122.4" y2="48"/>
+<line class="lead" data-numeral="20" data-part="bushing" stroke-width="0.2" x1="147.7" y1="110.41" x2="144" y2="110.4"/>
+<line class="lead" data-numeral="24" data-part="bushing" stroke-width="0.2" x1="20.3" y1="72.7" x2="60" y2="72"/>
 </g>
 <text class="numeral" data-numeral="22" data-part="bushing" x="151" y="50.25" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">22</text>
 <text class="numeral" data-numeral="20" data-part="bushing" x="151" y="112.04" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">20</text>
