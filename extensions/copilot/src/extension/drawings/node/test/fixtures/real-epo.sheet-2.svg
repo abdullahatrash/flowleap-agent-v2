@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" data-sheet="2" data-sheets="2" data-office="EPO" data-page-size="A4" data-orientation="portrait">
+<text class="sheet-number" x="110" y="29.296" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">2</text>
+<g class="figures" transform="translate(25 33.296)">
+<svg class="figure" data-figure="2" data-kind="flowchart" data-scale="1" x="45.825" y="45.104" width="78.35" height="156.2" viewBox="0 0 78.35 156.2">
+<rect width="78.35" height="156.2" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-node="start" data-role="terminal" stroke-width="0.4" d="M28.63 2 L40.78 2 A4.93 4.93 0 0 1 40.78 11.85 L28.63 11.85 A4.93 4.93 0 0 1 28.63 2 Z"/>
+<path class="edge" data-node="s1" data-role="process" stroke-width="0.4" d="M2 20.85 L67.4 20.85 L67.4 36.55 L2 36.55 Z"/>
+<path class="edge" data-node="s2" data-role="process" stroke-width="0.4" d="M2 45.55 L67.4 45.55 L67.4 61.25 L2 61.25 Z"/>
+<path class="edge" data-node="s3" data-role="process" stroke-width="0.4" d="M2 70.25 L67.4 70.25 L67.4 85.95 L2 85.95 Z"/>
+<path class="edge" data-node="s4" data-role="process" stroke-width="0.4" d="M2 94.95 L67.4 94.95 L67.4 110.65 L2 110.65 Z"/>
+<path class="edge" data-node="s5" data-role="process" stroke-width="0.4" d="M2 119.65 L67.4 119.65 L67.4 135.35 L2 135.35 Z"/>
+<path class="edge" data-node="end" data-role="terminal" stroke-width="0.4" d="M28.63 144.35 L40.78 144.35 A4.93 4.93 0 0 1 40.78 154.2 L28.63 154.2 A4.93 4.93 0 0 1 28.63 144.35 Z"/>
+<path class="edge" data-role="connector" data-from="start" data-to="s1" stroke-width="0.4" d="M34.7 11.85 L34.7 20.85"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M34.7 20.85 L33.9 18.85 L35.5 18.85 Z"/>
+<path class="edge" data-role="connector" data-from="s1" data-to="s2" stroke-width="0.4" d="M34.7 36.55 L34.7 45.55"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M34.7 45.55 L33.9 43.55 L35.5 43.55 Z"/>
+<path class="edge" data-role="connector" data-from="s2" data-to="s3" stroke-width="0.4" d="M34.7 61.25 L34.7 70.25"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M34.7 70.25 L33.9 68.25 L35.5 68.25 Z"/>
+<path class="edge" data-role="connector" data-from="s3" data-to="s4" stroke-width="0.4" d="M34.7 85.95 L34.7 94.95"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M34.7 94.95 L33.9 92.95 L35.5 92.95 Z"/>
+<path class="edge" data-role="connector" data-from="s4" data-to="s5" stroke-width="0.4" d="M34.7 110.65 L34.7 119.65"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M34.7 119.65 L33.9 117.65 L35.5 117.65 Z"/>
+<path class="edge" data-role="connector" data-from="s5" data-to="end" stroke-width="0.4" d="M34.7 135.35 L34.7 144.35"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M34.7 144.35 L33.9 142.35 L35.5 142.35 Z"/>
+<path class="lead" data-numeral="2" data-node="s1" stroke-width="0.2" d="M70.9 28.7 L67.4 28.7"/>
+<path class="lead" data-numeral="4" data-node="s2" stroke-width="0.2" d="M70.9 53.4 L67.4 53.4"/>
+<path class="lead" data-numeral="6" data-node="s3" stroke-width="0.2" d="M70.9 78.1 L67.4 78.1"/>
+<path class="lead" data-numeral="8" data-node="s4" stroke-width="0.2" d="M70.9 102.8 L67.4 102.8"/>
+<path class="lead" data-numeral="10" data-node="s5" stroke-width="0.2" d="M70.9 127.5 L67.4 127.5"/>
+</g>
+<text class="label" data-node="start" x="34.7" y="8.5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">START</text>
+<text class="label" data-node="s1" x="34.7" y="30.28" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Receiving vibration data</text>
+<text class="label" data-node="s2" x="34.7" y="52.05" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Transforming vibration</text>
+<text class="label" data-node="s2" x="34.7" y="57.9" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">data</text>
+<text class="label" data-node="s3" x="34.7" y="79.68" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Comparing amplitude</text>
+<text class="label" data-node="s4" x="34.7" y="104.38" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Storing amplitude</text>
+<text class="label" data-node="s5" x="34.7" y="129.07" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Generating alert</text>
+<text class="label" data-node="end" x="34.7" y="150.85" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">END</text>
+<text class="numeral" data-numeral="2" data-node="s1" x="72.64" y="30.05" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">2</text>
+<text class="numeral" data-numeral="4" data-node="s2" x="72.64" y="54.75" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">4</text>
+<text class="numeral" data-numeral="6" data-node="s3" x="72.64" y="79.45" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">6</text>
+<text class="numeral" data-numeral="8" data-node="s4" x="72.64" y="104.15" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">8</text>
+<text class="numeral" data-numeral="10" data-node="s5" x="73.88" y="128.85" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">10</text>
+</svg>
+<text class="fig-label" data-figure="2" x="85" y="208.6" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Fig. 2</text>
+</g>
+</svg>
