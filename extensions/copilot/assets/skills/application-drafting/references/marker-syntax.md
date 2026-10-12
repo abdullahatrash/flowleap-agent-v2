@@ -12,6 +12,9 @@ with the paragraph text on the next line and no blank line between:
 The housing 12 holds the battery 14 against the contact plate 16.
 ```
 
+An `item:O<n>` entry may follow the sources; it is a plan reference, see
+[Outline Item](#outline-item).
+
 | Marker | Source | Use for |
 |--------|--------|---------|
 | `<!-- src: feature:F3 -->` | Row `F3` of `feature-list.md` | Technical content from a confirmed feature |
@@ -27,12 +30,32 @@ One marker can name more than one source, separated by commas:
 <!-- src: feature:F3, disclosure:§2.1 -->
 ```
 
-- Headings carry no marker.
+- Headings carry no marker. Never put a marker on the line above a
+  heading: it is read as an empty paragraph, and its `item:` names no text.
 - A paragraph with text and no marker is reported as unmarked.
 - A paragraph with technical content and only `model-proposed` is a defect:
   replace it with an Inventor Question.
 - The Abstract heading contains the word "Abstract"; the claims heading
   contains the word "Claims".
+
+## Outline Item
+
+Name the Outline Item a paragraph realises with `item:O<n>` in its marker,
+after the sources:
+
+```markdown
+<!-- src: feature:F3, disclosure:§2.1, item:O7 -->
+The sealing ring 18 is made of an elastomer.
+```
+
+- `item` is a plan reference, not a source. A marker with only `item`
+  entries names no source and is reported.
+- A paragraph with only `item` and `model-proposed` is still a
+  Model-Proposed paragraph: it carries no technical content.
+- `item` names a row of `draft-outline.md`; `validate_draft` reports an
+  `item` that names no row, and a Technical item that no paragraph names
+  (`item-coverage`, see [outline-format.md](outline-format.md)).
+- A paragraph can name more than one item when it realises both.
 
 ## Reference numerals
 
