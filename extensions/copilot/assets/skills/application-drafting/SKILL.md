@@ -1,6 +1,6 @@
 ---
 name: application-drafting
-description: Draft a full patent application for the US or the EPO (specification, abstract, brief description of the drawings) from a confirmed Feature List and Approved Claims, with a source marker on every paragraph, code validators and an advisory review. Use when the user asks to draft, write or prepare a patent application or specification. For claims only use claim-drafting; to evaluate a new invention use invention-disclosure. The output is always a draft for attorney review.
+description: Draft a full patent application for the US or the EPO (specification, abstract, brief description of the drawings) from a confirmed Feature List and Approved Claims through a Draft Outline that plans every claim term, with a source marker on every paragraph, code validators and an advisory review. Use when the user asks to draft, write or prepare a patent application or specification. For claims only use claim-drafting; to evaluate a new invention use invention-disclosure. The output is always a draft for attorney review.
 user-invocable: true
 ---
 
@@ -12,8 +12,8 @@ technical gap is an **Inventor Question**. The attorney signs the application,
 so the draft shows what the model added.
 
 All files of one matter live in `drafting/<matter>/`: `feature-list.md`,
-`figures.md`, `claims.md`, `draft-application.md`, `findings.md`,
-`inventor-answers.md`. The tools write the snapshot, the Working Record, the
+`figures.md`, `claims.md`, `draft-outline.md`, `draft-application.md`,
+`findings.md`, `inventor-answers.md`. The tools write the snapshot, the Working Record, the
 export and `checklist.md` beside them.
 
 In a matter that has `checklist.md`, read it first. Code writes it after
@@ -63,43 +63,72 @@ Hand the confirmed Feature List and the prior-art results to the
 `approved: false`. Stop at the Claims gate. When the claims change after
 approval, the attorney sets the flag again.
 
-## Step 3: Draft the specification
+## Step 3: Plan, draft and integrate the specification
 
 1. Before the first drafting call, state in chat the model and the provider
    the disclosure goes to. Use the same values in the save in Step 4.
 2. Call `start_application_draft` with the matter folder. It returns the
-   Feature List, the figures, the Approved Claims and up to five style
-   exemplars, or it refuses and names the missing flag.
-3. Write the specification in the office's section order:
-   [US](references/us-section-order.md) or
-   [EPO](references/epo-section-order.md).
-4. Put a source marker before every paragraph, per
-   [references/marker-syntax.md](references/marker-syntax.md).
-5. Technical content comes only from a Feature List row, a disclosure span or
-   an attorney instruction. Model-Proposed is for structure: transitions and
-   boilerplate. When a claim element, example or embodiment has no source,
-   leave the technical text out and write an Inventor Question.
-6. Write results only for experiments the disclosure says were run. A
+   Feature List, the figures, the Approved Claims, the Draft Outline when it
+   exists, and up to five style exemplars, or it refuses and names the
+   missing flag.
+
+The draft save refuses while `draft-outline.md` is missing or was made from
+other claims: after the attorney approves changed claims, plan again.
+
+### 3a: Plan
+
+1. From the Approved Claims, the Feature List and the figures, write the
+   **Draft Outline** per [references/outline-format.md](references/outline-format.md):
+   the Template items of the office order, and one Technical item per claim
+   concept with its claims, claim terms, sources and `Explain`. A concept
+   with no source gets a `Question`, never a source found outside the matter.
+2. Save with `write_patent_results`, template `draft-outline`, to
+   `drafting/<matter>/draft-outline.md`. Fix each outline finding the save or
+   `validate_draft` reports before you draft.
+3. Tell the attorney the outline is in the folder and they can edit it
+   before drafting. It is not a gate: do not wait for a flag.
+
+### 3b: Draft by item
+
+1. Write the specification in outline order, in the office's section order
+   ([US](references/us-section-order.md) or
+   [EPO](references/epo-section-order.md)): the Template items first, then
+   each Technical item in its place. An item with a `Question` and no source
+   yields an Inventor Question and no technical text.
+2. Put a source marker before every paragraph, with the `item:O<n>` it
+   realises, per [references/marker-syntax.md](references/marker-syntax.md).
+3. Technical content comes only from a Feature List row, a disclosure span,
+   an answered Inventor Question or an attorney instruction. Model-Proposed
+   is for structure: transitions and boilerplate. When a claim element,
+   example or embodiment has no source, leave the technical text out and
+   write an Inventor Question.
+4. Write results only for experiments the disclosure says were run. A
    prophetic example is in present or future tense.
-7. Exemplars shape voice and structure only, per
+5. Exemplars shape voice and structure only, per
    [references/exemplar-rule.md](references/exemplar-rule.md). The tools
    create `style/` with a README; when it has no exemplar, tell the attorney
    once that they can put 1 to 5 of their own filed applications there.
 
-Done when every paragraph has a marker and every claim term appears in the
-specification.
+### 3c: Integrate
+
+Read the whole draft once per
+[references/integration-review.md](references/integration-review.md):
+terminology, figures and numerals, contradictory embodiments, duplicated
+passages, and the support of each claimed combination the outline planned.
+Each point is an integration item that quotes the passage.
+
+Done when the outline is saved for the Approved Claims, every paragraph has
+a marker, every Technical item is in a paragraph or an Inventor Question,
+and the integration items are written.
 
 ## Step 4: Save and validate
 
 1. Save with `write_patent_results`, template `draft-application`, to
    `drafting/<matter>/draft-application.md`, with `office`, `model`,
    `provider` and `version`. Findings never block a save.
-2. Call `validate_draft` on the matter folder. It runs the code validators
-   and writes `findings.md`.
-3. Run the advisory review: scope, clarity, and support of each claimed
-   combination (a term that appears in the specification does not yet support
-   the combination). Each item quotes the passage it concerns and gives its
-   paragraph. Pass the items to `validate_draft` as advisory items.
+2. Call `validate_draft` on the matter folder, and pass the integration
+   items of Step 3c as advisory items, each with its line. It runs the code
+   validators, also the outline rules, and writes `findings.md`.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 

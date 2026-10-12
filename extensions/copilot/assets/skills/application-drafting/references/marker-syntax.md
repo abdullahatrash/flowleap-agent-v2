@@ -20,6 +20,7 @@ The housing 12 holds the battery 14 against the contact plate 16.
 | `<!-- src: instruction -->` | An attorney instruction in this chat | Content the attorney dictated or asked for |
 | `<!-- src: template -->` | The office template | Standard statements the office template prescribes (for example the industrial-application statement) |
 | `<!-- src: model-proposed -->` | None | Transitions and boilerplate only |
+| `item:O7` (with a source, e.g. `<!-- src: feature:F3, item:O7 -->`) | None: a plan reference | The Outline Item of `draft-outline.md` the paragraph realises |
 
 One marker can name more than one source, separated by commas:
 
@@ -27,12 +28,32 @@ One marker can name more than one source, separated by commas:
 <!-- src: feature:F3, disclosure:§2.1 -->
 ```
 
-- Headings carry no marker.
+- Headings carry no marker. Never put a marker on the line above a
+  heading: it is read as an empty paragraph, and its `item:` names no text.
 - A paragraph with text and no marker is reported as unmarked.
 - A paragraph with technical content and only `model-proposed` is a defect:
   replace it with an Inventor Question.
 - The Abstract heading contains the word "Abstract"; the claims heading
   contains the word "Claims".
+
+## Outline Item
+
+Name the Outline Item a paragraph realises with `item:O<n>` in its marker,
+after the sources:
+
+```markdown
+<!-- src: feature:F3, disclosure:§2.1, item:O7 -->
+The sealing ring 18 is made of an elastomer.
+```
+
+- `item` is a plan reference, not a source. A marker with only `item`
+  entries names no source and is reported.
+- A paragraph with only `item` and `model-proposed` is still a
+  Model-Proposed paragraph: it carries no technical content.
+- `item` names a row of `draft-outline.md`; `validate_draft` reports an
+  `item` that names no row, and a Technical item that no paragraph names
+  (`item-coverage`, see [outline-format.md](outline-format.md)).
+- A paragraph can name more than one item when it realises both.
 
 ## Reference numerals
 
