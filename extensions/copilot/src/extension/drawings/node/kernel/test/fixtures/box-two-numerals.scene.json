@@ -1,0 +1,18 @@
+{
+	"figure": "FIG-1",
+	"camera": "isometric",
+	"parts": [
+		{
+			"id": "housing",
+			"name": "housing",
+			"shape": { "kind": "box", "size": [60, 40, 20] },
+			"subtract": [
+				{ "shape": { "kind": "cylinder", "radius": 8, "height": 22 }, "placement": { "translate": [30, 20, -1] } }
+			]
+		}
+	],
+	"numerals": [
+		{ "numeral": "10", "part": "housing", "face": "front" },
+		{ "numeral": "12", "part": "housing", "face": "top", "point": [12, 10, 20], "surface": true }
+	]
+}

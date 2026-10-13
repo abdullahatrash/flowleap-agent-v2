@@ -8059,6 +8059,8 @@
     "mammoth": "^1.13.0",
     "markdown-it": "^14.1.1",
     "minimatch": "^10.2.1",
+    "replicad": "1.1.0",
+    "replicad-opencascadejs": "1.1.0",
     "undici": "^7.24.1",
     "web-tree-sitter": "^0.23.0"
   },
