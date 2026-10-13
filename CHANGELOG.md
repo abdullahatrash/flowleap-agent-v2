@@ -14,6 +14,14 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+### Fixed
+
+- A user's own Anthropic key works on a Hosted Workspace. The BYOK Anthropic provider now
+  sends to `https://api.anthropic.com` explicitly instead of letting the SDK read
+  `ANTHROPIC_BASE_URL` from the server environment, where the hosted install points it at
+  the agent host's key proxy; the proxy replaced the user's key and every request failed
+  with 401 "invalid x-api-key". Mistral and OpenRouter were not affected.
+
 ## [0.8.0] - 2026-10-11
 
 ### Added
