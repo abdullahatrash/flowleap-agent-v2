@@ -102,7 +102,7 @@ export function checkOutlineCoverage(outline: DraftOutline, claims: readonly Dra
  * The row ids of `feature-list.md`: an `F<n>` at the start of a table row, a list item or a
  * heading (`| F3 | ...`, `- F3: ...`, `## F3 ...`), optionally in bold.
  */
-function featureRowIds(featureList: string): Set<string> {
+export function featureRowIds(featureList: string): Set<string> {
 	const { body } = parseDraftingFrontmatter(featureList);
 	const ids = new Set<string>();
 	for (const content of body.split('\n')) {
