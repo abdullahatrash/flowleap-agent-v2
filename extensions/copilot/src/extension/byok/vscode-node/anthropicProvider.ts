@@ -23,6 +23,15 @@ import { retrieveCapturingTokenByCorrelation, runWithCapturingToken } from '../.
 import { buildOTelInputFromChatMessages } from './byokOTelHelpers';
 import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
+
+/**
+ * The Anthropic API origin for a BYOK key. Pinned on purpose: the SDK otherwise reads
+ * `ANTHROPIC_BASE_URL` from the process environment, and the Hosted Workspace sets that
+ * variable for the agent host's key proxy (scripts/hosted/install.sh). The proxy drops the
+ * caller's `x-api-key` and inserts the instance key, so a user's own key would be ignored
+ * and answered with 401 "invalid x-api-key". A BYOK key always goes to Anthropic directly.
+ */
+const ANTHROPIC_BYOK_BASE_URL = 'https://api.anthropic.com';
 import { toErrorMessage } from '../../../util/common/errorMessage';
 import { RecordedProgress } from '../../../util/common/progressRecorder';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
@@ -68,7 +77,7 @@ export class AnthropicLMProvider extends AbstractLanguageModelChatProvider {
 		}
 
 		try {
-			const response = await new Anthropic({ apiKey }).models.list();
+			const response = await new Anthropic({ apiKey, baseURL: ANTHROPIC_BYOK_BASE_URL }).models.list();
 			const modelList: Record<string, BYOKModelCapabilities> = {};
 			for (const model of response.data) {
 				if (this._knownModels && this._knownModels[model.id]) {
@@ -116,7 +125,7 @@ export class AnthropicLMProvider extends AbstractLanguageModelChatProvider {
 				throw new Error('API key not found for the model');
 			}
 
-			const anthropicClient = new Anthropic({ apiKey });
+			const anthropicClient = new Anthropic({ apiKey, baseURL: ANTHROPIC_BYOK_BASE_URL });
 
 			// Convert the messages from the API format into messages that we can use against anthropic
 			const { system, messages: convertedMessages } = apiMessageToAnthropicMessage(messages as LanguageModelChatMessage[]);
