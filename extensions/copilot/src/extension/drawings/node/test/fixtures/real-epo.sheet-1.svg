@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" data-sheet="1" data-sheets="2" data-office="EPO" data-page-size="A4" data-orientation="portrait">
+<text class="sheet-number" x="110" y="29.296" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">1</text>
+<g class="figures" transform="translate(25 33.296)">
+<svg class="figure" data-figure="1" data-kind="3d" data-scale="1" x="1" y="50.709" width="168" height="144.99" viewBox="0 0 168 144.99">
+<rect width="168" height="144.99" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="housing" stroke-width="0.4" d="M24 79.43 L24 51.71 L72 24 L144 65.57"/>
+<path class="edge" data-part="housing" stroke-width="0.4" d="M24 79.43 L96 120.99 L96 93.28 L144 65.57"/>
+<path class="edge" data-part="housing" stroke-width="0.4" d="M24 51.71 L96 93.28"/>
+<path class="edge" data-part="housing" stroke-width="0.4" d="M93.6 64.18 L94.49 63.61 L95.29 63 L95.97 62.34 L96.54 61.64 L96.99 60.92 L97.32 60.17 L97.51 59.41 L97.58 58.64 L97.48 57.7 L97.18 56.77 L96.69 55.86 L96.02 55 L95.17 54.19 L94.16 53.44 L93 52.77 L91.71 52.19 L90.31 51.7 L88.81 51.31 L87.25 51.03 L85.64 50.86 L84 50.8 L82.23 50.87 L80.49 51.07 L78.8 51.4 L77.21 51.85 L75.74 52.42 L74.4 53.1 L73.23 53.87 L72.24 54.72 L71.46 55.64 L70.89 56.61 L70.54 57.62 L70.42 58.64 L70.52 59.56 L70.8 60.47 L71.26 61.35 L71.9 62.2 L72.71 63 L73.68 63.73 L74.78 64.4 L76.02 64.98 L77.37 65.48 L78.8 65.88 L80.49 66.21 L82.23 66.41 L84 66.48 L85.77 66.41 L87.51 66.21 L89.2 65.88 L90.79 65.43 L92.26 64.86 L93.6 64.18"/>
+<path class="edge" data-part="housing" stroke-width="0.4" d="M144 93.28 L144 65.57"/>
+<path class="edge" data-part="housing" stroke-width="0.4" d="M96 120.99 L144 93.28"/>
+<line class="underline" data-numeral="12" stroke-width="0.2" x1="47.9" y1="55.31" x2="52.9" y2="55.31"/>
+<line class="lead" data-numeral="10" data-part="housing" stroke-width="0.2" x1="60.62" y1="125.58" x2="60" y2="86.35"/>
+</g>
+<text class="numeral" data-numeral="12" data-part="housing" data-surface="true" x="50.4" y="54.71" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+<text class="numeral" data-numeral="10" data-part="housing" x="60.66" y="129.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">10</text>
+</svg>
+<text class="fig-label" data-figure="1" x="85" y="202.995" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Fig. 1</text>
+</g>
+</svg>

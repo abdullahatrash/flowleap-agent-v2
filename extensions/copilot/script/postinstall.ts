@@ -20,6 +20,13 @@ export interface ITreeSitterGrammar {
 	projectPath?: string;
 }
 
+/** The notice shipped beside `dist/resvg.wasm`; the package itself ships no license file. */
+const RESVG_NOTICE = `dist/resvg.wasm is @resvg/resvg-wasm 2.6.2 (https://github.com/yisibl/resvg-js),
+a WebAssembly build of resvg (https://github.com/linebender/resvg).
+It is licensed under the Mozilla Public License 2.0: https://mozilla.org/MPL/2.0/
+The file is unmodified. Its source code is available at https://github.com/yisibl/resvg-js/tree/v2.6.2.
+`;
+
 const treeSitterGrammars: ITreeSitterGrammar[] = [
 	{
 		name: 'tree-sitter-c-sharp',
@@ -291,6 +298,11 @@ async function main() {
 		'node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter.wasm',
 		'node_modules/@github/blackbird-external-ingest-utils/pkg/nodejs/external_ingest_utils_bg.wasm',
 	], 'dist');
+
+	// Patent drawings review renders: the resvg rasterizer (MPL-2.0) under a name that cannot
+	// collide with another wasm-bindgen `index_bg.wasm`, with its license notice beside it.
+	await fs.promises.copyFile(path.join(REPO_ROOT, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'), path.join(REPO_ROOT, 'dist/resvg.wasm'));
+	await fs.promises.writeFile(path.join(REPO_ROOT, 'dist/resvg.wasm.LICENSE.txt'), RESVG_NOTICE);
 
 	if (!distAssetsOnly) {
 		const copilotCliSourceDir = await materializeCopilotCliSdkLayout();
