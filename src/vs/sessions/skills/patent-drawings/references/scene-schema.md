@@ -1,0 +1,117 @@
+# Scene schema
+
+One file per Figure: `drafting/<matter>/drawings/FIG-N.scene.json`. The scene is
+the source of truth. The SVG line art and the Drawing Sheets are made from it
+and are made again on each render. The engine reads the scene; it never reads
+the model's idea of the picture.
+
+## Frame
+
+- Units are model millimetres. Right-handed. Z is up.
+- The front of the object faces -Y. The `front` camera looks along +Y.
+- Each shape is built in its own part frame, then moved by its `placement`.
+- `placement.rotate` is degrees about X, then Y, then Z. `placement.translate`
+  is applied after the rotation.
+
+## Top level
+
+| Field | Required | Value |
+|---|---|---|
+| `figure` | yes | `"FIG-N"` or `"FIG-NA"` (a partial view), e.g. `"FIG-1"` |
+| `camera` | yes | `isometric`, `front`, `top` or `side`. Isometric looks from the front, right and top corner. |
+| `parts` | yes | a non-empty array of parts |
+| `numerals` | yes | an array of numeral ports |
+| `hiddenEdges` | no | `omit` (default) or `dashed` |
+| `section` | no | `{ "origin": [x, y, z], "normal": "x" \| "y" \| "z" \| [x, y, z], "keep": "positive" \| "negative" }`. Every part is cut; the cut faces get 45° hatching. |
+| `scale` | no | sheet mm per model mm. Omit it to fit the default size. |
+
+## Part
+
+```json
+{ "id": "housing", "name": "housing", "shape": { "kind": "box", "size": [60, 40, 20] },
+  "placement": { "translate": [0, 0, 0], "rotate": [0, 0, 0] },
+  "subtract": [ { "shape": { "kind": "cylinder", "radius": 8, "height": 22 }, "placement": { "translate": [30, 20, -1] } } ] }
+```
+
+- `id`: an identifier such as `housing`. Unique in the scene. Never drawn.
+- `name`: the part name from `figures.md`. Never drawn. Two parts with the same
+  `name` are the same part for the numeral check.
+- `subtract`: primitives cut out of the shape, in the part frame (holes,
+  slots, bores). Only primitives, not library parts.
+
+## Primitives
+
+Faces in the right column are the names a numeral port can use.
+
+| Kind | Fields | Faces |
+|---|---|---|
+| `box` | `size: [x, y, z]`, from the origin | `top`, `bottom`, `front`, `back`, `left`, `right` |
+| `cylinder` | `radius`, `height`; on Z from z = 0 | `top`, `bottom`, `side` |
+| `extrudedPolygon` | `points: [[x, y], ...]` in the XY plane, `height` along +Z | `top`, `bottom`, `side-1` ... `side-N` (edge i to i+1) |
+| `revolve` | `profile: [[r, z], ...]` closed back to the first point, `degrees` (default 360); about Z; every r ≥ 0 | `profile-1` ... `profile-N` (segment i to i+1) |
+| `tube` | `path: [[x, y, z], ...]`, `radius`, `bendRadius`, `wall` (omit for a solid rod; less than `radius`) | `segment-1` ... `segment-N` |
+
+```json
+{ "kind": "box", "size": [40, 30, 5] }
+{ "kind": "cylinder", "radius": 5, "height": 20 }
+{ "kind": "extrudedPolygon", "points": [[0, 0], [20, 0], [20, 5], [5, 5], [5, 20], [0, 20]], "height": 10 }
+{ "kind": "revolve", "profile": [[0, 0], [8, 0], [8, 4], [4, 10], [0, 10]] }
+{ "kind": "tube", "path": [[0, 0, 0], [30, 0, 0], [30, 30, 0], [30, 30, 20]], "radius": 3, "bendRadius": 8, "wall": 1 }
+```
+
+## Library parts
+
+Use a library part for every standard part. Its ports are in
+[part-library.md](part-library.md).
+
+```json
+{ "kind": "fastener", "diameter": 6, "length": 20, "head": "hex" }
+{ "kind": "spring", "coilDiameter": 16, "wireDiameter": 2, "pitch": 5, "length": 30 }
+{ "kind": "gear", "teeth": 12, "module": 2, "width": 6, "bore": 5 }
+{ "kind": "bearing", "innerDiameter": 10, "outerDiameter": 26, "width": 8 }
+{ "kind": "shaft", "steps": [{ "diameter": 8, "length": 10 }, { "diameter": 12, "length": 15 }] }
+{ "kind": "pipe", "outerDiameter": 14, "wall": 2, "length": 30 }
+{ "kind": "motor", "diameter": 28, "length": 30, "shaftDiameter": 4, "shaftLength": 10 }
+```
+
+## The `code` kind
+
+`{ "kind": "code", "code": "..." }` is an opt-in escape hatch. The drawing
+tools and the drawings CLI do not opt in, so a scene with a `code` part is
+refused (`code-not-allowed`). When a shape needs it, the shape is out of scope:
+see [scope-and-refusals.md](scope-and-refusals.md).
+
+## Numeral ports
+
+```json
+{ "numeral": "10", "part": "housing", "face": "front" }
+{ "numeral": "12", "part": "housing", "face": "top", "point": [12, 10, 20], "surface": true }
+```
+
+| Field | Required | Value |
+|---|---|---|
+| `numeral` | yes | digits, an optional lower-case letter and an optional prime: `10`, `12a`, `14'` |
+| `part` | yes | a part `id` |
+| `face` | yes | a face or port name of that part's shape |
+| `point` | no | a point on the face in the part frame. Omit it to use the face anchor. |
+| `surface` | no | `true` when the numeral names a surface: it sits on the surface, underlined, with no lead line |
+
+You never place a numeral by sheet coordinates. The engine computes the lead
+line from the port and keeps lead lines from crossing.
+
+## Example: a whole scene
+
+```json
+{
+	"figure": "FIG-2",
+	"camera": "front",
+	"section": { "origin": [0, 0, 0], "normal": "y", "keep": "positive" },
+	"parts": [
+		{ "id": "bushing", "name": "bushing", "shape": { "kind": "revolve", "profile": [[10, 0], [25, 0], [25, 8], [16, 8], [16, 40], [10, 40]] } }
+	],
+	"numerals": [
+		{ "numeral": "20", "part": "bushing", "face": "profile-2", "point": [25, 0, 4] },
+		{ "numeral": "22", "part": "bushing", "face": "profile-4", "point": [16, 0, 30] }
+	]
+}
+```

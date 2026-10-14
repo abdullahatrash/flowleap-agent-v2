@@ -1,0 +1,117 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`drawings CLI > appends a proposal under its Figure heading 1`] = `
+{
+  "exitCode": 0,
+  "figures": "---
+numerals: hundreds
+---
+## FIG. 1
+
+- 10: housing [F1]
+- 12: top surface
+- 14: bracket (proposed from sketches/sketch-1.png)
+
+## FIG. 2
+
+- 202: measure the temperature
+- 204: compare with the limit
+- 206: open the valve
+",
+  "output": {
+    "added": "- 14: bracket (proposed from sketches/sketch-1.png)",
+    "command": "propose",
+    "file": "drafting/widget/figures.md",
+    "line": 8,
+    "next": "Stop. The attorney confirms the part by removing "(proposed)", or deletes the line. Do not draw the part before that.",
+    "ok": true,
+  },
+}
+`;
+
+exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then builds the Drawing Set 1`] = `
+{
+  "build": {
+    "exitCode": 0,
+    "output": {
+      "command": "build",
+      "figures": [
+        "FIG. 1",
+        "FIG. 2",
+      ],
+      "files": [
+        "drafting/widget/drawings/sheet-1.svg",
+        "drafting/widget/drawings/drawings.pdf",
+        "drafting/widget/drawings/drawings-compliance.md",
+      ],
+      "notes": [
+        "The claimed-feature coverage was not checked: drafting/widget/feature-list.md or drafting/widget/draft-outline.md does not exist.",
+        "drafting/widget/filing-manifest.md was not written: drafting/widget/draft-application.md or drafting/widget/claims.md does not exist. The export writes it.",
+      ],
+      "office": "US",
+      "ok": true,
+      "pageSize": "A4",
+      "receipt": {
+        "fail": 0,
+        "failing": [],
+        "file": "drafting/widget/drawings/drawings-compliance.md",
+        "notChecked": 1,
+        "pass": 29,
+      },
+      "sheets": 1,
+    },
+  },
+  "files": [
+    "drawings/FIG-1.scene.json",
+    "drawings/FIG-1.svg",
+    "drawings/FIG-2.flowchart.json",
+    "drawings/FIG-2.svg",
+    "drawings/drawings-compliance.md",
+    "drawings/drawings.pdf",
+    "drawings/review/FIG-1.round-1.png",
+    "drawings/review/FIG-2.round-1.png",
+    "drawings/sheet-1.svg",
+    "feature-list.md",
+    "figures.md",
+    "sketches/sketch-1.png",
+  ],
+  "flowchart": {
+    "exitCode": 0,
+    "output": {
+      "command": "render",
+      "errors": 0,
+      "figure": "FIG. 2",
+      "files": [
+        "drafting/widget/drawings/FIG-2.flowchart.json",
+        "drafting/widget/drawings/FIG-2.svg",
+        "drafting/widget/drawings/review/FIG-2.round-1.png",
+      ],
+      "findings": [],
+      "notes": [],
+      "ok": true,
+      "review": "drafting/widget/drawings/review/FIG-2.round-1.png",
+      "round": 1,
+      "roundsLeft": 2,
+    },
+  },
+  "scene": {
+    "exitCode": 0,
+    "output": {
+      "command": "render",
+      "errors": 0,
+      "figure": "FIG. 1",
+      "files": [
+        "drafting/widget/drawings/FIG-1.scene.json",
+        "drafting/widget/drawings/FIG-1.svg",
+        "drafting/widget/drawings/review/FIG-1.round-1.png",
+      ],
+      "findings": [],
+      "notes": [],
+      "ok": true,
+      "review": "drafting/widget/drawings/review/FIG-1.round-1.png",
+      "round": 1,
+      "roundsLeft": 2,
+    },
+  },
+}
+`;
