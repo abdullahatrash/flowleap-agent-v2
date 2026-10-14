@@ -1,0 +1,97 @@
+<!-- findings: [] -->
+<svg xmlns="http://www.w3.org/2000/svg" width="148.82mm" height="198mm" viewBox="0 0 148.82 198" data-figure="FIG-3" data-kind="3d">
+<rect width="148.82" height="198" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M85.39 138.65 L86.73 137.77 L87.85 136.8 L88.75 135.74 L89.27 134.92 L89.64 134.06 L89.86 133.19 L89.93 132.31 L89.93 91.27"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M58.89 132.31 L59 133.37 L59.32 134.41 L59.85 135.42 L60.58 136.38 L61.51 137.29 L62.61 138.13 L63.88 138.89 L65.29 139.56 L66.83 140.13 L68.47 140.59 L70.2 140.94 L71.98 141.17 L73.8 141.27 L75.63 141.25 L77.44 141.1 L79.21 140.84 L80.91 140.45 L82.52 139.96 L84.02 139.35 L85.39 138.65"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M66.91 92.64 L67.96 92.94 L69.05 93.2 L70.17 93.41 L71.31 93.57"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M77.51 93.57 L78.66 93.41 L79.77 93.2 L80.86 92.94 L81.91 92.64"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M82.64 49.94 L83.41 49.45 L84.09 48.92 L84.68 48.35 L85.17 47.76 L85.66 46.92 L85.95 46.06 L86.05 45.18 L85.97 44.37 L85.71 43.58 L85.3 42.8 L84.72 42.06 L83.99 41.37 L83.13 40.73 L82.13 40.15 L81.02 39.65 L79.82 39.23 L78.54 38.9 L77.2 38.66 L75.81 38.51 L74.41 38.46 L73.01 38.51 L71.63 38.66 L70.28 38.9 L69 39.23 L67.8 39.65 L66.69 40.15 L65.7 40.73 L64.83 41.37 L64.1 42.06 L63.53 42.8 L63.11 43.58 L62.86 44.37 L62.77 45.18 L62.87 46.06 L63.17 46.92 L63.66 47.76 L64.33 48.54 L65.18 49.28 L66.18 49.94 L67.33 50.52 L68.59 51.01 L69.96 51.39 L71.4 51.68 L72.89 51.85 L74.41 51.91 L75.93 51.85 L77.42 51.68 L78.87 51.39 L80.23 51.01 L81.5 50.52 L82.64 49.94"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M62.77 140.24 L62.77 138.24"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M58.89 132.31 L58.89 91.27"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M62.77 53.11 L62.77 45.18"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M96.36 168.75 L99.04 166.99 L101.3 165.04 L103.09 162.94 L104.12 161.28 L104.86 159.57 L105.31 157.83 L105.46 156.08 L105.46 140.24 L105.19 137.9 L104.4 135.6 L103.09 133.38 L101.3 131.27 L99.53 129.7 L97.48 128.24 L95.18 126.92 L92.66 125.74 L89.93 124.71"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M43.37 156.08 L43.58 158.18 L44.23 160.26 L45.29 162.28 L46.75 164.21 L48.6 166.03 L50.81 167.72 L53.34 169.24 L56.16 170.58 L59.24 171.71 L62.53 172.64 L66.38 173.39 L70.36 173.85 L74.41 174 L78.46 173.85 L82.45 173.39 L86.29 172.64 L89.93 171.6 L93.31 170.3 L96.36 168.75"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M96.36 152.91 L99.04 151.15 L101.3 149.2 L103.09 147.09 L104.12 145.44 L104.86 143.73 L105.31 141.99 L105.46 140.24"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M58.89 124.71 L56.16 125.74 L53.64 126.92 L51.34 128.24 L49.3 129.7 L47.53 131.27 L45.73 133.38 L44.43 135.6 L43.63 137.9 L43.37 140.24 L43.58 142.34 L44.23 144.42 L45.29 146.44 L46.75 148.37 L48.6 150.19 L50.81 151.88 L53.34 153.4 L56.16 154.74 L59.24 155.87 L62.53 156.79 L66.38 157.55 L70.36 158 L74.41 158.16 L78.46 158 L82.45 157.55 L86.29 156.79 L89.93 155.76 L93.31 154.45 L96.36 152.91"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M92.25 150.53 L93.91 149.47 L95.38 148.33 L96.66 147.1 L97.71 145.81 L98.55 144.46 L99.15 143.08 L99.51 141.66 L99.63 140.24 L99.47 138.59 L98.99 136.96 L98.19 135.37 L97.08 133.85 L95.68 132.41 L94.01 131.07 L92.09 129.85 L89.93 128.76"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M58.89 128.76 L56.74 129.85 L54.81 131.07 L53.14 132.41 L51.74 133.85 L50.64 135.37 L49.84 136.96 L49.35 138.59 L49.19 140.24 L49.36 141.95 L49.89 143.63 L50.75 145.28 L51.94 146.85 L53.44 148.33 L55.23 149.69 L57.29 150.93 L59.59 152.02 L62.09 152.94 L64.76 153.69 L67.88 154.3 L71.12 154.67 L74.41 154.8 L77.7 154.67 L80.94 154.3 L84.06 153.69 L87.02 152.85 L89.77 151.79 L92.25 150.53"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M86.76 147.36 L87.91 146.63 L88.93 145.84 L89.81 144.99 L90.54 144.09 L91.28 142.84 L91.72 141.55 L91.87 140.24 L91.8 139.31 L91.58 138.38 L91.21 137.48 L90.69 136.59 L90.04 135.74 L89.26 134.93"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M59.57 134.93 L58.78 135.74 L58.13 136.59 L57.62 137.48 L57.25 138.38 L57.02 139.31 L56.95 140.24 L57.07 141.42 L57.43 142.59 L58.03 143.72 L58.85 144.81 L59.89 145.84 L61.13 146.78 L62.56 147.64 L64.15 148.39 L65.88 149.03 L67.73 149.55 L69.89 149.97 L72.13 150.23 L74.41 150.32 L76.69 150.23 L78.93 149.97 L81.09 149.55 L83.14 148.97 L85.04 148.23 L86.76 147.36"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M82.64 144.99 L83.65 144.33 L84.49 143.6 L85.17 142.81 L85.55 142.19 L85.83 141.55 L86 140.89 L86.05 140.24 L86.05 138.24"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M62.77 140.24 L62.87 141.11 L63.17 141.97 L63.66 142.81 L64.33 143.6 L65.18 144.33 L66.18 144.99 L67.33 145.57 L68.59 146.06 L69.96 146.44 L71.4 146.73 L72.89 146.9 L74.41 146.96 L75.93 146.9 L77.42 146.73 L78.87 146.44 L80.23 146.06 L81.5 145.57 L82.64 144.99"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M43.37 156.08 L43.37 140.24"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M91.87 149.44 L91.87 140.24"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M56.95 149.44 L56.95 140.24"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M95.98 147.78 L95.53 147.69 L95.07 147.66 L94.61 147.68 L94.16 147.76 L93.72 147.9 L93.3 148.09 L92.91 148.33 L92.55 148.61 L92.23 148.94 L91.96 149.31 L91.73 149.7 L91.55 150.13 L91.42 150.57 L91.35 151.02"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M98.65 144.27 L98.53 143.82 L98.36 143.39 L98.13 142.98 L97.85 142.6 L97.53 142.26 L97.17 141.97 L96.77 141.72 L96.35 141.53 L95.91 141.39 L95.45 141.3 L94.98 141.28 L94.51 141.32 L94.06 141.41 L93.62 141.56 L93.2 141.77 L92.81 142.02 L92.45 142.33 L92.14 142.67 L91.87 143.06"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M91.87 146.88 L92.14 147.26 L92.45 147.6 L92.79 147.9 L93.18 148.16"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M91.87 142.27 L92.21 141.94 L92.51 141.58 L92.75 141.18 L92.95 140.76 L93.09 140.31 L93.17 139.85 L93.19 139.39 L93.15 138.92 L93.06 138.47 L92.91 138.02 L92.7 137.61 L92.44 137.22 L92.14 136.86 L91.79 136.55 L91.41 136.29 L90.99 136.07 L90.55 135.91 L90.1 135.8"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M58.73 135.8 L58.27 135.91 L57.83 136.07 L57.42 136.29 L57.03 136.55 L56.69 136.86 L56.38 137.22 L56.12 137.61 L55.92 138.02 L55.77 138.47 L55.67 138.92 L55.63 139.39 L55.66 139.85 L55.74 140.31 L55.88 140.76 L56.07 141.18 L56.32 141.58 L56.61 141.94 L56.95 142.27"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M55.65 148.16 L56.03 147.9 L56.38 147.6 L56.69 147.26 L56.95 146.88"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M56.95 143.06 L56.68 142.67 L56.37 142.33 L56.02 142.02 L55.63 141.77 L55.21 141.56 L54.77 141.41 L54.31 141.32 L53.84 141.28 L53.38 141.3 L52.92 141.39 L52.47 141.53 L52.05 141.72 L51.65 141.97 L51.29 142.26 L50.97 142.6 L50.69 142.98 L50.47 143.39 L50.29 143.82 L50.18 144.27"/>
+<path class="edge" data-part="bearing" stroke-width="0.4" d="M57.47 151.02 L57.4 150.57 L57.28 150.13 L57.1 149.7 L56.87 149.31 L56.59 148.94 L56.27 148.61 L55.91 148.33 L55.52 148.09 L55.1 147.9 L54.66 147.76 L54.21 147.68 L53.75 147.66 L53.29 147.69 L52.84 147.78"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M101.5 87.26 L101.5 71.42 L108.75 74.44 L111.37 72.93 L106.13 68.75 L108.79 66.75 L117.15 68.58 L118.99 66.73 L112.06 63.47 L113.73 61.14 L122.63 61.67 L123.58 59.61 L115.43 57.49 L116 54.99 L124.82 54.17 L124.82 52.04 L116 51.22 L115.43 48.72 L123.58 46.6 L122.63 44.54 L113.73 45.07 L112.06 42.74 L118.99 39.48 L117.15 37.63 L108.79 39.46 L106.13 37.46 L111.37 33.28 L108.75 31.77 L101.5 34.79 L98.04 33.26 L101.22 28.43 L98.02 27.37 L92.37 31.37 L88.34 30.4 L89.24 25.27 L85.67 24.72 L82.01 29.42 L77.68 29.1 L76.26 24 L72.56 24 L71.14 29.1 L66.81 29.42 L63.15 24.72 L59.58 25.27 L60.49 30.4 L56.45 31.37 L50.81 27.37 L47.61 28.43 L50.78 33.26 L47.32 34.79 L40.07 31.77 L37.46 33.28 L42.69 37.46 L40.03 39.46 L31.68 37.63 L29.83 39.48 L36.76 42.74 L35.09 45.07 L26.2 44.54 L25.24 46.6 L33.4 48.72 L32.83 51.22 L24 52.04 L24 54.17 L32.83 54.99 L33.4 57.49 L25.24 59.61 L26.2 61.67 L35.09 61.14 L36.76 63.47 L29.83 66.73 L31.68 68.58 L40.03 66.75 L42.69 68.75 L37.46 72.93 L40.07 74.44 L47.32 71.42 L50.78 72.95 L47.61 77.78 L50.81 78.84 L56.45 74.84 L60.49 75.81 L59.58 80.94 L63.15 81.49 L66.81 76.79 L71.14 77.11 L72.56 82.21 L76.26 82.21 L77.68 77.11 L82.01 76.79 L85.67 81.49 L89.24 80.94 L88.34 75.81 L92.37 74.84 L98.02 78.84 L101.22 77.78 L98.04 72.95 L101.5 71.42"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M108.75 90.28 L108.75 74.44"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M101.5 87.26 L108.75 90.28 L111.37 88.77 L111.37 72.93"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M101.22 87.39 L101.5 87.26"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M98.02 94.69 L101.22 93.62 L101.22 77.78"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M92.37 90.68 L98.02 94.69 L98.02 78.84"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M111.37 83.15 L117.15 84.42 L118.99 82.58 L118.99 66.73"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M89.24 91.43 L92.37 90.68 L92.37 74.84"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M85.67 97.34 L89.24 96.78 L89.24 80.94"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M82.01 92.63 L85.67 97.34 L85.67 81.49"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M118.99 77.3 L122.63 77.51 L123.58 75.45 L123.58 59.61"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M77.68 92.96 L82.01 92.63 L82.01 76.79"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M76.26 98.05 L77.68 92.96 L77.68 77.11"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M72.56 98.05 L76.26 98.05 L76.26 82.21"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M71.14 92.96 L72.56 98.05 L72.56 82.21"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M123.58 70.13 L124.82 70.01 L124.82 54.17"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M66.81 92.63 L71.14 92.96 L71.14 77.11"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M63.15 97.34 L66.81 92.63 L66.81 76.79"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M59.58 96.78 L63.15 97.34 L63.15 81.49"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M56.45 90.68 L59.58 91.43"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M50.81 94.69 L56.45 90.68 L56.45 74.84"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M47.61 93.62 L50.81 94.69 L50.81 78.84"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M47.32 87.26 L47.61 87.39"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M40.07 90.28 L47.32 87.26 L47.32 71.42"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M37.46 88.77 L40.07 90.28 L40.07 74.44"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M31.68 84.42 L37.46 83.15"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M29.83 82.58 L31.68 84.42 L31.68 68.58"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M26.2 77.51 L29.83 77.3"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M25.24 75.45 L26.2 77.51 L26.2 61.67"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M24 70.01 L25.24 70.13"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M82.64 57.86 L83.41 57.37 L84.09 56.84 L84.68 56.27 L85.17 55.68 L85.66 54.84 L85.95 53.98 L86.05 53.11 L86.05 45.18"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M62.77 53.11 L62.87 53.98 L63.17 54.84 L63.66 55.68 L64.33 56.47 L65.18 57.2 L66.18 57.86 L67.33 58.44 L68.59 58.93 L69.96 59.31 L71.4 59.6 L72.89 59.77 L74.41 59.83 L75.93 59.77 L77.42 59.6 L78.87 59.31 L80.23 58.93 L81.5 58.44 L82.64 57.86"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M108.79 70.87 L108.79 66.75"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M117.15 84.42 L117.15 68.58"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M113.73 64.26 L113.73 61.14"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M122.63 77.51 L122.63 61.67"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M116 57.64 L116 54.99"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M59.58 96.78 L59.58 80.94"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M123.58 51.92 L123.58 46.6"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M47.61 93.62 L47.61 77.78"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M118.99 44.76 L118.99 39.48"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M37.46 88.77 L37.46 72.93"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M111.37 38.9 L111.37 33.28"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M40.03 70.87 L40.03 66.75"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M29.83 82.58 L29.83 66.73"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M101.22 34.67 L101.22 28.43"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M35.09 64.26 L35.09 61.14"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M25.24 75.45 L25.24 59.61"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M89.24 30.62 L89.24 25.27"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M32.83 57.64 L32.83 54.99"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M24 70.01 L24 54.17"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M25.24 51.92 L25.24 46.6"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M59.58 30.62 L59.58 25.27"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M29.83 44.76 L29.83 39.48"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M47.61 34.67 L47.61 28.43"/>
+<path class="edge" data-part="gear" stroke-width="0.4" d="M37.46 38.9 L37.46 33.28"/>
+<line class="lead" data-numeral="44" data-part="gear" stroke-width="0.2" x1="128.52" y1="87.73" x2="74.41" y2="87.91"/>
+<line class="lead" data-numeral="40" data-part="shaft" stroke-width="0.2" x1="128.52" y1="117.79" x2="74.41" y2="117.51"/>
+<line class="lead" data-numeral="42" data-part="bearing" stroke-width="0.2" x1="74.41" y1="178.59" x2="74.41" y2="166.08"/>
+</g>
+<text class="numeral" data-numeral="44" data-part="gear" x="131.82" y="89.33" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">44</text>
+<text class="numeral" data-numeral="40" data-part="shaft" x="131.82" y="119.42" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">40</text>
+<text class="numeral" data-numeral="42" data-part="bearing" x="74.41" y="182.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">42</text>
+</svg>

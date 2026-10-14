@@ -1,0 +1,115 @@
+<!-- findings: [] -->
+<svg xmlns="http://www.w3.org/2000/svg" width="168mm" height="144mm" viewBox="0 0 168 144" data-figure="FIG-2" data-kind="3d">
+<rect width="168" height="144" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M108 120 L144 120 L144 100.8 L122.4 100.8 L122.4 24 L108 24 L107.4 24 L105.62 24 L102.76 24 L98.96 24 L94.41 24 L89.34 24 L84 24 L78.66 24 L73.59 24 L69.04 24 L65.24 24 L62.38 24 L60.6 24 L60 24 L60 120"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M24 120 L60 120"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M108 120 L107.4 120 L105.62 120 L102.76 120 L98.96 120 L94.41 120 L89.34 120 L84 120 L78.66 120 L73.59 120 L69.04 120 L65.24 120 L62.38 120 L60.6 120 L60 120"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M108 24 L108 120"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M144 100.8 L143.88 100.8 L143.53 100.8 L142.95 100.8 L142.13 100.8 L141.09 100.8 L139.82 100.8 L138.33 100.8 L136.63 100.8 L134.73 100.8 L132.63 100.8 L130.33 100.8 L127.86 100.8 L125.21 100.8 L122.4 100.8"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M45.6 100.8 L42.79 100.8 L40.14 100.8 L37.67 100.8 L35.37 100.8 L33.27 100.8 L31.37 100.8 L29.67 100.8 L28.18 100.8 L26.91 100.8 L25.87 100.8 L25.05 100.8 L24.47 100.8 L24.12 100.8 L24 100.8"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M24 120 L24 100.8"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M60 24 L45.6 24"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M45.6 100.8 L45.6 24"/>
+<path class="edge" data-part="bushing" stroke-width="0.4" d="M45.6 100.8 L24 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 25.11 L46.71 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 27.94 L49.54 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 30.77 L52.37 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 33.6 L55.2 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 36.42 L58.02 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 39.25 L60 24.85"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 42.08 L60 27.68"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 44.91 L60 30.51"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 47.74 L60 33.34"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 50.57 L60 36.17"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 53.39 L60 38.99"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 56.22 L60 41.82"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 59.05 L60 44.65"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 61.88 L60 47.48"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 64.71 L60 50.31"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 67.54 L60 53.14"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 70.37 L60 55.97"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 73.19 L60 58.79"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 76.02 L60 61.62"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 78.85 L60 64.45"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24 103.28 L26.48 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 81.68 L60 67.28"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24 106.11 L29.31 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 84.51 L60 70.11"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24 108.94 L32.14 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 87.34 L60 72.94"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 24.94 L108.94 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24 111.76 L34.96 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 90.16 L60 75.76"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 27.76 L111.76 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24 114.59 L37.79 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 92.99 L60 78.59"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 30.59 L114.59 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24 117.42 L40.62 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 95.82 L60 81.42"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 33.42 L117.42 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M24.25 120 L43.45 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M45.6 98.65 L60 84.25"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 36.25 L120.25 24"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M27.08 120 L60 87.08"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 39.08 L122.4 24.68"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M29.91 120 L60 89.91"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 41.91 L122.4 27.51"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M32.74 120 L60 92.74"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 44.74 L122.4 30.34"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M35.56 120 L60 95.56"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 47.56 L122.4 33.16"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M38.39 120 L60 98.39"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 50.39 L122.4 35.99"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M41.22 120 L60 101.22"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 53.22 L122.4 38.82"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M44.05 120 L60 104.05"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 56.05 L122.4 41.65"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M46.88 120 L60 106.88"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 58.88 L122.4 44.48"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M49.71 120 L60 109.71"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 61.71 L122.4 47.31"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M52.53 120 L60 112.53"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 64.53 L122.4 50.13"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M55.36 120 L60 115.36"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 67.36 L122.4 52.96"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M58.19 120 L60 118.19"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 70.19 L122.4 55.79"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 73.02 L122.4 58.62"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 75.85 L122.4 61.45"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 78.68 L122.4 64.28"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 81.5 L122.4 67.1"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 84.33 L122.4 69.93"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 87.16 L122.4 72.76"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 89.99 L122.4 75.59"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 92.82 L122.4 78.42"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 95.65 L122.4 81.25"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 98.48 L122.4 84.08"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 101.3 L122.4 86.9"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 104.13 L122.4 89.73"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 106.96 L122.4 92.56"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 109.79 L122.4 95.39"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 112.62 L122.4 98.22"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 115.45 L122.65 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M108 118.27 L125.47 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M109.1 120 L128.3 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M111.93 120 L131.13 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M114.76 120 L133.96 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M117.59 120 L136.79 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M120.42 120 L139.62 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M123.24 120 L142.44 100.8"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M126.07 120 L144 102.07"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M128.9 120 L144 104.9"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M131.73 120 L144 107.73"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M134.56 120 L144 110.56"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M137.39 120 L144 113.39"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M140.22 120 L144 116.22"/>
+<path class="hatch" data-part="bushing" stroke-width="0.2" d="M143.04 120 L144 119.04"/>
+<line class="lead" data-numeral="22" data-part="bushing" stroke-width="0.2" x1="147.7" y1="48.57" x2="122.4" y2="48"/>
+<line class="lead" data-numeral="20" data-part="bushing" stroke-width="0.2" x1="147.7" y1="110.41" x2="144" y2="110.4"/>
+<line class="lead" data-numeral="24" data-part="bushing" stroke-width="0.2" x1="20.3" y1="72.7" x2="60" y2="72"/>
+</g>
+<text class="numeral" data-numeral="22" data-part="bushing" x="151" y="50.25" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">22</text>
+<text class="numeral" data-numeral="20" data-part="bushing" x="151" y="112.04" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">20</text>
+<text class="numeral" data-numeral="24" data-part="bushing" x="17" y="74.36" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">24</text>
+</svg>
