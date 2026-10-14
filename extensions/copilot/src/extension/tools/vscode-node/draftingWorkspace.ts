@@ -364,7 +364,27 @@ export class DraftingWorkspace {
 		await this.write(this.folder.workingRecord, setRecordField(record, EXPORTED_DRAFT_HASH, draftHash(draft, claims)));
 	}
 
-	private async exists(path: string): Promise<boolean> {
+	/** The names of the files in a workspace-relative folder, sorted; empty when the folder does not exist. */
+	async listFiles(path: string): Promise<string[]> {
+		const uri = this.uri(path);
+		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+		try {
+			return (await this.fileSystemService.readDirectory(uri)).filter(([, type]) => type === FileType.File).map(([name]) => name).sort();
+		} catch {
+			return [];
+		}
+	}
+
+	/** Deletes a workspace-relative file; nothing happens when it does not exist. */
+	async delete(path: string): Promise<void> {
+		const uri = this.uri(path);
+		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+		if (await this.exists(path)) {
+			await this.fileSystemService.delete(uri);
+		}
+	}
+
+	async exists(path: string): Promise<boolean> {
 		try {
 			await this.fileSystemService.stat(this.uri(path));
 			return true;
