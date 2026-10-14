@@ -6,6 +6,9 @@
 import { DraftFinding } from '../../../tools/common/drafting/finding';
 import { countWords, DiagramOffice, EPO_MAX_WORDS, FONT_SIZE, textWidth, US_MAX_WORDS } from './diagramText';
 
+/** The rule ids of the diagram fault check, one per check of {@link checkDiagramSvg}. */
+export const DIAGRAM_RULES = ['us-keywords-only', 'epo-short-sentence', 'label-overlap', 'numeral-set', 'lead-line', 'lead-crosses-edge'] as const;
+
 /** What the fault check compares the SVG against. */
 export interface DiagramFaultInput {
 	readonly office: DiagramOffice;

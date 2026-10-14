@@ -462,6 +462,28 @@ describe('export_draft_docx', () => {
 	});
 });
 
+describe('export_draft_docx with a built Drawing Set', () => {
+	it('counts the sheet-N.svg files of drawings/ in the filing manifest', async () => {
+		const { tools, read, fileSystem } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft());
+		for (const name of ['sheet-1.svg', 'sheet-2.svg', 'drawings.pdf']) {
+			await fileSystem.writeFile(URI.file(`${root}/drawings/${name}`), new TextEncoder().encode('<svg/>'));
+		}
+		const result = await tools.exportDocx();
+		expect({
+			result: result.includes('The Drawing Sheets are the sheet-N.svg files of drafting/hinge/drawings/ (built by build_drawing_set).'),
+			manifest: (await read('drafting/hinge/filing-manifest.md')).split('\n').filter(line => /drawing/i.test(line)),
+		}).toEqual({
+			result: true,
+			manifest: [
+				'| Drawing sheets | 2 (measured: the sheet-N.svg files in drawings/) |',
+				'| Drawings | drawings/ (Drawing Sheets) | 2 |',
+			],
+		});
+	});
+});
+
 describe('Inventor Question answers', () => {
 	it('the save writes inventor-answers.md; an applied answer closes its question, is recorded, and the export blocks only on the rest', async () => {
 		const { tools, read, write } = setup(gatesOpen);
