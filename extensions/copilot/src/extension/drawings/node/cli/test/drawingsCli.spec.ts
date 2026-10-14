@@ -101,6 +101,12 @@ describe('drawings CLI', () => {
 		expect({ files: await listFiles(matterDir), scene, flowchart, build, rounds }).toMatchSnapshot();
 	}, 120_000);
 
+	it('records a round the model did not see with --no-render-seen', async () => {
+		const run = await runCli(workspace, ['render', 'widget', '1', '--scene', 'box.json', '--no-render-seen']);
+		const rounds = JSON.parse(await fs.readFile(path.join(matterDir, 'drawings', 'rounds.json'), 'utf8'));
+		expect({ exitCode: run.exitCode, seen: run.output.seen, rounds }).toEqual({ exitCode: 0, seen: false, rounds: { figures: { '1': [{ round: 1, png: 'review/FIG-1.round-1.png', seen: false }] } } });
+	}, 120_000);
+
 	it('proposes a part with the next numeral of the scheme and copies the sketch', async () => {
 		await fs.writeFile(path.join(workspace, 'photo of bracket.png'), 'png');
 		const run = await runCli(workspace, ['propose', 'widget', '1', 'bracket', '--features', 'f1', '--sketch', 'photo of bracket.png']);
@@ -169,6 +175,13 @@ describe('drawings CLI', () => {
 					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-1.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
 					await fs.writeFile(path.join(matterDir, 'figures.md'), FIGURES_MD.replace('numerals: hundreds', 'numerals: hundreds\npageSize: letter'));
 					await fs.writeFile(path.join(matterDir, 'feature-list.md'), FEATURE_LIST_MD.replace('office: US', 'office: EPO'));
+				},
+			},
+			{
+				name: 'a build with an open Figure Error', args: ['build', 'widget'],
+				setup: async (_workspace, matterDir) => {
+					await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
+					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-1.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"><text class="numeral" x="5" y="10" font-size="2">10</text></svg>');
 				},
 			},
 			{ name: 'a proposal with a used numeral', args: ['propose', 'widget', '1', 'bracket', '--numeral', '10'] },

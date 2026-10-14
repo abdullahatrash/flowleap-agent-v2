@@ -61,10 +61,10 @@ The `build` command refuses on these. They are not fixed by a render.
 | `figure-proposal` | A `(proposed)` line is in `figures.md`. A waiver does not open this gate. | The attorney removes the marker (confirms) or the line. |
 | `figure-coverage` | A Feature List row an Approved Claim cites has no drawn part (37 CFR 1.83(a)), or a part links a row that does not exist. | Link a confirmed part to the row, `- 20: part [F3]`, or the attorney waives the Finding in `findings.md`. |
 | `figures-settings` | `pageSize: letter` for the EPO. | The attorney sets `pageSize: A4`. |
+| a Figure Error | An Error of the two tables above is open in a Figure (the build checks each `FIG-N.svg` again). | Fix the Figure and render again, or the attorney waives the Finding in `findings.md` with a `  - Waived: <reason>` line. |
 | a failing sheet check | A sheet check of the receipt list below fails (for example `glyph-height` after a Figure was scaled down). | Fix the Figure that causes it and render again. |
 
-Figure-level Errors (the two tables above) do not block the build. They show as
-`fail` rows in the receipt; report each one.
+A waived Figure Error shows in the receipt with its waiver reason.
 
 ## Sheet checks in the receipt
 

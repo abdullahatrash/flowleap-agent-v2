@@ -73,7 +73,7 @@ Done when every in-scope Figure has an input file whose numerals are all in
    [references/fault-list.md](references/fault-list.md), in the input file,
    then render again. Look at the render for what code cannot check: a part
    in the wrong place, a wrong view. When you cannot read images, add
-   `--seen no`, so the receipt records that no render was seen.
+   `--no-render-seen`, so the receipt records that no render was seen.
 3. Stop after the third round (`roundsLeft` is 0, or the CLI refuses). Report
    the Errors that stay open.
 
@@ -94,9 +94,10 @@ and the attorney is asked.
 
 ## Step 5: Build the set and report the receipt
 
-1. Run `build`. It refuses on a `(proposed)` line, an open figure-list Error
-   (claimed-feature coverage, page size) or a failing sheet check; report
-   each item it lists.
+1. Run `build`. It refuses on a `(proposed)` line, an open Figure Error, an
+   open figure-list Error (claimed-feature coverage, page size) or a failing
+   sheet check; report each item it lists. Only the attorney waives an Error,
+   in `findings.md`.
 2. On success it writes `sheet-N.svg`, `drawings.pdf` and
    `drawings-compliance.md`, and updates `filing-manifest.md` when the export
    has written one.

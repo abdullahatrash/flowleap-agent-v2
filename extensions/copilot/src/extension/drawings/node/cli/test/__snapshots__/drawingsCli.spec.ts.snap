@@ -29,9 +29,10 @@ numerals: hundreds
       "added": "- 102: bracket [F1] (proposed from sketches/photo-of-bracket.png)",
       "command": "propose",
       "file": "drafting/widget/figures.md",
-      "next": "This part is a proposal: build and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why, then stop.",
+      "numeral": "102",
       "ok": true,
       "sketch": "drafting/widget/sketches/photo-of-bracket.png",
+      "text": "Wrote to drafting/widget/figures.md: \`- 102: bracket [F1] (proposed from sketches/photo-of-bracket.png)\`. The sketch is at drafting/widget/sketches/photo-of-bracket.png. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.",
     },
   },
 }
@@ -60,7 +61,7 @@ exports[`drawings CLI > refusals > refuses a build of Letter sheets for the EPO 
   "exitCode": 1,
   "ok": false,
   "reason": "1 Error(s) of the figure list are open; fix each in drafting/widget/figures.md, or the attorney waives it in drafting/widget/findings.md:
-- Error \`figures-settings\`: figures.md sets \`pageSize: letter\`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set \`pageSize: A4\`.",
+- \`figures-settings\` (figures.md): figures.md sets \`pageSize: letter\`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set \`pageSize: A4\`.",
   "wrote": [],
 }
 `;
@@ -70,7 +71,18 @@ exports[`drawings CLI > refusals > refuses a build with a proposal in figures.md
   "exitCode": 1,
   "ok": false,
   "reason": "drafting/widget/figures.md has 1 proposed part(s); the attorney confirms each by removing "(proposed)", or deletes the line:
-- Error \`figure-proposal\` (line 14): Part 14 ("bracket") is a proposal from sketches/sketch-1.png: the disclosure does not state it. The attorney confirms it by removing "(proposed)", or deletes the line.",
+- \`figure-proposal\` (figures.md, line 14): Part 14 ("bracket") is a proposal from sketches/sketch-1.png: the disclosure does not state it. The attorney confirms it by removing "(proposed)", or deletes the line.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a build with an open Figure Error and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "2 Error(s) of the Figures are open. Fix each in the Figure source and render again, or the attorney waives it: copy the item under "## Errors" in drafting/widget/findings.md and add a line \`  - Waived: <reason>\` under it.
+- \`glyph-too-small\` (FIG-1.svg): Text "10" is 1.43 mm high; the minimum is 3.2 mm.
+- \`lead-line-missing\` (FIG-1.svg): Numeral 10 has no lead line and is not underlined as a surface.",
   "wrote": [],
 }
 `;
@@ -79,7 +91,7 @@ exports[`drawings CLI > refusals > refuses a build with no rendered Figure and w
 {
   "exitCode": 1,
   "ok": false,
-  "reason": "drafting/widget/drawings/ has no Figure (FIG-N.svg). Render each Figure first.",
+  "reason": "drafting/widget/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first.",
   "wrote": [],
 }
 `;
@@ -127,7 +139,7 @@ exports[`drawings CLI > refusals > refuses a numeral outside figures.md and writ
   "ok": false,
   "reason": "Every part drawn has a numeral, and every numeral is in the figure list:
 - Error \`numeral-not-allowed\` (FIG-1.scene.json): Numeral 98 is not in the figures list (allowed: 10, 12, 202, 204, 206). [37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l)]
-Add the part to the figure list (propose when the disclosure does not state it), or remove it from the scene.",
+Add the part to the figure list (propose_figure_part when the disclosure does not state it), or remove it from the scene.",
   "wrote": [],
 }
 `;
@@ -136,7 +148,7 @@ exports[`drawings CLI > refusals > refuses a proposal from a sketch that does no
 {
   "exitCode": 1,
   "ok": false,
-  "reason": "drafting/widget/sketches/missing.png does not exist.",
+  "reason": "The sketch sketches/missing.png does not exist in the current folder, the workspace or drafting/widget/.",
   "wrote": [],
 }
 `;
@@ -186,29 +198,21 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
     "exitCode": 0,
     "output": {
       "command": "build",
-      "figures": [
-        "FIG. 1",
-        "FIG. 2",
-      ],
-      "files": [
-        "drafting/widget/drawings/sheet-1.svg",
-        "drafting/widget/drawings/review/sheet-1.png",
-        "drafting/widget/drawings/drawings.pdf",
-        "drafting/widget/drawings/drawings-compliance.md",
-      ],
-      "manifest": "The Filing Manifest is written by the export; it will count the 1 sheet(s).",
-      "next": "Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
-      "office": "US",
+      "manifestUpdated": false,
       "ok": true,
       "pageSize": "A4",
       "receipt": {
         "fail": 0,
-        "failing": [],
         "file": "drafting/widget/drawings/drawings-compliance.md",
         "notChecked": 1,
         "pass": 23,
       },
       "sheets": 1,
+      "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/widget/drawings/sheet-1.svg, drafting/widget/drawings/drawings.pdf, and the receipt drafting/widget/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/widget/drawings/review/.
+Receipt: 23 pass, 0 fail, 1 not checked.
+No code check fails.
+The Filing Manifest is written by export_draft_docx; it will count the 1 sheet(s).
+Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
     },
   },
   "files": [
@@ -233,18 +237,16 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
       "command": "render",
       "errors": 0,
       "figure": "FIG. 2",
-      "files": [
-        "drafting/widget/drawings/FIG-2.scene.json",
-        "drafting/widget/drawings/FIG-2.svg",
-        "drafting/widget/drawings/review/FIG-2.round-1.png",
-        "drafting/widget/drawings/rounds.json",
-      ],
       "findings": [],
-      "next": "The mechanical fault list found nothing. The attorney still reviews the Figure. Do not call it compliant or ready to file.",
       "ok": true,
       "review": "drafting/widget/drawings/review/FIG-2.round-1.png",
       "round": 1,
       "roundsLeft": 2,
+      "seen": true,
+      "text": "Rendered FIG. 2: wrote drafting/widget/drawings/FIG-2.scene.json, drafting/widget/drawings/FIG-2.svg and the review render drafting/widget/drawings/review/FIG-2.round-1.png. Round 1 of 3.
+The review render of this round is attached; it is not a deliverable.
+The mechanical fault list found nothing. The attorney still reviews the Figure.
+Do not call the Figure compliant or ready to file.",
     },
   },
   "rounds": {
@@ -271,18 +273,16 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
       "command": "render",
       "errors": 0,
       "figure": "FIG. 1",
-      "files": [
-        "drafting/widget/drawings/FIG-1.scene.json",
-        "drafting/widget/drawings/FIG-1.svg",
-        "drafting/widget/drawings/review/FIG-1.round-1.png",
-        "drafting/widget/drawings/rounds.json",
-      ],
       "findings": [],
-      "next": "The mechanical fault list found nothing. The attorney still reviews the Figure. Do not call it compliant or ready to file.",
       "ok": true,
       "review": "drafting/widget/drawings/review/FIG-1.round-1.png",
       "round": 1,
       "roundsLeft": 2,
+      "seen": true,
+      "text": "Rendered FIG. 1: wrote drafting/widget/drawings/FIG-1.scene.json, drafting/widget/drawings/FIG-1.svg and the review render drafting/widget/drawings/review/FIG-1.round-1.png. Round 1 of 3.
+The review render of this round is attached; it is not a deliverable.
+The mechanical fault list found nothing. The attorney still reviews the Figure.
+Do not call the Figure compliant or ready to file.",
     },
   },
 }

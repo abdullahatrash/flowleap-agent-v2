@@ -70,8 +70,9 @@ and the attorney is asked.
 ## Step 5: Build the set and report the receipt
 
 1. Call `build_drawing_set` with `matter`. It refuses on a `(proposed)` line,
-   an open figure-list Error (claimed-feature coverage, page size) or a
-   failing sheet check; report each item it lists.
+   an open Figure Error, an open figure-list Error (claimed-feature
+   coverage, page size) or a failing sheet check; report each item it lists.
+   Only the attorney waives an Error, in `findings.md`.
 2. On success it writes `sheet-N.svg`, `drawings.pdf` and
    `drawings-compliance.md`, and updates `filing-manifest.md` when the export
    has written one.
