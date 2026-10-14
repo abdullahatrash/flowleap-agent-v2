@@ -4,62 +4,48 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * The drawings CLI (PRD 0023, slice D6): the same engine as the editor drawing tools, for the
- * Agents Window skill `patent-drawings`. Bundled to `dist/drawings-cli.js` beside the kernel and
- * resvg WebAssembly files.
+ * The drawings CLI (PRD 0023, slice D6): the editor drawing tools `render_figure`,
+ * `build_drawing_set` and `propose_figure_part` (D5) for the Agents Window skill
+ * `patent-drawings`, with the same gates, refusals and files. Bundled to `dist/drawings-cli.js`
+ * beside the kernel and resvg WebAssembly files.
  *
  * ```
- * drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file>
+ * drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--seen no]
  * drawings-cli build <matter>
- * drawings-cli propose <matter> <numeral> <part> --sketch <file> [--figure <n>] [--features F1,F2]
+ * drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]
  * ```
  *
- * Common options: `--root <dir>` (the workspace that holds `drafting/`; default: the current
- * folder) and `--office US|EPO|PCT` (when `feature-list.md` sets no office).
+ * `<figure>` is `1`, `1A` or `FIG-1A`. `--root <dir>` is the workspace that holds `drafting/`
+ * (default: the current folder). Input files are read relative to the current folder; a sketch
+ * path is workspace-relative, or `sketches/<file>` relative to the matter folder.
  *
  * Output: one JSON object on stdout. Exit 0 on success, 1 on a refusal (`ok: false` and the
- * reason), 2 on a usage error. No model call: every check is code.
+ * reason, the same text the editor tool gives), 2 on a usage error. No model call.
  */
 
+import { createHash } from 'crypto';
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
+import type { DiagramBlock, DiagramConnection } from '../../common/diagram/blockDiagram';
 import type { DiagramResult } from '../../common/diagram/diagram';
-import type { BlockDiagramInput, DiagramBlock, DiagramConnection } from '../../common/diagram/blockDiagram';
 import type { FlowchartProposal } from '../../common/diagram/flowchart';
 import type { DiagramStep } from '../../common/diagram/steps';
-import type { DiagramNumeralScheme } from '../../common/diagram/diagramText';
-import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../common/scene/drawingFaults';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, drawingFindingLine, FigureId, figureId, figureOfSvgFile, insertPartLine, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsOfFigure, renderReviewRounds, reviewPngCount, reviewRecords, ReviewRound, ROUNDS_FILE, sameBytes, schemeFault, SKETCH_EXTENSIONS, sketchFileName } from '../../common/drawingFiles';
+import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
+import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
-import type { DrawingOffice, FigureInput } from '../../common/sheets/sheetLayout';
-import type { FigureReviewRecord } from '../../common/sheets/receipt';
-import { checkFigureProposals, checkFiguresSettings, checkClaimedFeatureCoverage } from '../../../tools/common/drafting/figureValidators';
+import type { CheckResult } from '../../common/sheets/receipt';
+import type { FigureInput } from '../../common/sheets/sheetLayout';
+import { parseClaims } from '../../../tools/common/drafting/claims';
+import { checkClaimedFeatureCoverage, checkFigureProposals, checkFiguresSettings } from '../../../tools/common/drafting/figureValidators';
 import { formatFigurePart, readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { DraftFinding } from '../../../tools/common/drafting/finding';
-import { parseFindingsFile } from '../../../tools/common/drafting/findingsFile';
+import { blockingFindings, mergeFindings, parseFindingsFile } from '../../../tools/common/drafting/findingsFile';
 import { filingManifest, renderFilingManifest } from '../../../tools/common/drafting/filingManifest';
-import { DraftingFolder, DRAFTING_FILE_NAMES, isDrawingSheetFile, resolveDraftingFolder } from '../../../tools/common/drafting/folderContract';
-import { DraftingOffice, parseDraftingFrontmatter, readOffice } from '../../../tools/common/drafting/frontmatter';
+import { DraftingFolder, isDrawingSheetFile, resolveDraftingFolder } from '../../../tools/common/drafting/folderContract';
+import { DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice } from '../../../tools/common/drafting/frontmatter';
 import { parseDraftOutline } from '../../../tools/common/drafting/outline';
-import { figureHeadingNumbers, figureNumbers, hasFigure, parseFigureParts, parseFigureSections } from '../../../tools/common/drafting/specValidators';
-
-/** The review renders per Figure (PRD 0023 D5 guardrail: three rounds per Figure). */
-export const MAX_ROUNDS = 3;
-
-/** The citations of the 2D diagram SVG checks (`diagramFaults.ts`), for the receipt rows that pass. */
-const DIAGRAM_RULES: Readonly<Record<string, string>> = {
-	'us-keywords-only': '37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible")',
-	'epo-short-sentence': 'GL A-IX 8; OJ EPO 2025 A49 Art. 1(2)(j) (a short sentence per method step)',
-	'label-overlap': '37 CFR 1.84(p)(1); PCT Rule 11.13(h) (plain and legible characters)',
-	'numeral-set': '37 CFR 1.84(p)(4), (p)(5) (one item, one character; none absent from the description)',
-	'lead-line': '37 CFR 1.84(q) (a lead line connects each reference character to its item)',
-	'lead-crosses-edge': '37 CFR 1.84(q) (lead lines must not cross each other or other lines)',
-};
-
-/** What one CLI run prints and exits with. */
-export interface CliResult {
-	readonly exitCode: 0 | 1 | 2;
-	readonly output: CliOutput;
-}
+import { figureHeadingNumbers, hasFigure, parseFigureParts, parseFigureSections } from '../../../tools/common/drafting/specValidators';
 
 /** A JSON value of the CLI output. */
 type CliValue = string | number | boolean | undefined | readonly CliValue[] | { readonly [key: string]: CliValue };
@@ -73,6 +59,12 @@ export type CliOutput = {
 	readonly [key: string]: CliValue;
 };
 
+/** What one CLI run prints and exits with. */
+export interface CliResult {
+	readonly exitCode: 0 | 1 | 2;
+	readonly output: CliOutput;
+}
+
 /** A Finding as the CLI prints it. */
 type CliFinding = {
 	readonly severity: string;
@@ -80,26 +72,21 @@ type CliFinding = {
 	readonly message: string;
 	readonly file?: string;
 	readonly citation?: string;
-	readonly waived?: string;
 };
+
+/** Thrown for a refusal; the message is the reason. */
+class Refusal extends Error { }
+
+/** Thrown for a usage error. */
+class UsageError extends Error { }
+
+const USAGE = 'Usage: drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--seen no]; drawings-cli build <matter>; drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]. Option: --root <workspace>.';
 
 /** The parsed command line: positional arguments and `--name value` options. */
 interface ParsedArgs {
 	readonly positional: readonly string[];
 	readonly options: ReadonlyMap<string, string>;
 }
-
-/** Thrown for a refusal; the message is the reason. */
-class Refusal extends Error {
-	constructor(reason: string, readonly details: Readonly<Record<string, CliValue>> = {}) {
-		super(reason);
-	}
-}
-
-/** Thrown for a usage error. */
-class UsageError extends Error { }
-
-const USAGE = 'Usage: drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file>; drawings-cli build <matter>; drawings-cli propose <matter> <numeral> <part> --sketch <file> [--figure <n>] [--features F1,F2]. Options: --root <workspace>, --office US|EPO|PCT.';
 
 function parseArgs(argv: readonly string[]): ParsedArgs {
 	const positional: string[] = [];
@@ -127,94 +114,110 @@ function toCliFinding(finding: DraftFinding & { readonly citation?: string }): C
 		message: finding.message,
 		...(finding.file ? { file: finding.file } : {}),
 		...(finding.citation ? { citation: finding.citation } : {}),
-		...(finding.waived ? { waived: finding.waived.reason } : {}),
 	};
 }
 
-/** The paths of one matter, absolute, with the drafting folder contract. */
-interface Matter {
-	readonly root: string;
-	readonly folder: DraftingFolder;
-	readonly dir: string;
-	readonly drawingsDir: string;
-	abs(workspacePath: string): string;
+/** One matter folder on disk, with the drafting folder contract and workspace-relative file access. */
+class Matter {
+
+	private constructor(readonly root: string, readonly folder: DraftingFolder) { }
+
+	static locate(root: string, name: string | undefined): Matter {
+		const folder = name === undefined ? undefined : resolveDraftingFolder(name);
+		if (!folder) {
+			throw new UsageError(`"${name ?? ''}" is not a matter name. Give the folder name under drafting/, e.g. "widget".`);
+		}
+		const matter = new Matter(root, folder);
+		if (!existsSync(matter.abs(folder.folder))) {
+			throw new Refusal(`${folder.folder}/ does not exist in the workspace ${root}.`);
+		}
+		return matter;
+	}
+
+	abs(workspacePath: string): string {
+		return path.join(this.root, ...workspacePath.split('/'));
+	}
+
+	async read(workspacePath: string): Promise<string | undefined> {
+		try {
+			return await fs.readFile(this.abs(workspacePath), 'utf8');
+		} catch {
+			return undefined;
+		}
+	}
+
+	async readBytes(workspacePath: string): Promise<Uint8Array | undefined> {
+		try {
+			return new Uint8Array(await fs.readFile(this.abs(workspacePath)));
+		} catch {
+			return undefined;
+		}
+	}
+
+	async write(workspacePath: string, content: string | Uint8Array): Promise<void> {
+		const file = this.abs(workspacePath);
+		await fs.mkdir(path.dirname(file), { recursive: true });
+		await fs.writeFile(file, content);
+	}
+
+	/** The file names in a workspace-relative folder, sorted; empty when it does not exist. */
+	async listFiles(workspacePath: string): Promise<string[]> {
+		const entries = await fs.readdir(this.abs(workspacePath), { withFileTypes: true }).catch(() => []);
+		return entries.filter(entry => entry.isFile()).map(entry => entry.name).sort();
+	}
+
+	/** The office of the draft: the draft's frontmatter, else the Feature List's. */
+	async office(draft: string | undefined): Promise<DraftingOffice | undefined> {
+		const fromDraft = draft ? readOffice(parseDraftingFrontmatter(draft).fields) : undefined;
+		if (fromDraft) {
+			return fromDraft;
+		}
+		const featureList = await this.read(this.folder.featureList);
+		return featureList ? readOffice(parseDraftingFrontmatter(featureList).fields) : undefined;
+	}
+
+	/**
+	 * The `approved` gate of `claims.md`, read only: the claims text, or the refusal. Unlike the
+	 * editor tools, the CLI does not clear the flag when the claims changed after approval; it
+	 * refuses and the editor's drafting tools clear it on their next call.
+	 */
+	async approvedClaims(): Promise<string> {
+		const path = this.folder.claims;
+		const text = await this.read(path);
+		if (text === undefined) {
+			throw new Refusal(`A flowchart from a claim needs the Approved Claims. ${path} does not exist. The attorney sets \`approved: true\` in its frontmatter after review.`);
+		}
+		const { fields, body } = parseDraftingFrontmatter(text);
+		const gate = readGateFlag(fields, 'approved');
+		if (gate !== 'set') {
+			throw new Refusal(`A flowchart from a claim needs the Approved Claims. ${gate === 'missing'
+				? `${path} has no \`approved\` flag in its frontmatter. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate.`
+				: `\`approved\` in ${path} is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate.`}`);
+		}
+		const approvedHash = fields['approvedHash'];
+		if (typeof approvedHash === 'string' && approvedHash !== createHash('sha256').update(body.trim()).digest('hex')) {
+			throw new Refusal(`A flowchart from a claim needs the Approved Claims. ${path} changed after it was approved. The attorney reviews the claims and sets \`approved: true\` again.`);
+		}
+		return text;
+	}
 }
 
-function resolveMatter(root: string, name: string | undefined): Matter {
-	const folder = name === undefined ? undefined : resolveDraftingFolder(name);
-	if (!folder) {
-		throw new UsageError(`"${name ?? ''}" is not a matter name. Give the folder name under drafting/, e.g. "widget".`);
+/** `1`, `1A`, `FIG-1A`, `fig. 2` as a Figure. */
+function parseFigure(text: string | undefined): FigureId {
+	const match = /^(?:fig(?:ure)?[-.\s]*)?(?<number>\d+)(?<partial>[A-Za-z])?$/i.exec((text ?? '').trim());
+	const figure = match?.groups ? figureId(Number(match.groups.number), match.groups.partial) : `"${text ?? ''}" is not a Figure. Give its number, e.g. 1, 2A or FIG-1.`;
+	if (typeof figure === 'string') {
+		throw new UsageError(figure);
 	}
-	const abs = (workspacePath: string) => path.join(root, ...workspacePath.split('/'));
-	if (!existsSync(abs(folder.folder))) {
-		throw new Refusal(`The matter folder ${folder.folder}/ does not exist under ${root}.`);
-	}
-	return { root, folder, dir: abs(folder.folder), drawingsDir: abs(folder.drawings), abs };
+	return figure;
 }
 
-async function readOptional(file: string): Promise<string | undefined> {
+/** A JSON object read from a file relative to the current folder. */
+async function readJsonObject(cwd: string, file: string, what: string): Promise<object> {
+	let text: string;
 	try {
-		return await fs.readFile(file, 'utf8');
+		text = await fs.readFile(path.resolve(cwd, file), 'utf8');
 	} catch {
-		return undefined;
-	}
-}
-
-async function readFigures(matter: Matter): Promise<string> {
-	const figures = await readOptional(matter.abs(matter.folder.figures));
-	if (figures === undefined) {
-		throw new Refusal(`${matter.folder.figures} does not exist. Write the figures list first: a "## FIG. N" heading per Figure and one "- 12: part" line per part.`);
-	}
-	return figures;
-}
-
-/** The office: `feature-list.md` frontmatter first, then `--office`. */
-async function readMatterOffice(matter: Matter, option: string | undefined): Promise<DrawingOffice> {
-	const featureList = await readOptional(matter.abs(matter.folder.featureList));
-	const fromFile = featureList === undefined ? undefined : readOffice(parseDraftingFrontmatter(featureList).fields);
-	if (fromFile) {
-		return fromFile;
-	}
-	const upper = option?.trim().toUpperCase();
-	if (upper === 'US' || upper === 'EPO' || upper === 'PCT') {
-		return upper;
-	}
-	throw new Refusal(`No office: ${matter.folder.featureList} sets no \`office\` (US or EPO). Set it there, or pass --office US, EPO or PCT.`);
-}
-
-/** The drafting office of the figure gates: PCT sheets follow the EPO wording. */
-function draftingOffice(office: DrawingOffice): DraftingOffice {
-	return office === 'US' ? 'US' : 'EPO';
-}
-
-/** `1`, `FIG-1`, `fig. 1A` = `1` / `1A`. */
-function parseFigureKey(text: string | undefined): { key: string; number: number; partial?: string } {
-	const match = /^(?:fig(?:ure)?[-.\s]*)?(?<number>[1-9]\d*)(?<partial>[A-Za-z])?$/i.exec((text ?? '').trim());
-	if (!match?.groups) {
-		throw new UsageError(`"${text ?? ''}" is not a Figure. Give its number, e.g. 1, 2A or FIG-1.`);
-	}
-	const partial = match.groups.partial?.toUpperCase();
-	return { key: `${match.groups.number}${partial ?? ''}`, number: Number(match.groups.number), ...(partial ? { partial } : {}) };
-}
-
-/** The review rounds already written for a Figure: `review/FIG-<key>.round-<n>.png`. */
-async function reviewRounds(drawingsDir: string, key: string): Promise<number[]> {
-	const names = await fs.readdir(path.join(drawingsDir, 'review')).catch(() => [] as string[]);
-	const pattern = new RegExp(`^FIG-${key}\\.round-(?<round>\\d+)\\.png$`);
-	return names.flatMap(name => {
-		const round = pattern.exec(name)?.groups?.round;
-		return round ? [Number(round)] : [];
-	}).sort((a, b) => a - b);
-}
-
-/** The numerals of `figures.md` the attorney confirmed (no `(proposed)` marker). */
-function confirmedNumerals(figures: string): string[] {
-	return [...new Set(parseFigureParts(figures).filter(part => !part.proposed).map(part => part.numeral))];
-}
-
-async function readJsonFile(file: string, what: string): Promise<object> {
-	const text = await readOptional(file);
-	if (text === undefined) {
 		throw new Refusal(`The ${what} file ${file} cannot be read.`);
 	}
 	try {
@@ -228,366 +231,409 @@ async function readJsonFile(file: string, what: string): Promise<object> {
 	}
 }
 
-/** The source of a 2D Figure as written to `FIG-N.flowchart.json`. */
-interface FlowchartSource {
-	readonly claim?: string;
-	readonly steps?: readonly DiagramStep[];
+/** The flowchart input file, the `flowchart` parameter of `render_figure`. */
+interface FlowchartParams {
+	readonly steps?: readonly string[];
+	readonly fromClaim?: number;
 	readonly terminals?: boolean;
 	readonly proposal?: FlowchartProposal;
 }
 
-/** The source of a block diagram as written to `FIG-N.block.json`. */
-interface BlockSource {
+/** The block input file, the `block` parameter of `render_figure`. */
+interface BlockParams {
 	readonly blocks: readonly DiagramBlock[];
-	readonly connections: readonly DiagramConnection[];
+	readonly connections?: readonly DiagramConnection[];
 }
 
-function isFlowchartSource(value: object): value is FlowchartSource {
-	const source = value as FlowchartSource;
-	const steps = source.steps;
-	return (typeof source.claim === 'string' || (Array.isArray(steps) && steps.every(step => typeof step?.id === 'string' && typeof step?.text === 'string')))
-		&& (source.terminals === undefined || typeof source.terminals === 'boolean')
-		&& (source.proposal === undefined || (typeof source.proposal === 'object' && source.proposal !== null));
+function isFlowchartParams(value: object): value is FlowchartParams {
+	const params = value as FlowchartParams;
+	return (params.steps === undefined || (Array.isArray(params.steps) && params.steps.every(step => typeof step === 'string')))
+		&& (params.fromClaim === undefined || typeof params.fromClaim === 'number')
+		&& (params.terminals === undefined || typeof params.terminals === 'boolean');
 }
 
-function isBlockSource(value: object): value is BlockSource {
-	const source = value as BlockSource;
-	return Array.isArray(source.blocks) && source.blocks.every(block => typeof block?.id === 'string' && typeof block?.label === 'string')
-		&& Array.isArray(source.connections) && source.connections.every(connection => typeof connection?.from === 'string' && typeof connection?.to === 'string');
+function isBlockParams(value: object): value is BlockParams {
+	const params = value as BlockParams;
+	return Array.isArray(params.blocks) && params.blocks.every(block => typeof block?.id === 'string' && typeof block?.label === 'string')
+		&& (params.connections === undefined || (Array.isArray(params.connections) && params.connections.every(connection => typeof connection?.from === 'string' && typeof connection?.to === 'string')));
 }
 
-async function flowchartSteps(source: FlowchartSource): Promise<readonly DiagramStep[]> {
-	if (source.steps) {
-		return source.steps;
+/** What one render produced, before anything is written. */
+interface RenderedSource {
+	readonly svg: string;
+	readonly source: string;
+	readonly findings: readonly DraftFinding[];
+}
+
+/** Checks the scene against the figure list, then renders it on the kernel (as `render_figure`). */
+async function renderScene(input: object, figure: FigureId, figures: string): Promise<RenderedSource> {
+	const allowedNumerals = [...new Set(parseFigureParts(figures).map(part => part.numeral))];
+	const validation = validateScene({ ...input, figure: `FIG-${figure.key}` });
+	if (!validation.scene) {
+		throw new Refusal(`The scene does not follow the schema:\n${validation.findings.map(drawingFindingLine).join('\n')}`);
+	}
+	const scene: DrawingScene = validation.scene;
+	const gate = checkSceneFaults(scene, allowedNumerals).filter(finding => finding.rule === 'part-without-numeral' || finding.rule === 'numeral-not-allowed');
+	if (gate.length) {
+		throw new Refusal(`Every part drawn has a numeral, and every numeral is in the figure list:\n${gate.map(drawingFindingLine).join('\n')}\nAdd the part to the figure list (propose when the disclosure does not state it), or remove it from the scene.`);
+	}
+	const { renderFigure } = await import('../kernel/figureRenderer');
+	const result = await renderFigure(scene, { allowedNumerals });
+	if (!result.svg) {
+		throw new Refusal(`The scene could not be rendered:\n${result.findings.map(drawingFindingLine).join('\n')}`);
+	}
+	return { svg: result.svg, source: `${JSON.stringify(scene, null, '\t')}\n`, findings: [...validation.findings, ...result.findings] };
+}
+
+/** The steps given in order, or the steps of the approved method claim. */
+async function flowchartSteps(matter: Matter, flowchart: FlowchartParams): Promise<DiagramStep[]> {
+	if (flowchart.fromClaim === undefined) {
+		const steps = (flowchart.steps ?? []).map(text => text.trim()).filter(Boolean);
+		if (!steps.length) {
+			throw new Refusal('Give the method steps in `steps`, or the number of an approved method claim in `fromClaim`.');
+		}
+		return steps.map((text, index) => ({ id: `s${index + 1}`, text }));
+	}
+	if (flowchart.steps?.length) {
+		throw new Refusal('Give either `steps` or `fromClaim`, not both: the claim is the authority for the steps.');
+	}
+	const claims = await matter.approvedClaims();
+	const claim = parseClaims(claims).find(item => item.number === flowchart.fromClaim);
+	if (!claim) {
+		throw new Refusal(`${matter.folder.claims} has no claim ${flowchart.fromClaim}.`);
 	}
 	const { stepsFromMethodClaim } = await import('../../common/diagram/steps');
-	return stepsFromMethodClaim(source.claim ?? '');
+	const steps = stepsFromMethodClaim(claim.text);
+	if (!steps.length) {
+		throw new Refusal(`Claim ${claim.number} has no steps to read (a method claim lists its steps after "comprising:").`);
+	}
+	return steps;
 }
 
-/** The step or block numerals of a 2D Figure, in order. */
-async function diagramNumerals(kind: 'flowchart' | 'block', source: FlowchartSource | BlockSource, scheme: DiagramNumeralScheme, figure: number): Promise<number[]> {
-	const { numeralFor } = await import('../../common/diagram/diagramText');
-	const count = kind === 'flowchart' ? (await flowchartSteps(source as FlowchartSource)).length : (source as BlockSource).blocks.length;
-	return Array.from({ length: count }, (_, index) => numeralFor(scheme, figure, index));
-}
-
-const SOURCE_SUFFIXES = ['scene.json', 'flowchart.json', 'block.json'] as const;
-
-async function render(args: ParsedArgs, root: string, cwd: string): Promise<CliOutput> {
-	const matter = resolveMatter(root, args.positional[1]);
-	const figure = parseFigureKey(args.positional[2]);
-	const inputs = (['scene', 'flowchart', 'block'] as const).filter(kind => args.options.has(kind));
-	if (inputs.length !== 1) {
-		throw new UsageError('Give exactly one input: --scene <file>, --flowchart <file> or --block <file>.');
+/** Builds the diagram input from the matter, checks its numerals against the figure list, then draws it (as `render_figure`). */
+async function renderDiagram(matter: Matter, mode: 'flowchart' | 'block', input: object, figure: FigureId, figures: string): Promise<RenderedSource> {
+	const { folder } = matter;
+	const office = await matter.office(await matter.read(folder.draft));
+	if (!office) {
+		throw new Refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`); a 2D Figure follows the office text rules.`);
 	}
-	const kind = inputs[0];
-	const figures = await readFigures(matter);
-	const numbers = figureNumbers(figures);
-	if (!hasFigure(numbers, figure.key) && !hasFigure(numbers, String(figure.number))) {
-		throw new Refusal(`FIG. ${figure.key} is not in ${matter.folder.figures} (Figures: ${numbers.join(', ') || 'none'}). Add a "## FIG. ${figure.key}" heading with its parts first.`);
-	}
-	if (kind !== 'scene' && figure.partial) {
-		throw new UsageError(`A ${kind} Figure takes a whole number, not ${figure.key}.`);
-	}
-	const rounds = await reviewRounds(matter.drawingsDir, figure.key);
-	if (rounds.length >= MAX_ROUNDS) {
-		throw new Refusal(`FIG. ${figure.key} has used its ${MAX_ROUNDS} review rounds. Report the open Findings to the attorney; the attorney starts new rounds by deleting drawings/review/FIG-${figure.key}.round-*.png.`);
-	}
-	const round = (rounds.at(-1) ?? 0) + 1;
-	const inputFile = path.resolve(cwd, args.options.get(kind)!);
-	const input = await readJsonFile(inputFile, kind);
-	const settings = readFiguresSettings(figures);
-	const confirmed = confirmedNumerals(figures);
-	const notes: string[] = [];
-
-	let result: { svg?: string; findings: readonly DraftFinding[] };
-	if (kind === 'scene') {
-		const sceneFigure = (input as { figure?: string }).figure;
-		if (sceneFigure !== `FIG-${figure.key}`) {
-			throw new Refusal(`The scene draws "${sceneFigure ?? ''}", not FIG-${figure.key}. Set "figure": "FIG-${figure.key}".`);
+	const scheme = readFiguresSettings(figures).numerals;
+	const fig = `FIG-${figure.key}`;
+	let source: DiagramSource;
+	let labels: string[];
+	if (mode === 'flowchart') {
+		if (!isFlowchartParams(input)) {
+			throw new Refusal('The flowchart file is { "steps": ["...", "..."] } or { "fromClaim": <claim number> }, with optional "terminals" and "proposal".');
 		}
-		const { renderFigure } = await import('../kernel/figureRenderer');
-		result = await renderFigure(input, { allowedNumerals: confirmed });
-		const blocking = result.findings.filter(finding => finding.rule === 'part-without-numeral' || finding.rule === 'numeral-not-allowed');
-		if (blocking.length > 0) {
-			throw new Refusal(`FIG. ${figure.key} has a part without a numeral or a numeral that is not a confirmed part of ${matter.folder.figures}. Nothing was written. A new part goes through "propose" and the attorney's confirmation first.`, { findings: blocking.map(toCliFinding) });
-		}
+		const steps = await flowchartSteps(matter, input);
+		source = { figure: fig, mode: 'flowchart', input: { office, scheme, figure: figure.number, steps, terminals: input.terminals, proposal: input.proposal } };
+		labels = steps.map(step => step.text);
 	} else {
-		const office = draftingOffice(await readMatterOffice(matter, args.options.get('office')));
-		let diagram: DiagramResult;
-		if (kind === 'flowchart') {
-			if (!isFlowchartSource(input)) {
-				throw new Refusal('The flowchart file must be { "claim": "<approved method claim>" } or { "steps": [{ "id": "s1", "text": "..." }] }, with optional "terminals" and "proposal".');
-			}
-			const { drawFlowchart } = await import('../../common/diagram/flowchart');
-			diagram = await drawFlowchart({ office, scheme: settings.numerals, figure: figure.number, steps: await flowchartSteps(input), terminals: input.terminals, proposal: input.proposal });
-		} else {
-			if (!isBlockSource(input)) {
-				throw new Refusal('The block file must be { "blocks": [{ "id": "...", "label": "..." }], "connections": [{ "from": "...", "to": "..." }] }.');
-			}
-			const { drawBlockDiagram } = await import('../../common/diagram/blockDiagram');
-			const blockInput: BlockDiagramInput = { office, scheme: settings.numerals, figure: figure.number, blocks: input.blocks, connections: input.connections };
-			diagram = await drawBlockDiagram(blockInput);
+		if (!isBlockParams(input)) {
+			throw new Refusal('The block file is { "blocks": [{ "id": "...", "label": "..." }], "connections": [{ "from": "...", "to": "..." }] }.');
 		}
-		result = { svg: diagram.svg, findings: diagram.findings };
-		if (diagram.svg) {
-			const missing = (await diagramNumerals(kind, input as FlowchartSource | BlockSource, settings.numerals, figure.number)).map(String).filter(numeral => !confirmed.includes(numeral));
-			if (missing.length) {
-				notes.push(`The numerals ${missing.join(', ')} of FIG. ${figure.key} are not in ${DRAFTING_FILE_NAMES.figures}. Add them under "## FIG. ${figure.key}" so the description names them.`);
-			}
-		}
+		source = { figure: fig, mode: 'block', input: { office, scheme, figure: figure.number, blocks: input.blocks, connections: input.connections ?? [] } };
+		labels = input.blocks.map(block => block.label);
+	}
+
+	const { numeralFor } = await import('../../common/diagram/diagramText');
+	const listed = new Set(partsOfFigure(figures, figure).map(part => part.numeral));
+	const missing = labels.map((text, index) => ({ numeral: String(numeralFor(scheme, figure.number, index)), text })).filter(item => !listed.has(item.numeral));
+	if (missing.length) {
+		throw new Refusal(`Every numeral in a Figure is a numeral of the figure list (${DRAWING_RULES['numeral-not-allowed']}). The ${source.mode === 'flowchart' ? 'steps' : 'blocks'} of FIG. ${figure.key} take these numerals (\`numerals: ${scheme}\`), which are not under its heading in ${folder.figures}:\n${missing.map(item => `- ${item.numeral}: ${item.text}`).join('\n')}\nAdd these lines under the FIG. ${figure.key} heading, then render again.`);
+	}
+
+	let result: DiagramResult;
+	if (source.mode === 'flowchart') {
+		const { drawFlowchart } = await import('../../common/diagram/flowchart');
+		result = await drawFlowchart(source.input);
+	} else {
+		const { drawBlockDiagram } = await import('../../common/diagram/blockDiagram');
+		result = await drawBlockDiagram(source.input);
 	}
 	if (!result.svg) {
-		throw new Refusal(`FIG. ${figure.key} was not drawn. Fix the Findings and render again; no round was used.`, { findings: result.findings.map(toCliFinding) });
+		throw new Refusal(`The diagram was refused:\n${result.findings.map(drawingFindingLine).join('\n')}`);
+	}
+	const svgFindings: DrawingFinding[] = checkFigureSvgFaults(result.svg, { file: `${fig}.svg`, checks: DIAGRAM_SVG_CHECKS });
+	return { svg: result.svg, source: `${JSON.stringify(source, null, '\t')}\n`, findings: [...result.findings, ...svgFindings] };
+}
+
+async function render(args: ParsedArgs, root: string, cwd: string): Promise<CliOutput> {
+	const matter = Matter.locate(root, args.positional[1]);
+	const { folder } = matter;
+	const figure = parseFigure(args.positional[2]);
+	const modes = (['scene', 'flowchart', 'block'] as const).filter(mode => args.options.has(mode));
+	if (modes.length !== 1) {
+		throw new UsageError('Give exactly one of --scene (a 3D Figure), --flowchart or --block.');
+	}
+	const mode = modes[0];
+	const figures = await matter.read(folder.figures);
+	if (figures === undefined) {
+		throw new Refusal(`${folder.figures} does not exist. Every numeral in a Figure is a numeral of the figure list, so write the figure list first.`);
+	}
+	const label = `FIG. ${figure.key}`;
+	const sectionNumbers = parseFigureSections(figures).figures.flatMap(section => figureHeadingNumbers(section.label));
+	if (!hasFigure(sectionNumbers, figure.key) && !hasFigure(sectionNumbers, String(figure.number))) {
+		throw new Refusal(`${folder.figures} has no heading for ${label} (\`## ${label}\` with its parts). Add the Figure and its parts to the figure list first.`);
+	}
+	const rounds = parseReviewRounds(await matter.read(`${folder.drawings}/${ROUNDS_FILE}`));
+	const done = Math.max(reviewPngCount(await matter.listFiles(`${folder.drawings}/review`), figure), rounds[figure.key]?.length ?? 0);
+	if (done >= MAX_REVIEW_ROUNDS) {
+		throw new Refusal(`${label} already had ${done} review rounds; the limit is ${MAX_REVIEW_ROUNDS} per Figure. Edit ${folder.drawings}/FIG-${figure.key}.scene.json by hand, or ask the attorney.`);
 	}
 
-	const { writeReviewPng, figureReviewPath } = await import('../raster/rasterize');
-	await fs.mkdir(matter.drawingsDir, { recursive: true });
-	const base = `FIG-${figure.key}`;
-	const sourceSuffix = kind === 'scene' ? 'scene.json' : `${kind}.json`;
-	for (const suffix of SOURCE_SUFFIXES.filter(item => item !== sourceSuffix)) {
-		await fs.rm(path.join(matter.drawingsDir, `${base}.${suffix}`), { force: true });
-	}
-	await fs.writeFile(path.join(matter.drawingsDir, `${base}.${sourceSuffix}`), `${JSON.stringify(input, undefined, '\t')}\n`);
-	await fs.writeFile(path.join(matter.drawingsDir, `${base}.svg`), result.svg);
-	const reviewPath = figureReviewPath(figure.key, round);
-	await writeReviewPng(matter.drawingsDir, reviewPath, result.svg);
-	const drawings = matter.folder.drawings;
+	const input = await readJsonObject(cwd, args.options.get(mode)!, mode);
+	const rendered = mode === 'scene' ? await renderScene(input, figure, figures) : await renderDiagram(matter, mode, input, figure, figures);
+
+	const round = done + 1;
+	const png = `review/FIG-${figure.key}.round-${round}.png`;
+	const { rasterizeSvg } = await import('../raster/rasterize');
+	const image = await rasterizeSvg(rendered.svg);
+	await matter.write(`${folder.drawings}/FIG-${figure.key}.scene.json`, rendered.source);
+	await matter.write(`${folder.drawings}/FIG-${figure.key}.svg`, rendered.svg);
+	await matter.write(`${folder.drawings}/${png}`, image.png);
+	const seen = args.options.get('seen') !== 'no';
+	const record: ReviewRound = { round, png, seen };
+	await matter.write(`${folder.drawings}/${ROUNDS_FILE}`, renderReviewRounds({ ...rounds, [figure.key]: [...(rounds[figure.key] ?? []), record] }));
+
+	const errors = rendered.findings.filter(finding => finding.severity === 'Error');
 	return {
 		ok: true,
 		command: 'render',
-		figure: `FIG. ${figure.key}`,
+		figure: label,
 		round,
-		roundsLeft: MAX_ROUNDS - round,
-		files: [`${drawings}/${base}.${sourceSuffix}`, `${drawings}/${base}.svg`, `${drawings}/${reviewPath}`],
-		review: `${drawings}/${reviewPath}`,
-		errors: result.findings.filter(finding => finding.severity === 'Error').length,
-		findings: result.findings.map(toCliFinding),
-		notes,
+		roundsLeft: MAX_REVIEW_ROUNDS - round,
+		files: [`${folder.drawings}/FIG-${figure.key}.scene.json`, `${folder.drawings}/FIG-${figure.key}.svg`, `${folder.drawings}/${png}`, `${folder.drawings}/${ROUNDS_FILE}`],
+		review: seen ? `${folder.drawings}/${png}` : undefined,
+		errors: errors.length,
+		findings: rendered.findings.map(toCliFinding),
+		next: errors.length
+			? `Fix the Errors in the source and render again${round < MAX_REVIEW_ROUNDS ? '' : '; this was the last round, so edit the scene file by hand or ask the attorney'}.`
+			: 'The mechanical fault list found nothing. The attorney still reviews the Figure. Do not call it compliant or ready to file.',
 	};
 }
 
-/** One Figure found in `drawings/`, with its source kind. */
-interface DrawnFigure {
-	readonly key: string;
-	readonly number: number;
-	readonly partial?: string;
-	readonly svg: string;
-	readonly kind: 'scene' | 'flowchart' | 'block' | 'svg';
-	readonly source?: object;
-}
-
-async function readDrawnFigures(drawingsDir: string): Promise<DrawnFigure[]> {
-	const names = await fs.readdir(drawingsDir).catch(() => [] as string[]);
-	const result: DrawnFigure[] = [];
-	for (const name of names) {
-		const match = /^FIG-(?<number>[1-9]\d*)(?<partial>[A-Z])?\.svg$/.exec(name);
-		if (!match?.groups) {
-			continue;
-		}
-		const key = `${match.groups.number}${match.groups.partial ?? ''}`;
-		const svg = await fs.readFile(path.join(drawingsDir, name), 'utf8');
-		let kind: DrawnFigure['kind'] = 'svg';
-		let source: object | undefined;
-		for (const candidate of ['scene', 'flowchart', 'block'] as const) {
-			const file = path.join(drawingsDir, `FIG-${key}.${candidate === 'scene' ? 'scene' : candidate}.json`);
-			if (existsSync(file)) {
-				kind = candidate;
-				source = await readJsonFile(file, candidate);
-				break;
-			}
-		}
-		result.push({ key, number: Number(match.groups.number), ...(match.groups.partial ? { partial: match.groups.partial } : {}), svg, kind, ...(source ? { source } : {}) });
-	}
-	return result.sort((a, b) => a.number - b.number || (a.partial ?? '').localeCompare(b.partial ?? ''));
-}
-
-/** The Figure-level checks again, on the written files, before the sheets are made. */
-async function checkDrawnFigure(figure: DrawnFigure, office: DrawingOffice, scheme: DiagramNumeralScheme, confirmed: readonly string[]): Promise<readonly (DraftFinding & { readonly citation?: string })[]> {
+/** The Figure-level findings of the receipt, re-run on the files as they are now (as `build_drawing_set`). */
+async function figureFindings(matter: Matter, figure: FigureId, svg: string, allowedNumerals: readonly string[]): Promise<DrawingFinding[]> {
 	const file = `FIG-${figure.key}.svg`;
-	if (figure.kind === 'scene' && figure.source) {
-		const validation = validateScene(figure.source);
-		const sceneFindings = validation.scene ? checkSceneFaults(validation.scene, confirmed) : validation.findings;
-		return [...sceneFindings, ...checkFigureSvgFaults(figure.svg, { file })];
+	const sourceText = await matter.read(`${matter.folder.drawings}/FIG-${figure.key}.scene.json`);
+	let source: { readonly mode?: string } | undefined;
+	try {
+		source = sourceText === undefined ? undefined : JSON.parse(sourceText);
+	} catch {
+		source = undefined;
 	}
-	if ((figure.kind === 'flowchart' || figure.kind === 'block') && figure.source) {
-		const { checkDiagramSvg } = await import('../../common/diagram/diagramFaults');
-		const numerals = await diagramNumerals(figure.kind, figure.source as FlowchartSource | BlockSource, scheme, figure.number);
-		return checkDiagramSvg(figure.svg, { office: draftingOffice(office) === 'US' ? 'US' : 'EPO', figure: figure.number, numerals });
+	if (source?.mode !== undefined) {
+		return checkFigureSvgFaults(svg, { file, checks: DIAGRAM_SVG_CHECKS });
 	}
-	return checkFigureSvgFaults(figure.svg, { file });
+	const scene = source ? validateScene(source).scene : undefined;
+	return [...(scene ? checkSceneFaults(scene, allowedNumerals) : []), ...checkFigureSvgFaults(svg, { file })];
 }
 
-/** The identity of a Figure Finding against a waiver in `findings.md`: rule and message. */
-function waiverKey(finding: DraftFinding): string {
-	return `${finding.rule}|${finding.message.replace(/\s+/g, ' ').trim()}`;
+function checkLine(check: CheckResult): string {
+	return `- \`${check.id}\` [${check.citation}]: ${check.detail}`;
 }
 
-function today(): string {
-	return new Date().toISOString().slice(0, 10);
+function findingsLines(findings: readonly DraftFinding[]): string {
+	return findings.map(finding => `- ${finding.severity} \`${finding.rule}\`${finding.line !== undefined ? ` (line ${finding.line})` : ''}: ${finding.message}${finding.waived ? ` (waived: ${finding.waived.reason})` : ''}`).join('\n');
 }
 
 async function build(args: ParsedArgs, root: string): Promise<CliOutput> {
-	const matter = resolveMatter(root, args.positional[1]);
-	const figures = await readFigures(matter);
-	const office = await readMatterOffice(matter, args.options.get('office'));
-	const settings = readFiguresSettings(figures);
-	const notes: string[] = [];
-
-	const gate = [...checkFigureProposals(figures), ...checkFiguresSettings(figures, draftingOffice(office))].filter(finding => finding.severity === 'Error');
-	if (gate.length) {
-		throw new Refusal(`${matter.folder.figures} blocks the Drawing Set. The attorney confirms or removes each proposal and fixes the settings.`, { findings: gate.map(toCliFinding) });
+	const matter = Matter.locate(root, args.positional[1]);
+	const { folder } = matter;
+	const figures = await matter.read(folder.figures);
+	if (figures === undefined) {
+		throw new Refusal(`${folder.figures} does not exist.`);
 	}
-	const featureList = await readOptional(matter.abs(matter.folder.featureList));
-	const outline = await readOptional(matter.abs(matter.folder.draftOutline));
-	if (featureList !== undefined && outline !== undefined) {
-		const coverage = checkClaimedFeatureCoverage({ office: draftingOffice(office), figures, outline: parseDraftOutline(outline), featureList });
-		const gaps = coverage.filter(finding => finding.severity === 'Error');
-		if (gaps.length) {
-			throw new Refusal('A claimed feature has no drawn part (coverage gap). Draw a confirmed part that links the Feature List row, or ask the attorney.', { findings: gaps.map(toCliFinding) });
-		}
-		notes.push(...coverage.map(finding => finding.message));
-	} else {
-		notes.push(`The claimed-feature coverage was not checked: ${matter.folder.featureList} or ${matter.folder.draftOutline} does not exist.`);
+	const draft = await matter.read(folder.draft);
+	const office = await matter.office(draft);
+	if (!office) {
+		throw new Refusal(`Neither ${folder.draft} nor ${folder.featureList} names the office (\`office: US\` or \`office: EPO\`).`);
 	}
-
-	const drawn = await readDrawnFigures(matter.drawingsDir);
-	if (drawn.length === 0) {
-		throw new Refusal(`${matter.folder.drawings}/ has no FIG-N.svg. Render each Figure first.`);
+	const figureFiles = (await matter.listFiles(folder.drawings))
+		.map(name => figureOfSvgFile(name))
+		.filter((figure): figure is FigureId => figure !== undefined)
+		.sort((a, b) => a.number - b.number || (a.partial ?? '').localeCompare(b.partial ?? ''));
+	if (!figureFiles.length) {
+		throw new Refusal(`${folder.drawings}/ has no Figure (FIG-N.svg). Render each Figure first.`);
 	}
-	const confirmed = confirmedNumerals(figures);
-	const figureFindings: (DraftFinding & { readonly citation?: string })[] = [];
-	const waived = new Map<string, DraftFinding['waived']>();
-	const findingsText = await readOptional(matter.abs(matter.folder.findings));
-	for (const finding of findingsText === undefined ? [] : parseFindingsFile(findingsText)) {
-		if (finding.waived) {
-			waived.set(waiverKey(finding), finding.waived);
-		}
+	const proposals = checkFigureProposals(figures);
+	if (proposals.length) {
+		throw new Refusal(`${folder.figures} has ${proposals.length} proposed part(s); the attorney confirms each by removing "(proposed)", or deletes the line:\n${findingsLines(proposals)}`);
 	}
-	for (const figure of drawn) {
-		for (const finding of await checkDrawnFigure(figure, office, settings.numerals, confirmed)) {
-			const waiver = waived.get(waiverKey(finding));
-			figureFindings.push(waiver ? { ...finding, waived: waiver } : finding);
-		}
-	}
-	const open = figureFindings.filter(finding => finding.severity === 'Error' && !finding.waived);
-	if (open.length) {
-		throw new Refusal(`${open.length} Figure Error(s) are open. Fix each Figure and render again, or the attorney waives the Finding in ${matter.folder.findings} with a "  - Waived: <reason>" line.`, { findings: open.map(toCliFinding) });
+	const outline = parseDraftOutline(await matter.read(folder.draftOutline) ?? '');
+	const listChecks: DraftFinding[] = [
+		...checkFiguresSettings(figures, office),
+		...checkClaimedFeatureCoverage({ office, figures, outline, featureList: await matter.read(folder.featureList) ?? '' }),
+	];
+	const blocking = blockingFindings(mergeFindings(listChecks, parseFindingsFile(await matter.read(folder.findings) ?? '')));
+	if (blocking.length) {
+		throw new Refusal(`${blocking.length} Error(s) of the figure list are open; fix each in ${folder.figures}, or the attorney waives it in ${folder.findings}:\n${findingsLines(blocking)}`);
 	}
 
-	const { layoutDrawingSheets } = await import('../../common/sheets/sheetLayout');
-	const figureInputs: FigureInput[] = drawn.map(figure => ({ number: figure.number, ...(figure.partial ? { partial: figure.partial } : {}), svg: figure.svg }));
-	const layout = layoutDrawingSheets(office, settings.pageSize, figureInputs);
+	const allowedNumerals = [...new Set(parseFigureParts(figures).map(part => part.numeral))];
+	const inputs: FigureInput[] = [];
+	const findings: DrawingFinding[] = [];
+	for (const figure of figureFiles) {
+		const svg = await matter.read(`${folder.drawings}/FIG-${figure.key}.svg`) ?? '';
+		inputs.push({ number: figure.number, partial: figure.partial, svg });
+		findings.push(...await figureFindings(matter, figure, svg, allowedNumerals));
+	}
+	const { pageSize } = readFiguresSettings(figures);
+	const [{ layoutDrawingSheets }, { runSheetChecks, writeDrawingsReceipt }] = await Promise.all([import('../../common/sheets/sheetLayout'), import('../../common/sheets/receipt')]);
+	const layout = layoutDrawingSheets(office, pageSize, inputs);
 	if (!layout.ok) {
-		throw new Refusal(`The Drawing Sheets cannot be laid out: ${layout.reason}`);
+		throw new Refusal(layout.reason);
 	}
 	const sheets = layout.sheets.map(sheet => sheet.svg);
-	for (const name of await fs.readdir(matter.drawingsDir)) {
+	const sheetFails = runSheetChecks(office, pageSize, sheets).filter(check => check.result === 'fail');
+	if (sheetFails.length) {
+		throw new Refusal(`${sheetFails.length} sheet check(s) fail:\n${sheetFails.map(checkLine).join('\n')}`);
+	}
+
+	const [{ rasterizeSvg }, { inspectPdf, renderDrawingsPdf }] = await Promise.all([import('../raster/rasterize'), import('../pdf/drawingsPdf')]);
+	for (const name of await matter.listFiles(folder.drawings)) {
 		if (isDrawingSheetFile(name)) {
-			await fs.rm(path.join(matter.drawingsDir, name));
+			await fs.rm(matter.abs(`${folder.drawings}/${name}`), { force: true });
 		}
 	}
-	const sheetFiles = sheets.map((_, index) => `sheet-${index + 1}.svg`);
-	await Promise.all(sheets.map((svg, index) => fs.writeFile(path.join(matter.drawingsDir, sheetFiles[index]), svg)));
-	const { writeDrawingsPdf } = await import('../pdf/drawingsPdf');
-	const pdf = await writeDrawingsPdf(matter.drawingsDir, sheets, { title: `Drawings - ${matter.folder.matter}` });
-
-	const reviewRecords: FigureReviewRecord[] = [];
-	for (const figure of drawn) {
-		const rounds = await reviewRounds(matter.drawingsDir, figure.key);
-		reviewRecords.push({ figure: figure.key, rounds: rounds.map(round => ({ round, png: `review/FIG-${figure.key}.round-${round}.png` })) });
+	const files: string[] = [];
+	for (let index = 0; index < sheets.length; index++) {
+		await matter.write(`${folder.drawings}/sheet-${index + 1}.svg`, sheets[index]);
+		await matter.write(`${folder.drawings}/review/sheet-${index + 1}.png`, (await rasterizeSvg(sheets[index])).png);
+		files.push(`${folder.drawings}/sheet-${index + 1}.svg`, `${folder.drawings}/review/sheet-${index + 1}.png`);
 	}
-	const figureRules: Record<string, string> = {
-		...(drawn.some(figure => figure.kind !== 'flowchart' && figure.kind !== 'block') ? DRAWING_RULES : {}),
-		...(drawn.some(figure => figure.kind === 'flowchart' || figure.kind === 'block') ? DIAGRAM_RULES : {}),
-	};
-	const { writeDrawingsReceipt } = await import('../../common/sheets/receipt');
-	const receipt = writeDrawingsReceipt({ office, pageSize: settings.pageSize, sheets, figureRules, figureFindings, reviewRounds: reviewRecords, pdf, date: today() });
-	await fs.writeFile(path.join(matter.drawingsDir, 'drawings-compliance.md'), receipt.markdown);
+	const pdfBytes = await renderDrawingsPdf(sheets, { title: `Drawings, ${folder.matter}` });
+	await matter.write(`${folder.drawings}/drawings.pdf`, pdfBytes);
+	const rounds = parseReviewRounds(await matter.read(`${folder.drawings}/${ROUNDS_FILE}`));
+	const receipt = writeDrawingsReceipt({
+		office,
+		pageSize,
+		sheets,
+		figureRules: DRAWING_RULES,
+		figureFindings: findings,
+		reviewRounds: reviewRecords(rounds, figureFiles.map(figure => figure.key)),
+		pdf: inspectPdf(pdfBytes),
+		date: new Date().toISOString().slice(0, 10),
+	});
+	const receiptPath = `${folder.drawings}/drawings-compliance.md`;
+	await matter.write(receiptPath, receipt.markdown);
+	files.push(`${folder.drawings}/drawings.pdf`, receiptPath);
 
-	const drawings = matter.folder.drawings;
-	const files = [...sheetFiles.map(name => `${drawings}/${name}`), `${drawings}/drawings.pdf`, `${drawings}/drawings-compliance.md`];
-	const draft = await readOptional(matter.abs(matter.folder.draft));
-	const claims = await readOptional(matter.abs(matter.folder.claims));
-	if (draft !== undefined && claims !== undefined) {
-		const manifest = filingManifest({ office: draftingOffice(office), draft, claims, figures, drawingFiles: sheetFiles });
-		await fs.writeFile(matter.abs(matter.folder.filingManifest), renderFilingManifest(manifest, matter.folder));
-		files.push(matter.folder.filingManifest);
-	} else {
-		notes.push(`${matter.folder.filingManifest} was not written: ${matter.folder.draft} or ${matter.folder.claims} does not exist. The export writes it.`);
+	let manifest = `The Filing Manifest is written by the export; it will count the ${sheets.length} sheet(s).`;
+	const claims = await matter.read(folder.claims);
+	if (draft !== undefined && claims !== undefined && existsSync(matter.abs(folder.filingManifest))) {
+		const values = filingManifest({ office, draft, claims, figures, drawingFiles: await matter.listFiles(folder.drawings) });
+		await matter.write(folder.filingManifest, renderFilingManifest(values, folder));
+		manifest = `Updated ${folder.filingManifest}: ${values.drawingSheets} drawing sheet(s), measured.`;
+		files.push(folder.filingManifest);
 	}
-	const count = (result: string) => receipt.checks.filter(check => check.result === result).length;
+
+	const count = (result: CheckResult['result']) => receipt.checks.filter(check => check.result === result).length;
 	return {
 		ok: true,
 		command: 'build',
 		office,
-		pageSize: settings.pageSize,
-		figures: drawn.map(figure => `FIG. ${figure.key}`),
+		pageSize,
+		figures: figureFiles.map(figure => `FIG. ${figure.key}`),
 		sheets: sheets.length,
 		files,
 		receipt: {
-			file: `${drawings}/drawings-compliance.md`,
+			file: receiptPath,
 			pass: count('pass'),
 			fail: count('fail'),
 			notChecked: count('not-checked'),
-			failing: receipt.checks.filter(check => check.result === 'fail').map(check => `${check.id}: ${check.detail}`),
+			failing: receipt.checks.filter(check => check.result === 'fail').map(checkLine),
 		},
-		notes,
+		manifest,
+		next: 'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.',
 	};
 }
 
-async function propose(args: ParsedArgs, root: string, cwd: string): Promise<CliOutput> {
-	const matter = resolveMatter(root, args.positional[1]);
-	const numeral = args.positional[2];
-	const part = args.positional.slice(3).join(' ').trim();
-	if (!numeral || !/^\d{1,4}[a-z]?$/.test(numeral) || !part) {
-		throw new UsageError('Give a numeral and a part name: propose <matter> <numeral> <part> --sketch <file>.');
+/** Copies the sketch to `sketches/` and returns its path relative to the matter folder (as `propose_figure_part`, without chat attachments). */
+async function copySketch(matter: Matter, sketch: string): Promise<string> {
+	const { folder } = matter;
+	const sketchFolder = `${folder.folder}/sketches`;
+	const relative = path.isAbsolute(sketch) ? path.relative(matter.root, sketch).split(path.sep).join('/') : sketch.replace(/\\/g, '/').replace(/^\.?\//, '');
+	const workspacePath = relative.startsWith('sketches/') ? `${folder.folder}/${relative}` : relative;
+	if (workspacePath.startsWith(`${sketchFolder}/`)) {
+		if (!existsSync(matter.abs(workspacePath))) {
+			throw new Refusal(`${workspacePath} does not exist.`);
+		}
+		return workspacePath.slice(folder.folder.length + 1);
 	}
-	const sketchOption = args.options.get('sketch');
-	if (!sketchOption) {
-		throw new UsageError('Give the sketch the part comes from: --sketch <file>.');
+	const bytes = SKETCH_EXTENSIONS.test(workspacePath) && !workspacePath.split('/').includes('..') ? await matter.readBytes(workspacePath) : undefined;
+	if (!bytes) {
+		throw new Refusal(`"${sketch}" is not an image file in the workspace.`);
 	}
-	const figures = await readFigures(matter);
-	const existing = parseFigureParts(figures).find(item => item.numeral === numeral);
-	if (existing) {
-		throw new Refusal(`Numeral ${numeral} is already "${existing.part}" in ${matter.folder.figures} (line ${existing.line}). Give the new part another numeral.`);
+	const fileName = sketchFileName(workspacePath);
+	const dot = fileName.lastIndexOf('.');
+	for (let index = 1; ; index++) {
+		const candidate = index === 1 ? fileName : `${fileName.slice(0, dot)}-${index}${fileName.slice(dot)}`;
+		const target = `${sketchFolder}/${candidate}`;
+		const existing = await matter.readBytes(target);
+		if (!existing) {
+			await matter.write(target, bytes);
+			return `sketches/${candidate}`;
+		}
+		if (sameBytes(existing, bytes)) {
+			return `sketches/${candidate}`;
+		}
 	}
-	const candidates = [path.resolve(matter.dir, sketchOption), path.resolve(root, sketchOption), path.resolve(cwd, sketchOption)];
-	const sketch = candidates.find(candidate => existsSync(candidate));
-	if (!sketch) {
-		throw new Refusal(`The sketch ${sketchOption} does not exist in ${matter.folder.folder}/ or the workspace. Copy it to ${matter.folder.folder}/sketches/ first.`);
-	}
-	const relative = path.relative(matter.dir, sketch).split(path.sep).join('/');
-	const source = relative.startsWith('..') ? path.relative(root, sketch).split(path.sep).join('/') : relative;
-	const features = args.options.get('features')?.split(',').map(item => item.trim()).filter(Boolean);
-	const line = formatFigurePart({ numeral, part, ...(features?.length ? { features } : {}), proposed: { source } });
+}
 
-	const lines = figures.replace(/\r\n/g, '\n').split('\n');
-	const figureOption = args.options.get('figure');
-	let insertAt = lines.length;
-	if (figureOption) {
-		const wanted = parseFigureKey(figureOption).key;
-		const section = parseFigureSections(figures).figures.find(item => hasFigure(figureHeadingNumbers(item.label), wanted));
-		if (!section) {
-			throw new Refusal(`FIG. ${wanted} is not a heading of ${matter.folder.figures}.`);
+async function propose(args: ParsedArgs, root: string): Promise<CliOutput> {
+	const matter = Matter.locate(root, args.positional[1]);
+	const { folder } = matter;
+	const figureText = args.positional[2];
+	const figure = Number(figureText);
+	if (!figureText || !Number.isInteger(figure) || figure < 1) {
+		throw new UsageError('Give the figure number the part is drawn in: propose <matter> <figure> <part>.');
+	}
+	const part = args.positional.slice(3).join(' ').trim().replace(/\s+/g, ' ');
+	if (!part || /[\[\]()]/.test(part)) {
+		throw new Refusal('Give the part name, without brackets or parentheses.');
+	}
+	const features = (args.options.get('features')?.split(',') ?? []).map(feature => feature.trim().toUpperCase()).filter(Boolean);
+	if (features.some(feature => !/^F\d+$/.test(feature))) {
+		throw new Refusal('A Feature List link is a row id such as `F3`.');
+	}
+	const figures = await matter.read(folder.figures);
+	if (figures === undefined) {
+		throw new Refusal(`${folder.figures} does not exist.`);
+	}
+	const scheme = readFiguresSettings(figures).numerals;
+	const parts = parseFigureParts(figures);
+	let numeral = args.options.get('numeral')?.trim();
+	if (numeral) {
+		if (!/^\d{1,4}[a-z]?$/.test(numeral)) {
+			throw new Refusal(`"${numeral}" is not a reference numeral (digits, then an optional small letter).`);
 		}
-		const last = section.parts.at(-1)?.line ?? section.line;
-		insertAt = last;
+		const used = parts.find(item => item.numeral === numeral);
+		if (used) {
+			throw new Refusal(`Numeral ${numeral} is already used for "${used.part}" (${folder.figures}, line ${used.line}). One numeral names one part.`);
+		}
+		const fault = schemeFault(numeral, scheme, figure);
+		if (fault) {
+			throw new Refusal(fault);
+		}
 	} else {
-		while (insertAt > 0 && lines[insertAt - 1].trim() === '') {
-			insertAt--;
+		numeral = nextNumeral(parts, scheme, figure);
+		if (!numeral) {
+			throw new Refusal(`FIG. ${figure} has no free numeral left in the ${figure}02 to ${figure}98 series.`);
 		}
 	}
-	lines.splice(insertAt, 0, line);
-	const text = lines.join('\n');
-	await fs.writeFile(matter.abs(matter.folder.figures), text.endsWith('\n') ? text : `${text}\n`);
+	const sketch = args.options.get('sketch')?.trim();
+	const source = sketch ? await copySketch(matter, sketch) : undefined;
+	const line = formatFigurePart({ numeral, part, ...(features.length ? { features } : {}), proposed: source ? { source } : {} });
+	await matter.write(folder.figures, insertPartLine(figures, figure, line));
 	return {
 		ok: true,
 		command: 'propose',
-		file: matter.folder.figures,
-		line: insertAt + 1,
+		file: folder.figures,
 		added: line,
-		next: 'Stop. The attorney confirms the part by removing "(proposed)", or deletes the line. Do not draw the part before that.',
+		sketch: source ? `${folder.folder}/${source}` : undefined,
+		next: 'This part is a proposal: build and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why, then stop.',
 	};
 }
 
@@ -601,12 +647,12 @@ export async function runDrawingsCli(argv: readonly string[], cwd: string = proc
 		switch (command) {
 			case 'render': return { exitCode: 0, output: await render(args, root, cwd) };
 			case 'build': return { exitCode: 0, output: await build(args, root) };
-			case 'propose': return { exitCode: 0, output: await propose(args, root, cwd) };
+			case 'propose': return { exitCode: 0, output: await propose(args, root) };
 			default: throw new UsageError(USAGE);
 		}
 	} catch (error) {
 		if (error instanceof Refusal) {
-			return { exitCode: 1, output: { ok: false, command, reason: error.message, ...error.details } };
+			return { exitCode: 1, output: { ok: false, command, reason: error.message } };
 		}
 		if (error instanceof UsageError) {
 			return { exitCode: 2, output: { ok: false, command, reason: error.message, usage: USAGE } };

@@ -21,19 +21,19 @@ launcher in this skill's base directory:
 
 ```sh
 sh "<skill base directory>/drawings.sh" render <matter> <N> --scene drafting/<matter>/drawings/FIG-<N>.scene.json
-sh "<skill base directory>/drawings.sh" render <matter> <N> --flowchart drafting/<matter>/drawings/FIG-<N>.flowchart.json
-sh "<skill base directory>/drawings.sh" render <matter> <N> --block drafting/<matter>/drawings/FIG-<N>.block.json
-sh "<skill base directory>/drawings.sh" propose <matter> <numeral> "<part>" --sketch sketches/<file> --figure <N>
+sh "<skill base directory>/drawings.sh" render <matter> <N> --flowchart drafting/<matter>/drawings/input/FIG-<N>.json
+sh "<skill base directory>/drawings.sh" render <matter> <N> --block drafting/<matter>/drawings/input/FIG-<N>.json
+sh "<skill base directory>/drawings.sh" propose <matter> <N> "<part>" --sketch <workspace path> [--features F3] [--numeral <n>]
 sh "<skill base directory>/drawings.sh" build <matter>
 ```
 
-Each command prints one JSON object. `"ok": false` is a refusal: report its
-`reason` and `findings`. The launcher runs `drawings-cli.js` of this app on
-the app's own runtime; no Node.js install is needed. When it cannot find the
-app, it says so: ask the user to set `FLOWLEAP_DRAWINGS_CLI` to
+`<N>` is the Figure number, or `1A` for a partial view. Each command prints
+one JSON object. `"ok": false` is a refusal: it wrote nothing; report its
+`reason`. The launcher runs `drawings-cli.js` of this app on the app's own
+runtime; no Node.js install is needed. When it cannot find the app, it says
+so: ask the user to set `FLOWLEAP_DRAWINGS_CLI` to
 `<app>/resources/app/extensions/copilot/dist/drawings-cli.js` (macOS:
 `<App>.app/Contents/Resources/app/extensions/copilot/dist/drawings-cli.js`).
-Pass `--office US`, `EPO` or `PCT` when `feature-list.md` sets no office.
 
 ## Step 1: Read and scope
 
@@ -52,26 +52,28 @@ Done when every `FIG. N` heading of `figures.md` has a stated mode or refusal.
    [references/scene-schema.md](references/scene-schema.md). Write the numeral
    ports first, one per listed part, then the geometry. Use a library part
    for each standard part ([references/part-library.md](references/part-library.md)).
-2. Flowchart: write `drawings/FIG-<N>.flowchart.json` as
-   `{ "claim": "<approved method claim>" }` or
-   `{ "steps": [{ "id": "s1", "text": "..." }] }`. Code makes one box per
-   step. You may add `"proposal": { "nodes": [decisions], "edges": [loops] }`
-   only, and `"terminals": true` for START and END.
-3. Block diagram: write `drawings/FIG-<N>.block.json` as
-   `{ "blocks": [{ "id", "label" }], "connections": [{ "from", "to", "label"?, "direction"? }] }`,
-   blocks in numeral order.
+2. Flowchart or block diagram: first make sure `figures.md` lists the step or
+   block numerals under the Figure heading, in the `numerals:` scheme (`2, 4,
+   6` for `even`; `502, 504` in FIG. 5 for `hundreds`). Then write
+   `drawings/input/FIG-<N>.json`: a flowchart is `{ "fromClaim": <approved
+   method claim number> }` or `{ "steps": ["...", "..."] }`, never both, with
+   optional `"terminals": true` and a `"proposal"` of decisions and edges
+   only; a block diagram is `{ "blocks": [{ "id", "label" }], "connections":
+   [{ "from", "to", "label"?, "direction"? }] }`, blocks in numeral order.
 
-Done when every in-scope Figure has an input file whose numerals are all
-confirmed parts of `figures.md`.
+Done when every in-scope Figure has an input file whose numerals are all in
+`figures.md`.
 
 ## Step 3: Render and fix, at most three rounds
 
-1. Run `render` for the Figure. It writes `FIG-<N>.svg` and the review render
-   named in `review`, and prints the Findings.
+1. Run `render` for the Figure. It writes `FIG-<N>.scene.json`,
+   `FIG-<N>.svg`, the review render named in `review` and `rounds.json`, and
+   prints the Findings.
 2. Read the review PNG. Fix each Error per
    [references/fault-list.md](references/fault-list.md), in the input file,
    then render again. Look at the render for what code cannot check: a part
-   in the wrong place, a wrong view.
+   in the wrong place, a wrong view. When you cannot read images, add
+   `--seen no`, so the receipt records that no render was seen.
 3. Stop after the third round (`roundsLeft` is 0, or the CLI refuses). Report
    the Errors that stay open.
 
@@ -81,22 +83,26 @@ open Errors are reported.
 ## Step 4: Propose missing parts and stop
 
 When a sketch or the disclosure needs a part that `figures.md` does not list,
-run `propose` with the numeral, the part name and the sketch it comes from.
-It adds a `(proposed from <sketch>)` line. Do not draw the part. Ask the
-attorney to confirm it (remove the marker) or delete the line, and wait.
+run `propose` with the Figure, the part name, the sketch it comes from and
+`--features` when it shows a Feature List row. Leave out `--numeral` to get
+the next free one. It adds a `(proposed from sketches/<file>)` line and copies
+the sketch. Ask the attorney to confirm the part (remove "(proposed)") or
+delete the line, and wait.
 
 Done when every needed part is either confirmed in `figures.md` or proposed
 and the attorney is asked.
 
 ## Step 5: Build the set and report the receipt
 
-1. Run `build`. It refuses on a `(proposed)` line, an unwaived Error or a
-   claimed feature with no drawn part; report each item it lists.
-2. On success it writes `sheet-N.svg`, `drawings.pdf`, `drawings-compliance.md`
-   and, when the draft and the claims exist, `filing-manifest.md`.
+1. Run `build`. It refuses on a `(proposed)` line, an open figure-list Error
+   (claimed-feature coverage, page size) or a failing sheet check; report
+   each item it lists.
+2. On success it writes `sheet-N.svg`, `drawings.pdf` and
+   `drawings-compliance.md`, and updates `filing-manifest.md` when the export
+   has written one.
 3. Report: the sheet count, the checks by result (pass, fail, not checked)
-   with each failing check and its rule, the review rounds per Figure, and the
-   rules only the attorney can judge ([references/office-page-rules.md](references/office-page-rules.md)).
+   with each failing check and its rule, and the rules only the attorney can
+   judge ([references/office-page-rules.md](references/office-page-rules.md)).
 
 Done when the receipt is reported. Say "no failing check", never
 "compliant", "passed" or "ready to file". Close with: "AI-assisted drawings

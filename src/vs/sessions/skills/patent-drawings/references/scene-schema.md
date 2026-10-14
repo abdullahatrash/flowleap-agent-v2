@@ -17,7 +17,7 @@ the model's idea of the picture.
 
 | Field | Required | Value |
 |---|---|---|
-| `figure` | yes | `"FIG-N"` or `"FIG-NA"` (a partial view), e.g. `"FIG-1"` |
+| `figure` | no | `"FIG-N"` or `"FIG-NA"`. The render sets it from the Figure number you give. |
 | `camera` | yes | `isometric`, `front`, `top` or `side`. Isometric looks from the front, right and top corner. |
 | `parts` | yes | a non-empty array of parts |
 | `numerals` | yes | an array of numeral ports |

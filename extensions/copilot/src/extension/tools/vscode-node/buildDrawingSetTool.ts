@@ -23,7 +23,7 @@ import { parseDraftOutline } from '../common/drafting/outline';
 import { parseFigureParts } from '../common/drafting/specValidators';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DIAGRAM_SVG_CHECKS, FigureId, figureOfSvgFile, parseReviewRounds, reviewRecords, ROUNDS_FILE } from './drawingFiles';
+import { DIAGRAM_SVG_CHECKS, FigureId, figureOfSvgFile, parseReviewRounds, reviewRecords, ROUNDS_FILE } from '../../drawings/common/drawingFiles';
 import { DraftingWorkspace, findingLine, textResult } from './draftingWorkspace';
 
 interface IBuildDrawingSetParams {

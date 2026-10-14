@@ -14,14 +14,19 @@
  *   review/FIG-1.round-2.png the review render of a round, never a deliverable
  * ```
  *
- * This module imports no kernel and no layout engine.
+ * This module imports no kernel, no layout engine and no VS Code API: the editor tools (D5) and
+ * the drawings CLI (D6) share it.
  */
 
-import { DRAWING_RULES, DrawingRule } from '../../drawings/common/scene/drawingFaults';
-import type { BlockDiagramInput } from '../../drawings/common/diagram/blockDiagram';
-import type { FlowchartInput } from '../../drawings/common/diagram/flowchart';
-import type { FigureReviewRecord } from '../../drawings/common/sheets/receipt';
-import { DraftFinding } from '../common/drafting/finding';
+import { basename } from '../../../util/vs/base/common/path';
+import { DRAWING_RULES, DrawingRule } from './scene/drawingFaults';
+import type { BlockDiagramInput } from './diagram/blockDiagram';
+import type { FlowchartInput } from './diagram/flowchart';
+import type { FigureReviewRecord } from './sheets/receipt';
+import { NumeralScheme } from '../../tools/common/drafting/figures';
+import { DraftFinding } from '../../tools/common/drafting/finding';
+import { parseDraftingFrontmatter } from '../../tools/common/drafting/frontmatter';
+import { figureHeadingNumbers, FigurePart, hasFigure, parseFigureSections } from '../../tools/common/drafting/specValidators';
 
 /** Three review rounds per Figure (PRD 0023, D5 guardrail). */
 export const MAX_REVIEW_ROUNDS = 3;
@@ -122,4 +127,82 @@ export function reviewRecords(rounds: ReviewRounds, keys: readonly string[]): Fi
 export function drawingFindingLine(finding: DraftFinding & { readonly citation?: string }): string {
 	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined].filter(Boolean).join(', ');
 	return `- ${finding.severity} \`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}${finding.citation ? ` [${finding.citation}]` : ''}`;
+}
+
+/** The parts listed under the figure heading of `figures.md` that names the Figure. */
+export function partsOfFigure(figures: string, figure: FigureId): FigurePart[] {
+	return parseFigureSections(figures).figures
+		.filter(section => {
+			const numbers = figureHeadingNumbers(section.label);
+			return hasFigure(numbers, figure.key) || hasFigure(numbers, String(figure.number));
+		})
+		.flatMap(section => section.parts);
+}
+
+/** The number of review renders of a Figure among the file names of `drawings/review/`. */
+export function reviewPngCount(files: readonly string[], figure: FigureId): number {
+	const pattern = new RegExp(`^FIG-${figure.key}\\.round-\\d+\\.png$`);
+	return files.filter(name => pattern.test(name)).length;
+}
+
+/** File extensions a sketch may have. */
+export const SKETCH_EXTENSIONS = /\.(png|jpe?g|gif|webp|bmp|tiff?|svg|pdf)$/i;
+
+function leadingNumber(numeral: string): number {
+	return Number.parseInt(numeral, 10);
+}
+
+/** The reason a numeral does not follow the scheme, or `undefined` when it does. */
+export function schemeFault(numeral: string, scheme: NumeralScheme, figure: number): string | undefined {
+	const value = leadingNumber(numeral);
+	if (scheme === 'even') {
+		return value % 2 ? `Numeral ${numeral} is odd; figures.md uses \`numerals: even\`.` : undefined;
+	}
+	return Math.floor(value / 100) !== figure ? `Numeral ${numeral} does not start with ${figure}; figures.md uses \`numerals: hundreds\`, so a part first drawn in FIG. ${figure} takes ${figure}02 to ${figure}98.` : undefined;
+}
+
+/** The next free numeral of the scheme, or `undefined` when the series of the figure is full. */
+export function nextNumeral(parts: readonly FigurePart[], scheme: NumeralScheme, figure: number): string | undefined {
+	const values = parts.map(part => leadingNumber(part.numeral));
+	if (scheme === 'even') {
+		const highest = Math.max(0, ...values);
+		return String(highest + (highest % 2 ? 1 : 2));
+	}
+	const base = figure * 100;
+	const highest = Math.max(base, ...values.filter(value => Math.floor(value / 100) === figure));
+	const next = highest + (highest % 2 ? 1 : 2);
+	return next < base + 100 ? String(next) : undefined;
+}
+
+/** A file name safe to write in `sketches/`. */
+export function sketchFileName(name: string, mimeType?: string): string {
+	let file = basename(name.replace(/\\/g, '/')).replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'sketch';
+	if (!SKETCH_EXTENSIONS.test(file)) {
+		const extension = mimeType?.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+		file = `${file}.${extension && /^[a-z]+$/.test(extension) ? extension : 'png'}`;
+	}
+	return file;
+}
+
+/** True when two byte arrays are equal. */
+export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+	return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+/**
+ * Inserts a part line under the heading of the figure: after the last part line of its section,
+ * or right after the heading. A figure without a heading gets one at the end of the file.
+ */
+export function insertPartLine(figures: string, figure: number, line: string): string {
+	const section = parseFigureSections(figures).figures.find(item => hasFigure(figureHeadingNumbers(item.label), String(figure)));
+	const lines = figures.replace(/\r\n/g, '\n').split('\n');
+	if (!section) {
+		const body = lines.join('\n').replace(/\n*$/, '');
+		const empty = parseDraftingFrontmatter(figures).body.trim() === '';
+		return `${body}${empty ? '\n' : '\n\n'}## FIG. ${figure}\n\n${line}\n`;
+	}
+	const after = section.parts.length ? section.parts[section.parts.length - 1].line : section.line;
+	const insert = section.parts.length ? [line] : ['', line];
+	lines.splice(after, 0, ...insert);
+	return lines.join('\n');
 }

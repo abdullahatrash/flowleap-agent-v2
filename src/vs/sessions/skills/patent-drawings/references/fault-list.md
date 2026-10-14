@@ -14,9 +14,9 @@ From the scene validator, the renderer and `drawingFaults.ts`.
 | `scene-schema` | A field of the scene has a wrong type, value or range (the message gives the path, e.g. `parts[1].shape.radius`). | Correct that field per [scene-schema.md](scene-schema.md). |
 | `code-not-allowed` | A part uses the `code` kind; the tools do not opt in. | Build the part from primitives or a library part. If neither can, the part is out of scope. |
 | `scene-build` | The geometry kernel could not build the solids (bad boolean, zero-size cut, self-crossing profile). | Simplify the part: check that `subtract` shapes overlap the part, that a polygon or profile does not cross itself, that a tube bend radius fits its segments. |
-| `part-without-numeral` | A drawn part has no numeral port. Every part drawn has one. | Add a port for the part with its numeral from `figures.md`, or remove the part. |
+| `part-without-numeral` | Refusal: a drawn part has no numeral port. Every part drawn has one. Nothing is written. | Add a port for the part with its numeral from `figures.md`, or remove the part. |
 | `numeral-without-port` | A port names a part or face that does not exist (the message lists the faces). | Use a face from the list, or add a `point` on the face. |
-| `numeral-not-allowed` | The numeral is not in `figures.md`. | Use the numeral `figures.md` gives the part. A new part goes through the `propose` command first. |
+| `numeral-not-allowed` | Refusal: the numeral is not in `figures.md`. Nothing is written. | Use the numeral `figures.md` gives the part. A new part goes through the `propose` command first. |
 | `numeral-two-parts` | One numeral points at two different parts. | Give each part its own numeral; for one part shown twice, use the same `name` on both. |
 | `lead-lines-cross` | Two lead lines cross. | Move one port: another face or `point` that the camera sees on the other side, or change the camera. |
 | `lead-line-off-part` | A lead line ends off its part. | Pick a face that is visible in this camera, or give a `point` on the visible side. |
@@ -47,6 +47,7 @@ refusal returns no SVG.
 | `epo-short-sentence` | An EPO label has more than 12 words (GL A-IX 8). As a Note, the label was cut. | Shorten the label to a short sentence. |
 | `label-overlap` | Two texts overlap. | Shorten the labels, or remove an edge label. |
 | `numeral-set` | The drawn numerals differ from the step or block numerals. | Render again from the same step list; do not edit the SVG. |
+| step numerals not listed | Refusal: a step or block numeral of the `numerals:` scheme (`2, 4, 6` or `502, 504`) is not under the Figure's heading in `figures.md`. The refusal lists the lines to add. | Add the listed `- N: text` lines under the heading, then render again. |
 | `lead-line` | A numeral has no lead line. | Render again; if it stays, report it. |
 | `lead-crosses-edge` | A numeral or its lead line touches a connector. | Remove or move a proposed edge, or shorten the labels so the layout changes. |
 | `decision-branch` | Note: a decision has fewer than two outgoing edges. | Add the second branch edge, or remove the decision. |
@@ -57,10 +58,13 @@ The `build` command refuses on these. They are not fixed by a render.
 
 | Rule | Meaning | Fix |
 |---|---|---|
-| `figure-proposal` | A `(proposed)` line is in `figures.md`. | The attorney removes the marker (confirms) or the line. |
-| `figure-coverage` | A Feature List row an Approved Claim cites has no drawn part (37 CFR 1.83(a)), or a part links a row that does not exist. | Draw a confirmed part that links the row, `- 20: part [F3]`, or ask the attorney. |
-| `figures-settings` | `pageSize: letter` for the EPO (Error), or an unknown setting value (Note). | The attorney sets `pageSize: A4`. |
-| any Figure Error | A Figure still has an unwaived Error Finding. | Fix the Figure, or the attorney waives the Finding with a reason. |
+| `figure-proposal` | A `(proposed)` line is in `figures.md`. A waiver does not open this gate. | The attorney removes the marker (confirms) or the line. |
+| `figure-coverage` | A Feature List row an Approved Claim cites has no drawn part (37 CFR 1.83(a)), or a part links a row that does not exist. | Link a confirmed part to the row, `- 20: part [F3]`, or the attorney waives the Finding in `findings.md`. |
+| `figures-settings` | `pageSize: letter` for the EPO. | The attorney sets `pageSize: A4`. |
+| a failing sheet check | A sheet check of the receipt list below fails (for example `glyph-height` after a Figure was scaled down). | Fix the Figure that causes it and render again. |
+
+Figure-level Errors (the two tables above) do not block the build. They show as
+`fail` rows in the receipt; report each one.
 
 ## Sheet checks in the receipt
 

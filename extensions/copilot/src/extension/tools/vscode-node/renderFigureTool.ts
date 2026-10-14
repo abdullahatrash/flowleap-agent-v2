@@ -20,10 +20,10 @@ import { validateScene } from '../../drawings/common/scene/sceneValidator';
 import { parseClaims } from '../common/drafting/claims';
 import { readFiguresSettings } from '../common/drafting/figures';
 import { DraftFinding } from '../common/drafting/finding';
-import { figureHeadingNumbers, FigurePart, hasFigure, parseFigureParts, parseFigureSections } from '../common/drafting/specValidators';
+import { figureHeadingNumbers, hasFigure, parseFigureParts, parseFigureSections } from '../common/drafting/specValidators';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, drawingFindingLine, FigureId, figureId, MAX_REVIEW_ROUNDS, parseReviewRounds, renderReviewRounds, ReviewRound, ROUNDS_FILE } from './drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, drawingFindingLine, FigureId, figureId, MAX_REVIEW_ROUNDS, parseReviewRounds, partsOfFigure, renderReviewRounds, reviewPngCount, ReviewRound, ROUNDS_FILE } from '../../drawings/common/drawingFiles';
 import { DraftingWorkspace, textResult } from './draftingWorkspace';
 
 /** A flowchart Figure: the steps in order, or the approved method claim to read them from. */
@@ -66,22 +66,6 @@ interface RenderedSource {
 	readonly svg: string;
 	readonly source: string;
 	readonly findings: readonly DraftFinding[];
-}
-
-/** The parts listed under the figure heading of `figures.md` that names the Figure. */
-function partsOfFigure(figures: string, figure: FigureId): FigurePart[] {
-	return parseFigureSections(figures).figures
-		.filter(section => {
-			const numbers = figureHeadingNumbers(section.label);
-			return hasFigure(numbers, figure.key) || hasFigure(numbers, String(figure.number));
-		})
-		.flatMap(section => section.parts);
-}
-
-/** The number of review renders of a Figure already in `drawings/review/`. */
-function reviewPngCount(files: readonly string[], figure: FigureId): number {
-	const pattern = new RegExp(`^FIG-${figure.key}\\.round-\\d+\\.png$`);
-	return files.filter(name => pattern.test(name)).length;
 }
 
 /**
