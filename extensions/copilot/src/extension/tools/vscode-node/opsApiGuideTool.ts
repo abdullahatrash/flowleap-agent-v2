@@ -37,6 +37,8 @@ export class OpsApiGuideTool extends BaseRegistryGuideTool {
 		'get_family',
 		'get_legal_status',
 		'get_register_events',
+		'get_register_biblio',
+		'search_register',
 		'get_citations',
 		'get_patent_image',
 		'convert_patent_number',

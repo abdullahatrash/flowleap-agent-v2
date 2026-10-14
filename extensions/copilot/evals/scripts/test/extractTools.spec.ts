@@ -55,6 +55,7 @@ describe('extract-tools', () => {
 			'search_legal',
 			'search_npl',
 			'search_patents',
+			'search_register',
 			'start_application_draft',
 			'uspto_api_guide',
 			'validate_draft',

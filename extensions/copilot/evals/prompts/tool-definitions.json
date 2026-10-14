@@ -631,6 +631,29 @@
   {
     "type": "function",
     "function": {
+      "name": "search_register",
+      "description": "PRIMARY tool for REPRESENTATIVE or OPPONENT questions: searches the EP Register with register CQL and returns OPS's total for the whole query plus one row per EP application (publication, application number, representative, status, applicant, title). The EP Register is the ONLY search with a representative index: use re=<name> for the professional representative (agent) of record ('how many EP filings does representative X handle', 'which applications does firm Y represent') and op=<name> for an opponent ('which oppositions did Z file'). Other register indexes: ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. NOT register indexes (they return nothing): ag, rep, ab, cpc, st, ps, fd, ctr. Quote a multi-word value: re=\"Muster Patentanwälte\". search_patents has NO representative index at any office, so never answer a representative question from a bare name there. EP applications only: say so when you report a count. The total is capped at 10000; report it as the count and the rows as examples. For the US attorney of record, search_patents provider=uspto on recordAttorney.attorneyBag.lastName names the USPTO-registered practitioner; an EP agent is not a USPTO practitioner, so expect 0 there for the same firm. Grammar: get_search_syntax provider=epo_register. For one application's register events use get_register_events.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "EP Register CQL, e.g. 're=Kreuels', 'op=Siemens and pd>=20200101', 're=\"Kreuels\" and ia=Syntegon'. Combine field=value terms with and/or/not; quote multi-word values."
+          },
+          "range": {
+            "type": "string",
+            "description": "Optional result range 'start-end', max 100 per page. Default '1-25'. The total is reported for the whole query whatever the range."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "read_pdf",
       "description": "Extract text content from a local PDF file. Use this tool when users reference PDF documents (patent PDFs, research papers, technical documents) and need to analyze their content. Reads all pages by default, a single page via 'pageNumber', or a range via 'startPage'/'endPage'. Returns extracted text plus metadata (title, author, page count). The PDF must be a local file accessible from the workspace. If the user attached the PDF to the chat message, its full content — including figures and scanned pages — is already visible to you; do not use this tool for attached PDFs. Use it only for PDF files on disk that are not attached.",
       "parameters": {

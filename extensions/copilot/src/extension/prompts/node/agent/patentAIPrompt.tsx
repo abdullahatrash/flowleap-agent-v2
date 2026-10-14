@@ -86,6 +86,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasGetLegalStatus: toolNames.has(ToolName.GetLegalStatus),
 		hasGetPatentFamily: toolNames.has(ToolName.GetPatentFamily),
 		hasGetRegisterEvents: toolNames.has(ToolName.GetRegisterEvents),
+		hasSearchRegister: toolNames.has(ToolName.SearchRegister),
 		hasGetContinuity: toolNames.has(ToolName.GetContinuity),
 		hasGetProsecutionTimeline: toolNames.has(ToolName.GetProsecutionTimeline),
 		hasGetPatentSummary: toolNames.has(ToolName.GetPatentSummary),
@@ -115,6 +116,7 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasGetLegalStatus,
 		base.hasGetPatentFamily,
 		base.hasGetRegisterEvents,
+		base.hasSearchRegister,
 		base.hasGetContinuity,
 		base.hasGetProsecutionTimeline,
 		base.hasGetPatentSummary,
@@ -357,6 +359,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{tools.hasGetLegalStatus && <>→ LEGAL STATUS in depth ("is it still in force / valid", "has it lapsed / expired", renewal/maintenance fees, oppositions): `get_legal_status` (publicationNumber) — the full INPADOC legal-status event history as a per-jurisdiction table.{tools.hasGetPatentSummary ? <> Use this, not get_patent_summary, when the user wants the detailed status history rather than a one-line snapshot</> : <></>}<br /></>}
 					{tools.hasGetPatentFamily && <>→ PATENT FAMILY in depth (every member across jurisdictions, "where else was it filed / granted"): `get_patent_family` (publicationNumber) — the EXTENDED INPADOC family as a table, ONE ROW PER MEMBER (one application), each named by the publication to CITE for it: its grant where it has one, else its earliest publication. Name a granted member by its grant number, NEVER by the pre-grant publication listed beside it under "Also published as" — a pre-grant publication and a granted patent are different legal objects.{tools.hasGetPatentSummary ? <> Use this, not get_patent_summary, when the user wants the enumerated members rather than a count</> : <></>}<br /></>}
 					{tools.hasGetRegisterEvents && <>→ EP REGISTER EVENTS (opposition proceedings, transfers/assignments of rights, amendments, procedural history — EP applications/patents only): `get_register_events` (publicationNumber) — the EP Register event chronology as a table<br /></>}
+					{tools.hasSearchRegister && <>→ REPRESENTATIVE / OPPONENT counts and lists ("how many EP filings does representative X handle", "which applications does firm Y represent", "which oppositions did Z file"): `search_register` (query `re=` followed by the representative of record, `op=` followed by an opponent; EP Register only, EP applications only — say so). `search_patents` has NO representative index at any office; never answer a representative question from a bare name there. Report the total as the count and the rows as examples. The US attorney of record is a different thing: search_patents provider=uspto on recordAttorney.attorneyBag.lastName names the USPTO-registered practitioner<br /></>}
 					→ ADVANCED / edge cases only (data with no dedicated typed tool): `ops_api_guide` action="list"/"endpoint" names the backend tool, which you then call with `patent_api_request` — {'path: "/tools/<tool_name>", method: "POST"'} (authenticated, no terminal needed).{(tools.hasGetLegalStatus || tools.hasGetPatentFamily || tools.hasGetRegisterEvents) ? <> For standard legal-status, family and register lookups PREFER the typed tools above over this raw path.</> : <></>}<br />
 				→ Keywords: tell me about, overview, summarize, claims, full text, description, when does it expire, expiration date, patent term, legal status, patent family, biblio<br />
 				→ NUMBER FORMATS: for the EPO tools, kind codes are stripped automatically (US6021533A ≡ US6021533). For `get_us_grant`, use the bare numeric patent number only (6021533 — no "US" prefix, no kind code).<br />
