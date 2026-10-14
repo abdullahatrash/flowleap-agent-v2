@@ -7,6 +7,7 @@ assets/walkthroughs/**
 !dist/*.wasm
 !dist/replicad_single.mjs
 !dist/LICENSE-opencascade.txt
+!dist/resvg.wasm.LICENSE.txt
 !dist/*.json
 !dist/*.bpe
 !dist/*.tiktoken

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" data-sheet="1" data-sheets="1" data-office="US" data-page-size="A4" data-orientation="portrait">
+<text class="sheet-number" x="110" y="29.296" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">1/1</text>
+<g class="figures" transform="translate(25 33.296)">
+<svg class="figure" data-figure="1" data-kind="3d" data-scale="1" x="5" y="69.556" width="80" height="60" viewBox="0 0 80 60">
+<rect width="80" height="60" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L70 10 L70 50 L10 50 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 30 L70 30"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M72 6 C74 8 70 9 70 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="75" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+<text class="fig-label" data-figure="1" x="45" y="136.852" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">FIG. 1</text>
+<svg class="figure" data-figure="2" data-kind="3d" data-scale="1" x="95" y="59.556" width="70" height="70" viewBox="0 0 70 70">
+<rect width="70" height="70" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L60 10 L60 60 L10 60 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 35 L60 35"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M62 6 C64 8 60 9 60 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="65" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+<text class="fig-label" data-figure="2" x="130" y="136.852" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">FIG. 2</text>
+<svg class="figure" data-figure="3A" data-kind="3d" data-scale="1" x="20" y="146.852" width="60" height="40" viewBox="0 0 60 40">
+<rect width="60" height="40" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L50 10 L50 30 L10 30 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 20 L50 20"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M52 6 C54 8 50 9 50 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="55" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+<text class="fig-label" data-figure="3A" x="50" y="194.148" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">FIG. 3A</text>
+<svg class="figure" data-figure="3B" data-kind="3d" data-scale="1" x="90" y="146.852" width="60" height="40" viewBox="0 0 60 40">
+<rect width="60" height="40" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L50 10 L50 30 L10 30 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 20 L50 20"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M52 6 C54 8 50 9 50 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="55" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+<text class="fig-label" data-figure="3B" x="120" y="194.148" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">FIG. 3B</text>
+</g>
+</svg>

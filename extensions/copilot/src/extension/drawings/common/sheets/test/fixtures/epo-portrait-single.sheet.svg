@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" data-sheet="1" data-sheets="1" data-office="EPO" data-page-size="A4" data-orientation="portrait">
+<text class="sheet-number" x="110" y="29.296" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">1</text>
+<g class="figures" transform="translate(25 33.296)">
+<svg class="figure" data-figure="1" data-kind="3d" data-scale="1" x="25" y="81.852" width="120" height="90" viewBox="0 0 120 90">
+<rect width="120" height="90" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L110 10 L110 80 L10 80 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 45 L110 45"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M112 6 C114 8 110 9 110 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="115" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+</g>
+</svg>

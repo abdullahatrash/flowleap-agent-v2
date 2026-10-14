@@ -2505,7 +2505,7 @@
             },
             "coverage": {
               "type": "array",
-              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 \u2014 element (b): \u2026\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report: one row per element of each independent claim (claimNumber required), each with an examiner side and a found side; the row's own status, sourceAnchors, evidence and elements are unused there.",
+              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 — element (b): …\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report: one row per element of each independent claim (claimNumber required), each with an examiner side and a found side; the row's own status, sourceAnchors, evidence and elements are unused there.",
               "minItems": 1,
               "items": {
                 "type": "object",
@@ -7951,6 +7951,7 @@
     "@types/minimist": "^1.2.5",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.3",
+    "@types/pdfkit": "0.17.6",
     "@types/picomatch": "^4.0.0",
     "@types/react": "17.0.44",
     "@types/react-dom": "^18.2.17",
@@ -8038,6 +8039,7 @@
     "@opentelemetry/sdk-metrics": "^2.5.1",
     "@opentelemetry/sdk-trace-node": "^2.5.1",
     "@opentelemetry/semantic-conventions": "^1.39.0",
+    "@resvg/resvg-wasm": "2.6.2",
     "@sinclair/typebox": "^0.34.41",
     "@vscode/copilot-api": "^0.4.3",
     "@vscode/extension-telemetry": "^1.5.1",
@@ -8060,6 +8062,7 @@
     "mammoth": "^1.13.0",
     "markdown-it": "^14.1.1",
     "minimatch": "^10.2.1",
+    "pdfkit": "0.20.2",
     "replicad": "1.1.0",
     "replicad-opencascadejs": "1.1.0",
     "undici": "^7.24.1",

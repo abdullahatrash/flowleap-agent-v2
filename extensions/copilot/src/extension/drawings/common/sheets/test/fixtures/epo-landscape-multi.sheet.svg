@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" data-sheet="1" data-sheets="1" data-office="EPO" data-page-size="A4" data-orientation="landscape">
+<text class="sheet-number" x="110" y="29.296" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">1</text>
+<g class="figures" transform="translate(25 287) rotate(-90)">
+<svg class="figure" data-figure="1" data-kind="3d" data-scale="1" x="11.852" y="7.704" width="230" height="60" viewBox="0 0 230 60">
+<rect width="230" height="60" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L220 10 L220 50 L10 50 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 30 L220 30"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M222 6 C224 8 220 9 220 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="225" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+<text class="fig-label" data-figure="1" x="126.852" y="75" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Fig. 1</text>
+<svg class="figure" data-figure="2" data-kind="3d" data-scale="1" x="26.852" y="85" width="200" height="70" viewBox="0 0 200 70">
+<rect width="200" height="70" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" stroke-width="0.4" d="M10 10 L190 10 L190 60 L10 60 Z"/>
+<path class="hidden" stroke-width="0.2" stroke-dasharray="1.5 1" d="M10 35 L190 35"/>
+<path class="lead" data-numeral="12" stroke-width="0.2" d="M192 6 C194 8 190 9 190 12"/>
+</g>
+<text class="numeral" data-numeral="12" x="195" y="5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+</svg>
+<text class="fig-label" data-figure="2" x="126.852" y="162.296" font-size="6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Fig. 2</text>
+</g>
+</svg>
