@@ -3,14 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { formatFigurePart, NumeralScheme, readFiguresSettings } from '../../../tools/common/drafting/figures';
+import { formatFigurePart, readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { DRAFTING_FILE_NAMES } from '../../../tools/common/drafting/folderContract';
-import { parseDraftingFrontmatter } from '../../../tools/common/drafting/frontmatter';
-import { figureHeadingNumbers, FigurePart, hasFigure, parseFigureParts, parseFigureSections } from '../../../tools/common/drafting/specValidators';
+import { parseFigureParts } from '../../../tools/common/drafting/specValidators';
+import { insertPartLine, nextNumeral, sameBytes, schemeFault, sketchFileName } from '../../common/drawingFiles';
 import { MatterFiles } from './matterFiles';
-
-/** File extensions a sketch may have. */
-export const SKETCH_EXTENSIONS = /\.(png|jpe?g|gif|webp|bmp|tiff?|svg|pdf)$/i;
 
 /** A sketch the caller resolved: its original file name and its bytes. */
 export interface SketchFile {
@@ -49,46 +46,6 @@ export type ProposeFigurePartResult =
 	}
 	| { readonly ok: false; readonly reason: string };
 
-function leadingNumber(numeral: string): number {
-	return Number.parseInt(numeral, 10);
-}
-
-/** The reason a numeral does not follow the scheme, or `undefined` when it does. */
-function schemeFault(numeral: string, scheme: NumeralScheme, figure: number): string | undefined {
-	const value = leadingNumber(numeral);
-	if (scheme === 'even') {
-		return value % 2 ? `Numeral ${numeral} is odd; figures.md uses \`numerals: even\`.` : undefined;
-	}
-	return Math.floor(value / 100) !== figure ? `Numeral ${numeral} does not start with ${figure}; figures.md uses \`numerals: hundreds\`, so a part first drawn in FIG. ${figure} takes ${figure}02 to ${figure}98.` : undefined;
-}
-
-/** The next free numeral of the scheme, or `undefined` when the series of the figure is full. */
-function nextNumeral(parts: readonly FigurePart[], scheme: NumeralScheme, figure: number): string | undefined {
-	const values = parts.map(part => leadingNumber(part.numeral));
-	if (scheme === 'even') {
-		const highest = Math.max(0, ...values);
-		return String(highest + (highest % 2 ? 1 : 2));
-	}
-	const base = figure * 100;
-	const highest = Math.max(base, ...values.filter(value => Math.floor(value / 100) === figure));
-	const next = highest + (highest % 2 ? 1 : 2);
-	return next < base + 100 ? String(next) : undefined;
-}
-
-/** A file name safe to write in `sketches/`. */
-export function sketchFileName(name: string, mimeType?: string): string {
-	let file = (name.replace(/\\/g, '/').split('/').pop() ?? '').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'sketch';
-	if (!SKETCH_EXTENSIONS.test(file)) {
-		const extension = mimeType?.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg');
-		file = `${file}.${extension && /^[a-z]+$/.test(extension) ? extension : 'png'}`;
-	}
-	return file;
-}
-
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-	return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-
 /** Writes the sketch to `sketches/`, reusing a file with the same bytes; returns its matter-relative path. */
 async function storeSketch(files: MatterFiles, sketch: SketchFile): Promise<string> {
 	const fileName = sketchFileName(sketch.name, sketch.mimeType);
@@ -104,23 +61,6 @@ async function storeSketch(files: MatterFiles, sketch: SketchFile): Promise<stri
 			return candidate;
 		}
 	}
-}
-
-/**
- * Inserts a part line under the heading of the figure: after the last part line of its section,
- * or right after the heading. A figure without a heading gets one at the end of the file.
- */
-function insertPartLine(figures: string, figure: number, line: string): string {
-	const section = parseFigureSections(figures).figures.find(item => hasFigure(figureHeadingNumbers(item.label), String(figure)));
-	const lines = figures.replace(/\r\n/g, '\n').split('\n');
-	if (!section) {
-		const body = lines.join('\n').replace(/\n*$/, '');
-		const empty = parseDraftingFrontmatter(figures).body.trim() === '';
-		return `${body}${empty ? '\n' : '\n\n'}## FIG. ${figure}\n\n${line}\n`;
-	}
-	const after = section.parts.length ? section.parts[section.parts.length - 1].line : section.line;
-	lines.splice(after, 0, ...(section.parts.length ? [line] : ['', line]));
-	return lines.join('\n');
 }
 
 /**

@@ -17,7 +17,7 @@ import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../com
 import { validateScene } from '../../common/scene/sceneValidator';
 import { CheckResult, FigureFinding, runSheetChecks, writeDrawingsReceipt } from '../../common/sheets/receipt';
 import { DrawingPageSize, FigureInput, layoutDrawingSheets } from '../../common/sheets/sheetLayout';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, FigureId, figureOfSvgFile, parseReviewRounds, reviewRecords, ROUNDS_FILE } from './drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, FigureId, figureOfSvgFile, parseReviewRounds, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
 import { MatterFiles, readMatterOffice } from './matterFiles';
 
 /** The result of a build: the written Drawing Set, or the refusal reason (nothing was written). */
