@@ -17,11 +17,11 @@
  * This module imports no kernel and no layout engine.
  */
 
-import { DRAWING_RULES, DrawingRule } from '../../drawings/common/scene/drawingFaults';
-import type { BlockDiagramInput } from '../../drawings/common/diagram/blockDiagram';
-import type { FlowchartInput } from '../../drawings/common/diagram/flowchart';
-import type { FigureReviewRecord } from '../../drawings/common/sheets/receipt';
-import { DraftFinding } from '../common/drafting/finding';
+import { DRAWING_RULES, DrawingRule } from '../../common/scene/drawingFaults';
+import type { BlockDiagramInput } from '../../common/diagram/blockDiagram';
+import type { FlowchartInput } from '../../common/diagram/flowchart';
+import type { FigureReviewRecord } from '../../common/sheets/receipt';
+import { DraftFinding } from '../../../tools/common/drafting/finding';
 
 /** Three review rounds per Figure (PRD 0023, D5 guardrail). */
 export const MAX_REVIEW_ROUNDS = 3;

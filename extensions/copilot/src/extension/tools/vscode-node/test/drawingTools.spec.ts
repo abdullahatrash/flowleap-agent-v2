@@ -130,132 +130,50 @@ function setup(files: Record<string, string> = matter) {
 	return { fileSystem, tools, read, exists, list, write };
 }
 
-describe('render_figure', () => {
-	it('refuses a Figure without a heading in figures.md, and writes nothing', async () => {
-		const { tools, list } = setup();
-		expect({ result: await tools.render({ figure: 3, scene }), drawings: await list('drafting/hinge/drawings') }).toEqual({
-			result: { text: 'The Figure was not rendered. drafting/hinge/figures.md has no heading for FIG. 3 (`## FIG. 3` with its parts). Add the Figure and its parts to the figure list first.', images: [] },
-			drawings: [],
-		});
-	});
-
-	it('refuses a numeral that figures.md does not list', async () => {
-		const { tools } = setup();
-		const result = await tools.render({ figure: 1, scene: { ...scene, numerals: [...scene.numerals, { numeral: '14', part: 'housing', face: 'top' }] } });
-		expect(result.text).toBe('The Figure was not rendered. Every part drawn has a numeral, and every numeral is in the figure list:\n- Error `numeral-not-allowed` (FIG-1.scene.json): Numeral 14 is not in the figures list (allowed: 10, 12, 2, 4, 6). [37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l)]\nAdd the part to the figure list (propose_figure_part when the disclosure does not state it), or remove it from the scene.');
-	});
-
-	it('refuses a part without a numeral', async () => {
-		const { tools } = setup();
-		const result = await tools.render({ figure: 1, scene: { ...scene, parts: [...scene.parts, { id: 'lid', shape: { kind: 'box', size: [10, 10, 2] } }] } });
-		expect(result.text).toMatchSnapshot();
-	});
-
-	it('refuses 2D numerals that are not under the Figure heading, listing the lines to add', async () => {
-		const { tools } = setup();
-		const result = await tools.render({ figure: 2, flowchart: { steps: ['measure the temperature', 'compare it with a limit', 'open the valve', 'close the valve'] } });
-		expect(result.text).toMatchSnapshot();
-	});
-
-	it('refuses a fourth round', async () => {
-		const { tools, write, list } = setup();
-		for (const round of [1, 2, 3]) {
-			await write(`drafting/hinge/drawings/review/FIG-1.round-${round}.png`, 'png');
-		}
-		expect({ result: (await tools.render({ figure: 1, scene })).text, review: await list('drafting/hinge/drawings/review') }).toEqual({
-			result: 'The Figure was not rendered. FIG. 1 already had 3 review rounds; the limit is 3 per Figure. Edit drafting/hinge/drawings/FIG-1.scene.json by hand, or ask the attorney.',
-			review: ['FIG-1.round-1.png', 'FIG-1.round-2.png', 'FIG-1.round-3.png'],
-		});
-	});
-
-	it('renders a 3D scene: writes the source, the SVG and the review render, returns the render with the findings, and records the round', async () => {
-		const { tools, read, list, fileSystem } = setup();
-		const first = await tools.render({ figure: 1, scene });
-		const second = await tools.render({ figure: 1, scene, includeRender: false });
-		const png = await fileSystem.readFile(URI.file('/workspace/drafting/hinge/drawings/review/FIG-1.round-2.png'));
+describe('render_figure tool', () => {
+	it('prefixes a refusal, and checks the Approved Claims with the drafting gate', async () => {
+		const stale = `---\napproved: true\napprovedHash: 0000\n---\n${claims.split('---\n')[2]}`;
+		const { tools, read } = setup({ ...matter, 'drafting/hinge/claims.md': stale });
 		expect({
-			first,
-			second,
-			drawings: await list('drafting/hinge/drawings'),
-			review: await list('drafting/hinge/drawings/review'),
-			pngSignature: [...png.slice(1, 4)].map(code => String.fromCharCode(code)).join(''),
-			sourceFigure: JSON.parse(await read('drafting/hinge/drawings/FIG-1.scene.json')).figure,
-			svgStart: (await read('drafting/hinge/drawings/FIG-1.svg')).slice(0, 4),
-			rounds: JSON.parse(await read('drafting/hinge/drawings/rounds.json')),
-		}).toMatchSnapshot();
-	}, KERNEL_TIMEOUT);
-
-	it('renders a flowchart from an approved method claim', async () => {
-		const { tools, read } = setup();
-		const result = await tools.render({ figure: 2, flowchart: { fromClaim: 2 } });
-		expect({ result, source: JSON.parse(await read('drafting/hinge/drawings/FIG-2.scene.json')) }).toMatchSnapshot();
-	}, KERNEL_TIMEOUT);
-});
-
-describe('build_drawing_set', () => {
-	it('refuses with no Figure, on a proposed part, on a figure-list Error and on a coverage gap', async () => {
-		const noFigure = await setup().tools.build();
-		const withFigure = async (files: Record<string, string>) => {
-			const run = setup({ ...matter, ...files });
-			await run.write('drafting/hinge/drawings/FIG-1.svg', '<svg/>');
-			return run.tools.build();
-		};
-		expect({
-			noFigure,
-			proposed: await withFigure({ 'drafting/hinge/figures.md': `${figures}- 8: spring (proposed from sketches/sketch-1.png)\n` }),
-			epoLetter: await withFigure({ 'drafting/hinge/feature-list.md': featureList.replace('office: US', 'office: EPO'), 'drafting/hinge/figures.md': figures.replace('numerals: even', 'numerals: even\npageSize: letter') }),
-			coverageGap: await withFigure({ 'drafting/hinge/figures.md': figures.replace('- 10: housing [F1]', '- 10: housing') }),
-		}).toMatchSnapshot();
-	});
-
-	it('lays out the Figures, writes the sheets, the PDF and the receipt, and updates the Filing Manifest', async () => {
-		const { tools, read, list, write, fileSystem } = setup();
-		await tools.render({ figure: 1, scene });
-		await tools.render({ figure: 2, flowchart: { fromClaim: 2 }, includeRender: false });
-		await write('drafting/hinge/draft-application.md', '---\noffice: US\n---\n# Housing\n\n## DETAILED DESCRIPTION\n\nThe housing 10 has a top face 12.\n\n## CLAIMS\n\n1. A housing comprising a top face.\n\n## ABSTRACT\n\nA housing.\n');
-		await write('drafting/hinge/filing-manifest.md', 'old manifest');
-		await write('drafting/hinge/drawings/sheet-9.svg', '<svg/>');
-		const result = await tools.build();
-		const pdf = Buffer.from(await fileSystem.readFile(URI.file('/workspace/drafting/hinge/drawings/drawings.pdf'))).toString('latin1');
-		expect({
-			result,
-			drawings: await list('drafting/hinge/drawings'),
-			review: await list('drafting/hinge/drawings/review'),
-			pdfHeader: pdf.slice(0, 8),
-			receipt: (await read('drafting/hinge/drawings/drawings-compliance.md')).replace(/\d{4}-\d\d-\d\d/, '<date>'),
-			manifestSheets: (await read('drafting/hinge/filing-manifest.md')).split('\n').filter(line => /drawing sheets/i.test(line)),
-		}).toMatchSnapshot();
-	}, KERNEL_TIMEOUT);
-});
-
-describe('propose_figure_part', () => {
-	it('refuses a numeral already used, a numeral outside the scheme and a sketch it cannot find', async () => {
-		const { tools, read } = setup();
-		expect({
-			used: await tools.propose({ figure: 1, part: 'lid', numeral: '12' }),
-			odd: await tools.propose({ figure: 1, part: 'lid', numeral: '13' }),
-			hundreds: await setup({ ...matter, 'drafting/hinge/figures.md': figures.replace('numerals: even', 'numerals: hundreds') }).tools.propose({ figure: 1, part: 'lid', numeral: '204' }),
-			noSketch: await tools.propose({ figure: 1, part: 'lid', sketch: 'napkin.png' }),
-			figuresUnchanged: await read('drafting/hinge/figures.md') === figures,
+			noHeading: await tools.render({ figure: 3, scene }),
+			staleApproval: (await tools.render({ figure: 2, flowchart: { fromClaim: 2 } })).text,
+			claimsCleared: (await read('drafting/hinge/claims.md')).split('---')[1],
 		}).toEqual({
-			used: 'No part was proposed. Numeral 12 is already used for "top face" (drafting/hinge/figures.md, line 7). One numeral names one part.',
-			odd: 'No part was proposed. Numeral 13 is odd; figures.md uses `numerals: even`.',
-			hundreds: 'No part was proposed. Numeral 204 does not start with 1; figures.md uses `numerals: hundreds`, so a part first drawn in FIG. 1 takes 102 to 198.',
-			noSketch: 'No part was proposed. "napkin.png" is neither an image attached in this chat (none is attached) nor an image file in the workspace.',
-			figuresUnchanged: true,
+			noHeading: { text: 'The Figure was not rendered. drafting/hinge/figures.md has no heading for FIG. 3 (`## FIG. 3` with its parts). Add the Figure and its parts to the figure list first.', images: [] },
+			staleApproval: 'The Figure was not rendered. A flowchart from a claim needs the Approved Claims. drafting/hinge/claims.md changed after it was approved, so `approved` was set to `false`. The attorney reviews the claims and sets `approved: true` again; then start_application_draft and a new save start the next draft version.',
+			claimsCleared: '\napproved: false\n',
 		});
 	});
 
-	it('appends a proposed line with the next numeral and copies the attached sketch to sketches/', async () => {
-		const { tools, read, fileSystem } = setup();
-		const sketch = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
-		const attached = new ChatVariablesCollection([{ id: 'vscode.image', name: 'bracket sketch.png', value: new ChatReferenceBinaryData('image/png', async () => sketch) }]);
-		const result = await tools.propose({ figure: 1, part: 'bracket', features: ['f1'], sketch: 'bracket sketch.png' }, attached);
-		const again = await tools.propose({ figure: 3, part: 'spring', sketch: 'drafting/hinge/sketches/bracket-sketch.png' });
+	it('attaches the review render only when the model sees it, and records the round', async () => {
+		const { tools, read } = setup();
+		const seen = await tools.render({ figure: 2, flowchart: { fromClaim: 2 } });
+		const unseen = await tools.render({ figure: 2, flowchart: { fromClaim: 2 }, includeRender: false });
 		expect({
-			result,
-			again,
-			figures: await read('drafting/hinge/figures.md'),
+			seen: seen.images,
+			unseen: unseen.images,
+			rounds: JSON.parse(await read('drafting/hinge/drawings/rounds.json')).figures['2'].map((round: { seen: boolean }) => round.seen),
+		}).toEqual({ seen: ['image/png'], unseen: [], rounds: [true, false] });
+	}, KERNEL_TIMEOUT);
+});
+
+describe('build_drawing_set tool', () => {
+	it('prefixes a refusal', async () => {
+		expect(await setup().tools.build()).toBe('The Drawing Set was not built. drafting/hinge/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first.');
+	});
+});
+
+describe('propose_figure_part tool', () => {
+	it('copies an image attached in chat, or a workspace image, to sketches/', async () => {
+		const { tools, read, fileSystem, write } = setup();
+		const sketch = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+		await write('photos/clip.png', 'clip');
+		const attached = new ChatVariablesCollection([{ id: 'vscode.image', name: 'bracket sketch.png', value: new ChatReferenceBinaryData('image/png', async () => sketch) }]);
+		expect({
+			attached: await tools.propose({ figure: 1, part: 'bracket', sketch: 'bracket sketch.png' }, attached),
+			workspace: await tools.propose({ figure: 1, part: 'clip', sketch: 'photos/clip.png' }),
+			notFound: await tools.propose({ figure: 1, part: 'lid', sketch: 'napkin.png' }, attached),
+			figures: (await read('drafting/hinge/figures.md')).split('\n').filter(line => line.includes('proposed')),
 			sketch: [...await fileSystem.readFile(URI.file('/workspace/drafting/hinge/sketches/bracket-sketch.png'))],
 		}).toMatchSnapshot();
 	});

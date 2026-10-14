@@ -13,7 +13,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { checklistPointer, DraftingChecklist, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
-import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
+import { DraftFinding, findingLine, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
@@ -23,6 +23,7 @@ import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README }
 import { validateDraft } from '../common/drafting/validateDraft';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, EXPORTED_DRAFT_HASH, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
+import type { MatterFiles } from '../../drawings/node/ops/matterFiles';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
 export type PdfTextReader = (uri: URI) => Promise<string>;
@@ -364,6 +365,20 @@ export class DraftingWorkspace {
 		await this.write(this.folder.workingRecord, setRecordField(record, EXPORTED_DRAFT_HASH, draftHash(draft, claims)));
 	}
 
+	/** The files of this matter for the drawing operations: paths relative to `drafting/<matter>/`. */
+	matterFiles(): MatterFiles {
+		const at = (path: string) => `${this.folder.folder}/${path}`;
+		return {
+			folder: this.folder.folder,
+			read: path => this.read(at(path)),
+			readBytes: path => this.readBytes(at(path)),
+			write: (path, content) => this.write(at(path), content),
+			listFiles: folder => this.listFiles(at(folder)),
+			delete: path => this.delete(at(path)),
+			exists: path => this.exists(at(path)),
+		};
+	}
+
 	/** The names of the files in a workspace-relative folder, sorted; empty when the folder does not exist. */
 	async listFiles(path: string): Promise<string[]> {
 		const uri = this.uri(path);
@@ -517,12 +532,6 @@ export class DraftingWorkspace {
 		}
 		return new TextDecoder().decode(bytes);
 	}
-}
-
-/** One line per finding, for a tool result. */
-export function findingLine(finding: DraftFinding): string {
-	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
-	return `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}`;
 }
 
 /** Counts by severity and the blocking list, for a tool result. */

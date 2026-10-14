@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DraftFinding } from '../common/drafting/finding';
+import { DraftFinding, findingLine } from '../common/drafting/finding';
 import { DRAFT_OUTLINE_SAVE } from '../common/drafting/folderContract';
 import { parseDraftingFrontmatter, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
 import { parseDraftOutline } from '../common/drafting/outline';
 import { checkOutline } from '../common/drafting/outlineValidators';
 import { addRecordLine, emptyWorkingRecord, OUTLINE_RESAVED } from '../common/drafting/workingRecord';
 import { sha256Hex } from '../../../util/node/crypto';
-import { DraftingSaveResult, DraftingWorkspace, findingLine } from './draftingWorkspace';
+import { DraftingSaveResult, DraftingWorkspace } from './draftingWorkspace';
 
 /** Errors listed in the tool result; the rest are counted. */
 const MAX_LISTED_ERRORS = 10;
