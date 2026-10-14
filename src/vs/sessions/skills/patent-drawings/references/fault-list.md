@@ -58,6 +58,7 @@ The `build` command refuses on these. They are not fixed by a render.
 
 | Rule | Meaning | Fix |
 |---|---|---|
+| `figures-missing` | A Figure that a heading of `figures.md` names (each member of a range heading such as `FIGS. 7 to 10`) has no `FIG-N.svg` (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i)). The refusal names the missing Figures. | Render each missing Figure. To review the Figures drawn so far, build with the partial option (`partial: true` in the editor, `--partial` in the CLI): the receipt starts with `INCOMPLETE SET: FIG. ... not drawn`, the FIG labels follow the `figures.md` count, and `filing-manifest.md` is not changed. A partial build is never the Drawing Set. |
 | `figure-proposal` | A `(proposed)` line is in `figures.md`. A waiver does not open this gate. | The attorney removes the marker (confirms) or the line. |
 | `figure-coverage` | A Feature List row an Approved Claim cites has no drawn part (37 CFR 1.83(a)), or a part links a row that does not exist. | Link a confirmed part to the row, `- 20: part [F3]`, or the attorney waives the Finding in `findings.md`. |
 | `figures-settings` | `pageSize: letter` for the EPO. | The attorney sets `pageSize: A4`. |
@@ -72,5 +73,5 @@ A waived Figure Error shows in the receipt with its waiver reason.
 `pass`, `fail` or `not-checked`: `page-size`, `margins`, `no-frame`,
 `glyph-height`, `label-larger-than-numerals`, `figure-labels`,
 `single-figure-no-label`, `sheet-numbering`, `orientation`, `text-keywords`,
-`no-scale-text`, `pdf-format`. The citations are in
+`no-scale-text`, `pdf-format`, and `figures-missing` (the Figures of `figures.md` not drawn). The citations are in
 [office-page-rules.md](office-page-rules.md).

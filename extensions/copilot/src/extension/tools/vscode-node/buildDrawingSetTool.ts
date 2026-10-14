@@ -17,6 +17,8 @@ import { DraftingWorkspace, textResult } from './draftingWorkspace';
 interface IBuildDrawingSetParams {
 	/** The matter folder name under `drafting/`. */
 	matter: string;
+	/** Build for review although Figures of figures.md are not drawn; never a filable set. */
+	partial?: boolean;
 }
 
 const refused = 'The Drawing Set was not built.';
@@ -45,7 +47,7 @@ export class BuildDrawingSetTool implements ICopilotTool<IBuildDrawingSetParams>
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}
-		const result = await buildDrawingSetOp(workspace.matterFiles());
+		const result = await buildDrawingSetOp(workspace.matterFiles(), { partial: options.input.partial === true });
 		return textResult(result.ok ? result.text : `${refused} ${result.reason}`);
 	}
 }

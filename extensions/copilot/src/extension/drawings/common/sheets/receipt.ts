@@ -25,6 +25,7 @@ export const SHEET_CHECKS = {
 	'text-keywords': '37 CFR 1.84(o); MPEP 507(C); OJ EPO 2025 A49 Art. 1(2)(j); PCT Rule 11.11 (a few short keywords; flowcharts and block diagrams excepted)',
 	'no-scale-text': '37 CFR 1.84(k); OJ EPO 2025 A49 Art. 1(2)(c); PCT Rule 11.13(d) (no "actual size" or "scale 1:2")',
 	'pdf-format': 'USPTO Patent Center PDF Guidelines; PCT Annex F 3.1.2 (PDF 1.4 to 1.6, fonts embedded, unencrypted, one page per sheet, A4 or Letter)',
+	'figures-missing': '37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every Figure the description names is in the Drawing Set)',
 } as const;
 
 /** A sheet-level check id. */
@@ -60,6 +61,14 @@ export interface PdfFacts {
 	readonly pageSizes: readonly { readonly width: number; readonly height: number }[];
 }
 
+/** The Figures the figure list names, for the completeness check and the FIG label rules. */
+export interface FigureSetFacts {
+	/** The number of Figures the figure list (`figures.md` headings) names. */
+	readonly expected: number;
+	/** The Figures not drawn, e.g. `FIG. 1, 3–10`; empty when every Figure is drawn. */
+	readonly missing: string;
+}
+
 /** Everything the receipt records. */
 export interface ReceiptInput {
 	readonly office: DrawingOffice;
@@ -74,6 +83,8 @@ export interface ReceiptInput {
 	readonly pdf?: PdfFacts;
 	/** The receipt date, `YYYY-MM-DD`. */
 	readonly date: string;
+	/** The Figures the figure list names; absent means the completeness check is not recorded. */
+	readonly figureSet?: FigureSetFacts;
 }
 
 interface Box {
@@ -202,7 +213,7 @@ const round2 = (value: number) => value.toFixed(2);
  * Runs the sheet-level checks on the sheet SVGs as written. The checks read the files, so a sheet
  * changed by hand is checked as it is, not as the layout meant it.
  */
-export function runSheetChecks(office: DrawingOffice, pageSize: DrawingPageSize, sheetSources: readonly string[], pdf?: PdfFacts): CheckResult[] {
+export function runSheetChecks(office: DrawingOffice, pageSize: DrawingPageSize, sheetSources: readonly string[], pdf?: PdfFacts, figureSet?: FigureSetFacts): CheckResult[] {
 	const sheets = sheetSources.map((source, index) => readSheet(source, index + 1));
 	const page = PAGE_SIZES[pageSize];
 	const results: CheckResult[] = [];
@@ -258,7 +269,9 @@ export function runSheetChecks(office: DrawingOffice, pageSize: DrawingPageSize,
 		sizeTexts.filter(text => text.font <= numeralFont + 1e-6).map(text => `"${text.content}" is ${round2(text.font)} mm, numerals are up to ${round2(numeralFont)} mm`),
 		`Labels and sheet numbers at least ${round2(Math.min(...sizeTexts.map(text => text.font), Number.POSITIVE_INFINITY))} mm; numerals up to ${round2(numeralFont)} mm.`));
 
-	const figureCount = sheets.reduce((total, sheet) => total + sheet.figures.length, 0);
+	const drawnCount = sheets.reduce((total, sheet) => total + sheet.figures.length, 0);
+	const figureCount = Math.max(drawnCount, figureSet?.expected ?? 0);
+	const incomplete = !!figureSet?.missing;
 	const labels = allTexts.filter(text => text.classes.includes('fig-label')).map(text => text.content);
 	if (figureCount === 1) {
 		results.push(check('single-figure-no-label', labels.map(label => `the only Figure carries the label "${label}"`), 'One Figure, no FIG label.'));
@@ -267,8 +280,8 @@ export function runSheetChecks(office: DrawingOffice, pageSize: DrawingPageSize,
 		results.push({ id: 'single-figure-no-label', citation: SHEET_CHECKS['single-figure-no-label'], result: 'not-checked', detail: `${figureCount} Figures; the rule applies to one.` });
 		const pattern = office === 'US' ? /^FIG\. (?<number>\d+)(?<partial>[A-Z])?$/ : /^(?:FIG|Fig)\.? (?<number>\d+)(?<partial>[A-Z])?$/;
 		const labelFailures: string[] = [];
-		if (labels.length !== figureCount) {
-			labelFailures.push(`${figureCount} Figures but ${labels.length} labels`);
+		if (labels.length !== drawnCount) {
+			labelFailures.push(`${drawnCount} Figures but ${labels.length} labels`);
 		}
 		const numbers: number[] = [];
 		for (const label of labels) {
@@ -280,7 +293,12 @@ export function runSheetChecks(office: DrawingOffice, pageSize: DrawingPageSize,
 			}
 		}
 		const distinct = [...new Set(numbers)];
-		if (distinct.some((value, index) => value !== index + 1) || numbers.some((value, index) => index > 0 && value < numbers[index - 1])) {
+		if (incomplete) {
+			// A partial build for review: the labels ascend in sheet order; the gaps are the Figures not drawn.
+			if (numbers.some((value, index) => index > 0 && value < numbers[index - 1])) {
+				labelFailures.push(`numbers ${numbers.join(', ')} do not ascend in sheet order`);
+			}
+		} else if (distinct.some((value, index) => value !== index + 1) || numbers.some((value, index) => index > 0 && value < numbers[index - 1])) {
 			labelFailures.push(`numbers ${numbers.join(', ')} are not consecutive from 1 in sheet order`);
 		}
 		results.push(check('figure-labels', labelFailures, `${labels.join(', ')}.`));
@@ -396,9 +414,18 @@ function cell(text: string): string {
  * (01-formal-drawing-rules.md section 10) stay with the attorney.
  */
 export function writeDrawingsReceipt(input: ReceiptInput): { readonly markdown: string; readonly checks: readonly CheckResult[] } {
-	const checks = [...runSheetChecks(input.office, input.pageSize, input.sheets, input.pdf), ...figureRows(input.figureRules ?? {}, input.figureFindings ?? [])];
+	const completeness: CheckResult[] = input.figureSet
+		? [check('figures-missing', input.figureSet.missing ? [`${input.figureSet.missing} not drawn`] : [], `All ${input.figureSet.expected} Figure(s) of the figure list are drawn.`)]
+		: [];
+	const checks = [...completeness, ...runSheetChecks(input.office, input.pageSize, input.sheets, input.pdf, input.figureSet), ...figureRows(input.figureRules ?? {}, input.figureFindings ?? [])];
 	const count = (result: CheckResult['result']) => checks.filter(row => row.result === result).length;
 	const lines: string[] = [];
+	if (input.figureSet?.missing) {
+		lines.push(`INCOMPLETE SET: ${input.figureSet.missing} not drawn`);
+		lines.push('');
+		lines.push('This partial build is for review only. It is not a Drawing Set to file, and the Filing Manifest was not changed.');
+		lines.push('');
+	}
 	lines.push('# Drawing Set check receipt');
 	lines.push('');
 	lines.push(`- Office: ${input.office}`);

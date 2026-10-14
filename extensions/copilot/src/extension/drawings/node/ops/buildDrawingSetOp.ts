@@ -15,9 +15,9 @@ import { checkDiagramSvg } from '../../common/diagram/diagramFaults';
 import { numeralFor } from '../../common/diagram/diagramText';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../common/scene/drawingFaults';
 import { validateScene } from '../../common/scene/sceneValidator';
-import { CheckResult, FigureFinding, runSheetChecks, writeDrawingsReceipt } from '../../common/sheets/receipt';
+import { CheckResult, FigureFinding, FigureSetFacts, runSheetChecks, SHEET_CHECKS, writeDrawingsReceipt } from '../../common/sheets/receipt';
 import { DrawingPageSize, FigureInput, layoutDrawingSheets } from '../../common/sheets/sheetLayout';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, FigureId, figureOfSvgFile, parseReviewRounds, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, FigureId, figureListText, figureOfSvgFile, figureSetStatus, parseReviewRounds, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
 import { MatterFiles, readMatterOffice } from './matterFiles';
 
 /** The result of a build: the written Drawing Set, or the refusal reason (nothing was written). */
@@ -31,6 +31,8 @@ export type BuildDrawingSetResult =
 		readonly checks: readonly CheckResult[];
 		/** True when `filing-manifest.md` was rewritten with the measured sheet count. */
 		readonly manifestUpdated: boolean;
+		/** The Figures of the figure list not drawn; not empty only for a partial build. */
+		readonly missing: readonly string[];
 	}
 	| { readonly ok: false; readonly reason: string };
 
@@ -75,17 +77,30 @@ function withFigureWaivers(findings: readonly FigureFinding[], previous: readonl
 	});
 }
 
+/** Options of a build. */
+export interface BuildDrawingSetOptions {
+	/**
+	 * Build for review although Figures of the figure list are not drawn: the receipt starts with
+	 * `INCOMPLETE SET: ... not drawn` and the Filing Manifest is not rewritten.
+	 */
+	readonly partial?: boolean;
+}
+
 /**
  * Builds the Drawing Set of a drafting matter (PRD 0023, slice D5) from every `drawings/FIG-N.svg`.
- * It refuses, and writes nothing, when there is no Figure, on a `(proposed)` part in `figures.md`,
+ * It refuses, and writes nothing, when there is no Figure, when a Figure a heading of `figures.md`
+ * names is not drawn (`figures-missing`; a range heading `FIGS. 7 to 10` names each member) unless
+ * `options.partial` is set, on a `(proposed)` part in `figures.md`,
  * on an unwaived Error of the figure-list checks (page size for the office, claimed-feature
  * coverage) or of the Figure checks re-run on the written files, on a layout refusal and on a
  * failing sheet check. Waivers are `  - Waived: <reason>` lines in `findings.md`. Otherwise it
  * writes `drawings/sheet-N.svg` (older sheets removed), `drawings/review/sheet-N.png`,
  * `drawings/drawings.pdf` and the receipt `drawings/drawings-compliance.md`, and rewrites
- * `filing-manifest.md` with the measured sheet count when the export already wrote it. No model call.
+ * `filing-manifest.md` with the measured sheet count when the export already wrote it. A partial
+ * build lays the FIG labels out by the figure-list count, starts the receipt with
+ * `INCOMPLETE SET: <Figures> not drawn` and never rewrites the manifest. No model call.
  */
-export async function buildDrawingSetOp(files: MatterFiles): Promise<BuildDrawingSetResult> {
+export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawingSetOptions = {}): Promise<BuildDrawingSetResult> {
 	const refuse = (reason: string): BuildDrawingSetResult => ({ ok: false, reason });
 	const drawings = `${files.folder}/drawings`;
 	const path = (name: string) => `${files.folder}/${name}`;
@@ -104,6 +119,11 @@ export async function buildDrawingSetOp(files: MatterFiles): Promise<BuildDrawin
 		.sort((a, b) => a.number - b.number || (a.partial ?? '').localeCompare(b.partial ?? ''));
 	if (!figureFiles.length) {
 		return refuse(`${drawings}/ has no Figure (FIG-N.svg). Render each Figure with render_figure first.`);
+	}
+	const status = figureSetStatus(figures, figureFiles);
+	const figureSet: FigureSetFacts = { expected: status.expected.length, missing: figureListText(status.missing) };
+	if (status.missing.length && !options.partial) {
+		return refuse(`\`figures-missing\`: ${figureSet.missing} of ${path(DRAFTING_FILE_NAMES.figures)} ${status.missing.length === 1 ? 'is' : 'are'} not drawn (${SHEET_CHECKS['figures-missing']}). Render ${status.missing.length === 1 ? 'it' : 'each'} with render_figure first. To review the Figures drawn so far, build with the partial option (\`partial: true\`; CLI \`--partial\`): the receipt then starts with "INCOMPLETE SET" and the Filing Manifest is not changed.`);
 	}
 
 	const proposals = checkFigureProposals(figures);
@@ -135,12 +155,12 @@ export async function buildDrawingSetOp(files: MatterFiles): Promise<BuildDrawin
 		return refuse(`${openFigureErrors.length} Error(s) of the Figures are open. Fix each in the Figure source and render again, or the attorney waives it: copy the item under "## Errors" in ${path(DRAFTING_FILE_NAMES.findings)} and add a line \`  - Waived: <reason>\` under it.\n${openFigureErrors.map(findingLine).join('\n')}`);
 	}
 	const { pageSize } = readFiguresSettings(figures);
-	const layout = layoutDrawingSheets(office, pageSize, inputs);
+	const layout = layoutDrawingSheets(office, pageSize, inputs, { figureCount: figureSet.expected });
 	if (!layout.ok) {
 		return refuse(layout.reason);
 	}
 	const sheets = layout.sheets.map(sheet => sheet.svg);
-	const sheetFails = runSheetChecks(office, pageSize, sheets).filter(check => check.result === 'fail');
+	const sheetFails = runSheetChecks(office, pageSize, sheets, undefined, figureSet).filter(check => check.result === 'fail');
 	if (sheetFails.length) {
 		return refuse(`${sheetFails.length} sheet check(s) fail:\n${sheetFails.map(checkLine).join('\n')}`);
 	}
@@ -168,6 +188,7 @@ export async function buildDrawingSetOp(files: MatterFiles): Promise<BuildDrawin
 		reviewRounds: reviewRecords(rounds, figureFiles.map(figure => figure.key)),
 		pdf: inspectPdf(pdfBytes),
 		date: new Date().toISOString().slice(0, 10),
+		figureSet,
 	});
 	const receiptPath = `${drawings}/drawings-compliance.md`;
 	await files.write('drawings/drawings-compliance.md', receipt.markdown);
@@ -175,7 +196,9 @@ export async function buildDrawingSetOp(files: MatterFiles): Promise<BuildDrawin
 	let manifestUpdated = false;
 	let manifestLine = `The Filing Manifest is written by export_draft_docx; it will count the ${sheets.length} sheet(s).`;
 	const claims = await files.read(DRAFTING_FILE_NAMES.claims);
-	if (draftingFolder && draft !== undefined && claims !== undefined && await files.exists(DRAFTING_FILE_NAMES.filingManifest)) {
+	if (status.missing.length) {
+		manifestLine = `${path(DRAFTING_FILE_NAMES.filingManifest)} was not changed: a partial build never counts as the Drawing Set.`;
+	} else if (draftingFolder && draft !== undefined && claims !== undefined && await files.exists(DRAFTING_FILE_NAMES.filingManifest)) {
 		const manifest = filingManifest({ office, draft, claims, figures, drawingFiles: await files.listFiles('drawings') });
 		await files.write(DRAFTING_FILE_NAMES.filingManifest, renderFilingManifest(manifest, draftingFolder));
 		manifestUpdated = true;
@@ -185,11 +208,12 @@ export async function buildDrawingSetOp(files: MatterFiles): Promise<BuildDrawin
 	const count = (result: CheckResult['result']) => receipt.checks.filter(check => check.result === result).length;
 	const failing = receipt.checks.filter(check => check.result === 'fail');
 	const text = [
-		`Built the Drawing Set of ${figureFiles.length} Figure(s) on ${sheets.length} ${pageSize} sheet(s) for ${office}: ${sheets.map((_, index) => `${drawings}/sheet-${index + 1}.svg`).join(', ')}, ${drawings}/drawings.pdf, and the receipt ${receiptPath}. Review renders of the sheets are in ${drawings}/review/.`,
+		...(status.missing.length ? [`INCOMPLETE SET: ${figureSet.missing} not drawn. Built for review only (partial); do not present it as the Drawing Set.`] : []),
+		`Built ${status.missing.length ? 'a partial set for review' : 'the Drawing Set'} of ${figureFiles.length} Figure(s) on ${sheets.length} ${pageSize} sheet(s) for ${office}: ${sheets.map((_, index) => `${drawings}/sheet-${index + 1}.svg`).join(', ')}, ${drawings}/drawings.pdf, and the receipt ${receiptPath}. Review renders of the sheets are in ${drawings}/review/.`,
 		`Receipt: ${count('pass')} pass, ${count('fail')} fail, ${count('not-checked')} not checked.`,
 		failing.length ? `Failing checks:\n${failing.map(checkLine).join('\n')}` : 'No code check fails.',
 		manifestLine,
 		'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.',
 	].join('\n');
-	return { ok: true, text, sheets: sheets.length, pageSize, checks: receipt.checks, manifestUpdated };
+	return { ok: true, text, sheets: sheets.length, pageSize, checks: receipt.checks, manifestUpdated, missing: status.missing };
 }

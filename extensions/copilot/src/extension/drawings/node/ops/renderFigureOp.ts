@@ -15,7 +15,7 @@ import type { DiagramStep } from '../../common/diagram/steps';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, drawingFindingLine, FigureId, figureId, MAX_REVIEW_ROUNDS, parseReviewRounds, partsOfFigure, renderReviewRounds, ReviewRound, reviewPngCount, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_ROUNDS, parseReviewRounds, partsOfFigure, renderReviewRounds, ReviewRound, reviewPngCount, ROUNDS_FILE } from '../../common/drawingFiles';
 import { ApprovedClaims, MatterFiles, readApprovedClaims, readMatterOffice } from './matterFiles';
 
 /** A flowchart Figure: the steps in order, or the approved method claim to read them from. */
@@ -129,9 +129,12 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 	const record: ReviewRound = { round, png, seen: input.seen };
 	await files.write(`drawings/${ROUNDS_FILE}`, renderReviewRounds({ ...rounds, [figure.key]: [...(rounds[figure.key] ?? []), record] }));
 
+	const drawn = (await files.listFiles('drawings')).map(name => figureOfSvgFile(name)).filter((item): item is FigureId => item !== undefined);
+	const { expected, missing } = figureSetStatus(figures, drawn);
 	const errors = rendered.findings.filter(finding => finding.severity === 'Error');
 	const text = [
 		`Rendered ${label}: wrote ${drawings}/FIG-${figure.key}.scene.json, ${drawings}/FIG-${figure.key}.svg and the review render ${drawings}/${png}. Round ${round} of ${MAX_REVIEW_ROUNDS}.`,
+		missing.length ? `Still to draw: ${figureListText(missing)} (${figuresPath} names ${expected.length} Figure(s)); build_drawing_set refuses until every one is drawn.` : `Every Figure ${figuresPath} names is drawn.`,
 		input.seen ? 'The review render of this round is attached; it is not a deliverable.' : 'No render is attached (the model reads the findings only); the receipt records that no render was seen in this round.',
 		rendered.findings.length
 			? `Findings (${errors.length} Error(s)):\n${rendered.findings.map(drawingFindingLine).join('\n')}`
