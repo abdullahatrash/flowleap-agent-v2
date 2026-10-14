@@ -1,5 +1,38 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`buildDrawingSetOp > builds a partial set for review: keeps the FIG label, marks the receipt INCOMPLETE SET and leaves the Filing Manifest 1`] = `
+{
+  "figLabels": [
+    "FIG. 2",
+  ],
+  "manifest": "manifest of the export",
+  "receiptRows": [
+    "| figures-missing | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every Figure the description names is in the Drawing Set) | fail | FIG. 1, 3–5 not drawn |",
+    "| single-figure-no-label | 37 CFR 1.84(u)(1); GL A-IX 5.2; PCT IP 5.141 (a single Figure is not numbered and carries no "FIG.") | not-checked | 5 Figures; the rule applies to one. |",
+    "| figure-labels | 37 CFR 1.84(u)(1); GL A-IX 5.2; PCT Rule 11.13(k), IP 5.141 ("FIG." / "Fig.", consecutive Arabic numerals, partial views as number plus capital letter) | pass | FIG. 2. |",
+  ],
+  "receiptStart": [
+    "INCOMPLETE SET: FIG. 1, 3–5 not drawn",
+    "",
+    "This partial build is for review only. It is not a Drawing Set to file, and the Filing Manifest was not changed.",
+  ],
+  "result": {
+    "manifestUpdated": false,
+    "missing": [
+      "1",
+      "3",
+      "4",
+      "5",
+    ],
+    "text": [
+      "INCOMPLETE SET: FIG. 1, 3–5 not drawn. Built for review only (partial); do not present it as the Drawing Set.",
+      "Built a partial set for review of 1 Figure(s) on 1 A4 sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.",
+    ],
+  },
+  "stillToDraw": "Still to draw: FIG. 1, 3–5 (drafting/hinge/figures.md names 5 Figure(s)); build_drawing_set refuses until every one is drawn.",
+}
+`;
+
 exports[`buildDrawingSetOp > lays out the Figures, writes the sheets, the PDF and the receipt, and updates the Filing Manifest 1`] = `
 {
   "drawings": [
@@ -23,7 +56,7 @@ exports[`buildDrawingSetOp > lays out the Figures, writes the sheets, the PDF an
 - Page size: A4
 - Drawing Sheets: 1
 - Date: <date>
-- Results: 23 pass, 0 fail, 1 not checked
+- Results: 24 pass, 0 fail, 1 not checked
 
 This file lists each code check, the rule it applies and its result. It is not a verdict on the drawings. The rules a person must judge (sufficient views, every claimed feature shown, suitable legends) are not checked here; the attorney reviews them.
 
@@ -31,6 +64,7 @@ This file lists each code check, the rule it applies and its result. It is not a
 
 | Check | Rule | Result | Detail |
 |---|---|---|---|
+| figures-missing | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every Figure the description names is in the Drawing Set) | pass | All 2 Figure(s) of the figure list are drawn. |
 | page-size | 37 CFR 1.84(f); OJ EPO 2025 A49 Art. 2(2); PCT Rule 11.5 (A4 for all, Letter for the USPTO only; one size per application) | pass | 1 sheet(s), all A4 210 x 297 mm, short side at the top. |
 | margins | 37 CFR 1.84(g), (t); OJ EPO 2025 A49 Art. 1(1), Art. 2(5); PCT Rule 11.6(c), 11.7 (top 25, left 25, right 15, bottom 10 mm; nothing in the margin) | pass | Every Figure, label and sheet number is inside the 170.00 x 262.00 mm sight. |
 | no-frame | 37 CFR 1.84(g); OJ EPO 2025 A49 Art. 1(1); PCT Rule 11.6(c) (no frame around the sight) | pass | No frame and no drawn element outside the Figures. |
@@ -68,7 +102,7 @@ This file lists each code check, the rule it applies and its result. It is not a
     "pageSize": "A4",
     "sheets": 1,
     "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.
-Receipt: 23 pass, 0 fail, 1 not checked.
+Receipt: 24 pass, 0 fail, 1 not checked.
 No code check fails.
 Updated drafting/hinge/filing-manifest.md: 1 drawing sheet(s), measured.
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
@@ -88,7 +122,7 @@ exports[`buildDrawingSetOp > refuses on an open Figure Error and builds once fin
   "refused": {
     "ok": false,
     "reason": "1 Error(s) of the Figures are open. Fix each in the Figure source and render again, or the attorney waives it: copy the item under "## Errors" in drafting/hinge/findings.md and add a line \`  - Waived: <reason>\` under it.
-- \`numeral-not-allowed\` (FIG-1.scene.json): Numeral 12 is not in the figures list (allowed: 10, 2, 4, 6).",
+- \`numeral-not-allowed\` (FIG-1.scene.json): Numeral 12 is not in the figures list (allowed: 10).",
   },
 }
 `;
@@ -199,6 +233,7 @@ exports[`renderFigureOp > renders a 3D scene: writes the source, the SVG and the
     "round": 1,
     "seen": true,
     "text": "Rendered FIG. 1: wrote drafting/hinge/drawings/FIG-1.scene.json, drafting/hinge/drawings/FIG-1.svg and the review render drafting/hinge/drawings/review/FIG-1.round-1.png. Round 1 of 3.
+Still to draw: FIG. 2 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
 Do not call the Figure compliant or ready to file.",
@@ -231,6 +266,7 @@ Do not call the Figure compliant or ready to file.",
     "round": 2,
     "seen": false,
     "text": "Rendered FIG. 1: wrote drafting/hinge/drawings/FIG-1.scene.json, drafting/hinge/drawings/FIG-1.svg and the review render drafting/hinge/drawings/review/FIG-1.round-2.png. Round 2 of 3.
+Still to draw: FIG. 2 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 No render is attached (the model reads the findings only); the receipt records that no render was seen in this round.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
 Do not call the Figure compliant or ready to file.",
@@ -249,6 +285,7 @@ exports[`renderFigureOp > renders a flowchart from an approved method claim 1`] 
     "round": 1,
     "seen": true,
     "text": "Rendered FIG. 2: wrote drafting/hinge/drawings/FIG-2.scene.json, drafting/hinge/drawings/FIG-2.svg and the review render drafting/hinge/drawings/review/FIG-2.round-1.png. Round 1 of 3.
+Still to draw: FIG. 1 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
 Do not call the Figure compliant or ready to file.",

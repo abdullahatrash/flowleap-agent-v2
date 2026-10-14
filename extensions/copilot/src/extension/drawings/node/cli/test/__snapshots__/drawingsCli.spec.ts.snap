@@ -192,6 +192,28 @@ Add these lines under the FIG. 2 heading, then render again.",
 }
 `;
 
+exports[`drawings CLI > refuses a build while a Figure of figures.md is not drawn, and builds it for review with --partial 1`] = `
+{
+  "figLabels": [
+    "FIG. 2",
+  ],
+  "manifest": "manifest of the export",
+  "partial": {
+    "exitCode": 0,
+    "manifestUpdated": false,
+    "missing": [
+      "1",
+    ],
+  },
+  "receiptFirstLine": "INCOMPLETE SET: FIG. 1 not drawn",
+  "refused": {
+    "exitCode": 1,
+    "ok": false,
+    "reason": "\`figures-missing\`: FIG. 1 of drafting/widget/figures.md is not drawn (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every Figure the description names is in the Drawing Set)). Render it with render_figure first. To review the Figures drawn so far, build with the partial option (\`partial: true\`; CLI \`--partial\`): the receipt then starts with "INCOMPLETE SET" and the Filing Manifest is not changed.",
+  },
+}
+`;
+
 exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then builds the Drawing Set 1`] = `
 {
   "build": {
@@ -199,17 +221,18 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
     "output": {
       "command": "build",
       "manifestUpdated": false,
+      "missing": [],
       "ok": true,
       "pageSize": "A4",
       "receipt": {
         "fail": 0,
         "file": "drafting/widget/drawings/drawings-compliance.md",
         "notChecked": 1,
-        "pass": 23,
+        "pass": 24,
       },
       "sheets": 1,
       "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/widget/drawings/sheet-1.svg, drafting/widget/drawings/drawings.pdf, and the receipt drafting/widget/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/widget/drawings/review/.
-Receipt: 23 pass, 0 fail, 1 not checked.
+Receipt: 24 pass, 0 fail, 1 not checked.
 No code check fails.
 The Filing Manifest is written by export_draft_docx; it will count the 1 sheet(s).
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
@@ -244,6 +267,7 @@ Report the receipt by check. The rules a person must judge (sufficient views, ev
       "roundsLeft": 2,
       "seen": true,
       "text": "Rendered FIG. 2: wrote drafting/widget/drawings/FIG-2.scene.json, drafting/widget/drawings/FIG-2.svg and the review render drafting/widget/drawings/review/FIG-2.round-1.png. Round 1 of 3.
+Every Figure drafting/widget/figures.md names is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
 Do not call the Figure compliant or ready to file.",
@@ -280,6 +304,7 @@ Do not call the Figure compliant or ready to file.",
       "roundsLeft": 2,
       "seen": true,
       "text": "Rendered FIG. 1: wrote drafting/widget/drawings/FIG-1.scene.json, drafting/widget/drawings/FIG-1.svg and the review render drafting/widget/drawings/review/FIG-1.round-1.png. Round 1 of 3.
+Still to draw: FIG. 2 (drafting/widget/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
 Do not call the Figure compliant or ready to file.",

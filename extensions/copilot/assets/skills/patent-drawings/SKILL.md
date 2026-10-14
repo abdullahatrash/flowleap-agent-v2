@@ -69,14 +69,19 @@ and the attorney is asked.
 
 ## Step 5: Build the set and report the receipt
 
-1. Call `build_drawing_set` with `matter`. It refuses on a `(proposed)` line,
-   an open Figure Error, an open figure-list Error (claimed-feature
+1. Call `build_drawing_set` with `matter`. It refuses when a Figure that
+   `figures.md` names is not drawn (`figures-missing`), on a `(proposed)`
+   line, an open Figure Error, an open figure-list Error (claimed-feature
    coverage, page size) or a failing sheet check; report each item it lists.
    Only the attorney waives an Error, in `findings.md`.
 2. On success it writes `sheet-N.svg`, `drawings.pdf` and
    `drawings-compliance.md`, and updates `filing-manifest.md` when the export
    has written one.
-3. Report: the sheet count, the checks by result (pass, fail, not checked)
+3. Only when the attorney asks to review the Figures drawn so far, call it
+   with `partial: true`. The receipt then starts with `INCOMPLETE SET` and
+   `filing-manifest.md` is not changed. Report it as a review build, never as
+   the Drawing Set.
+4. Report: the sheet count, the checks by result (pass, fail, not checked)
    with each failing check and its rule, and the rules only the attorney can
    judge ([references/office-page-rules.md](references/office-page-rules.md)).
 

@@ -101,6 +101,23 @@ describe('drawings CLI', () => {
 		expect({ files: await listFiles(matterDir), scene, flowchart, build, rounds }).toMatchSnapshot();
 	}, 120_000);
 
+	it('refuses a build while a Figure of figures.md is not drawn, and builds it for review with --partial', async () => {
+		await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
+		await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-2.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
+		await fs.writeFile(path.join(matterDir, 'filing-manifest.md'), 'manifest of the export');
+		const refused = await runCli(workspace, ['build', 'widget']);
+		const partial = await runCli(workspace, ['build', 'widget', '--partial']);
+		const sheet = await fs.readFile(path.join(matterDir, 'drawings', 'sheet-1.svg'), 'utf8');
+		const receipt = await fs.readFile(path.join(matterDir, 'drawings', 'drawings-compliance.md'), 'utf8');
+		expect({
+			refused: refusal(refused),
+			partial: { exitCode: partial.exitCode, missing: partial.output.missing, manifestUpdated: partial.output.manifestUpdated },
+			figLabels: [...sheet.matchAll(/class="fig-label"[^>]*>(?<label>[^<]*)</g)].map(match => match.groups?.label),
+			receiptFirstLine: receipt.split('\n')[0],
+			manifest: await fs.readFile(path.join(matterDir, 'filing-manifest.md'), 'utf8'),
+		}).toMatchSnapshot();
+	}, 120_000);
+
 	it('records a round the model did not see with --no-render-seen', async () => {
 		const run = await runCli(workspace, ['render', 'widget', '1', '--scene', 'box.json', '--no-render-seen']);
 		const rounds = JSON.parse(await fs.readFile(path.join(matterDir, 'drawings', 'rounds.json'), 'utf8'));
@@ -165,6 +182,7 @@ describe('drawings CLI', () => {
 				setup: async (_workspace, matterDir) => {
 					await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
 					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-1.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
+					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-2.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
 					await fs.appendFile(path.join(matterDir, 'figures.md'), '- 14: bracket (proposed from sketches/sketch-1.png)\n');
 				},
 			},
@@ -173,6 +191,7 @@ describe('drawings CLI', () => {
 				setup: async (_workspace, matterDir) => {
 					await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
 					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-1.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
+					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-2.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
 					await fs.writeFile(path.join(matterDir, 'figures.md'), FIGURES_MD.replace('numerals: hundreds', 'numerals: hundreds\npageSize: letter'));
 					await fs.writeFile(path.join(matterDir, 'feature-list.md'), FEATURE_LIST_MD.replace('office: US', 'office: EPO'));
 				},
@@ -182,6 +201,7 @@ describe('drawings CLI', () => {
 				setup: async (_workspace, matterDir) => {
 					await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
 					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-1.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"><text class="numeral" x="5" y="10" font-size="2">10</text></svg>');
+					await fs.writeFile(path.join(matterDir, 'drawings', 'FIG-2.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="20mm" viewBox="0 0 50 20"/>');
 				},
 			},
 			{ name: 'a proposal with a used numeral', args: ['propose', 'widget', '1', 'bracket', '--numeral', '10'] },

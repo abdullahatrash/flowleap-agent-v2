@@ -206,3 +206,39 @@ export function insertPartLine(figures: string, figure: number, line: string): s
 	lines.splice(after, 0, ...insert);
 	return lines.join('\n');
 }
+
+/** The Figures the figure list names and the ones not drawn yet, as Figure keys (`1`, `2A`). */
+export interface FigureSetStatus {
+	readonly expected: readonly string[];
+	readonly missing: readonly string[];
+}
+
+/**
+ * Compares the Figures the headings of `figures.md` name (a range heading `FIGS. 7 to 10` names
+ * each member) with the Figures drawn. A heading `FIG. 2` is drawn by `FIG-2.svg` or by a partial
+ * view `FIG-2A.svg`; a heading `FIG. 2A` only by `FIG-2A.svg`.
+ */
+export function figureSetStatus(figures: string, drawn: readonly FigureId[]): FigureSetStatus {
+	const expected = [...new Set(parseFigureSections(figures).figures.flatMap(section => figureHeadingNumbers(section.label)).map(number => number.trim().toUpperCase()))];
+	expected.sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10) || a.localeCompare(b));
+	const missing = expected.filter(key => !drawn.some(figure => figure.key === key || (/^\d+$/.test(key) && figure.number === Number(key))));
+	return { expected, missing };
+}
+
+/** Figure keys as text, ranges of whole numbers joined: `FIG. 1, 3–10, 12A`. */
+export function figureListText(keys: readonly string[]): string {
+	const parts: string[] = [];
+	for (let index = 0; index < keys.length; index++) {
+		const start = keys[index];
+		let end = index;
+		while (/^\d+$/.test(start) && /^\d+$/.test(keys[end + 1] ?? '') && Number(keys[end + 1]) === Number(keys[end]) + 1) {
+			end++;
+		}
+		parts.push(end - index >= 2 ? `${start}–${keys[end]}` : start);
+		if (end - index === 1) {
+			parts.push(keys[end]);
+		}
+		index = end;
+	}
+	return parts.length ? `FIG. ${parts.join(', ')}` : '';
+}

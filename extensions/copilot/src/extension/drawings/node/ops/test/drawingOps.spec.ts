@@ -167,6 +167,7 @@ describe('buildDrawingSetOp', () => {
 		const withFigure = async (changes: Record<string, string>) => {
 			const run = await setup({ ...matter, ...changes });
 			await run.files.write('drawings/FIG-1.svg', '<svg/>');
+			await run.files.write('drawings/FIG-2.svg', '<svg/>');
 			return buildDrawingSetOp(run.files);
 		};
 		expect({
@@ -180,7 +181,7 @@ describe('buildDrawingSetOp', () => {
 	it('refuses on an open Figure Error and builds once findings.md waives it', async () => {
 		const { render, files, read } = await setup();
 		await render({ figure: 1, scene });
-		await files.write('figures.md', figures.replace('- 12: top face\n', ''));
+		await files.write('figures.md', figures.replace('- 12: top face\n', '').split('## FIG. 2')[0]);
 		const refused = await buildDrawingSetOp(files);
 		await files.write('findings.md', '# Findings\n\n## Errors\n\n- `numeral-not-allowed` (FIG-1.scene.json): Numeral 12 is not in the figures list.\n  - Waived: The top face is named in the description only.\n');
 		const built = await buildDrawingSetOp(files);
@@ -189,6 +190,32 @@ describe('buildDrawingSetOp', () => {
 			refused,
 			built: built.ok,
 			receiptRow: receipt.split('\n').find(line => line.startsWith('| numeral-not-allowed')),
+		}).toMatchSnapshot();
+	}, KERNEL_TIMEOUT);
+
+	it('refuses a set with a Figure figures.md names but nobody drew, expanding a range heading', async () => {
+		const { render, files } = await setup({ ...matter, 'figures.md': `${figures}\n## FIGS. 3 to 5\n\n- 20: frame\n` });
+		await render({ figure: 1, scene });
+		expect({ result: await buildDrawingSetOp(files), drawings: await files.listFiles('drawings') }).toEqual({
+			result: { ok: false, reason: '`figures-missing`: FIG. 2–5 of drafting/hinge/figures.md are not drawn (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every Figure the description names is in the Drawing Set)). Render each with render_figure first. To review the Figures drawn so far, build with the partial option (`partial: true`; CLI `--partial`): the receipt then starts with "INCOMPLETE SET" and the Filing Manifest is not changed.' },
+			drawings: ['FIG-1.scene.json', 'FIG-1.svg', 'rounds.json'],
+		});
+	}, KERNEL_TIMEOUT);
+
+	it('builds a partial set for review: keeps the FIG label, marks the receipt INCOMPLETE SET and leaves the Filing Manifest', async () => {
+		const { render, read, files } = await setup({ ...matter, 'figures.md': `${figures}\n## FIGS. 3 to 5\n\n- 20: frame\n` });
+		const rendered = await render({ figure: 2, flowchart: { fromClaim: 2 } });
+		await files.write('draft-application.md', '---\noffice: US\n---\n# Housing\n\n## CLAIMS\n\n1. A housing comprising a top face.\n');
+		await files.write('filing-manifest.md', 'manifest of the export');
+		const result = await buildDrawingSetOp(files, { partial: true });
+		const receipt = await read('drawings/drawings-compliance.md') ?? '';
+		expect({
+			stillToDraw: rendered.ok ? rendered.text.split('\n')[1] : rendered.reason,
+			result: result.ok ? { text: result.text.split('\n').slice(0, 2), missing: result.missing, manifestUpdated: result.manifestUpdated } : result,
+			figLabels: [...(await read('drawings/sheet-1.svg') ?? '').matchAll(/class="fig-label"[^>]*>(?<label>[^<]*)</g)].map(match => match.groups?.label),
+			receiptStart: receipt.split('\n').slice(0, 3),
+			receiptRows: receipt.split('\n').filter(line => /^\| (figures-missing|single-figure-no-label|figure-labels) /.test(line)),
+			manifest: await read('filing-manifest.md'),
 		}).toMatchSnapshot();
 	}, KERNEL_TIMEOUT);
 

@@ -190,13 +190,23 @@ function fitScale(figure: ParsedFigure, frame: Frame, labelBand: number): number
  *   1 that keeps every glyph at 3.2 mm or more (37 CFR 1.84(p)(3); A49 Art. 1(2)(g); PCT Rule 11.13(h)).
  *   A Figure that cannot fit at that scale is refused with the reason.
  * - FIG label below each Figure, larger than the numerals (37 CFR 1.84(u)(2); GL A-IX 5.2); no label for
- *   a single-figure Drawing Set (37 CFR 1.84(u)(1); GL A-IX 5.2; PCT IP 5.141).
+ *   a single-figure Drawing Set (37 CFR 1.84(u)(1); GL A-IX 5.2; PCT IP 5.141). The Figure count is the
+ *   larger of the Figures given and `options.figureCount`.
  * - Upright is preferred (37 CFR 1.84(i); A49 Art. 1(2)(h)). A Figure wider than tall that fits larger
  *   sideways goes on a landscape sheet: the page stays portrait and the content turns so the top of the
  *   Figure is at the right for the USPTO (37 CFR 1.84(i)) and at the left for EPO and PCT (A49
  *   Art. 1(2)(h); PCT Rule 11.13(j)). All Figures on one sheet share one orientation.
  */
-export function layoutDrawingSheets(office: DrawingOffice, pageSize: DrawingPageSize, figures: readonly FigureInput[]): SheetLayoutResult {
+/** Options of the sheet layout. */
+export interface SheetLayoutOptions {
+	/**
+	 * The number of Figures the figure list names. A partial build for review lays out fewer;
+	 * the FIG labels then follow this count, so a lone FIG. 2 of a ten-Figure set keeps its label.
+	 */
+	readonly figureCount?: number;
+}
+
+export function layoutDrawingSheets(office: DrawingOffice, pageSize: DrawingPageSize, figures: readonly FigureInput[], options: SheetLayoutOptions = {}): SheetLayoutResult {
 	if (pageSize === 'letter' && office !== 'US') {
 		return { ok: false, reason: `Letter is a USPTO page size only. The ${office === 'EPO' ? 'EPO accepts A4 only (OJ EPO 2025 A49 Art. 2(2))' : 'PCT accepts A4 only (PCT Rule 11.5)'}. Use A4.` };
 	}
@@ -222,7 +232,7 @@ export function layoutDrawingSheets(office: DrawingOffice, pageSize: DrawingPage
 	const labelFont = Math.max(MIN_LABEL_FONT_SIZE, Math.ceil(maxNumeralFont * LABEL_TO_NUMERAL_RATIO * 10) / 10);
 	const labelCap = labelFont * CAP_HEIGHT_RATIO;
 	const numberBand = labelCap + SHEET_NUMBER_GAP;
-	const labelled = parsed.length > 1;
+	const labelled = Math.max(parsed.length, options.figureCount ?? 0) > 1;
 	const labelBand = labelled ? LABEL_GAP + labelCap : 0;
 	const portrait: Frame = { width: sight.width, height: sight.height - numberBand };
 	const landscape: Frame = { width: portrait.height, height: portrait.width };

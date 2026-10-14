@@ -11,7 +11,7 @@
  *
  * ```
  * drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen]
- * drawings-cli build <matter>
+ * drawings-cli build <matter> [--partial]
  * drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]
  * ```
  *
@@ -58,10 +58,10 @@ class Refusal extends Error { }
 /** Thrown for a usage error. */
 class UsageError extends Error { }
 
-const USAGE = 'Usage: drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen]; drawings-cli build <matter>; drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]. Option: --root <workspace>.';
+const USAGE = 'Usage: drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen]; drawings-cli build <matter> [--partial]; drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]. Option: --root <workspace>.';
 
 /** Options without a value. */
-const FLAGS = new Set(['no-render-seen']);
+const FLAGS = new Set(['no-render-seen', 'partial']);
 
 /** The parsed command line: positional arguments, `--name value` options and flags. */
 interface ParsedArgs {
@@ -187,7 +187,7 @@ async function render(args: ParsedArgs, root: string, cwd: string): Promise<CliO
 
 async function build(args: ParsedArgs, root: string): Promise<CliOutput> {
 	const { files } = matterFiles(root, args.positional[1]);
-	const result = await buildDrawingSetOp(files);
+	const result = await buildDrawingSetOp(files, { partial: args.flags.has('partial') });
 	if (!result.ok) {
 		throw new Refusal(result.reason);
 	}
@@ -204,6 +204,7 @@ async function build(args: ParsedArgs, root: string): Promise<CliOutput> {
 			notChecked: count('not-checked'),
 		},
 		manifestUpdated: result.manifestUpdated,
+		missing: result.missing,
 		text: result.text,
 	};
 }
