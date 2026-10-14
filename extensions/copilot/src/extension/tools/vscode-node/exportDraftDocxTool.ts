@@ -12,6 +12,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { diffDraftParagraphs } from '../common/drafting/draftDiff';
 import { OFFICE_PAGE_SETUP } from '../common/drafting/filingDocuments';
 import { filingManifest, renderFilingManifest } from '../common/drafting/filingManifest';
+import { findingLine } from '../common/drafting/finding';
 import { blockingFindings } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES } from '../common/drafting/folderContract';
 import { composeFullReviewCopy } from '../common/drafting/fullReviewCopy';
@@ -19,7 +20,7 @@ import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workin
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildDraftDocx, buildFullReviewCopyDocx } from './draftDocx';
-import { DraftingWorkspace, findingLine, textResult } from './draftingWorkspace';
+import { DraftingWorkspace, textResult } from './draftingWorkspace';
 
 interface IExportDraftDocxParams {
 	/** The matter folder name under `drafting/`. */

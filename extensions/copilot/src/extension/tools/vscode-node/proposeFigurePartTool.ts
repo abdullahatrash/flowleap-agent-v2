@@ -12,10 +12,9 @@ import { basename } from '../../../util/vs/base/common/path';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatReferenceBinaryData } from '../../../vscodeTypes';
+import { SKETCH_EXTENSIONS } from '../../drawings/common/drawingFiles';
+import { proposeFigurePartOp, SketchFile } from '../../drawings/node/ops/proposeFigurePartOp';
 import { IBuildPromptContext } from '../../prompt/common/intents';
-import { insertPartLine, nextNumeral, sameBytes, schemeFault, SKETCH_EXTENSIONS, sketchFileName } from '../../drawings/common/drawingFiles';
-import { formatFigurePart, readFiguresSettings } from '../common/drafting/figures';
-import { parseFigureParts } from '../common/drafting/specValidators';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { DraftingWorkspace, textResult } from './draftingWorkspace';
@@ -41,16 +40,15 @@ const refused = 'No part was proposed.';
 interface AttachedImage {
 	readonly names: readonly string[];
 	readonly fileName: string;
+	readonly mimeType?: string;
 	readonly bytes: () => Promise<Uint8Array>;
 }
 
 /**
- * Proposes a part the disclosure does not state (PRD 0023, slice D5): appends
- * `- NN: <part> (proposed from sketches/<file>)` under the figure heading of `figures.md`, with the
- * next free numeral of the scheme when none is given. It refuses a numeral already used or outside
- * the scheme. A sketch attached in chat, or one in the workspace, is copied to
- * `drafting/<matter>/sketches/` and named in the proposal. Export stays blocked until the attorney
- * confirms the part.
+ * Proposes a part the disclosure does not state (PRD 0023, slice D5) through
+ * {@link proposeFigurePartOp}. This tool resolves the sketch: an image attached to the chat
+ * request (read in `resolveInput`), else an image file in the workspace (a path relative to the
+ * workspace, or `sketches/<file>` relative to the matter).
  */
 export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartParams> {
 
@@ -79,97 +77,34 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}
-		const { folder } = workspace;
-		const refusal = (reason: string) => textResult(`${refused} ${reason}`);
-		const part = input.part?.trim().replace(/\s+/g, ' ');
-		if (!part || /[\[\]()]/.test(part)) {
-			return refusal('Give the part name in `part`, without brackets or parentheses.');
-		}
-		if (!Number.isInteger(input.figure) || input.figure < 1) {
-			return refusal('Give the figure number the part is drawn in, in `figure`.');
-		}
-		const features = (input.features ?? []).map(feature => feature.trim().toUpperCase());
-		if (features.some(feature => !/^F\d+$/.test(feature))) {
-			return refusal('A Feature List link is a row id such as `F3`.');
-		}
-		const figures = await workspace.read(folder.figures);
-		if (figures === undefined) {
-			return refusal(`${folder.figures} does not exist.`);
-		}
-		const scheme = readFiguresSettings(figures).numerals;
-		const parts = parseFigureParts(figures);
-		let numeral = input.numeral?.trim();
-		if (numeral) {
-			if (!/^\d{1,4}[a-z]?$/.test(numeral)) {
-				return refusal(`"${numeral}" is not a reference numeral (digits, then an optional small letter).`);
-			}
-			const used = parts.find(item => item.numeral === numeral);
-			if (used) {
-				return refusal(`Numeral ${numeral} is already used for "${used.part}" (${folder.figures}, line ${used.line}). One numeral names one part.`);
-			}
-			const fault = schemeFault(numeral, scheme, input.figure);
-			if (fault) {
-				return refusal(fault);
-			}
-		} else {
-			numeral = nextNumeral(parts, scheme, input.figure);
-			if (!numeral) {
-				return refusal(`FIG. ${input.figure} has no free numeral left in the ${input.figure}02 to ${input.figure}98 series.`);
-			}
-		}
-
-		let source: string | undefined;
+		let sketch: SketchFile | undefined;
 		if (input.sketch?.trim()) {
-			const sketch = await this.copySketch(workspace, input.sketch.trim());
-			if (typeof sketch !== 'string') {
-				return refusal(sketch.reason);
+			const resolved = await this.resolveSketch(workspace, input.sketch.trim());
+			if (typeof resolved === 'string') {
+				return textResult(`${refused} ${resolved}`);
 			}
-			source = sketch;
+			sketch = resolved;
 		}
-
-		const line = formatFigurePart({ numeral, part, ...(features.length ? { features } : {}), proposed: source ? { source } : {} });
-		await workspace.write(folder.figures, insertPartLine(figures, input.figure, line));
-		return textResult(`Wrote to ${folder.figures}: \`${line}\`${source ? `. The sketch is at ${folder.folder}/${source}` : ''}. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.`);
+		const result = await proposeFigurePartOp(workspace.matterFiles(), { figure: input.figure, part: input.part, numeral: input.numeral, features: input.features, sketch });
+		return textResult(result.ok ? result.text : `${refused} ${result.reason}`);
 	}
 
-	/** Copies the sketch to `sketches/` and returns its path relative to the matter folder, or the refusal. */
-	private async copySketch(workspace: DraftingWorkspace, sketch: string): Promise<string | { readonly reason: string }> {
-		const { folder } = workspace;
-		const sketchFolder = `${folder.folder}/sketches`;
+	/** The sketch bytes: an attached image whose name matches, else a workspace image file; or the refusal. */
+	private async resolveSketch(workspace: DraftingWorkspace, sketch: string): Promise<SketchFile | string> {
 		const attached = this.attachedImages();
 		const wanted = sketch.toLowerCase();
 		const image = attached.find(item => item.names.some(name => name.toLowerCase() === wanted || basename(name).toLowerCase() === basename(wanted)));
-		let bytes: Uint8Array | undefined;
-		let fileName: string;
 		if (image) {
-			bytes = await image.bytes();
-			fileName = image.fileName;
-		} else {
-			const relative = sketch.replace(/\\/g, '/').replace(/^\.?\//, '');
-			const path = relative.startsWith('sketches/') ? `${folder.folder}/${relative}` : relative;
-			if (path.startsWith(`${sketchFolder}/`)) {
-				return await workspace.exists(path) ? path.slice(folder.folder.length + 1) : { reason: `${path} does not exist.` };
-			}
-			bytes = SKETCH_EXTENSIONS.test(path) && !path.split('/').includes('..') ? await workspace.readBytes(path) : undefined;
-			if (!bytes) {
-				const names = attached.map(item => item.fileName);
-				return { reason: `"${sketch}" is neither an image attached in this chat${names.length ? ` (attached: ${names.join(', ')})` : ' (none is attached)'} nor an image file in the workspace.` };
-			}
-			fileName = sketchFileName(path);
+			return { name: image.fileName, bytes: await image.bytes(), mimeType: image.mimeType };
 		}
-		const dot = fileName.lastIndexOf('.');
-		for (let index = 1; ; index++) {
-			const candidate = index === 1 ? fileName : `${fileName.slice(0, dot)}-${index}${fileName.slice(dot)}`;
-			const target = `${sketchFolder}/${candidate}`;
-			const existing = await workspace.readBytes(target);
-			if (!existing) {
-				await workspace.write(target, bytes);
-				return `sketches/${candidate}`;
-			}
-			if (sameBytes(existing, bytes)) {
-				return `sketches/${candidate}`;
-			}
+		const relative = sketch.replace(/\\/g, '/').replace(/^\.?\//, '');
+		const path = relative.startsWith('sketches/') ? `${workspace.folder.folder}/${relative}` : relative;
+		const bytes = SKETCH_EXTENSIONS.test(path) && !path.split('/').includes('..') ? await workspace.readBytes(path) : undefined;
+		if (!bytes) {
+			const names = attached.map(item => item.fileName);
+			return `"${sketch}" is neither an image attached in this chat${names.length ? ` (attached: ${names.join(', ')})` : ' (none is attached)'} nor an image file in the workspace.`;
 		}
+		return { name: path, bytes };
 	}
 
 	/** The images attached to the chat request this tool call belongs to. */
@@ -180,9 +115,9 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 			const names = [variable.originalName, variable.uniqueName, variable.reference.name].filter(Boolean);
 			if (value instanceof ChatReferenceBinaryData && value.mimeType.startsWith('image/')) {
 				const reference = value.reference ? basename(value.reference.path) : undefined;
-				images.push({ names: reference ? [...names, reference] : names, fileName: sketchFileName(reference ?? variable.originalName, value.mimeType), bytes: async () => value.data() });
+				images.push({ names: reference ? [...names, reference] : names, fileName: reference ?? variable.originalName, mimeType: value.mimeType, bytes: async () => value.data() });
 			} else if (URI.isUri(value) && SKETCH_EXTENSIONS.test(value.path)) {
-				images.push({ names: [...names, basename(value.path)], fileName: sketchFileName(value.path), bytes: () => this.fileSystemService.readFile(value, true) });
+				images.push({ names: [...names, basename(value.path)], fileName: basename(value.path), bytes: () => this.fileSystemService.readFile(value, true) });
 			}
 		}
 		return images;
