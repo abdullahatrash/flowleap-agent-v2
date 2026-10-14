@@ -168,6 +168,9 @@ const nodeExtHostBuildOptions = {
 		{ in: './src/platform/diff/node/diffWorkerMain.ts', out: 'diffWorker' },
 		{ in: './src/test-extension.ts', out: 'test-extension' },
 		{ in: './src/sanity-test-extension.ts', out: 'sanity-test-extension' },
+		// The drawings CLI of the Agents Window skill `patent-drawings` (PRD 0023 D6). It sits beside
+		// the kernel and resvg WebAssembly files in dist/ and loads them from there.
+		{ in: './src/extension/drawings/node/cli/drawingsCli.ts', out: 'drawings-cli' },
 	],
 	loader: { '.ps1': 'text' },
 	plugins: [testBundlePlugin, sanityTestBundlePlugin],

@@ -1,0 +1,289 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`drawings CLI > proposes a part with the next numeral of the scheme and copies the sketch 1`] = `
+{
+  "figures": "---
+numerals: hundreds
+---
+## FIG. 1
+
+- 10: housing [F1]
+- 12: top surface
+- 102: bracket [F1] (proposed from sketches/photo-of-bracket.png)
+
+## FIG. 2
+
+- 202: measure the temperature
+- 204: compare with the limit
+- 206: open the valve
+",
+  "files": [
+    "feature-list.md",
+    "figures.md",
+    "sketches/photo-of-bracket.png",
+    "sketches/sketch-1.png",
+  ],
+  "run": {
+    "exitCode": 0,
+    "output": {
+      "added": "- 102: bracket [F1] (proposed from sketches/photo-of-bracket.png)",
+      "command": "propose",
+      "file": "drafting/widget/figures.md",
+      "numeral": "102",
+      "ok": true,
+      "sketch": "drafting/widget/sketches/photo-of-bracket.png",
+      "text": "Wrote to drafting/widget/figures.md: \`- 102: bracket [F1] (proposed from sketches/photo-of-bracket.png)\`. The sketch is at drafting/widget/sketches/photo-of-bracket.png. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.",
+    },
+  },
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a 2D Figure with no office and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "Neither drafting/widget/draft-application.md nor drafting/widget/feature-list.md names the office (\`office: US\` or \`office: EPO\`); a 2D Figure follows the office text rules.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a Figure with no heading in figures.md and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "drafting/widget/figures.md has no heading for FIG. 3 (\`## FIG. 3\` with its parts). Add the Figure and its parts to the figure list first.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a build of Letter sheets for the EPO and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "1 Error(s) of the figure list are open; fix each in drafting/widget/figures.md, or the attorney waives it in drafting/widget/findings.md:
+- \`figures-settings\` (figures.md): figures.md sets \`pageSize: letter\`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set \`pageSize: A4\`.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a build with a proposal in figures.md and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "drafting/widget/figures.md has 1 proposed part(s); the attorney confirms each by removing "(proposed)", or deletes the line:
+- \`figure-proposal\` (figures.md, line 14): Part 14 ("bracket") is a proposal from sketches/sketch-1.png: the disclosure does not state it. The attorney confirms it by removing "(proposed)", or deletes the line.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a build with an open Figure Error and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "2 Error(s) of the Figures are open. Fix each in the Figure source and render again, or the attorney waives it: copy the item under "## Errors" in drafting/widget/findings.md and add a line \`  - Waived: <reason>\` under it.
+- \`glyph-too-small\` (FIG-1.svg): Text "10" is 1.43 mm high; the minimum is 3.2 mm.
+- \`lead-line-missing\` (FIG-1.svg): Numeral 10 has no lead line and is not underlined as a surface.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a build with no rendered Figure and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "drafting/widget/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a flowchart from a claim that is not approved and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "A flowchart from a claim needs the Approved Claims. \`approved\` in drafting/widget/claims.md is not \`true\`. The attorney sets \`approved: true\` after review; a statement in chat does not open this gate.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a flowchart proposal that adds a step and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The diagram was refused:
+- Error \`node-count\` (FIG-2.svg): FIG. 2 would have 4 process boxes for 3 steps. The step list is the authority: a proposal may add decisions and edges only, never a step (ADR 0014).",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a fourth round and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "FIG. 1 already had 3 review rounds; the limit is 3 per Figure. Edit drafting/widget/drawings/FIG-1.scene.json by hand, or ask the attorney.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a matter that does not exist and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "drafting/other/ does not exist in the workspace <workspace>.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a numeral outside figures.md and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "Every part drawn has a numeral, and every numeral is in the figure list:
+- Error \`numeral-not-allowed\` (FIG-1.scene.json): Numeral 98 is not in the figures list (allowed: 10, 12, 202, 204, 206). [37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l)]
+Add the part to the figure list (propose_figure_part when the disclosure does not state it), or remove it from the scene.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a proposal from a sketch that does not exist and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The sketch sketches/missing.png does not exist in the current folder, the workspace or drafting/widget/.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a proposal outside the numeral scheme and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "Numeral 304 does not start with 1; figures.md uses \`numerals: hundreds\`, so a part first drawn in FIG. 1 takes 102 to 198.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a proposal with a used numeral and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "Numeral 10 is already used for "housing" (drafting/widget/figures.md, line 6). One numeral names one part.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a scene that does not follow the schema and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The scene does not follow the schema:
+- Error \`scene-schema\` (FIG-1.scene.json): camera: must be one of isometric, front, top, side [ADR 0014 decision 1 (scene schema)]",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses step numerals that are not under the Figure heading and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "Every numeral in a Figure is a numeral of the figure list (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l)). The steps of FIG. 2 take these numerals (\`numerals: hundreds\`), which are not under its heading in drafting/widget/figures.md:
+- 208: close the valve
+Add these lines under the FIG. 2 heading, then render again.",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then builds the Drawing Set 1`] = `
+{
+  "build": {
+    "exitCode": 0,
+    "output": {
+      "command": "build",
+      "manifestUpdated": false,
+      "ok": true,
+      "pageSize": "A4",
+      "receipt": {
+        "fail": 0,
+        "file": "drafting/widget/drawings/drawings-compliance.md",
+        "notChecked": 1,
+        "pass": 23,
+      },
+      "sheets": 1,
+      "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/widget/drawings/sheet-1.svg, drafting/widget/drawings/drawings.pdf, and the receipt drafting/widget/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/widget/drawings/review/.
+Receipt: 23 pass, 0 fail, 1 not checked.
+No code check fails.
+The Filing Manifest is written by export_draft_docx; it will count the 1 sheet(s).
+Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
+    },
+  },
+  "files": [
+    "drawings/FIG-1.scene.json",
+    "drawings/FIG-1.svg",
+    "drawings/FIG-2.scene.json",
+    "drawings/FIG-2.svg",
+    "drawings/drawings-compliance.md",
+    "drawings/drawings.pdf",
+    "drawings/review/FIG-1.round-1.png",
+    "drawings/review/FIG-2.round-1.png",
+    "drawings/review/sheet-1.png",
+    "drawings/rounds.json",
+    "drawings/sheet-1.svg",
+    "feature-list.md",
+    "figures.md",
+    "sketches/sketch-1.png",
+  ],
+  "flowchart": {
+    "exitCode": 0,
+    "output": {
+      "command": "render",
+      "errors": 0,
+      "figure": "FIG. 2",
+      "findings": [],
+      "ok": true,
+      "review": "drafting/widget/drawings/review/FIG-2.round-1.png",
+      "round": 1,
+      "roundsLeft": 2,
+      "seen": true,
+      "text": "Rendered FIG. 2: wrote drafting/widget/drawings/FIG-2.scene.json, drafting/widget/drawings/FIG-2.svg and the review render drafting/widget/drawings/review/FIG-2.round-1.png. Round 1 of 3.
+The review render of this round is attached; it is not a deliverable.
+The mechanical fault list found nothing. The attorney still reviews the Figure.
+Do not call the Figure compliant or ready to file.",
+    },
+  },
+  "rounds": {
+    "figures": {
+      "1": [
+        {
+          "png": "review/FIG-1.round-1.png",
+          "round": 1,
+          "seen": true,
+        },
+      ],
+      "2": [
+        {
+          "png": "review/FIG-2.round-1.png",
+          "round": 1,
+          "seen": true,
+        },
+      ],
+    },
+  },
+  "scene": {
+    "exitCode": 0,
+    "output": {
+      "command": "render",
+      "errors": 0,
+      "figure": "FIG. 1",
+      "findings": [],
+      "ok": true,
+      "review": "drafting/widget/drawings/review/FIG-1.round-1.png",
+      "round": 1,
+      "roundsLeft": 2,
+      "seen": true,
+      "text": "Rendered FIG. 1: wrote drafting/widget/drawings/FIG-1.scene.json, drafting/widget/drawings/FIG-1.svg and the review render drafting/widget/drawings/review/FIG-1.round-1.png. Round 1 of 3.
+The review render of this round is attached; it is not a deliverable.
+The mechanical fault list found nothing. The attorney still reviews the Figure.
+Do not call the Figure compliant or ready to file.",
+    },
+  },
+}
+`;
