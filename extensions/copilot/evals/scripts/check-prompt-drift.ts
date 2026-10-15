@@ -45,6 +45,7 @@ const PATENT_TOOL_PREFIXES = [
 	'build_patent',
 	'build_uspto',
 	'search_patent',
+	'search_register',
 	'search_academic',
 	'search_citation',
 	'search_forward',

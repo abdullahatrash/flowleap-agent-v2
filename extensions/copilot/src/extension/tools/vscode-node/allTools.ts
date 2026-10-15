@@ -36,6 +36,7 @@ import './searchCitationsTool';
 import './searchForwardCitationsTool';
 import './searchLegalTool';
 import './searchPatentsTool';
+import './searchRegisterTool';
 import './switchAgentTool';
 import './usptoApiGuideTool';
 import './startApplicationDraftTool';
