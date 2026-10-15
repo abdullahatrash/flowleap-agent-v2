@@ -122,7 +122,7 @@ describe('SearchRegisterTool', () => {
 		expect(textOf(result)).toContain('Showing results 26-27 in register order.');
 	});
 
-	it('reports no matches when the backend returns an empty page', async () => {
+	it('reports no matches when the backend returns an empty page without a hint', async () => {
 		const { client } = makeBackendClient({ success: true, data: { query: 're=zzzz', range: { begin: 1, end: 0 }, returned: 0, total: 0, docs: [] } });
 		const tool = new SearchRegisterTool(makeLogService(), client, unrecordedPatentLedger);
 
@@ -133,7 +133,24 @@ describe('SearchRegisterTool', () => {
 
 			No EP Register records match this query.
 
-			The EP Register covers EP applications only. Register indexes: re (representative), op (opponent), ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. Not register indexes: ag, rep, ab, cpc, st, ps, fd, ctr. Quote a multi-word value: re="Muster Patentanwälte". See get_search_syntax provider=epo_register."
+			The EP Register covers EP applications only. Register indexes: re (representative), op (opponent), nm (a name in any role), ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. Not register indexes: ag, rep, ab, cpc, st, ps, fd, ctr. A role index that returns 0 does not mean the name is absent: retry with nm=<surname> to find which role the person holds. Names are surname-first: nm="Surname, First", not nm="First Surname". Quote a multi-word value: re="Muster Patentanwälte". See get_search_syntax provider=epo_register."
+		`);
+	});
+
+	it('renders the backend hint directly under the no-match line when a role-index query returns zero', async () => {
+		// The backend (flowleap-backend#582) adds `hint` to a zero-result role-index query, as it did on 2026-10-15 for `re=Boniberger`.
+		const { client } = makeBackendClient({ success: true, data: { query: 're=Boniberger', range: { begin: 1, end: 0 }, returned: 0, total: 0, docs: [], hint: 'No results for re=Boniberger. The name may appear in another role; retry with nm=Boniberger.' } });
+		const tool = new SearchRegisterTool(makeLogService(), client, unrecordedPatentLedger);
+
+		const result = await tool.invoke(makeOptions({ query: 're=Boniberger' }), makeToken());
+
+		expect(textOf(result)).toMatchInlineSnapshot(`
+			"# EP Register Search: re=Boniberger
+
+			No EP Register records match this query.
+			No results for re=Boniberger. The name may appear in another role; retry with nm=Boniberger.
+
+			The EP Register covers EP applications only. Register indexes: re (representative), op (opponent), nm (a name in any role), ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. Not register indexes: ag, rep, ab, cpc, st, ps, fd, ctr. A role index that returns 0 does not mean the name is absent: retry with nm=<surname> to find which role the person holds. Names are surname-first: nm="Surname, First", not nm="First Surname". Quote a multi-word value: re="Muster Patentanwälte". See get_search_syntax provider=epo_register."
 		`);
 	});
 
