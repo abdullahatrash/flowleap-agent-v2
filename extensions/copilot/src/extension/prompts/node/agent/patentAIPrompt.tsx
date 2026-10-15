@@ -367,7 +367,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				{tools.hasGetPatentFigures && <>
 					**G) SHOW / VIEW / ANALYZE the FIGURES or DRAWINGS of a patent?**<br />
-					→ `get_patent_figures` (publicationNumber; optional `pages` like "1,2,3") — it returns the drawing pages as inline PNGs you can see and analyze. Use get_patent_details, not this tool, for claims/description TEXT<br />
+					→ `get_patent_figures` (publicationNumber; optional `pages` like "9,10,11", PDF pages not figure numbers) — it returns the drawing pages as inline images you can see and analyze; a truncated result lists the remaining pages to fetch next. Use get_patent_details, not this tool, for claims/description TEXT<br />
 					→ Keywords: figures, drawings, images, show me the figure, view the drawing<br />
 					<br />
 				</>}

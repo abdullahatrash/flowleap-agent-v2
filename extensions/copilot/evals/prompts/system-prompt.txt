@@ -133,7 +133,7 @@ The other branches (C analytics, E claim comparison, F/G patent lookup and figur
 → If a direct lookup returns 404: verify the format with `convert_patent_number`, and for US patents try `get_us_grant` — do NOT fall back to web data without trying both.
 
 **G) SHOW / VIEW / ANALYZE the FIGURES or DRAWINGS of a patent?**
-→ `get_patent_figures` (publicationNumber; optional `pages` like "1,2,3") — it returns the drawing pages as inline PNGs you can see and analyze. Use get_patent_details, not this tool, for claims/description TEXT
+→ `get_patent_figures` (publicationNumber; optional `pages` like "9,10,11", PDF pages not figure numbers) — it returns the drawing pages as inline images you can see and analyze; a truncated result lists the remaining pages to fetch next. Use get_patent_details, not this tool, for claims/description TEXT
 → Keywords: figures, drawings, images, show me the figure, view the drawing
 
 **H) US PATENT SEARCH (USPTO Open Data Portal)?**

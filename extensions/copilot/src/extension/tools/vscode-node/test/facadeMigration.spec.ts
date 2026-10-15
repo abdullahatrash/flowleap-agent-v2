@@ -203,13 +203,14 @@ describe('get_patent_figures', () => {
 	function makeScriptedImageClient() {
 		const { client, calls } = makeBackendClient({});
 		const answers = [
-			{ docId: 'EP1000000A1', formats: [{ format: 'pdf', pages: 9, link: 'x', drawingStartPage: 7 }] },
+			{ docId: 'EP1000000A1', totalFigures: 9, drawingStartPage: 7, drawingPages: [7, 8, 9], sections: { DRAWINGS: 7 }, formats: [{ format: 'pdf', pages: 9, link: 'x', drawingStartPage: 7 }] },
 			{
-				docId: 'EP1000000A1', totalFigures: 9, availableFormats: ['png', 'pdf'], drawingStartPage: 7,
+				docId: 'EP1000000A1', totalFigures: 9, availableFormats: ['png', 'jpeg', 'pdf'], drawingStartPage: 7,
 				figures: [
-					{ page: 7, format: 'png', description: 'Figure 7', base64: 'aGVsbG8=' },
-					{ page: 8, format: 'png', description: 'Figure 8', base64: 'aGVsbG8=' },
+					{ page: 7, format: 'png', width: 707, height: 1000, bytes: 5, base64: 'aGVsbG8=' },
+					{ page: 8, format: 'png', width: 707, height: 1000, bytes: 5, base64: 'aGVsbG8=' },
 				],
+				truncated: false, remainingPages: [],
 			},
 		];
 		let call = 0;
@@ -229,7 +230,7 @@ describe('get_patent_figures', () => {
 		return { tool, writes: services.writes };
 	}
 
-	it('reads page metadata, then fetches the drawing pages as base64 PNGs inside the tool envelope', async () => {
+	it('reads page metadata, then fetches the drawing pages as compact base64 renders inside the tool envelope', async () => {
 		const { scripted, calls } = makeScriptedImageClient();
 		const { tool, writes } = makeFiguresTool(scripted);
 
@@ -239,7 +240,7 @@ describe('get_patent_figures', () => {
 			{ tool: 'get_patent_image', input: { patent_number: 'EP1000000A1' } },
 			{
 				tool: 'get_patent_image',
-				input: { patent_number: 'EP1000000A1', include_images: true, render: 'png', pages: [7, 8, 9] },
+				input: { patent_number: 'EP1000000A1', include_images: true, fit: 'compact', pages: [7, 8, 9] },
 			},
 		]);
 		// Base64 pages arrive inside the JSON envelope and become inline image parts.
@@ -262,7 +263,7 @@ describe('get_patent_figures', () => {
 			{ path: '/ws/figures/EP1000000A1-page-8.png', bytes: 5 },
 		]);
 		const allText = result.content.filter(part => part instanceof LanguageModelTextPart).map(part => part.value).join('\n');
-		expect(allText).toContain('Saved 2 PNG file(s)');
+		expect(allText).toContain('Saved 2 image file(s)');
 		expect(allText).toContain('/ws/figures/EP1000000A1-page-7.png');
 	});
 
