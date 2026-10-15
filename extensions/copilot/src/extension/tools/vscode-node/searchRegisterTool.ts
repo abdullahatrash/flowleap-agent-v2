@@ -50,6 +50,8 @@ interface RegisterSearchData {
 		end: number;
 	};
 	docs?: RegisterDoc[];
+	/** Backend guidance on a zero-result role-index query, e.g. retry with `nm=` (optional). */
+	hint?: string;
 }
 
 /** The range the backend applies when the model gives none. */
@@ -66,7 +68,8 @@ function partyLabel(parties: RegisterParty[] | undefined): string {
 /**
  * Tool for searching the EP Register with register CQL through the FlowLeap agent-first
  * `/tools/search_register` facade. The EP Register is the one search with a representative index:
- * `re=` is the professional representative (agent) of record and `op=` an opponent. Routes through
+ * `re=` is the professional representative (agent) of record, `op=` an opponent and `nm=` a name in
+ * any role (the fallback when a role index returns 0; the register stores names surname-first). Routes through
  * the shared {@link IPatentBackendClient} seam (via {@link callFacadeTool}), so it inherits the
  * centralized `401 → re-sign-in` / `402 → start-trial` / `429 → wait` gating. EP applications only.
  */
@@ -125,8 +128,11 @@ export class SearchRegisterTool implements ICopilotTool<ISearchRegisterParams> {
 
 		if (docs.length === 0) {
 			lines.push('No EP Register records match this query.');
+			if (data.hint) {
+				lines.push(data.hint);
+			}
 			lines.push('');
-			lines.push('The EP Register covers EP applications only. Register indexes: re (representative), op (opponent), ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. Not register indexes: ag, rep, ab, cpc, st, ps, fd, ctr. Quote a multi-word value: re="Muster Patentanwälte". See get_search_syntax provider=epo_register.');
+			lines.push('The EP Register covers EP applications only. Register indexes: re (representative), op (opponent), nm (a name in any role), ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. Not register indexes: ag, rep, ab, cpc, st, ps, fd, ctr. A role index that returns 0 does not mean the name is absent: retry with nm=<surname> to find which role the person holds. Names are surname-first: nm="Surname, First", not nm="First Surname". Quote a multi-word value: re="Muster Patentanwälte". See get_search_syntax provider=epo_register.');
 			return lines.join('\n');
 		}
 
@@ -143,6 +149,10 @@ export class SearchRegisterTool implements ICopilotTool<ISearchRegisterParams> {
 			{ header: 'Title', cell: doc => doc.title || '—' },
 		]));
 		lines.push('');
+		if (data.hint) {
+			lines.push(data.hint);
+			lines.push('');
+		}
 		lines.push('The EP Register covers EP applications only, so a representative or opponent count from here is EP-only: say so. Report the total as the count and the rows as examples. Rows arrive in register order, not by relevance. For the register record of one application use get_register_biblio (ops_api_guide); for its event chronology use get_register_events.');
 		return lines.join('\n');
 	}
