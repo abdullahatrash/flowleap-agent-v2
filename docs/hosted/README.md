@@ -65,7 +65,9 @@ Threat model of `/_flowleap/session`:
   until the user clicks Sign In. The gate cookie itself stays until it expires (30 days).
 - Known limit, not new: another workspace on `*.app.flowleap.co` could set an `fl_hosted`
   cookie for the parent domain (cookie tossing). The gate then checks that token, and this
-  endpoint would return it. Both are covered by the "allowlist is not ownership" limit below.
+  endpoint would return it. The gate admits a scoped entry (`user_x@<name>`) only to its own
+  workspace, so a tossed token of another invitee is refused here; a bare entry (your own
+  test account) is admitted everywhere.
 
 We do not use the website's Clerk `__session` cookie. It expires in about one minute. nginx
 does **not** forward any browser cookie to the backend (#542). Clerk sets client cookies on the
@@ -142,8 +144,11 @@ writes state every five seconds). Teardown removes the data folder and the key.
    ```
    It asks for the Anthropic key. The input is hidden. You can also put the key in
    `FLOWLEAP_ANTHROPIC_API_KEY`.
-5. **Allowlist.** On the backend host (`ssh flowleap`), add the user id to
-   `HOSTED_ALLOWLIST` (comma-separated) in `/opt/flowleap-backend/.env`. Then run
+5. **Allowlist.** On the backend host (`ssh flowleap`), add `<clerk-user-id>@<name>` to
+   `HOSTED_ALLOWLIST` (comma-separated) in `/opt/flowleap-backend/.env`. The `@<name>` part
+   admits the user to this workspace only: every VM asks the same backend, and nginx sends the
+   label in `X-FlowLeap-Hosted-Workspace`. A bare id admits to every workspace; keep that for
+   your own test account. Then run
    `docker compose up -d` in `/opt/flowleap-backend`. Do not use `restart`: it does not read
    the env file again.
 6. **Verify.** On the VM, run `sudo flowleap-server-web-*/hosted/verify.sh <name>`. All checks
