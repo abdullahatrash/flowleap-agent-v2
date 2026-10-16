@@ -5,6 +5,12 @@ Never build a bolt, spring, gear, bearing, shaft, pipe or motor from
 primitives. All library parts stand on the Z axis from z = 0 in their part
 frame; rotate them with `placement.rotate`.
 
+In a section view, a `shaft`, `fastener` or `spring` is not sectioned when
+the plane runs along its axis: it is drawn whole, with no hatch, and it hides
+the cut faces behind it. When the plane cuts it across, it is hatched like any
+other part. The part field `sectioned` changes this (see
+[scene-schema.md](scene-schema.md)).
+
 The ports are the `face` names a numeral port can point at. Without a `point`,
 the engine uses the port's anchor on the side that faces the camera.
 

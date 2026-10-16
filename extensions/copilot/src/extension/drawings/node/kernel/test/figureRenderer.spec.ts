@@ -6,6 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { figureHatchStyles } from '../../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../../common/scene/drawingScene';
 import { renderFigure } from '../figureRenderer';
 
@@ -55,6 +56,38 @@ describe('Patent Drawings engine: scene to FIG-N.svg', () => {
 			escape: ['scene-build'],
 		});
 	}, KERNEL_TIMEOUT);
+
+	it('a shaft along the section plane stays unhatched; the body around it is hatched', async () => {
+		const result = await renderFigure(fixture('shaft-through-body'));
+		await expect(`<!-- findings: ${JSON.stringify(rules(result.findings))} hatch: ${JSON.stringify(figureHatchStyles(result.svg ?? ''))} -->\n${result.svg}`).toMatchFileSnapshot('fixtures/shaft-through-body.svg');
+	}, KERNEL_TIMEOUT);
+
+	it('the live quick-release section: the skewer and spring stay clear, touching parts take different hatches', async () => {
+		const result = await renderFigure(fixture('quick-release-section'));
+		expect({ findings: rules(result.findings), hatch: figureHatchStyles(result.svg ?? '') }).toMatchInlineSnapshot(`
+			{
+			  "findings": [],
+			  "hatch": {
+			    "head1": {
+			      "angle": 45,
+			      "pitch": 2,
+			    },
+			    "head2": {
+			      "angle": 45,
+			      "pitch": 2,
+			    },
+			    "lever": {
+			      "angle": 135,
+			      "pitch": 2,
+			    },
+			    "shuttle": {
+			      "angle": 135,
+			      "pitch": 2,
+			    },
+			  },
+			}
+		`);
+	}, 4 * KERNEL_TIMEOUT);
 
 	it('a port point off its part gives lead-line-off-part', async () => {
 		const scene = fixture('box-two-numerals');

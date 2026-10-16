@@ -18,7 +18,10 @@ export interface DrawingScene {
 	readonly camera: CameraPreset;
 	/** `omit` (the default) drops hidden edges; `dashed` draws them as thin dashed lines. */
 	readonly hiddenEdges?: 'omit' | 'dashed';
-	/** A section plane: the parts are cut, the cut faces are hatched at 45 degrees. */
+	/**
+	 * A section plane: the parts are cut and the cut faces are hatched. Adjacent cut faces get
+	 * different hatch styles. A part with `sectioned: false` is drawn whole, with no hatch.
+	 */
 	readonly section?: SectionPlane;
 	/** Sheet millimetres per model millimetre. Omit it to fit the Figure to the default size. */
 	readonly scale?: number;
@@ -62,7 +65,33 @@ export interface ScenePart {
 	readonly placement?: Placement;
 	/** Primitives cut out of the shape, in the part-local frame (holes, slots, bores). */
 	readonly subtract?: readonly PlacedPrimitive[];
+	/**
+	 * False draws the part whole through a section, with no hatch. Default true, except a `shaft`,
+	 * `fastener` or `spring` that the section plane cuts along its axis (ASME Y14.3 convention).
+	 */
+	readonly sectioned?: boolean;
+	/** The hatch style of the cut face. Omit it to let the engine pick one that differs from the neighbours. */
+	readonly hatch?: HatchOverride;
 }
+
+/** A hatch angle on the sheet, in degrees counter-clockwise from the x axis. */
+export type HatchAngle = 45 | 135;
+
+/** A part's hatch override; each omitted field takes its default (45 degrees, 2 mm). */
+export interface HatchOverride {
+	readonly angle?: HatchAngle;
+	/** Line pitch in sheet millimetres, from `HATCH_PITCH_MIN` to `HATCH_PITCH_MAX`. */
+	readonly pitch?: number;
+}
+
+/** The hatch angles a scene may give. */
+export const HATCH_ANGLES: readonly HatchAngle[] = [45, 135];
+/** The hatch pitch range in sheet millimetres. */
+export const HATCH_PITCH_MIN = 1.5;
+export const HATCH_PITCH_MAX = 3;
+
+/** The library kinds that stay unsectioned when the section plane runs along their axis. */
+export const UNSECTIONED_KINDS: readonly LibraryShape['kind'][] = ['shaft', 'fastener', 'spring'];
 
 /** A primitive with its own placement in the part-local frame. */
 export interface PlacedPrimitive {

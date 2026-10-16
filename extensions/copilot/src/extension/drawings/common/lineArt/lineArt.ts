@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Vec2 } from '../scene/drawingScene';
+import type { HatchAngle, HatchOverride, Vec2 } from '../scene/drawingScene';
 import { NUMERAL_FONT_SIZE, NumeralRequest, PlacedNumeral, placeNumerals } from './numeralPlacer';
-import { hatch, Rect, Segment, toSegments } from './planar';
+import { hatch, Rect, Segment, segmentSetsNear, toSegments } from './planar';
 
 /** Visible edge width in sheet millimetres. */
 export const EDGE_WIDTH = 0.4;
@@ -13,6 +13,28 @@ export const EDGE_WIDTH = 0.4;
 export const THIN_WIDTH = 0.2;
 /** Hatch spacing in sheet millimetres (37 CFR 1.84(h)(3): regularly spaced oblique lines). */
 export const HATCH_SPACING = 2;
+
+/** The hatch style of one cut face: line angle in degrees and line pitch in sheet millimetres. */
+export interface HatchStyle {
+	readonly angle: HatchAngle;
+	readonly pitch: number;
+}
+
+/**
+ * The styles the engine gives to cut faces, in order of preference. Each part takes the first
+ * style that no neighbour uses, so adjacent parts read as separate bodies (37 CFR 1.84(h)(3)).
+ */
+export const HATCH_SEQUENCE: readonly HatchStyle[] = [
+	{ angle: 45, pitch: 2 },
+	{ angle: 135, pitch: 2 },
+	{ angle: 45, pitch: 1.5 },
+	{ angle: 135, pitch: 1.5 },
+	{ angle: 45, pitch: 3 },
+	{ angle: 135, pitch: 3 },
+];
+
+/** Two cut faces this close, in sheet millimetres, are neighbours and take different hatch styles. */
+export const HATCH_NEIGHBOUR_DISTANCE = 0.5;
 /**
  * Default size the drawing is fitted into, in sheet millimetres, when the scene sets no `scale`
  * (`scale` overrides it). The Figure is not drawn 1:1 from model millimetres: a large machine at
@@ -33,8 +55,10 @@ export interface ProjectedPart {
 	readonly id: string;
 	readonly visible: readonly (readonly Vec2[])[];
 	readonly hidden: readonly (readonly Vec2[])[];
-	/** Closed loops of the section cut faces of this part. */
+	/** Closed loops of the section cut faces of this part; empty for an unsectioned part. */
 	readonly cutFaces: readonly (readonly Vec2[])[];
+	/** The scene's hatch override of this part. Omit it to let the layout pick a style. */
+	readonly hatch?: HatchOverride;
 }
 
 /** A numeral port projected to the drawing plane; `anchor` is absent when the port does not resolve. */
@@ -63,6 +87,8 @@ export interface FigureLayout {
 	readonly edges: readonly { readonly part: string; readonly line: readonly Vec2[] }[];
 	readonly hidden: readonly { readonly part: string; readonly line: readonly Vec2[] }[];
 	readonly hatching: readonly { readonly part: string; readonly line: Segment }[];
+	/** The hatch style of each sectioned part, in scene order. */
+	readonly hatchStyles: readonly ({ readonly part: string } & HatchStyle)[];
 	readonly numerals: readonly PlacedNumeral[];
 	readonly fontSize: number;
 }
@@ -88,9 +114,35 @@ function dedupe(lines: readonly { readonly part: string; readonly line: readonly
 	return result;
 }
 
+const sameStyle = (a: HatchStyle, b: HatchStyle) => a.angle === b.angle && a.pitch === b.pitch;
+
 /**
- * Scales the projected Figure to the sheet, hatches the cut faces at 45 degrees (adjacent parts
- * alternate 45 and 135 degrees, 37 CFR 1.84(h)(3)) and places the numerals.
+ * Gives each sectioned part a hatch style. A part's override wins (an omitted field takes the
+ * default 45 degrees, 2 mm). Then each other part, in scene order, takes the first style of
+ * `HATCH_SEQUENCE` that no neighbour (a cut face within `HATCH_NEIGHBOUR_DISTANCE`) uses.
+ */
+function assignHatchStyles(parts: readonly { readonly id: string; readonly boundary: readonly Segment[]; readonly hatch?: HatchOverride }[]): Map<string, HatchStyle> {
+	const styles = new Map<string, HatchStyle>();
+	for (const part of parts) {
+		if (part.hatch) {
+			styles.set(part.id, { angle: part.hatch.angle ?? HATCH_SEQUENCE[0].angle, pitch: part.hatch.pitch ?? HATCH_SPACING });
+		}
+	}
+	for (const part of parts) {
+		if (styles.has(part.id)) {
+			continue;
+		}
+		const taken = parts
+			.filter(other => other !== part && styles.has(other.id) && segmentSetsNear(part.boundary, other.boundary, HATCH_NEIGHBOUR_DISTANCE))
+			.map(other => styles.get(other.id)!);
+		styles.set(part.id, HATCH_SEQUENCE.find(style => !taken.some(used => sameStyle(style, used))) ?? HATCH_SEQUENCE[0]);
+	}
+	return styles;
+}
+
+/**
+ * Scales the projected Figure to the sheet, hatches the cut faces (adjacent parts take different
+ * hatch styles, 37 CFR 1.84(h)(3)) and places the numerals.
  */
 export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 	const all = projected.parts.flatMap(part => [...part.visible, ...part.hidden, ...part.cutFaces].flat());
@@ -106,12 +158,15 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 	const edges = dedupe(mapLines(part => part.visible));
 	const hidden = projected.hiddenEdges === 'dashed' ? dedupe(mapLines(part => part.hidden)) : [];
 	const hatching: { part: string; line: Segment }[] = [];
-	projected.parts.filter(part => part.cutFaces.length > 0).forEach((part, index) => {
-		const boundary = toSegments(part.cutFaces.map(loop => loop.map(toSheet)));
-		for (const line of hatch(boundary, index % 2 === 0 ? 45 : 135, HATCH_SPACING)) {
+	const sectioned = projected.parts.filter(part => part.cutFaces.length > 0).map(part => ({ id: part.id, hatch: part.hatch, boundary: toSegments(part.cutFaces.map(loop => loop.map(toSheet))) }));
+	const styles = assignHatchStyles(sectioned);
+	const hatchStyles = sectioned.map(part => ({ part: part.id, ...styles.get(part.id)! }));
+	for (const part of sectioned) {
+		const style = styles.get(part.id)!;
+		for (const line of hatch(part.boundary, style.angle, style.pitch)) {
 			hatching.push({ part: part.id, line: [[round(line[0][0]), round(line[0][1])], [round(line[1][0]), round(line[1][1])]] });
 		}
-	});
+	}
 	const drawing: Rect = { x: MARGIN, y: MARGIN, width: spanX * scale, height: spanY * scale };
 	const requests: NumeralRequest[] = projected.ports
 		.filter((port): port is ProjectedPort & { anchor: Vec2 } => port.anchor !== undefined)
@@ -123,7 +178,7 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 		y: round(numeral.y),
 		lead: numeral.lead && [[round(numeral.lead[0][0]), round(numeral.lead[0][1])], [round(numeral.lead[1][0]), round(numeral.lead[1][1])]] as Segment,
 	}));
-	return { figure: projected.figure, width: round(spanX * scale + 2 * MARGIN), height: round(spanY * scale + 2 * MARGIN), edges, hidden, hatching, numerals, fontSize: NUMERAL_FONT_SIZE };
+	return { figure: projected.figure, width: round(spanX * scale + 2 * MARGIN), height: round(spanY * scale + 2 * MARGIN), edges, hidden, hatching, hatchStyles, numerals, fontSize: NUMERAL_FONT_SIZE };
 }
 
 function pathData(line: readonly Vec2[]): string {

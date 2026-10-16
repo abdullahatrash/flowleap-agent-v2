@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { CameraPreset, NumeralPort, PartShape, Placement, ScenePart, Vec2, Vec3 } from './drawingScene';
+import { CameraPreset, NumeralPort, PartShape, Placement, ScenePart, SectionPlane, UNSECTIONED_KINDS, Vec2, Vec3 } from './drawingScene';
 
 /**
  * An orthographic camera. `direction` points from the object to the viewer; `xAxis` is screen
@@ -238,4 +238,42 @@ export function resolvePort(port: NumeralPort, part: ScenePart | undefined, came
 	}
 	const local = faceAnchor(part.shape, port.face, toLocalDirection(part.placement, camera.direction));
 	return local && applyPlacement(part.placement, local);
+}
+
+/** The unit normal of a section plane. */
+export function sectionNormal(section: SectionPlane): Vec3 {
+	const named: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
+	const raw = typeof section.normal === 'string' ? named[section.normal] : section.normal;
+	return normalize(raw) ?? [0, 0, 1];
+}
+
+/** The outer radius of a part that stays unsectioned along its axis; 0 for other kinds. */
+function axialRadius(shape: PartShape): number {
+	switch (shape.kind) {
+		case 'shaft': return Math.max(...shape.steps.map(step => step.diameter)) / 2;
+		case 'fastener': return Math.max(shape.diameter / 2, FASTENER_HEAD_RADIUS * shape.diameter);
+		case 'spring': return (shape.coilDiameter + shape.wireDiameter) / 2;
+		default: return 0;
+	}
+}
+
+/**
+ * True when the section cuts the part and hatches its cut face. The part's `sectioned` field wins.
+ * Without it, a `shaft`, `fastener` or `spring` stays unsectioned when the plane runs along its
+ * axis: the plane is parallel to the axis and passes through the part. A plane across the axis
+ * sections it as usual. Every other part is sectioned.
+ */
+export function isSectioned(part: ScenePart, section: SectionPlane): boolean {
+	if (part.sectioned !== undefined) {
+		return part.sectioned;
+	}
+	if (!(UNSECTIONED_KINDS as readonly string[]).includes(part.shape.kind)) {
+		return true;
+	}
+	const normal = sectionNormal(section);
+	const origin = applyPlacement(part.placement, [0, 0, 0]);
+	const axis = add(applyPlacement(part.placement, [0, 0, 1]), scale(origin, -1));
+	const along = Math.abs(dot(axis, normal)) < 1e-6;
+	const distance = Math.abs(dot(add(origin, scale(section.origin, -1)), normal));
+	return !(along && distance < axialRadius(part.shape));
 }

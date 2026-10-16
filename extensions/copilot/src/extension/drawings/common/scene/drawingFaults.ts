@@ -5,8 +5,9 @@
 
 import type { DraftFinding } from '../../../tools/common/drafting/finding';
 import type { DrawingScene, Vec2 } from './drawingScene';
+import { HATCH_NEIGHBOUR_DISTANCE } from '../lineArt/lineArt';
 import { DIGIT_HEIGHT_RATIO, numeralBox } from '../lineArt/numeralPlacer';
-import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentsIntersect, toSegments } from '../lineArt/planar';
+import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentSetsNear, segmentsIntersect, toSegments } from '../lineArt/planar';
 import { cameraBasis, faceNames, resolvePort } from './sceneGeometry';
 
 /**
@@ -34,6 +35,7 @@ export const DRAWING_RULES = {
 	'text-beyond-keywords': '37 CFR 1.84(o); OJ EPO 2025 A49 Art. 1(2)(j) ("a few short keywords"); PCT Rule 11.11; 37 CFR 1.84(k) (no scale text)',
 	'numeral-overlap': '37 CFR 1.84(p)(3) ("should not cross or mingle with the lines")',
 	'numeral-on-line': '37 CFR 1.84(p)(3) ("should not cross or mingle with the lines", not on hatched surfaces); OJ EPO 2025 A49 Art. 1(2)(b)',
+	'hatch-same-as-neighbour': '37 CFR 1.84(h)(3) ("regularly spaced oblique parallel lines"; juxtaposed parts hatched differently); OJ EPO 2025 A49 Art. 1(2)(b); PCT Rule 11.13(b)',
 } as const;
 
 export type DrawingRule = keyof typeof DRAWING_RULES;
@@ -50,8 +52,18 @@ const KEYWORD_MAX_WORDS = 2;
 /** The reference numeral format: digits, an optional letter, an optional prime. */
 export const NUMERAL_PATTERN = /^\d{1,4}[a-z]?'?$/;
 
-function fault(rule: DrawingRule, message: string, extra: { numeral?: string; part?: string; file?: string } = {}): DrawingFinding {
+function fault(rule: DrawingRule, message: string, extra: { numeral?: string; part?: string; file?: string; severity?: DrawingFinding['severity'] } = {}): DrawingFinding {
 	return { severity: 'Error', rule, message, citation: DRAWING_RULES[rule], ...extra };
+}
+
+/** The hatch style that a part's hatch lines show: angle in whole degrees, pitch when two or more lines exist. */
+function hatchStyleOf(segments: readonly Segment[]): { angle: number; pitch?: number } {
+	const [[x1, y1], [x2, y2]] = segments[0];
+	const angle = ((Math.round(Math.atan2(y1 - y2, x2 - x1) * 180 / Math.PI) % 180) + 180) % 180;
+	const radians = angle * Math.PI / 180;
+	const offsets = [...new Set(segments.map(([[x, y]]) => Math.round((x * Math.sin(radians) + y * Math.cos(radians)) * 20) / 20))].sort((a, b) => a - b);
+	const gaps = offsets.slice(1).map((offset, i) => offset - offsets[i]).filter(gap => gap > 0.1);
+	return { angle, pitch: gaps.length ? Math.round(Math.min(...gaps) * 10) / 10 : undefined };
 }
 
 /**
@@ -157,6 +169,23 @@ function readFigureSvg(svg: string): { paths: SvgPath[]; texts: SvgText[] } {
 	return { paths, texts };
 }
 
+/** The hatch lines of each part, with the style they show. */
+function hatchedParts(paths: readonly SvgPath[]): { part: string; segments: Segment[]; style: { angle: number; pitch?: number } }[] {
+	const hatches = new Map<string, Segment[]>();
+	for (const path of paths.filter(item => item.classes.includes('hatch') && item.part)) {
+		hatches.set(path.part!, [...(hatches.get(path.part!) ?? []), ...toSegments(path.lines)]);
+	}
+	return [...hatches].filter(([, segments]) => segments.length > 0).map(([part, segments]) => ({ part, segments, style: hatchStyleOf(segments) }));
+}
+
+/**
+ * The hatch style each hatched part of a Figure SVG shows, read back from its hatch lines: angle
+ * in whole degrees and pitch in sheet millimetres (absent when the part has one hatch line).
+ */
+export function figureHatchStyles(svg: string): Record<string, { angle: number; pitch?: number }> {
+	return Object.fromEntries(hatchedParts(readFigureSvg(svg).paths).map(item => [item.part, item.style]));
+}
+
 /** Options of the SVG fault list runner. */
 export interface FigureSvgCheckOptions {
 	/** The file name the Findings name, e.g. `FIG-1.svg`. */
@@ -239,6 +268,17 @@ export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions
 			findings.push(fault('numeral-on-line', `Numeral ${numerals[i].content} sits on a drawn line.`, { numeral: numerals[i].content, file }));
 		}
 	}
+	const hatched = hatchedParts(paths);
+	for (let i = 0; i < hatched.length; i++) {
+		for (let j = i + 1; j < hatched.length; j++) {
+			const [a, b] = [hatched[i], hatched[j]];
+			const same = a.style.angle === b.style.angle && a.style.pitch !== undefined && b.style.pitch !== undefined && Math.abs(a.style.pitch - b.style.pitch) < 0.25;
+			if (same && segmentSetsNear(a.segments, b.segments, HATCH_NEIGHBOUR_DISTANCE)) {
+				findings.push(fault('hatch-same-as-neighbour', `Parts "${a.part}" and "${b.part}" touch and have the same hatch (${a.style.angle}°, ${a.style.pitch} mm); they read as one body.`, { part: b.part, file, severity: 'Note' }));
+			}
+		}
+	}
+
 	const checks = options.checks;
 	return checks ? findings.filter(finding => checks.includes(finding.rule as DrawingRule)) : findings;
 }

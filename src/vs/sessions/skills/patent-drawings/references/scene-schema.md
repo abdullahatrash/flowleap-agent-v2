@@ -22,7 +22,7 @@ the model's idea of the picture.
 | `parts` | yes | a non-empty array of parts |
 | `numerals` | yes | an array of numeral ports |
 | `hiddenEdges` | no | `omit` (default) or `dashed` |
-| `section` | no | `{ "origin": [x, y, z], "normal": "x" \| "y" \| "z" \| [x, y, z], "keep": "positive" \| "negative" }`. Every part is cut; the cut faces get 45° hatching. |
+| `section` | no | `{ "origin": [x, y, z], "normal": "x" \| "y" \| "z" \| [x, y, z], "keep": "positive" \| "negative" }`. The parts are cut and the cut faces are hatched. Touching cut faces get different hatch styles. See `sectioned` and `hatch` below. |
 | `scale` | no | sheet mm per model mm. Omit it to fit the default size. |
 
 ## Part
@@ -38,6 +38,19 @@ the model's idea of the picture.
   `name` are the same part for the numeral check.
 - `subtract`: primitives cut out of the shape, in the part frame (holes,
   slots, bores). Only primitives, not library parts.
+- `sectioned`: `true` or `false`. Used only with a `section`. `false` draws
+  the part whole through the cut, with its full outline and no hatch. The
+  default is `true`. Exception: a `shaft`, `fastener` or `spring` is not
+  sectioned when the plane runs along its axis (drafting convention). When
+  the plane cuts it across, it is sectioned. Set `sectioned` to change the
+  default, for example `false` for a pin or key built from a primitive.
+- `hatch`: `{ "angle": 45 | 135, "pitch": 1.5 to 3 }`. Used only with a
+  `section`. `pitch` is the line spacing in sheet mm. An omitted field takes
+  its default (45°, 2 mm). Omit `hatch` normally: the engine gives each
+  sectioned part a style that differs from every part it touches. It tries
+  45° 2 mm, 135° 2 mm, 45° 1.5 mm, 135° 1.5 mm, 45° 3 mm, 135° 3 mm, in
+  this order. Parts with a `hatch` are set first; the other parts avoid them.
+  Give the same `hatch` to two separate parts of one item (37 CFR 1.84(h)(3)).
 
 ## Primitives
 
