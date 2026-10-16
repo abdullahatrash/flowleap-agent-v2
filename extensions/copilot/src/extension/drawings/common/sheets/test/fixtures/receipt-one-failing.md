@@ -30,5 +30,5 @@ This file lists each code check, the rule it applies and its result. It is not a
 
 | Figure | Rounds the model saw | Latest render |
 |---|---|---|
-| 1 | 1, 2 | review/FIG-1.round-2.png |
-| 2 | no render seen | - |
+| 1 | cycle 1, rounds 1, 2 | review/FIG-1.round-2.png |
+| 2 | cycle 2, no render seen | - |

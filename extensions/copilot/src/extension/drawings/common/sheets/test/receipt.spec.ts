@@ -26,8 +26,8 @@ describe('drawings-compliance.md receipt', () => {
 			figureRules: { 'lead-lines-cross': '37 CFR 1.84(q) ("Lead lines must not cross each other")' },
 			figureFindings: [],
 			reviewRounds: [
-				{ figure: '1', rounds: [{ round: 1, png: 'review/FIG-1.round-1.png' }, { round: 2, png: 'review/FIG-1.round-2.png' }] },
-				{ figure: '2', rounds: [] },
+				{ figure: '1', cycle: 1, rounds: [{ round: 1, png: 'review/FIG-1.round-1.png' }, { round: 2, png: 'review/FIG-1.round-2.png' }] },
+				{ figure: '2', cycle: 2, rounds: [] },
 			],
 			pdf: { version: '1.4', pageCount: 2, fontsEmbedded: true, encrypted: false, pageSizes: [{ width: 210, height: 297 }, { width: 210, height: 297 }] },
 			date: '2026-10-12',

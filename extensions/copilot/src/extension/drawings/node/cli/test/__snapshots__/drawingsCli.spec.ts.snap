@@ -115,11 +115,11 @@ exports[`drawings CLI > refusals > refuses a flowchart proposal that adds a step
 }
 `;
 
-exports[`drawings CLI > refusals > refuses a fourth round and writes no drawing 1`] = `
+exports[`drawings CLI > refusals > refuses a fourth round in a review cycle and writes no drawing 1`] = `
 {
   "exitCode": 1,
   "ok": false,
-  "reason": "FIG. 1 already had 3 review rounds; the limit is 3 per Figure. Edit drafting/widget/drawings/FIG-1.scene.json by hand, or ask the attorney.",
+  "reason": "Three review rounds used for FIG. 1 in cycle 1. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).",
   "wrote": [],
 }
 `;
@@ -258,6 +258,7 @@ Report the receipt by check. The rules a person must judge (sufficient views, ev
     "exitCode": 0,
     "output": {
       "command": "render",
+      "cycle": 1,
       "errors": 0,
       "figure": "FIG. 2",
       "findings": [],
@@ -266,7 +267,7 @@ Report the receipt by check. The rules a person must judge (sufficient views, ev
       "round": 1,
       "roundsLeft": 2,
       "seen": true,
-      "text": "Rendered FIG. 2: wrote drafting/widget/drawings/FIG-2.scene.json, drafting/widget/drawings/FIG-2.svg and the review render drafting/widget/drawings/review/FIG-2.round-1.png. Round 1 of 3.
+      "text": "Rendered FIG. 2: wrote drafting/widget/drawings/FIG-2.scene.json, drafting/widget/drawings/FIG-2.svg and the review render drafting/widget/drawings/review/FIG-2.round-1.png. Round 1 of 3 in review cycle 1.
 Every Figure drafting/widget/figures.md names is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
@@ -275,26 +276,33 @@ Do not call the Figure compliant or ready to file.",
   },
   "rounds": {
     "figures": {
-      "1": [
-        {
-          "png": "review/FIG-1.round-1.png",
-          "round": 1,
-          "seen": true,
-        },
-      ],
-      "2": [
-        {
-          "png": "review/FIG-2.round-1.png",
-          "round": 1,
-          "seen": true,
-        },
-      ],
+      "1": {
+        "cycle": 1,
+        "rounds": [
+          {
+            "png": "review/FIG-1.round-1.png",
+            "round": 1,
+            "seen": true,
+          },
+        ],
+      },
+      "2": {
+        "cycle": 1,
+        "rounds": [
+          {
+            "png": "review/FIG-2.round-1.png",
+            "round": 1,
+            "seen": true,
+          },
+        ],
+      },
     },
   },
   "scene": {
     "exitCode": 0,
     "output": {
       "command": "render",
+      "cycle": 1,
       "errors": 0,
       "figure": "FIG. 1",
       "findings": [],
@@ -303,7 +311,7 @@ Do not call the Figure compliant or ready to file.",
       "round": 1,
       "roundsLeft": 2,
       "seen": true,
-      "text": "Rendered FIG. 1: wrote drafting/widget/drawings/FIG-1.scene.json, drafting/widget/drawings/FIG-1.svg and the review render drafting/widget/drawings/review/FIG-1.round-1.png. Round 1 of 3.
+      "text": "Rendered FIG. 1: wrote drafting/widget/drawings/FIG-1.scene.json, drafting/widget/drawings/FIG-1.svg and the review render drafting/widget/drawings/review/FIG-1.round-1.png. Round 1 of 3 in review cycle 1.
 Still to draw: FIG. 2 (drafting/widget/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.

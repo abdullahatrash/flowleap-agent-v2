@@ -10,8 +10,9 @@
  * drawings/
  *   FIG-1.scene.json         source of a Figure: the 3D scene, or for a 2D Figure the diagram input
  *   FIG-1.svg                the line art render_figure writes
- *   rounds.json              the review rounds per Figure, and whether the model saw the render
- *   review/FIG-1.round-2.png the review render of a round, never a deliverable
+ *   rounds.json              the review cycle per Figure, its rounds, and whether the model saw the render
+ *   review/FIG-1.round-2.png the review render of a round of cycle 1, never a deliverable
+ *   review/FIG-1.cycle-2.round-1.png  the review render of a round of a later cycle
  * ```
  *
  * This module imports no kernel, no layout engine and no VS Code API: the editor tools (D5) and
@@ -28,8 +29,11 @@ import { DraftFinding } from '../../tools/common/drafting/finding';
 import { parseDraftingFrontmatter } from '../../tools/common/drafting/frontmatter';
 import { figureHeadingNumbers, FigurePart, hasFigure, parseFigureSections } from '../../tools/common/drafting/specValidators';
 
-/** Three review rounds per Figure (PRD 0023, D5 guardrail). */
+/** Three review rounds per review cycle of a Figure (PRD 0023, D5 guardrail; #696). */
 export const MAX_REVIEW_ROUNDS = 3;
+
+/** Three review cycles per Figure. After that, only a person clears the rounds (`reset-rounds`, #696). */
+export const MAX_REVIEW_CYCLES = 3;
 
 /** The file that records the review rounds, in `drawings/`. */
 export const ROUNDS_FILE = 'rounds.json';
@@ -88,14 +92,32 @@ export interface ReviewRound {
 	readonly seen: boolean;
 }
 
-/** The review rounds per Figure key. */
-export type ReviewRounds = Readonly<Record<string, readonly ReviewRound[]>>;
-
-interface RoundsFileShape {
-	readonly figures?: Record<string, readonly Partial<ReviewRound>[]>;
+/** The review rounds of the current cycle of one Figure. */
+export interface FigureReview {
+	/** The cycle number, from 1. A new cycle starts only on `newCycle` (#696). */
+	readonly cycle: number;
+	/** The rounds of this cycle, in order. */
+	readonly rounds: readonly ReviewRound[];
 }
 
-/** Reads `rounds.json`; a missing or broken file gives no rounds. */
+/** The review cycle and its rounds per Figure key. */
+export type ReviewRounds = Readonly<Record<string, FigureReview>>;
+
+interface RoundsFileShape {
+	/** A Figure is `{ cycle, rounds }`, or a plain array of rounds in the first file shape (cycle 1). */
+	readonly figures?: Record<string, readonly Partial<ReviewRound>[] | { readonly cycle?: number; readonly rounds?: readonly Partial<ReviewRound>[] }>;
+}
+
+function toRounds(rounds: readonly Partial<ReviewRound>[]): ReviewRound[] {
+	return rounds
+		.filter(round => typeof round.round === 'number' && typeof round.png === 'string')
+		.map(round => ({ round: round.round!, png: round.png!, seen: round.seen !== false }));
+}
+
+/**
+ * Reads `rounds.json`; a missing or broken file gives no rounds. A Figure in the first file shape
+ * (a plain array of rounds) reads as cycle 1; the next write stores it in the new shape.
+ */
 export function parseReviewRounds(text: string | undefined): ReviewRounds {
 	if (!text) {
 		return {};
@@ -106,12 +128,14 @@ export function parseReviewRounds(text: string | undefined): ReviewRounds {
 	} catch {
 		return {};
 	}
-	const result: Record<string, ReviewRound[]> = {};
-	for (const [key, rounds] of Object.entries(parsed?.figures ?? {})) {
-		if (Array.isArray(rounds)) {
-			result[key] = rounds
-				.filter(round => typeof round.round === 'number' && typeof round.png === 'string')
-				.map(round => ({ round: round.round!, png: round.png!, seen: round.seen !== false }));
+	const result: Record<string, FigureReview> = {};
+	for (const [key, value] of Object.entries(parsed?.figures ?? {})) {
+		if (Array.isArray(value)) {
+			result[key] = { cycle: 1, rounds: toRounds(value) };
+		} else if (value && typeof value === 'object' && !Array.isArray(value)) {
+			const entry = value as { readonly cycle?: number; readonly rounds?: readonly Partial<ReviewRound>[] };
+			const cycle = typeof entry.cycle === 'number' && Number.isInteger(entry.cycle) && entry.cycle >= 1 ? entry.cycle : 1;
+			result[key] = { cycle, rounds: Array.isArray(entry.rounds) ? toRounds(entry.rounds) : [] };
 		}
 	}
 	return result;
@@ -119,13 +143,17 @@ export function parseReviewRounds(text: string | undefined): ReviewRounds {
 
 /** Writes `rounds.json`. */
 export function renderReviewRounds(rounds: ReviewRounds): string {
-	const figures = Object.fromEntries(Object.keys(rounds).sort().map(key => [key, rounds[key]]));
+	const figures = Object.fromEntries(Object.keys(rounds).sort().map(key => [key, { cycle: rounds[key].cycle, rounds: rounds[key].rounds }]));
 	return `${JSON.stringify({ figures }, null, '\t')}\n`;
 }
 
-/** The review records of the receipt: per Figure, the rounds whose render the model saw. */
+/** The review records of the receipt: per Figure, the cycle and the rounds of it whose render the model saw. */
 export function reviewRecords(rounds: ReviewRounds, keys: readonly string[]): FigureReviewRecord[] {
-	return keys.map(figure => ({ figure, rounds: (rounds[figure] ?? []).filter(round => round.seen).map(round => ({ round: round.round, png: round.png })) }));
+	return keys.map(figure => ({
+		figure,
+		cycle: rounds[figure]?.cycle ?? 1,
+		rounds: (rounds[figure]?.rounds ?? []).filter(round => round.seen).map(round => ({ round: round.round, png: round.png })),
+	}));
 }
 
 /** One line per Figure finding, with its rule citation when it has one. */
@@ -144,10 +172,30 @@ export function partsOfFigure(figures: string, figure: FigureId): FigurePart[] {
 		.flatMap(section => section.parts);
 }
 
-/** The number of review renders of a Figure among the file names of `drawings/review/`. */
-export function reviewPngCount(files: readonly string[], figure: FigureId): number {
-	const pattern = new RegExp(`^FIG-${figure.key}\\.round-\\d+\\.png$`);
-	return files.filter(name => pattern.test(name)).length;
+/** The review render of a round, relative to `drawings/`. Cycle 1 keeps the first file name. */
+export function reviewPngName(figure: FigureId, cycle: number, round: number): string {
+	return cycle === 1 ? `review/FIG-${figure.key}.round-${round}.png` : `review/FIG-${figure.key}.cycle-${cycle}.round-${round}.png`;
+}
+
+/** The review renders of a Figure among the file names of `drawings/review/`, with their cycle and round. */
+export function reviewPngs(files: readonly string[], figure: FigureId): { readonly name: string; readonly cycle: number; readonly round: number }[] {
+	const pattern = new RegExp(`^FIG-${figure.key}\\.(?:cycle-(?<cycle>\\d+)\\.)?round-(?<round>\\d+)\\.png$`);
+	return files.flatMap(name => {
+		const match = pattern.exec(name);
+		return match?.groups ? [{ name, cycle: match.groups.cycle ? Number(match.groups.cycle) : 1, round: Number(match.groups.round) }] : [];
+	});
+}
+
+/**
+ * The current review cycle of a Figure and the rounds used in it. The review renders on disk count
+ * too, so a deleted or edited `rounds.json` does not reset the count.
+ */
+export function reviewState(rounds: ReviewRounds, reviewFiles: readonly string[], figure: FigureId): { readonly cycle: number; readonly used: number } {
+	const pngs = reviewPngs(reviewFiles, figure);
+	const entry = rounds[figure.key];
+	const cycle = Math.max(entry?.cycle ?? 1, ...pngs.map(png => png.cycle));
+	const used = Math.max(entry?.cycle === cycle ? entry.rounds.length : 0, pngs.filter(png => png.cycle === cycle).length);
+	return { cycle, used };
 }
 
 /** File extensions a sketch may have. */

@@ -11,7 +11,8 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import type { DrawingScene } from '../../drawings/common/scene/drawingScene';
-import { BlockRequest, FlowchartRequest, renderFigureOp } from '../../drawings/node/ops/renderFigureOp';
+import { figureId } from '../../drawings/common/drawingFiles';
+import { BlockRequest, FlowchartRequest, readReviewState, renderFigureOp, reviewCycleRefusal } from '../../drawings/node/ops/renderFigureOp';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { DraftingWorkspace, textResult } from './draftingWorkspace';
@@ -29,6 +30,8 @@ interface IRenderFigureParams {
 	block?: BlockRequest;
 	/** False returns the findings without the render; the round is recorded as not seen. */
 	includeRender?: boolean;
+	/** Starts the next review cycle (three more rounds); the attorney confirms it in chat first (#696). */
+	newCycle?: boolean;
 }
 
 const refused = 'The Figure was not rendered.';
@@ -38,6 +41,11 @@ const refused = 'The Figure was not rendered.';
  * figure-list gate, the render, the fault list, the files and the round. This tool locates the
  * matter, decides whether the model sees the render (the request flag and the model's image
  * input), checks the Approved Claims with the drafting gate, and attaches the review render.
+ *
+ * `newCycle` starts the next review cycle of the Figure. {@link prepareInvocation} then asks the
+ * attorney to confirm it in chat. VS Code runs {@link invoke} only after the click: a denied
+ * confirmation cancels the call and a skipped one returns a skip text to the model, so the Figure
+ * is not rendered and no round is used. The guard is in code, not in the prompt (#696).
  */
 export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 
@@ -49,8 +57,43 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
-	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IRenderFigureParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
-		return { invocationMessage: l10n.t`Rendering FIG. ${options.input.figure}${options.input.partial ?? ''} of ${options.input.matter}` };
+	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IRenderFigureParams>, _token: CancellationToken): Promise<vscode.PreparedToolInvocation> {
+		const input = options.input;
+		const label = `${input.figure}${input.partial ?? ''}`;
+		const invocationMessage = l10n.t`Rendering FIG. ${label} of ${input.matter}`;
+		if (input.newCycle !== true) {
+			return { invocationMessage };
+		}
+		const cycle = await this.nextCycle(input);
+		if (cycle === undefined) {
+			// The call refuses anyway (no matter, a bad Figure, or the cap of three cycles): nothing to confirm.
+			return { invocationMessage };
+		}
+		return {
+			invocationMessage,
+			confirmationMessages: {
+				title: l10n.t`Start Review Cycle`,
+				message: l10n.t`Start review cycle ${cycle} for FIG. ${label}? Three more rounds.`,
+			},
+		};
+	}
+
+	/** The cycle a `newCycle` call starts, or `undefined` when the call refuses before it renders. */
+	private async nextCycle(input: IRenderFigureParams): Promise<number | undefined> {
+		const figure = figureId(input.figure, input.partial);
+		if (typeof figure === 'string') {
+			return undefined;
+		}
+		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		if (typeof workspace === 'string') {
+			return undefined;
+		}
+		const files = workspace.matterFiles();
+		const { state } = await readReviewState(files, figure);
+		if (reviewCycleRefusal(files.folder, figure, state, true)) {
+			return undefined;
+		}
+		return state.used > 0 ? state.cycle + 1 : state.cycle;
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IRenderFigureParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
@@ -60,7 +103,7 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 			return textResult(`${refused} ${workspace}`);
 		}
 		const seen = input.includeRender !== false && options.model?.capabilities.supportsImageToText !== false;
-		const result = await renderFigureOp(workspace.matterFiles(), { figure: input.figure, partial: input.partial, scene: input.scene, flowchart: input.flowchart, block: input.block, seen }, {
+		const result = await renderFigureOp(workspace.matterFiles(), { figure: input.figure, partial: input.partial, scene: input.scene, flowchart: input.flowchart, block: input.block, seen, newCycle: input.newCycle === true }, {
 			approvedClaims: async () => {
 				const approval = await workspace.requireApprovedClaims();
 				return typeof approval === 'string' ? approval : { text: await workspace.read(workspace.folder.claims) ?? '' };

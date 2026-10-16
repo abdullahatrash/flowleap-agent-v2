@@ -127,7 +127,8 @@ function setup(files: Record<string, string> = matter) {
 	const exists = (file: string) => fileSystem.stat(URI.file(`/workspace/${file}`)).then(() => true, () => false);
 	const list = async (folder: string) => (await fileSystem.readDirectory(URI.file(`/workspace/${folder}`))).map(([name]) => name).sort();
 	const write = (file: string, contents: string) => fileSystem.writeFile(URI.file(`/workspace/${file}`), new TextEncoder().encode(contents));
-	return { fileSystem, tools, read, exists, list, write };
+	const confirmation = async (input: Omit<RenderInput, 'matter'>) => (await render.prepareInvocation({ input: { matter: 'hinge', ...input } } as vscode.LanguageModelToolInvocationPrepareOptions<RenderInput>, CancellationToken.None)).confirmationMessages?.message;
+	return { fileSystem, tools, read, exists, list, write, confirmation };
 }
 
 describe('render_figure tool', () => {
@@ -152,9 +153,25 @@ describe('render_figure tool', () => {
 		expect({
 			seen: seen.images,
 			unseen: unseen.images,
-			rounds: JSON.parse(await read('drafting/hinge/drawings/rounds.json')).figures['2'].map((round: { seen: boolean }) => round.seen),
+			rounds: JSON.parse(await read('drafting/hinge/drawings/rounds.json')).figures['2'].rounds.map((round: { seen: boolean }) => round.seen),
 		}).toEqual({ seen: ['image/png'], unseen: [], rounds: [true, false] });
 	}, KERNEL_TIMEOUT);
+	it('asks the attorney to confirm a new review cycle, and asks nothing for a normal round or after the cap of three cycles', async () => {
+		const { confirmation, write } = setup();
+		const rounds = (cycle: number) => write('drafting/hinge/drawings/rounds.json', JSON.stringify({ figures: { '2': { cycle, rounds: [{ round: 1, png: 'review/FIG-2.round-1.png', seen: true }] } } }));
+		const noRound = await confirmation({ figure: 2, newCycle: true });
+		await rounds(1);
+		const plain = await confirmation({ figure: 2 });
+		const second = await confirmation({ figure: 2, newCycle: true });
+		await rounds(3);
+		const capped = await confirmation({ figure: 2, newCycle: true });
+		expect({ noRound, plain, second, capped }).toEqual({
+			noRound: 'Start review cycle 1 for FIG. 2? Three more rounds.',
+			plain: undefined,
+			second: 'Start review cycle 2 for FIG. 2? Three more rounds.',
+			capped: undefined,
+		});
+	});
 });
 
 describe('build_drawing_set tool', () => {

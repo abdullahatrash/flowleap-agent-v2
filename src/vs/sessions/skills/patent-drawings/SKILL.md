@@ -27,6 +27,11 @@ sh "<skill base directory>/drawings.sh" propose <matter> <N> "<part>" --sketch <
 sh "<skill base directory>/drawings.sh" build <matter>
 ```
 
+Add `--new-cycle` to `render` to start the next review cycle of a Figure
+(three more rounds). Unlike the editor tool, it has no chat confirmation. The
+guard is the host's approval of the command and a hard cap of three cycles per
+Figure: after that, `render` refuses until a person clears the rounds.
+
 `<N>` is the Figure number, or `1A` for a partial view. Each command prints
 one JSON object. `"ok": false` is a refusal: it wrote nothing; report its
 `reason`. The launcher runs `drawings-cli.js` of this app on the app's own
@@ -74,11 +79,15 @@ Done when every in-scope Figure has an input file whose numerals are all in
    then render again. Look at the render for what code cannot check: a part
    in the wrong place, a wrong view. When you cannot read images, add
    `--no-render-seen`, so the receipt records that no render was seen.
-3. Stop after the third round (`roundsLeft` is 0, or the CLI refuses). Report
-   the Errors that stay open.
+3. Stop after the third round of the review cycle (`roundsLeft` is 0, or the
+   CLI refuses). Report the Errors that stay open.
+4. Never add `--new-cycle` on your own. Add it only when the attorney asked to
+   continue work on this Figure or the engine changed, and ask the attorney
+   in chat first: this flag has no chat confirmation.
 
-Done when each Figure has no Error Finding, or has used three rounds and its
-open Errors are reported.
+Done when each Figure has no Error Finding, or has used the three rounds of
+its review cycle and its open Errors are reported. A new review cycle starts
+only when the attorney asked for it.
 
 ## Step 4: Propose missing parts and stop
 
