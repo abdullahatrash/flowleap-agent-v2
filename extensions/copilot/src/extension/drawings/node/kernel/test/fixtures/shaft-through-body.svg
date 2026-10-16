@@ -1,0 +1,87 @@
+<!-- findings: [] hatch: {"body":{"angle":45,"pitch":2}} -->
+<svg xmlns="http://www.w3.org/2000/svg" width="168mm" height="88mm" viewBox="0 0 168 88" data-figure="FIG-3" data-kind="3d">
+<rect width="168" height="88" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="body" stroke-width="0.4" d="M44 64 L44 49.33 L44 49.32 L44 49.31 L44 49.3 L44 49.29 L44 49.27 L44 49.25 L44 49.22 L44 49.2 L44 49.17 L44 49.14 L44 49.11 L44 49.07"/>
+<path class="edge" data-part="body" stroke-width="0.4" d="M44 38.67 L44 24"/>
+<path class="edge" data-part="body" stroke-width="0.4" d="M124 24 L44 24"/>
+<path class="edge" data-part="body" stroke-width="0.4" d="M124 64 L44 64"/>
+<path class="edge" data-part="body" stroke-width="0.4" d="M124 64 L124 49.33 L124 49.32 L124 49.31 L124 49.3 L124 49.29 L124 49.27 L124 49.25 L124 49.22 L124 49.2 L124 49.17 L124 49.14 L124 49.11 L124 49.07"/>
+<path class="edge" data-part="body" stroke-width="0.4" d="M44 49.33 L124 49.33"/>
+<path class="edge" data-part="body" stroke-width="0.4" d="M44 38.67 L124 38.67 L124 24"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M24 38.67 L24 38.8 L24 39.19 L24 39.83 L24 40.67 L24 41.69 L24 42.81 L24 44 L24 45.19 L24 46.31 L24 47.33 L24 48.17 L24 48.81 L24 49.2 L24 49.33 L144 49.33"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M144 38.67 L144 38.8 L144 39.19 L144 39.83 L144 40.67 L144 41.69 L144 42.81 L144 44 L144 45.19 L144 46.31 L144 47.33 L144 48.17 L144 48.81 L144 49.2 L144 49.33"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M24 38.67 L144 38.67"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 26.71 L46.71 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 29.54 L49.54 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 32.37 L52.37 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 35.2 L55.2 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 38.02 L58.02 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M46.19 38.67 L60.85 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M49.01 38.67 L63.68 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M51.84 38.67 L66.51 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 49.34 L44 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M54.67 38.67 L69.34 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 52.17 L46.83 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M57.5 38.67 L72.17 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 54.99 L49.66 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M60.33 38.67 L74.99 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 57.82 L52.49 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M63.16 38.67 L77.82 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 60.65 L55.32 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M65.99 38.67 L80.65 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M44 63.48 L58.15 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M68.81 38.67 L83.48 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M46.31 64 L60.98 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M71.64 38.67 L86.31 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M49.14 64 L63.8 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M74.47 38.67 L89.14 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M51.97 64 L66.63 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M77.3 38.67 L91.97 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M54.79 64 L69.46 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M80.13 38.67 L94.79 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M57.62 64 L72.29 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M82.96 38.67 L97.62 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M60.45 64 L75.12 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M85.78 38.67 L100.45 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M63.28 64 L77.95 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M88.61 38.67 L103.28 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M66.11 64 L80.77 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M91.44 38.67 L106.11 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M68.94 64 L83.6 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M94.27 38.67 L108.94 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M71.76 64 L86.43 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M97.1 38.67 L111.76 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M74.59 64 L89.26 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M99.93 38.67 L114.59 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M77.42 64 L92.09 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M102.75 38.67 L117.42 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M80.25 64 L94.92 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M105.58 38.67 L120.25 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M83.08 64 L97.74 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M108.41 38.67 L123.08 24"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M85.91 64 L100.57 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M111.24 38.67 L124 25.91"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M88.74 64 L103.4 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M114.07 38.67 L124 28.74"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M91.56 64 L106.23 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M116.9 38.67 L124 31.56"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M94.39 64 L109.06 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M119.73 38.67 L124 34.39"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M97.22 64 L111.89 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M122.55 38.67 L124 37.22"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M100.05 64 L114.72 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M102.88 64 L117.54 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M105.71 64 L120.37 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M108.53 64 L123.2 49.33"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M111.36 64 L124 51.36"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M114.19 64 L124 54.19"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M117.02 64 L124 57.02"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M119.85 64 L124 59.85"/>
+<path class="hatch" data-part="body" stroke-width="0.2" d="M122.68 64 L124 62.68"/>
+<line class="lead" data-numeral="30" data-part="body" stroke-width="0.2" x1="83.51" y1="19.41" x2="84" y2="24"/>
+<line class="lead" data-numeral="32" data-part="shaft" stroke-width="0.2" x1="147.7" y1="49.84" x2="137.33" y2="49.33"/>
+</g>
+<text class="numeral" data-numeral="30" data-part="body" x="83.25" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">30</text>
+<text class="numeral" data-numeral="32" data-part="shaft" x="151" y="51.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">32</text>
+</svg>

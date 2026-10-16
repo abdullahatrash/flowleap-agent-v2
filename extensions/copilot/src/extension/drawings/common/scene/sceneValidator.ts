@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DrawingFinding, NUMERAL_PATTERN } from './drawingFaults';
-import { CAMERA_PRESETS, DrawingScene, LIBRARY_KINDS, PRIMITIVE_KINDS } from './drawingScene';
+import { CAMERA_PRESETS, DrawingScene, HATCH_ANGLES, HATCH_PITCH_MAX, HATCH_PITCH_MIN, LIBRARY_KINDS, PRIMITIVE_KINDS } from './drawingScene';
 
 /** Options of the scene validator. */
 export interface SceneValidationOptions {
@@ -265,6 +265,22 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 						shapeOf(cut.shape, `${cutPath}.shape`, false);
 						placement(cut.placement, `${cutPath}.placement`);
 					});
+				}
+			}
+			if (part.sectioned !== undefined && typeof part.sectioned !== 'boolean') {
+				error(`${path}.sectioned`, 'must be true or false');
+			}
+			if (part.hatch !== undefined) {
+				if (!isObject(part.hatch)) {
+					error(`${path}.hatch`, 'must be { angle?, pitch? }');
+				} else {
+					if (part.hatch.angle !== undefined && !(typeof part.hatch.angle === 'number' && (HATCH_ANGLES as readonly number[]).includes(part.hatch.angle))) {
+						error(`${path}.hatch.angle`, `must be ${HATCH_ANGLES.join(' or ')} (degrees)`);
+					}
+					const pitch = part.hatch.pitch;
+					if (pitch !== undefined && (typeof pitch !== 'number' || !Number.isFinite(pitch) || pitch < HATCH_PITCH_MIN || pitch > HATCH_PITCH_MAX)) {
+						error(`${path}.hatch.pitch`, `must be a number from ${HATCH_PITCH_MIN} to ${HATCH_PITCH_MAX} (sheet mm)`);
+					}
 				}
 			}
 		});

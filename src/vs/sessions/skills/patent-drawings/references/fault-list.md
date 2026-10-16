@@ -26,6 +26,7 @@ From the scene validator, the renderer and `drawingFaults.ts`.
 | `text-beyond-keywords` | A text is more than two words, or names a scale. | Remove the text. A 3D Figure carries numerals only. |
 | `numeral-overlap` | Two numerals overlap. | Move one port to another face or point. |
 | `numeral-on-line` | A numeral sits on a drawn line. | Move the port; a surface numeral needs a free area of the face. |
+| `hatch-same-as-neighbour` | Note: two touching sectioned parts have the same hatch angle and pitch, so they read as one body (37 CFR 1.84(h)(3); OJ EPO 2025 A49 Art. 1(2)(b)). Only a `hatch` override causes it. | Remove the `hatch` of one part, or give it another angle or pitch. Keep it when the two parts are one item. |
 
 ## Diagram faults
 

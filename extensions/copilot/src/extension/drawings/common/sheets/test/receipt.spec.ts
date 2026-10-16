@@ -75,6 +75,25 @@ describe('drawings-compliance.md receipt', () => {
 		`);
 	});
 
+	it('a Figure-level Note passes its row and shows in the detail', () => {
+		const sheets = sheetsOf(layoutDrawingSheets('US', 'A4', [figure(1, 120, 90)]));
+		const receipt = writeDrawingsReceipt({
+			office: 'US',
+			pageSize: 'A4',
+			sheets,
+			figureRules: { 'hatch-same-as-neighbour': '37 CFR 1.84(h)(3)' },
+			figureFindings: [{ severity: 'Note', rule: 'hatch-same-as-neighbour', message: 'Parts "b" and "c" touch and have the same hatch (45°, 2 mm); they read as one body.', file: 'FIG-1.svg', citation: '37 CFR 1.84(h)(3)' }],
+			reviewRounds: [],
+			date: '2026-10-16',
+		});
+		expect(receipt.checks.find(row => row.id === 'hatch-same-as-neighbour')).toEqual({
+			id: 'hatch-same-as-neighbour',
+			citation: '37 CFR 1.84(h)(3)',
+			result: 'pass',
+			detail: 'Note: FIG-1.svg: Parts "b" and "c" touch and have the same hatch (45°, 2 mm); they read as one body.',
+		});
+	});
+
 	it('never writes the word "compliant"', () => {
 		const sheets = sheetsOf(layoutDrawingSheets('PCT', 'A4', [figure(1, 80, 60)]));
 		const receipt = writeDrawingsReceipt({ office: 'PCT', pageSize: 'A4', sheets, reviewRounds: [], date: '2026-10-12' });

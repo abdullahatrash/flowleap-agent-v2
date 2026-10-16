@@ -228,11 +228,11 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
         "fail": 0,
         "file": "drafting/widget/drawings/drawings-compliance.md",
         "notChecked": 1,
-        "pass": 24,
+        "pass": 25,
       },
       "sheets": 1,
       "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/widget/drawings/sheet-1.svg, drafting/widget/drawings/drawings.pdf, and the receipt drafting/widget/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/widget/drawings/review/.
-Receipt: 24 pass, 0 fail, 1 not checked.
+Receipt: 25 pass, 0 fail, 1 not checked.
 No code check fails.
 The Filing Manifest is written by export_draft_docx; it will count the 1 sheet(s).
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",

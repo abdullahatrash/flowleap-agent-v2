@@ -76,6 +76,42 @@ export function pointSegmentDistance(point: Vec2, segment: Segment): number {
 	return Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dy));
 }
 
+/** The shortest distance between two segments; 0 when they cross or touch. */
+export function segmentDistance(a: Segment, b: Segment): number {
+	if (segmentsIntersect(a, b)) {
+		return 0;
+	}
+	return Math.min(pointSegmentDistance(a[0], b), pointSegmentDistance(a[1], b), pointSegmentDistance(b[0], a), pointSegmentDistance(b[1], a));
+}
+
+/** The bounding box of segments; `undefined` when there are none. */
+export function segmentBounds(segments: readonly Segment[]): Rect | undefined {
+	if (segments.length === 0) {
+		return undefined;
+	}
+	const points = segments.flat();
+	const xs = points.map(point => point[0]);
+	const ys = points.map(point => point[1]);
+	const x = Math.min(...xs);
+	const y = Math.min(...ys);
+	return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+}
+
+/**
+ * True when two sets of segments come within `distance` of each other (shared end points count).
+ * A bounding-box test runs first, so far-apart sets cost little.
+ */
+export function segmentSetsNear(a: readonly Segment[], b: readonly Segment[], distance: number): boolean {
+	const boundsA = segmentBounds(a);
+	const boundsB = segmentBounds(b);
+	if (!boundsA || !boundsB || !rectsOverlap(inflate(boundsA, distance + 1e-6), boundsB)) {
+		return false;
+	}
+	const reach = inflate(boundsB, distance + 1e-6);
+	const near = a.filter(segment => segmentHitsRect(segment, reach));
+	return near.some(first => b.some(second => segmentDistance(first, second) <= distance + 1e-9));
+}
+
 /** The distance from a point to the nearest point of a rectangle (0 inside). */
 export function pointRectDistance(point: Vec2, rect: Rect): number {
 	const dx = Math.max(rect.x - point[0], 0, point[0] - (rect.x + rect.width));

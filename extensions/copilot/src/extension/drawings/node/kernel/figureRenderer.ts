@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../../common/scene/drawingFaults';
-import type { DrawingScene, SectionPlane, Vec2, Vec3 } from '../../common/scene/drawingScene';
+import type { DrawingScene, HatchOverride, SectionPlane, Vec2 } from '../../common/scene/drawingScene';
 import { layoutFigure, ProjectedPart, ProjectedPort, writeFigureSvg } from '../../common/lineArt/lineArt';
 import { flattenSvgPath, pointSegmentDistance, Segment, toSegments } from '../../common/lineArt/planar';
-import { CameraBasis, cameraBasis, dot, normalize, projectPoint, resolvePort } from '../../common/scene/sceneGeometry';
+import { CameraBasis, cameraBasis, dot, isSectioned, projectPoint, resolvePort, sectionNormal } from '../../common/scene/sceneGeometry';
 import { SceneValidationOptions, validateScene } from '../../common/scene/sceneValidator';
 import { KernelDrawing, KernelObject, KernelShape, loadDrawingKernel, point3, ReplicadApi } from './drawingKernel';
 import { buildPart } from './sceneSolids';
@@ -41,12 +41,6 @@ function drawingLines(drawing: KernelDrawing): Vec2[][] {
 function project(r: ReplicadApi, shape: KernelShape, camera: CameraBasis): { visible: Vec2[][]; hidden: Vec2[][] } {
 	const projection = r.drawProjection(shape, new r.ProjectionCamera([0, 0, 0], point3(camera.direction), point3(camera.xAxis)));
 	return { visible: drawingLines(projection.visible), hidden: drawingLines(projection.hidden) };
-}
-
-function sectionNormal(section: SectionPlane): Vec3 {
-	const named: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
-	const raw = typeof section.normal === 'string' ? named[section.normal] : section.normal;
-	return normalize(raw) ?? [0, 0, 1];
 }
 
 /** The faces of a cut solid that lie on the section plane, as projected polylines. */
@@ -108,37 +102,48 @@ function attribute(lines: readonly Vec2[][], solo: readonly { id: string; segmen
 	return result;
 }
 
-/** Builds the solids, cuts the section, projects with hidden-line removal and returns the parts. */
+/**
+ * Builds the solids, cuts the section, projects with hidden-line removal and returns the parts.
+ * An unsectioned part that the plane does not remove stays whole: it has no cut face, and its
+ * outline covers the cut faces behind it.
+ */
 async function projectScene(scene: DrawingScene, camera: CameraBasis): Promise<ProjectedPart[]> {
 	const r = await loadDrawingKernel();
 	const owned: KernelObject[] = [];
 	try {
-		const solids: { id: string; shape: KernelShape }[] = [];
+		const solids: { id: string; shape: KernelShape; sectioned: boolean; hatch?: HatchOverride }[] = [];
 		for (const part of scene.parts) {
-			let shape: KernelShape | null = buildPart(r, part);
+			const whole = buildPart(r, part);
+			owned.push(whole);
+			let shape: KernelShape | null = whole;
+			const sectioned = scene.section !== undefined && isSectioned(part, scene.section);
 			if (scene.section) {
 				const plane = new r.Plane(point3(scene.section.origin), null, point3(sectionNormal(scene.section)));
 				owned.push(plane);
-				shape = shape.cutPlane(plane, 0, scene.section.keep ?? 'positive');
+				const cut = whole.cutPlane(plane, 0, scene.section.keep ?? 'positive');
+				if (cut) {
+					owned.push(cut);
+				}
+				// The plane removes a part wholly on the far side, sectioned or not.
+				shape = cut && !sectioned ? whole : cut;
 			}
 			if (shape) {
-				owned.push(shape);
-				solids.push({ id: part.id, shape });
+				solids.push({ id: part.id, shape, sectioned, hatch: part.hatch });
 			}
 		}
-		const solo = solids.map(({ id, shape }) => {
+		const solo = solids.map(({ id, shape, sectioned, hatch }) => {
 			const own = project(r, shape, camera);
-			return { id, own, cut: scene.section ? cutFaces(shape, scene.section, camera) : [], segments: toSegments([...own.visible, ...own.hidden]) };
+			return { id, own, hatch, cut: scene.section && sectioned ? cutFaces(shape, scene.section, camera) : [], segments: toSegments([...own.visible, ...own.hidden]) };
 		});
 		if (solids.length === 1) {
-			return solo.map(part => ({ id: part.id, visible: part.own.visible, hidden: part.own.hidden, cutFaces: part.cut }));
+			return solo.map(part => ({ id: part.id, visible: part.own.visible, hidden: part.own.hidden, cutFaces: part.cut, hatch: part.hatch }));
 		}
 		const compound = r.makeCompound(solids.map(solid => solid.shape.clone()));
 		owned.push(compound);
 		const whole = project(r, compound, camera);
 		const visible = attribute(whole.visible, solo);
 		const hidden = attribute(whole.hidden, solo);
-		return solo.map(part => ({ id: part.id, visible: visible.get(part.id) ?? [], hidden: hidden.get(part.id) ?? [], cutFaces: part.cut }));
+		return solo.map(part => ({ id: part.id, visible: visible.get(part.id) ?? [], hidden: hidden.get(part.id) ?? [], cutFaces: part.cut, hatch: part.hatch }));
 	} finally {
 		for (const item of owned) {
 			try {

@@ -5,7 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../drawingFaults';
-import type { DrawingScene } from '../drawingScene';
+import type { DrawingScene, ScenePart, SectionPlane } from '../drawingScene';
+import { isSectioned } from '../sceneGeometry';
 import { validateScene } from '../sceneValidator';
 
 function rules(findings: readonly DrawingFinding[]): string[] {
@@ -112,5 +113,41 @@ describe('Patent Drawings mechanical fault list', () => {
 			'scene-schema: parts[1].shape.kind: unknown kind "widget" (primitives: box, cylinder, extrudedPolygon, revolve, tube; library: fastener, spring, gear, bearing, shaft, pipe, motor; code)',
 			'scene-schema: numerals[0].numeral: must be a reference numeral such as "10" or "12a"',
 		]);
+	});
+
+	it('scene validator: sectioned and hatch take only the allowed values', () => {
+		const part = (extra: object) => ({ id: 'p', shape: { kind: 'box', size: [1, 1, 1] }, ...extra });
+		const result = validateScene({ figure: 'FIG-1', camera: 'front', parts: [part({ sectioned: 'no' }), { ...part({ hatch: { angle: 30, pitch: 5 } }), id: 'q' }, { ...part({ hatch: 'dense' }), id: 'r' }, { ...part({ sectioned: false, hatch: { angle: 135, pitch: 1.5 } }), id: 's' }], numerals: [] });
+		expect(result.findings.map(finding => `${finding.rule}: ${finding.message}`)).toEqual([
+			'scene-schema: parts[0].sectioned: must be true or false',
+			'scene-schema: parts[1].hatch.angle: must be 45 or 135 (degrees)',
+			'scene-schema: parts[1].hatch.pitch: must be a number from 1.5 to 3 (sheet mm)',
+			'scene-schema: parts[2].hatch: must be { angle?, pitch? }',
+		]);
+	});
+
+	it('shafts, fasteners and springs stay unsectioned only when the plane runs along their axis', () => {
+		const plane: SectionPlane = { origin: [0, 0, 0], normal: 'y' };
+		const alongX = { rotate: [0, 90, 0] as const };
+		const parts: Record<string, ScenePart> = {
+			shaftAlong: { id: 'a', shape: { kind: 'shaft', steps: [{ diameter: 8, length: 40 }] }, placement: alongX },
+			shaftAcross: { id: 'b', shape: { kind: 'shaft', steps: [{ diameter: 8, length: 40 }] }, placement: { rotate: [90, 0, 0] } },
+			shaftOffPlane: { id: 'c', shape: { kind: 'shaft', steps: [{ diameter: 8, length: 40 }] }, placement: { ...alongX, translate: [0, 10, 0] } },
+			fastenerAlong: { id: 'd', shape: { kind: 'fastener', diameter: 6, length: 20 } },
+			springAlong: { id: 'e', shape: { kind: 'spring', coilDiameter: 10, wireDiameter: 1.5, pitch: 3, length: 12 }, placement: alongX },
+			shaftForced: { id: 'f', shape: { kind: 'shaft', steps: [{ diameter: 8, length: 40 }] }, placement: alongX, sectioned: true },
+			boxDefault: { id: 'g', shape: { kind: 'box', size: [10, 10, 10] } },
+			boxOptOut: { id: 'h', shape: { kind: 'box', size: [10, 10, 10] }, sectioned: false },
+		};
+		expect(Object.fromEntries(Object.entries(parts).map(([name, part]) => [name, isSectioned(part, plane)]))).toEqual({
+			shaftAlong: false,
+			shaftAcross: true,
+			shaftOffPlane: true,
+			fastenerAlong: false,
+			springAlong: false,
+			shaftForced: true,
+			boxDefault: true,
+			boxOptOut: false,
+		});
 	});
 });
