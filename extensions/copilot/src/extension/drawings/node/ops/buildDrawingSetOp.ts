@@ -5,6 +5,7 @@
 
 import { readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { checkClaimedFeatureCoverage, checkFigureProposals, checkFiguresSettings } from '../../../tools/common/drafting/figureValidators';
+import { officeDrawingPageSize } from '../../../tools/common/drafting/filingDocuments';
 import { filingManifest, renderFilingManifest } from '../../../tools/common/drafting/filingManifest';
 import { DraftFinding, findingLine } from '../../../tools/common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile } from '../../../tools/common/drafting/findingsFile';
@@ -17,7 +18,7 @@ import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../com
 import { validateScene } from '../../common/scene/sceneValidator';
 import { CheckResult, FigureFinding, FigureSetFacts, runSheetChecks, SHEET_CHECKS, writeDrawingsReceipt } from '../../common/sheets/receipt';
 import { DrawingPageSize, FigureInput, layoutDrawingSheets } from '../../common/sheets/sheetLayout';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, FigureId, figureListText, figureOfSvgFile, figureSetStatus, parseReviewRounds, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, FIGURE_LIST_RULES, FigureId, figureListText, figureOfSvgFile, figureSetStatus, parseReviewRounds, partsNotDrawn, partsNotDrawnFindings, partsNotDrawnLine, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
 import { MatterFiles, readMatterOffice } from './matterFiles';
 
 /** The result of a build: the written Drawing Set, or the refusal reason (nothing was written). */
@@ -91,14 +92,16 @@ export interface BuildDrawingSetOptions {
  * It refuses, and writes nothing, when there is no Figure, when a Figure a heading of `figures.md`
  * names is not drawn (`figures-missing`; a range heading `FIGS. 7 to 10` names each member) unless
  * `options.partial` is set, on a `(proposed)` part in `figures.md`,
- * on an unwaived Error of the figure-list checks (page size for the office, claimed-feature
- * coverage) or of the Figure checks re-run on the written files, on a layout refusal and on a
+ * on an unwaived Error of the figure-list checks (`page-size-mismatch` against the office's export
+ * page, claimed-feature coverage) or of the Figure checks re-run on the written files, on a layout refusal and on a
  * failing sheet check. Waivers are `  - Waived: <reason>` lines in `findings.md`. Otherwise it
  * writes `drawings/sheet-N.svg` (older sheets removed), `drawings/review/sheet-N.png`,
  * `drawings/drawings.pdf` and the receipt `drawings/drawings-compliance.md`, and rewrites
  * `filing-manifest.md` with the measured sheet count when the export already wrote it. A partial
  * build lays the FIG labels out by the figure-list count, starts the receipt with
- * `INCOMPLETE SET: <Figures> not drawn` and never rewrites the manifest. No model call.
+ * `INCOMPLETE SET: <Figures> not drawn` and never rewrites the manifest. The receipt row
+ * `figure-parts-not-drawn` lists, as a Note, the numerals a heading of `figures.md` lists but its
+ * drawn Figures do not carry; it never blocks the build. No model call.
  */
 export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawingSetOptions = {}): Promise<BuildDrawingSetResult> {
 	const refuse = (reason: string): BuildDrawingSetResult => ({ ok: false, reason });
@@ -149,12 +152,14 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		inputs.push({ number: figure.number, partial: figure.partial, svg });
 		found.push(...await figureFindings(files, figure, svg, allowedNumerals));
 	}
+	const notDrawn = partsNotDrawn(figures, figureFiles.map((figure, index) => ({ figure, svg: inputs[index].svg })));
+	found.push(...partsNotDrawnFindings(notDrawn));
 	const figureFindingsWaived = withFigureWaivers(found, previous);
 	const openFigureErrors = blockingFindings(figureFindingsWaived);
 	if (openFigureErrors.length) {
 		return refuse(`${openFigureErrors.length} Error(s) of the Figures are open. Fix each in the Figure source and render again, or the attorney waives it: copy the item under "## Errors" in ${path(DRAFTING_FILE_NAMES.findings)} and add a line \`  - Waived: <reason>\` under it.\n${openFigureErrors.map(findingLine).join('\n')}`);
 	}
-	const { pageSize } = readFiguresSettings(figures);
+	const { pageSize } = readFiguresSettings(figures, officeDrawingPageSize(office));
 	const layout = layoutDrawingSheets(office, pageSize, inputs, { figureCount: figureSet.expected });
 	if (!layout.ok) {
 		return refuse(layout.reason);
@@ -183,7 +188,7 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		office,
 		pageSize,
 		sheets,
-		figureRules: DRAWING_RULES,
+		figureRules: { ...DRAWING_RULES, ...FIGURE_LIST_RULES },
 		figureFindings: figureFindingsWaived,
 		reviewRounds: reviewRecords(rounds, figureFiles.map(figure => figure.key)),
 		pdf: inspectPdf(pdfBytes),
@@ -212,6 +217,7 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		`Built ${status.missing.length ? 'a partial set for review' : 'the Drawing Set'} of ${figureFiles.length} Figure(s) on ${sheets.length} ${pageSize} sheet(s) for ${office}: ${sheets.map((_, index) => `${drawings}/sheet-${index + 1}.svg`).join(', ')}, ${drawings}/drawings.pdf, and the receipt ${receiptPath}. Review renders of the sheets are in ${drawings}/review/.`,
 		`Receipt: ${count('pass')} pass, ${count('fail')} fail, ${count('not-checked')} not checked.`,
 		failing.length ? `Failing checks:\n${failing.map(checkLine).join('\n')}` : 'No code check fails.',
+		...(notDrawn.length ? [`Parts listed but not drawn (Note, \`figure-parts-not-drawn\`):\n${notDrawn.map(item => `- ${partsNotDrawnLine(item)}`).join('\n')}`] : []),
 		manifestLine,
 		'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.',
 	].join('\n');

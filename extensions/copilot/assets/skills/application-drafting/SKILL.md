@@ -50,6 +50,9 @@ invention record of the **invention-disclosure** skill.
    as working (the inventor ran it) or prophetic.
 2. Write `figures.md`: a heading per figure the user supplied, then one list
    item per part, `- 12: housing`, one numeral per part across all figures.
+   Leave `pageSize` out of the frontmatter: the drawings then use the page of
+   the office's export (letter for US, A4 for EPO), one page size per
+   application.
 3. A feature the disclosure only implies goes to the attorney as a question,
    not into a row.
 

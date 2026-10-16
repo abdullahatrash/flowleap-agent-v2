@@ -26,7 +26,7 @@ exports[`buildDrawingSetOp > builds a partial set for review: keeps the FIG labe
     ],
     "text": [
       "INCOMPLETE SET: FIG. 1, 3–5 not drawn. Built for review only (partial); do not present it as the Drawing Set.",
-      "Built a partial set for review of 1 Figure(s) on 1 A4 sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.",
+      "Built a partial set for review of 1 Figure(s) on 1 letter sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.",
     ],
   },
   "stillToDraw": "Still to draw: FIG. 1, 3–5 (drafting/hinge/figures.md names 5 Figure(s)); build_drawing_set refuses until every one is drawn.",
@@ -44,19 +44,20 @@ exports[`buildDrawingSetOp > lays out the Figures, writes the sheets, the PDF an
     "drawings.pdf",
     "rounds.json",
     "sheet-1.svg",
+    "sheet-2.svg",
   ],
   "manifestSheets": [
-    "| Drawing sheets | 1 (measured: the sheet-N.svg files in drawings/) |",
-    "| Drawings | drawings/ (Drawing Sheets) | 1 |",
+    "| Drawing sheets | 2 (measured: the sheet-N.svg files in drawings/) |",
+    "| Drawings | drawings/ (Drawing Sheets) | 2 |",
   ],
   "pdfHeader": "%PDF-1.4",
   "receipt": "# Drawing Set check receipt
 
 - Office: US
-- Page size: A4
-- Drawing Sheets: 1
+- Page size: letter
+- Drawing Sheets: 2
 - Date: <date>
-- Results: 28 pass, 0 fail, 1 not checked
+- Results: 29 pass, 0 fail, 1 not checked
 
 This file lists each code check, the rule it applies and its result. It is not a verdict on the drawings. The rules a person must judge (sufficient views, every claimed feature shown, suitable legends) are not checked here; the attorney reviews them.
 
@@ -65,18 +66,18 @@ This file lists each code check, the rule it applies and its result. It is not a
 | Check | Rule | Result | Detail |
 |---|---|---|---|
 | figures-missing | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every Figure the description names is in the Drawing Set) | pass | All 2 Figure(s) of the figure list are drawn. |
-| page-size | 37 CFR 1.84(f); OJ EPO 2025 A49 Art. 2(2); PCT Rule 11.5 (A4 for all, Letter for the USPTO only; one size per application) | pass | 1 sheet(s), all A4 210 x 297 mm, short side at the top. |
-| margins | 37 CFR 1.84(g), (t); OJ EPO 2025 A49 Art. 1(1), Art. 2(5); PCT Rule 11.6(c), 11.7 (top 25, left 25, right 15, bottom 10 mm; nothing in the margin) | pass | Every Figure, label and sheet number is inside the 170.00 x 262.00 mm sight. |
+| page-size | 37 CFR 1.84(f); OJ EPO 2025 A49 Art. 2(2); PCT Rule 11.5 (A4 for all, Letter for the USPTO only; one size per application) | pass | 2 sheet(s), all letter 215.9 x 279.4 mm, short side at the top. |
+| margins | 37 CFR 1.84(g), (t); OJ EPO 2025 A49 Art. 1(1), Art. 2(5); PCT Rule 11.6(c), 11.7 (top 25, left 25, right 15, bottom 10 mm; nothing in the margin) | pass | Every Figure, label and sheet number is inside the 175.90 x 244.40 mm sight. |
 | no-frame | 37 CFR 1.84(g); OJ EPO 2025 A49 Art. 1(1); PCT Rule 11.6(c) (no frame around the sight) | pass | No frame and no drawn element outside the Figures. |
 | glyph-height | 37 CFR 1.84(p)(3); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h) (0.32 cm minimum at sheet scale) | pass | Smallest glyph at sheet scale: 3.22 mm (minimum 3.2 mm). |
 | label-larger-than-numerals | 37 CFR 1.84(t), (u)(2); GL A-IX 4.2, 5.2 (FIG labels and sheet numbers larger than the reference signs) | pass | Labels and sheet numbers at least 6.00 mm; numerals up to 4.50 mm. |
 | single-figure-no-label | 37 CFR 1.84(u)(1); GL A-IX 5.2; PCT IP 5.141 (a single Figure is not numbered and carries no "FIG.") | not-checked | 2 Figures; the rule applies to one. |
 | figure-labels | 37 CFR 1.84(u)(1); GL A-IX 5.2; PCT Rule 11.13(k), IP 5.141 ("FIG." / "Fig.", consecutive Arabic numerals, partial views as number plus capital letter) | pass | FIG. 1, FIG. 2. |
-| sheet-numbering | 37 CFR 1.84(t); PCT AI Section 207(b)(iii), Rule 11.7 ("n/N"); OJ EPO 2025 A49 Art. 2(5), GL A-IX 4.2 (consecutive integer); centred at the top of the sight | pass | "n/N" 1 to 1, centred at the top of the sight. |
-| orientation | 37 CFR 1.84(i) (top of a sideways sheet on the right); OJ EPO 2025 A49 Art. 1(2)(h); PCT Rule 11.13(j) (top of the Figures on the left) | pass | 1 upright sheet(s), 0 sideways with the Figure top on the right. |
+| sheet-numbering | 37 CFR 1.84(t); PCT AI Section 207(b)(iii), Rule 11.7 ("n/N"); OJ EPO 2025 A49 Art. 2(5), GL A-IX 4.2 (consecutive integer); centred at the top of the sight | pass | "n/N" 1 to 2, centred at the top of the sight. |
+| orientation | 37 CFR 1.84(i) (top of a sideways sheet on the right); OJ EPO 2025 A49 Art. 1(2)(h); PCT Rule 11.13(j) (top of the Figures on the left) | pass | 2 upright sheet(s), 0 sideways with the Figure top on the right. |
 | text-keywords | 37 CFR 1.84(o); MPEP 507(C); OJ EPO 2025 A49 Art. 1(2)(j); PCT Rule 11.11 (a few short keywords; flowcharts and block diagrams excepted) | pass | No Figure has more than 3 words of legend text (flowcharts and block diagrams excepted). |
 | no-scale-text | 37 CFR 1.84(k); OJ EPO 2025 A49 Art. 1(2)(c); PCT Rule 11.13(d) (no "actual size" or "scale 1:2") | pass | No scale or "actual size" text. |
-| pdf-format | USPTO Patent Center PDF Guidelines; PCT Annex F 3.1.2 (PDF 1.4 to 1.6, fonts embedded, unencrypted, one page per sheet, A4 or Letter) | pass | PDF 1.4, 1 page(s), fonts embedded, not encrypted. |
+| pdf-format | USPTO Patent Center PDF Guidelines; PCT Annex F 3.1.2 (PDF 1.4 to 1.6, fonts embedded, unencrypted, one page per sheet, A4 or Letter) | pass | PDF 1.4, 2 page(s), fonts embedded, not encrypted. |
 | part-without-numeral | CONTEXT.md Figure ("every part drawn has one"); 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) | pass | No finding. |
 | numeral-without-port | 37 CFR 1.84(q) ("extend to the feature indicated"); GL A-IX 7.5.1 | pass | No finding. |
 | numeral-not-allowed | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l) | pass | No finding. |
@@ -93,6 +94,7 @@ This file lists each code check, the rule it applies and its result. It is not a
 | lead-ends-on-nothing | 37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | lead-along-edge | 37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | lead-crosses-outline | 37 CFR 1.84(q) (lead lines "as short as possible"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
+| figure-parts-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (reference signs not in the description are not in the drawings, and the reverse) | pass | No finding. |
 
 ## Review rounds
 
@@ -103,18 +105,19 @@ This file lists each code check, the rule it applies and its result. It is not a
 ",
   "result": {
     "manifestUpdated": true,
-    "pageSize": "A4",
-    "sheets": 1,
-    "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.
-Receipt: 28 pass, 0 fail, 1 not checked.
+    "pageSize": "letter",
+    "sheets": 2,
+    "text": "Built the Drawing Set of 2 Figure(s) on 2 letter sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/sheet-2.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.
+Receipt: 29 pass, 0 fail, 1 not checked.
 No code check fails.
-Updated drafting/hinge/filing-manifest.md: 1 drawing sheet(s), measured.
+Updated drafting/hinge/filing-manifest.md: 2 drawing sheet(s), measured.
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
   },
   "review": [
     "FIG-1.round-1.png",
     "FIG-2.round-1.png",
     "sheet-1.png",
+    "sheet-2.png",
   ],
 }
 `;
@@ -141,7 +144,7 @@ exports[`buildDrawingSetOp > refuses with no Figure, on a proposed part, on a fi
   "epoLetter": {
     "ok": false,
     "reason": "1 Error(s) of the figure list are open; fix each in drafting/hinge/figures.md, or the attorney waives it in drafting/hinge/findings.md:
-- \`figures-settings\` (figures.md): figures.md sets \`pageSize: letter\`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set \`pageSize: A4\`.",
+- \`page-size-mismatch\` (figures.md): figures.md sets \`pageSize: letter\`, but the EPO export puts the text on A4 (Rule 49 EPC page setup). One page size per application (OJ EPO 2025 A49 Art. 1(1)(a); PCT Rule 11.5). The EPO accepts A4 sheets only. Set \`pageSize: A4\`, or remove the line to use the office default.",
   },
   "noFigure": {
     "ok": false,
@@ -152,6 +155,21 @@ exports[`buildDrawingSetOp > refuses with no Figure, on a proposed part, on a fi
     "reason": "drafting/hinge/figures.md has 1 proposed part(s); the attorney confirms each by removing "(proposed)", or deletes the line:
 - \`figure-proposal\` (figures.md, line 14): Part 8 ("spring") is a proposal from sketches/sketch-1.png: the disclosure does not state it. The attorney confirms it by removing "(proposed)", or deletes the line.",
   },
+}
+`;
+
+exports[`figure-parts-not-drawn > names the numerals figures.md lists for a Figure but the Figure does not draw, in the render text and as a receipt Note (live FIG. 2) 1`] = `
+{
+  "buildLines": [
+    "Parts listed but not drawn (Note, \`figure-parts-not-drawn\`):",
+    "- FIG. 2 lists but does not draw: 96, 98, 104, 106, 166, 176, 170, 172, 182",
+  ],
+  "pageSize": "letter",
+  "receiptRow": "| figure-parts-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (reference signs not in the description are not in the drawings, and the reverse) | pass | Note: FIG. 2 lists but does not draw: 96, 98, 104, 106, 166, 176, 170, 172, 182 |",
+  "renderLines": [
+    "FIG. 2 lists but does not draw: 96, 98, 104, 106, 166, 176, 170, 172, 182",
+    "Draw each part drafting/hinge/figures.md lists for the Figure, or tell the attorney which parts the Figure leaves out. The receipt records the list as a Note; it does not block the build.",
+  ],
 }
 `;
 

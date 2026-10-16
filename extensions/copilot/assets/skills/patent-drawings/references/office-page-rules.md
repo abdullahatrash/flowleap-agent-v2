@@ -13,7 +13,7 @@ Instructions Section 207 and Annex F (PCT).
 
 | Item | Rule | Value |
 |---|---|---|
-| Page size | 37 CFR 1.84(f); OJ EPO 2025 A49 Art. 2(2); PCT Rule 11.5 | A4 for all offices; Letter for the USPTO only; one size per application. `figures.md` sets `pageSize`. |
+| Page size | 37 CFR 1.84(f); OJ EPO 2025 A49 Art. 2(2); PCT Rule 11.5 | A4 for all offices; Letter for the USPTO only; one size per application. `figures.md` sets `pageSize`. Without `pageSize`, the sheets use the page of the office's text export: letter for US, A4 for EPO and PCT. |
 | Margins | 37 CFR 1.84(g); A49 Art. 1(1); PCT Rule 11.6(c) | top 25, left 25, right 15, bottom 10 mm minimum. A4 sight: 170 x 262 mm. |
 | Frame | 37 CFR 1.84(g); A49 Art. 1(1); PCT Rule 11.6(c) | no frame around the sight |
 | Sheet number | 37 CFR 1.84(t); PCT AI Section 207(b)(iii), Rule 11.7; A49 Art. 2(5), GL A-IX 4.2 | US and PCT: `n/N`; EPO: a consecutive integer; centred at the top of the sight, not in the margin; larger than the numerals |

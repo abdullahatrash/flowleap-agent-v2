@@ -189,6 +189,15 @@ export function figureHatchStyles(svg: string): Record<string, { angle: number; 
 	return Object.fromEntries(hatchedParts(readFigureSvg(svg).paths).map(item => [item.part, item.style]));
 }
 
+/**
+ * The reference numerals a Figure SVG carries, in document order, each once: the `data-numeral`
+ * of a numeral text, else its content.
+ */
+export function figureSvgNumerals(svg: string): string[] {
+	const numerals = readFigureSvg(svg).texts.filter(text => text.className === 'numeral' || NUMERAL_PATTERN.test(text.content));
+	return [...new Set(numerals.map(text => text.numeral ?? text.content))];
+}
+
 /** Options of the SVG fault list runner. */
 export interface FigureSvgCheckOptions {
 	/** The file name the Findings name, e.g. `FIG-1.svg`. */
