@@ -70,7 +70,7 @@ export type DiagramSource =
 	| { readonly figure: string; readonly mode: 'block'; readonly input: BlockDiagramInput };
 
 /** The 3D-only SVG checks: a diagram has keywords per office, no parts, and its own lead rules. */
-const NOT_FOR_DIAGRAMS: ReadonlySet<DrawingRule> = new Set<DrawingRule>(['text-beyond-keywords', 'lead-line-off-part', 'lead-ends-on-nothing', 'lead-along-edge']);
+const NOT_FOR_DIAGRAMS: ReadonlySet<DrawingRule> = new Set<DrawingRule>(['text-beyond-keywords', 'lead-line-off-part', 'lead-ends-on-nothing', 'lead-along-edge', 'lead-crosses-outline']);
 
 /**
  * The SVG checks of a 2D Figure. The diagram writer checks its own labels per office (a flowchart

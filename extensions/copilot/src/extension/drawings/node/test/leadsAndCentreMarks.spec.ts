@@ -6,7 +6,8 @@
 import { readFileSync } from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
-import { lineAngle, Segment } from '../../common/lineArt/planar';
+import { leadCrossesEdges } from '../../common/lineArt/numeralPlacer';
+import { flattenSvgPath, lineAngle, Segment, toSegments } from '../../common/lineArt/planar';
 import { checkFigureSvgFaults } from '../../common/scene/drawingFaults';
 import type { DrawingScene, NumeralPort } from '../../common/scene/drawingScene';
 import { renderFigure } from '../kernel/figureRenderer';
@@ -70,5 +71,38 @@ describe('Lead ends and centre marks on the live FIG. 4 (#693, #694)', () => {
 			lead154EndsOnArmEnd: armEnds(svg, '154').some(end => Math.hypot(end[0] - lead154[1][0], end[1] - lead154[1][1]) < 0.02),
 			lead194At30To60Degrees: angle >= 30 && angle <= 60,
 		}).toEqual({ findings: [], centreMarks: 1, lead154EndsOnArmEnd: true, lead194At30To60Degrees: true });
+	}, KERNEL_TIMEOUT);
+});
+
+/** The visible edges of a part in a written Figure SVG. */
+function edgesOf(svg: string, part: string): Segment[] {
+	return [...svg.matchAll(new RegExp(`class="edge" data-part="${part}"[^>]* d="(?<d>[^"]+)"`, 'g'))].flatMap(match => toSegments(flattenSvgPath(match.groups!.d)));
+}
+
+/** The numeral texts and lead lines of a written Figure SVG, by numeral. */
+function numeralLines(svg: string): Record<string, string> {
+	return Object.fromEntries([...svg.matchAll(/<(?:text class="numeral"|line class="lead") data-numeral="(?<numeral>\d+)"[^>]*>/g)].map(match => [`${match[0].startsWith('<text') ? 'text' : 'lead'} ${match.groups!.numeral}`, match[0]]));
+}
+
+describe('Interior numerals on the live FIG. 4 cam (#701)', () => {
+
+	it('the old placement of 154 on the cam axis gives the lead-crosses-outline Note', () => {
+		expect(checkFigureSvgFaults(fixture('fig4-cam-axis-before.svg'), { file: 'FIG-4.svg' }).map(finding => `${finding.severity} ${finding.rule}: ${finding.numeral}`)).toEqual(['Note lead-crosses-outline: 154']);
+	});
+
+	it('154 sits inside the cam next to its centre mark; the other four numerals do not move', async () => {
+		const result = await renderFigure(JSON.parse(fixture('fig4-cam-axis.scene.json')));
+		const svg = result.svg ?? '';
+		const lead = leadOf(svg, '154');
+		const before = numeralLines(fixture('fig4-cam-axis-before.svg'));
+		const after = numeralLines(svg);
+		const others = Object.keys(before).filter(key => !key.endsWith(' 154'));
+		expect({
+			findings: result.findings.map(finding => finding.rule),
+			leadUnder8mm: Math.hypot(lead[1][0] - lead[0][0], lead[1][1] - lead[0][1]) <= 8,
+			leadCrossesAnEdge: leadCrossesEdges(lead, edgesOf(svg, 'cam')),
+			leadEndsOnArmEnd: armEnds(svg, '154').some(end => Math.hypot(end[0] - lead[1][0], end[1] - lead[1][1]) < 0.02),
+			othersMoved: others.filter(key => before[key] !== after[key]),
+		}).toEqual({ findings: [], leadUnder8mm: true, leadCrossesAnEdge: false, leadEndsOnArmEnd: true, othersMoved: [] });
 	}, KERNEL_TIMEOUT);
 });

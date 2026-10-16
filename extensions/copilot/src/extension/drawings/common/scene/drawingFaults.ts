@@ -6,7 +6,7 @@
 import type { DraftFinding } from '../../../tools/common/drafting/finding';
 import type { DrawingScene, Vec2 } from './drawingScene';
 import { HATCH_NEIGHBOUR_DISTANCE } from '../lineArt/lineArt';
-import { DIGIT_HEIGHT_RATIO, LEAD_END_TOLERANCE, leadRunsAlong, numeralBox } from '../lineArt/numeralPlacer';
+import { DIGIT_HEIGHT_RATIO, insidePosition, LEAD_END_TOLERANCE, leadCrossesEdges, leadRunsAlong, numeralBox } from '../lineArt/numeralPlacer';
 import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, pointSegmentDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentSetsNear, segmentsIntersect, toSegments } from '../lineArt/planar';
 import { cameraBasis, faceNames, resolvePort } from './sceneGeometry';
 
@@ -38,6 +38,7 @@ export const DRAWING_RULES = {
 	'hatch-same-as-neighbour': '37 CFR 1.84(h)(3) ("regularly spaced oblique parallel lines"; juxtaposed parts hatched differently); OJ EPO 2025 A49 Art. 1(2)(b); PCT Rule 11.13(b)',
 	'lead-ends-on-nothing': '37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2',
 	'lead-along-edge': '37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2',
+	'lead-crosses-outline': '37 CFR 1.84(q) (lead lines "as short as possible"); OJ EPO 2025 A49 Art. 2',
 } as const;
 
 export type DrawingRule = keyof typeof DRAWING_RULES;
@@ -199,7 +200,8 @@ export interface FigureSvgCheckOptions {
 /**
  * The SVG half of the mechanical fault list, run on the written file before any model sees a
  * render: crossing lead lines, a lead line that ends off its part, on no visible edge or centre mark,
- * runs along a visible edge, or starts far from its numeral,
+ * runs along a visible edge, or starts far from its numeral, a lead that crosses its own part's
+ * outline while the numeral would fit inside it (a Note, found with the placer's own `insidePosition`),
  * a numeral without a lead line that is not underlined, a glyph under 3.2 mm, text beyond
  * keywords, and a numeral that overlaps another numeral or a line. It reads any SVG in the Figure
  * contract (paths, lines, texts with `class` and `data-*`), imports no kernel, and so also runs on
@@ -240,6 +242,7 @@ export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions
 	}
 	const visibleEdges = paths.filter(item => item.classes.includes('edge')).flatMap(item => toSegments(item.lines));
 	const endTargets = [...visibleEdges, ...paths.filter(item => item.classes.includes('mark')).flatMap(item => toSegments(item.lines))];
+	const lineSegments = paths.filter(path => !path.classes.includes('lead') && !path.classes.includes('underline')).flatMap(path => toSegments(path.lines));
 	for (const { path, segment } of leads) {
 		const offPart = path.part !== undefined && pointPolygonDistance(segment[1], convexHull(outlines.get(path.part) ?? [])) > LEAD_OFF_PART_TOLERANCE;
 		if (offPart) {
@@ -257,6 +260,23 @@ export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions
 		}
 	}
 
+	for (const { path, segment } of leads) {
+		const partEdges = path.part === undefined ? [] : paths.filter(item => item.classes.includes('edge') && item.part === path.part).flatMap(item => toSegments(item.lines));
+		if (!partEdges.length || !leadCrossesEdges(segment, partEdges)) {
+			continue;
+		}
+		const own = (item: { numeral?: string; part?: string }) => item.numeral === path.numeral && item.part === path.part;
+		const mark = paths.find(item => item.classes.includes('mark') && own(item))?.lines[0];
+		const anchor: Vec2 = mark && mark.length >= 2 ? [(mark[0][0] + mark[mark.length - 1][0]) / 2, (mark[0][1] + mark[mark.length - 1][1]) / 2] : segment[1];
+		const text = numerals.find(own);
+		const others = numerals.filter(item => item !== text).map(item => ({ box: boxes.get(item)!, lead: leads.find(lead => lead.path.numeral === (item.numeral ?? item.content) && lead.path.part === item.part)?.segment }));
+		const obstacles = { segments: lineSegments, visible: visibleEdges, numerals: others };
+		const request = { numeral: path.numeral ?? '', part: path.part!, anchor, surface: false, mark: mark !== undefined };
+		if (insidePosition(request, partEdges, obstacles, text?.fontSize)) {
+			findings.push(fault('lead-crosses-outline', `The lead line of numeral ${path.numeral} crosses the outline of part "${path.part}", but the numeral fits inside the outline next to its feature with a short lead.`, { numeral: path.numeral, part: path.part, file, severity: 'Note' }));
+		}
+	}
+
 	const underlined = new Set(paths.filter(path => path.classes.includes('underline')).map(path => path.numeral));
 	for (const text of numerals) {
 		const hasLead = leads.some(lead => lead.path.numeral === (text.numeral ?? text.content) && (text.part === undefined || lead.path.part === text.part));
@@ -265,7 +285,6 @@ export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions
 		}
 	}
 
-	const lineSegments = paths.filter(path => !path.classes.includes('lead') && !path.classes.includes('underline')).flatMap(path => toSegments(path.lines));
 	for (let i = 0; i < numerals.length; i++) {
 		const box = boxes.get(numerals[i])!;
 		for (let j = i + 1; j < numerals.length; j++) {
