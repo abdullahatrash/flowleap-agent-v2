@@ -148,6 +148,11 @@ A lead line always ends on a visible edge or on a centre mark:
 - An axis or a centre point: use the `axis` port or `mark: "centre"`. The lead
   ends on an arm of the centre mark.
 
+The numeral of a centre mark, or of a feature more than 8 mm inside the
+part's outline, goes inside the outline, 5 mm to 8 mm from the feature, with a
+short lead that crosses no edge. Only when no inside position is free does it go
+outside the drawing.
+
 ## Example: a whole scene
 
 ```json

@@ -199,16 +199,153 @@ function approachPreferred(lead: Segment, target: LeadTarget): boolean {
 	return !(target.edge && target.inside) || side(target.edge, lead[0]) * side(target.edge, target.inside) < 0;
 }
 
+/** Distances in millimetres from an interior anchor to the inside candidate positions (the numeral centre). */
+const INSIDE_GAPS = [5, 6.5, 8];
+/** Directions of the inside candidate positions around the anchor: every 45 degrees. */
+const INSIDE_DIRECTIONS = 8;
 /**
- * Places numerals on rings of candidate positions around the drawing. Deterministic: numerals are
- * taken in angular order around the drawing centre, candidates by distance to the anchor. A lead
- * line ends on a visible edge of its part or on a centre mark arm (see `leadTarget`), never on an
- * empty face. The first candidate is kept whose numeral clears the drawing, the centre marks and
- * the other numerals, whose lead line crosses no other lead line or numeral, runs along no visible
- * edge, and meets its target the preferred way (30 to 60 degrees to an edge seen edge-on or to a
- * centre mark arm; from outside a face seen flat-on, at 30 degrees or more to its edge). Without such a candidate, the first that only fails the preferred
- * approach is kept, then the first clear one, then the nearest; the mechanical fault list reports
- * what is left.
+ * An anchor whose lead end lies more than this distance inside its part's outline, in millimetres,
+ * is an interior anchor: its numeral goes inside the outline first (37 CFR 1.84(q), "as short as possible").
+ * A centre mark is always an interior anchor.
+ */
+export const INTERIOR_DEPTH = 8;
+
+/** The number of segments a ray from `point` crosses. `axis` 0 is x, 1 is y; `sign` is the ray direction. */
+function rayCrossings(point: Vec2, segments: readonly Segment[], axis: 0 | 1, sign: 1 | -1): number {
+	const other = axis === 0 ? 1 : 0;
+	let count = 0;
+	for (const [a, b] of segments) {
+		if ((a[other] > point[other]) === (b[other] > point[other])) {
+			continue;
+		}
+		const t = (point[other] - a[other]) / (b[other] - a[other]);
+		const crossing = a[axis] + t * (b[axis] - a[axis]);
+		if ((crossing - point[axis]) * sign > 0) {
+			count++;
+		}
+	}
+	return count;
+}
+
+/**
+ * True when `point` lies inside the outline that the part's visible edges close: each of the four
+ * axis rays from the point crosses the edges an odd number of times (even-odd rule). A hole is
+ * outside. An open edge inside the outline (a seam of a 3D view) makes the rays disagree, and the
+ * point then counts as outside, so the placer keeps the outside positions there.
+ */
+export function insideOutline(point: Vec2, segments: readonly Segment[]): boolean {
+	return rayCrossings(point, segments, 0, 1) % 2 === 1
+		&& rayCrossings(point, segments, 0, -1) % 2 === 1
+		&& rayCrossings(point, segments, 1, 1) % 2 === 1
+		&& rayCrossings(point, segments, 1, -1) % 2 === 1;
+}
+
+/** How far `point` lies inside the convex `hull`, in millimetres; 0 when it lies outside. */
+function hullDepth(point: Vec2, hull: readonly Vec2[]): number {
+	if (hull.length < 3 || pointPolygonDistance(point, hull) > 0) {
+		return 0;
+	}
+	return Math.min(...hull.map((corner, i): number => pointSegmentDistance(point, [corner, hull[(i + 1) % hull.length]])));
+}
+
+/** What a candidate numeral must keep clear of. */
+export interface PlacementObstacles {
+	/** Every drawn line a numeral must not touch: visible and hidden edges, hatch lines, centre marks. */
+	readonly segments: readonly Segment[];
+	/** The visible edges: a lead must not run along one. */
+	readonly visible: readonly Segment[];
+	/** The numerals already placed, with their lead lines. */
+	readonly numerals: readonly { readonly box: Rect; readonly lead?: Segment }[];
+}
+
+/** How well a candidate fits: 0 preferred approach, 1 no lead along an edge, 2 clear only, 3 blocked. */
+type Fit = 0 | 1 | 2 | 3;
+
+/** The candidate numeral centred on `point`, and how well it fits. */
+function evaluate(request: NumeralRequest, target: LeadTarget, point: Vec2, obstacles: PlacementObstacles, fontSize: number): { candidate: PlacedNumeral; fit: Fit } {
+	const x = point[0];
+	const y = point[1] + DIGIT_HEIGHT_RATIO * fontSize / 2;
+	const box = numeralBox(request.numeral, x, y, fontSize);
+	const own = target.arms ? armTarget(target, point) : target;
+	const lead: Segment = [leadStart(box, own.end), own.end];
+	const candidate: PlacedNumeral = { ...request, x, y, box, lead, centreMark: request.mark ? request.anchor : undefined };
+	const clear = inflate(box, CLEARANCE);
+	if (obstacles.numerals.some(other => rectsOverlap(clear, other.box) || (other.lead && segmentHitsRect(other.lead, clear)))) {
+		return { candidate, fit: 3 };
+	}
+	if (obstacles.segments.some(segment => segmentHitsRect(segment, clear))) {
+		return { candidate, fit: 3 };
+	}
+	if (obstacles.numerals.some(other => (other.lead && segmentsIntersect(lead, other.lead)) || segmentHitsRect(lead, inflate(other.box, 0.3)))) {
+		return { candidate, fit: 3 };
+	}
+	if (obstacles.visible.some(segment => leadRunsAlong(lead, segment))) {
+		return { candidate, fit: 2 };
+	}
+	return { candidate, fit: approachPreferred(lead, own) ? 0 : 1 };
+}
+
+/** The lead without its last `LEAD_END_TOLERANCE` millimetres, so the edge it ends on does not count as a crossing. */
+function leadBody(lead: Segment): Segment {
+	const [from, to] = lead;
+	const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+	const keep = Math.max(0, length - 2 * LEAD_END_TOLERANCE) / Math.max(length, 1e-9);
+	return [from, [from[0] + (to[0] - from[0]) * keep, from[1] + (to[1] - from[1]) * keep]];
+}
+
+/** True when the lead crosses one of `edges` before it reaches its end. */
+export function leadCrossesEdges(lead: Segment, edges: readonly Segment[]): boolean {
+	const body = leadBody(lead);
+	return edges.some(edge => segmentsIntersect(body, edge));
+}
+
+/**
+ * The inside position of an interior anchor (a centre mark, or a lead end more than
+ * `INTERIOR_DEPTH` inside the part's convex outline), or `undefined` when the anchor is not
+ * interior or no inside position fits. Candidates sit in eight directions around the anchor at
+ * 5, 6.5 and 8 mm, inside the outline (`insideOutline`), taken by shortest lead. A candidate fits when it
+ * keeps the clearance of the outside candidates, its lead runs along no visible edge and crosses
+ * no visible edge. The first with the preferred approach wins, else the first that fits. The placer
+ * and the `lead-crosses-outline` check both use it.
+ */
+export function insidePosition(request: NumeralRequest, partEdges: readonly Segment[], obstacles: PlacementObstacles, fontSize = NUMERAL_FONT_SIZE): PlacedNumeral | undefined {
+	const hull = convexHull(partEdges.flat());
+	const target = leadTarget(request, partEdges, hull);
+	const anchor = target.arms ? request.anchor : hullDepth(target.end, hull) > INTERIOR_DEPTH ? target.end : undefined;
+	if (!anchor) {
+		return undefined;
+	}
+	const evaluated: { candidate: PlacedNumeral; fit: Fit; length: number; index: number }[] = [];
+	for (const gap of INSIDE_GAPS) {
+		for (let k = 0; k < INSIDE_DIRECTIONS; k++) {
+			const angle = 2 * Math.PI * k / INSIDE_DIRECTIONS;
+			const point: Vec2 = [anchor[0] + gap * Math.cos(angle), anchor[1] + gap * Math.sin(angle)];
+			if (!insideOutline(point, partEdges)) {
+				continue;
+			}
+			const { candidate, fit } = evaluate(request, target, point, obstacles, fontSize);
+			const lead = candidate.lead!;
+			const crosses = leadCrossesEdges(lead, obstacles.visible);
+			evaluated.push({ candidate, fit: crosses ? 3 : fit, length: Math.hypot(lead[1][0] - lead[0][0], lead[1][1] - lead[0][1]), index: evaluated.length });
+		}
+	}
+	evaluated.sort((a, b) => a.length - b.length || a.index - b.index);
+	return (evaluated.find(item => item.fit === 0) ?? evaluated.find(item => item.fit === 1))?.candidate;
+}
+
+/**
+ * Places numerals. Deterministic: numerals are taken in angular order around the drawing centre.
+ * A lead line ends on a visible edge of its part or on a centre mark arm (see `leadTarget`), never
+ * on an empty face. An interior anchor (a centre mark, or a lead end deep inside its part) first
+ * tries the inside positions of `insidePosition`: the numeral sits next to the anchor with a short
+ * lead that crosses no edge (37 CFR 1.84(q)). Else the numeral goes on rings of candidate positions
+ * around the drawing, taken by distance to the anchor. The first candidate is kept whose numeral
+ * clears the drawing, the centre marks and the other numerals, whose lead line crosses no other
+ * lead line or numeral, runs along no visible edge, and meets its target the preferred way (30 to
+ * 60 degrees to an edge seen edge-on or to a centre mark arm; from outside a face seen flat-on, at
+ * 30 degrees or more to its edge). Without such a candidate, the first that only fails the
+ * preferred approach is kept, then the first clear one, then the nearest; the mechanical fault list
+ * reports what is left.
  */
 export function placeNumerals(requests: readonly NumeralRequest[], obstacles: readonly Segment[], drawing: Rect, edges: readonly PartEdge[] = [], fontSize = NUMERAL_FONT_SIZE): PlacedNumeral[] {
 	const placed: PlacedNumeral[] = [];
@@ -219,52 +356,32 @@ export function placeNumerals(requests: readonly NumeralRequest[], obstacles: re
 		placed.push({ numeral: request.numeral, part: request.part, surface: true, x, y, box: numeralBox(request.numeral, x, y, fontSize) });
 	}
 	const marks = requests.filter(item => item.mark && !item.surface).flatMap(item => centreMarkLines(item.anchor));
-	const blocking = [...obstacles, ...marks];
-	const visible = edges.map(edge => edge.segment);
+	const context: PlacementObstacles = { segments: [...obstacles, ...marks], visible: edges.map(edge => edge.segment), numerals: placed };
 	const centre: Vec2 = [drawing.x + drawing.width / 2, drawing.y + drawing.height / 2];
 	const angleOf = (point: Vec2) => Math.atan2(point[1] - centre[1], point[0] - centre[0]);
 	const ordered = requests.filter(item => !item.surface).sort((a, b) => angleOf(a.anchor) - angleOf(b.anchor) || a.numeral.localeCompare(b.numeral));
 	const candidates = ringCandidates(drawing);
 	for (const request of ordered) {
 		const partEdges = edges.filter(edge => edge.part === request.part).map(edge => edge.segment);
+		const inside = insidePosition(request, partEdges, context, fontSize);
+		if (inside) {
+			placed.push(inside);
+			continue;
+		}
 		const target = leadTarget(request, partEdges, convexHull(partEdges.flat()));
 		const near = target.arms ? request.anchor : target.end;
 		const byDistance = candidates
 			.map((point, index) => ({ point, index, distance: Math.hypot(point[0] - near[0], point[1] - near[1]) }))
 			.sort((a, b) => a.distance - b.distance || a.index - b.index);
-		let preferred: PlacedNumeral | undefined;
-		let notAlong: PlacedNumeral | undefined;
-		let clearOnly: PlacedNumeral | undefined;
-		let fallback: PlacedNumeral | undefined;
+		const best: (PlacedNumeral | undefined)[] = [undefined, undefined, undefined, undefined];
 		for (const { point } of byDistance) {
-			const x = point[0];
-			const y = point[1] + glyphOffset;
-			const box = numeralBox(request.numeral, x, y, fontSize);
-			const own = target.arms ? armTarget(target, point) : target;
-			const lead: Segment = [leadStart(box, own.end), own.end];
-			const candidate: PlacedNumeral = { ...request, x, y, box, lead, centreMark: request.mark ? request.anchor : undefined };
-			fallback ??= candidate;
-			const clear = inflate(box, CLEARANCE);
-			if (placed.some(other => rectsOverlap(clear, other.box) || (other.lead && segmentHitsRect(other.lead, clear)))) {
-				continue;
-			}
-			if (blocking.some(segment => segmentHitsRect(segment, clear))) {
-				continue;
-			}
-			if (placed.some(other => (other.lead && segmentsIntersect(lead, other.lead)) || segmentHitsRect(lead, inflate(other.box, 0.3)))) {
-				continue;
-			}
-			clearOnly ??= candidate;
-			if (visible.some(segment => leadRunsAlong(lead, segment))) {
-				continue;
-			}
-			notAlong ??= candidate;
-			if (approachPreferred(lead, own)) {
-				preferred = candidate;
+			const { candidate, fit } = evaluate(request, target, point, context, fontSize);
+			best[fit] ??= candidate;
+			if (fit === 0) {
 				break;
 			}
 		}
-		const result = preferred ?? notAlong ?? clearOnly ?? fallback;
+		const result = best.find(item => item !== undefined);
 		if (result) {
 			placed.push(result);
 		}

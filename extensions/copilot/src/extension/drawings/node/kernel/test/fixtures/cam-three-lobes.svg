@@ -11,11 +11,11 @@
 <line class="lead" data-numeral="194" data-part="camsurface" stroke-width="0.2" x1="96.73" y1="19.41" x2="112.15" y2="45.24"/>
 <line class="lead" data-numeral="196" data-part="cam" stroke-width="0.2" x1="21.55" y1="134.15" x2="32.51" y2="133.68"/>
 <path class="mark" data-numeral="154" data-part="cam" stroke-width="0.2" d="M57.56 87.71 L60.56 87.71 M59.06 86.21 L59.06 89.21"/>
-<line class="lead" data-numeral="154" data-part="cam" stroke-width="0.2" x1="21.06" y1="109.37" x2="57.56" y2="87.71"/>
+<line class="lead" data-numeral="154" data-part="cam" stroke-width="0.2" x1="56.09" y1="85.52" x2="57.56" y2="87.71"/>
 </g>
 <text class="numeral" data-numeral="208" data-part="cam" x="17" y="42.68" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">208</text>
 <text class="numeral" data-numeral="210" data-part="cam" x="75.72" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">210</text>
 <text class="numeral" data-numeral="194" data-part="camsurface" x="95.29" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">194</text>
 <text class="numeral" data-numeral="196" data-part="cam" x="17" y="135.95" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">196</text>
-<text class="numeral" data-numeral="154" data-part="cam" x="17" y="113.39" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">154</text>
+<text class="numeral" data-numeral="154" data-part="cam" x="54.46" y="84.72" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">154</text>
 </svg>

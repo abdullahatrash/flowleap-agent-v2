@@ -103,7 +103,7 @@ describe('Patent Drawings mechanical fault list', () => {
 		expect({
 			onNothing: rules(checkFigureSvgFaults(svg(SQUARE, lead('10', 'M66.7 30 L30 30'), numeral('10', 70, 32)))),
 			onMarkArm: rules(checkFigureSvgFaults(svg(SQUARE, mark, lead('10', 'M66.7 40 L30 31.5'), numeral('10', 70, 42)))),
-		}).toEqual({ onNothing: ['lead-ends-on-nothing'], onMarkArm: [] });
+		}).toEqual({ onNothing: ['lead-ends-on-nothing'], onMarkArm: ['lead-crosses-outline'] }); // The 40 mm square has room for 10 inside, next to its mark (#701).
 	});
 
 	it('lead line that runs along a visible edge (#694)', () => {
