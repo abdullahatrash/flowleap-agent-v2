@@ -20,9 +20,21 @@ the engine uses the port's anchor on the side that faces the camera.
 | `spring` | `coilDiameter`, `wireDiameter`, `pitch` (more than `wireDiameter`), `length` | `top`, `bottom`, `coil` | outer edge of the top coil, the bottom coil, the middle coil |
 | `gear` | `teeth` (6 to 200), `module`, `width`, `bore` (optional) | `teeth`, `face`, `bore` | teeth: the tooth nearest the camera on the pitch circle; face: top face between bore and root; bore: the bore wall (only when `bore` is set) |
 | `bearing` | `innerDiameter`, `outerDiameter` (more than inner), `width` | `outer-race`, `inner-race`, `face` | outer cylinder at mid-width; inner ring on the top face; outer ring on the top face |
-| `shaft` | `steps: [{ diameter, length }, ...]`, base step first, more steps along +Z | `end-1`, `end-2`, `step-1` ... `step-N` | end-1: centre of the base end; end-2: centre of the far end; step-i: the side of step i at its middle |
+| `shaft` | `steps: [{ diameter, length }, ...]`, base step first, more steps along +Z | `end-1`, `end-2`, `step-1` ... `step-N`, `axis` | end-1: centre of the base end; end-2: centre of the far end; step-i: the side of step i at its middle; axis: see below |
 | `pipe` | `outerDiameter`, `wall` (less than half the diameter), `length` | `outer`, `bore`, `end-1`, `end-2` | outer: side at mid-length; bore: inner wall at the far end; end-1 / end-2: the wall ring at each end |
 | `motor` | `diameter`, `length`, `shaftDiameter`, `shaftLength` | `body`, `face`, `shaft` | body: side of the can; face: the output face; shaft: the output shaft (along +Z) |
+
+## The `axis` port
+
+`shaft`, `cylinder`, `revolve` and `extrudedPolygon` have an `axis` port: the
+Z axis of the part frame. A camera that looks along the axis sees it as the
+centre of the top face. Any other camera sees the midpoint of the axis. A
+numeral on `axis` gets a centre mark, and its lead line ends on an arm of the
+mark. Use it for the axis of a cam, a shaft or a wheel.
+
+```json
+{ "numeral": "154", "part": "cam", "face": "axis" }
+```
 
 ## Example: a three-part assembly
 

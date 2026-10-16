@@ -56,7 +56,7 @@ exports[`buildDrawingSetOp > lays out the Figures, writes the sheets, the PDF an
 - Page size: A4
 - Drawing Sheets: 1
 - Date: <date>
-- Results: 25 pass, 0 fail, 1 not checked
+- Results: 27 pass, 0 fail, 1 not checked
 
 This file lists each code check, the rule it applies and its result. It is not a verdict on the drawings. The rules a person must judge (sufficient views, every claimed feature shown, suitable legends) are not checked here; the attorney reviews them.
 
@@ -90,6 +90,8 @@ This file lists each code check, the rule it applies and its result. It is not a
 | numeral-overlap | 37 CFR 1.84(p)(3) ("should not cross or mingle with the lines") | pass | No finding. |
 | numeral-on-line | 37 CFR 1.84(p)(3) ("should not cross or mingle with the lines", not on hatched surfaces); OJ EPO 2025 A49 Art. 1(2)(b) | pass | No finding. |
 | hatch-same-as-neighbour | 37 CFR 1.84(h)(3) ("regularly spaced oblique parallel lines"; juxtaposed parts hatched differently); OJ EPO 2025 A49 Art. 1(2)(b); PCT Rule 11.13(b) | pass | No finding. |
+| lead-ends-on-nothing | 37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
+| lead-along-edge | 37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 
 ## Review rounds
 
@@ -103,7 +105,7 @@ This file lists each code check, the rule it applies and its result. It is not a
     "pageSize": "A4",
     "sheets": 1,
     "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.
-Receipt: 25 pass, 0 fail, 1 not checked.
+Receipt: 27 pass, 0 fail, 1 not checked.
 No code check fails.
 Updated drafting/hinge/filing-manifest.md: 1 drawing sheet(s), measured.
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",

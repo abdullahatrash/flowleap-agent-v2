@@ -59,9 +59,9 @@ Faces in the right column are the names a numeral port can use.
 | Kind | Fields | Faces |
 |---|---|---|
 | `box` | `size: [x, y, z]`, from the origin | `top`, `bottom`, `front`, `back`, `left`, `right` |
-| `cylinder` | `radius`, `height`; on Z from z = 0 | `top`, `bottom`, `side` |
-| `extrudedPolygon` | `points: [[x, y], ...]` in the XY plane, `height` along +Z | `top`, `bottom`, `side-1` ... `side-N` (edge i to i+1) |
-| `revolve` | `profile: [[r, z], ...]` closed back to the first point, `degrees` (default 360); about Z; every r ≥ 0 | `profile-1` ... `profile-N` (segment i to i+1) |
+| `cylinder` | `radius`, `height`; on Z from z = 0 | `top`, `bottom`, `side`, `axis` |
+| `extrudedPolygon` | `points: [[x, y], ...]` in the XY plane, `height` along +Z | `top`, `bottom`, `side-1` ... `side-N` (edge i to i+1), `axis` (the Z axis of the part frame) |
+| `revolve` | `profile: [[r, z], ...]` closed back to the first point, `degrees` (default 360); about Z; every r ≥ 0 | `profile-1` ... `profile-N` (segment i to i+1), `axis` |
 | `tube` | `path: [[x, y, z], ...]`, `radius`, `bendRadius`, `wall` (omit for a solid rod; less than `radius`) | `segment-1` ... `segment-N` |
 
 ```json
@@ -108,9 +108,19 @@ see [scope-and-refusals.md](scope-and-refusals.md).
 | `face` | yes | a face or port name of that part's shape |
 | `point` | no | a point on the face in the part frame. Omit it to use the face anchor. |
 | `surface` | no | `true` when the numeral names a surface: it sits on the surface, underlined, with no lead line |
+| `mark` | no | `"centre"` draws a centre mark (a thin cross, 3 mm arms) at the port. The lead line ends on one arm. Use it for a centre point that has no edge. The `axis` port sets it for you. |
 
 You never place a numeral by sheet coordinates. The engine computes the lead
 line from the port and keeps lead lines from crossing.
+
+A lead line always ends on a visible edge or on a centre mark:
+
+- A port on a face that the camera sees flat-on: the lead ends on the nearest
+  visible edge of the part and comes from outside the face.
+- A port on a face that the camera sees edge-on (the face is a line): the lead
+  meets that line at 30° to 60°. It never runs along an edge.
+- An axis or a centre point: use the `axis` port or `mark: "centre"`. The lead
+  ends on an arm of the centre mark.
 
 ## Example: a whole scene
 

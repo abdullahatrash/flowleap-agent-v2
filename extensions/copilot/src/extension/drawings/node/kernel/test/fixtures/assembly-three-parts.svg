@@ -87,9 +87,9 @@
 <path class="edge" data-part="gear" stroke-width="0.4" d="M29.83 44.76 L29.83 39.48"/>
 <path class="edge" data-part="gear" stroke-width="0.4" d="M47.61 34.67 L47.61 28.43"/>
 <path class="edge" data-part="gear" stroke-width="0.4" d="M37.46 38.9 L37.46 33.28"/>
-<line class="lead" data-numeral="44" data-part="gear" stroke-width="0.2" x1="128.52" y1="87.73" x2="74.41" y2="87.91"/>
-<line class="lead" data-numeral="40" data-part="shaft" stroke-width="0.2" x1="128.52" y1="117.79" x2="74.41" y2="117.51"/>
-<line class="lead" data-numeral="42" data-part="bearing" stroke-width="0.2" x1="74.41" y1="178.59" x2="74.41" y2="166.08"/>
+<line class="lead" data-numeral="44" data-part="gear" stroke-width="0.2" x1="128.52" y1="87.73" x2="76.26" y2="87.91"/>
+<line class="lead" data-numeral="40" data-part="shaft" stroke-width="0.2" x1="128.52" y1="117.78" x2="89.93" y2="117.51"/>
+<line class="lead" data-numeral="42" data-part="bearing" stroke-width="0.2" x1="74.51" y1="178.59" x2="74.7" y2="173.99"/>
 </g>
 <text class="numeral" data-numeral="44" data-part="gear" x="131.82" y="89.33" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">44</text>
 <text class="numeral" data-numeral="40" data-part="shaft" x="131.82" y="119.42" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">40</text>

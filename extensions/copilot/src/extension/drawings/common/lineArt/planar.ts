@@ -112,6 +112,57 @@ export function segmentSetsNear(a: readonly Segment[], b: readonly Segment[], di
 	return near.some(first => b.some(second => segmentDistance(first, second) <= distance + 1e-9));
 }
 
+/** The point of a segment nearest to `point`. */
+export function nearestPointOnSegment(point: Vec2, segment: Segment): Vec2 {
+	const [a, b] = segment;
+	const dx = b[0] - a[0];
+	const dy = b[1] - a[1];
+	const lengthSquared = dx * dx + dy * dy;
+	const t = lengthSquared < EPSILON ? 0 : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / lengthSquared));
+	return [a[0] + t * dx, a[1] + t * dy];
+}
+
+/** The angle in degrees between the lines of two segments, 0 to 90. A zero-length segment gives 90. */
+export function lineAngle(a: Segment, b: Segment): number {
+	const ax = a[1][0] - a[0][0];
+	const ay = a[1][1] - a[0][1];
+	const bx = b[1][0] - b[0][0];
+	const by = b[1][1] - b[0][1];
+	const lengths = Math.hypot(ax, ay) * Math.hypot(bx, by);
+	if (lengths < EPSILON) {
+		return 90;
+	}
+	return Math.acos(Math.min(1, Math.abs(ax * bx + ay * by) / lengths)) * 180 / Math.PI;
+}
+
+/** Sample step in millimetres of `parallelOverlap`. */
+const OVERLAP_STEP = 0.05;
+
+/**
+ * The length of segment `a` that runs along segment `b`: zero when the lines differ by
+ * `maxAngle` degrees or more, else the length of `a` that is within `maxDistance` of `b`.
+ */
+export function parallelOverlap(a: Segment, b: Segment, maxAngle: number, maxDistance: number): number {
+	if (lineAngle(a, b) >= maxAngle) {
+		return 0;
+	}
+	// Two near-parallel segments run close only where they cross or an end point is close to the other.
+	const ends = Math.min(pointSegmentDistance(a[0], b), pointSegmentDistance(a[1], b), pointSegmentDistance(b[0], a), pointSegmentDistance(b[1], a));
+	if (ends > maxDistance && !segmentsIntersect(a, b)) {
+		return 0;
+	}
+	const length = Math.hypot(a[1][0] - a[0][0], a[1][1] - a[0][1]);
+	const steps = Math.max(1, Math.ceil(length / OVERLAP_STEP));
+	let near = 0;
+	for (let i = 0; i <= steps; i++) {
+		const t = i / steps;
+		if (pointSegmentDistance([a[0][0] + t * (a[1][0] - a[0][0]), a[0][1] + t * (a[1][1] - a[0][1])], b) <= maxDistance) {
+			near++;
+		}
+	}
+	return near <= 1 ? 0 : (near - 1) * length / steps;
+}
+
 /** The distance from a point to the nearest point of a rectangle (0 inside). */
 export function pointRectDistance(point: Vec2, rect: Rect): number {
 	const dx = Math.max(rect.x - point[0], 0, point[0] - (rect.x + rect.width));

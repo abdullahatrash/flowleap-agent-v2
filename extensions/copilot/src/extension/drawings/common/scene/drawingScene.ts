@@ -111,14 +111,14 @@ export interface BoxShape {
 	readonly size: Vec3;
 }
 
-/** A cylinder on the Z axis from z = 0 to z = height. Faces: top, bottom, side. */
+/** A cylinder on the Z axis from z = 0 to z = height. Faces: top, bottom, side, axis. */
 export interface CylinderShape {
 	readonly kind: 'cylinder';
 	readonly radius: number;
 	readonly height: number;
 }
 
-/** A polygon in the XY plane extruded along +Z. Faces: top, bottom, side-1 … side-N (edge i to i+1). */
+/** A polygon in the XY plane extruded along +Z. Faces: top, bottom, side-1 … side-N (edge i to i+1), axis (the Z axis). */
 export interface ExtrudedPolygonShape {
 	readonly kind: 'extrudedPolygon';
 	readonly points: readonly Vec2[];
@@ -127,7 +127,7 @@ export interface ExtrudedPolygonShape {
 
 /**
  * A profile of (radius, z) points revolved about the Z axis. The profile is closed from the last
- * point back to the first. Faces: profile-1 … profile-N (segment i to i+1).
+ * point back to the first. Faces: profile-1 … profile-N (segment i to i+1), axis.
  */
 export interface RevolveShape {
 	readonly kind: 'revolve';
@@ -185,7 +185,7 @@ export interface BearingShape {
 
 /**
  * A stepped shaft on the Z axis from z = 0. The first step is the base diameter and length; more
- * steps follow along +Z. Ports: end-1, end-2, step-1 … step-N.
+ * steps follow along +Z. Ports: end-1, end-2, step-1 … step-N, axis.
  */
 export interface ShaftShape {
 	readonly kind: 'shaft';
@@ -236,6 +236,12 @@ export interface NumeralPort {
 	readonly point?: Vec3;
 	/** True when the numeral names a surface: it sits on the surface, underlined, without a lead line. */
 	readonly surface?: boolean;
+	/**
+	 * `centre` draws a centre mark (a thin cross) at the port and ends the lead line on one arm of
+	 * the cross. Use it for an axis or a centre point that has no edge to end on. The `axis` port
+	 * sets it without this field.
+	 */
+	readonly mark?: 'centre';
 }
 
 /** The library part kinds, in schema order. */

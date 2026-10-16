@@ -6,8 +6,8 @@
 import type { DraftFinding } from '../../../tools/common/drafting/finding';
 import type { DrawingScene, Vec2 } from './drawingScene';
 import { HATCH_NEIGHBOUR_DISTANCE } from '../lineArt/lineArt';
-import { DIGIT_HEIGHT_RATIO, numeralBox } from '../lineArt/numeralPlacer';
-import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentSetsNear, segmentsIntersect, toSegments } from '../lineArt/planar';
+import { DIGIT_HEIGHT_RATIO, LEAD_END_TOLERANCE, leadRunsAlong, numeralBox } from '../lineArt/numeralPlacer';
+import { convexHull, flattenSvgPath, inflate, pointPolygonDistance, pointRectDistance, pointSegmentDistance, Rect, rectsOverlap, Segment, segmentHitsRect, segmentSetsNear, segmentsIntersect, toSegments } from '../lineArt/planar';
 import { cameraBasis, faceNames, resolvePort } from './sceneGeometry';
 
 /**
@@ -36,6 +36,8 @@ export const DRAWING_RULES = {
 	'numeral-overlap': '37 CFR 1.84(p)(3) ("should not cross or mingle with the lines")',
 	'numeral-on-line': '37 CFR 1.84(p)(3) ("should not cross or mingle with the lines", not on hatched surfaces); OJ EPO 2025 A49 Art. 1(2)(b)',
 	'hatch-same-as-neighbour': '37 CFR 1.84(h)(3) ("regularly spaced oblique parallel lines"; juxtaposed parts hatched differently); OJ EPO 2025 A49 Art. 1(2)(b); PCT Rule 11.13(b)',
+	'lead-ends-on-nothing': '37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2',
+	'lead-along-edge': '37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2',
 } as const;
 
 export type DrawingRule = keyof typeof DRAWING_RULES;
@@ -45,7 +47,7 @@ export const MIN_GLYPH_HEIGHT = 3.2;
 /** A lead line must start within this distance of its numeral, in millimetres. */
 const LEAD_START_TOLERANCE = 2;
 /** A lead line must end within this distance of its part's outline, in millimetres. */
-const LEAD_END_TOLERANCE = 0.5;
+const LEAD_OFF_PART_TOLERANCE = 0.5;
 /** A keyword legend has at most this many words. */
 const KEYWORD_MAX_WORDS = 2;
 
@@ -196,7 +198,8 @@ export interface FigureSvgCheckOptions {
 
 /**
  * The SVG half of the mechanical fault list, run on the written file before any model sees a
- * render: crossing lead lines, a lead line that ends off its part or starts far from its numeral,
+ * render: crossing lead lines, a lead line that ends off its part, on no visible edge or centre mark,
+ * runs along a visible edge, or starts far from its numeral,
  * a numeral without a lead line that is not underlined, a glyph under 3.2 mm, text beyond
  * keywords, and a numeral that overlaps another numeral or a line. It reads any SVG in the Figure
  * contract (paths, lines, texts with `class` and `data-*`), imports no kernel, and so also runs on
@@ -235,9 +238,17 @@ export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions
 	for (const path of paths.filter(item => item.classes.includes('edge') && item.part)) {
 		outlines.set(path.part!, [...(outlines.get(path.part!) ?? []), ...path.lines.flat()]);
 	}
+	const visibleEdges = paths.filter(item => item.classes.includes('edge')).flatMap(item => toSegments(item.lines));
+	const endTargets = [...visibleEdges, ...paths.filter(item => item.classes.includes('mark')).flatMap(item => toSegments(item.lines))];
 	for (const { path, segment } of leads) {
-		if (path.part && pointPolygonDistance(segment[1], convexHull(outlines.get(path.part) ?? [])) > LEAD_END_TOLERANCE) {
+		const offPart = path.part !== undefined && pointPolygonDistance(segment[1], convexHull(outlines.get(path.part) ?? [])) > LEAD_OFF_PART_TOLERANCE;
+		if (offPart) {
 			findings.push(fault('lead-line-off-part', `The lead line of numeral ${path.numeral} ends off part "${path.part}".`, { numeral: path.numeral, part: path.part, file }));
+		} else if (!endTargets.some(target => pointSegmentDistance(segment[1], target) <= LEAD_END_TOLERANCE + 1e-6)) {
+			findings.push(fault('lead-ends-on-nothing', `The lead line of numeral ${path.numeral} ends on no visible edge and no centre mark; it must end on the feature it names.`, { numeral: path.numeral, part: path.part, file }));
+		}
+		if (visibleEdges.some(edge => leadRunsAlong(segment, edge))) {
+			findings.push(fault('lead-along-edge', `The lead line of numeral ${path.numeral} runs along a visible edge; it must meet the edge at an angle.`, { numeral: path.numeral, part: path.part, file }));
 		}
 		const text = numerals.find(item => item.numeral === path.numeral && item.part === path.part) ?? numerals.find(item => item.content === path.numeral);
 		const box = text && boxes.get(text);

@@ -86,19 +86,25 @@ function toLocalDirection(placement: Placement | undefined, direction: Vec3): Ve
 	return rotateAbout(result, 0, -rotation[0]);
 }
 
+/**
+ * The port of a part's Z axis (`shaft`, `cylinder`, `revolve`, `extrudedPolygon`). A numeral on it
+ * gets a centre mark: an axis has no edge for the lead line to end on.
+ */
+export const AXIS_PORT = 'axis';
+
 /** The face and port names of a shape; `undefined` for a code part, which takes any name with a point. */
 export function faceNames(shape: PartShape): readonly string[] | undefined {
 	switch (shape.kind) {
 		case 'box': return ['top', 'bottom', 'front', 'back', 'left', 'right'];
-		case 'cylinder': return ['top', 'bottom', 'side'];
-		case 'extrudedPolygon': return ['top', 'bottom', ...numbered('side', shape.points.length)];
-		case 'revolve': return numbered('profile', shape.profile.length);
+		case 'cylinder': return ['top', 'bottom', 'side', AXIS_PORT];
+		case 'extrudedPolygon': return ['top', 'bottom', ...numbered('side', shape.points.length), AXIS_PORT];
+		case 'revolve': return [...numbered('profile', shape.profile.length), AXIS_PORT];
 		case 'tube': return numbered('segment', Math.max(0, shape.path.length - 1));
 		case 'fastener': return ['head', 'shank', 'tip'];
 		case 'spring': return ['top', 'bottom', 'coil'];
 		case 'gear': return ['teeth', 'face', 'bore'];
 		case 'bearing': return ['outer-race', 'inner-race', 'face'];
-		case 'shaft': return ['end-1', 'end-2', ...numbered('step', shape.steps.length)];
+		case 'shaft': return ['end-1', 'end-2', ...numbered('step', shape.steps.length), AXIS_PORT];
 		case 'pipe': return ['outer', 'bore', 'end-1', 'end-2'];
 		case 'motor': return ['body', 'face', 'shaft'];
 		case 'code': return undefined;
@@ -119,6 +125,74 @@ export const BEARING_BALL = 0.38;
 export const MOTOR_BOSS_RADIUS = 0.25;
 export const MOTOR_BOSS_HEIGHT = 0.05;
 
+/** The lowest and highest z of the part-local Z axis of a shape that has an `axis` port. */
+function axisExtent(shape: PartShape): Vec2 | undefined {
+	switch (shape.kind) {
+		case 'cylinder':
+		case 'extrudedPolygon':
+			return [0, shape.height];
+		case 'revolve': {
+			const zs = shape.profile.map(point => point[1]);
+			return [Math.min(...zs), Math.max(...zs)];
+		}
+		case 'shaft':
+			return [0, shape.steps.reduce((sum, step) => sum + step.length, 0)];
+		default:
+			return undefined;
+	}
+}
+
+/** The part-local normal of a named plane face, or `undefined` for a curved face or a port. */
+function planeNormal(shape: PartShape, face: string): Vec3 | undefined {
+	const zFaces: Partial<Record<PartShape['kind'], readonly string[]>> = {
+		cylinder: ['top', 'bottom'],
+		extrudedPolygon: ['top', 'bottom'],
+		shaft: ['end-1', 'end-2'],
+		pipe: ['end-1', 'end-2'],
+		motor: ['face'],
+		gear: ['face'],
+		bearing: ['face'],
+	};
+	if (zFaces[shape.kind]?.includes(face)) {
+		return [0, 0, 1];
+	}
+	if (shape.kind === 'box') {
+		const table: Record<string, Vec3> = { top: [0, 0, 1], bottom: [0, 0, -1], front: [0, -1, 0], back: [0, 1, 0], left: [-1, 0, 0], right: [1, 0, 0] };
+		return table[face];
+	}
+	const side = /^(?<prefix>side|profile)-(?<number>\d+)$/.exec(face);
+	if (!side) {
+		return undefined;
+	}
+	const i = Number(side.groups!.number) - 1;
+	if (shape.kind === 'extrudedPolygon' && side.groups!.prefix === 'side' && i < shape.points.length) {
+		const from = shape.points[i];
+		const to = shape.points[(i + 1) % shape.points.length];
+		return normalize([to[1] - from[1], from[0] - to[0], 0]);
+	}
+	if (shape.kind === 'revolve' && side.groups!.prefix === 'profile' && i < shape.profile.length) {
+		// A profile segment at one z is a flat ring; every other segment is a cone or a cylinder.
+		const from = shape.profile[i];
+		const to = shape.profile[(i + 1) % shape.profile.length];
+		return Math.abs(to[1] - from[1]) < 1e-9 ? [0, 0, 1] : undefined;
+	}
+	return undefined;
+}
+
+/**
+ * True when the face of the port is a plane seen edge-on by the camera: it projects to a line, so
+ * the lead line must meet that line at an angle and never run along it.
+ */
+export function isPortEdgeOn(port: NumeralPort, part: ScenePart | undefined, camera: CameraBasis): boolean {
+	const normal = part && planeNormal(part.shape, port.face);
+	return normal !== undefined && Math.abs(dot(normal, toLocalDirection(part!.placement, camera.direction))) < 1e-6;
+}
+
+/** True when the port gets a centre mark: `mark: "centre"`, or the `axis` port. */
+export function hasCentreMark(port: NumeralPort): boolean {
+	return port.mark === 'centre' || port.face === AXIS_PORT;
+}
+
 /**
  * The anchor point of a named face of a shape, in the part-local frame. `toViewer` is the camera
  * direction in the same frame: a curved face takes the point that faces the viewer.
@@ -129,6 +203,15 @@ function faceAnchor(shape: PartShape, face: string, toViewer: Vec3): Vec3 | unde
 		return planar < 1e-9 ? [radius, 0, z] : [radius * toViewer[0] / planar, radius * toViewer[1] / planar, z];
 	};
 	const index = (prefix: string) => face.startsWith(`${prefix}-`) ? Number(face.slice(prefix.length + 1)) - 1 : -1;
+	if (face === AXIS_PORT) {
+		const extent = axisExtent(shape);
+		if (!extent) {
+			return undefined;
+		}
+		// Seen along the axis, the axis is the centre of the top face; else take its midpoint.
+		const alongAxis = Math.abs(toViewer[2]) > 1 - 1e-6;
+		return [0, 0, alongAxis ? extent[1] : (extent[0] + extent[1]) / 2];
+	}
 	switch (shape.kind) {
 		case 'box': {
 			const [a, b, c] = shape.size;

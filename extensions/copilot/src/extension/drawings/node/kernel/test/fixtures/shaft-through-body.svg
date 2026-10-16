@@ -79,9 +79,9 @@
 <path class="hatch" data-part="body" stroke-width="0.2" d="M117.02 64 L124 57.02"/>
 <path class="hatch" data-part="body" stroke-width="0.2" d="M119.85 64 L124 59.85"/>
 <path class="hatch" data-part="body" stroke-width="0.2" d="M122.68 64 L124 62.68"/>
-<line class="lead" data-numeral="30" data-part="body" stroke-width="0.2" x1="83.51" y1="19.41" x2="84" y2="24"/>
-<line class="lead" data-numeral="32" data-part="shaft" stroke-width="0.2" x1="147.7" y1="49.84" x2="137.33" y2="49.33"/>
+<line class="lead" data-numeral="30" data-part="body" stroke-width="0.2" x1="80.55" y1="19.41" x2="84" y2="24"/>
+<line class="lead" data-numeral="32" data-part="shaft" stroke-width="0.2" x1="147.7" y1="55.53" x2="137.33" y2="49.33"/>
 </g>
-<text class="numeral" data-numeral="30" data-part="body" x="83.25" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">30</text>
-<text class="numeral" data-numeral="32" data-part="shaft" x="151" y="51.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">32</text>
+<text class="numeral" data-numeral="30" data-part="body" x="78.73" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">30</text>
+<text class="numeral" data-numeral="32" data-part="shaft" x="151" y="59.11" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">32</text>
 </svg>
