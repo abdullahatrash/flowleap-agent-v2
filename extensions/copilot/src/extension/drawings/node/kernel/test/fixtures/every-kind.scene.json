@@ -14,7 +14,10 @@
 		{ "id": "race", "shape": { "kind": "bearing", "innerDiameter": 10, "outerDiameter": 26, "width": 8 }, "placement": { "translate": [120, 120, 0] } },
 		{ "id": "axle", "shape": { "kind": "shaft", "steps": [{ "diameter": 8, "length": 10 }, { "diameter": 12, "length": 15 }] }, "placement": { "translate": [0, 170, 0], "rotate": [0, 90, 0] } },
 		{ "id": "duct", "shape": { "kind": "pipe", "outerDiameter": 14, "wall": 2, "length": 30 }, "placement": { "translate": [60, 170, 0] } },
-		{ "id": "drive", "shape": { "kind": "motor", "diameter": 28, "length": 30, "shaftDiameter": 4, "shaftLength": 10 }, "placement": { "translate": [110, 170, 0] } }
+		{ "id": "drive", "shape": { "kind": "motor", "diameter": 28, "length": 30, "shaftDiameter": 4, "shaftLength": 10 }, "placement": { "translate": [110, 170, 0] } },
+		{ "id": "lobe", "shape": { "kind": "cam", "base": 6, "lobes": [{ "angle": 90, "lift": 3, "width": 120 }], "height": 4 }, "placement": { "translate": [0, -60, 0] } },
+		{ "id": "dome", "shape": { "kind": "revolve", "profile": [[0, 0], [8, 0], [8, 10], { "arc": [0, 18], "through": [5.657, 15.657] }] }, "placement": { "translate": [40, -60, 0] } },
+		{ "id": "blade", "shape": { "kind": "extrudedPolygon", "points": [[0, 0], [20, 0], { "arc": [20, 20], "through": [30, 10] }, { "spline": [[10, 25], [0, 20]] }], "height": 3 }, "placement": { "translate": [80, -60, 0] } }
 	],
 	"numerals": [
 		{ "numeral": "50", "part": "plate", "face": "top" },
@@ -28,6 +31,9 @@
 		{ "numeral": "66", "part": "race", "face": "outer-race" },
 		{ "numeral": "68", "part": "axle", "face": "step-2" },
 		{ "numeral": "70", "part": "duct", "face": "outer" },
-		{ "numeral": "72", "part": "drive", "face": "body" }
+		{ "numeral": "72", "part": "drive", "face": "body" },
+		{ "numeral": "74", "part": "lobe", "face": "lobe-1" },
+		{ "numeral": "76", "part": "dome", "face": "profile-3" },
+		{ "numeral": "78", "part": "blade", "face": "side-3" }
 	]
 }

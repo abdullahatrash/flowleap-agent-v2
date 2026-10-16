@@ -71,6 +71,66 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 		value.forEach((point, index) => vector(point, length, `${path}[${index}]`));
 	};
 
+	/** A closed profile: a plain point first, then points, arc segments and spline segments. Returns every named point. */
+	const profile = (value: unknown, path: string): number[][] => {
+		if (!Array.isArray(value) || value.length < 2) {
+			error(path, 'must be an array of at least 3 points');
+			return [];
+		}
+		const named: number[][] = [];
+		let previous: number[] | undefined;
+		let curved = false;
+		value.forEach((item, index) => {
+			const itemPath = `${path}[${index}]`;
+			if (Array.isArray(item)) {
+				if (vector(item, 2, itemPath)) {
+					named.push(item);
+					previous = item;
+				}
+				return;
+			}
+			if (index === 0) {
+				error(itemPath, 'must be a plain point [x, y]: a profile starts with a point');
+				return;
+			}
+			if (isObject(item) && item.arc !== undefined) {
+				curved = true;
+				const ok = vector(item.arc, 2, `${itemPath}.arc`) && vector(item.through, 2, `${itemPath}.through`);
+				if (ok) {
+					const [end, through] = [item.arc as number[], item.through as number[]];
+					if (previous) {
+						const cross = (through[0] - previous[0]) * (end[1] - previous[1]) - (through[1] - previous[1]) * (end[0] - previous[0]);
+						const span = Math.max(Math.hypot(end[0] - previous[0], end[1] - previous[1]), Math.hypot(through[0] - previous[0], through[1] - previous[1]), Math.hypot(end[0] - through[0], end[1] - through[1]));
+						if (span < 1e-9 || Math.abs(cross) < 1e-9 * span * span) {
+							error(itemPath, 'an arc needs three distinct points that are not on one line (previous point, "through", "arc")');
+						}
+					}
+					named.push(through, end);
+					previous = end;
+				}
+				return;
+			}
+			if (isObject(item) && item.spline !== undefined) {
+				curved = true;
+				if (!Array.isArray(item.spline) || item.spline.length < 2) {
+					error(`${itemPath}.spline`, 'must be an array of at least 2 points');
+					return;
+				}
+				const valid = item.spline.every((point, pointIndex) => vector(point, 2, `${itemPath}.spline[${pointIndex}]`));
+				if (valid) {
+					named.push(...item.spline as number[][]);
+					previous = item.spline[item.spline.length - 1] as number[];
+				}
+				return;
+			}
+			error(itemPath, 'must be a point [x, y], an arc { "arc": [x, y], "through": [x, y] } or a spline { "spline": [[x, y], ...] }');
+		});
+		if (!curved && value.length < 3) {
+			error(path, 'must be an array of at least 3 points');
+		}
+		return named;
+	};
+
 	const primitive = (shape: JsonObject, path: string) => {
 		switch (shape.kind) {
 			case 'box':
@@ -83,12 +143,11 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 				positive(shape.height, `${path}.height`);
 				break;
 			case 'extrudedPolygon':
-				points(shape.points, 2, 3, `${path}.points`);
+				profile(shape.points, `${path}.points`);
 				positive(shape.height, `${path}.height`);
 				break;
 			case 'revolve':
-				points(shape.profile, 2, 3, `${path}.profile`);
-				if (Array.isArray(shape.profile) && shape.profile.some(point => Array.isArray(point) && typeof point[0] === 'number' && point[0] < 0)) {
+				if (profile(shape.profile, `${path}.profile`).some(point => point[0] < 0)) {
 					error(`${path}.profile`, 'radius values must not be negative');
 				}
 				if (shape.degrees !== undefined && (typeof shape.degrees !== 'number' || shape.degrees <= 0 || shape.degrees > 360)) {
@@ -186,6 +245,28 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 				positive(shape.length, `${path}.length`);
 				positive(shape.shaftDiameter, `${path}.shaftDiameter`);
 				positive(shape.shaftLength, `${path}.shaftLength`);
+				break;
+			case 'cam':
+				positive(shape.base, `${path}.base`);
+				positive(shape.height, `${path}.height`);
+				if (!Array.isArray(shape.lobes) || shape.lobes.length === 0) {
+					error(`${path}.lobes`, 'must be a non-empty array of { angle, lift, width }');
+				} else {
+					shape.lobes.forEach((lobe, index) => {
+						const lobePath = `${path}.lobes[${index}]`;
+						if (!isObject(lobe)) {
+							error(lobePath, 'must be { angle, lift, width }');
+							return;
+						}
+						if (typeof lobe.angle !== 'number' || !Number.isFinite(lobe.angle)) {
+							error(`${lobePath}.angle`, 'must be a number of degrees');
+						}
+						positive(lobe.lift, `${lobePath}.lift`);
+						if (typeof lobe.width !== 'number' || !(lobe.width > 0 && lobe.width <= 360)) {
+							error(`${lobePath}.width`, 'must be a number of degrees in (0, 360]');
+						}
+					});
+				}
 				break;
 			case 'code':
 				if (typeof shape.code !== 'string' || shape.code.trim() === '') {

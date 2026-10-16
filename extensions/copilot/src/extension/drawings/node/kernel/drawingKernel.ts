@@ -64,7 +64,7 @@ export interface KernelDrawing {
 	toSVGPaths(): string[] | string[][];
 }
 
-/** A replicad sketch on a plane. */
+/** A replicad sketch on a plane, or a sketch made from a closed wire. */
 export interface KernelSketch {
 	extrude(distance: number): KernelShape;
 	revolve(axis: Point3, options: { origin: Point3; angle: number }): KernelShape;
@@ -93,6 +93,8 @@ export interface ReplicadApi {
 	makeSphere(radius: number): KernelShape;
 	makeLine(from: Point3, to: Point3): KernelCurve;
 	makeThreePointArc(from: Point3, middle: Point3, to: Point3): KernelCurve;
+	/** One smooth B-spline edge that passes within `tolerance` of each point. */
+	makeBSplineApproximation(points: Point3[], config: { tolerance?: number; degMax?: number; degMin?: number }): KernelCurve;
 	makeCircle(radius: number, center: Point3 | KernelVector, normal: Point3 | KernelVector): KernelCurve;
 	makeHelix(pitch: number, height: number, radius: number, center: Point3, direction: Point3): KernelCurve;
 	assembleWire(edges: KernelCurve[]): KernelCurve;
@@ -100,6 +102,8 @@ export interface ReplicadApi {
 	makeCompound(shapes: KernelShape[]): KernelShape;
 	drawProjection(shape: KernelShape, camera: KernelObject): { visible: KernelDrawing; hidden: KernelDrawing };
 	readonly ProjectionCamera: new (position: Point3, direction: Point3, xAxis: Point3) => KernelObject;
+	/** A sketch from a closed planar wire; it extrudes along +Z by default. */
+	readonly Sketch: new (wire: KernelCurve) => KernelSketch;
 	readonly Plane: new (origin: Point3, xDirection: null, normal: Point3) => KernelObject;
 	readonly Solid: ShapeClass;
 	readonly Compound: ShapeClass;

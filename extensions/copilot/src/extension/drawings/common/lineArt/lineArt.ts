@@ -45,6 +45,17 @@ export const HATCH_NEIGHBOUR_DISTANCE = 0.5;
  */
 const FIT_WIDTH = 120;
 const FIT_HEIGHT = 150;
+/**
+ * Largest distance between a curve and the straight pieces it is drawn with, in sheet millimetres.
+ * A 300 dpi pixel is 0.085 mm and the edge line is 0.4 mm wide, so no facet shows on a curved edge.
+ */
+export const SHEET_CHORD_TOLERANCE = 0.1;
+
+/** Sheet millimetres per model millimetre: the scene `scale`, or the scale that fits the drawing span. */
+export function figureScale(spanX: number, spanY: number, scale?: number): number {
+	return scale ?? Math.min(FIT_WIDTH / Math.max(spanX, 1e-6), FIT_HEIGHT / Math.max(spanY, 1e-6));
+}
+
 /** Space around the drawing for numerals, in sheet millimetres. */
 const MARGIN = 24;
 
@@ -156,7 +167,7 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 	const minY = ys.length ? Math.min(...ys) : 0;
 	const spanX = xs.length ? Math.max(...xs) - minX : 0;
 	const spanY = ys.length ? Math.max(...ys) - minY : 0;
-	const scale = projected.scale ?? Math.min(FIT_WIDTH / Math.max(spanX, 1e-6), FIT_HEIGHT / Math.max(spanY, 1e-6));
+	const scale = figureScale(spanX, spanY, projected.scale);
 	const toSheet = (point: Vec2): Vec2 => [(point[0] - minX) * scale + MARGIN, (point[1] - minY) * scale + MARGIN];
 	const mapLines = (pick: (part: ProjectedPart) => readonly (readonly Vec2[])[]) => projected.parts.flatMap(part => pick(part).map(line => ({ part: part.id, line: line.map(toSheet) })));
 	const edges = dedupe(mapLines(part => part.visible));

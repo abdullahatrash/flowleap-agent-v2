@@ -1,0 +1,20 @@
+<!-- findings: [] -->
+<svg xmlns="http://www.w3.org/2000/svg" width="168mm" height="173.61mm" viewBox="0 0 168 173.61" data-figure="FIG-4" data-kind="3d">
+<rect width="168" height="173.61" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="cam" stroke-width="0.4" d="M112.6 86.81 L110.42 77.96 L104.52 70.7 L96.52 65.87 L88.32 63.25 L81.35 61.67 L75.96 59.61 L71.48 55.98 L66.62 50.72 L60.26 44.94 L52.08 40.42 L42.84 38.94 L34.09 41.48 L27.52 47.79 L24.18 56.53 L24 65.87 L25.83 74.28 L27.95 81.11 L28.86 86.81 L27.95 92.5 L25.83 99.33 L24 107.74 L24.18 117.08 L27.52 125.82 L34.09 132.13 L42.84 134.67 L52.08 133.19 L60.26 128.68 L66.62 122.89 L71.48 117.63 L75.96 114 L81.35 111.94 L88.32 110.36 L96.52 107.74 L104.52 102.91 L110.42 95.65 L112.6 86.81"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M112.6 149.61 L112.6 24 L144 24"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M144 149.61 L144 24"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M112.6 149.61 L144 149.61"/>
+<line class="lead" data-numeral="208" data-part="cam" stroke-width="0.2" x1="21.55" y1="44.22" x2="30.81" y2="44.63"/>
+<line class="lead" data-numeral="210" data-part="cam" stroke-width="0.2" x1="74.18" y1="19.41" x2="73.72" y2="57.8"/>
+<line class="lead" data-numeral="194" data-part="camsurface" stroke-width="0.2" x1="96.79" y1="19.41" x2="112.6" y2="44.94"/>
+<line class="lead" data-numeral="196" data-part="cam" stroke-width="0.2" x1="21.55" y1="129.39" x2="30.81" y2="128.98"/>
+<line class="lead" data-numeral="154" data-part="cam" stroke-width="0.2" x1="21.55" y1="87.27" x2="28.86" y2="86.81"/>
+</g>
+<text class="numeral" data-numeral="208" data-part="cam" x="17" y="45.63" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">208</text>
+<text class="numeral" data-numeral="210" data-part="cam" x="74.21" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">210</text>
+<text class="numeral" data-numeral="194" data-part="camsurface" x="95.29" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">194</text>
+<text class="numeral" data-numeral="196" data-part="cam" x="17" y="131.2" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">196</text>
+<text class="numeral" data-numeral="154" data-part="cam" x="17" y="89.17" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">154</text>
+</svg>

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CameraPreset, NumeralPort, PartShape, Placement, ScenePart, SectionPlane, UNSECTIONED_KINDS, Vec2, Vec3 } from './drawingScene';
+import { camPoint, camPortAngles, profileSegments, profileVertices, segmentMidpoint } from './profile';
 
 /**
  * An orthographic camera. `direction` points from the object to the viewer; `xAxis` is screen
@@ -87,7 +88,7 @@ function toLocalDirection(placement: Placement | undefined, direction: Vec3): Ve
 }
 
 /**
- * The port of a part's Z axis (`shaft`, `cylinder`, `revolve`, `extrudedPolygon`). A numeral on it
+ * The port of a part's Z axis (`shaft`, `cylinder`, `revolve`, `extrudedPolygon`, `cam`). A numeral on it
  * gets a centre mark: an axis has no edge for the lead line to end on.
  */
 export const AXIS_PORT = 'axis';
@@ -97,8 +98,8 @@ export function faceNames(shape: PartShape): readonly string[] | undefined {
 	switch (shape.kind) {
 		case 'box': return ['top', 'bottom', 'front', 'back', 'left', 'right'];
 		case 'cylinder': return ['top', 'bottom', 'side', AXIS_PORT];
-		case 'extrudedPolygon': return ['top', 'bottom', ...numbered('side', shape.points.length), AXIS_PORT];
-		case 'revolve': return [...numbered('profile', shape.profile.length), AXIS_PORT];
+		case 'extrudedPolygon': return ['top', 'bottom', ...numbered('side', profileSegments(shape.points).length), AXIS_PORT];
+		case 'revolve': return [...numbered('profile', profileSegments(shape.profile).length), AXIS_PORT];
 		case 'tube': return numbered('segment', Math.max(0, shape.path.length - 1));
 		case 'fastener': return ['head', 'shank', 'tip'];
 		case 'spring': return ['top', 'bottom', 'coil'];
@@ -107,6 +108,7 @@ export function faceNames(shape: PartShape): readonly string[] | undefined {
 		case 'shaft': return ['end-1', 'end-2', ...numbered('step', shape.steps.length), AXIS_PORT];
 		case 'pipe': return ['outer', 'bore', 'end-1', 'end-2'];
 		case 'motor': return ['body', 'face', 'shaft'];
+		case 'cam': return ['top', 'bottom', AXIS_PORT, ...numbered('lobe', shape.lobes.length), ...numbered('land', shape.lobes.length)];
 		case 'code': return undefined;
 	}
 }
@@ -130,9 +132,10 @@ function axisExtent(shape: PartShape): Vec2 | undefined {
 	switch (shape.kind) {
 		case 'cylinder':
 		case 'extrudedPolygon':
+		case 'cam':
 			return [0, shape.height];
 		case 'revolve': {
-			const zs = shape.profile.map(point => point[1]);
+			const zs = profileVertices(shape.profile).map(point => point[1]);
 			return [Math.min(...zs), Math.max(...zs)];
 		}
 		case 'shaft':
@@ -165,16 +168,15 @@ function planeNormal(shape: PartShape, face: string): Vec3 | undefined {
 		return undefined;
 	}
 	const i = Number(side.groups!.number) - 1;
-	if (shape.kind === 'extrudedPolygon' && side.groups!.prefix === 'side' && i < shape.points.length) {
-		const from = shape.points[i];
-		const to = shape.points[(i + 1) % shape.points.length];
-		return normalize([to[1] - from[1], from[0] - to[0], 0]);
+	// Only a straight segment gives a plane side; an arc or a spline side is curved.
+	if (shape.kind === 'extrudedPolygon' && side.groups!.prefix === 'side') {
+		const segment = profileSegments(shape.points)[i];
+		return segment?.kind === 'line' ? normalize([segment.to[1] - segment.from[1], segment.from[0] - segment.to[0], 0]) : undefined;
 	}
-	if (shape.kind === 'revolve' && side.groups!.prefix === 'profile' && i < shape.profile.length) {
-		// A profile segment at one z is a flat ring; every other segment is a cone or a cylinder.
-		const from = shape.profile[i];
-		const to = shape.profile[(i + 1) % shape.profile.length];
-		return Math.abs(to[1] - from[1]) < 1e-9 ? [0, 0, 1] : undefined;
+	if (shape.kind === 'revolve' && side.groups!.prefix === 'profile') {
+		// A straight profile segment at one z is a flat ring; every other segment is a cone, a cylinder or curved.
+		const segment = profileSegments(shape.profile)[i];
+		return segment?.kind === 'line' && Math.abs(segment.to[1] - segment.from[1]) < 1e-9 ? [0, 0, 1] : undefined;
 	}
 	return undefined;
 }
@@ -221,29 +223,26 @@ function faceAnchor(shape: PartShape, face: string, toViewer: Vec3): Vec3 | unde
 		case 'cylinder':
 			return face === 'top' ? [0, 0, shape.height] : face === 'bottom' ? [0, 0, 0] : face === 'side' ? radial(shape.radius, shape.height / 2) : undefined;
 		case 'extrudedPolygon': {
-			const points = shape.points;
 			if (face === 'top' || face === 'bottom') {
+				const points = profileVertices(shape.points);
 				const cx = points.reduce((sum, point) => sum + point[0], 0) / points.length;
 				const cy = points.reduce((sum, point) => sum + point[1], 0) / points.length;
 				return [cx, cy, face === 'top' ? shape.height : 0];
 			}
-			const i = index('side');
-			if (i < 0 || i >= points.length) {
+			const segment = profileSegments(shape.points)[index('side')];
+			if (!segment) {
 				return undefined;
 			}
-			const from = points[i];
-			const to = points[(i + 1) % points.length];
-			return [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, shape.height / 2];
+			const [x, y] = segmentMidpoint(segment);
+			return [x, y, shape.height / 2];
 		}
 		case 'revolve': {
-			const i = index('profile');
-			const profile = shape.profile;
-			if (i < 0 || i >= profile.length) {
+			const segment = profileSegments(shape.profile)[index('profile')];
+			if (!segment) {
 				return undefined;
 			}
-			const from = profile[i];
-			const to = profile[(i + 1) % profile.length];
-			return radial((from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
+			const [radius, z] = segmentMidpoint(segment);
+			return radial(radius, z);
 		}
 		case 'tube': {
 			const i = index('segment');
@@ -302,6 +301,21 @@ function faceAnchor(shape: PartShape, face: string, toViewer: Vec3): Vec3 | unde
 			const radius = shape.diameter / 2;
 			const boss = MOTOR_BOSS_RADIUS * shape.diameter;
 			return face === 'body' ? radial(radius, shape.length / 2) : face === 'face' ? radial((radius + boss) / 2, shape.length) : face === 'shaft' ? radial(shape.shaftDiameter / 2, shape.length + MOTOR_BOSS_HEIGHT * shape.length + shape.shaftLength / 2) : undefined;
+		}
+		case 'cam': {
+			if (face === 'top') {
+				return [0, 0, shape.height];
+			}
+			if (face === 'bottom') {
+				return [0, 0, 0];
+			}
+			const angles = camPortAngles(shape);
+			const angle = face.startsWith('lobe-') ? angles.lobes[index('lobe')] : face.startsWith('land-') ? angles.lands[index('land')] : undefined;
+			if (angle === undefined) {
+				return undefined;
+			}
+			const [x, y] = camPoint(shape, angle);
+			return [x, y, shape.height / 2];
 		}
 		case 'code':
 			return undefined;

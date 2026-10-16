@@ -268,11 +268,31 @@ export function hatch(boundary: readonly Segment[], degrees: number, spacing: nu
 	return lines;
 }
 
+/** Largest turn between two adjacent pieces of a flattened curve, in radians (6 degrees). */
+const MAX_TURN = 6 * Math.PI / 180;
+
+/** The number of straight pieces that keep a cubic Bezier within `tolerance` and under the turn limit. */
+function cubicSteps(from: Vec2, c1: Vec2, c2: Vec2, end: Vec2, tolerance: number): number {
+	// Chord error of n uniform pieces is at most 3/4 * M / n^2, M the largest second difference of the control points.
+	const second = Math.max(Math.hypot(from[0] - 2 * c1[0] + c2[0], from[1] - 2 * c1[1] + c2[1]), Math.hypot(c1[0] - 2 * c2[0] + end[0], c1[1] - 2 * c2[1] + end[1]));
+	const byError = Math.ceil(Math.sqrt(0.75 * second / tolerance));
+	// The curve turns at most as much as its control polygon.
+	const legs = [[c1[0] - from[0], c1[1] - from[1]], [c2[0] - c1[0], c2[1] - c1[1]], [end[0] - c2[0], end[1] - c2[1]]].filter(([x, y]) => Math.hypot(x, y) > EPSILON);
+	let turn = 0;
+	for (let k = 1; k < legs.length; k++) {
+		turn += Math.abs(Math.atan2(legs[k - 1][0] * legs[k][1] - legs[k - 1][1] * legs[k][0], legs[k - 1][0] * legs[k][0] + legs[k - 1][1] * legs[k][1]));
+	}
+	return Math.max(1, byError, Math.ceil(turn / MAX_TURN));
+}
+
 /**
  * Flattens SVG path data into polylines. Supports the absolute commands the kernel writes
- * (M, L, H, V, A, C, Q, Z). Curves become `steps` straight pieces.
+ * (M, L, H, V, A, C, Q, Z). Without `tolerance`, a curve becomes `steps` straight pieces (an arc:
+ * `steps` per half turn). With `tolerance`, a cubic gets as many pieces as keep its chord error
+ * under `tolerance` and each turn between pieces under 6 degrees, and an arc gets more pieces
+ * than `steps` when it needs them for the same chord error.
  */
-export function flattenSvgPath(d: string, steps = 16): Vec2[][] {
+export function flattenSvgPath(d: string, steps = 16, tolerance?: number): Vec2[][] {
 	const tokens = d.match(/[MLHVACQZmlhvacqz]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) ?? [];
 	const polylines: Vec2[][] = [];
 	let current: Vec2[] = [];
@@ -312,8 +332,9 @@ export function flattenSvgPath(d: string, steps = 16): Vec2[][] {
 				const c2: Vec2 = [next(), next()];
 				const end: Vec2 = [next(), next()];
 				const from = cursor;
-				for (let s = 1; s <= steps; s++) {
-					const t = s / steps;
+				const pieces = tolerance === undefined ? steps : cubicSteps(from, c1, c2, end, tolerance);
+				for (let s = 1; s <= pieces; s++) {
+					const t = s / pieces;
 					const u = 1 - t;
 					current.push([
 						u * u * u * from[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * end[0],
@@ -342,7 +363,7 @@ export function flattenSvgPath(d: string, steps = 16): Vec2[][] {
 				const largeArc = next();
 				const sweep = next();
 				const end: Vec2 = [next(), next()];
-				current.push(...arcPoints(cursor, end, rx, ry, rotation, largeArc !== 0, sweep !== 0, steps));
+				current.push(...arcPoints(cursor, end, rx, ry, rotation, largeArc !== 0, sweep !== 0, steps, tolerance));
 				cursor = end;
 				break;
 			}
@@ -365,7 +386,7 @@ export function flattenSvgPath(d: string, steps = 16): Vec2[][] {
 }
 
 /** Points along an SVG elliptical arc (endpoint parameterisation, SVG 1.1 appendix F.6). */
-function arcPoints(from: Vec2, to: Vec2, rxIn: number, ryIn: number, rotationDegrees: number, largeArc: boolean, sweep: boolean, steps: number): Vec2[] {
+function arcPoints(from: Vec2, to: Vec2, rxIn: number, ryIn: number, rotationDegrees: number, largeArc: boolean, sweep: boolean, steps: number, tolerance?: number): Vec2[] {
 	let rx = Math.abs(rxIn);
 	let ry = Math.abs(ryIn);
 	if (rx < EPSILON || ry < EPSILON) {
@@ -398,7 +419,10 @@ function arcPoints(from: Vec2, to: Vec2, rxIn: number, ryIn: number, rotationDeg
 	} else if (sweep && delta < 0) {
 		delta += 2 * Math.PI;
 	}
-	const count = Math.max(2, Math.ceil(steps * Math.abs(delta) / Math.PI));
+	// A piece of angle a has chord error r * (1 - cos(a / 2)).
+	const radius = Math.max(rx, ry);
+	const byError = tolerance === undefined || tolerance >= radius ? 0 : Math.ceil(Math.abs(delta) / (2 * Math.acos(1 - tolerance / radius)));
+	const count = Math.max(2, Math.ceil(steps * Math.abs(delta) / Math.PI), byError);
 	const points: Vec2[] = [];
 	for (let s = 1; s <= count; s++) {
 		const t = theta + delta * s / count;

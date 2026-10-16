@@ -1,7 +1,7 @@
 # Part library
 
-Seven parametric parts. Use one for every standard part in the figures list.
-Never build a bolt, spring, gear, bearing, shaft, pipe or motor from
+Eight parametric parts. Use one for every standard part in the figures list.
+Never build a bolt, spring, gear, bearing, shaft, pipe, motor or cam from
 primitives. All library parts stand on the Z axis from z = 0 in their part
 frame; rotate them with `placement.rotate`.
 
@@ -23,10 +23,11 @@ the engine uses the port's anchor on the side that faces the camera.
 | `shaft` | `steps: [{ diameter, length }, ...]`, base step first, more steps along +Z | `end-1`, `end-2`, `step-1` ... `step-N`, `axis` | end-1: centre of the base end; end-2: centre of the far end; step-i: the side of step i at its middle; axis: see below |
 | `pipe` | `outerDiameter`, `wall` (less than half the diameter), `length` | `outer`, `bore`, `end-1`, `end-2` | outer: side at mid-length; bore: inner wall at the far end; end-1 / end-2: the wall ring at each end |
 | `motor` | `diameter`, `length`, `shaftDiameter`, `shaftLength` | `body`, `face`, `shaft` | body: side of the can; face: the output face; shaft: the output shaft (along +Z) |
+| `cam` | `base` (base circle radius), `lobes: [{ angle, lift, width }, ...]` (angle and width in degrees, angle from +X towards +Y), `height` | `top`, `bottom`, `axis`, `lobe-1` ... `lobe-N`, `land-1` ... `land-N` | top: centre of the top face; axis: see below; bottom: centre of the bottom face; lobe-i: the point of maximum lift of lobe i, on the side; land-i: the middle of the base arc from lobe i to lobe i + 1, on the side |
 
 ## The `axis` port
 
-`shaft`, `cylinder`, `revolve` and `extrudedPolygon` have an `axis` port: the
+`shaft`, `cylinder`, `revolve`, `extrudedPolygon` and `cam` have an `axis` port: the
 Z axis of the part frame. A camera that looks along the axis sees it as the
 centre of the top face. Any other camera sees the midpoint of the axis. A
 numeral on `axis` gets a centre mark, and its lead line ends on an arm of the
@@ -51,6 +52,27 @@ mark. Use it for the axis of a cam, a shaft or a wheel.
 		{ "numeral": "40", "part": "shaft", "face": "step-2" },
 		{ "numeral": "42", "part": "bearing", "face": "outer-race" },
 		{ "numeral": "44", "part": "gear", "face": "teeth" }
+	]
+}
+```
+
+## Example: a cam profile
+
+A plate cam with three lobes, seen along its axis. Each lobe is a smooth bump
+of `lift` above the base circle, `width` degrees wide. The outline is one smooth
+curve.
+
+```json
+{
+	"figure": "FIG-4",
+	"camera": "top",
+	"parts": [
+		{ "id": "cam", "name": "cam", "shape": { "kind": "cam", "base": 6, "lobes": [{ "angle": 0, "lift": 4, "width": 100 }, { "angle": 120, "lift": 4, "width": 100 }, { "angle": 240, "lift": 4, "width": 100 }], "height": 6 } }
+	],
+	"numerals": [
+		{ "numeral": "154", "part": "cam", "face": "axis" },
+		{ "numeral": "208", "part": "cam", "face": "lobe-2" },
+		{ "numeral": "210", "part": "cam", "face": "land-1" }
 	]
 }
 ```
