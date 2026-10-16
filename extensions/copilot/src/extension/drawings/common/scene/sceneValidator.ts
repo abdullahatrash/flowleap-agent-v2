@@ -291,7 +291,7 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 		input.numerals.forEach((port, index) => {
 			const path = `numerals[${index}]`;
 			if (!isObject(port)) {
-				error(path, 'must be { numeral, part, face, point?, surface? }');
+				error(path, 'must be { numeral, part, face, point?, surface?, mark? }');
 				return;
 			}
 			if (typeof port.numeral !== 'string' || !NUMERAL_PATTERN.test(port.numeral)) {
@@ -308,6 +308,9 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 			}
 			if (port.surface !== undefined && typeof port.surface !== 'boolean') {
 				error(`${path}.surface`, 'must be true or false');
+			}
+			if (port.mark !== undefined && port.mark !== 'centre') {
+				error(`${path}.mark`, 'must be "centre"');
 			}
 		});
 	}

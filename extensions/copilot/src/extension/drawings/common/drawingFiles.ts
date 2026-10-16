@@ -69,11 +69,16 @@ export type DiagramSource =
 	| { readonly figure: string; readonly mode: 'flowchart'; readonly input: FlowchartInput }
 	| { readonly figure: string; readonly mode: 'block'; readonly input: BlockDiagramInput };
 
+/** The 3D-only SVG checks: a diagram has keywords per office, no parts, and its own lead rules. */
+const NOT_FOR_DIAGRAMS: ReadonlySet<DrawingRule> = new Set<DrawingRule>(['text-beyond-keywords', 'lead-line-off-part', 'lead-ends-on-nothing', 'lead-along-edge']);
+
 /**
  * The SVG checks of a 2D Figure. The diagram writer checks its own labels per office (a flowchart
- * box may carry a sentence) and has no parts, so the keyword and on-part checks do not apply.
+ * box may carry a sentence) and has no parts, so the keyword and on-part checks do not apply. Its
+ * lead lines end on the box edge by construction (`lead-line` and `lead-crosses-edge` in
+ * diagramFaults.ts), so the 3D lead-end checks do not run either.
  */
-export const DIAGRAM_SVG_CHECKS: readonly DrawingRule[] = (Object.keys(DRAWING_RULES) as DrawingRule[]).filter(rule => rule !== 'text-beyond-keywords' && rule !== 'lead-line-off-part');
+export const DIAGRAM_SVG_CHECKS: readonly DrawingRule[] = (Object.keys(DRAWING_RULES) as DrawingRule[]).filter(rule => !NOT_FOR_DIAGRAMS.has(rule));
 
 /** One review round of a Figure. `seen` is false when the model got the findings only. */
 export interface ReviewRound {

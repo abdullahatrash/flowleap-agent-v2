@@ -7,7 +7,7 @@ import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../../co
 import type { DrawingScene, HatchOverride, SectionPlane, Vec2 } from '../../common/scene/drawingScene';
 import { layoutFigure, ProjectedPart, ProjectedPort, writeFigureSvg } from '../../common/lineArt/lineArt';
 import { flattenSvgPath, pointSegmentDistance, Segment, toSegments } from '../../common/lineArt/planar';
-import { CameraBasis, cameraBasis, dot, isSectioned, projectPoint, resolvePort, sectionNormal } from '../../common/scene/sceneGeometry';
+import { CameraBasis, cameraBasis, dot, hasCentreMark, isPortEdgeOn, isSectioned, projectPoint, resolvePort, sectionNormal } from '../../common/scene/sceneGeometry';
 import { SceneValidationOptions, validateScene } from '../../common/scene/sceneValidator';
 import { KernelDrawing, KernelObject, KernelShape, loadDrawingKernel, point3, ReplicadApi } from './drawingKernel';
 import { buildPart } from './sceneSolids';
@@ -178,8 +178,9 @@ export async function renderFigure(input: unknown, options: RenderFigureOptions 
 	}
 	const partsById = new Map(scene.parts.map(part => [part.id, part]));
 	const ports: ProjectedPort[] = scene.numerals.map(port => {
-		const point = resolvePort(port, partsById.get(port.part), camera);
-		return { numeral: port.numeral, part: port.part, surface: port.surface === true, anchor: point && projectPoint(camera, point) };
+		const part = partsById.get(port.part);
+		const point = resolvePort(port, part, camera);
+		return { numeral: port.numeral, part: port.part, surface: port.surface === true, anchor: point && projectPoint(camera, point), mark: hasCentreMark(port), edgeOn: isPortEdgeOn(port, part, camera) };
 	});
 	const svg = writeFigureSvg(layoutFigure({ figure: scene.figure, parts, ports, hiddenEdges: scene.hiddenEdges ?? 'omit', scale: scene.scale }));
 	findings.push(...checkFigureSvgFaults(svg, { file: `${scene.figure}.svg` }));

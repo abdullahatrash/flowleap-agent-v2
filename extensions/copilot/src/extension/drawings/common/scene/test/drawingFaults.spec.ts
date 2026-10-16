@@ -67,7 +67,7 @@ describe('Patent Drawings mechanical fault list', () => {
 	});
 
 	it('crossing lead lines', () => {
-		expect(rules(checkFigureSvgFaults(svg(SQUARE, lead('10', 'M66.7 30 L30 45'), numeral('10', 70, 32), lead('12', 'M66.7 46 L30 20'), numeral('12', 70, 48))))).toEqual(['lead-lines-cross']);
+		expect(rules(checkFigureSvgFaults(svg(SQUARE, lead('10', 'M66.7 30 L50 45'), numeral('10', 70, 32), lead('12', 'M66.7 46 L50 20'), numeral('12', 70, 48))))).toEqual(['lead-lines-cross']);
 	});
 
 	it('lead line ending off its part', () => {
@@ -91,11 +91,26 @@ describe('Patent Drawings mechanical fault list', () => {
 	});
 
 	it('numerals that overlap', () => {
-		expect(rules(checkFigureSvgFaults(svg(...CLEAN, lead('12', 'M74.5 33.8 L45 49'), numeral('12', 74.5, 33))))).toEqual(['numeral-overlap']);
+		expect(rules(checkFigureSvgFaults(svg(...CLEAN, lead('12', 'M74.5 33.8 L45 50'), numeral('12', 74.5, 33))))).toEqual(['numeral-overlap']);
 	});
 
 	it('numeral on a drawn line', () => {
 		expect(rules(checkFigureSvgFaults(svg(...CLEAN, '<line class="edge" data-part="p" x1="60" y1="30.5" x2="80" y2="30.5" stroke="#000" stroke-width="0.4"/>')))).toEqual(['numeral-on-line']);
+	});
+
+	it('lead line that ends on no edge and no centre mark (#693)', () => {
+		const mark = '<path class="mark" data-numeral="10" data-part="p" stroke-width="0.2" d="M28.5 30 L31.5 30 M30 28.5 L30 31.5"/>';
+		expect({
+			onNothing: rules(checkFigureSvgFaults(svg(SQUARE, lead('10', 'M66.7 30 L30 30'), numeral('10', 70, 32)))),
+			onMarkArm: rules(checkFigureSvgFaults(svg(SQUARE, mark, lead('10', 'M66.7 40 L30 31.5'), numeral('10', 70, 42)))),
+		}).toEqual({ onNothing: ['lead-ends-on-nothing'], onMarkArm: [] });
+	});
+
+	it('lead line that runs along a visible edge (#694)', () => {
+		expect({
+			alongTopEdge: rules(checkFigureSvgFaults(svg(SQUARE, lead('10', 'M66.7 10 L45 10'), numeral('10', 70, 12)))),
+			atAnAngle: rules(checkFigureSvgFaults(svg(SQUARE, lead('10', 'M66.7 0 L45 10'), numeral('10', 70, 2)))),
+		}).toEqual({ alongTopEdge: ['lead-along-edge'], atAnAngle: [] });
 	});
 
 	it('a diagram SVG runs a subset of checks without parts or a kernel', () => {
@@ -148,6 +163,20 @@ describe('Patent Drawings mechanical fault list', () => {
 			shaftForced: true,
 			boxDefault: true,
 			boxOptOut: false,
+		});
+	});
+
+	it('scene validator and port check: mark is "centre", axis is a port of axial parts', () => {
+		const parts = [{ id: 'cam', name: 'cam', shape: { kind: 'extrudedPolygon' as const, points: [[10, 0], [0, 8], [-6, 0], [0, -8]] as const, height: 6 } }, { id: 'housing', shape: { kind: 'box' as const, size: [4, 4, 4] as const } }];
+		const badMark = validateScene({ ...scene({}), numerals: [{ numeral: '10', part: 'housing', face: 'top', mark: 'cross' }] });
+		expect({
+			badMark: badMark.findings.map(finding => finding.message),
+			axisOnCam: rules(checkSceneFaults(scene({ camera: 'top', parts, numerals: [{ numeral: '10', part: 'cam', face: 'axis' }, { numeral: '12', part: 'housing', face: 'top', mark: 'centre' }] }))),
+			axisOnBox: rules(checkSceneFaults(scene({ parts, numerals: [{ numeral: '10', part: 'cam', face: 'top' }, { numeral: '12', part: 'housing', face: 'axis' }] }))),
+		}).toEqual({
+			badMark: ['numerals[0].mark: must be "centre"'],
+			axisOnCam: [],
+			axisOnBox: ['numeral-without-port'],
 		});
 	});
 });

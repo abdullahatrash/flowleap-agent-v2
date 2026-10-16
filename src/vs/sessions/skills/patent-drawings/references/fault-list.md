@@ -20,6 +20,8 @@ From the scene validator, the renderer and `drawingFaults.ts`.
 | `numeral-two-parts` | One numeral points at two different parts. | Give each part its own numeral; for one part shown twice, use the same `name` on both. |
 | `lead-lines-cross` | Two lead lines cross. | Move one port: another face or `point` that the camera sees on the other side, or change the camera. |
 | `lead-line-off-part` | A lead line ends off its part. | Pick a face that is visible in this camera, or give a `point` on the visible side. |
+| `lead-ends-on-nothing` | A lead line ends more than 0.3 mm from every visible edge and every centre mark (for example on the empty middle of a face). | Point the port at a visible edge, or use the `axis` port or `mark: "centre"` for an axis or a centre point. |
+| `lead-along-edge` | A lead line runs along a visible edge: within 5° of it and within 0.3 mm for more than 1 mm. It reads as part of the edge. | Move the port to a face the camera does not see edge-on, or give a `point` away from the edge's end. |
 | `lead-line-far-from-numeral` | A lead line does not start beside its numeral. | Move the port so the numeral has free space near it; render again. |
 | `lead-line-missing` | A numeral has no lead line and is not an underlined surface numeral. | Remove `surface: true` only if a lead line is wanted, or set it for a surface numeral. |
 | `glyph-too-small` | A character is under 3.2 mm high at sheet scale. | Remove `scale` (fit to the default size), or lower the part count of the Figure. |

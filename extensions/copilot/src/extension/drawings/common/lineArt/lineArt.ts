@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { HatchAngle, HatchOverride, Vec2 } from '../scene/drawingScene';
-import { NUMERAL_FONT_SIZE, NumeralRequest, PlacedNumeral, placeNumerals } from './numeralPlacer';
+import { centreMarkLines, NUMERAL_FONT_SIZE, NumeralRequest, PartEdge, PlacedNumeral, placeNumerals } from './numeralPlacer';
 import { hatch, Rect, Segment, segmentSetsNear, toSegments } from './planar';
 
 /** Visible edge width in sheet millimetres. */
@@ -67,6 +67,10 @@ export interface ProjectedPort {
 	readonly part: string;
 	readonly anchor?: Vec2;
 	readonly surface: boolean;
+	/** True when the port gets a centre mark (`mark: "centre"` or the `axis` port). */
+	readonly mark?: boolean;
+	/** True when the port's face is a plane the camera sees edge-on. */
+	readonly edgeOn?: boolean;
 }
 
 /** The kernel output for one Figure. */
@@ -170,13 +174,15 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 	const drawing: Rect = { x: MARGIN, y: MARGIN, width: spanX * scale, height: spanY * scale };
 	const requests: NumeralRequest[] = projected.ports
 		.filter((port): port is ProjectedPort & { anchor: Vec2 } => port.anchor !== undefined)
-		.map(port => ({ numeral: port.numeral, part: port.part, surface: port.surface, anchor: toSheet(port.anchor) }));
+		.map(port => ({ numeral: port.numeral, part: port.part, surface: port.surface, anchor: toSheet(port.anchor), mark: port.mark, edgeOn: port.edgeOn }));
 	const obstacles = [...toSegments(edges.map(edge => edge.line)), ...toSegments(hidden.map(edge => edge.line)), ...hatching.map(item => item.line)];
-	const numerals = placeNumerals(requests, obstacles, drawing).map(numeral => ({
+	const partEdges: PartEdge[] = edges.flatMap(edge => toSegments([edge.line]).map(segment => ({ part: edge.part, segment })));
+	const numerals = placeNumerals(requests, obstacles, drawing, partEdges).map(numeral => ({
 		...numeral,
 		x: round(numeral.x),
 		y: round(numeral.y),
 		lead: numeral.lead && [[round(numeral.lead[0][0]), round(numeral.lead[0][1])], [round(numeral.lead[1][0]), round(numeral.lead[1][1])]] as Segment,
+		centreMark: numeral.centreMark && [round(numeral.centreMark[0]), round(numeral.centreMark[1])] as Vec2,
 	}));
 	return { figure: projected.figure, width: round(spanX * scale + 2 * MARGIN), height: round(spanY * scale + 2 * MARGIN), edges, hidden, hatching, hatchStyles, numerals, fontSize: NUMERAL_FONT_SIZE };
 }
@@ -191,7 +197,7 @@ function escapeXml(text: string): string {
 
 /**
  * Writes `FIG-N.svg`: black line art on white, units in sheet millimetres. Visible edges 0.4 mm,
- * lead lines, hatching and dashed hidden edges 0.2 mm, numerals at 4.5 mm font size (3.2 mm digit
+ * lead lines, centre marks (`path.mark`), hatching and dashed hidden edges 0.2 mm, numerals at 4.5 mm font size (3.2 mm digit
  * height), surface numerals underlined without a lead line. The `class` and `data-*` attributes let
  * the mechanical fault list read the file back.
  */
@@ -210,6 +216,10 @@ export function writeFigureSvg(layout: FigureLayout): string {
 		lines.push(`<path class="hatch" data-part="${escapeXml(item.part)}" stroke-width="${THIN_WIDTH}" d="${pathData(item.line)}"/>`);
 	}
 	for (const numeral of layout.numerals) {
+		if (numeral.centreMark) {
+			const d = centreMarkLines(numeral.centreMark).map(([from, to]) => `M${round(from[0])} ${round(from[1])} L${round(to[0])} ${round(to[1])}`).join(' ');
+			lines.push(`<path class="mark" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}" stroke-width="${THIN_WIDTH}" d="${d}"/>`);
+		}
 		if (numeral.lead) {
 			const [from, to] = numeral.lead;
 			lines.push(`<line class="lead" data-numeral="${escapeXml(numeral.numeral)}" data-part="${escapeXml(numeral.part)}" stroke-width="${THIN_WIDTH}" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`);
