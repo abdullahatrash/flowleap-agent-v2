@@ -10,10 +10,15 @@
  * refusals and files. Bundled to `dist/drawings-cli.js` beside the kernel and resvg WebAssembly.
  *
  * ```
- * drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen]
+ * drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen] [--new-cycle]
  * drawings-cli build <matter> [--partial]
  * drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]
+ * drawings-cli reset-rounds <matter> <figure>
  * ```
+ *
+ * `--new-cycle` starts the next review cycle of the Figure (three more rounds). It has no chat
+ * confirmation: the host's command approval and the cap of three cycles are the guard. After three
+ * cycles only a person clears the rounds with `reset-rounds`, which no skill names (#696).
  *
  * `<figure>` is `1`, `1A` or `FIG-1A`. `--root <dir>` is the workspace that holds `drafting/`
  * (default: the current folder). Input and sketch files are read relative to the current folder,
@@ -32,7 +37,7 @@ import { buildDrawingSetOp } from '../ops/buildDrawingSetOp';
 import { figureId, MAX_REVIEW_ROUNDS } from '../../common/drawingFiles';
 import { NodeMatterFiles } from '../ops/matterFiles';
 import { proposeFigurePartOp } from '../ops/proposeFigurePartOp';
-import { BlockRequest, FlowchartRequest, renderFigureOp } from '../ops/renderFigureOp';
+import { BlockRequest, FlowchartRequest, renderFigureOp, resetReviewRoundsOp } from '../ops/renderFigureOp';
 
 /** A JSON value of the CLI output. */
 type CliValue = string | number | boolean | undefined | readonly CliValue[] | { readonly [key: string]: CliValue };
@@ -58,10 +63,10 @@ class Refusal extends Error { }
 /** Thrown for a usage error. */
 class UsageError extends Error { }
 
-const USAGE = 'Usage: drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen]; drawings-cli build <matter> [--partial]; drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]. Option: --root <workspace>.';
+const USAGE = 'Usage: drawings-cli render <matter> <figure> --scene <file> | --flowchart <file> | --block <file> [--no-render-seen] [--new-cycle]; drawings-cli build <matter> [--partial]; drawings-cli propose <matter> <figure> <part> [--numeral <n>] [--features F1,F2] [--sketch <file>]; drawings-cli reset-rounds <matter> <figure>. Option: --root <workspace>.';
 
 /** Options without a value. */
-const FLAGS = new Set(['no-render-seen', 'partial']);
+const FLAGS = new Set(['no-render-seen', 'partial', 'new-cycle']);
 
 /** The parsed command line: positional arguments, `--name value` options and flags. */
 interface ParsedArgs {
@@ -166,19 +171,20 @@ async function render(args: ParsedArgs, root: string, cwd: string): Promise<CliO
 		...(figure.partial ? { partial: figure.partial } : {}),
 		...(mode === 'scene' ? { scene: input as DrawingScene } : mode === 'flowchart' ? { flowchart: input as FlowchartRequest } : { block: input as BlockRequest }),
 		seen,
+		...(args.flags.has('new-cycle') ? { newCycle: true } : {}),
 	});
 	if (!result.ok) {
 		throw new Refusal(result.reason);
 	}
-	const review = `${files.folder}/drawings/review/FIG-${figure.key}.round-${result.round}.png`;
 	return {
 		ok: true,
 		command: 'render',
 		figure: `FIG. ${figure.key}`,
+		cycle: result.cycle,
 		round: result.round,
 		roundsLeft: MAX_REVIEW_ROUNDS - result.round,
 		seen: result.seen,
-		review,
+		review: result.review,
 		errors: result.findings.filter(finding => finding.severity === 'Error').length,
 		findings: result.findings.map(toCliFinding),
 		text: result.text,
@@ -246,6 +252,24 @@ async function propose(args: ParsedArgs, root: string, cwd: string): Promise<Cli
 	};
 }
 
+/** Clears the review rounds of one Figure; a human step (#696). Prints what it cleared. */
+async function resetRounds(args: ParsedArgs, root: string): Promise<CliOutput> {
+	const { files } = matterFiles(root, args.positional[1]);
+	const figure = parseFigure(args.positional[2]);
+	const label = `FIG. ${figure.key}`;
+	const result = await resetReviewRoundsOp(files, figure);
+	return {
+		ok: true,
+		command: 'reset-rounds',
+		figure: label,
+		cleared: { cycle: result.cycle, rounds: result.rounds },
+		deleted: result.deleted,
+		text: result.cycle === 0
+			? `${label} had no review rounds; nothing to clear.`
+			: `Cleared ${label}: review cycle ${result.cycle} with ${result.rounds} round(s) used, and ${result.deleted.length} review render(s). The next render is round 1 of cycle 1.`,
+	};
+}
+
 /** Runs one CLI command. Never throws: a refusal or a usage error is part of the result. */
 export async function runDrawingsCli(argv: readonly string[], cwd: string = process.cwd()): Promise<CliResult> {
 	let command = argv[0] ?? '';
@@ -257,6 +281,7 @@ export async function runDrawingsCli(argv: readonly string[], cwd: string = proc
 			case 'render': return { exitCode: 0, output: await render(args, root, cwd) };
 			case 'build': return { exitCode: 0, output: await build(args, root) };
 			case 'propose': return { exitCode: 0, output: await propose(args, root, cwd) };
+			case 'reset-rounds': return { exitCode: 0, output: await resetRounds(args, root) };
 			default: throw new UsageError(USAGE);
 		}
 	} catch (error) {

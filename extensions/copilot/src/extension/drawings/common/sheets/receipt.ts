@@ -44,10 +44,12 @@ export interface FigureFinding extends DraftFinding {
 	readonly citation?: string;
 }
 
-/** The review renders the model saw for one Figure, latest last. Empty when no render was seen. */
+/** The review renders the model saw for one Figure in its current review cycle, latest last. Empty when no render was seen. */
 export interface FigureReviewRecord {
 	/** The Figure key, e.g. `1` or `1A`. */
 	readonly figure: string;
+	/** The current review cycle of the Figure, from 1. */
+	readonly cycle: number;
 	readonly rounds: readonly { readonly round: number; readonly png: string }[];
 }
 
@@ -453,8 +455,8 @@ export function writeDrawingsReceipt(input: ReceiptInput): { readonly markdown: 
 	for (const record of input.reviewRounds) {
 		const rounds = [...record.rounds].sort((a, b) => a.round - b.round);
 		lines.push(rounds.length
-			? `| ${cell(record.figure)} | ${rounds.map(item => item.round).join(', ')} | ${cell(rounds[rounds.length - 1].png)} |`
-			: `| ${cell(record.figure)} | no render seen | - |`);
+			? `| ${cell(record.figure)} | cycle ${record.cycle}, ${rounds.length === 1 ? 'round' : 'rounds'} ${rounds.map(item => item.round).join(', ')} | ${cell(rounds[rounds.length - 1].png)} |`
+			: `| ${cell(record.figure)} | cycle ${record.cycle}, no render seen | - |`);
 	}
 	if (input.reviewRounds.length === 0) {
 		lines.push('| - | no render seen | - |');

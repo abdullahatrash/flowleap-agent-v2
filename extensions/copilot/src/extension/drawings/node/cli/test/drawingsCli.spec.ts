@@ -121,7 +121,35 @@ describe('drawings CLI', () => {
 	it('records a round the model did not see with --no-render-seen', async () => {
 		const run = await runCli(workspace, ['render', 'widget', '1', '--scene', 'box.json', '--no-render-seen']);
 		const rounds = JSON.parse(await fs.readFile(path.join(matterDir, 'drawings', 'rounds.json'), 'utf8'));
-		expect({ exitCode: run.exitCode, seen: run.output.seen, rounds }).toEqual({ exitCode: 0, seen: false, rounds: { figures: { '1': [{ round: 1, png: 'review/FIG-1.round-1.png', seen: false }] } } });
+		expect({ exitCode: run.exitCode, seen: run.output.seen, rounds }).toEqual({ exitCode: 0, seen: false, rounds: { figures: { '1': { cycle: 1, rounds: [{ round: 1, png: 'review/FIG-1.round-1.png', seen: false }] } } } });
+	}, 120_000);
+
+	it('starts a new review cycle with --new-cycle, and reset-rounds prints what it clears', async () => {
+		await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
+		const rounds = [1, 2, 3].map(round => ({ round, png: `review/FIG-1.round-${round}.png`, seen: false }));
+		await fs.writeFile(path.join(matterDir, 'drawings', 'rounds.json'), JSON.stringify({ figures: { '1': rounds } }));
+		const refused = await runCli(workspace, ['render', 'widget', '1', '--scene', 'box.json']);
+		const next = await runCli(workspace, ['render', 'widget', '1', '--scene', 'box.json', '--new-cycle', '--no-render-seen']);
+		const reset = await runCli(workspace, ['reset-rounds', 'widget', 'FIG-1']);
+		const roundsAfter = JSON.parse(await fs.readFile(path.join(matterDir, 'drawings', 'rounds.json'), 'utf8'));
+		expect({
+			refused: refusal(refused),
+			next: { exitCode: next.exitCode, cycle: next.output.cycle, round: next.output.round, roundsLeft: next.output.roundsLeft, review: next.output.review },
+			reset: reset.output,
+			roundsAfter,
+		}).toEqual({
+			refused: { exitCode: 1, ok: false, reason: 'Three review rounds used for FIG. 1 in cycle 1. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).' },
+			next: { exitCode: 0, cycle: 2, round: 1, roundsLeft: 2, review: 'drafting/widget/drawings/review/FIG-1.cycle-2.round-1.png' },
+			reset: {
+				ok: true,
+				command: 'reset-rounds',
+				figure: 'FIG. 1',
+				cleared: { cycle: 2, rounds: 1 },
+				deleted: ['drafting/widget/drawings/review/FIG-1.cycle-2.round-1.png'],
+				text: 'Cleared FIG. 1: review cycle 2 with 1 round(s) used, and 1 review render(s). The next render is round 1 of cycle 1.',
+			},
+			roundsAfter: { figures: {} },
+		});
 	}, 120_000);
 
 	it('proposes a part with the next numeral of the scheme and copies the sketch', async () => {
@@ -150,7 +178,7 @@ describe('drawings CLI', () => {
 				},
 			},
 			{
-				name: 'a fourth round', args: ['render', 'widget', '1', '--scene', 'box.json'],
+				name: 'a fourth round in a review cycle', args: ['render', 'widget', '1', '--scene', 'box.json'],
 				setup: async (_workspace, matterDir) => {
 					await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
 					const rounds = [1, 2, 3].map(round => ({ round, png: `review/FIG-1.round-${round}.png`, seen: false }));

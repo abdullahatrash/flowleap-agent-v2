@@ -98,8 +98,8 @@ This file lists each code check, the rule it applies and its result. It is not a
 
 | Figure | Rounds the model saw | Latest render |
 |---|---|---|
-| 1 | 1 | review/FIG-1.round-1.png |
-| 2 | no render seen | - |
+| 1 | cycle 1, round 1 | review/FIG-1.round-1.png |
+| 2 | cycle 1, no render seen | - |
 ",
   "result": {
     "manifestUpdated": true,
@@ -231,12 +231,14 @@ exports[`renderFigureOp > renders a 3D scene: writes the source, the SVG and the
     "rounds.json",
   ],
   "first": {
+    "cycle": 1,
     "findings": [],
     "ok": true,
     "png": "PNG",
+    "review": "drafting/hinge/drawings/review/FIG-1.round-1.png",
     "round": 1,
     "seen": true,
-    "text": "Rendered FIG. 1: wrote drafting/hinge/drawings/FIG-1.scene.json, drafting/hinge/drawings/FIG-1.svg and the review render drafting/hinge/drawings/review/FIG-1.round-1.png. Round 1 of 3.
+    "text": "Rendered FIG. 1: wrote drafting/hinge/drawings/FIG-1.scene.json, drafting/hinge/drawings/FIG-1.svg and the review render drafting/hinge/drawings/review/FIG-1.round-1.png. Round 1 of 3 in review cycle 1.
 Still to draw: FIG. 2 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
@@ -249,27 +251,32 @@ Do not call the Figure compliant or ready to file.",
   ],
   "rounds": {
     "figures": {
-      "1": [
-        {
-          "png": "review/FIG-1.round-1.png",
-          "round": 1,
-          "seen": true,
-        },
-        {
-          "png": "review/FIG-1.round-2.png",
-          "round": 2,
-          "seen": false,
-        },
-      ],
+      "1": {
+        "cycle": 1,
+        "rounds": [
+          {
+            "png": "review/FIG-1.round-1.png",
+            "round": 1,
+            "seen": true,
+          },
+          {
+            "png": "review/FIG-1.round-2.png",
+            "round": 2,
+            "seen": false,
+          },
+        ],
+      },
     },
   },
   "second": {
+    "cycle": 1,
     "findings": [],
     "ok": true,
     "png": "PNG",
+    "review": "drafting/hinge/drawings/review/FIG-1.round-2.png",
     "round": 2,
     "seen": false,
-    "text": "Rendered FIG. 1: wrote drafting/hinge/drawings/FIG-1.scene.json, drafting/hinge/drawings/FIG-1.svg and the review render drafting/hinge/drawings/review/FIG-1.round-2.png. Round 2 of 3.
+    "text": "Rendered FIG. 1: wrote drafting/hinge/drawings/FIG-1.scene.json, drafting/hinge/drawings/FIG-1.svg and the review render drafting/hinge/drawings/review/FIG-1.round-2.png. Round 2 of 3 in review cycle 1.
 Still to draw: FIG. 2 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 No render is attached (the model reads the findings only); the receipt records that no render was seen in this round.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
@@ -283,12 +290,14 @@ Do not call the Figure compliant or ready to file.",
 exports[`renderFigureOp > renders a flowchart from an approved method claim 1`] = `
 {
   "result": {
+    "cycle": 1,
     "findings": [],
     "ok": true,
     "png": "PNG",
+    "review": "drafting/hinge/drawings/review/FIG-2.round-1.png",
     "round": 1,
     "seen": true,
-    "text": "Rendered FIG. 2: wrote drafting/hinge/drawings/FIG-2.scene.json, drafting/hinge/drawings/FIG-2.svg and the review render drafting/hinge/drawings/review/FIG-2.round-1.png. Round 1 of 3.
+    "text": "Rendered FIG. 2: wrote drafting/hinge/drawings/FIG-2.scene.json, drafting/hinge/drawings/FIG-2.svg and the review render drafting/hinge/drawings/review/FIG-2.round-1.png. Round 1 of 3 in review cycle 1.
 Still to draw: FIG. 1 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.

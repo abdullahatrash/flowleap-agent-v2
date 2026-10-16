@@ -29,6 +29,7 @@ const SURFACE_WORDING: readonly (readonly [editor: string, sessions: string])[] 
 	['`build_drawing_set` refuses', 'The `build` command refuses'],
 	['Write the input per Figure', 'Write the input file per Figure'],
 	['has an input whose numerals', 'has an input file whose numerals'],
+	['`newCycle: true`', '`--new-cycle`'],
 ];
 
 /** Editor text in Agents Window wording. */

@@ -50,10 +50,15 @@ Done when every in-scope Figure has an input whose numerals are all in
 2. Fix each Error per [references/fault-list.md](references/fault-list.md),
    in the input, then render again. Look at the render for what code cannot
    check: a part in the wrong place, a wrong view.
-3. Stop after the third round. Report the Errors that stay open.
+3. Stop after the third round of the review cycle. Report the Errors that
+   stay open.
+4. Never set `newCycle` on your own. Set it only when the attorney asked to
+   continue work on this Figure or the engine changed. Then `render_figure`
+   asks the attorney to confirm the new cycle (three more rounds) in chat.
 
-Done when each Figure has no Error Finding, or has used three rounds and its
-open Errors are reported.
+Done when each Figure has no Error Finding, or has used the three rounds of
+its review cycle and its open Errors are reported. A new review cycle starts
+only when the attorney asked for it.
 
 ## Step 4: Propose missing parts and stop
 
