@@ -60,6 +60,7 @@ echo "== nginx hardening (2026-10-06 outage)"
 # while DNS is down.
 check "vhost carries a resolver (no backend name resolved at startup)" grep -qE '^[[:space:]]*resolver ' "/etc/nginx/sites-available/$host"
 check "authorize proxy_pass uses a variable (runtime DNS)" grep -qE 'proxy_pass \$flowleap_authorize;' "/etc/nginx/sites-available/$host"
+check "authorize subrequest names this workspace (scoped allowlist entries)" grep -qE "proxy_set_header X-FlowLeap-Hosted-Workspace \"$name\";" "/etc/nginx/sites-available/$host"
 check "no backup file in sites-enabled" sh -c "! ls /etc/nginx/sites-enabled/*.bak* /etc/nginx/sites-enabled/*~ >/dev/null 2>&1"
 if [ "$FLOWLEAP_INIT" = systemd ]; then
 	check "nginx drop-in restarts nginx on failure" grep -q '^Restart=on-failure' /etc/systemd/system/nginx.service.d/flowleap-restart.conf
