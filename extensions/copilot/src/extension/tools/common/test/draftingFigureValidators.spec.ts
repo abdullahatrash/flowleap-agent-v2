@@ -35,17 +35,23 @@ const outline = parseDraftOutline([
 
 describe('Application Drafting figures.md validators', () => {
 
-	it('settings: Notes for unknown values; for EPO an Error for letter sheets (OJ EPO 2025 A49 Art. 2(2))', () => {
+	it('settings: Notes for unknown values; an Error when pageSize differs from the export page of the office (one page size per application)', () => {
 		expect([
 			checkFiguresSettings('---\nnumerals: hundreds\npageSize: letter\n---\n', 'US'),
+			checkFiguresSettings('## FIG. 1\n- 12: housing\n', 'US'),
+			checkFiguresSettings('## FIG. 1\n- 12: housing\n', 'EPO'),
+			checkFiguresSettings('---\npageSize: A4\n---\n', 'US'),
 			checkFiguresSettings('---\npageSize: letter\n---\n', 'EPO'),
-			checkFiguresSettings('---\nnumerals: odd\npageSize: A3\n---\n', 'EPO'),
+			checkFiguresSettings('---\nnumerals: odd\npageSize: A3\n---\n', 'US'),
 		]).toEqual([
 			[],
-			[{ severity: 'Error', rule: 'figures-settings', file: 'figures.md', message: 'figures.md sets `pageSize: letter`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set `pageSize: A4`.' }],
+			[],
+			[],
+			[{ severity: 'Error', rule: 'page-size-mismatch', file: 'figures.md', message: 'figures.md sets `pageSize: A4`, but the US export puts the text on Letter (37 CFR 1.52 page setup). One page size per application (37 CFR 1.52(a)(1)(ii); 37 CFR 1.84(f)). Set `pageSize: letter`, or remove the line to use the office default.' }],
+			[{ severity: 'Error', rule: 'page-size-mismatch', file: 'figures.md', message: 'figures.md sets `pageSize: letter`, but the EPO export puts the text on A4 (Rule 49 EPC page setup). One page size per application (OJ EPO 2025 A49 Art. 1(1)(a); PCT Rule 11.5). The EPO accepts A4 sheets only. Set `pageSize: A4`, or remove the line to use the office default.' }],
 			[
 				{ severity: 'Note', rule: 'figures-settings', file: 'figures.md', message: 'figures.md sets `numerals: odd`; use `even` or `hundreds`. The checks use `even`.' },
-				{ severity: 'Note', rule: 'figures-settings', file: 'figures.md', message: 'figures.md sets `pageSize: A3`; use `A4` or `letter`. The sheets use `A4`.' },
+				{ severity: 'Note', rule: 'figures-settings', file: 'figures.md', message: 'figures.md sets `pageSize: A3`; use `A4` or `letter`. The sheets use `letter`, the page of the US export.' },
 			],
 		]);
 	});

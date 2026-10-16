@@ -9,7 +9,8 @@
  * the proposal gate and the claimed-feature coverage. No model call.
  */
 
-import { readFiguresSettings } from './figures';
+import { DrawingPageSize, readFiguresSettings } from './figures';
+import { OFFICE_PAGE_SETUP, officeDrawingPageSize } from './filingDocuments';
 import { DraftFinding } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
@@ -19,13 +20,22 @@ import { FigurePart, figureHeadingNumbers, hasFigures, parseFigureParts, parseFi
 
 const figuresFile = DRAFTING_FILE_NAMES.figures;
 
+/** The rules of one page size per application, per office page. */
+const PAGE_SIZE_RULES: Readonly<Record<DrawingPageSize, string>> = {
+	letter: '37 CFR 1.52(a)(1)(ii); 37 CFR 1.84(f)',
+	A4: 'OJ EPO 2025 A49 Art. 1(1)(a); PCT Rule 11.5',
+};
+
 /**
  * Findings of the `figures.md` frontmatter: a Note for a `numerals` or `pageSize` value that is
- * not known (the default is used), and for EPO an Error for `pageSize: letter`: the EPO accepts
- * A4 sheets only (OJ EPO 2025 A49 Art. 2(2)).
+ * not known (the default is used), and an Error (`page-size-mismatch`) when the page size of the
+ * Drawing Sheets differs from the page of the office's export (letter for US, A4 for EPO): one
+ * page size per application. Without `pageSize` the sheets use the office's page, so the Error
+ * comes only from a value the frontmatter sets.
  */
 export function checkFiguresSettings(figures: string, office: DraftingOffice): DraftFinding[] {
-	const settings = readFiguresSettings(figures);
+	const officePage = officeDrawingPageSize(office);
+	const settings = readFiguresSettings(figures, officePage);
 	const { fields } = parseDraftingFrontmatter(figures);
 	const findings: DraftFinding[] = settings.invalid.map(key => ({
 		severity: 'Note',
@@ -33,10 +43,12 @@ export function checkFiguresSettings(figures: string, office: DraftingOffice): D
 		file: figuresFile,
 		message: key === 'numerals'
 			? `${figuresFile} sets \`numerals: ${String(fields[key])}\`; use \`even\` or \`hundreds\`. The checks use \`even\`.`
-			: `${figuresFile} sets \`pageSize: ${String(fields[key])}\`; use \`A4\` or \`letter\`. The sheets use \`A4\`.`,
+			: `${figuresFile} sets \`pageSize: ${String(fields[key])}\`; use \`A4\` or \`letter\`. The sheets use \`${officePage}\`, the page of the ${office} export.`,
 	}));
-	if (office === 'EPO' && settings.pageSize === 'letter') {
-		findings.push({ severity: 'Error', rule: 'figures-settings', file: figuresFile, message: `${figuresFile} sets \`pageSize: letter\`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set \`pageSize: A4\`.` });
+	if (settings.pageSize !== officePage) {
+		const setup = OFFICE_PAGE_SETUP[office];
+		const why = office === 'EPO' ? ' The EPO accepts A4 sheets only.' : '';
+		findings.push({ severity: 'Error', rule: 'page-size-mismatch', file: figuresFile, message: `${figuresFile} sets \`pageSize: ${settings.pageSize}\`, but the ${office} export puts the text on ${setup.paper} (${setup.rule} page setup). One page size per application (${PAGE_SIZE_RULES[officePage]}).${why} Set \`pageSize: ${officePage}\`, or remove the line to use the office default.` });
 	}
 	return findings;
 }

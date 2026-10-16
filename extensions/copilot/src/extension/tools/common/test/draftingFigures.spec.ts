@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { formatFigurePart, readFiguresSettings, readPartMarkers } from '../drafting/figures';
+import { officeDrawingPageSize } from '../drafting/filingDocuments';
 
 describe('Application Drafting figures.md contract', () => {
 
@@ -59,5 +60,15 @@ describe('Application Drafting figures.md contract', () => {
 			{ numerals: 'hundreds', pageSize: 'letter', invalid: [] },
 			{ numerals: 'even', pageSize: 'A4', invalid: ['numerals', 'pageSize'] },
 		]);
+	});
+
+	it('settings: pageSize defaults to the page of the office export; a value in the frontmatter wins', () => {
+		const bare = '## FIG. 1\n- 12: housing\n';
+		expect([
+			readFiguresSettings(bare, officeDrawingPageSize('US')).pageSize,
+			readFiguresSettings(bare, officeDrawingPageSize('EPO')).pageSize,
+			readFiguresSettings('---\npageSize: A4\n---\n', officeDrawingPageSize('US')).pageSize,
+			readFiguresSettings('---\npageSize: letter\n---\n', officeDrawingPageSize('EPO')).pageSize,
+		]).toEqual(['letter', 'A4', 'A4', 'letter']);
 	});
 });

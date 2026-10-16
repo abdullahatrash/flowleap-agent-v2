@@ -61,7 +61,7 @@ exports[`drawings CLI > refusals > refuses a build of Letter sheets for the EPO 
   "exitCode": 1,
   "ok": false,
   "reason": "1 Error(s) of the figure list are open; fix each in drafting/widget/figures.md, or the attorney waives it in drafting/widget/findings.md:
-- \`figures-settings\` (figures.md): figures.md sets \`pageSize: letter\`, but the EPO accepts A4 sheets only (OJ EPO 2025 A49 Art. 2(2)). Set \`pageSize: A4\`.",
+- \`page-size-mismatch\` (figures.md): figures.md sets \`pageSize: letter\`, but the EPO export puts the text on A4 (Rule 49 EPC page setup). One page size per application (OJ EPO 2025 A49 Art. 1(1)(a); PCT Rule 11.5). The EPO accepts A4 sheets only. Set \`pageSize: A4\`, or remove the line to use the office default.",
   "wrote": [],
 }
 `;
@@ -223,16 +223,16 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
       "manifestUpdated": false,
       "missing": [],
       "ok": true,
-      "pageSize": "A4",
+      "pageSize": "letter",
       "receipt": {
         "fail": 0,
         "file": "drafting/widget/drawings/drawings-compliance.md",
         "notChecked": 1,
-        "pass": 28,
+        "pass": 29,
       },
       "sheets": 1,
-      "text": "Built the Drawing Set of 2 Figure(s) on 1 A4 sheet(s) for US: drafting/widget/drawings/sheet-1.svg, drafting/widget/drawings/drawings.pdf, and the receipt drafting/widget/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/widget/drawings/review/.
-Receipt: 28 pass, 0 fail, 1 not checked.
+      "text": "Built the Drawing Set of 2 Figure(s) on 1 letter sheet(s) for US: drafting/widget/drawings/sheet-1.svg, drafting/widget/drawings/drawings.pdf, and the receipt drafting/widget/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/widget/drawings/review/.
+Receipt: 29 pass, 0 fail, 1 not checked.
 No code check fails.
 The Filing Manifest is written by export_draft_docx; it will count the 1 sheet(s).
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",

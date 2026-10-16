@@ -137,7 +137,7 @@ describe('Application Drafting validateDraft', () => {
 			'| O1 | Detailed Description | Technical | 1, 2, 3, 4 | a hinge, a housing, a lever, a spring | F2, F3 | yes |  |',
 		].join('\n');
 		const run = (office: 'US' | 'EPO') => summary(validateDraft({ office, draft, claims, figures: drawn, outline: { text: outline, approvedClaimsHash: 'c1', featureList: '| F1 | A hinge. |\n| F2 | A housing. |\n| F3 | A lever. |' } }))
-			.filter(line => /figure-|numeral|figures-settings/.test(line));
+			.filter(line => /figure-|numeral|figures-settings|page-size/.test(line));
 		expect({ US: run('US'), EPO: run('EPO') }).toEqual({
 			US: [
 				'Error reference-numeral figures.md:9',
@@ -147,7 +147,7 @@ describe('Application Drafting validateDraft', () => {
 			],
 			EPO: [
 				'Error reference-numeral figures.md:9',
-				'Error figures-settings figures.md:-',
+				'Error page-size-mismatch figures.md:-',
 				'Error figure-proposal figures.md:8',
 				'Error figure-coverage figures.md:- claim 1',
 				'Note numeral-scheme figures.md:9',

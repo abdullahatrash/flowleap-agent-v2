@@ -15,7 +15,7 @@ import type { DiagramStep } from '../../common/diagram/steps';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, parseReviewRounds, partsOfFigure, renderReviewRounds, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
 import { ApprovedClaims, MatterFiles, readApprovedClaims, readMatterOffice } from './matterFiles';
 
 /** A flowchart Figure: the steps in order, or the approved method claim to read them from. */
@@ -143,10 +143,17 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 
 	const drawn = (await files.listFiles('drawings')).map(name => figureOfSvgFile(name)).filter((item): item is FigureId => item !== undefined);
 	const { expected, missing } = figureSetStatus(figures, drawn);
+	const drawnFigures: DrawnFigure[] = [];
+	for (const item of drawn) {
+		drawnFigures.push({ figure: item, svg: item.key === figure.key ? rendered.svg : await files.read(`drawings/FIG-${item.key}.svg`) ?? '' });
+	}
+	const notDrawn = partsNotDrawn(figures, drawnFigures).filter(item => item.figures.includes(figure.key));
 	const errors = rendered.findings.filter(finding => finding.severity === 'Error');
 	const text = [
 		`Rendered ${label}: wrote ${drawings}/FIG-${figure.key}.scene.json, ${drawings}/FIG-${figure.key}.svg and the review render ${drawings}/${png}. Round ${round} of ${MAX_REVIEW_ROUNDS} in review cycle ${cycle}.`,
 		missing.length ? `Still to draw: ${figureListText(missing)} (${figuresPath} names ${expected.length} Figure(s)); build_drawing_set refuses until every one is drawn.` : `Every Figure ${figuresPath} names is drawn.`,
+		...notDrawn.map(partsNotDrawnLine),
+		...(notDrawn.length ? [`Draw each part ${figuresPath} lists for the Figure, or tell the attorney which parts the Figure leaves out. The receipt records the list as a Note; it does not block the build.`] : []),
 		input.seen ? 'The review render of this round is attached; it is not a deliverable.' : 'No render is attached (the model reads the findings only); the receipt records that no render was seen in this round.',
 		rendered.findings.length
 			? `Findings (${errors.length} Error(s)):\n${rendered.findings.map(drawingFindingLine).join('\n')}`

@@ -303,6 +303,22 @@ describe('buildDrawingSetOp', () => {
 	}, KERNEL_TIMEOUT);
 });
 
+describe('figure-parts-not-drawn', () => {
+	it('names the numerals figures.md lists for a Figure but the Figure does not draw, in the render text and as a receipt Note (live FIG. 2)', async () => {
+		const quickRelease: DrawingScene = JSON.parse(readFileSync(path.join(__dirname, '../../kernel/test/fixtures/quick-release-section.scene.json'), 'utf8'));
+		const { render, read, files } = await setup({ 'feature-list.md': featureList, 'figures.md': readFileSync(path.join(__dirname, 'fixtures/quick-release.figures.md'), 'utf8') });
+		const rendered = await render({ figure: 2, scene: quickRelease });
+		const result = await buildDrawingSetOp(files, { partial: true });
+		const receipt = await read('drawings/drawings-compliance.md') ?? '';
+		expect({
+			renderLines: rendered.ok ? rendered.text.split('\n').filter(line => /lists but does not draw|Draw each part/.test(line)) : rendered.reason,
+			buildLines: result.ok ? result.text.split('\n').filter(line => /not drawn \(Note|does not draw/.test(line)) : result.reason,
+			pageSize: result.ok ? result.pageSize : undefined,
+			receiptRow: receipt.split('\n').find(line => line.startsWith('| figure-parts-not-drawn')),
+		}).toMatchSnapshot();
+	}, KERNEL_TIMEOUT);
+});
+
 describe('proposeFigurePartOp', () => {
 	it('refuses a numeral already used and a numeral outside the scheme', async () => {
 		const { files, read } = await setup();

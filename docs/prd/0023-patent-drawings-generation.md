@@ -86,7 +86,7 @@ connections. Acceptance: snapshot per fixture; the invented-step fixture fails.
 
 ### D4 — `figures.md` contract and validators (extensions/copilot, common drafting layer)
 Extend the parser and writer: `- 12: housing [F3]` links, `(proposed)` marker, frontmatter
-`numerals: even | hundreds` (default even), `pageSize: A4 | letter`, `drawingSheets` becomes
+`numerals: even | hundreds` (default even), `pageSize: A4 | letter` (default the office's text export page: letter for US, A4 for EPO and PCT, #665), `drawingSheets` becomes
 measured when `drawings/` exists. New validators beside the existing numeral check: scheme
 followed; no proposal at export; claimed-feature coverage (37 CFR 1.83(a)) through the Feature
 List links; numeral set equality against description and, for EPO, claims. The Filing Manifest

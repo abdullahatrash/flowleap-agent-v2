@@ -20,10 +20,10 @@
  */
 
 import { basename } from '../../../util/vs/base/common/path';
-import { DRAWING_RULES, DrawingRule } from './scene/drawingFaults';
+import { DRAWING_RULES, DrawingRule, figureSvgNumerals } from './scene/drawingFaults';
 import type { BlockDiagramInput } from './diagram/blockDiagram';
 import type { FlowchartInput } from './diagram/flowchart';
-import type { FigureReviewRecord } from './sheets/receipt';
+import type { FigureFinding, FigureReviewRecord } from './sheets/receipt';
 import { NumeralScheme } from '../../tools/common/drafting/figures';
 import { DraftFinding } from '../../tools/common/drafting/finding';
 import { parseDraftingFrontmatter } from '../../tools/common/drafting/frontmatter';
@@ -170,6 +170,57 @@ export function partsOfFigure(figures: string, figure: FigureId): FigurePart[] {
 			return hasFigure(numbers, figure.key) || hasFigure(numbers, String(figure.number));
 		})
 		.flatMap(section => section.parts);
+}
+
+/** The Figure-list rules of the receipt that compare `figures.md` with the drawn Figures, rule id to citation. */
+export const FIGURE_LIST_RULES = {
+	'figure-parts-not-drawn': '37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (reference signs not in the description are not in the drawings, and the reverse)',
+} as const;
+
+/** A drawn Figure and its SVG. */
+export interface DrawnFigure {
+	readonly figure: FigureId;
+	readonly svg: string;
+}
+
+/** A heading of `figures.md` whose drawn Figures do not carry every numeral listed under it. */
+export interface PartsNotDrawn {
+	/** The heading label, e.g. `FIG. 2` or `FIGS. 7 to 10`. */
+	readonly label: string;
+	/** The keys of the drawn Figures the heading names. */
+	readonly figures: readonly string[];
+	/** The numerals listed under the heading that no drawn Figure of the heading carries, in list order. */
+	readonly numerals: readonly string[];
+}
+
+/**
+ * The numerals that `figures.md` lists under a Figure heading but that the Figure does not draw.
+ * A heading that names more than one Figure (`FIGS. 7 to 10`, or `FIG. 2` drawn as 2A and 2B)
+ * counts a numeral as drawn when any of its drawn Figures carries it. A heading with no drawn
+ * Figure is skipped: `figures-missing` reports it.
+ */
+export function partsNotDrawn(figures: string, drawn: readonly DrawnFigure[]): PartsNotDrawn[] {
+	return parseFigureSections(figures).figures.flatMap(section => {
+		const numbers = figureHeadingNumbers(section.label);
+		const members = drawn.filter(item => hasFigure(numbers, item.figure.key) || hasFigure(numbers, String(item.figure.number)));
+		if (!members.length) {
+			return [];
+		}
+		const carried = new Set(members.flatMap(item => figureSvgNumerals(item.svg)));
+		const numerals = [...new Set(section.parts.map(part => part.numeral))].filter(numeral => !carried.has(numeral));
+		return numerals.length ? [{ label: section.label, figures: members.map(item => item.figure.key), numerals }] : [];
+	});
+}
+
+/** One result line: `FIG. 2 lists but does not draw: 93, 96`. */
+export function partsNotDrawnLine(item: PartsNotDrawn): string {
+	const several = figureHeadingNumbers(item.label).length > 1;
+	return `${item.label} ${several ? 'list but do not draw' : 'lists but does not draw'}: ${item.numerals.join(', ')}`;
+}
+
+/** The receipt Notes of {@link partsNotDrawn}: one per heading, never blocking. */
+export function partsNotDrawnFindings(items: readonly PartsNotDrawn[]): FigureFinding[] {
+	return items.map(item => ({ severity: 'Note', rule: 'figure-parts-not-drawn', message: partsNotDrawnLine(item), citation: FIGURE_LIST_RULES['figure-parts-not-drawn'] }));
 }
 
 /** The review render of a round, relative to `drawings/`. Cycle 1 keeps the first file name. */

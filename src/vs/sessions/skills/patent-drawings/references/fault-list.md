@@ -65,7 +65,7 @@ The `build` command refuses on these. They are not fixed by a render.
 | `figures-missing` | A Figure that a heading of `figures.md` names (each member of a range heading such as `FIGS. 7 to 10`) has no `FIG-N.svg` (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i)). The refusal names the missing Figures. | Render each missing Figure. To review the Figures drawn so far, build with the partial option (`partial: true` in the editor, `--partial` in the CLI): the receipt starts with `INCOMPLETE SET: FIG. ... not drawn`, the FIG labels follow the `figures.md` count, and `filing-manifest.md` is not changed. A partial build is never the Drawing Set. |
 | `figure-proposal` | A `(proposed)` line is in `figures.md`. A waiver does not open this gate. | The attorney removes the marker (confirms) or the line. |
 | `figure-coverage` | A Feature List row an Approved Claim cites has no drawn part (37 CFR 1.83(a)), or a part links a row that does not exist. | Link a confirmed part to the row, `- 20: part [F3]`, or the attorney waives the Finding in `findings.md`. |
-| `figures-settings` | `pageSize: letter` for the EPO. | The attorney sets `pageSize: A4`. |
+| `page-size-mismatch` | `pageSize` in `figures.md` differs from the page of the office's text export (letter for US, A4 for EPO). One page size per application: 37 CFR 1.52(a)(1)(ii) and 1.84(f) for US; OJ EPO 2025 A49 Art. 1(1)(a) and PCT Rule 11.5 for A4. The draft validation shows it before the export and the build. | Remove the `pageSize` line (the office default applies), or set the office's page. |
 | a Figure Error | An Error of the two tables above is open in a Figure (the build checks each `FIG-N.svg` again). | Fix the Figure and render again, or the attorney waives the Finding in `findings.md` with a `  - Waived: <reason>` line. |
 | a failing sheet check | A sheet check of the receipt list below fails (for example `glyph-height` after a Figure was scaled down). | Fix the Figure that causes it and render again. |
 
@@ -79,3 +79,11 @@ A waived Figure Error shows in the receipt with its waiver reason.
 `single-figure-no-label`, `sheet-numbering`, `orientation`, `text-keywords`,
 `no-scale-text`, `pdf-format`, and `figures-missing` (the Figures of `figures.md` not drawn). The citations are in
 [office-page-rules.md](office-page-rules.md).
+
+The receipt also has the row `figure-parts-not-drawn` (37 CFR 1.84(p)(5);
+OJ EPO 2025 A49 Art. 1(2)(i)). It is a Note and never blocks the build. Per
+heading of `figures.md`, it lists the numerals under the heading that no drawn
+Figure of the heading carries: `FIG. 2 lists but does not draw: 96, 98`. A range
+heading (`FIGS. 7 to 10`) counts a numeral as drawn when one of its Figures
+carries it. The render result shows the same line for the Figure. Draw each
+listed part, or tell the attorney which parts the Figure leaves out.

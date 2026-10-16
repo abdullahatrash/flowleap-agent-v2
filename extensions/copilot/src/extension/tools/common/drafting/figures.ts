@@ -9,7 +9,7 @@
  * ```
  * ---
  * numerals: even        # even | hundreds; even when absent
- * pageSize: A4          # A4 | letter; A4 when absent
+ * pageSize: letter      # A4 | letter; when absent, the office's: letter for US, A4 for EPO and PCT
  * drawingSheets: 2      # optional: the sheet count when no sheets are generated
  * ---
  * ## FIG. 1
@@ -116,14 +116,16 @@ function readSetting<T extends string>(fields: DraftingFrontmatterFields, key: F
 }
 
 /**
- * Reads `numerals` (`even` | `hundreds`, default `even`) and `pageSize` (`A4` | `letter`,
- * default `A4`) from the frontmatter of `figures.md`, case-insensitive. An unknown value gives the
- * default and is listed in `invalid`.
+ * Reads `numerals` (`even` | `hundreds`, default `even`) and `pageSize` (`A4` | `letter`) from the
+ * frontmatter of `figures.md`, case-insensitive. `pageSize` defaults to `officePageSize`, the page
+ * of the office's export (`officeDrawingPageSize` in filingDocuments.ts: letter for US, A4 for EPO
+ * and PCT); a value in the frontmatter wins. An unknown value gives the default and is listed in
+ * `invalid`.
  */
-export function readFiguresSettings(figures: string): FiguresSettings {
+export function readFiguresSettings(figures: string, officePageSize: DrawingPageSize = 'A4'): FiguresSettings {
 	const { fields } = parseDraftingFrontmatter(figures);
 	const numerals = readSetting<NumeralScheme>(fields, 'numerals', ['even', 'hundreds'], 'even');
-	const pageSize = readSetting<DrawingPageSize>(fields, 'pageSize', ['A4', 'letter'], 'A4');
+	const pageSize = readSetting<DrawingPageSize>(fields, 'pageSize', ['A4', 'letter'], officePageSize);
 	const invalid: FiguresSettingKey[] = [];
 	if (!numerals.valid) {
 		invalid.push('numerals');
