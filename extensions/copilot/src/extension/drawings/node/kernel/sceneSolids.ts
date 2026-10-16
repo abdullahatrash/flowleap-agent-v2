@@ -4,28 +4,62 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vm from 'node:vm';
-import type { CodeShape, LibraryShape, PartShape, Placement, PrimitiveShape, ScenePart, Vec2, Vec3 } from '../../common/scene/drawingScene';
+import type { CodeShape, LibraryShape, PartShape, Placement, PrimitiveShape, ProfileItem, ScenePart, Vec2, Vec3 } from '../../common/scene/drawingScene';
+import { camProfile, hasCurves, profileSegments, sampleSpline } from '../../common/scene/profile';
 import { add, BEARING_BALL, BEARING_RING, FASTENER_HEAD_HEIGHT, FASTENER_HEAD_RADIUS, MOTOR_BOSS_HEIGHT, MOTOR_BOSS_RADIUS, normalize, scale } from '../../common/scene/sceneGeometry';
-import { KernelCurve, KernelShape, point3, ReplicadApi } from './drawingKernel';
+import { KernelCurve, KernelShape, KernelSketch, point3, ReplicadApi } from './drawingKernel';
 
 /** Time limit for one code escape hatch part, in milliseconds. */
 const CODE_TIMEOUT = 5000;
 
-function extrudePolygon(r: ReplicadApi, points: readonly Vec2[], height: number): KernelShape {
-	let pen = r.draw([points[0][0], points[0][1]]);
-	for (const point of points.slice(1)) {
+/** Points per Catmull-Rom piece that the B-spline edge of a spline segment is fitted through. */
+const SPLINE_SAMPLES = 8;
+/** Largest distance of the fitted B-spline from the sampled spline points, in model millimetres. */
+const SPLINE_TOLERANCE = 1e-3;
+
+/**
+ * The closed sketch of a profile with arcs or splines, from kernel edges. `lift` maps a profile
+ * point to model space. Each spline segment becomes ONE B-spline edge: the side it extrudes or
+ * revolves into is one smooth face, so the hidden-line removal draws no seam lines inside it.
+ */
+function curvedSketch(r: ReplicadApi, items: readonly ProfileItem[], lift: (point: Vec2) => [number, number, number]): KernelSketch {
+	const edges: KernelCurve[] = profileSegments(items).map(segment => {
+		switch (segment.kind) {
+			case 'line':
+				return r.makeLine(lift(segment.from), lift(segment.to));
+			case 'arc':
+				return r.makeThreePointArc(lift(segment.from), lift(segment.through), lift(segment.to));
+			case 'spline':
+				return r.makeBSplineApproximation(sampleSpline(segment, SPLINE_SAMPLES).map(lift), { tolerance: SPLINE_TOLERANCE, degMin: 3, degMax: 8 });
+		}
+	});
+	return new r.Sketch(r.assembleWire(edges));
+}
+
+function extrudePolygon(r: ReplicadApi, points: readonly ProfileItem[], height: number): KernelShape {
+	if (hasCurves(points)) {
+		return curvedSketch(r, points, ([x, y]) => [x, y, 0]).extrude(height);
+	}
+	const corners = points as readonly Vec2[];
+	let pen = r.draw([corners[0][0], corners[0][1]]);
+	for (const point of corners.slice(1)) {
 		pen = pen.lineTo([point[0], point[1]]);
 	}
 	return pen.close().sketchOnPlane('XY').extrude(height);
 }
 
 /** Revolves a closed (radius, z) profile about the Z axis. The XZ plane maps (u, v) to (u, 0, v). */
-function revolveProfile(r: ReplicadApi, profile: readonly Vec2[], degrees = 360): KernelShape {
-	let pen = r.draw([profile[0][0], profile[0][1]]);
-	for (const point of profile.slice(1)) {
+function revolveProfile(r: ReplicadApi, profile: readonly ProfileItem[], degrees = 360): KernelShape {
+	const options = { origin: [0, 0, 0] as [number, number, number], angle: degrees };
+	if (hasCurves(profile)) {
+		return curvedSketch(r, profile, ([u, v]) => [u, 0, v]).revolve([0, 0, 1], options);
+	}
+	const corners = profile as readonly Vec2[];
+	let pen = r.draw([corners[0][0], corners[0][1]]);
+	for (const point of corners.slice(1)) {
 		pen = pen.lineTo([point[0], point[1]]);
 	}
-	return pen.close().sketchOnPlane('XZ').revolve([0, 0, 1], { origin: [0, 0, 0], angle: degrees });
+	return pen.close().sketchOnPlane('XZ').revolve([0, 0, 1], options);
 }
 
 /** A round sweep along a polyline whose inner corners are rounded with `bendRadius`. */
@@ -169,6 +203,8 @@ function library(r: ReplicadApi, shape: LibraryShape): KernelShape {
 				.fuse(r.makeCylinder(boss, bossHeight, [0, 0, shape.length], [0, 0, 1]))
 				.fuse(r.makeCylinder(shape.shaftDiameter / 2, shape.shaftLength, [0, 0, shape.length + bossHeight], [0, 0, 1]));
 		}
+		case 'cam':
+			return extrudePolygon(r, camProfile(shape), shape.height);
 	}
 }
 

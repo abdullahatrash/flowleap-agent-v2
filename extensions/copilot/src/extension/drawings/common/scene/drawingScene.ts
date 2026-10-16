@@ -39,6 +39,24 @@ export type Vec3 = readonly [number, number, number];
 
 export type Vec2 = readonly [number, number];
 
+/** A three-point arc from the previous point through `through` to `arc`. */
+export interface ArcSegment {
+	readonly arc: Vec2;
+	readonly through: Vec2;
+}
+
+/** A smooth curve from the previous point through each point, ending at the last. */
+export interface SplineSegment {
+	readonly spline: readonly Vec2[];
+}
+
+/**
+ * One item of a closed 2D profile: a plain point (a straight segment from the previous point),
+ * an arc segment or a spline segment. The first item is always a plain point. The profile closes
+ * with a straight segment from the last point back to the first, unless they are the same point.
+ */
+export type ProfileItem = Vec2 | ArcSegment | SplineSegment;
+
 /** A plane that cuts every part. The kept half is on the side the normal points to by default. */
 export interface SectionPlane {
 	/** A point on the plane, in model coordinates. */
@@ -103,7 +121,7 @@ export type PartShape = PrimitiveShape | LibraryShape | CodeShape;
 
 export type PrimitiveShape = BoxShape | CylinderShape | ExtrudedPolygonShape | RevolveShape | TubeShape;
 
-export type LibraryShape = FastenerShape | SpringShape | GearShape | BearingShape | ShaftShape | PipeShape | MotorShape;
+export type LibraryShape = FastenerShape | SpringShape | GearShape | BearingShape | ShaftShape | PipeShape | MotorShape | CamShape;
 
 /** A box from the origin to `size`. Faces: top, bottom, front, back, left, right. */
 export interface BoxShape {
@@ -118,20 +136,24 @@ export interface CylinderShape {
 	readonly height: number;
 }
 
-/** A polygon in the XY plane extruded along +Z. Faces: top, bottom, side-1 … side-N (edge i to i+1), axis (the Z axis). */
+/**
+ * A closed profile in the XY plane extruded along +Z. Faces: top, bottom, side-1 … side-N, axis (the
+ * Z axis). Side i is the segment that ends at item i + 1 (an arc or a spline is one side); the
+ * closing segment is last.
+ */
 export interface ExtrudedPolygonShape {
 	readonly kind: 'extrudedPolygon';
-	readonly points: readonly Vec2[];
+	readonly points: readonly ProfileItem[];
 	readonly height: number;
 }
 
 /**
- * A profile of (radius, z) points revolved about the Z axis. The profile is closed from the last
- * point back to the first. Faces: profile-1 … profile-N (segment i to i+1), axis.
+ * A profile of (radius, z) items revolved about the Z axis. The profile is closed from the last
+ * point back to the first. Faces: profile-1 … profile-N, numbered as the sides of an extrudedPolygon, axis.
  */
 export interface RevolveShape {
 	readonly kind: 'revolve';
-	readonly profile: readonly Vec2[];
+	readonly profile: readonly ProfileItem[];
 	/** Revolve angle in degrees, default 360. */
 	readonly degrees?: number;
 }
@@ -209,6 +231,29 @@ export interface MotorShape {
 	readonly shaftLength: number;
 }
 
+/** One lobe of a cam: a smooth bump of `lift` centred at `angle`, `width` degrees wide. */
+export interface CamLobe {
+	/** The lobe centre, in degrees from +X towards +Y. */
+	readonly angle: number;
+	/** The rise of the lobe above the base circle. */
+	readonly lift: number;
+	/** The angle the lobe spans, in degrees. */
+	readonly width: number;
+}
+
+/**
+ * A plate cam on the Z axis from z = 0 to z = height: a base circle with smooth lobes. Ports: top,
+ * bottom, axis (the centre of the top face), lobe-1 … lobe-N (the point of maximum lift),
+ * land-1 … land-N (the middle of the base arc from lobe i to lobe i + 1).
+ */
+export interface CamShape {
+	readonly kind: 'cam';
+	/** The base circle radius. */
+	readonly base: number;
+	readonly lobes: readonly CamLobe[];
+	readonly height: number;
+}
+
 /**
  * The per-part code escape hatch, for a shape the primitives cannot express. OPT-IN: the engine
  * refuses it unless the caller passes `allowCode`. The code is the body of a function that gets
@@ -245,7 +290,7 @@ export interface NumeralPort {
 }
 
 /** The library part kinds, in schema order. */
-export const LIBRARY_KINDS: readonly LibraryShape['kind'][] = ['fastener', 'spring', 'gear', 'bearing', 'shaft', 'pipe', 'motor'];
+export const LIBRARY_KINDS: readonly LibraryShape['kind'][] = ['fastener', 'spring', 'gear', 'bearing', 'shaft', 'pipe', 'motor', 'cam'];
 
 /** The primitive kinds, in schema order. */
 export const PRIMITIVE_KINDS: readonly PrimitiveShape['kind'][] = ['box', 'cylinder', 'extrudedPolygon', 'revolve', 'tube'];

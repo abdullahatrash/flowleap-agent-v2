@@ -5,7 +5,7 @@
 
 import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene, HatchOverride, SectionPlane, Vec2 } from '../../common/scene/drawingScene';
-import { layoutFigure, ProjectedPart, ProjectedPort, writeFigureSvg } from '../../common/lineArt/lineArt';
+import { figureScale, layoutFigure, ProjectedPart, ProjectedPort, SHEET_CHORD_TOLERANCE, writeFigureSvg } from '../../common/lineArt/lineArt';
 import { flattenSvgPath, pointSegmentDistance, Segment, toSegments } from '../../common/lineArt/planar';
 import { CameraBasis, cameraBasis, dot, hasCentreMark, isPortEdgeOn, isSectioned, projectPoint, resolvePort, sectionNormal } from '../../common/scene/sceneGeometry';
 import { SceneValidationOptions, validateScene } from '../../common/scene/sceneValidator';
@@ -27,20 +27,39 @@ export interface RenderedFigure {
 /** Samples per curved edge when a section face is turned into polylines. */
 const CURVE_SAMPLES = 32;
 
-function drawingLines(drawing: KernelDrawing): Vec2[][] {
-	let paths: string[] | string[][];
+/** The SVG path data of one half of a projection. The kernel writes curves as `C` and `A` commands. */
+function drawingPaths(drawing: KernelDrawing): string[] {
 	try {
-		paths = drawing.toSVGPaths();
+		return drawing.toSVGPaths().flat();
 	} catch {
 		// An empty projection has no paths.
 		return [];
 	}
-	return paths.flat().flatMap(d => flattenSvgPath(d, 24));
 }
 
-function project(r: ReplicadApi, shape: KernelShape, camera: CameraBasis): { visible: Vec2[][]; hidden: Vec2[][] } {
+/** One projection as SVG path data, before it is flattened. */
+interface ProjectedPaths {
+	readonly visible: string[];
+	readonly hidden: string[];
+}
+
+function project(r: ReplicadApi, shape: KernelShape, camera: CameraBasis): ProjectedPaths {
 	const projection = r.drawProjection(shape, new r.ProjectionCamera([0, 0, 0], point3(camera.direction), point3(camera.xAxis)));
-	return { visible: drawingLines(projection.visible), hidden: drawingLines(projection.hidden) };
+	return { visible: drawingPaths(projection.visible), hidden: drawingPaths(projection.hidden) };
+}
+
+/**
+ * Turns projected curves into polylines fine enough for the sheet. A first coarse pass gives the
+ * drawing span and so the sheet scale; the curves are then flattened to a chord error of
+ * SHEET_CHORD_TOLERANCE at that scale. The sheet layout can only shrink a Figure, which makes the
+ * error smaller still.
+ */
+function flattener(paths: readonly ProjectedPaths[], scale: number | undefined): (projection: ProjectedPaths) => { visible: Vec2[][]; hidden: Vec2[][] } {
+	const coarse = paths.flatMap(projection => [...projection.visible, ...projection.hidden]).flatMap(d => flattenSvgPath(d, 4)).flat();
+	const span = (axis: 0 | 1) => coarse.length ? Math.max(...coarse.map(point => point[axis])) - Math.min(...coarse.map(point => point[axis])) : 0;
+	const tolerance = SHEET_CHORD_TOLERANCE / figureScale(span(0), span(1), scale);
+	const flatten = (d: string) => flattenSvgPath(d, 24, tolerance);
+	return projection => ({ visible: projection.visible.flatMap(flatten), hidden: projection.hidden.flatMap(flatten) });
 }
 
 /** The faces of a cut solid that lie on the section plane, as projected polylines. */
@@ -131,8 +150,10 @@ async function projectScene(scene: DrawingScene, camera: CameraBasis): Promise<P
 				solids.push({ id: part.id, shape, sectioned, hatch: part.hatch });
 			}
 		}
-		const solo = solids.map(({ id, shape, sectioned, hatch }) => {
-			const own = project(r, shape, camera);
+		const soloPaths = solids.map(({ shape }) => project(r, shape, camera));
+		const flatten = flattener(soloPaths, scene.scale);
+		const solo = solids.map(({ id, shape, sectioned, hatch }, index) => {
+			const own = flatten(soloPaths[index]);
 			return { id, own, hatch, cut: scene.section && sectioned ? cutFaces(shape, scene.section, camera) : [], segments: toSegments([...own.visible, ...own.hidden]) };
 		});
 		if (solids.length === 1) {
@@ -140,7 +161,7 @@ async function projectScene(scene: DrawingScene, camera: CameraBasis): Promise<P
 		}
 		const compound = r.makeCompound(solids.map(solid => solid.shape.clone()));
 		owned.push(compound);
-		const whole = project(r, compound, camera);
+		const whole = flatten(project(r, compound, camera));
 		const visible = attribute(whole.visible, solo);
 		const hidden = attribute(whole.hidden, solo);
 		return solo.map(part => ({ id: part.id, visible: visible.get(part.id) ?? [], hidden: hidden.get(part.id) ?? [], cutFaces: part.cut, hatch: part.hatch }));

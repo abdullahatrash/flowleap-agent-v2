@@ -13,8 +13,8 @@ Figure to an illustrator.
 | Housings, brackets, plates, with holes and slots | 3D: `box`, `extrudedPolygon`, `cylinder`, `subtract` |
 | Revolved parts (shafts, knobs, caps, bushings) with stated diameters | 3D: `revolve` or `shaft` |
 | Tubes and hoses made of straight segments and bends | 3D: `tube` |
-| Standard parts: fastener, spring, gear, bearing, shaft, pipe, motor | 3D: library part |
-| A profile view of a cam seen along its axis: an extruded polygon with lobes and lands, one Figure per position | 3D: `extrudedPolygon` (its axis is the cam axis, Z), `top` camera |
+| Standard parts: fastener, spring, gear, bearing, shaft, pipe, motor, cam | 3D: library part |
+| A profile view of a cam seen along its axis, with lobes and lands, one Figure per position | 3D: `cam` library part (its axis is Z), `top` camera |
 | Labelled assemblies of 15 parts or fewer | 3D, one scene, parts placed from the list and the sketch |
 | Sections through these parts, hidden edges as dashes | 3D: `section`, `hiddenEdges: dashed` |
 

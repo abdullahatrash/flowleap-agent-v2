@@ -125,7 +125,7 @@ describe('Patent Drawings mechanical fault list', () => {
 			'scene-schema: camera: must be one of isometric, front, top, side',
 			'scene-schema: parts[0].shape.size[1]: must be a positive number',
 			'scene-schema: parts[1].id: duplicate part id "a"',
-			'scene-schema: parts[1].shape.kind: unknown kind "widget" (primitives: box, cylinder, extrudedPolygon, revolve, tube; library: fastener, spring, gear, bearing, shaft, pipe, motor; code)',
+			'scene-schema: parts[1].shape.kind: unknown kind "widget" (primitives: box, cylinder, extrudedPolygon, revolve, tube; library: fastener, spring, gear, bearing, shaft, pipe, motor, cam; code)',
 			'scene-schema: numerals[0].numeral: must be a reference numeral such as "10" or "12a"',
 		]);
 	});

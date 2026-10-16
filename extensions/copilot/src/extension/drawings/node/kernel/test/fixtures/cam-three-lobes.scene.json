@@ -1,0 +1,88 @@
+{
+	"figure": "FIG-4",
+	"camera": "top",
+	"parts": [
+		{
+			"id": "cam",
+			"name": "cam",
+			"shape": {
+				"kind": "cam",
+				"base": 6,
+				"lobes": [
+					{
+						"angle": 0,
+						"lift": 4,
+						"width": 100
+					},
+					{
+						"angle": 120,
+						"lift": 4,
+						"width": 100
+					},
+					{
+						"angle": 240,
+						"lift": 4,
+						"width": 100
+					}
+				],
+				"height": 6
+			}
+		},
+		{
+			"id": "camsurface",
+			"name": "cam surface",
+			"shape": {
+				"kind": "box",
+				"size": [
+					6,
+					24,
+					6
+				]
+			},
+			"placement": {
+				"translate": [
+					10,
+					-12,
+					0
+				],
+				"rotate": [
+					0,
+					0,
+					0
+				]
+			}
+		}
+	],
+	"numerals": [
+		{
+			"numeral": "208",
+			"part": "cam",
+			"face": "lobe-2"
+		},
+		{
+			"numeral": "210",
+			"part": "cam",
+			"face": "land-1"
+		},
+		{
+			"numeral": "196",
+			"part": "cam",
+			"face": "lobe-3"
+		},
+		{
+			"numeral": "154",
+			"part": "cam",
+			"face": "axis"
+		},
+		{
+			"numeral": "194",
+			"part": "camsurface",
+			"face": "top",
+			"point": [
+				0.5,
+				20,
+				6
+			]
+		}
+	]
+}

@@ -60,8 +60,8 @@ Faces in the right column are the names a numeral port can use.
 |---|---|---|
 | `box` | `size: [x, y, z]`, from the origin | `top`, `bottom`, `front`, `back`, `left`, `right` |
 | `cylinder` | `radius`, `height`; on Z from z = 0 | `top`, `bottom`, `side`, `axis` |
-| `extrudedPolygon` | `points: [[x, y], ...]` in the XY plane, `height` along +Z | `top`, `bottom`, `side-1` ... `side-N` (edge i to i+1), `axis` (the Z axis of the part frame) |
-| `revolve` | `profile: [[r, z], ...]` closed back to the first point, `degrees` (default 360); about Z; every r ≥ 0 | `profile-1` ... `profile-N` (segment i to i+1), `axis` |
+| `extrudedPolygon` | `points: [[x, y], ...]` in the XY plane (points and curved segments, see below), `height` along +Z | `top`, `bottom`, `side-1` ... `side-N` (segment i, see below), `axis` (the Z axis of the part frame) |
+| `revolve` | `profile: [[r, z], ...]` closed back to the first point (points and curved segments), `degrees` (default 360); about Z; every r ≥ 0 | `profile-1` ... `profile-N` (segment i, see below), `axis` |
 | `tube` | `path: [[x, y, z], ...]`, `radius`, `bendRadius`, `wall` (omit for a solid rod; less than `radius`) | `segment-1` ... `segment-N` |
 
 ```json
@@ -71,6 +71,31 @@ Faces in the right column are the names a numeral port can use.
 { "kind": "revolve", "profile": [[0, 0], [8, 0], [8, 4], [4, 10], [0, 10]] }
 { "kind": "tube", "path": [[0, 0, 0], [30, 0, 0], [30, 30, 0], [30, 30, 20]], "radius": 3, "bendRadius": 8, "wall": 1 }
 ```
+
+### Curved segments in `points` and `profile`
+
+A plain point `[x, y]` draws a straight segment from the previous point. Two
+other items draw a curve from the previous point:
+
+- `{ "arc": [x, y], "through": [mx, my] }`: a circular arc that goes through
+  `through` and ends at `arc`. The three points must be different and not on
+  one line.
+- `{ "spline": [[x, y], ...] }`: a smooth curve through each point, ending at
+  the last. Give at least 2 points.
+
+The first item is always a plain point. The profile closes with a straight
+segment back to the first point. When the last point is the first point, there
+is no closing segment. Each item after the first is one side: an arc or a
+spline is one face (`side-i`, `profile-i`), not one face per point. The
+closing segment is the last side. Use curves for a round outline. Never
+approximate a curve with many straight points: the facets show on the sheet.
+
+```json
+{ "kind": "extrudedPolygon", "points": [[0, 0], [20, 0], { "arc": [20, 20], "through": [30, 10] }, { "spline": [[10, 25], [0, 20]] }], "height": 3 }
+```
+
+Here `side-1` is the bottom edge, `side-2` the arc, `side-3` the spline and
+`side-4` the closing edge from (0, 20) to (0, 0).
 
 ## Library parts
 
@@ -85,6 +110,7 @@ Use a library part for every standard part. Its ports are in
 { "kind": "shaft", "steps": [{ "diameter": 8, "length": 10 }, { "diameter": 12, "length": 15 }] }
 { "kind": "pipe", "outerDiameter": 14, "wall": 2, "length": 30 }
 { "kind": "motor", "diameter": 28, "length": 30, "shaftDiameter": 4, "shaftLength": 10 }
+{ "kind": "cam", "base": 6, "lobes": [{ "angle": 0, "lift": 4, "width": 100 }], "height": 6 }
 ```
 
 ## The `code` kind
