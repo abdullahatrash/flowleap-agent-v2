@@ -63,6 +63,7 @@ import { markNodeCompileCacheReady } from '../../../base/node/nodeCompileCache.j
 import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
 import { RemoteAccessHostController } from './remoteAccessHostController.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 
 // Entry point for the agent host utility process.
 // Sets up IPC, logging, and registers agent providers (Copilot).
@@ -119,6 +120,8 @@ async function startAgentHost(): Promise<void> {
 	// after the block) can forward agent-SDK download progress to clients.
 	let sdkDownloadProgress: Event<IAgentSdkDownloadProgress> | undefined;
 	let byokLmBridgeRegistry: ByokLmBridgeRegistry;
+	// FlowLeap (PRD 0018 C1/C2): the editor chats each window publishes while Remote Access is on.
+	const chatMirrorRegistry = disposables.add(new AgentHostChatMirrorRegistry());
 	let proxyResolver!: IAgentHostProxyResolver;
 	const hostLaunchKind = readAgentHostLaunchKind(process.env[AgentHostLaunchKindEnvVar]);
 	try {
@@ -284,6 +287,8 @@ async function startAgentHost(): Promise<void> {
 					const byokLmConnection = createAgentHostClientByokLmConnection(getChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL));
 					connectionStore.add(byokLmBridgeRegistry.register(clientId, byokLmConnection));
 				}
+				// Lazy: the agent host calls a window's mirror channel only after that window published.
+				connectionStore.add(chatMirrorRegistry.attachWindow(clientId, createAgentHostChatMirrorWindow(getChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL))));
 				authorityRegistrations.set(connection, connectionStore);
 			};
 			localDataPlaneDisposables.add(server.onDidAddConnection(registerConnection));
@@ -508,6 +513,11 @@ async function startAgentHost(): Promise<void> {
 		},
 		async getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
 			return remoteAccessHost?.status ?? REMOTE_ACCESS_STOPPED_STATUS;
+		},
+		async publishChatMirror(publication: ChatMirrorPublication): Promise<void> {
+			if (!chatMirrorRegistry.publish(publication)) {
+				logService.trace(`[AgentHost] editor chat publication '${publication.kind}' from client ${publication.clientId} dropped`);
+			}
 		},
 	};
 	server.registerChannel(AgentHostIpcChannels.Management, ProxyChannel.fromService(instantiationService.createInstance(

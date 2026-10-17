@@ -24,6 +24,7 @@ import { AgentHostClientState, AgentHostProtocolClient } from '../../browser/age
 import { IMcpNotification, isFatalAgentHostStartError, toFatalAgentHostStartError } from '../../common/agent.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL } from '../../common/agentHostClientProxyChannel.js';
 import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AgentHostClientByokLmChannel } from '../../common/agentHostClientByokLmChannel.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostClientChatMirrorChannel } from '../../common/agentHostChatMirror.js';
 import { AgentHostClientType, editorWindowAgentHostClientInfo } from '../../common/agentHostClientInfo.js';
 import { AgentHostStartupTelemetry } from '../../common/agentHostStartupTelemetry.js';
 import { AgentHostClientConnectionKind } from '../../common/agentHostTelemetry.js';
@@ -189,20 +190,29 @@ suite('registerAgentHostClientChannels', () => {
 	 * BYOK channel when `byokHandlerMissing`, mirroring the strict "UNKNOWN
 	 * service agentHostByokLmHandler" failure in windows without the handler.
 	 */
-	function fakeInstantiationService(byokHandlerMissing: boolean): IInstantiationService {
+	function fakeInstantiationService(byokHandlerMissing: boolean, chatMirrorSourceMissing = false): IInstantiationService {
 		return {
 			createInstance: (ctor: unknown) => {
 				if (ctor === AgentHostClientByokLmChannel && byokHandlerMissing) {
 					throw new Error('[createInstance] AgentHostClientByokLmChannel depends on UNKNOWN service agentHostByokLmHandler.');
+				}
+				if (ctor === AgentHostClientChatMirrorChannel && chatMirrorSourceMissing) {
+					throw new Error('[createInstance] AgentHostClientChatMirrorChannel depends on UNKNOWN service agentHostChatMirrorSource.');
 				}
 				return {};
 			},
 		} as unknown as IInstantiationService;
 	}
 
-	test('registers both channels when the BYOK handler is available', () => {
+	test('registers every channel when the BYOK handler and the chat mirror source are available', () => {
 		const { server, registered } = fakeChannelServer();
 		registerAgentHostClientChannels(server, fakeInstantiationService(false), new NullLogService());
+		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL]);
+	});
+
+	test('leaves the chat mirror channel out when the window has no mirror source', () => {
+		const { server, registered } = fakeChannelServer();
+		registerAgentHostClientChannels(server, fakeInstantiationService(false, true), new NullLogService());
 		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL]);
 	});
 
@@ -314,7 +324,7 @@ suite('registerAgentHostClientChannels', () => {
 	test('registers a null BYOK channel when the handler is missing', () => {
 		const { server, registered } = fakeChannelServer();
 		registerAgentHostClientChannels(server, fakeInstantiationService(true), new NullLogService());
-		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL]);
+		assert.deepStrictEqual(registered, [AGENT_HOST_CLIENT_PROXY_CHANNEL, AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL]);
 	});
 });
 
