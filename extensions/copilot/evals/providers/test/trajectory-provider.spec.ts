@@ -149,10 +149,10 @@ describe('TrajectoryProvider', () => {
 		expect(result.output).toBeUndefined();
 		expect(result.error).toMatch(/rate-limited upstream/);
 	});
-	// PRD 0024 E1: the app's completion guard runs when the model stops. A chart saved with fallbacks
-	// not covered and no Search Round must come back to the model as the guard's hook message, once.
+	// PRD 0024 C4: the app's completion guard runs when the model stops. A chart saved with open points
+	// and a turn that ends without a Round Report must come back to the model as the guard's hook message, once.
+	const receipt = 'Prior-art artifact receipt: {"reportUri":"file:///w/chart.md","reportDigest":"a","evidenceUri":"file:///w/chart.evidence.json","evidenceDigest":"b"} fallbacksNotCovered=2 rounds=0 notCovered=3,4\nOpen points: 2. Critical date: 2018-03-15. Write the Round Report now: …\nOpen point [rung-3]: Claim 3 (fallback of claim 1) is not found in the cited art: magnet\nOpen point [rung-4]: Claim 4 (fallback of claim 1) is not found in the cited art: vent hole';
 	it('runs the real completion guard when the model stops, and sends its reason back as the loop does', async () => {
-		const receipt = 'Prior-art artifact receipt: {"reportUri":"file:///w/chart.md","reportDigest":"a","evidenceUri":"file:///w/chart.evidence.json","evidenceDigest":"b"} fallbacksNotCovered=2 rounds=0 notCovered=3,4';
 		const script: MockScript = { id: 'guard', rules: [{ tool: 'write_patent_results', response: { tag: 'OK', body: `Successfully wrote patent results to chart.md\n${receipt}` } }] };
 		const save = { id: 'w1', type: 'function', function: { name: 'write_patent_results', arguments: JSON.stringify({ template: 'invalidity-claim-chart', filePath: 'chart.md', content: '', coverage: [{ feature: 'Claim 1 as a whole' }] }) } };
 		const lastMessages: Array<{ role: string; content: unknown }> = [];
@@ -178,11 +178,30 @@ describe('TrajectoryProvider', () => {
 			finalText: parsed.finalText,
 			modelCalls: call,
 		}).toEqual({
-			guardNudges: ['The saved chart leaves 2 fallbacks not covered (3, 4). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.'],
+			guardNudges: ['The saved chart lists 2 open points (rung-3, rung-4) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.'],
 			hookMessage: { role: 'user', content: `You were about to complete but a hook blocked you with the following message: "${parsed.guardNudges[0]}". Please address this requirement before completing.` },
 			finalText: 'stop 3',
 			modelCalls: 3,
 		});
+	});
+
+	it('lets a Round Report end the turn, and checks the expert\'s follow-up turn with the first turn as history', async () => {
+		const script: MockScript = { id: 'guard', rules: [{ tool: 'write_patent_results', response: { tag: 'OK', body: `Successfully wrote patent results to chart.md\n${receipt}` } }] };
+		const save = (id: string) => ({ id, type: 'function', function: { name: 'write_patent_results', arguments: JSON.stringify({ template: 'invalidity-claim-chart', filePath: 'chart.md', content: '', coverage: [{ feature: 'Claim 1 as a whole' }] }) } });
+		const report = '1. [rung-3] Claim 3 is not found. Recommended: search magnet detents.\n2. [rung-4] Claim 4 is not found. Recommended: search vent holes.\nReply with the numbers to run, \'all\', or your own steer.';
+		// Turn 0: save, then a Round Report. Turn 1 (the expert's answer): save again, stop without a report, then report.
+		const replies = [{ tool_calls: [save('w1')] }, { content: report }, { tool_calls: [save('w2')] }, { content: 'Saved the round.' }, { content: report }];
+		let call = 0;
+		const provider = new TrajectoryProvider(undefined, {
+			fetch: async () => jsonResponse({ choices: [{ finish_reason: 'stop', message: replies[call++] }] }),
+			env: { OPENROUTER_API_KEY: 'test-key' },
+			loadScript: () => script,
+		});
+
+		const result = await provider.callApi('Build an invalidity chart for EP1 and save it.', { vars: { mockScript: 'guard', completionGuard: true, followUpPrompt: 'Run 1 and 2.' } });
+
+		const parsed = JSON.parse(String(result.output));
+		expect({ nudges: parsed.guardNudges.length, turnTexts: parsed.turnTexts, modelCalls: call }).toEqual({ nudges: 1, turnTexts: [report, report], modelCalls: 5 });
 	});
 
 	it('opens the first turn with the replayed skill run and sends the case\'s output budget', async () => {

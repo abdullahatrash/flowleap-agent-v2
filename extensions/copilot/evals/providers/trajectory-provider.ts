@@ -203,15 +203,17 @@ function safeParseArgs(raw: string): Record<string, unknown> {
  *                          default snapshot — the key-state blocks depend on props, so a case
  *                          about a gated office must see the prompt that user would get.
  *   `followUpPrompt`       A SECOND user message, sent once the first turn settles (e.g. "I added
- *                          the key"). Its rounds carry `turn: 1`, so a resume case can assert on
- *                          post-resume work alone.
+ *                          the key", or the expert's answer to a Round Report). Its rounds carry
+ *                          `turn: 1`, so a case can assert on the work after it alone.
  *
  *   `completionGuard`      Run the extension's real prior-art completion guard
  *                          (`checkPriorArtReportCompletion`) whenever the model stops, as the
- *                          tool-calling loop does: a blocking reason goes back to the model as the
+ *                          tool-calling loop does: the stopping round, with its text, joins the
+ *                          turn before the check; a blocking reason goes back to the model as the
  *                          same user message the loop renders, and the loop continues (at most
- *                          {@link MAX_REPORT_RECOVERIES} times per turn). The reasons are recorded
- *                          in `guardNudges`.
+ *                          {@link MAX_REPORT_RECOVERIES} times per turn). A follow-up turn is
+ *                          checked with the earlier turns as its history, as in the app. The
+ *                          reasons are recorded in `guardNudges`.
  *   `skill`                Start the first turn the way the app does when the model runs that
  *                          skill: the `skill` call and its `<skill-context>`, then a `read_file`
  *                          per file the skill lists or links (the skill-grounded suite's replay,
@@ -343,6 +345,8 @@ export default class TrajectoryProvider implements ApiProvider {
 		const turnTexts: string[] = [];
 		let stoppedReason: Trajectory['stoppedReason'] = 'max_rounds';
 
+		// The guard reads earlier turns of the conversation as its history, as the extension loop does.
+		const guardHistory: GuardTurn[] = [];
 		try {
 			for (let turn = 0; turn < userTurns.length; turn++) {
 				if (turn === 0 && skillPreamble.length > 0) {
@@ -352,7 +356,10 @@ export default class TrajectoryProvider implements ApiProvider {
 					messages.push({ role: 'user', content: userTurns[turn] });
 				}
 				const guard: GuardTurn | undefined = guarded ? { message: userTurns[turn], rounds: [], results: {}, nudges: guardNudges } : undefined;
-				const settled = await this.runTurn(apiKey, messages, script, scriptState, turn, rounds, { maxRounds, maxTokens, skillFiles }, guard);
+				const settled = await this.runTurn(apiKey, messages, script, scriptState, turn, rounds, { maxRounds, maxTokens, skillFiles }, guard, [...guardHistory]);
+				if (guard) {
+					guardHistory.push(guard);
+				}
 				turnTexts.push(settled.finalText);
 				stoppedReason = settled.stoppedReason;
 				// Carry the answer into the next turn so a follow-up ("I added the key") is read
@@ -379,6 +386,7 @@ export default class TrajectoryProvider implements ApiProvider {
 		rounds: Array<{ turn: number; toolCalls: TrajectoryToolCall[] }>,
 		{ maxRounds, maxTokens, skillFiles }: { readonly maxRounds: number; readonly maxTokens: number; readonly skillFiles?: ReadonlyMap<string, string> },
 		guard: GuardTurn | undefined,
+		guardHistory: readonly GuardTurn[] = [],
 	): Promise<{ finalText: string; stoppedReason: Trajectory['stoppedReason'] }> {
 		let finalText = '';
 		let recoveries = 0;
@@ -389,19 +397,23 @@ export default class TrajectoryProvider implements ApiProvider {
 			const choice = await this.chat(apiKey, messages, tools, maxTokens);
 			const toolCalls = choice.message.tool_calls ?? [];
 			if (toolCalls.length === 0) {
-				const issue = guard && recoveries < MAX_REPORT_RECOVERIES ? await this.checkCompletion(guard) : undefined;
+				// The stopping round is part of the turn when the guard runs, as in the extension loop,
+				// so the guard sees the text the model ended with (a Round Report, for one).
+				const response = choice.message.content ?? '';
+				const stop: IToolCallRound = { id: `guard-${round}`, response, toolInputRetry: 0, toolCalls: [] };
+				guard?.rounds.push(stop);
+				const issue = guard && recoveries < MAX_REPORT_RECOVERIES ? await this.checkCompletion(guard, guardHistory) : undefined;
 				if (guard && issue) {
 					recoveries++;
 					guard.nudges.push(issue);
-					const response = choice.message.content ?? '';
-					guard.rounds.push({ id: `guard-${round}`, response, toolInputRetry: 0, toolCalls: [], hookContext: hookContextMessage(issue) });
+					stop.hookContext = hookContextMessage(issue);
 					if (response) {
 						messages.push({ role: 'assistant', content: response });
 					}
 					messages.push({ role: 'user', content: hookContextMessage(issue) });
 					continue;
 				}
-				finalText = choice.message.content ?? '';
+				finalText = response;
 				stoppedReason = 'no_more_tools';
 				break;
 			}
@@ -449,10 +461,10 @@ export default class TrajectoryProvider implements ApiProvider {
 	}
 
 	/** Ask the extension's completion guard whether the model may stop now; a string is the reason it may not. */
-	private checkCompletion(guard: GuardTurn): Promise<string | undefined> {
+	private checkCompletion(guard: GuardTurn, history: readonly GuardTurn[]): Promise<string | undefined> {
 		// The guard types its results as vscode's LanguageModelToolResult, a class the eval cannot
 		// construct outside the extension host; it reads only text parts with a `value`. The extra
 		// `nudges` field is not part of the guard's turn and it never reads it.
-		return checkPriorArtReportCompletion([], guard as unknown as ReportCompletionTurn, unreadableWorkspace as IFileSystemService);
+		return checkPriorArtReportCompletion(history as unknown as readonly ReportCompletionTurn[], guard as unknown as ReportCompletionTurn, unreadableWorkspace as IFileSystemService);
 	}
 }

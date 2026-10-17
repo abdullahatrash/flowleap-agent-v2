@@ -5,8 +5,8 @@
 import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
-import { candidateWordingReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
-import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundLedgerStatus, roundOrderErrors } from '../patentFallbackLadder';
+import { candidateWordingReview, chartOpenPoints, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
+import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundAnswerErrors, roundLedgerStatus, roundOrderErrors } from '../patentFallbackLadder';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
@@ -285,6 +285,110 @@ describe('fallback row checks (invalidity variant)', () => {
 			expect(roundOrderErrors(review, snapshotOf(...snapshot.executions, save('2026-10-17T03:00:00Z', 1)), chart)).toEqual([]);
 		});
 	});
+
+	describe('a Search Round added in a re-save answers an open point of the previous receipt (C4)', () => {
+		const chart = 'outputs/invalidity-chart.md';
+		/** The writer's mark of a successful save, with the open-point ids its receipt listed. */
+		const save = (openPoints: readonly string[] | undefined, rounds = 0): PatentExecution => ({ id: 'save', recordedAt: '2026-10-17T03:00:00Z', kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: chart, rounds, openPoints });
+		const answering = (answers: readonly string[] | undefined): PatentCandidateReview => ({ ...review, rounds: review.rounds?.map(round => ({ ...round, answers })) });
+
+		it('refuses a round whose answers name no open point of the previous receipt', () => {
+			expect(roundAnswerErrors(answering(['rung-9']), snapshotOf(...snapshot.executions, save(['rung-3', 'search-1'])), chart)).toEqual([
+				'Round 1 answers no open point of the previous receipt (it names rung-9). A Search Round runs only on the expert\'s answer to the Round Report. In answers, give the ids of the open points the expert chose (the previous receipt listed rung-3, search-1). If the expert has not answered yet, save without the new round, write the Round Report and wait.',
+			]);
+		});
+
+		it('refuses a round with no answers when the previous receipt listed open points', () => {
+			expect(roundAnswerErrors(answering(undefined), snapshotOf(...snapshot.executions, save(['rung-3'])), chart)).toEqual([
+				'Round 1 answers no open point of the previous receipt. A Search Round runs only on the expert\'s answer to the Round Report. In answers, give the ids of the open points the expert chose (the previous receipt listed rung-3). If the expert has not answered yet, save without the new round, write the Round Report and wait.',
+			]);
+		});
+
+		it('accepts a round that answers one open point the expert chose', () => {
+			expect(roundAnswerErrors(answering(['rung-3', 'own steer']), snapshotOf(...snapshot.executions, save(['rung-3', 'search-1'])), chart)).toEqual([]);
+		});
+
+		it('does not check a first save, a save recorded before open points, or a round the previous save recorded', () => {
+			expect({
+				first: roundAnswerErrors(answering(undefined), snapshot, chart),
+				older: roundAnswerErrors(answering(undefined), snapshotOf(...snapshot.executions, save(undefined)), chart),
+				recorded: roundAnswerErrors(answering(undefined), snapshotOf(...snapshot.executions, save(['rung-3'], 1)), chart),
+			}).toEqual({ first: [], older: [], recorded: [] });
+		});
+	});
+
+	describe('open points of a saved chart (C4)', () => {
+		const us = 'US5000000A';
+		const usClaim = '1. A clamp with a band and a screw.';
+		const usFigure = `${us}:figure:2`;
+		const scoped = snapshotOf(
+			{ id: 'search', recordedAt: '2026-10-17T00:30:00Z', kind: 'search', status: 'succeeded', query: 'ti=clamp', effectiveQuery: 'ti=clamp', countryFilter: ['EP'], total: 2, returned: 2 },
+			{ id: 'failed', recordedAt: '2026-10-17T00:40:00Z', kind: 'search', status: 'failed', query: 'ti=lined AND ti=band', purpose: 'rubber lining' },
+			snapshot.executions[1],
+			{ ...details('EP1000000A1', [artClaim]), publicationDate: '20060102' },
+			{ ...details(us, [usClaim]), publicationDate: '1991-03-19' },
+			{ id: 'us-figure', recordedAt: '2026-10-17T02:30:00Z', kind: 'figures', status: 'succeeded', publicationIds: [us], sources: [{ anchor: usFigure, reference: { publicationNumber: us, section: 'bibliography' }, figure: { page: 2 }, retrieval: 'returned', review: 'unknown', completeness: 'unknown' }] },
+		);
+		const usAnchor = `${us}:claims:1:en`;
+		const chartReview: PatentCandidateReview = {
+			...review,
+			criticalDate: '2005-03-01',
+			coverage: [
+				{ ...coverage[0], sourceAnchors: [art, usFigure], elements: [{ element: 'a band', anchor: art, disclosedBy: 'a steel band' }, { element: 'a band around the pipe', anchor: usFigure, basis: 'figure', reading: 'the band 12 surrounds the pipe 10' }] },
+				{ feature: 'Claim 1 — element (b): a screw', claimNumber: '1', kind: 'feature', importance: 'essential', status: 'unresolved', sourceAnchors: [], gap: 'No cited passage names a screw.' },
+				{ ...coverage[1], sourceAnchors: [usAnchor], evidence: [{ anchor: usAnchor, quote: usClaim, scope: 'Claim 1.', qualifiers: 'None.', quantityBasis: 'None.' }], elements: [{ element: 'a band and a screw', anchor: usAnchor, disclosedBy: 'a band and a screw' }] },
+				{ ...coverage[2], status: 'partial' },
+				coverage[3],
+				coverage[4],
+			],
+		};
+
+		it('lists every kind of open point from the record, in a stable order', () => {
+			const record = renderWorkingRecord(chartReview, scoped, 'chart.md', 'chart.md.evidence.json', undefined, undefined, 'invalidity').split('\n');
+			const start = record.indexOf('## Open points (generated)');
+			expect({ points: chartOpenPoints(chartReview, scoped), record: record.slice(start, record.indexOf('', start)) }).toEqual({
+				points: [
+					{ id: 'rung-2', text: 'Claim 2 (fallback of claim 1) is partly disclosed in the cited art: Claim 2 (depends on 1) — added limitation: the band is steel' },
+					{ id: 'rung-3', text: 'Claim 3 (fallback of claim 1) is not found in the cited art: Claim 3 (depends on 2) — added limitation: the screw is captive' },
+					{ id: 'rung-d1', text: 'Description fallback of claim 1 is not found in the cited art: Description fallback — a rubber-lined band' },
+					{ id: 'element-1.2', text: 'Claim 1 element is not found in the cited art: Claim 1 — element (b): a screw' },
+					{ id: 'scope-US5000000A', text: 'Cited document US5000000A is outside the searched jurisdictions (EP).' },
+					{ id: 'date-EP1000000A1', text: 'Cited document EP1000000A1 was published on 2006-01-02, after the critical date 2005-03-01.' },
+					{ id: 'drawing-1.1', text: 'The row rests in part on a drawing reading, not on quoted text: Claim 1 — element (a): a band' },
+					{ id: 'search-1', text: 'A search failed and did not run again: rubber lining (ti=lined AND ti=band)' },
+				],
+				record: [
+					'## Open points (generated)',
+					'Computed by the writer from the record. The Round Report asks the expert about each one, in this order. Critical date: 2005-03-01.',
+					'- [rung-2] Claim 2 (fallback of claim 1) is partly disclosed in the cited art: Claim 2 (depends on 1) — added limitation: the band is steel',
+					'- [rung-3] Claim 3 (fallback of claim 1) is not found in the cited art: Claim 3 (depends on 2) — added limitation: the screw is captive',
+					'- [rung-d1] Description fallback of claim 1 is not found in the cited art: Description fallback — a rubber-lined band',
+					'- [element-1.2] Claim 1 element is not found in the cited art: Claim 1 — element (b): a screw',
+					'- [scope-US5000000A] Cited document US5000000A is outside the searched jurisdictions (EP).',
+					'- [date-EP1000000A1] Cited document EP1000000A1 was published on 2006-01-02, after the critical date 2005-03-01.',
+					'- [drawing-1.1] The row rests in part on a drawing reading, not on quoted text: Claim 1 — element (a): a band',
+					'- [search-1] A search failed and did not run again: rubber lining (ti=lined AND ti=band)',
+				],
+			});
+		});
+
+		it('skips the critical-date check without a structured criticalDate, and lists an unknown date with one', () => {
+			const undated = snapshotOf(...scoped.executions.map(execution => execution.id === 'EP1000000A1' ? { ...execution, publicationDate: undefined } : execution));
+			expect({
+				noDate: chartOpenPoints({ ...chartReview, criticalDate: undefined }, scoped).map(point => point.id),
+				unknown: chartOpenPoints(chartReview, undated).filter(point => point.id.startsWith('date-')),
+			}).toEqual({
+				noDate: ['rung-2', 'rung-3', 'rung-d1', 'element-1.2', 'scope-US5000000A', 'drawing-1.1', 'search-1'],
+				unknown: [{ id: 'date-EP1000000A1', text: 'Cited document EP1000000A1 has no recorded publication date, so it was not compared with the critical date 2005-03-01.' }],
+			});
+		});
+
+		it('refuses a criticalDate that is not an ISO date', () => {
+			expect(validateCandidateReview({ ...review, criticalDate: '1 March 2005' }, snapshot, '', 'invalidity')).toEqual([
+				'criticalDate "1 March 2005" is not an ISO date. Give it as YYYY-MM-DD (for example 2005-03-01), or leave criticalDate out and keep the basis in prose.',
+			]);
+		});
+	});
 });
 
 describe('fallback coverage and Search Rounds in the rendered chart', () => {
@@ -421,7 +525,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			  ],
 			  "rounds": [
 			    "## Search rounds",
-			    "Each Search Round targets fallbacks a saved chart left not covered. A query marked ledger-matched matches a tool execution recorded this session; a query marked not recorded by the ledger ran through a tool the ledger does not record and is not confirmed.",
+			    "Each Search Round runs on the expert's answer to the Round Report of a saved chart and targets the open points the expert chose. A query marked ledger-matched matches a tool execution recorded this session; a query marked not recorded by the ledger ran through a tool the ledger does not record and is not confirmed.",
 			    "",
 			    "### Search Round 1",
 			    "Targets: claim 6, description fallback "Rubber-lined band"",
