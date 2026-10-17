@@ -3,9 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { describe, expect, it } from 'vitest';
 import type { MockScript } from '../mock-tool-table';
 import TrajectoryProvider from '../trajectory-provider';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const SCRIPT: MockScript = {
 	id: 'spec-script',
@@ -143,5 +148,93 @@ describe('TrajectoryProvider', () => {
 
 		expect(result.output).toBeUndefined();
 		expect(result.error).toMatch(/rate-limited upstream/);
+	});
+	// PRD 0024 E1: the app's completion guard runs when the model stops. A chart saved with fallbacks
+	// not covered and no Search Round must come back to the model as the guard's hook message, once.
+	it('runs the real completion guard when the model stops, and sends its reason back as the loop does', async () => {
+		const receipt = 'Prior-art artifact receipt: {"reportUri":"file:///w/chart.md","reportDigest":"a","evidenceUri":"file:///w/chart.evidence.json","evidenceDigest":"b"} fallbacksNotCovered=2 rounds=0 notCovered=3,4';
+		const script: MockScript = { id: 'guard', rules: [{ tool: 'write_patent_results', response: { tag: 'OK', body: `Successfully wrote patent results to chart.md\n${receipt}` } }] };
+		const save = { id: 'w1', type: 'function', function: { name: 'write_patent_results', arguments: JSON.stringify({ template: 'invalidity-claim-chart', filePath: 'chart.md', content: '', coverage: [{ feature: 'Claim 1 as a whole' }] }) } };
+		const lastMessages: Array<{ role: string; content: unknown }> = [];
+		let call = 0;
+		const provider = new TrajectoryProvider(undefined, {
+			fetch: async (_url, init) => {
+				const body = JSON.parse(String(init?.body));
+				lastMessages.push(body.messages[body.messages.length - 1]);
+				return jsonResponse(call++ === 0
+					? { choices: [{ message: { tool_calls: [save] } }] }
+					: { choices: [{ finish_reason: 'stop', message: { content: `stop ${call}` } }] });
+			},
+			env: { OPENROUTER_API_KEY: 'test-key' },
+			loadScript: () => script,
+		});
+
+		const result = await provider.callApi('Build an invalidity chart for EP1 and save it.', { vars: { mockScript: 'guard', completionGuard: true } });
+
+		const parsed = JSON.parse(String(result.output));
+		expect({
+			guardNudges: parsed.guardNudges,
+			hookMessage: lastMessages[2],
+			finalText: parsed.finalText,
+			modelCalls: call,
+		}).toEqual({
+			guardNudges: ['The saved chart leaves 2 fallbacks not covered (3, 4). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.'],
+			hookMessage: { role: 'user', content: `You were about to complete but a hook blocked you with the following message: "${parsed.guardNudges[0]}". Please address this requirement before completing.` },
+			finalText: 'stop 3',
+			modelCalls: 3,
+		});
+	});
+
+	it('opens the first turn with the replayed skill run and sends the case\'s output budget', async () => {
+		const bodies: Array<{ max_tokens: number; messages: Array<{ role: string; content: unknown; tool_calls?: Array<{ function: { name: string; arguments: string } }> }> }> = [];
+		const provider = new TrajectoryProvider(undefined, {
+			fetch: async (_url, init) => {
+				bodies.push(JSON.parse(String(init?.body)));
+				return jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: 'done' } }] });
+			},
+			env: { OPENROUTER_API_KEY: 'test-key' },
+			loadScript: () => SCRIPT,
+		});
+
+		await provider.callApi('chart it', { vars: { mockScript: 'spec-script', skill: 'invalidity-analysis', maxTokens: 16000 } });
+
+		const [, user, skillCall, skillResult] = bodies[0].messages;
+		expect({
+			maxTokens: bodies[0].max_tokens,
+			user,
+			skillCall: skillCall.tool_calls?.[0].function,
+			skillContext: String(skillResult.content).startsWith('<skill-context name="invalidity-analysis">'),
+		}).toEqual({
+			maxTokens: 16000,
+			user: { role: 'user', content: 'chart it' },
+			skillCall: { name: 'skill', arguments: '{"skill":"invalidity-analysis"}' },
+			skillContext: true,
+		});
+	});
+	it('offers read_file to a skill case and answers it from the skill\'s files', async () => {
+		const skillMd = path.resolve(__dirname, '..', '..', '..', 'assets', 'skills', 'invalidity-analysis', 'SKILL.md');
+		const reads = [
+			{ id: 'r1', type: 'function', function: { name: 'read_file', arguments: JSON.stringify({ filePath: skillMd, startLine: 1, endLine: 1 }) } },
+			{ id: 'r2', type: 'function', function: { name: 'read_file', arguments: JSON.stringify({ filePath: '/nowhere.md', startLine: 1, endLine: 5 }) } },
+		];
+		const offered: boolean[] = [];
+		let call = 0;
+		const provider = new TrajectoryProvider(undefined, {
+			fetch: async (_url, init) => {
+				const body = JSON.parse(String(init?.body));
+				offered.push(body.tools.some((tool: { function: { name: string } }) => tool.function.name === 'read_file'));
+				return jsonResponse(call++ === 0 ? { choices: [{ message: { tool_calls: reads } }] } : { choices: [{ finish_reason: 'stop', message: { content: 'done' } }] });
+			},
+			env: { OPENROUTER_API_KEY: 'test-key' },
+			loadScript: () => SCRIPT,
+		});
+
+		const result = await provider.callApi('chart it', { vars: { mockScript: 'spec-script', skill: 'invalidity-analysis' } });
+
+		const calls = JSON.parse(String(result.output)).rounds[0].toolCalls.map((c: { mockTag: string; resultBody: string }) => ({ tag: c.mockTag, body: c.resultBody }));
+		expect({ offered, calls }).toEqual({
+			offered: [true, true],
+			calls: [{ tag: 'OK', body: fs.readFileSync(skillMd, 'utf-8').split('\n')[0] }, { tag: 'EMPTY', body: 'File not found: /nowhere.md' }],
+		});
 	});
 });

@@ -56,12 +56,14 @@ defaultTest:
           stream: false
   assert:
     # Global guard: every tool the model calls (across all rounds) must exist in the eval
-    # tool surface — catches hallucinated tool names the per-case asserts wouldn't look for.
+    # tool surface — catches hallucinated tool names the per-case asserts wouldn't look for. A case
+    # that replays a skill (`vars.skill`) is also offered `read_file`, as the app offers it.
     - type: javascript
       value: |
         return import('node:fs').then(fs => {
           const defs = JSON.parse(fs.readFileSync('prompts/tool-definitions.json', 'utf-8'));
           const allowed = new Set(defs.map(d => d.function.name));
+          if (context.vars && context.vars.skill) { allowed.add('read_file'); }
           const traj = typeof output === 'string' ? JSON.parse(output) : output;
           const calls = (traj.rounds || []).flatMap(r => r.toolCalls || []);
           return calls.every(c => allowed.has(c.name));

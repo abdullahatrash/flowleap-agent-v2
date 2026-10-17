@@ -18,7 +18,13 @@
  * failure then recovery); past the end of a sequence the last element repeats. Unmatched
  * calls fall back to the script `default` (a benign OK), so the model can always make
  * forward progress on tools the case does not care about.
+ *
+ * A rule may instead carry `invalidityReceipt`: its body is the structured writer's result for an
+ * invalidity chart, with the receipt counts computed from the call's own arguments (see
+ * {@link invalidityReceiptBody}), so the receipt agrees with what the model saved.
  */
+
+import { invalidityReceiptBody, type InvalidityReceiptMock } from './invalidity-receipt';
 
 /**
  * Which failure/success shape a mock result carries. Tags flow into the trajectory so structural
@@ -44,6 +50,8 @@ export interface MockRule {
 	readonly response?: MockResponse;
 	/** Per-call sequence: call N gets element N, clamped to the last element once exhausted. */
 	readonly responses?: readonly MockResponse[];
+	/** A `write_patent_results` result whose receipt is computed from the call's arguments. */
+	readonly invalidityReceipt?: InvalidityReceiptMock;
 }
 
 export interface MockScript {
@@ -97,6 +105,10 @@ export function resolveMock(
 		}
 		if (rule.argMatch && !argsMatch(args, rule.argMatch)) {
 			continue;
+		}
+		if (rule.invalidityReceipt) {
+			state.counters[i]++;
+			return { tag: 'OK', body: invalidityReceiptBody(rule.invalidityReceipt, args) };
 		}
 		if (rule.responses && rule.responses.length > 0) {
 			const idx = Math.min(state.counters[i], rule.responses.length - 1);
