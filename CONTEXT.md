@@ -23,10 +23,34 @@ panel. Owns presentation; does **not** own the agent loop or auth.
 _Avoid_: calling it "the flowleap extension" without qualifying — it is the UI shell only.
 
 **Patent Skill**:
-A deep patent-analysis workflow shipped as a `SKILL.md` (e.g. `prior-art`, `claim-analysis`,
+A **Workflow Skill** that FlowLeap ships (e.g. `prior-art`, `claim-analysis`,
 `freedom-to-operate`, `patent-landscape`). Model-invoked, comprehensive, produces a
-deliverable. Registered in `package.json` → `chatSkills`.
-_Avoid_: building patent-analysis as coded "intents" — that duplicates the Skills.
+deliverable. Read-only to users and replaced on every app update; users change its behavior
+only through **Firm Rules**, never by editing or shadowing it.
+_Avoid_: building patent-analysis as coded "intents" — that duplicates the Skills; "built-in
+skill" (say Patent Skill).
+
+**Workflow Skill**:
+The method of one patent deliverable — the steps, the output form, and the doctrine that needs
+judgment — written without naming any tool, command or query syntax, so the same skill runs in
+every harness (editor chat, Agents window, CLI). Gets its data access from **Tool Guides**.
+Rules a machine can check are not part of it; they are enforced in code.
+_Avoid_: putting tool names, call order or query syntax in it — that belongs in a Tool Guide.
+
+**Tool Guide**:
+Vendor-owned, read-only knowledge of how to get one family of data in one harness (e.g. how to
+write CQL and run the classification-only track with the patent-search tools). Attached for
+the model when a Workflow Skill that needs it loads. Never customized by firms.
+_Avoid_: "reference" for this (a Workflow Skill's own references are method, not data access).
+
+**Firm Rules**:
+A firm's or attorney's own additions to how the Patent Agent works — house style, report
+sections, claim-format preferences, jurisdiction defaults. They add to a Workflow Skill and
+never replace it, so they survive every app update. Kept per workspace (matter or client) or
+per person; a rule can target named Workflow Skills or apply to all work. Firm Rules may change
+the output form, never the doctrine: when a Firm Rule conflicts with the doctrine, the doctrine
+wins and the agent tells the user which rule it did not apply.
+_Avoid_: "override", "custom skill" for this; a firm copy of a Patent Skill.
 
 **FlowLeap Settings Sidebar**:
 The webview view behind the FlowLeap brand-mark icon in the Activity Bar (owned by the Patent
