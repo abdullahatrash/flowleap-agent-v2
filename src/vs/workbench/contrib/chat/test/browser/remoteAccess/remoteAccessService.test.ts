@@ -248,6 +248,15 @@ suite('RemoteAccessService', () => {
 		assert.strictEqual(service.signedIn.get(), false);
 	});
 
+	test('a window without a token yet leaves a running Host transport alone', async () => {
+		storage.store(RemoteAccessStorageKey.Enabled, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
+		auth.token = undefined;
+		const service = createService();
+		assert.strictEqual(service.enabled.get(), true);
+		await new Promise(resolve => setTimeout(resolve, 20));
+		assert.deepStrictEqual(agentHost.pushes, [], 'no push that would switch the Host off');
+	});
+
 	test('the agent host gets the config again when it restarts', async () => {
 		const service = createService();
 		await service.setEnabled(true);

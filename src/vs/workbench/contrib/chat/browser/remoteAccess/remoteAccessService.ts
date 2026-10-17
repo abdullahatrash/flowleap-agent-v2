@@ -374,6 +374,9 @@ export class RemoteAccessService extends Disposable implements IRemoteAccessServ
 				return;
 			}
 			const config = await this._buildConfig();
+			if (config === 'unchanged') {
+				return;
+			}
 			try {
 				await this._agentHostService.setRemoteAccessHost?.(config);
 			} catch (error) {
@@ -385,10 +388,19 @@ export class RemoteAccessService extends Disposable implements IRemoteAccessServ
 		});
 	}
 
-	private async _buildConfig(): Promise<IRemoteAccessHostConfig | undefined> {
-		const token = this._token;
-		if (!this._enabled.get() || !token) {
+	/**
+	 * `undefined` switches the Host transport off. `'unchanged'` leaves the
+	 * agent host as it is: on but with no token yet, this window may still be
+	 * waiting for the authentication provider, and another window may be
+	 * running the transport. Sign-out switches Remote Access off explicitly.
+	 */
+	private async _buildConfig(): Promise<IRemoteAccessHostConfig | undefined | 'unchanged'> {
+		if (!this._enabled.get()) {
 			return undefined;
+		}
+		const token = this._token;
+		if (!token) {
+			return 'unchanged';
 		}
 		const pairs: { pairId: string; pairKey: string }[] = [];
 		for (const pairId of this._readPairKeyIds()) {
