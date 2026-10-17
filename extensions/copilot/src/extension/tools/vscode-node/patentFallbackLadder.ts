@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { RECORDED_TOOLS, type PatentEvidenceSource, type PatentExecution, type PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import type { PatentCandidateReview } from './patentCandidateReview';
 import { queryKey } from './patentFindBetter';
 
@@ -216,17 +216,57 @@ function executionQueries(execution: PatentExecution): readonly string[] {
 	return [execution.query, execution.effectiveQuery, execution.request].flatMap(value => value?.trim() ? [queryKey(value)] : []);
 }
 
-/** Every Search Round query must be a tool execution the ledger holds: same tool, same query text. */
+/** The search tools the ledger records under `kind: 'search'`, which carries no tool name of its own. */
+const SEARCH_TOOLS: readonly string[] = ['search_patents', 'search_register'];
+
+/** Every tool name whose executions the ledger records; a round query through any other tool cannot be confirmed. */
+const LEDGER_TOOLS: ReadonlySet<string> = new Set<string>([...SEARCH_TOOLS, ...RECORDED_TOOLS]);
+
+/** How the ledger stands to one Search Round query: confirmed by a recorded execution, or run through a tool the ledger does not record. */
+export type RoundQueryLedgerStatus = 'matched' | 'unrecorded';
+
+/** The `tool + query` keys of every recorded execution. */
+function executedKeys(snapshot: PatentExecutionSnapshot): ReadonlySet<string> {
+	return new Set(snapshot.executions.flatMap(execution => executionTools(execution).flatMap(tool => executionQueries(execution).map(query => `${tool}\u0000${query}`))));
+}
+
+/** One round query's tool, lower-cased and trimmed. */
+function roundTool(entry: { readonly tool?: string } | undefined): string {
+	return entry?.tool?.trim().toLowerCase() ?? '';
+}
+
+/**
+ * Per Search Round, in the order of `rounds[].queries`, whether each query matches a recorded
+ * execution (`matched`) or the ledger cannot confirm it (`unrecorded`): a query through a tool the
+ * ledger never records (search_npl, search_academic, a web search). Call it on a review that passed
+ * {@link fallbackLadderErrors}, where a recorded tool's query always matches.
+ */
+export function roundLedgerStatus(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly { readonly round: number; readonly queries: readonly RoundQueryLedgerStatus[] }[] {
+	const executed = executedKeys(snapshot);
+	return (review.rounds ?? []).map(round => ({
+		round: round.round,
+		queries: (round.queries ?? []).map(entry => executed.has(`${roundTool(entry)}\u0000${queryKey(entry?.query ?? '')}`) ? 'matched' : 'unrecorded'),
+	}));
+}
+
+/**
+ * A round query through a tool the ledger records must match one of its executions (same tool, same
+ * query text); a query through any other tool is accepted as unrecorded. Every round needs at least
+ * one query the ledger confirms.
+ */
 function roundErrors(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): string[] {
 	const errors: string[] = [];
-	const executed = new Set(snapshot.executions.flatMap(execution => executionTools(execution).flatMap(tool => executionQueries(execution).map(query => `${tool}\u0000${query}`))));
+	const executed = executedKeys(snapshot);
 	for (const round of review.rounds ?? []) {
+		let matched = 0;
 		for (const entry of round?.queries ?? []) {
-			const tool = entry?.tool?.trim() ?? '';
+			const tool = roundTool(entry);
 			const query = entry?.query?.trim() ?? '';
 			if (!tool || !query) { errors.push(`Search Round ${round.round} lists a query without its tool or its text. Name the tool and copy the query exactly as it ran.`); continue; }
-			if (!executed.has(`${tool.toLowerCase()}\u0000${queryKey(query)}`)) { errors.push(`Search Round ${round.round} lists ${tool} query "${query}", which matches no tool execution recorded this session. Run the query, or copy it exactly as it ran (same tool, same text), or remove it from the round.`); }
+			if (executed.has(`${tool}\u0000${queryKey(query)}`)) { matched++; continue; }
+			if (LEDGER_TOOLS.has(tool)) { errors.push(`Search Round ${round.round} lists ${entry.tool.trim()} query "${query}", which matches no tool execution recorded this session. Run the query, or copy it exactly as it ran (same tool, same text), or remove it from the round.`); }
 		}
+		if (!matched) { errors.push(`Round ${round.round} has no query the ledger can confirm; include at least one search_patents, search_register, patent_api_request or fetch_webpage query exactly as run.`); }
 	}
 	return errors;
 }

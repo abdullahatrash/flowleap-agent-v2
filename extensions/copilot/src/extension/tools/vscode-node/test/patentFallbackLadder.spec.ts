@@ -6,7 +6,7 @@ import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { PatentCandidateReview, validateCandidateReview } from '../patentCandidateReview';
-import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency } from '../patentFallbackLadder';
+import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundLedgerStatus } from '../patentFallbackLadder';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
@@ -222,10 +222,23 @@ describe('fallback row checks (invalidity variant)', () => {
 		]);
 	});
 
-	it('refuses a Search Round query that matches no recorded execution', () => {
-		expect(fallbackLadderErrors({ ...review, rounds: [{ round: 1, targets: ['3'], queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=bolt' }, { tool: 'search_academic', query: 'ti=captive AND ti=screw' }], outcome: 'Nothing new.' }] }, snapshot, sources)).toEqual([
+	it('accepts a query through a tool the ledger does not record and labels it unrecorded', () => {
+		const withNpl: PatentCandidateReview = { ...review, rounds: [{ round: 1, targets: ['3'], queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=screw' }, { tool: 'search_npl', query: 'captive screw pipe clamp' }], outcome: 'Nothing new.' }] };
+		expect({ errors: fallbackLadderErrors(withNpl, snapshot, sources), status: roundLedgerStatus(withNpl, snapshot) }).toEqual({
+			errors: [],
+			status: [{ round: 1, queries: ['matched', 'unrecorded'] }],
+		});
+	});
+
+	it('refuses a query through a recorded tool that matches no recorded execution', () => {
+		expect(fallbackLadderErrors({ ...review, rounds: [{ round: 1, targets: ['3'], queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=screw' }, { tool: 'search_patents', query: 'ti=captive AND ti=bolt' }], outcome: 'Nothing new.' }] }, snapshot, sources)).toEqual([
 			'Search Round 1 lists search_patents query "ti=captive AND ti=bolt", which matches no tool execution recorded this session. Run the query, or copy it exactly as it ran (same tool, same text), or remove it from the round.',
-			'Search Round 1 lists search_academic query "ti=captive AND ti=screw", which matches no tool execution recorded this session. Run the query, or copy it exactly as it ran (same tool, same text), or remove it from the round.',
+		]);
+	});
+
+	it('refuses a round with no query the ledger can confirm', () => {
+		expect(fallbackLadderErrors({ ...review, rounds: [{ round: 1, targets: ['3'], queries: [{ tool: 'search_academic', query: 'captive screw' }, { tool: 'web_search', query: 'captive screw pipe clamp' }], outcome: 'Nothing new.' }] }, snapshot, sources)).toEqual([
+			'Round 1 has no query the ledger can confirm; include at least one search_patents, search_register, patent_api_request or fetch_webpage query exactly as run.',
 		]);
 	});
 
