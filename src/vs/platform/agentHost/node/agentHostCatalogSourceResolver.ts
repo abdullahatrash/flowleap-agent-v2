@@ -42,6 +42,8 @@ export interface ICatalogSourceState {
 export interface IAgentHostCatalogSourceResolverDependencies {
 	readonly isUnpersistedChatBacking: (session: URI) => boolean;
 	readonly worktreeProjectFromRepositoryRoot: (repositoryRoot: string | undefined) => { readonly uri: URI; readonly displayName: string } | undefined;
+	/** FlowLeap (PRD 0018 D1): the only title the session may store on disk, when its provider keeps its titles off disk. */
+	readonly persistedTitle?: (session: URI) => string | undefined;
 }
 
 export interface IAgentHostCatalogMetadataReference {
@@ -140,6 +142,7 @@ export class AgentHostCatalogSourceResolver {
 			? persistedTitle ?? state.title ?? ''
 			: metadataOverrides[SESSION_CUSTOM_TITLE_KEY] ?? state.title ?? '';
 		const titleSource = normalizeCatalogTitleSource(persistedTitleSource);
+		const diskTitle = this._dependencies.persistedTitle?.(session);
 		const persistedMultiRoot = sessionMetadata.multiRoot.read(metadata);
 		const multiRoot = preferPersistedMetadata
 			? (sessionMetadata.multiRoot.has(metadata) ? persistedMultiRoot : readSessionMultiRootMetadata(state.meta))
@@ -220,7 +223,7 @@ export class AgentHostCatalogSourceResolver {
 		};
 		const data: AgentHostCatalogData = {
 			modifiedTime: state.modifiedTime,
-			summary: toCatalogSummary(title),
+			summary: toCatalogSummary(diskTitle ?? title),
 			titleSource,
 			isRead,
 			isArchived,
@@ -251,7 +254,7 @@ export class AgentHostCatalogSourceResolver {
 					uri: chat.uri,
 					order,
 					kind: chat.kind,
-					summary: toCatalogSummary(summary),
+					summary: toCatalogSummary(diskTitle !== undefined && summary !== undefined ? diskTitle : summary),
 					titleSource: normalizeCatalogTitleSource(titleSource),
 					origin: toCatalogChatOrigin(chat.origin),
 					...(interactivity !== undefined ? { interactivity } : {}),
@@ -288,8 +291,15 @@ export class AgentHostCatalogSourceResolver {
 		if (devContainerWorktree || sessionMetadata.devContainerWorktree.has(metadata)) {
 			legacyMetadata[AH_META_DEV_CONTAINER_WORKTREE_DB_KEY] = devContainerWorktree ? JSON.stringify(devContainerWorktree) : '';
 		}
+		if (diskTitle !== undefined) {
+			for (const key of Object.keys(legacyMetadata)) {
+				if (key.startsWith(customChatTitleMetadataKey(''))) {
+					legacyMetadata[key] = diskTitle;
+				}
+			}
+		}
 		if (metadataOverrides[SESSION_CUSTOM_TITLE_KEY] !== undefined || persisted[SESSION_CUSTOM_TITLE_KEY] !== undefined) {
-			legacyMetadata[SESSION_CUSTOM_TITLE_KEY] = title;
+			legacyMetadata[SESSION_CUSTOM_TITLE_KEY] = diskTitle ?? title;
 			legacyMetadata[SESSION_CUSTOM_TITLE_SOURCE_KEY] = titleSource;
 		} else if (metadataOverrides[SESSION_CUSTOM_TITLE_SOURCE_KEY] !== undefined || persisted[SESSION_CUSTOM_TITLE_SOURCE_KEY] !== undefined) {
 			legacyMetadata[SESSION_CUSTOM_TITLE_SOURCE_KEY] = titleSource;

@@ -63,7 +63,8 @@ import { markNodeCompileCacheReady } from '../../../base/node/nodeCompileCache.j
 import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
 import { RemoteAccessHostController } from './remoteAccessHostController.js';
-import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
+import { FlowLeapChatMirrorAgent } from './flowleapChatMirrorAgent.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, FLOWLEAP_CHAT_MIRROR_ENABLED, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 
 // Entry point for the agent host utility process.
 // Sets up IPC, logging, and registers agent providers (Copilot).
@@ -178,6 +179,11 @@ async function startAgentHost(): Promise<void> {
 		// in the agent picker (matches the pre-CDN UX exactly).
 		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
+		}
+		// FlowLeap (PRD 0018 C2): the editor chat bridge agent. It runs no model. Off until C3 (#720)
+		// hides it in the local Agents Window.
+		if (FLOWLEAP_CHAT_MIRROR_ENABLED) {
+			providerService.registerProvider(instantiationService.createInstance(FlowLeapChatMirrorAgent, chatMirrorRegistry));
 		}
 		// Codex registration is one-way (register-on-enable): the env-var toggle
 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.

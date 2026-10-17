@@ -204,6 +204,14 @@ One conversation with the Patent Agent in the Agents Window: its messages, tool 
 permission prompts and outputs. Distinct from the **FlowLeap Session** (sign-in).
 _Avoid_: bare "session" wherever the two could be confused.
 
+**Editor Chat**:
+One conversation with the Patent Agent in the chat view of an editor window (or a Local chat of
+the Agents Window). Its model calls run in that window's extension host with the user's own key.
+With Remote Access on, the Host also offers its Editor Chats to Viewers, next to its Agent
+Sessions; on disk the Host keeps only a neutral title ("Editor chat, <date>"). A Viewer can
+allow or skip one tool call at a time; it cannot allow a tool for the rest of the chat.
+_Avoid_: calling it an Agent Session — it runs in the editor window, not in the agent host.
+
 **Host**:
 A desktop running FlowLeap, signed in, that offers its Agent Sessions to paired **Viewers**.
 A user may have several Hosts. A Host that is closed or asleep offers nothing.
