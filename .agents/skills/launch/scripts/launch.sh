@@ -22,6 +22,13 @@
 #   --full              Copy the entire profile (incl. extensions). Use if the
 #                       slim copy is missing something you need.
 #
+# Environment overlays (applied to the NEW profile only, never to the source):
+#   LAUNCH_SETTINGS_OVERLAY  JSON object merged into User/settings.json key by key
+#                            (same text-based insert as files.simpleDialog.enable).
+#   LAUNCH_STATE_OVERLAY     JSON object of application-scope storage keys written to
+#                            User/globalStorage/state.vscdb (ItemTable) with sqlite3, so a
+#                            one-time opt-in dialog never shows. Values are stored as text.
+#
 # Defaults:
 #   --source-user-data-dir  $CODE_OSS_DEV_AUTHED_USER_DATA_DIR  (else ~/.vscode-oss-dev)
 #   --repo                  $PWD if it looks like a vscode checkout; otherwise pass it explicitly
@@ -192,6 +199,58 @@ then
 	exit 1
 fi
 echo "[launch.sh] ensured files.simpleDialog.enable=true in $SETTINGS_FILE" >&2
+
+# Optional settings overlay for unattended runs (tool auto-approve, request limit, …).
+# Same data-preserving text insert, one key at a time; values are JSON.
+if [[ -n "${LAUNCH_SETTINGS_OVERLAY:-}" ]]; then
+	if ! node - "$SETTINGS_FILE" "$LAUNCH_SETTINGS_OVERLAY" <<'NODE'
+const fs = require('fs');
+const [f, overlayText] = process.argv.slice(2);
+let overlay;
+try { overlay = JSON.parse(overlayText); } catch (e) { console.error('[launch.sh] LAUNCH_SETTINGS_OVERLAY is not JSON: ' + e.message); process.exit(1); }
+if (!overlay || typeof overlay !== 'object' || Array.isArray(overlay)) { console.error('[launch.sh] LAUNCH_SETTINGS_OVERLAY must be a JSON object'); process.exit(1); }
+let text = fs.readFileSync(f, 'utf8');
+for (const [key, value] of Object.entries(overlay)) {
+	const encoded = JSON.stringify(value);
+	const keyValueRe = new RegExp('("' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"\\s*:\\s*)(true|false|null|"[^"\\n]*"|-?\\d+(?:\\.\\d+)?)', 'g');
+	if (keyValueRe.test(text)) { text = text.replace(keyValueRe, '$1' + encoded); continue; }
+	const lastBrace = text.lastIndexOf('}');
+	const firstBrace = text.indexOf('{');
+	if (lastBrace === -1 || firstBrace === -1 || firstBrace >= lastBrace) { console.error('[launch.sh] settings.json has no object shape — refusing to clobber it: ' + f); process.exit(1); }
+	const between = text.slice(firstBrace + 1, lastBrace).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').trim();
+	const insertion = (between.length === 0 ? '\n  "' : ',\n  "') + key + '": ' + encoded + '\n';
+	text = text.slice(0, lastBrace).replace(/\s+$/, '') + insertion + text.slice(lastBrace);
+}
+fs.writeFileSync(f, text);
+console.error('[launch.sh] settings overlay applied: ' + Object.keys(overlay).join(', '));
+NODE
+	then
+		echo "[launch.sh] failed to apply LAUNCH_SETTINGS_OVERLAY to $SETTINGS_FILE" >&2
+		exit 1
+	fi
+fi
+
+# Optional application-scope storage overlay (state.vscdb ItemTable), e.g. the one-time
+# opt-in flag that chat.tools.global.autoApprove otherwise asks for in a dialog.
+if [[ -n "${LAUNCH_STATE_OVERLAY:-}" ]]; then
+	if ! command -v sqlite3 >/dev/null 2>&1; then
+		echo "[launch.sh] LAUNCH_STATE_OVERLAY set but sqlite3 is not installed" >&2
+		exit 1
+	fi
+	STATE_DB="$DEST_UDD/User/globalStorage/state.vscdb"
+	mkdir -p "$(dirname "$STATE_DB")"
+	STATE_SQL=$(node -e '
+const overlay = JSON.parse(process.argv[1]);
+const q = v => "'"'"'" + String(v).replace(/'"'"'/g, "'"'"''"'"'") + "'"'"'";
+const rows = Object.entries(overlay).map(([k, v]) => "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (" + q(k) + ", " + q(typeof v === "string" ? v : JSON.stringify(v)) + ");");
+console.log("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);\n" + rows.join("\n"));
+' -- "$LAUNCH_STATE_OVERLAY") || { echo "[launch.sh] LAUNCH_STATE_OVERLAY is not a JSON object" >&2; exit 1; }
+	if ! sqlite3 "$STATE_DB" "$STATE_SQL"; then
+		echo "[launch.sh] failed to apply LAUNCH_STATE_OVERLAY to $STATE_DB" >&2
+		exit 1
+	fi
+	echo "[launch.sh] state overlay applied to $STATE_DB" >&2
+fi
 
 # Strip ELECTRON_RUN_AS_NODE, commonly inherited from VS Code's integrated
 # terminal / agent runtimes; it breaks ./scripts/code.sh.
