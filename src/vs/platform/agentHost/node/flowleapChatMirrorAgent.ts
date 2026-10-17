@@ -16,6 +16,7 @@
 // Privacy (ADR 0009 decision 4, PRD 0018 A4): this file logs ids, counts and kinds only, never
 // message text, tool input or titles.
 
+import * as os from 'os';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable, IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -58,14 +59,13 @@ interface IEmittedTurn {
 }
 
 /**
- * The project of every editor chat (PRD 0018 C3). A client groups sessions by project, so a Viewer
- * lists the Host's Editor Chats under one group instead of "Unknown". It names no folder and holds
- * no user content; the agent host stores it as is.
+ * The project of every editor chat (PRD 0018 C3). A client groups sessions by the project's name,
+ * so a Viewer lists the Host's Editor Chats under "Editor Chats" instead of "Unknown". A client
+ * also uses the project as a folder (for example as a terminal's working directory), so its URI
+ * is a folder that exists: the Host's home folder, the agent host's default directory.
  */
-export const EDITOR_CHATS_PROJECT_URI = URI.from({ scheme: FLOWLEAP_CHAT_AGENT_PROVIDER_ID, path: '/editor-chats' });
-
 export function editorChatsProject(): IAgentSessionProjectInfo {
-	return { uri: EDITOR_CHATS_PROJECT_URI, displayName: localize('flowleapChat.group', "Editor Chats") };
+	return { uri: URI.file(os.homedir()), displayName: localize('flowleapChat.group', "Editor Chats") };
 }
 
 /** The neutral title the host writes to disk for an editor chat (D1). */
@@ -386,7 +386,9 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 		if (status === ToolCallStatus.Streaming || status === previous) {
 			return;
 		}
-		const base = { turnId: turn.turnId, toolCallId: toolCall.toolCallId };
+		// The tool's `_meta` (its kind) rides every lifecycle action, so a Viewer renders it as the
+		// agent host's own agents' tools (a terminal tool stays a terminal tool after it completes).
+		const base = { turnId: turn.turnId, toolCallId: toolCall.toolCallId, ...(toolCall._meta ? { _meta: toolCall._meta } : {}) };
 		if (status === ToolCallStatus.PendingConfirmation) {
 			this._requestConfirmation(chatId, toolCall);
 			turn.tools.set(toolCall.toolCallId, status);

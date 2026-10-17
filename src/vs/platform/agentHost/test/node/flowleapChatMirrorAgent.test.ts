@@ -22,7 +22,7 @@ import { ActionType } from '../../common/state/sessionActions.js';
 import { buildDefaultChatUri, MessageKind, ResponsePartKind, ROOT_STATE_URI, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type ResponsePart, type ToolCallState, type Turn } from '../../common/state/sessionState.js';
 import { AgentHostDatabase } from '../../node/agentHostDatabase.js';
 import { AgentService } from '../../node/agentService.js';
-import { EDITOR_CHATS_PROJECT_URI, FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from '../../node/flowleapChatMirrorAgent.js';
+import { editorChatsProject, FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from '../../node/flowleapChatMirrorAgent.js';
 import { createNoopGitService, createSessionDataService, TestSessionDatabase } from '../common/sessionTestHelpers.js';
 import { createTestAgentService, getTestAgentHostProviderService, getTestAgentStateManager, registerTestAgentProvider } from './agentServiceTestUtils.js';
 
@@ -246,6 +246,33 @@ suite('FlowLeapChatMirrorAgent', () => {
 		});
 	});
 
+	test('a completed terminal tool keeps its kind in the host state and on every tool action (C3)', async () => {
+		const harness = await createHarness();
+		await publishAndRegister(harness);
+		await harness.service.subscribe(CHAT_CHANNEL, 'viewer');
+		const kinds: string[] = [];
+		disposables.add(harness.service.onDidAction(envelope => {
+			const action = envelope.action as { type: string; _meta?: Record<string, unknown> };
+			if (action.type.includes('toolCall')) {
+				kinds.push(`${action.type}:${action._meta?.['toolKind']}`);
+			}
+		}));
+		const terminal = (status: ToolCallStatus.Running | ToolCallStatus.Completed): ResponsePart => {
+			const part = tool(status, '{"command":"echo ok"}');
+			return part.kind === ResponsePartKind.ToolCall ? { ...part, toolCall: { ...part.toolCall, _meta: { toolKind: 'terminal' } } } : part;
+		};
+
+		harness.publishUpdate({ activeTurn: active('req-1', 'run it', [terminal(ToolCallStatus.Running)]) });
+		await until(() => harness.chatState()?.activeTurn?.responseParts.some(part => part.kind === ResponsePartKind.ToolCall), 'the running tool');
+		harness.publishUpdate({ endedTurns: [turn('req-1', 'run it', [terminal(ToolCallStatus.Completed)])] });
+		const finished = harness.chatState()?.turns[0]?.responseParts[0];
+
+		assert.deepStrictEqual({ kinds, finished: finished?.kind === ResponsePartKind.ToolCall ? { status: finished.toolCall.status, kind: finished.toolCall._meta?.['toolKind'] } : undefined }, {
+			kinds: ['chat/toolCallStart:terminal', 'chat/toolCallReady:terminal', 'chat/toolCallComplete:terminal'],
+			finished: { status: ToolCallStatus.Completed, kind: 'terminal' },
+		});
+	});
+
 	test('the host\'s own refusals never answer an editor tool; an answer in the editor ends the prompt for Viewers', async () => {
 		const harness = await createHarness();
 		await publishAndRegister(harness);
@@ -323,10 +350,10 @@ suite('FlowLeapChatMirrorAgent', () => {
 			before: [],
 			whilePublishing: {
 				agents: [FLOWLEAP_CHAT_AGENT_PROVIDER_ID],
-				listed: [{ session: SESSION.toString(), title: 'Hinge prior art', group: 'Editor Chats', project: EDITOR_CHATS_PROJECT_URI.toString() }],
+				listed: [{ session: SESSION.toString(), title: 'Hinge prior art', group: 'Editor Chats', project: editorChatsProject().uri.toString() }],
 			},
 			afterWithdrawal: { agents: [], registered: false, listed: [] },
-			republished: [{ session: SESSION.toString(), title: 'Hinge prior art', group: 'Editor Chats', project: EDITOR_CHATS_PROJECT_URI.toString() }],
+			republished: [{ session: SESSION.toString(), title: 'Hinge prior art', group: 'Editor Chats', project: editorChatsProject().uri.toString() }],
 		});
 	});
 

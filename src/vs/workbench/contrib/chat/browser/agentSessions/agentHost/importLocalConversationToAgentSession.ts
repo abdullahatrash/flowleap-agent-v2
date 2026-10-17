@@ -10,8 +10,9 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { basename } from '../../../../../../base/common/resources.js';
 import { localize } from '../../../../../../nls.js';
 import type { IMirroredActiveTurn, IMirroredChat } from '../../../../../../platform/agentHost/common/agentHostChatMirror.js';
+import { toToolCallMeta } from '../../../../../../platform/agentHost/common/meta/agentToolCallMeta.js';
 import { MessageKind, ResponsePartKind, ToolCallCancellationReason, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type ErrorInfo, type ResponsePart, type ToolCallCompletedState, type ToolCallState, type ToolResultContent, type Turn } from '../../../../../../platform/agentHost/common/state/sessionState.js';
-import { IChatToolInvocation, ToolConfirmKind, type ConfirmedReason, type IChatContentInlineReference, type IChatContentReference, type IChatToolInvocationSerialized } from '../../../common/chatService/chatService.js';
+import { IChatToolInvocation, isLegacyChatTerminalToolInvocationData, ToolConfirmKind, type ConfirmedReason, type IChatTerminalToolInvocationData, type ILegacyChatTerminalToolInvocationData, type IChatContentInlineReference, type IChatContentReference, type IChatToolInvocationSerialized } from '../../../common/chatService/chatService.js';
 import type { IChatModel, IChatProgressResponseContent, IChatRequestModel } from '../../../common/model/chatModel.js';
 import { isToolResultInputOutputDetails } from '../../../common/tools/languageModelToolsService.js';
 
@@ -190,12 +191,57 @@ function confirmationReason(reason: ConfirmedReason): ToolCallConfirmationReason
 	}
 }
 
+/** The command an editor terminal tool runs, as the chat view shows it; `undefined` for other tools. */
+function terminalCommand(part: IChatToolInvocation | IChatToolInvocationSerialized): string | undefined {
+	const data = terminalData(part);
+	if (!data) {
+		return undefined;
+	}
+	if (isLegacyChatTerminalToolInvocationData(data)) {
+		return data.command;
+	}
+	const { forDisplay, toolEdited, userEdited, original } = data.commandLine;
+	return forDisplay ?? toolEdited ?? userEdited ?? original;
+}
+
+function terminalData(part: IChatToolInvocation | IChatToolInvocationSerialized): IChatTerminalToolInvocationData | ILegacyChatTerminalToolInvocationData | undefined {
+	return part.toolSpecificData?.kind === 'terminal' ? part.toolSpecificData : undefined;
+}
+
+/**
+ * Marks an editor terminal tool as a terminal tool call (mirror only, PRD 0018 C3), as the agent
+ * host's own agents do: `_meta.toolKind` and the command as the input. Without it a Viewer renders
+ * the tool as a generic confirmation, which it hides once the tool completes. The command output
+ * becomes the result text when the tool has none.
+ */
+function withTerminalKind(state: ToolCallState, part: IChatToolInvocation | IChatToolInvocationSerialized): ToolCallState {
+	const command = terminalCommand(part);
+	if (command === undefined || state.status === ToolCallStatus.Streaming) {
+		return state;
+	}
+	const marked = { ...state, toolInput: JSON.stringify({ command }), _meta: { ...state._meta, ...toToolCallMeta({ toolKind: 'terminal' }) } };
+	if (marked.status !== ToolCallStatus.Completed) {
+		return marked;
+	}
+	const data = terminalData(part);
+	const output = data && !isLegacyChatTerminalToolInvocationData(data) ? data.terminalCommandOutput?.text : undefined;
+	if (!output || marked.content?.some(content => content.type === ToolResultContentType.Text)) {
+		return marked;
+	}
+	return { ...marked, content: [...(marked.content ?? []), { type: ToolResultContentType.Text, text: output }] };
+}
+
 /**
  * Maps a tool invocation to its live agent-host state (mirror only). A tool that still streams
  * its input has no state yet. A result that waits for approval stays `running`: the Viewer cannot
  * approve a result (Remote Access v1), the editor user does.
  */
 function liveToolCall(part: IChatToolInvocation | IChatToolInvocationSerialized, toolCallId: string): ToolCallState | undefined {
+	const state = liveToolCallState(part, toolCallId);
+	return state && withTerminalKind(state, part);
+}
+
+function liveToolCallState(part: IChatToolInvocation | IChatToolInvocationSerialized, toolCallId: string): ToolCallState | undefined {
 	if (part.kind === 'toolInvocationSerialized') {
 		return completedToolCall(part, toolCallId);
 	}
