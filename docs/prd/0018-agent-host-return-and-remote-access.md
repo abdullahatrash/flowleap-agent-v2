@@ -1,6 +1,6 @@
 # PRD 0018 — Agent host returns; Remote Access v1
 
-**Status:** ACTIVE 2026-09-29 — ADR 0009 accepted; issues #472–#484 filed (A1+A2 #472, A3 #473, A4 #474, A5 #475, A6 #476, A7 #477, A8 #478, B1 #479, B2 #480, B3 #481, B4 #482, B5 #483, B6 #484)
+**Status:** ACTIVE — Phase A SHIPPED as v0.5.0 (2026-10-05); Phase B resumed 2026-10-17 with Q24 = BOTH surfaces (adapter spike running). ADR 0009 accepted; issues #472–#484 filed (A1+A2 #472, A3 #473, A4 #474, A5 #475, A6 #476, A7 #477, A8 #478, B1 #479, B2 #480, B3 #481, B4 #482, B5 #483, B6 #484)
 **Date:** 2026-09-29
 **Base:** main at the PRD 0017 merge (`45a4c6d6ddc`, upstream 1.140 + fork intents)
 **Decides:** ADR 0009. **Glossary:** `CONTEXT.md` → Remote Access. **Evidence:** spike #469
@@ -89,7 +89,30 @@ changes.
 
 ## Phase B — Remote Access v1 (watch plus respond)
 
-### B1 (#479) — Q24 decision + Relay contract (docs, founder)
+**Resumed 2026-10-17.** Two facts changed since Phase A: ADR 0011 (Hosted Workspace) now owns
+`app.flowleap.co` as the parent domain of per-user VMs, and it recorded Remote Access as "keeps
+scope, loses priority"; the founder re-prioritised it on 2026-10-17. **Q24 is decided: both.** The
+phone follows Claude sessions (agent host, already AHP) **and** the editor Patent Agent chat, which
+needs an adapter that publishes the workbench chat model over AHP. The adapter is designed by the
+chat-adapter spike (branch `spike/remote-access-chat-adapter`) and lands as the new slice **B0**.
+The Viewer moves to `remote.flowleap.co`. The wire contract is
+`docs/remote-access/RELAY-CONTRACT.md`.
+
+### B0 (#TBD) — Editor-chat AHP adapter (core, after the spike)
+Publish the editor Patent Agent chat (workbench chat model + extension-host participant) as a
+second agent on the local agent host, so a remote Viewer lists it next to Claude sessions,
+renders its turns, answers its permission prompts and sends the next message. Shape, seams and
+size come from the spike report; guardrails: model calls never route through the agent host's
+proxy branch (ADR 0009 decision 2); mirrored content obeys the metadata-only log policy
+(`platform/agentHost/common/sessionLogContent.ts`, A4); no new chat surface — the adapter mirrors
+the existing one.
+
+
+### B1 (#479) — Q24 decision + Relay contract (docs, founder) — DONE 2026-10-17
+Q24 = both (founder, 2026-10-17). Contract: `docs/remote-access/RELAY-CONTRACT.md` (addresses,
+identities, first-frame auth + entitlement, frame types, pairing with a 128-bit secret the Relay
+never sees, X25519 + AES-GCM session keys, Host outbound transport, Viewer boot order, content-free
+events). Original brief follows for the record.
 Founder decides Q24 on the Phase A window: Claude sessions only, or also editor Patent Agent
 chats via a chat-model adapter. Write the Relay wire contract as a short doc:
 `wss://api.flowleap.co/v1/relay/host` and `/v1/relay/viewer/<hostId>`, Clerk bearer on connect,
@@ -112,7 +135,9 @@ machine-local storage; revoked on sign-out; Mac keep-awake (`powerSaveBlocker`) 
 session runs; setting `flowleap.remoteAccess.keepAwake` default on.
 
 ### B4 (#482) — Viewer page (web build + hosting)
-Static web build of the Agents Window served versioned at `app.flowleap.co/agents/<version>/`
+Static web build of the Agents Window served versioned at `remote.flowleap.co/<version>/`
+(`app.flowleap.co` belongs to the Hosted Workspace, ADR 0011; reuse PRD 0019 H1's web-client
+build output where it fits)
 from the Hetzner box (nginx vhost + certbot + DNS); a small boot page that runs the Clerk browser
 SDK, lists the user's pairs, and boots the workbench with the client-side `remoteAgentHost`
 provider registered (PRD 0017 kept it out) against the Relay transport; version handshake
@@ -145,4 +170,12 @@ Content-free web push from the Relay on the Host's `attention` frame; fixed text
 
 ## Outcome
 
-_Filled as slices land._
+### Phase A — shipped as v0.5.0 (2026-10-05)
+A1+A2 #486 · A3 #487 · A4 #488 · A5 #491 · A6 #492 (−41k lines) · A7 #490 · A8 founder acceptance
+PASSED 2026-09-30 on the real profile. The release needed four packaging follow-ups because PRD
+0017 had not synced `build/`: #497 (foundry-local-sdk), #498 (koffi + win32 SDK addons), #499 (rpm
+dep-lists), and the `mainImpl` bootstrap entry in #490. Published 2026-10-05 09:36Z, 24 assets,
+without `--clean-old` (#494). Open follow-ups: #489, #493, #494, #495.
+
+### Phase B
+B1 done 2026-10-17 (Q24 = both; contract written). B0 pending the chat-adapter spike.
