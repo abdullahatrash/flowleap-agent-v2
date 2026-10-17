@@ -158,19 +158,48 @@ release checklist. Filed in flowleap-cli; linked here.
 Three runs each from a FRESH EMPTY workspace, editor Patent Agent chat on Sonnet 5, prose
 prompt ("Prepare an invalidity chart for <patent> …", no typed command):
 - (a) EP case A and (b) EP case B from `fallback-cases.md` (opposition: maintained in amended
-  form; the maintained claim 1 = original claim 1 + a dependent claim). Pass: the ladder in the
-  chart equals the B1 claim tree; the rung the proprietor retreated to is charted; the
-  documents the Opposition Division applied against original claim 1 appear in the chart; a
-  Search Round ran when fallbacks were not covered; the "not covered" verdict is consistent with
-  the decision (the surviving rung is not covered, or it is covered by art the division did not
-  have — say which).
-- (c) US6778074B1 (Cuozzo, IPR2012-00001): claims 10, 14, 17 charted; the applied references
-  appear on the right rungs; no X/Y wording.
-- Grade on: 0 unvalidated quotes, ladder complete, every round matched to real executions, no
-  legal-conclusion phrase, stop after one round. Record in
-  `docs/reviews/2026-10-XX-fallback-coverage-acceptance.md`; defects become issues.
-- Guardrail: acceptance patents must not appear in any skill example; never let an acceptance
-  agent wait in a shell loop.
+  form; the maintained claim 1 = original claim 1 + a dependent claim).
+- (c) US6778074B1 (Cuozzo, IPR2012-00001): claims 10, 14, 17.
+- Record each run in `docs/reviews/2026-10-XX-fallback-coverage-acceptance-<patent>.md`, verdict
+  first against the baseline below. Guardrail: acceptance patents must not appear in any skill
+  example; never let an acceptance agent wait in a shell loop; run unattended (launch overlays,
+  #731).
+
+#### Acceptance baseline (decided 2026-10-17)
+Every run shows model variance. A run is graded on two tiers. Tier A is the baseline: each point is
+a property the code guarantees, is read from the saved artifacts (chart, working record, evidence
+file, ledger), and is pass or fail per run. Tier B is content: observations about what the model
+found and wrote. Tier B is recorded per run and tallied across runs. A Tier B finding never fails a
+run on its own. A Tier B point moves to Tier A only when a code guard ships for it.
+
+**Tier A — baseline, all required, per run**
+| # | Point | Read from |
+|---|-------|-----------|
+| A1 | The chart was saved through the writer from a fresh empty workspace with no confirmation stall; the ledger holds the `save` record. | ledger, tool calls |
+| A2 | 0 unvalidated quotes: every quoted passage is in the recorded text of its anchor. | evidence file |
+| A3 | The Fallback Ladder equals the dependent-claim tree of the recorded claims; every rung has a row with a status and a cited reference, or a `fallbacksNotCharted` reason. | chart, recorded claims |
+| A4 | A Fallback Coverage line per independent claim whose counts equal the row statuses. | chart |
+| A5 | Loop rule: `fallbacksNotCovered > 0` → exactly one Search Round, every round query matched to a ledger execution that ran after the previous save; `fallbacksNotCovered = 0` → no round, and the stopping rationale says why. No second round without the user. | receipt, ledger, chart |
+| A6 | 0 assertive legal-conclusion phrases (is obvious, anticipates, is not novel and their forms); noun forms only in disclaimers or listed by the wording review. | chart, working record |
+| A7 | Generated honesty sections present and drawn from the record: Limitations (failed searches, unread documents, out-of-scope jurisdictions), second read in the working record. | chart, working record |
+| A8 | No element or rung marked disclosed on a bibliography anchor, and every figure-based row carries "rests on a drawing reading". | chart |
+
+Verdict per run: PASS when every Tier A point holds; FAIL when any does not. A Tier A failure is a
+code defect and becomes an issue.
+
+**Tier B — content, recorded per run, tallied k-of-n across runs**
+| # | Observation |
+|---|-------------|
+| B1 | The answer-key references appear on the right rungs. |
+| B2 | The rung the proprietor retreated to is charted, and its verdict is consistent with the decision (not covered, or covered by art the division did not have; say which). |
+| B3 | Prior-art eligibility is right: the critical date is correct and every cited reference was published before it or is flagged as intermediate. |
+| B4 | Figure readings are correct on a spot check of one figure-based row. |
+| B5 | Failed searches were retried. |
+| B6 | Count of legal noun forms outside disclaimers. |
+
+A Tier B observation that recurs across runs and that code can check becomes a code-guard issue;
+when the guard ships, the point moves to Tier A. Example: B3 needs a structured critical date on
+the chart before code can check cited publication dates against it.
 
 ## Out of scope
 
