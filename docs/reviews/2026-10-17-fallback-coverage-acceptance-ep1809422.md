@@ -24,9 +24,9 @@ ledger `save` record, every quote and fragment is in the recorded text, the ladd
 recorded claim tree with every rung charted, the coverage counts match the rows, the loop rule
 applied as written (`fallbacksNotCovered=0`, no round, rationale given), no assertive legal
 phrase, the generated honesty sections are present, and no row is disclosed on a bibliography
-anchor. Tier B records three content misses (B3 critical date, B4 one misread figure, B5 one
-failed search not retried) and one open design question (B2: a partly covered rung never
-triggers a Search Round). Two harness defects outside both tiers cost the run about an hour.
+anchor. Tier B records four content misses (B2 the surviving rung was never re-searched, B3 critical
+date, B4 one misread figure, B5 one failed search not retried). Two harness defects outside both
+tiers cost the run about an hour. The nine-point grading of the pilot is kept below as detail.
 
 ## Tier A — baseline
 
@@ -46,11 +46,25 @@ triggers a Search Round). Two harness defects outside both tiers cost the run ab
 | # | Observation | Result | What was observed |
 |---|-------------|--------|-------------------|
 | B1 | Answer-key references on the right rungs | Partial | D3 (JP2004174393) is on claim 1 elements (a) and (b) ("disclosed in the cited art, rests on a drawing reading", figure page 6), on "Claim 1 as a whole", and on claim 3. Elements (c) and (d) (inner pair between outer pair; deposit region) are "not found in the cited art"; the OD found the proprietor's claim 1 not new over D3. D3's text is not served by the backend ("OPS serves no full text for these jurisdictions"), so the reading rests on drawings only. D1 (JP 9-155215) was never retrieved; D4 (WO0035585A1) was retrieved at 15:14:40Z and cited on no row. Source of D3: the `examiner_baseline` call (15:06:59Z) returned the B2's eleven applicant citations, which include JP2004174393 and WO0035585; the agent read D3 at 15:07:57Z before any search. Art of record, not model memory: the agent never named T 0693/17, a D-number, the opponent or the opposition. |
-| B2 | The surviving rung is charted; verdict consistent with the decision | Consistent, with an open design question | Claim 3 is charted: "partially disclosed" by D3; element "a row containing at least four side-by-side breaker drum assemblies" met by "a sub-set of four" of D3's six rolls; element "each drum … rotating in a direction opposite to its immediately adjacent drum" "not disclosed in cited text". The OD held the rung new over D3 because D3 shows six rolls. So the chart does not cover the rung with D3 (consistent), and finds no art the division lacked. But the rung is "partly covered", not "not covered", so `notCovered` was empty and no Search Round ran for it. The litigator's question ("do the documents take care of all the fallbacks?") is answered "no" for claim 3 without a second search. Design question for the lead: should a partly covered rung count toward the nudge, or should the skill run the round for partial rungs too. |
+| B2 | The surviving rung is charted; verdict consistent with the decision | Fail | Claim 3 is charted: "partially disclosed" by D3; element "a row containing at least four side-by-side breaker drum assemblies" met by "a sub-set of four" of D3's six rolls; element "each drum … rotating in a direction opposite to its immediately adjacent drum" "not disclosed in cited text". The OD held the rung new over D3 because D3 shows six rolls. So the chart does not cover the rung with D3 (consistent), and finds no art the division lacked. But the rung is "partly covered", not "not covered", so `notCovered` was empty and no Search Round ran for it. The litigator's question ("do the documents take care of all the fallbacks?") is answered "no" for claim 3 without a second search, so the rung the proprietor retreated to was never re-searched. Under the ADR 0016 amendment on the baseline branch (decision 7, Round Report), claim 3 would have been an open point of the receipt (a `partial` rung) with the agent's recommended next step, and the Search Round would have run on the expert's answer. |
 | B3 | Prior-art eligibility right: critical date correct, every reference before it or flagged intermediate | Fail (lead's finding, confirmed) | Critical date 2004-09-27 is right. The row then says WO2005072877A1 "published 11 August 2005, before EP1809422's own filing date (26 September 2005), so it qualifies as ordinary Art. 54(2) EPC / pre-AIA 35 U.S.C. 102(b) state-of-the-art prior art". Recorded bibliography: WO2005072877A1 filed 2005-01-28, published 2005-08-11, priorities 2004-01-30 and 2004-03-26. Published after the critical date and before the filing date: an intermediate document, at most Art. 54(3) novelty-only art through its EP entry EP1725335; "102(b)" has no place in an EP chart. It is the main reference for claims 2, 4, 5, 6 and element (g). The chart flags nothing. Code can check this once the critical date is structured on the chart. |
 | B4 | Figure readings correct on a spot check | One misread (lead's finding, confirmed on the saved page) | Claim 3 gap: "No rotation arrows or direction callouts are shown on the recorded drawing page". `references/figures/JP2004174393-page-6.png`, Fig. 5, draws a curved arrow on each of the six rolls (14), all turning the same way; Fig. 6 draws a rotation arrow on one roll. The status "partially disclosed" stands; the correct reason is that the arrows show same-direction rotation, which is evidence against the alternating-rotation limitation. The other two figure rows (claim 1 (a), (b): a row of toothed rolls, at least four) read correctly from Fig. 3 and Fig. 5. |
 | B5 | Failed searches retried | Fail (lead's finding, confirmed) | Chart Limitations: "1 search(es) could not be run and were not retried: row of 4+ toothed breaker drums with inner pair feeding oversized material outward to outer pair ((ti=breaker or ti=crusher) and ab=drum and ab=teeth and ab="four" and not pa="MMD")" (15:09:41Z). A near variant without the `not pa` clause ran at 15:09:52Z and is logged as a separate search set; the failed query itself was not re-run. |
 | B6 | Legal noun forms outside disclaimers | 0 | Chart and working record: the only noun-form hit is the generated disclaimer in "Reference roles". |
+
+## Nine-point detail (the pilot's grading, kept for comparison)
+
+| # | Point | Grade |
+|---|-------|-------|
+| 1 | Saved through the validated writer, receipt with `fallbacksNotCovered=… rounds=… notCovered=…` | PASS |
+| 2 | Fallback coverage section lists 2–6 under 1 with recorded claim text | PASS |
+| 3 | Answer-key art on the right rows (D3 on claim 1; the surviving rung) | PARTIAL: D3 on claim 1; claim 3 "partially disclosed" by D3, reason misread |
+| 4 | Search Round ran for not-covered fallbacks, ledger-matched, stopped after one | N/A: `notCovered` was empty, no round ran (see B2) |
+| 5 | Writer refusals and the agent's response | PASS: 7 refusals, all fixed; plus 11 pre-execution schema rejections (#740) |
+| 6 | 0 unvalidated quotes; no X/Y/anticipat-/obvious- wording | PASS |
+| 7 | #725: no round accepted whose queries all predate the previous save | PASS by absence: one save, no re-save, no round |
+| 8 | #733: no assertive legal phrase in the saved chart | PASS: the refusal never fired |
+| 9 | `--unattended` kept the run moving | PASS for prompts: none appeared; the run still stalled 47 min on a model-API error that needed a human click |
 
 ## Harness and run facts (outside both tiers)
 
@@ -120,7 +134,7 @@ twice and `search_npl` twice with no stop. The Cuozzo pilot's three stops did no
 | 15:06:40–15:39:24 | Search, reading, figures, first draft (33 min; thinking pauses of 2–4 min between calls at "High" reasoning). |
 | 15:39:30–15:51:27 | Fixes after refusal 1: drawings of GB2088746A and JP2004174393A, evidence lookups (12 min). |
 | 15:51:27–15:53:06 | Three drafts rejected by the input validator, then the turn died on the key's usage limit. |
-| 15:53:06–16:40:16 | Idle 47 min 10 s. The chat showed "Try Again". Someone clicked it at 16:40:16; the acceptance operator did not. The model answered after the click, so the key or its limit had changed in between. |
+| 15:53:06–16:40:16 | Idle 47 min 10 s. The chat showed "Try Again". A human clicked it at 16:40:16, most likely the founder; confirmation pending. Neither the acceptance operator nor the lead clicked it. The model answered after the click, so the key or its limit had changed in between (confirmation pending). |
 | 16:40:16–16:49:06 | Eight more rejections, four probe refusals, two real refusals, then the save (9 min). |
 | 16:49:06–16:50:01 | Second read and final message. Turn ended. |
 
@@ -129,21 +143,23 @@ Wall clock 1 h 43 min; model work about 56 min; idle 47 min; about 10 min of the
 
 ## Defects and observations
 
-1. **Tool-input validation names no field** (harness). Eleven writer requests were rejected with
+1. **Tool-input validation names no field** (harness, #740). Eleven writer requests were rejected with
    "Your input to the tool was invalid (must be array)" and the agent spent ten minutes and four
    probe saves finding that `limitations` was a string. The error should carry the JSON path. The
    rejected arguments are recorded nowhere (no ledger entry, no transcript event, no debug span).
-   New issue.
+   Filed as #740.
 2. **BYOK key usage limit ended the turn; a human "Try Again" resumed it** (environment). The
-   click at 16:40:16Z is a second user message in a run meant to take one prompt. Acceptance
+   click at 16:40:16Z (most likely the founder; confirmation pending) is a second user message in
+   a run meant to take one prompt. Acceptance
    protocol: check the key's remaining budget before an E2 run, and record who may click "Try
    Again". Not a product defect.
 3. **B3, critical date row** (content, new issue): see Tier B. Candidate code guard: a
    structured critical date on the chart, then the writer compares each cited publication date
    and flags intermediate documents.
 4. **B4, claim 3 gap text** (content, new issue): see Tier B.
-5. **B2, partly covered rung never triggers a Search Round** (design): see Tier B. Decision for
-   the lead.
+5. **B2, partly covered rung never triggers a Search Round** (design): see Tier B. The ADR 0016
+   amendment (Round Report) on the baseline branch resolves it: open points include `partial`
+   rungs, and the round runs on the expert's answer.
 6. **B5, failed search not retried** (content): see Tier B. The skill's search-failure ladder
    asks for a retry; the writer only reports it.
 7. **Kind-code duplicates persist** (#729 family). "Retrieved documents" lists JP2004174393A and
