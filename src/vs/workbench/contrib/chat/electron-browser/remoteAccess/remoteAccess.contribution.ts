@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { localize } from '../../../../../nls.js';
-import { FLOWLEAP_CHAT_MIRROR_ENABLED, IAgentHostChatMirrorSource } from '../../../../../platform/agentHost/common/agentHostChatMirror.js';
+import { IAgentHostChatMirrorSource } from '../../../../../platform/agentHost/common/agentHostChatMirror.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationType, registerSingleton } from '../../../../../platform/instantiation/common/extensions.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -52,14 +52,14 @@ registerWorkbenchContribution2(RemoteAccessStartupContribution.ID, RemoteAccessS
 // chats to the agent host while Remote Access is on (D5).
 registerSingleton(IAgentHostChatMirrorSource, AgentHostChatMirrorSource, InstantiationType.Delayed);
 
-/** Creates the editor chat mirror at startup; it then follows the Remote Access switch. */
+/**
+ * Creates the editor chat mirror at startup; it then follows the Remote Access switch (D5): it
+ * publishes while Remote Access is on and withdraws when it goes off. There is no other setting.
+ */
 class AgentHostChatMirrorStartupContribution implements IWorkbenchContribution {
 	static readonly ID = 'workbench.contrib.agentHostChatMirrorStartup';
 
 	constructor(@IAgentHostChatMirrorSource _source: IAgentHostChatMirrorSource) { }
 }
 
-// Off until C3 (#720) hides the `flowleap-chat` agent in the local Agents Window.
-if (FLOWLEAP_CHAT_MIRROR_ENABLED) {
-	registerWorkbenchContribution2(AgentHostChatMirrorStartupContribution.ID, AgentHostChatMirrorStartupContribution, WorkbenchPhase.Eventually);
-}
+registerWorkbenchContribution2(AgentHostChatMirrorStartupContribution.ID, AgentHostChatMirrorStartupContribution, WorkbenchPhase.Eventually);

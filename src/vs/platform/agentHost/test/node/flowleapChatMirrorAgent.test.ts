@@ -22,9 +22,9 @@ import { ActionType } from '../../common/state/sessionActions.js';
 import { buildDefaultChatUri, MessageKind, ResponsePartKind, ROOT_STATE_URI, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, type ResponsePart, type ToolCallState, type Turn } from '../../common/state/sessionState.js';
 import { AgentHostDatabase } from '../../node/agentHostDatabase.js';
 import { AgentService } from '../../node/agentService.js';
-import { FlowLeapChatMirrorAgent } from '../../node/flowleapChatMirrorAgent.js';
+import { EDITOR_CHATS_PROJECT_URI, FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from '../../node/flowleapChatMirrorAgent.js';
 import { createNoopGitService, createSessionDataService, TestSessionDatabase } from '../common/sessionTestHelpers.js';
-import { createTestAgentService, getTestAgentStateManager, registerTestAgentProvider } from './agentServiceTestUtils.js';
+import { createTestAgentService, getTestAgentHostProviderService, getTestAgentStateManager, registerTestAgentProvider } from './agentServiceTestUtils.js';
 
 const CLIENT = 'window-1';
 const CHAT = 'vscode-chat-session://local/Y2hhdC0x';
@@ -94,9 +94,9 @@ function tool(status: ToolCallStatus.PendingConfirmation | ToolCallStatus.Runnin
 	return { kind: ResponsePartKind.ToolCall, toolCall };
 }
 
-async function until<T>(read: () => T | undefined | false, what: string): Promise<T> {
+async function until<T>(read: () => T | undefined | false | Promise<T | undefined | false>, what: string): Promise<T> {
 	for (let i = 0; i < 200; i++) {
-		const value = read();
+		const value = await read();
 		if (value) {
 			return value;
 		}
@@ -262,18 +262,71 @@ suite('FlowLeapChatMirrorAgent', () => {
 		});
 	});
 
-	test('a window that closes during a turn ends that turn for Viewers', async () => {
+	test('a window that closes during a turn ends that turn, then its chat leaves the host (C3)', async () => {
 		const harness = await createHarness();
 		await publishAndRegister(harness);
 		await harness.service.subscribe(CHAT_CHANNEL, 'viewer');
 		harness.publishUpdate({ activeTurn: active('req-1', 'long task', [markdown('req-1', 0, 'working')]) });
 		await until(() => harness.chatState()?.activeTurn, 'the live turn');
+		const actions: string[] = [];
+		disposables.add(harness.service.onDidAction(envelope => actions.push(envelope.action.type)));
+		// A Viewer listed the session, so the host owes it a removal.
+		const listedSummary = getTestAgentStateManager(harness.service).getSessionSummary(SESSION.toString());
+		assert.ok(listedSummary);
+		getTestAgentStateManager(harness.service).prepareSessionSummariesForListing([listedSummary]);
+		const removed: string[] = [];
+		disposables.add(getTestAgentStateManager(harness.service).onDidEmitNotification(notification => {
+			if (notification.type === 'root/sessionRemoved') {
+				removed.push(notification.session.toString());
+			}
+		}));
 
 		assert.ok(harness.registry.publish({ version: CHAT_MIRROR_PUBLICATION_VERSION, kind: 'withdraw', clientId: CLIENT }));
+		const listed = (await harness.service.listSessions()).map(session => session.session.toString());
 
-		assert.deepStrictEqual({ active: harness.chatState()?.activeTurn, turns: projectTurns(harness.chatState()?.turns) }, {
-			active: undefined,
-			turns: [{ id: 'req-1', text: 'long task', state: TurnState.Cancelled, parts: [{ markdown: 'working' }] }],
+		assert.deepStrictEqual({ cancelled: actions.includes(ActionType.ChatTurnCancelled), state: harness.chatState(), offered: harness.agent.offersSession(SESSION), listed, removed }, {
+			cancelled: true,
+			state: undefined,
+			offered: false,
+			listed: [],
+			removed: [SESSION.toString()],
+		});
+	});
+
+	test('the agent exists only while a window publishes, and lists its chats under Editor Chats (D5, C3)', async () => {
+		const log = new RecordingLogService();
+		const fileService = disposables.add(new FileService(new NullLogService()));
+		const service = disposables.add(createTestAgentService(log, fileService, createSessionDataService(new TestSessionDatabase()), { _serviceBrand: undefined } as IProductService, createNoopGitService(), undefined, undefined, undefined, undefined, undefined, [], undefined, undefined, disposables.add(new AgentHostDatabase(':memory:'))));
+		const providers = getTestAgentHostProviderService(service);
+		const registry = disposables.add(new AgentHostChatMirrorRegistry());
+		disposables.add(registry.attachWindow(CLIENT, new FakeMirrorWindow()));
+		const registration = disposables.add(new FlowLeapChatAgentRegistration(registry, providers, () => new FlowLeapChatMirrorAgent(registry, log), log));
+		const agents = () => providers.getProviders().map(agent => agent.id);
+		const listed = async () => (await service.listSessions()).map(session => ({ session: session.session.toString(), title: session.summary, group: session.project?.displayName, project: session.project?.uri.toString() }));
+		const before = agents();
+
+		assert.ok(registry.publish({ version: CHAT_MIRROR_PUBLICATION_VERSION, kind: 'chats', clientId: CLIENT, chats: [summary('Hinge prior art')] }));
+		const whilePublishing = await until(async () => {
+			const sessions = await listed();
+			return sessions.length > 0 ? sessions : undefined;
+		}, 'the listing');
+		const agentsWhilePublishing = agents();
+		assert.ok(registry.publish({ version: CHAT_MIRROR_PUBLICATION_VERSION, kind: 'withdraw', clientId: CLIENT }));
+		const afterWithdrawal = { agents: agents(), registered: registration.registered, listed: await listed() };
+		assert.ok(registry.publish({ version: CHAT_MIRROR_PUBLICATION_VERSION, kind: 'chats', clientId: CLIENT, chats: [summary('Hinge prior art')] }));
+		const republished = await until(async () => {
+			const sessions = await listed();
+			return sessions.length > 0 ? sessions : undefined;
+		}, 'the second listing');
+
+		assert.deepStrictEqual({ before, whilePublishing: { agents: agentsWhilePublishing, listed: whilePublishing }, afterWithdrawal, republished }, {
+			before: [],
+			whilePublishing: {
+				agents: [FLOWLEAP_CHAT_AGENT_PROVIDER_ID],
+				listed: [{ session: SESSION.toString(), title: 'Hinge prior art', group: 'Editor Chats', project: EDITOR_CHATS_PROJECT_URI.toString() }],
+			},
+			afterWithdrawal: { agents: [], registered: false, listed: [] },
+			republished: [{ session: SESSION.toString(), title: 'Hinge prior art', group: 'Editor Chats', project: EDITOR_CHATS_PROJECT_URI.toString() }],
 		});
 	});
 

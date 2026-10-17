@@ -23,7 +23,7 @@ import { observableValue } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { ILogService } from '../../log/common/log.js';
-import { AgentSession, resolveAgentChatContext, type AgentChatMigrationResult, type AgentSignal, type IActiveClient, type IAgent, type IAgentChatContext, type IAgentChatHistoryChange, type IAgentChatMetadata, type IAgentChats, type IAgentCreateChatResult, type IAgentDescriptor, type IAgentDiscoveredChat, type IAgentModelInfo, type IAgentPermissionResponseContext, type IAgentSessionTitlePolicy } from '../common/agent.js';
+import { AgentSession, resolveAgentChatContext, type AgentChatMigrationResult, type AgentSignal, type IActiveClient, type IAgent, type IAgentChatContext, type IAgentChatHistoryChange, type IAgentChatMetadata, type IAgentChats, type IAgentCreateChatResult, type IAgentDescriptor, type IAgentDiscoveredChat, type IAgentModelInfo, type IAgentPermissionResponseContext, type IAgentSessionProjectInfo, type IAgentSessionTitlePolicy } from '../common/agent.js';
 import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID, type AgentHostChatMirrorRegistry, type IAgentHostChatMirrorWindow, type IChatMirrorPublisher, type IMirroredActiveTurn, type IMirroredChatSummary, type IMirroredChatUpdate } from '../common/agentHostChatMirror.js';
 import type { ResolveSessionConfigResult, SessionConfigCompletionsResult } from '../common/state/protocol/commands.js';
 import type { ProtectedResourceMetadata } from '../common/state/protocol/state.js';
@@ -57,6 +57,17 @@ interface IEmittedTurn {
 	diverged: boolean;
 }
 
+/**
+ * The project of every editor chat (PRD 0018 C3). A client groups sessions by project, so a Viewer
+ * lists the Host's Editor Chats under one group instead of "Unknown". It names no folder and holds
+ * no user content; the agent host stores it as is.
+ */
+export const EDITOR_CHATS_PROJECT_URI = URI.from({ scheme: FLOWLEAP_CHAT_AGENT_PROVIDER_ID, path: '/editor-chats' });
+
+export function editorChatsProject(): IAgentSessionProjectInfo {
+	return { uri: EDITOR_CHATS_PROJECT_URI, displayName: localize('flowleapChat.group', "Editor Chats") };
+}
+
 /** The neutral title the host writes to disk for an editor chat (D1). */
 export function neutralEditorChatTitle(createdAt: number | undefined): string {
 	if (createdAt === undefined || !Number.isFinite(createdAt)) {
@@ -87,6 +98,8 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 	readonly onDidMaterializeChat = Event.None;
 	readonly onDidChangeChatData = Event.None;
 	readonly onDidSpawnChat = Event.None;
+	private readonly _onDidRetractSessions = this._register(new Emitter<readonly URI[]>());
+	readonly onDidRetractSessions = this._onDidRetractSessions.event;
 
 	/** Chat id (the window's chat model resource) → the window that publishes it. */
 	private readonly _chats = new Map<string, IPublishedChat>();
@@ -117,6 +130,13 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 		this._register(this._registry.onDidChangeChats(publisher => this._onDidPublishChats(publisher)));
 		this._register(this._registry.onDidUpdateChat(({ clientId, update }) => this._onDidUpdateChat(clientId, update)));
 		this._register(this._registry.onDidWithdraw(clientId => this._onDidWithdraw(clientId)));
+	}
+
+	/**
+	 * Offers the chats that windows publish already. The host calls it once the agent is
+	 * registered, so that the host hears the discovery (see {@link FlowLeapChatAgentRegistration}).
+	 */
+	offerPublishedChats(): void {
 		for (const publisher of this._registry.publishers) {
 			this._onDidPublishChats(publisher);
 		}
@@ -156,19 +176,39 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 			chat: this._chatUri(summary.id),
 			startTime: summary.createdAt,
 			modifiedTime: summary.modifiedAt,
+			project: editorChatsProject(),
 			summary: summary.title,
 		};
+	}
+
+	/** Whether a window publishes the chat of `session` now (PRD 0018 C3). */
+	offersSession(session: URI): boolean {
+		const chatId = this._chatId(session);
+		return chatId !== undefined && this._chats.has(chatId);
+	}
+
+	/** Ends every mirrored chat; the host drops them from live state and from clients' lists. */
+	private _retract(chatIds: readonly string[]): void {
+		if (chatIds.length === 0) {
+			return;
+		}
+		for (const chatId of chatIds) {
+			this._forget(chatId);
+		}
+		this._onDidRetractSessions.fire(chatIds.map(chatId => this._sessionUri(chatId)));
 	}
 
 	// ---- Windows --------------------------------------------------------------------------------
 
 	private _onDidPublishChats(publisher: IChatMirrorPublisher): void {
 		const published = new Set(publisher.chats.map(chat => chat.id));
+		const gone: string[] = [];
 		for (const [chatId, chat] of this._chats) {
 			if (chat.clientId === publisher.clientId && !published.has(chatId)) {
-				this._forget(chatId);
+				gone.push(chatId);
 			}
 		}
+		this._retract(gone);
 		const discovered: IAgentDiscoveredChat[] = [];
 		for (const summary of publisher.chats) {
 			const previous = this._chats.get(summary.id);
@@ -185,14 +225,14 @@ export class FlowLeapChatMirrorAgent extends Disposable implements IAgent {
 	}
 
 	private _onDidWithdraw(clientId: string): void {
-		let count = 0;
+		const gone: string[] = [];
 		for (const [chatId, chat] of this._chats) {
 			if (chat.clientId === clientId) {
-				this._forget(chatId);
-				count++;
+				gone.push(chatId);
 			}
 		}
-		this._logService.info(`${LOG_PREFIX} client ${clientId} withdrew ${count} editor chat(s)`);
+		this._retract(gone);
+		this._logService.info(`${LOG_PREFIX} client ${clientId} withdrew ${gone.length} editor chat(s)`);
 	}
 
 	/** The window no longer offers the chat: end a turn the host still shows as running. */
@@ -594,4 +634,61 @@ function cancellationReason(toolCall: ToolCallState): ToolCallCancellationReason
 	return toolCall.status === ToolCallStatus.Cancelled && toolCall.reason === ToolCallCancellationReason.Skipped
 		? ToolCallCancellationReason.Skipped
 		: ToolCallCancellationReason.Denied;
+}
+
+/** What {@link FlowLeapChatAgentRegistration} needs of the provider service. */
+export interface IFlowLeapChatAgentProviders {
+	registerProvider(provider: IAgent): void;
+	unregisterProvider(provider: string): void;
+}
+
+/**
+ * Registers the `flowleap-chat` agent while at least one window publishes its chats, and removes
+ * it when the last one stops (PRD 0018 C3, decision D5). A window publishes only while Remote
+ * Access is on, so with Remote Access off the agent does not exist: Viewers see no Editor Chat
+ * agent and no Editor Chats.
+ */
+export class FlowLeapChatAgentRegistration extends Disposable {
+
+	private _registered = false;
+
+	constructor(
+		private readonly _registry: AgentHostChatMirrorRegistry,
+		private readonly _providers: IFlowLeapChatAgentProviders,
+		private readonly _createAgent: () => FlowLeapChatMirrorAgent,
+		private readonly _logService: ILogService,
+	) {
+		super();
+		this._register(this._registry.onDidChangePublishers(() => this._update()));
+		this._update();
+	}
+
+	get registered(): boolean {
+		return this._registered;
+	}
+
+	private _update(): void {
+		if (this._registry.hasPublishers === this._registered) {
+			return;
+		}
+		if (this._registered) {
+			// The agent already retracted the chats of the window that withdrew (it hears the
+			// withdrawal first); removing it disposes it.
+			this._registered = false;
+			this._providers.unregisterProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID);
+			this._logService.info(`${LOG_PREFIX} no window publishes: agent removed`);
+			return;
+		}
+		const agent = this._createAgent();
+		try {
+			this._providers.registerProvider(agent);
+		} catch (error) {
+			agent.dispose();
+			this._logService.warn(`${LOG_PREFIX} agent registration failed: ${error instanceof Error ? error.name : 'unknown error'}`);
+			return;
+		}
+		this._registered = true;
+		this._logService.info(`${LOG_PREFIX} a window publishes: agent registered`);
+		agent.offerPublishedChats();
+	}
 }
