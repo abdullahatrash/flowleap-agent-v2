@@ -60,6 +60,9 @@ import ErrorTelemetry from '../../telemetry/node/errorTelemetry.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { AgentHostLaunchKindEnvVar, readAgentHostLaunchKind, type AgentHostLaunchKind } from '../common/agentHostTelemetry.js';
 import { markNodeCompileCacheReady } from '../../../base/node/nodeCompileCache.js';
+import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
+import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
+import { RemoteAccessHostController } from './remoteAccessHostController.js';
 
 // Entry point for the agent host utility process.
 // Sets up IPC, logging, and registers agent providers (Copilot).
@@ -356,6 +359,45 @@ async function startAgentHost(): Promise<void> {
 	// management IPC channel.
 	const connectionCountEmitter = disposables.add(new Emitter<number>());
 	let dynamicSocketInfo: IAgentHostSocketInfo | undefined;
+	// Remote Access (PRD 0018 B3): the outbound Relay transport, created on
+	// first use. Viewers are remote clients, so host-control extension methods
+	// stay off for them.
+	let remoteAccessHost: RemoteAccessHostController | undefined;
+	const getRemoteAccessHost = (): RemoteAccessHostController => {
+		if (!remoteAccessHost) {
+			remoteAccessHost = protocolIngressDisposables.add(new RemoteAccessHostController(
+				productService.version,
+				SUPPORTED_PROTOCOL_VERSIONS,
+				relayServer => {
+					const handler = instantiationService.createInstance(
+						ProtocolServerHandler,
+						agentService,
+						stateManager,
+						relayServer,
+						{
+							hostLaunchKind,
+							defaultDirectory: URI.file(os.homedir()).toString(),
+							completionTriggerCharacters,
+							terminalCommandPrefix: BANG_COMMAND_PREFIX,
+							otlpLogEmitter,
+							allowExtensionMethods: false,
+						},
+						clientFileSystemProvider,
+					);
+					protocolHandlers.push(handler);
+					return toDisposable(() => {
+						const index = protocolHandlers.indexOf(handler);
+						if (index !== -1) {
+							protocolHandlers.splice(index, 1);
+						}
+						handler.dispose();
+					});
+				},
+				logService,
+			));
+		}
+		return remoteAccessHost;
+	};
 	const configuredWebSocketServer = new DeferredPromise<void>();
 	const connectionTrackerService: IConnectionTrackerService = {
 		onDidChangeConnectionCount: connectionCountEmitter.event,
@@ -449,6 +491,21 @@ async function startAgentHost(): Promise<void> {
 				logService.warn(`[AgentHost] Unexpected inspector URL: ${url}`);
 				return undefined;
 			}
+		},
+		async setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
+			if (protocolIngressDisposables.isDisposed) {
+				if (config) {
+					throw new Error('Agent Host is shutting down.');
+				}
+				return;
+			}
+			if (!config && !remoteAccessHost) {
+				return;
+			}
+			getRemoteAccessHost().setConfig(config);
+		},
+		async getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+			return remoteAccessHost?.status ?? REMOTE_ACCESS_STOPPED_STATUS;
 		},
 	};
 	server.registerChannel(AgentHostIpcChannels.Management, ProxyChannel.fromService(instantiationService.createInstance(

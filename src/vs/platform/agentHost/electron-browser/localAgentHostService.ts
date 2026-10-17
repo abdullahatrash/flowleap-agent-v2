@@ -61,6 +61,7 @@ import {
 	readAgentHostOTelPolicySettings,
 	type IAgentHostDebugLogsChunk,
 } from '../common/agentService.js';
+import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
 import type { IRemoteWatchHandle } from '../common/agentHostFileSystemProvider.js';
 import type { IActiveSubscriptionInfo, IAgentSubscription } from '../common/state/agentSubscription.js';
 import type { CompletionsParams, CompletionsResult, ContentEncoding, CreateTerminalParams, ResolveSessionConfigResult, SessionConfigCompletionsResult } from '../common/state/protocol/commands.js';
@@ -605,6 +606,14 @@ export class LocalAgentHostServiceClient extends Disposable implements IAgentHos
 
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined> {
 		return this._getManagementService().getInspectInfo(tryEnable);
+	}
+
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
+		return this._getManagementService().setRemoteAccessHost(config);
+	}
+
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+		return this._getManagementService().getRemoteAccessHostStatus();
 	}
 
 	private _getManagementService(): IAgentHostManagementService {

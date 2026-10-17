@@ -8,6 +8,7 @@ import { URI } from '../../../base/common/uri.js';
 import { ILogService } from '../../log/common/log.js';
 import { IAgentCreateChatRequestOptions, IAgentCreateSessionConfig } from '../common/agent.js';
 import { IAgentHostInspectInfo, IAgentHostManagedSettingsDiagnostics, IAgentHostManagementService, IAgentHostNetworkDiagnosticsInfo, IAgentHostNetworkFetchResult, IAgentHostSocketInfo, IAgentService, IConnectionTrackerService, type AgentHostDebugLogsArtifactKind, type IAgentHostDebugLogsArtifact, type IAgentHostDebugLogsChunk } from '../common/agentService.js';
+import { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from '../common/remoteAccessHost.js';
 import { ISessionDataService } from '../common/sessionDataService.js';
 
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 1000;
@@ -157,5 +158,13 @@ export class AgentHostManagementService implements IAgentHostManagementService {
 
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined> {
 		return this._connectionTrackerService.getInspectInfo(tryEnable);
+	}
+
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void> {
+		return this._connectionTrackerService.setRemoteAccessHost(config);
+	}
+
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus> {
+		return this._connectionTrackerService.getRemoteAccessHostStatus();
 	}
 }
