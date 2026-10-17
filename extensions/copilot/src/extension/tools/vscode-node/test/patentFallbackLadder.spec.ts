@@ -331,7 +331,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			  "errors": [],
 			  "fallbacks": [
 			    [
-			      "## Fallback coverage (generated)",
+			      "## Fallback coverage (generated) — claim 1",
 			      "Claim 1: 2 of 2 elements disclosed; fallbacks: 1 of 4 covered (1 partly); not covered: description fallback "Rubber-lined band"; not charted: claim 4.",
 			      "",
 			      "Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.",
@@ -344,7 +344,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			      "",
 			    ],
 			    [
-			      "## Fallback coverage (generated)",
+			      "## Fallback coverage (generated) — claim 5",
 			      "Claim 5: 1 of 1 elements disclosed; fallbacks: 0 of 1 covered (0 partly); not covered: claim 6.",
 			      "",
 			      "Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.",
@@ -360,13 +360,12 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			    "### Claim 1 — element (a): a band",
 			    "### Claim 1 — element (b): a screw",
 			    "### Claim 1 as a whole",
-			    "## Fallback coverage (generated)",
+			    "## Fallback coverage (generated) — claim 1",
 			    "### Claim 2 (1 → 2) — fallback of claim 1",
 			    "### Claim 3 (1 → 2 → 3) — fallback of claim 1",
 			    "### Description fallback of claim 1: Rubber-lined band",
-			    "## Coverage and remaining search tracks — claim 5",
 			    "### Claim 5 — element (a): tightening a band around the pipe",
-			    "## Fallback coverage (generated)",
+			    "## Fallback coverage (generated) — claim 5",
 			    "### Claim 6 (5 → 6) — fallback of claim 5",
 			    "## Reference roles (generated)",
 			    "## Search rounds",
@@ -388,7 +387,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			    "### Search Round 1",
 			    "Targets: claim 6, description fallback "Rubber-lined band"",
 			    "",
-			    "| Tool | Query | Results | Ledger |",
+			    "| Tool | Query | Count | Ledger |",
 			    "| --- | --- | --- | --- |",
 			    "| search_patents | ti=heated AND ti=band | 4 | ledger-matched |",
 			    "",
@@ -397,7 +396,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			    "### Search Round 2",
 			    "Targets: claim 3",
 			    "",
-			    "| Tool | Query | Results | Ledger |",
+			    "| Tool | Query | Count | Ledger |",
 			    "| --- | --- | --- | --- |",
 			    "| search_patents | ti=captive  AND ti=screw | 0 | ledger-matched |",
 			    "| search_npl | captive screw pipe clamp | 2 | not recorded by the ledger |",
@@ -433,7 +432,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 		expect(sections(chart, '## Fallback coverage (generated)', /^#{2,3} /)).toMatchInlineSnapshot(`
 			[
 			  [
-			    "## Fallback coverage (generated)",
+			    "## Fallback coverage (generated) — claim 1",
 			    "Claim 1: 2 of 2 elements disclosed; claim numbers could not be established; no Fallback Ladder; fallbacks: 0 of 1 covered (0 partly); not covered: description fallback "Rubber-lined band".",
 			    "",
 			    "Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.",
@@ -443,7 +442,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			    "",
 			  ],
 			  [
-			    "## Fallback coverage (generated)",
+			    "## Fallback coverage (generated) — claim 5",
 			    "Claim 5: 1 of 1 elements disclosed; claim numbers could not be established; no Fallback Ladder.",
 			    "",
 			    "",

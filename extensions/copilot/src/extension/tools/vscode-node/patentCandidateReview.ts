@@ -853,7 +853,7 @@ function fallbackCoverageSection(review: PatentCandidateReview, coverage: Fallba
 		return [section[0], `Basis in the challenged patent: ${source ? patentCitationLink(anchor, source.reference) : anchor}`, quotation(row.basis?.quote ?? ''), ...section.slice(1)];
 	};
 	return [
-		'## Fallback coverage (generated)',
+		`## Fallback coverage (generated) — claim ${cell(claim)}`,
 		fallbackCoverageLine(review, coverage, derivation),
 		'',
 		...(table.length ? [
@@ -879,10 +879,12 @@ function fallbackCoverageSection(review: PatentCandidateReview, coverage: Fallba
 function invalidityCoverageSections(review: PatentCandidateReview, derivation: FallbackLadderDerivation, sources: Map<string, PatentEvidenceSource>, rowSection: (row: PatentCoverageRow) => string[]): string[] {
 	if (derivation.kind === 'missing') { return ['## Coverage and remaining search tracks', ...(review.coverage ?? []).flatMap(rowSection)]; }
 	const coverage = fallbackCoverage(review, derivation);
+	// Every claim's Fallback Coverage carries its own heading with the claim number, so only the first
+	// group opens the coverage section.
 	return claimGroups((review.coverage ?? []).filter(row => row.kind !== 'fallback')).flatMap((group, index) => {
 		const claimCoverage = group.claim ? coverage.find(entry => entry.claimNumber === group.claim) : undefined;
 		return [
-			...(index === 0 ? ['## Coverage and remaining search tracks'] : ['', `## Coverage and remaining search tracks — claim ${cell(group.claim ?? '')}`]),
+			...(index === 0 ? ['## Coverage and remaining search tracks'] : []),
 			...group.rows.flatMap(rowSection),
 			...(claimCoverage ? fallbackCoverageSection(review, claimCoverage, derivation, sources, rowSection) : []),
 		];
@@ -911,7 +913,7 @@ function searchRoundsSection(review: PatentCandidateReview, snapshot: PatentExec
 			'', `### Search Round ${round.round}`,
 			`Targets: ${(round.targets ?? []).map(target).join(', ') || 'none named'}`,
 			'',
-			'| Tool | Query | Results | Ledger |',
+			'| Tool | Query | Count | Ledger |',
 			'| --- | --- | --- | --- |',
 			...(round.queries ?? []).map((query, position) => '| ' + [query.tool, query.query, query.count === undefined ? 'not stated' : String(query.count), ROUND_LEDGER_LABEL[ledger[index]?.queries[position] ?? 'unrecorded']].map(cell).join(' | ') + ' |'),
 			'',
