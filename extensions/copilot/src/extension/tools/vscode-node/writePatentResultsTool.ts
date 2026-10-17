@@ -285,7 +285,10 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// read; the two-sided input is what the report renders.
 			const flat = flattenSides(input);
 			if (snapshot) {
-				const errors = validateCandidateReview(input, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(flat.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
+				// The Fallback Ladder is derived for the challenged patent the chart's header names, so the
+				// checks read the same fallback to matter the header does.
+				const checked = variant === 'invalidity' ? { ...input, challengedPublication: input.challengedPublication ?? options.input.matter } : input;
+				const errors = validateCandidateReview(checked, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(flat.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}

@@ -44,7 +44,7 @@ export type PatentStatusTool = 'get_legal_status' | 'get_patent_family' | 'get_p
 export type PatentRecordedTool = PatentAnalyticsTool | PatentStatusTool;
 
 /** The tool identities the reader accepts; anything else is a dropped field, not a new tool. */
-const RECORDED_TOOLS: readonly PatentRecordedTool[] = ['patstat_query', 'patstat_portfolio', 'patent_analytics_viz', 'patstat_graph', 'patent_api_request', 'fetch_webpage', 'run_in_terminal', 'examiner_baseline', 'get_legal_status', 'get_patent_family', 'get_patent_term', 'get_register_events'];
+export const RECORDED_TOOLS: readonly PatentRecordedTool[] = ['patstat_query', 'patstat_portfolio', 'patent_analytics_viz', 'patstat_graph', 'patent_api_request', 'fetch_webpage', 'run_in_terminal', 'examiner_baseline', 'get_legal_status', 'get_patent_family', 'get_patent_term', 'get_register_events'];
 
 /** Cap for a recorded request (SQL, a publication number, or the JSON of the request params). */
 export const ANALYTICS_REQUEST_CAP = 2_000;

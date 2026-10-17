@@ -624,7 +624,7 @@ function baselineCell(value: ExaminerBaselineCell | undefined): string {
 }
 
 /** A query as the execution record keys it: whitespace collapsed, case kept. */
-function queryKey(value: string): string { return value.replace(/\s+/g, ' ').trim(); }
+export function queryKey(value: string): string { return value.replace(/\s+/g, ' ').trim(); }
 
 /**
  * The keys a logged query is looked up under: the query itself, then the query without a trailing

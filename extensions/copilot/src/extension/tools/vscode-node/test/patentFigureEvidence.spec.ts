@@ -225,7 +225,8 @@ describe('an essential unresolved row before any drawing was read', () => {
 		const untyped = { ...structural, kind: undefined };
 		expect({
 			untyped: validateCandidateReview({ ...unresolvedReview, coverage: [untyped, combination] }, unread).filter(error => error.startsWith('Row "')),
-			invalidity: validateCandidateReview(unresolvedReview, unread, '', 'invalidity'),
+			// Only the figures gate is under test; the invalidity chart's Fallback Ladder checks are covered in patentFallbackLadder.spec.ts.
+			invalidity: validateCandidateReview(unresolvedReview, unread, '', 'invalidity').filter(error => error.startsWith('Row "')),
 		}).toEqual({
 			untyped: [refusal(threeRetrieved)],
 			invalidity: [refusal(threeRetrieved)],
