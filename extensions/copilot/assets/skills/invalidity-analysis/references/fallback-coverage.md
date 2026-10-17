@@ -160,6 +160,7 @@ search-failure ladder in order: reformulate in `search_patents`, the other offic
 }]
 ```
 
-Receipt: `fallbacksNotCovered=1 rounds=1 notCovered=4`. Stop searching. The report's Gaps
-section says: "Claim 4 (resilient retaining tab): not covered after one Search Round. The round
-searched side-entry and retaining-tab terms in both offices and NPL; it moved claim 3 to covered."
+Receipt: `fallbacksNotCovered=1 rounds=1 notCovered=4`. Stop searching. The report's "Not
+covered after the Search Round" section says: "Claim 4 (resilient retaining tab): not covered
+after one Search Round. Queries run: the three in round 1. A deeper search would target
+side-loading cages in product catalogues before the critical date."
