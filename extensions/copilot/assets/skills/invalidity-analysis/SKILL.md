@@ -8,15 +8,21 @@ user-invocable: true
 
 The adversarial mirror of a prior art search: the target is a granted patent's claims, and the goal is destruction. Search relative to the TARGET's priority date, and prioritize art the examiner never saw.
 
+**Critical date on every search.** Every search in this skill, the Search Round included, keeps only art published before the critical date (Phase 1.3).
+
 ## Phase 1: Know the Target
 
-1. `get_patent_details` with the publication number → granted claims (independent claims are the targets), description, and classification
+1. **Fetch the challenged patent first, before any other call**: `get_patent_details` with the publication number → granted claims, segmented by claim number (independent claims are the targets), description, and classification. The writer builds the **Fallback Ladder** (every dependent claim under each independent claim, with the limitation it adds) from this call, and refuses a chart when the ledger holds no per-claim text for the challenged patent. If the claims come back unsegmented, the chart saves with no ladder and the report says so.
 2. Confirm it IS granted (kind code B1/B2) and in force: `ops_api_guide` endpoint="family-legal" → `patent_api_request`
 3. **Critical date**: the earliest priority date, not the filing date — check the family (`ops_api_guide` endpoint="family-biblio" → `patent_api_request`). ALL invalidating art must predate it.
    - **Attack the priority claim itself**: priority entitlement is challengeable per claim. If the priority document doesn't fully support a claim, that claim's critical date shifts to the actual filing date — opening intervening art, often including the patentee's own publications. Compare the claim against the priority document's disclosure.
-4. **Prosecution history** (`ops_api_guide` endpoint="register-events" → `patent_api_request`, plus the **Examiner Baseline** — the art of record for every family member and office; get and read it as the `find-better` skill's Step 1 does: any X or Y category is examiner's art, and each gap is a gap, not "nothing cited". For who-cites-the-target-forward that's `search_forward_citations` instead):
+4. **Prosecution history** (`ops_api_guide` endpoint="register-events" → `patent_api_request`, plus the **Examiner Baseline** — the art of record for every family member and office. For who-cites-the-target-forward that's `search_forward_citations` instead):
+   - Get the Baseline with the `examiner_baseline` tool: it writes `references/<publication>.examiner-baseline.json` and returns that path. Read the file with `read_file`. Without the tool, use `flowleap --json patent examiner-baseline <publication>` in the terminal and save the output to the same path.
+   - Any document with an X or Y category is the examiner's art. Each entry in `gaps[]` is a gap in the record, never "nothing cited". See also the `find-better` skill, Step 1.
    - Art already of record — a challenge built on already-considered art is much weaker; you want NEW art
    - What was amended or argued to get allowance — the distinguishing feature the applicant relied on is exactly where to aim, and their arguments constrain how broadly they can now construe the claims
+
+Done when the claims are recorded per claim number, and the critical date, legal status and art of record are known.
 
 ## Phase 2: Venue & Window (verify with `search_legal` — never from memory)
 
@@ -26,10 +32,12 @@ The adversarial mirror of a prior art search: the target is a granted patent's c
 - **District court**: any time as a defense; clear-and-convincing standard
 Note which of the user's goals fit which venue, and whether the clock has run.
 
+Done when each of the user's goals has a venue, and each venue has an open or closed clock.
+
 ## Phase 3: The Search
 
 Run the **prior-art** skill's broad-to-narrow engine with these overrides:
-- Concept table built from the TARGET's independent claim elements (not an invention description)
+- Concept table built from the TARGET's independent claim elements (not an invention description), with the added limitation of every Fallback Ladder rung as a secondary concept: the first search aims at the claims and every fallback, and the Search Round is only the retry
 - Hard date filter: publication before the priority date
 - **De-prioritize art of record** (from Phase 1.4) — log it, but the prize is art the examiner never considered
 - NPL hits hard here (`search_npl` first, then `search_academic`): printed publications are fully usable in IPR, and examiners rarely searched them
@@ -37,9 +45,11 @@ Run the **prior-art** skill's broad-to-narrow engine with these overrides:
 - Check the applicant's own earlier filings and the inventors' own papers — self-collision is common
 - Aim at the allowance-winning feature identified in Phase 1.4
 
+Done when every element of every independent claim and the added limitation of every rung were searched with the date filter, each query is logged with its count, and each zero result went down the search-failure ladder below. Retries on that ladder are part of Phase 3; a Search Round is only the pass Phase 4b runs after a saved chart.
+
 ## When a search fails
 
-Prior art rarely sits in one office — before concluding the art isn't there, work the ladder in order:
+Prior art rarely sits in one office — before concluding the art isn't there, work the search-failure ladder in order:
 1. **Clean zero result** (call succeeded, no hits): reformulate before concluding — rebuild the concept table from other claim elements, broaden or narrow the CPC/IPC, drop a filter, try a different number format — then try the alternate office/route (`search_patents` ↔ `patent_api_request`, `get_patent_summary` when `get_patent_details` is empty) and the NPL sweep (`search_npl`, then `search_academic`). A clean zero on the killer element is not "no invalidating art" until searched every way.
 2. **Search error** (5xx, gateway timeout, connection reset, truncated response): transient outage, not a coverage limit — back off and retry the same call, then switch office. NEVER report a gap in the art from an errored call.
 3. **Route exhausted** (both offices genuinely dry): fall back to the web — `fetch_webpage` is always available (even when `web_search` is not) against `patents.google.com/patent/NUMBER` or `freepatentsonline.com`; quote only text the page returned and spot-check the number and title.
@@ -59,21 +69,45 @@ Per target claim, using the **patent-examination** X/Y discipline. Construction 
 - §103/Art. 56: name the combination, which reference contributes which element, and a concrete motivation — anticipate the patentee's secondary-considerations rebuttal (commercial success, long-felt need)
 - EPO extra grounds worth checking: added matter (Art. 123(2)) — compare granted claims against the application as filed
 
-## Phase 5: Report
-
-Save via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it **structured**: leave `content` empty and supply `coverage`, so the writer validates the quotes, renders the chart and writes the evidence companion.
-- One row per element of each independent claim — `feature: "Claim 1 — element (b): …"`, `claimNumber: "1"`, `kind: 'feature'` — plus one `kind: 'combination'` row per independent claim (`"Claim 1 as a whole"`).
-- `elements` carry literal fragments copied from the **prior art's** claims or description, and `sourceAnchors`/`evidence` cite those prior-art passages, never the challenged patent.
+The structured chart for `write_patent_results` (`template: 'invalidity-claim-chart'`) carries these rows:
+- **Element rows**: one row per element of each independent claim — `feature: "Claim 1 — element (b): …"`, `claimNumber: "1"`, `kind: 'feature'` — plus one `kind: 'combination'` row per independent claim (`"Claim 1 as a whole"`).
+- **Fallback rows**: one `kind: 'fallback'` row per rung of the Fallback Ladder of each charted independent claim, with `claimNumber` (the dependent claim) and `fallbackOf` (its independent claim). It charts ONLY the limitation the dependent claim adds, with the same evidence fields as an element row. A claim that depends on several claims is a rung under each parent it names.
+- **Description fallbacks** (optional): an amendment the proprietor can draw from the description, as a fallback row with no `claimNumber` and a `basis` that quotes the challenged patent's own description verbatim.
+- **Rungs left out**: each one goes in `fallbacksNotCharted` with a reason. The writer refuses a chart in which a rung has neither a row nor an entry.
+- `elements` carry literal fragments copied from the **prior art's** claims or description, and `sourceAnchors`/`evidence` cite those prior-art passages, never the challenged patent. Only a description fallback's `basis` quotes the challenged patent.
 - Set `challengedPublication` to the target patent, and put the critical-date basis in `objective`.
-- `status` stays supported / partial / unresolved; the chart renders them as disclosed / partially disclosed / not found in the cited art, and derives a reference-roles table from them. Your X/Y/A tagging stays your own judgment in the prose above.
+- `status` stays supported / partial / unresolved; the chart renders them as disclosed / partially disclosed / not found in the cited art, counts fallbacks as covered / partly covered / not covered, and derives a reference-roles table from them. Your X/Y/A tagging stays your own judgment in the prose above.
+
+Field detail, the EN/DE/FR dependency wording and a worked example: [references/fallback-coverage.md](references/fallback-coverage.md).
+
+Done when every element of every charted independent claim has a row, and every rung of its Fallback Ladder has a fallback row or a `fallbacksNotCharted` entry with a reason.
+
+## Phase 4b: Save, Then One Search Round
+
+Save via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it **structured**: leave `content` empty and supply the Phase 4 rows, so the writer validates the quotes, renders the chart and writes the evidence companion.
+
+Read the receipt line: `fallbacksNotCovered=<n> rounds=<k> notCovered=<claims>`.
+- `fallbacksNotCovered=0`: the ladder is covered. Go to Phase 5.
+- `fallbacksNotCovered` above 0 and `rounds=0`: run ONE **Search Round** aimed only at the limitations those rungs add:
+  1. New **Discriminating Terms** for each added limitation (not the terms of the independent claim).
+  2. The search-failure ladder, in order: reformulate, other office, NPL (`search_npl`, then `search_academic`), web.
+  3. Chart what the round found on those fallback rows, and record the round in `rounds`: `round: 1`, `targets` (the claim numbers, or the `feature` of a description fallback), every query with its `tool` and the exact query text as you ran it, and an `outcome`. The ledger records `search_patents`, `search_register`, `patstat_*`, `patent_api_request`, `fetch_webpage` and `run_in_terminal` calls; the writer confirms those queries against it. NPL and academic queries (`search_npl`, `search_academic`) are listed in the round too and the chart marks them 'not recorded by the ledger'. Every round must contain at least one query through a recorded tool, exactly as run, or the writer refuses the save.
+  4. Save again. If the writer refuses a round query as matching no execution, correct the query text to the exact text you ran, or drop that query, and save again. A round counts only once the chart that records it is saved. Never re-run a search only to make a query match.
+- `rounds` at 1 or more: stop searching. A rung still not covered is a complete result. The report says "not covered after one Search Round" and names what the round tried.
+
+Done when every rung is covered, or one Search Round ran on every rung not covered and the chart that records it is saved.
+
+## Phase 5: Report
 
 The saved chart covers:
 1. **Target summary** — claims, priority date, legal status, prosecution-history findings
 2. **Venue assessment** — which challenges are still open, on which grounds
-3. **Invalidity charts** — per claim, best grounds first
+3. **Invalidity charts** — per claim, best grounds first, then its fallback coverage ("fallbacks: k of j covered; not covered: claims 3, 5")
 4. **Reference ranking** — the 3-5 strongest references, flagging which are NEW vs of record
-5. **Gaps** — claim elements no found art teaches (the patent's real strength), and what a deeper search should target
+5. **Not covered after the Search Round** — each rung still not covered, the queries the round ran for it, and what a deeper search would target. What stays not covered is the patent's real strength.
 6. **Audit trail** (run the audit-report skill — invalidity work gets scrutinized)
+
+Done when the chart is saved with every section above, and the chat summary states the fallback coverage per independent claim.
 
 ## Rules
 - ALL art must predate the priority date — state each reference's publication date in the chart
