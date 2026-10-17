@@ -18,7 +18,7 @@ The adversarial mirror of a prior art search: the target is a granted patent's c
    - **Attack the priority claim itself**: priority entitlement is challengeable per claim. If the priority document doesn't fully support a claim, that claim's critical date shifts to the actual filing date — opening intervening art, often including the patentee's own publications. Compare the claim against the priority document's disclosure.
 4. **Prosecution history** (`ops_api_guide` endpoint="register-events" → `patent_api_request`, plus the **Examiner Baseline** — the art of record for every family member and office. For who-cites-the-target-forward that's `search_forward_citations` instead):
    - Get the Baseline with the `examiner_baseline` tool: it writes `references/<publication>.examiner-baseline.json` and returns that path. Read the file with `read_file`. Without the tool, use `flowleap --json patent examiner-baseline <publication>` in the terminal and save the output to the same path.
-   - Any document with an X or Y category is the examiner's art. Each entry in `gaps[]` is a gap in the record, never "nothing cited".
+   - Any document with an X or Y category is the examiner's art. Each entry in `gaps[]` is a gap in the record, never "nothing cited". See also the `find-better` skill, Step 1.
    - Art already of record — a challenge built on already-considered art is much weaker; you want NEW art
    - What was amended or argued to get allowance — the distinguishing feature the applicant relied on is exactly where to aim, and their arguments constrain how broadly they can now construe the claims
 
