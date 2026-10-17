@@ -68,7 +68,8 @@ practitioner accepts, e.g. "claim 9 is a use claim outside the attack".
 `{ round, targets, queries: [{ tool, query, count }], outcome }`. `targets` are claim numbers or
 the `feature` of a description fallback. Copy each `query` exactly as you ran it: the writer
 matches it to a tool execution in the ledger (tool name and query text, whitespace normalised)
-and refuses the save on a mismatch. `outcome` says what the round changed, in chart wording:
+and refuses the save on a mismatch. The ledger records `search_patents`, `search_register`, `patstat_*`, `patent_api_request`, `fetch_webpage` and `run_in_terminal` calls; the writer confirms those queries against it. NPL and academic queries (`search_npl`, `search_academic`) are listed in the round too and the chart marks them 'not recorded by the ledger'. Every round must contain at least one query through a recorded tool, exactly as run, or the writer refuses the save.
+`outcome` says what the round changed, in chart wording:
 "disclosed in the cited art", "partially disclosed", "not found in the cited art".
 
 **Wording**: `feature`, `gap`, `reason` and `outcome` use the chart's words only. They carry no
