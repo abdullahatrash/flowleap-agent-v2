@@ -184,7 +184,7 @@ describe('mock-table resolver (deterministic sequences)', () => {
 describe('every fixture is a well-formed MockScript', () => {
 	const ids = fs.readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
 
-	it('all 9 T-case fixtures are present', () => {
+	it('all T-case fixtures are present', () => {
 		expect(ids.sort()).toStrictEqual([
 			't1-us-claims-exhausted',
 			't2-empty-citation-sibling',
@@ -196,6 +196,7 @@ describe('every fixture is a well-formed MockScript', () => {
 			't7-negative-control-bounded',
 			't8-jurisdiction-nonblock',
 			't9-source-attribution-quoting',
+			't11-fallback-round',
 		].sort());
 	});
 
@@ -205,7 +206,7 @@ describe('every fixture is a well-formed MockScript', () => {
 		expect(Array.isArray(script.rules)).toBe(true);
 		for (const rule of script.rules) {
 			expect(typeof rule.tool).toBe('string');
-			const hasOne = Boolean(rule.response) || (Array.isArray(rule.responses) && rule.responses.length > 0);
+			const hasOne = Boolean(rule.response) || (Array.isArray(rule.responses) && rule.responses.length > 0) || Boolean(rule.invalidityReceipt);
 			expect(hasOne).toBe(true);
 		}
 	});
@@ -617,5 +618,64 @@ describe('T9 source attribution: copied runs, quoting marks, and the worked-exam
 			summaryUs: resolveMock(t9Script, state, 'get_patent_summary', { patentNumber: 'US10123456' }).body.startsWith('US10123456B2'),
 			unknownIsBare: resolveMock(t9Script, state, 'search_patents', { query: 'helmet' }).body,
 		}).toEqual({ detailsEp: true, summaryUs: true, unknownIsBare: 'OK. Request acknowledged (no data payload).' });
+	});
+});
+
+describe('T11 Fallback Coverage: one Search Round after a not-covered fallback', () => {
+	const t11Script = loadFixture('t11-fallback-round');
+	const challenged: CallSpec = ['get_patent_details', 'OK', { publicationNumber: 'EP3654321B1' }];
+	const search = (query: string): CallSpec => ['search_patents', 'OK', { query }];
+	const save = (rounds?: unknown[]): CallSpec => ['write_patent_results', 'OK', { template: 'invalidity-claim-chart', content: '', coverage: [{}], ...(rounds ? { rounds } : {}) }];
+	const round = { round: 1, targets: ['3', '4'], queries: [{ tool: 'search_patents', query: 'ab=(magnet) and ab=(slider)', count: 1 }], outcome: 'disclosed in the cited art' };
+	const all = (calls: CallSpec[]) => {
+		const t = traj(calls);
+		return {
+			fetched: H.cases.t11_fetched_claims_before_chart(t),
+			ran: H.cases.t11_ran_one_round_after_not_covered(t),
+			recorded: H.cases.t11_second_save_records_round(t),
+			stopped: H.cases.t11_stopped_after_one_round(t),
+		};
+	};
+
+	it('grades both loop shapes and each way a run can miss the loop', () => {
+		expect({
+			roundBetweenSaves: all([challenged, search('ti=(drinking lid) and ab=slider'), save(), search('ab=(magnet) and ab=(slider)'), save([round])]),
+			roundBeforeOnlySave: all([challenged, search('ti=lid'), search('ab=(magnet) and ab=(slider)'), save([round])]),
+			chartBeforeClaims: all([search('ti=lid'), save(), challenged, search('ab=vent'), save([round])]),
+			noRound: all([challenged, search('ti=lid'), save()]),
+			roundOffTarget: all([challenged, search('ti=lid'), save(), search('ti=(drinking lid) and ab=slider'), save([round])]),
+			recordedRoundNeverRan: all([challenged, search('ti=lid'), save([round])]),
+			roundNotRecorded: all([challenged, search('ti=lid'), save(), search('ab=(vent hole)'), save()]),
+			keptSearching: all([challenged, search('ti=lid'), save(), search('ab=magnet'), save([round]), search('ab=(air hole)')]),
+			secondRound: all([challenged, search('ti=lid'), save(), search('ab=magnet'), save([round]), save([round, { ...round, round: 2 }])]),
+			evidenceLookupAfter: all([challenged, search('ti=lid'), save(), search('ab=magnet'), save([round]), ['get_patent_details', 'OK', { publicationNumber: 'WO2016071234A1', evidenceLookup: { query: 'magnet' } }]]),
+		}).toEqual({
+			roundBetweenSaves: { fetched: true, ran: true, recorded: true, stopped: true },
+			roundBeforeOnlySave: { fetched: true, ran: true, recorded: true, stopped: true },
+			chartBeforeClaims: { fetched: false, ran: true, recorded: true, stopped: true },
+			noRound: { fetched: true, ran: false, recorded: false, stopped: true },
+			roundOffTarget: { fetched: true, ran: false, recorded: true, stopped: true },
+			recordedRoundNeverRan: { fetched: true, ran: false, recorded: true, stopped: true },
+			roundNotRecorded: { fetched: true, ran: true, recorded: false, stopped: true },
+			keptSearching: { fetched: true, ran: true, recorded: true, stopped: false },
+			secondRound: { fetched: true, ran: true, recorded: false, stopped: false },
+			evidenceLookupAfter: { fetched: true, ran: true, recorded: true, stopped: true },
+		});
+	});
+
+	it('the fixture serves the segmented claims and a receipt computed from each save', () => {
+		const state = createMockScriptState(t11Script);
+		const fallback = (claimNumber: string, status: string) => ({ kind: 'fallback', claimNumber, fallbackOf: '1', feature: `Claim ${claimNumber} (depends on 1) — added limitation`, status });
+		const chart = (rows: object[], rounds?: object[]) => ({ template: 'invalidity-claim-chart', content: '', coverage: [{ kind: 'feature', claimNumber: '1', feature: 'Claim 1 — element (a)', status: 'supported' }, ...rows], ...(rounds ? { rounds } : {}) });
+		const receiptTail = (body: string) => body.split('\n').find(line => line.startsWith('Prior-art artifact receipt: '))?.replace(/^.*\} /, '');
+		expect({
+			claims: resolveMock(t11Script, state, 'get_patent_details', { publicationNumber: 'EP3654321B1' }).body.match(/^(?:\d\.|\([a-c]\)) /gm),
+			first: receiptTail(resolveMock(t11Script, state, 'write_patent_results', chart([fallback('2', 'supported'), fallback('3', 'unresolved'), fallback('4', 'unresolved')])).body),
+			second: receiptTail(resolveMock(t11Script, state, 'write_patent_results', chart([fallback('2', 'supported'), fallback('3', 'supported'), fallback('4', 'unresolved')], [round])).body),
+		}).toEqual({
+			claims: ['1. ', '(a) ', '(b) ', '(c) ', '2. ', '3. ', '4. '],
+			first: 'fallbacksNotCovered=2 rounds=0 notCovered=3,4',
+			second: 'fallbacksNotCovered=1 rounds=1 notCovered=4',
+		});
 	});
 });

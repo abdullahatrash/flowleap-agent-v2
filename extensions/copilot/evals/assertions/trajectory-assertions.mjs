@@ -581,6 +581,48 @@ export function calledWithValue(traj, names, needle) {
 	);
 }
 
+/** The T11 challenged patent (number core, so 'EP 3654321' and 'EP3654321B1' both match). */
+const T11_CHALLENGED = 'EP3654321';
+/**
+ * Words of the two limitations the first T11 receipt leaves not covered: claim 3's magnet detent
+ * and claim 4's vent hole. A Search Round query aims at an added limitation when it names one.
+ */
+const T11_ROUND_TERMS = /magnet|vent|air[\s-]?(?:hole|inlet|passage|opening)|breath/i;
+/** Tools a Search Round query runs through: the ledger-recorded tools plus NPL, academic and web search. */
+const T11_SEARCH_TOOLS = ['search_patents', 'search_register', 'patstat_query', 'patent_api_request', 'fetch_webpage', 'web_search', 'search_npl', 'search_academic'];
+
+/**
+ * Is this call a retrieval of patent evidence? Every search tool, and a document lookup that is
+ * not a local `evidenceLookup` (the completion guard draws the same line).
+ * @param {FlatCall} call
+ */
+function isT11Retrieval(call) {
+	if (T11_SEARCH_TOOLS.includes(call.name)) {
+		return true;
+	}
+	return ['get_patent_details', 'get_patent_summary'].includes(call.name) && !call.args?.evidenceLookup;
+}
+
+/**
+ * The Search Rounds a chart save records (its `rounds` argument), or none.
+ * @param {FlatCall} call
+ * @returns {Array<{ queries?: Array<{ query?: unknown }> }>}
+ */
+function roundsOf(call) {
+	return Array.isArray(call.args?.rounds) ? call.args.rounds : [];
+}
+
+/**
+ * The calls of a trajectory with the indices of its invalidity-chart saves.
+ * @param {Trajectory} traj
+ * @returns {{ calls: FlatCall[], saves: number[] }}
+ */
+function invalidityChartSaves(traj) {
+	const calls = flatCalls(traj);
+	const saves = calls.flatMap((call, i) => call.name === 'write_patent_results' && String(call.args?.template ?? '').includes('invalidity') ? [i] : []);
+	return { calls, saves };
+}
+
 /** The two T9 fixture documents (number core without kind code, so 'EP 3123456' and 'EP3123456B1' both match) and the lookup tools that return them. */
 const T9_DOCUMENTS = ['EP3123456', 'US10123456'];
 const T9_LOOKUP_TOOLS = ['get_patent_details', 'get_patent_summary'];
@@ -687,5 +729,38 @@ export const cases = {
 		const searchIdx = calls.findIndex(c => ['search_patents', 'build_patent_query', 'build_uspto_query'].includes(c.name));
 		const askIdx = calls.findIndex(c => c.name === 'vscode_askQuestions');
 		return searchIdx >= 0 && (askIdx < 0 || askIdx > searchIdx);
+	},
+	/** T11 — the challenged patent's claims were fetched with get_patent_details before the first chart save. */
+	t11_fetched_claims_before_chart: traj => {
+		const { calls, saves } = invalidityChartSaves(traj);
+		const fetched = calls.findIndex(call => call.name === 'get_patent_details' && Object.values(call.args ?? {}).some(v => squashNumber(String(v)).includes(squashNumber(T11_CHALLENGED))));
+		return saves.length > 0 && fetched >= 0 && fetched < saves[0];
+	},
+	/**
+	 * T11 — one Search Round ran on a not-covered limitation, in either shape the skill allows:
+	 * (a) after the first save, a search names a term of claim 3 or 4's added limitation before the
+	 * second save; or (b) the model ran the round before saving, so the first save records exactly
+	 * one round with a query that names such a term, and a search with such a term ran before it.
+	 */
+	t11_ran_one_round_after_not_covered: traj => {
+		const { calls, saves } = invalidityChartSaves(traj);
+		if (saves.length === 0) {
+			return false;
+		}
+		const namesTerm = call => T11_SEARCH_TOOLS.includes(call.name) && T11_ROUND_TERMS.test(JSON.stringify(call.args ?? {}));
+		const betweenSaves = saves.length >= 2 && calls.slice(saves[0] + 1, saves[1]).some(namesTerm);
+		const firstRounds = roundsOf(calls[saves[0]]);
+		const inFirstSave = firstRounds.length === 1 && (firstRounds[0]?.queries ?? []).some(q => T11_ROUND_TERMS.test(String(q?.query ?? ''))) && calls.slice(0, saves[0]).some(namesTerm);
+		return betweenSaves || inFirstSave;
+	},
+	/** T11 — the save that closes the loop (the last chart save) records exactly one Search Round. */
+	t11_second_save_records_round: traj => {
+		const { calls, saves } = invalidityChartSaves(traj);
+		return saves.length > 0 && roundsOf(calls[saves[saves.length - 1]]).length === 1;
+	},
+	/** T11 — no chart save records more than one round, and nothing was retrieved after the last save. */
+	t11_stopped_after_one_round: traj => {
+		const { calls, saves } = invalidityChartSaves(traj);
+		return saves.length > 0 && saves.every(i => roundsOf(calls[i]).length <= 1) && !calls.slice(saves[saves.length - 1] + 1).some(isT11Retrieval);
 	},
 };

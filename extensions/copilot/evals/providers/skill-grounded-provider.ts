@@ -37,6 +37,24 @@ const SKILL_FILENAME = 'SKILL.md';
  */
 export const SKILL_SKIP_DIRS: ReadonlySet<string> = new Set(['.git', 'node_modules', 'dist', 'build', 'out', '.cache', 'coverage', '__pycache__', 'target', 'bin', 'obj', '.venv', 'venv']);
 
+/** The app's `read_file` tool, as the replayed skill run calls it. A trajectory case that replays a skill offers it too. */
+export const READ_FILE_TOOL = {
+	type: 'function',
+	function: {
+		name: 'read_file',
+		description: 'Read the contents of a file.',
+		parameters: {
+			type: 'object',
+			properties: {
+				filePath: { type: 'string', description: 'The absolute path of the file to read.' },
+				startLine: { type: 'number', description: 'The line number to start reading from, 1-based.' },
+				endLine: { type: 'number', description: 'The inclusive line number to end reading at, 1-based.' },
+			},
+			required: ['filePath', 'startLine', 'endLine'],
+		},
+	},
+};
+
 /** The two app tools whose calls the provider replays. Names and argument shapes match the app's. */
 const SKILL_TOOLS = [
 	{
@@ -47,22 +65,7 @@ const SKILL_TOOLS = [
 			parameters: { type: 'object', properties: { skill: { type: 'string', description: 'The skill name.' } }, required: ['skill'] },
 		},
 	},
-	{
-		type: 'function',
-		function: {
-			name: 'read_file',
-			description: 'Read the contents of a file.',
-			parameters: {
-				type: 'object',
-				properties: {
-					filePath: { type: 'string', description: 'The absolute path of the file to read.' },
-					startLine: { type: 'number', description: 'The line number to start reading from, 1-based.' },
-					endLine: { type: 'number', description: 'The inclusive line number to end reading at, 1-based.' },
-				},
-				required: ['filePath', 'startLine', 'endLine'],
-			},
-		},
-	},
+	READ_FILE_TOOL,
 ];
 
 /** A file of a loaded skill: its path relative to the skill folder, its absolute path, and its text. */
@@ -198,7 +201,7 @@ interface ChatMessage {
  * then read every file the skill lists or links. These are the calls a model makes in the app when
  * it follows the skill; replaying them makes every case start from the same, complete context.
  */
-function buildSkillConversation(skill: LoadedSkill, userPrompt: string): ChatMessage[] {
+export function buildSkillConversation(skill: LoadedSkill, userPrompt: string): ChatMessage[] {
 	const messages: ChatMessage[] = [
 		{ role: 'user', content: userPrompt },
 		{ role: 'assistant', content: '', tool_calls: [{ id: 'skill_0', type: 'function', function: { name: 'skill', arguments: JSON.stringify({ skill: skill.name }) } }] },

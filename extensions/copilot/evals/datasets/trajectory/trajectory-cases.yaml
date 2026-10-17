@@ -325,3 +325,59 @@
         sequence with no comparison. PASS if every statement names its document, copied
         wording is marked and located, and the answer is arranged around the question.
       metric: t9_attribution_and_quoting_judged
+
+# ── T11 — Fallback Coverage: one Search Round after a not-covered fallback (PRD 0024 E1). ──
+# get_patent_details returns the challenged patent's claim 1 (segmented) and dependents 2–4. Each
+# invalidity-chart save returns the writer's receipt computed from that save's own arguments
+# (`fallbacksNotCovered` and `notCovered` from the fallback rows marked unresolved, `rounds` from
+# `rounds.length`), so the receipt never contradicts what the model saved. No mocked reference
+# discloses the claim-4 vent hole. The agent must fetch the claims before charting, run ONE Search
+# Round aimed at the added limitations of claims 3 and 4 (magnet detent, vent hole) after a receipt
+# left them not covered, record it in `rounds`, and then stop: a rung still not covered after one
+# round is a complete result. A round the model runs before its first save and records in that save
+# also counts, as long as a new search for the uncovered term precedes it; a re-save whose round
+# lists only queries that ran before the previous save does not (#725).
+#
+# Two provider opt-ins make the run match the app. `skill` replays the invalidity-analysis skill
+# run (SKILL.md and its references, Phase 4b included), so the model works from the skill text.
+# `completionGuard` runs the extension's real completion guard whenever the model stops: it asks
+# for the structured save and, on the first receipt, for the one Search Round — the same message
+# the product sends.
+#
+# The invalidity workflow (claims, searches, reference lookups, two saves) does not fit the default
+# 8-round cap, so this case alone runs to 20. A structured chart save is one tool call longer than
+# the default 4096-token output budget, so the case gets 16000. The prompt names EP and WO so the
+# run is about the round, not the USPTO query-building leg.
+- description: "T11 — invalidity chart leaves fallbacks 3 and 4 not covered: run one Search Round on their limitations, re-save with the round recorded, then stop"
+  vars:
+    prompt: "Build an invalidity chart for EP3654321B1, claims 1 to 4, against EP and WO prior art published before its 2018-03-15 priority date, and save it."
+    mockScript: t11-fallback-round
+    skill: invalidity-analysis
+    completionGuard: true
+    maxRounds: 20
+    maxTokens: 16000
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t11_fetched_claims_before_chart(H.parseTrajectory(output)));
+      metric: t11_fetched_claims_before_chart
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t11_ran_one_round_after_not_covered(H.parseTrajectory(output)));
+      metric: t11_ran_one_round_after_not_covered
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t11_second_save_records_round(H.parseTrajectory(output)));
+      metric: t11_second_save_records_round
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t11_stopped_after_one_round(H.parseTrajectory(output)));
+      metric: t11_stopped_after_one_round
