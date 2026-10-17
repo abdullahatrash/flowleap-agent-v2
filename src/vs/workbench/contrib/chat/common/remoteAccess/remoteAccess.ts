@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Remote Access on the Host (PRD 0018 B3; docs/remote-access/RELAY-CONTRACT.md §5).
+// Remote Access on the Host (PRD 0018 B3; docs/remote-access/RELAY-CONTRACT.md section 5).
 // Vocabulary from CONTEXT.md → Remote Access: Host, Viewer, Pairing, Relay.
 // This service is reachable from the editor window and the Agents Window, so
 // editor-chat publishing (slice C) can follow the same switch.
@@ -35,7 +35,7 @@ export const REMOTE_ACCESS_PAIR_KEY_SECRET_PREFIX = 'flowleap.remoteAccess.pairK
 
 export const FLOWLEAP_AUTHENTICATION_PROVIDER_ID = 'flowleap';
 
-/** How long the Relay keeps an unclaimed Pairing offer (§5 step 1). */
+/** How long the Relay keeps an unclaimed Pairing offer (section 5 step 1). */
 export const REMOTE_ACCESS_OFFER_TTL_MS = 10 * 60 * 1000;
 
 export const RemoteAccessEnabledContext = new RawContextKey<boolean>('flowleap.remoteAccessEnabled', false);

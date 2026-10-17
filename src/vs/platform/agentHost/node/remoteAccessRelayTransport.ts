@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Remote Access Host transport (docs/remote-access/RELAY-CONTRACT.md §3, §4, §6, §7).
+// Remote Access Host transport (docs/remote-access/RELAY-CONTRACT.md section 3, section 4, section 6, section 7).
 //
 // The Host does not listen. This IProtocolServer dials the FlowLeap Relay,
 // authenticates with the first frame, and hands one IProtocolTransport per
@@ -27,12 +27,12 @@ import { JSON_RPC_PARSE_ERROR, type AhpServerNotification, type JsonRpcNotificat
 import type { IProtocolServer, IProtocolTransport } from '../common/state/sessionTransport.js';
 import type * as wsTypes from 'ws';
 
-/** Relay payload frame to or from one pair (§4). */
+/** Relay payload frame to or from one pair (section 4). */
 export const RELAY_FRAME_PAIR = 0x01;
-/** Relay payload frame from the Host to every live Viewer (§4). AHP does not use it. */
+/** Relay payload frame from the Host to every live Viewer (section 4). AHP does not use it. */
 export const RELAY_FRAME_BROADCAST = 0x02;
 
-/** Relay close codes (§3, §4). */
+/** Relay close codes (section 3, section 4). */
 export const enum RelayCloseCode {
 	Unauthorized = 4401,
 	SubscriptionRequired = 4402,

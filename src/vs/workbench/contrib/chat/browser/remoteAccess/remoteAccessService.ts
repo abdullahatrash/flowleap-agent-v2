@@ -225,7 +225,7 @@ export class RemoteAccessService extends Disposable implements IRemoteAccessServ
 		return this._token;
 	}
 
-	// ---- Relay REST (§5) ------------------------------------------------------
+	// ---- Relay REST (section 5) ------------------------------------------------------
 
 	private _relayUrl(): string {
 		const configured = this._configurationService.getValue<string>(RemoteAccessSettingId.RelayUrl);

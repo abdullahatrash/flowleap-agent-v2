@@ -3,19 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Remote Access end-to-end crypto (docs/remote-access/RELAY-CONTRACT.md §5, §6).
+// Remote Access end-to-end crypto (docs/remote-access/RELAY-CONTRACT.md section 5, section 6).
 //
 // Shared by the Host (agent host process, Node) and the Viewer (browser), so it
 // uses WebCrypto (`globalThis.crypto.subtle`) only: X25519, HMAC-SHA256,
 // HKDF-SHA256 and AES-256-GCM. No Node or DOM imports.
 //
-// Byte layout (contract §6.1):
+// Byte layout (contract section 6.1):
 //   Pairing proof   hex(HMAC-SHA256(key = pairSecret (16 raw bytes), msg = UTF-8 hostId))
 //   Pair key        HKDF-SHA256(ikm = pairSecret, salt = pairId (16 raw bytes), info = PAIR_KEY_INFO), 32 bytes
 //   Handshake frame [0x01][version 0x01][role 0x01 host | 0x02 viewer][X25519 public key, 32][tag, 32]
-//                   tag = HMAC-SHA256(pairKey, publicKey ‖ UTF-8 role name)
+//                   tag = HMAC-SHA256(pairKey, publicKey || UTF-8 role name)
 //   Session key     HKDF-SHA256(ikm = X25519 shared secret, salt = pairId, info = SESSION_KEY_INFO)
-//   Data frame      [0x02][counter, 8 bytes big-endian][AES-256-GCM ciphertext ‖ tag]
+//   Data frame      [0x02][counter, 8 bytes big-endian][AES-256-GCM ciphertext || tag]
 //                   nonce = [direction, 4 bytes big-endian: 1 host→viewer, 2 viewer→host][counter, 8]
 //                   aad = pairId (16 raw bytes)
 //                   plaintext = [flags][chunk]; flags bit 0 = last chunk of one AHP message
@@ -48,7 +48,7 @@ const DIRECTION_VIEWER_TO_HOST = 2;
 const FLAG_LAST_CHUNK = 0x01;
 /**
  * Largest plaintext chunk per data frame. The Relay closes on a payload frame
- * over 1 MiB (§4); this leaves room for the Relay header, the frame header and
+ * over 1 MiB (section 4); this leaves room for the Relay header, the frame header and
  * the GCM tag.
  */
 export const REMOTE_ACCESS_MAX_CHUNK_BYTES = 1_000_000;
@@ -184,7 +184,7 @@ export function bytesToUuid(bytes: Uint8Array): string {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-// ---- Pairing (§5) -------------------------------------------------------------
+// ---- Pairing (section 5) -------------------------------------------------------------
 
 export function generatePairSecret(): Uint8Array<ArrayBuffer> {
 	const secret = new Uint8Array(REMOTE_ACCESS_PAIR_SECRET_BYTES);
@@ -250,7 +250,7 @@ export function derivePairKey(pairSecret: Uint8Array, pairId: string): Promise<U
 	return hkdfSha256(pairSecret, uuidToBytes(pairId), REMOTE_ACCESS_PAIR_KEY_INFO, 32);
 }
 
-// ---- Handshake and channel (§6) -----------------------------------------------
+// ---- Handshake and channel (section 6) -----------------------------------------------
 
 function roleByte(role: RemoteAccessRole): number {
 	return role === RemoteAccessRole.Host ? 0x01 : 0x02;

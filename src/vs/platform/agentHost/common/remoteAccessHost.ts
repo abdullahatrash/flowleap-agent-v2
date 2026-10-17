@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // Renderer ↔ agent host contract for the Remote Access Host transport
-// (docs/remote-access/RELAY-CONTRACT.md §7). The renderer owns the FlowLeap
+// (docs/remote-access/RELAY-CONTRACT.md section 7). The renderer owns the FlowLeap
 // Session token and the pair keys (secret storage); it pushes them to the
 // agent host over the Management IPC channel. The agent host keeps them in
 // memory only.
