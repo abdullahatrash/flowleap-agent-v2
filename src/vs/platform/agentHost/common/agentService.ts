@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from './remoteAccessHost.js';
+import type { ChatMirrorPublication } from './agentHostChatMirror.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
 import { Event } from '../../../base/common/event.js';
@@ -770,6 +771,12 @@ export interface IConnectionTrackerService {
 
 	/** The Remote Access Host transport's current status. */
 	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
+
+	/**
+	 * A window publishes its editor chats to the `flowleap-chat` agent (PRD 0018 C1). The window
+	 * names its own client id, the id its MessagePort connection carries.
+	 */
+	publishChatMirror(publication: ChatMirrorPublication): Promise<void>;
 }
 
 /**
@@ -807,6 +814,7 @@ export interface IAgentHostManagementService {
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
 	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
 	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
+	publishChatMirror(publication: ChatMirrorPublication): Promise<void>;
 }
 
 // ---- Service interfaces -----------------------------------------------------
@@ -1311,4 +1319,7 @@ export interface IAgentHostService extends IAgentConnection {
 
 	/** Remote Access (local agent host only): the Host transport's status. */
 	getRemoteAccessHostStatus?(): Promise<IRemoteAccessHostStatus>;
+
+	/** Remote Access (local agent host only): publish this window's editor chats (PRD 0018 C1). */
+	publishChatMirror?(publication: ChatMirrorPublication): Promise<void>;
 }

@@ -817,6 +817,7 @@ export class AgentService extends Disposable implements IAgentService {
 		this._catalogSourceResolver = new AgentHostCatalogSourceResolver({
 			isUnpersistedChatBacking: session => this._unpersistedChatBackings.has(session.toString()),
 			worktreeProjectFromRepositoryRoot,
+			persistedTitle: session => this._providerService.getProviderForSession(session)?.sessionTitlePolicy?.persisted(session),
 		});
 		this._peerChatStore = core.peerChatStore;
 		this._sessionsV2MigrationService = new AgentHostSessionsV2MigrationService(
@@ -3656,9 +3657,12 @@ export class AgentService extends Disposable implements IAgentService {
 				? this._withLiveSessionMetadata(s, liveSummary, false, !this._stateManager.getSurfacedSessionSummary(s.session.toString()))
 				: s;
 			const persistedTitle = persistedFallbackTitles.get(s.session.toString());
-			return persistedTitle && !this._stateManager.getSessionState(s.session.toString())
+			const listed = persistedTitle && !this._stateManager.getSessionState(s.session.toString())
 				? { ...metadata, summary: persistedTitle }
 				: metadata;
+			// FlowLeap (PRD 0018 D1): a provider that keeps its titles off disk lists the live one.
+			const liveTitle = this._providerService.getProviderForSession(s.session)?.sessionTitlePolicy?.live(s.session);
+			return liveTitle ? { ...listed, summary: liveTitle } : listed;
 		});
 
 		// Overlay any session known to state but missing from the providers'

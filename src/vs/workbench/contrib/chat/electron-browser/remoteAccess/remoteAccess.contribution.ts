@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { localize } from '../../../../../nls.js';
+import { FLOWLEAP_CHAT_MIRROR_ENABLED, IAgentHostChatMirrorSource } from '../../../../../platform/agentHost/common/agentHostChatMirror.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationType, registerSingleton } from '../../../../../platform/instantiation/common/extensions.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../common/contributions.js';
+import { AgentHostChatMirrorSource } from '../../browser/agentSessions/agentHost/agentHostChatMirrorSource.js';
 import { RemoteAccessService } from '../../browser/remoteAccess/remoteAccessService.js';
 import { IRemoteAccessService, REMOTE_ACCESS_DEFAULT_RELAY_URL, RemoteAccessSettingId } from '../../common/remoteAccess/remoteAccess.js';
 
@@ -45,3 +47,19 @@ class RemoteAccessStartupContribution implements IWorkbenchContribution {
 }
 
 registerWorkbenchContribution2(RemoteAccessStartupContribution.ID, RemoteAccessStartupContribution, WorkbenchPhase.Eventually);
+
+// PRD 0018 C1: each window (editor windows and the Agents Window, D2 and D4) publishes its editor
+// chats to the agent host while Remote Access is on (D5).
+registerSingleton(IAgentHostChatMirrorSource, AgentHostChatMirrorSource, InstantiationType.Delayed);
+
+/** Creates the editor chat mirror at startup; it then follows the Remote Access switch. */
+class AgentHostChatMirrorStartupContribution implements IWorkbenchContribution {
+	static readonly ID = 'workbench.contrib.agentHostChatMirrorStartup';
+
+	constructor(@IAgentHostChatMirrorSource _source: IAgentHostChatMirrorSource) { }
+}
+
+// Off until C3 (#720) hides the `flowleap-chat` agent in the local Agents Window.
+if (FLOWLEAP_CHAT_MIRROR_ENABLED) {
+	registerWorkbenchContribution2(AgentHostChatMirrorStartupContribution.ID, AgentHostChatMirrorStartupContribution, WorkbenchPhase.Eventually);
+}
