@@ -284,10 +284,10 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// A Find Better row's two sides become two ordinary rows for every check and for the second
 			// read; the two-sided input is what the report renders.
 			const flat = flattenSides(input);
+			// The Fallback Ladder is derived for the challenged patent the chart's header names, so the
+			// checks, the chart and the working record read the same fallback to matter the header does.
+			const checked = variant === 'invalidity' ? { ...input, challengedPublication: input.challengedPublication ?? options.input.matter } : input;
 			if (snapshot) {
-				// The Fallback Ladder is derived for the challenged patent the chart's header names, so the
-				// checks read the same fallback to matter the header does.
-				const checked = variant === 'invalidity' ? { ...input, challengedPublication: input.challengedPublication ?? options.input.matter } : input;
 				const errors = validateCandidateReview(checked, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(flat.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
@@ -309,7 +309,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// verbatim when no template is requested. The tool stamps what it knows (date, AI
 			// authorship); the model supplies what the conversation knows; only genuinely
 			// practitioner-owned fields keep the placeholder.
-			const candidateContent = snapshot ? renderCandidateReview(input, snapshot, basename(recordUri), variant, reportWorkspacePath(uri, folders)) : content;
+			const candidateContent = snapshot ? renderCandidateReview(checked, snapshot, basename(recordUri), variant, reportWorkspacePath(uri, folders)) : content;
 			const wording = snapshot ? candidateWordingReview(input, variant) : [];
 			// A landscape report is a page of numbers; every other content template (FTO memo, invalidity
 			// chart, infringement chart, office-action scaffold, opinion, due-diligence memo) is a page of
@@ -354,7 +354,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const verdictFileName = secondRead ? await this.writeSecondReadFile(uri, companionId, secondRead) : undefined;
 			// The record links the verdict file, so it is written after it; losing it must not cost the
 			// report that is already on disk, so a failure is a warning and an unnamed record.
-			const recordWritten = snapshot ? await this.writeWorkingRecord(recordUri, renderWorkingRecord(input, snapshot, basename(uri), basename(evidenceUri), verdictFileName, secondRead, variant)) : false;
+			const recordWritten = snapshot ? await this.writeWorkingRecord(recordUri, renderWorkingRecord(checked, snapshot, basename(uri), basename(evidenceUri), verdictFileName, secondRead, variant)) : false;
 			const objectedSaves = this.countObjectedSave(`${options.chatSessionResource?.toString() ?? ''}|${uri.toString()}`, secondRead);
 
 			this.logService.info(`[WritePatentResultsTool] Successfully wrote file: ${filePath}`);

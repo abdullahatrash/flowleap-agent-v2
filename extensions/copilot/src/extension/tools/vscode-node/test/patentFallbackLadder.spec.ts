@@ -5,7 +5,7 @@
 import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
-import { PatentCandidateReview, validateCandidateReview } from '../patentCandidateReview';
+import { candidateWordingReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
 import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundLedgerStatus } from '../patentFallbackLadder';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
@@ -246,5 +246,209 @@ describe('fallback row checks (invalidity variant)', () => {
 		const unsegmented: PatentEvidenceSource = { anchor: `${challenged}:claims:en`, text: challengedClaims.join(' '), reference: { publicationNumber: challenged, section: 'claims' }, language: 'en', retrieval: 'unsegmented', review: 'unknown', completeness: 'unknown' };
 		const flat = snapshotOf(snapshot.executions[0], details(challenged, [], 'en', [unsegmented, snapshot.executions[1].sources![3]]), snapshot.executions[2]);
 		expect(fallbackLadderErrors(review, flat, sources)).toEqual([]);
+	});
+});
+
+describe('fallback coverage and Search Rounds in the rendered chart', () => {
+	const challenged = 'EP3000001B1';
+	const challengedClaims = [
+		'1. A pipe clamp comprising a band and a screw.',
+		'2. The clamp according to claim 1, wherein the band is steel.',
+		'3. The clamp according to claim 2, wherein the screw is captive.',
+		'4. The clamp according to claim 1, further comprising a hinge.',
+		'5. A method of fastening a pipe comprising tightening a band around the pipe.',
+		'6. The method of claim 5, wherein the band is heated before tightening.',
+	];
+	const description = `${challenged}:description:en`;
+	const clampArt = 'EP1000000A1:claims:1:en';
+	const clampClaim = '1. A pipe clamp comprising a steel band and a captive screw.';
+	const methodArt = 'US5000000A:claims:1:en';
+	const methodClaim = '1. A method comprising tightening a band around a pipe.';
+	const search = (id: string, query: string, total: number): PatentExecution => ({ id, recordedAt: '2026-10-17T03:00:00Z', kind: 'search', status: 'succeeded', query, effectiveQuery: query, total, returned: total });
+	const snapshot = snapshotOf(
+		details(challenged, challengedClaims, 'en', [{ anchor: description, text: 'The band may be lined with rubber to protect the pipe.', reference: { publicationNumber: challenged, section: 'description' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' }]),
+		details('EP1000000A1', [clampClaim]),
+		{ ...details('US5000000A', [methodClaim]), id: 'US5000000A-details' },
+		{ id: 'figures', recordedAt: '2026-10-17T02:00:00Z', kind: 'figures', status: 'failed', publicationIds: ['EP1000000A1'] },
+		search('round-1', 'ti=heated AND ti=band', 4),
+		search('round-2', 'ti=captive AND ti=screw', 0),
+	);
+	const evidence = (anchor: string, quote: string) => [{ anchor, quote, scope: 'Independent claim 1 as quoted.', qualifiers: 'Structural recitation only.', quantityBasis: 'No numeric range.' }];
+	const review: PatentCandidateReview = {
+		challengedPublication: challenged,
+		coverage: [
+			{ feature: 'Claim 1 — element (a): a band', claimNumber: '1', kind: 'feature', importance: 'essential', status: 'supported', sourceAnchors: [clampArt], evidence: evidence(clampArt, clampClaim), elements: [{ element: 'a band', anchor: clampArt, disclosedBy: 'a steel band' }], gap: '' },
+			{ feature: 'Claim 1 — element (b): a screw', claimNumber: '1', kind: 'feature', importance: 'essential', status: 'supported', sourceAnchors: [clampArt], evidence: evidence(clampArt, clampClaim), elements: [{ element: 'a screw', anchor: clampArt, disclosedBy: 'a captive screw' }], gap: '' },
+			{ feature: 'Claim 1 as a whole', claimNumber: '1', kind: 'combination', importance: 'essential', status: 'supported', sourceAnchors: [clampArt], evidence: evidence(clampArt, clampClaim), elements: [{ element: 'a band and a screw', anchor: clampArt, disclosedBy: 'a steel band and a captive screw' }], gap: '' },
+			{ feature: 'Claim 2 (depends on 1) — the model\'s own wording', claimNumber: '2', fallbackOf: '1', kind: 'fallback', importance: 'essential', status: 'supported', sourceAnchors: [clampArt], evidence: evidence(clampArt, clampClaim), elements: [{ element: 'a steel band', anchor: clampArt, disclosedBy: 'a steel band' }], gap: '' },
+			{ feature: 'Claim 3 (depends on 2) — the model\'s own wording', claimNumber: '3', fallbackOf: '1', kind: 'fallback', importance: 'essential', status: 'partial', sourceAnchors: [clampArt], evidence: evidence(clampArt, clampClaim), elements: [{ element: 'a captive screw', anchor: clampArt, disclosedBy: 'a captive screw' }, { element: 'on a steel band of a clamp per claim 2' }], gap: 'The captive screw is not tied to the steel band of claim 2.' },
+			{ feature: 'Rubber-lined band', fallbackOf: '1', basis: { anchor: description, quote: 'lined with rubber' }, kind: 'fallback', importance: 'optional', status: 'unresolved', sourceAnchors: [], gap: 'No cited passage lines the band.' },
+			{ feature: 'Claim 5 — element (a): tightening a band around the pipe', claimNumber: '5', kind: 'feature', importance: 'essential', status: 'supported', sourceAnchors: [methodArt], evidence: evidence(methodArt, methodClaim), elements: [{ element: 'tightening a band around the pipe', anchor: methodArt, disclosedBy: 'tightening a band around a pipe' }], gap: '' },
+			{ feature: 'Claim 6 (depends on 5) — the model\'s own wording', claimNumber: '6', fallbackOf: '5', kind: 'fallback', importance: 'essential', status: 'unresolved', sourceAnchors: [], gap: 'No cited passage heats the band.' },
+		],
+		fallbacksNotCharted: [{ claimNumber: '4', reason: 'The hinge is absent from the accused product; outside the attack.' }],
+		rounds: [
+			{ round: 1, targets: ['6', 'Rubber-lined band'], queries: [{ tool: 'search_patents', query: 'ti=heated AND ti=band', count: 4 }], outcome: 'Four hits; none heats the band before tightening.' },
+			{ round: 2, targets: ['3'], queries: [{ tool: 'search_patents', query: 'ti=captive  AND ti=screw', count: 0 }, { tool: 'search_npl', query: 'captive screw pipe clamp', count: 2 }], outcome: 'No new document; claim 3 stays partly covered.' },
+		],
+		limitations: ['Synthetic fixture.'],
+		stopReason: 'Two Search Rounds ran; claims 6 and the rubber liner stay not covered.',
+	};
+	/** The lines from each heading that starts with `start` up to the next heading at `stop`. */
+	const sections = (text: string, start: string, stop: RegExp) => {
+		const lines = text.split('\n');
+		return lines.flatMap((line, index) => {
+			if (!line.startsWith(start)) { return []; }
+			const end = lines.findIndex((next, position) => position > index && stop.test(next));
+			return [lines.slice(index, end < 0 ? undefined : end)];
+		});
+	};
+
+	it('renders the coverage line, the fallback table, the description basis and the Search Rounds per claim', () => {
+		const chart = renderCandidateReview(review, snapshot, 'chart.working-record.md', 'invalidity');
+		const record = renderWorkingRecord(review, snapshot, 'chart.md', 'chart.md.evidence.json', undefined, undefined, 'invalidity');
+		const generated = [...sections(chart, '## Fallback coverage (generated)', /^#{2,3} /), ...sections(chart, '## Search rounds', /^## /)].flat();
+		expect({
+			errors: validateCandidateReview(review, snapshot, '', 'invalidity'),
+			headings: chart.split('\n').filter(line => /^##+ /.test(line) && !line.startsWith('## Search sets') && !line.startsWith('## Retrieved') && !line.startsWith('## Limitations')),
+			fallbacks: sections(chart, '## Fallback coverage (generated)', /^#{2,3} /),
+			descriptionBasis: sections(chart, '### Description fallback of claim 1', /^#{2,3} /)[0].slice(0, 6),
+			rounds: sections(chart, '## Search rounds', /^## /)[0],
+			roles: sections(chart, '## Reference roles (generated)', /^## /)[0].filter(line => line.startsWith('| ')),
+			// Blank lines aside, the working record carries the same generated text as the chart.
+			recordMirrors: sections(record, '## Fallback coverage (generated)', /^## /).concat(sections(record, '## Search rounds', /^## /)).flat().filter(Boolean).join('\n') === generated.filter(Boolean).join('\n'),
+			forbidden: generated.filter(line => /\b[XY]\b|anticipat|obvious/i.test(line)),
+		}).toMatchInlineSnapshot(`
+			{
+			  "descriptionBasis": [
+			    "### Description fallback of claim 1: Rubber-lined band",
+			    "Basis in the challenged patent: [EP3000001B1:description:en](flowleap://flowleap.patent-ai/patent?publication=EP3000001B1&section=description)",
+			    "",
+			    "<blockquote>",
+			    "<p style="white-space: pre-wrap">lined with rubber</p>",
+			    "</blockquote>",
+			  ],
+			  "errors": [],
+			  "fallbacks": [
+			    [
+			      "## Fallback coverage (generated)",
+			      "Claim 1: 2 of 2 elements disclosed; fallbacks: 1 of 4 covered (1 partly); not covered: description fallback "Rubber-lined band"; not charted: claim 4.",
+			      "",
+			      "Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.",
+			      "| Fallback | Claim text (recorded) | Status | References cited |",
+			      "| --- | --- | --- | --- |",
+			      "| Claim 2 (1 → 2) | 2. The clamp according to claim 1, wherein the band is steel. | disclosed in the cited art | EP1000000A1 |",
+			      "| Claim 3 (1 → 2 → 3) | 3. The clamp according to claim 2, wherein the screw is captive. | partially disclosed | EP1000000A1 |",
+			      "| Claim 4 (1 → 4) | 4. The clamp according to claim 1, further comprising a hinge. | not charted: The hinge is absent from the accused product; outside the attack. | — |",
+			      "| Description fallback: Rubber-lined band | description-supported; basis quote below | not found in the cited art | — |",
+			      "",
+			    ],
+			    [
+			      "## Fallback coverage (generated)",
+			      "Claim 5: 1 of 1 elements disclosed; fallbacks: 0 of 1 covered (0 partly); not covered: claim 6.",
+			      "",
+			      "Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.",
+			      "| Fallback | Claim text (recorded) | Status | References cited |",
+			      "| --- | --- | --- | --- |",
+			      "| Claim 6 (5 → 6) | 6. The method of claim 5, wherein the band is heated before tightening. | not found in the cited art | — |",
+			      "",
+			    ],
+			  ],
+			  "forbidden": [],
+			  "headings": [
+			    "## Coverage and remaining search tracks",
+			    "### Claim 1 — element (a): a band",
+			    "### Claim 1 — element (b): a screw",
+			    "### Claim 1 as a whole",
+			    "## Fallback coverage (generated)",
+			    "### Claim 2 (1 → 2) — fallback of claim 1",
+			    "### Claim 3 (1 → 2 → 3) — fallback of claim 1",
+			    "### Description fallback of claim 1: Rubber-lined band",
+			    "## Coverage and remaining search tracks — claim 5",
+			    "### Claim 5 — element (a): tightening a band around the pipe",
+			    "## Fallback coverage (generated)",
+			    "### Claim 6 (5 → 6) — fallback of claim 5",
+			    "## Reference roles (generated)",
+			    "## Search rounds",
+			    "### Search Round 1",
+			    "### Search Round 2",
+			    "## Search stopping rationale",
+			  ],
+			  "recordMirrors": true,
+			  "roles": [
+			    "| Reference | Cited in | Role (generated) |",
+			    "| --- | --- | --- |",
+			    "| EP1000000A1 | Claim 1 — element (a): a band; Claim 1 — element (b): a screw; Claim 1 as a whole; Claim 2 (depends on 1) — the model's own wording; Claim 3 (depends on 2) — the model's own wording | discloses element(s) on its own |",
+			    "| US5000000A | Claim 5 — element (a): tightening a band around the pipe | discloses element(s) on its own |",
+			  ],
+			  "rounds": [
+			    "## Search rounds",
+			    "Each Search Round targets fallbacks a saved chart left not covered. A query marked ledger-matched matches a tool execution recorded this session; a query marked not recorded by the ledger ran through a tool the ledger does not record and is not confirmed.",
+			    "",
+			    "### Search Round 1",
+			    "Targets: claim 6, description fallback "Rubber-lined band"",
+			    "",
+			    "| Tool | Query | Results | Ledger |",
+			    "| --- | --- | --- | --- |",
+			    "| search_patents | ti=heated AND ti=band | 4 | ledger-matched |",
+			    "",
+			    "Outcome (model judgment): Four hits; none heats the band before tightening.",
+			    "",
+			    "### Search Round 2",
+			    "Targets: claim 3",
+			    "",
+			    "| Tool | Query | Results | Ledger |",
+			    "| --- | --- | --- | --- |",
+			    "| search_patents | ti=captive  AND ti=screw | 0 | ledger-matched |",
+			    "| search_npl | captive screw pipe clamp | 2 | not recorded by the ledger |",
+			    "",
+			    "Outcome (model judgment): No new document; claim 3 stays partly covered.",
+			    "",
+			    "",
+			  ],
+			}
+		`);
+	});
+
+	it('reviews the wording of round outcomes, not-charted reasons and fallback features, never the basis quote', () => {
+		const worded: PatentCandidateReview = {
+			...review,
+			coverage: (review.coverage ?? []).map(row => row.basis ? { ...row, feature: 'Liner that makes claim 1 obvious over EP1000000A1', basis: { ...row.basis, quote: 'is obvious' } } : row),
+			fallbacksNotCharted: [{ claimNumber: '4', reason: 'Claim 4 is not novel.' }],
+			rounds: [{ ...review.rounds![0], outcome: 'A hit would anticipate claim 6.' }],
+		};
+		expect(candidateWordingReview(worded, 'invalidity')).toMatchInlineSnapshot(`
+			[
+			  ""obvious over" in coverage feature for "Liner that makes claim 1 obvious over EP1000000A1"",
+			  ""not novel" in fallbacksNotCharted reason for claim 4",
+			  ""anticipate" in outcome of Search Round 1",
+			]
+		`);
+	});
+
+	it('names the missing ladder when the challenged claims were recorded unsegmented', () => {
+		const unsegmented: PatentEvidenceSource = { anchor: `${challenged}:claims:en`, text: challengedClaims.join(' '), reference: { publicationNumber: challenged, section: 'claims' }, language: 'en', retrieval: 'unsegmented', review: 'unknown', completeness: 'unknown' };
+		const flat = snapshotOf(details(challenged, [], 'en', [unsegmented, snapshot.executions[0].sources![6]]), ...snapshot.executions.slice(1));
+		const chart = renderCandidateReview({ ...review, coverage: (review.coverage ?? []).filter(row => row.kind !== 'fallback' || !row.claimNumber), fallbacksNotCharted: [] }, flat, 'chart.working-record.md', 'invalidity');
+		expect(sections(chart, '## Fallback coverage (generated)', /^#{2,3} /)).toMatchInlineSnapshot(`
+			[
+			  [
+			    "## Fallback coverage (generated)",
+			    "Claim 1: 2 of 2 elements disclosed; claim numbers could not be established; no Fallback Ladder; fallbacks: 0 of 1 covered (0 partly); not covered: description fallback "Rubber-lined band".",
+			    "",
+			    "Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.",
+			    "| Fallback | Claim text (recorded) | Status | References cited |",
+			    "| --- | --- | --- | --- |",
+			    "| Description fallback: Rubber-lined band | description-supported; basis quote below | not found in the cited art | — |",
+			    "",
+			  ],
+			  [
+			    "## Fallback coverage (generated)",
+			    "Claim 5: 1 of 1 elements disclosed; claim numbers could not be established; no Fallback Ladder.",
+			    "",
+			    "",
+			  ],
+			]
+		`);
 	});
 });
