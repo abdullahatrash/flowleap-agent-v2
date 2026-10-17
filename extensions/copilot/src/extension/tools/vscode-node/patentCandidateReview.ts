@@ -872,19 +872,19 @@ function fallbackCoverageSection(review: PatentCandidateReview, coverage: Fallba
 }
 
 /**
- * The coverage body of a structured invalidity chart: per charted claim its rows, then its Fallback
- * Coverage. Without recorded claims of the challenged patent (the writer refuses such a save) the rows
+ * The coverage body of a structured invalidity chart: per charted claim its rows under "Claim N —
+ * elements", then its Fallback Coverage. Without recorded claims of the challenged patent (the writer refuses such a save) the rows
  * render as a plain list, exactly as before the ladder existed.
  */
 function invalidityCoverageSections(review: PatentCandidateReview, derivation: FallbackLadderDerivation, sources: Map<string, PatentEvidenceSource>, rowSection: (row: PatentCoverageRow) => string[]): string[] {
 	if (derivation.kind === 'missing') { return ['## Coverage and remaining search tracks', ...(review.coverage ?? []).flatMap(rowSection)]; }
 	const coverage = fallbackCoverage(review, derivation);
-	// Every claim's Fallback Coverage carries its own heading with the claim number, so only the first
-	// group opens the coverage section.
-	return claimGroups((review.coverage ?? []).filter(row => row.kind !== 'fallback')).flatMap((group, index) => {
+	// Each claim opens with its own elements heading and closes with its Fallback Coverage; rows that
+	// name no claim before the first claim keep the general heading.
+	return claimGroups((review.coverage ?? []).filter(row => row.kind !== 'fallback')).flatMap(group => {
 		const claimCoverage = group.claim ? coverage.find(entry => entry.claimNumber === group.claim) : undefined;
 		return [
-			...(index === 0 ? ['## Coverage and remaining search tracks'] : []),
+			group.claim ? `## Claim ${cell(group.claim)} — elements` : '## Coverage and remaining search tracks',
 			...group.rows.flatMap(rowSection),
 			...(claimCoverage ? fallbackCoverageSection(review, claimCoverage, derivation, sources, rowSection) : []),
 		];

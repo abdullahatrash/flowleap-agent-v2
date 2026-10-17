@@ -356,7 +356,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			  ],
 			  "forbidden": [],
 			  "headings": [
-			    "## Coverage and remaining search tracks",
+			    "## Claim 1 — elements",
 			    "### Claim 1 — element (a): a band",
 			    "### Claim 1 — element (b): a screw",
 			    "### Claim 1 as a whole",
@@ -364,6 +364,7 @@ describe('fallback coverage and Search Rounds in the rendered chart', () => {
 			    "### Claim 2 (1 → 2) — fallback of claim 1",
 			    "### Claim 3 (1 → 2 → 3) — fallback of claim 1",
 			    "### Description fallback of claim 1: Rubber-lined band",
+			    "## Claim 5 — elements",
 			    "### Claim 5 — element (a): tightening a band around the pipe",
 			    "## Fallback coverage (generated) — claim 5",
 			    "### Claim 6 (5 → 6) — fallback of claim 5",
