@@ -160,55 +160,74 @@ describe('prior-art report completion contract', () => {
 		expect(await checkPriorArtReportCompletion([], afterSave, fs)).toContain('More patent evidence');
 	});
 
-	describe('one Search Round for fallbacks not covered (invalidity chart)', () => {
+	describe('the Round Report after a saved invalidity chart (C4)', () => {
 		const invalidityRequest = 'Build the invalidity case against EP2000000A1 and save "outputs/研究 review.md".';
-		const nudge = 'The saved chart leaves 2 fallbacks not covered (3, a rubber-lined band). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.';
-		/** A turn that saves the chart once, its receipt stating the given Fallback Coverage counts. */
-		async function chart(fs: MockFileSystemService, fallbacks: ReceiptFallbacks, request = invalidityRequest, template = 'invalidity-claim-chart'): Promise<ReportCompletionTurn> {
+		const nudge = 'The saved chart lists 3 open points (rung-3, element-1.2, search-1) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.';
+		const openPoints: ReceiptFallbacks = {
+			fallbacksNotCovered: 1, rounds: 0, notCovered: ['3'], criticalDate: '2005-03-01',
+			openPoints: [
+				{ id: 'rung-3', text: 'Claim 3 (fallback of claim 1) is partly disclosed in the cited art: Claim 3 (depends on 2) — added limitation: the screw\nis captive' },
+				{ id: 'element-1.2', text: 'Claim 1 element is not found in the cited art: Claim 1 — element (b): a screw' },
+				{ id: 'search-1', text: 'A search failed and did not run again: captive screw (ti=captive AND ti=screw)' },
+			],
+		};
+		const noOpenPoints: ReceiptFallbacks = { fallbacksNotCovered: 0, rounds: 0, notCovered: [], openPoints: [] };
+		const roundReport = ['Saved. Receipt: 1 fallback not covered, 3 open points.', '1. [rung-3] Claim 3 is partly covered. Recommended: search the captive-screw limitation in CPC F16L 3/10.', '2. [element-1.2] Element (b) is not found. Recommended: search US art for a screw clamp.', '3. [search-1] One search failed. Recommended: run it again.', 'Reply with the numbers to run, \'all\', or your own steer.'].join('\n');
+		/** A turn that saves the chart once, its receipt stating the given open points, then ends with the given text. */
+		async function chart(fs: MockFileSystemService, fallbacks: ReceiptFallbacks, closing = '', request = invalidityRequest, template = 'invalidity-claim-chart'): Promise<ReportCompletionTurn> {
 			await fs.writeFile(report, new TextEncoder().encode('Evidence-backed chart'));
 			await fs.writeFile(evidence, new TextEncoder().encode('Snapshot'));
 			return {
 				message: request,
-				rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: '0', name: ToolName.SearchPatents, arguments: '{}' }, { id: '1', name: ToolName.WritePatentResults, arguments: JSON.stringify({ template, coverage: [{ feature: 'Claim 1 — element (a)' }] }) }] }],
+				rounds: [
+					{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: '0', name: ToolName.SearchPatents, arguments: '{}' }, { id: '1', name: ToolName.WritePatentResults, arguments: JSON.stringify({ template, coverage: [{ feature: 'Claim 1 — element (a)' }] }) }] },
+					{ id: 'stop', response: closing, toolInputRetry: 0, toolCalls: [] },
+				],
 				results: { '1': new LanguageModelToolResult([new LanguageModelTextPart(priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot', fallbacks))]) },
 			};
 		}
-		const notCovered: ReceiptFallbacks = { fallbacksNotCovered: 2, rounds: 0, notCovered: ['3', 'a rubber-lined\nband'] };
 
-		it('asks for one Search Round when fallbacks are not covered and no round ran', async () => {
-			const fs = files();
-			expect(await checkPriorArtReportCompletion([], await chart(fs, notCovered), fs)).toBe(nudge);
+		it('prints the open points one line each after the receipt line', () => {
+			const lines = priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot', openPoints).split('\n');
+			expect({ first: lines[0].replace(/^Prior-art artifact receipt: \{.*\}/, '<receipt>'), rest: lines.slice(1), none: priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot', noOpenPoints).split('\n').slice(1) }).toEqual({
+				first: '<receipt> fallbacksNotCovered=1 rounds=0 notCovered=3',
+				rest: [
+					'Open points: 3. Critical date: 2005-03-01. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
+					'Open point [rung-3]: Claim 3 (fallback of claim 1) is partly disclosed in the cited art: Claim 3 (depends on 2) — added limitation: the screw is captive',
+					'Open point [element-1.2]: Claim 1 element is not found in the cited art: Claim 1 — element (b): a screw',
+					'Open point [search-1]: A search failed and did not run again: captive screw (ti=captive AND ti=screw)',
+				],
+				none: ['Open points: none. Critical date: not given (no criticalDate), so the publication dates of the cited documents were not checked.'],
+			});
 		});
-		it('accepts a chart that records a round, whatever it leaves not covered', async () => {
+		it('asks for the Round Report when the receipt lists open points and the turn ends without one', async () => {
 			const fs = files();
-			expect(await checkPriorArtReportCompletion([], await chart(fs, { ...notCovered, rounds: 1 }), fs)).toBeUndefined();
+			expect(await checkPriorArtReportCompletion([], await chart(fs, openPoints, 'Saved the chart. Claim 3 is partly covered; I will run a Search Round next.'), fs)).toBe(nudge);
 		});
-		it('accepts a chart whose fallbacks are all covered', async () => {
+		it('accepts a turn that ends with a Round Report naming the open points', async () => {
 			const fs = files();
-			expect(await checkPriorArtReportCompletion([], await chart(fs, { fallbacksNotCovered: 0, rounds: 0, notCovered: [] }), fs)).toBeUndefined();
+			expect(await checkPriorArtReportCompletion([], await chart(fs, openPoints, roundReport), fs)).toBeUndefined();
 		});
-		it('never asks for a round on a prior-art or Find Better report with the same receipt fields', async () => {
+		it('accepts a chart whose receipt lists no open points', async () => {
+			const fs = files();
+			expect(await checkPriorArtReportCompletion([], await chart(fs, noOpenPoints), fs)).toBeUndefined();
+		});
+		it('never asks for a Round Report on a prior-art or Find Better report with the same receipt', async () => {
 			const fs = files();
 			expect({
-				priorArt: await checkPriorArtReportCompletion([], await chart(fs, notCovered, message, 'prior-art-report'), fs),
-				findBetter: await checkPriorArtReportCompletion([], await chart(fs, notCovered, 'Find better art than the examiner for EP2000000A1 and save "outputs/研究 review.md".', 'find-better-report'), fs),
+				priorArt: await checkPriorArtReportCompletion([], await chart(fs, openPoints, '', message, 'prior-art-report'), fs),
+				findBetter: await checkPriorArtReportCompletion([], await chart(fs, openPoints, '', 'Find better art than the examiner for EP2000000A1 and save "outputs/研究 review.md".', 'find-better-report'), fs),
 			}).toEqual({ priorArt: undefined, findBetter: undefined });
 		});
-		it('does not ask again once the nudge fired for the path, in this turn or the next', async () => {
+		it('asks once: a turn that already holds the nudge is not asked again', async () => {
 			const fs = files();
-			const first = await chart(fs, notCovered);
-			// The loop records the nudge on the round that tried to stop; the model then re-saves without a round.
-			const nudged: ReportCompletionTurn = { ...first, rounds: [...first.rounds, { id: 'stop', response: '', toolInputRetry: 0, toolCalls: [], hookContext: `You were about to complete but a hook blocked you with the following message: "${nudge}".` }] };
-			const resaved = await chart(fs, notCovered, 'Continue');
-			const sameTurn: ReportCompletionTurn = { ...nudged, rounds: [...nudged.rounds, ...resaved.rounds.map(round => ({ ...round, id: 'again', toolCalls: round.toolCalls.map(call => ({ ...call, id: 'again-' + call.id })) }))], results: { ...nudged.results, 'again-1': resaved.results['1'] } };
-			expect({
-				sameTurn: await checkPriorArtReportCompletion([], sameTurn, fs),
-				nextTurn: await checkPriorArtReportCompletion([first], resaved, fs),
-			}).toEqual({ sameTurn: undefined, nextTurn: undefined });
+			const first = await chart(fs, openPoints);
+			const nudged: ReportCompletionTurn = { ...first, rounds: [...first.rounds.slice(0, 1), { ...first.rounds[1], hookContext: `You were about to complete but a hook blocked you with the following message: "${nudge}".` }, { id: 'again', response: 'Saved.', toolInputRetry: 0, toolCalls: [] }] };
+			expect(await checkPriorArtReportCompletion([], nudged, fs)).toBeUndefined();
 		});
-		it('reads an older receipt without the fallback fields as a plain receipt', async () => {
+		it('reads an older receipt without the open-points lines as a plain receipt', async () => {
 			const fs = files();
-			const older = await chart(fs, notCovered);
+			const older = await chart(fs, openPoints);
 			const plain = { ...older, results: { '1': new LanguageModelToolResult([new LanguageModelTextPart(priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot'))]) } };
 			expect(await checkPriorArtReportCompletion([], plain, fs)).toBeUndefined();
 		});

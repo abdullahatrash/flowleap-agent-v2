@@ -6,6 +6,7 @@
 import type { LanguageModelToolResult } from 'vscode';
 import { IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { sha256Hex } from '../../../util/node/crypto';
+import { escapeRegExpCharacters } from '../../../util/vs/base/common/strings';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IToolCallRound } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
@@ -18,42 +19,65 @@ interface ReportReceipt {
 }
 
 /**
+ * One open point of a saved invalidity chart (PRD 0024 C4): a short id the Round Report and a Search
+ * Round's `answers` name, and one line that says what is open. Computed by the writer from the record.
+ */
+export interface ReceiptOpenPoint {
+	readonly id: string;
+	readonly text: string;
+}
+
+/**
  * Fallback Coverage of a saved invalidity chart, as its receipt states it (PRD 0024 C3): how many
  * fallbacks the cited art does not cover, how many Search Rounds the chart records, and which
- * fallbacks are not covered (claim numbers, or a description fallback's feature).
+ * fallbacks are not covered (claim numbers, or a description fallback's feature). The receipt also
+ * lists the chart's open points (C4), in the order the Round Report numbers them.
  */
 export interface ReceiptFallbacks {
 	readonly fallbacksNotCovered: number;
 	readonly rounds: number;
 	readonly notCovered: readonly string[];
+	readonly openPoints: readonly ReceiptOpenPoint[];
+	/** The chart's structured critical date; absent when the chart gave none, so the date check was skipped. */
+	readonly criticalDate?: string;
 }
 
 interface ParsedReportReceipt extends ReportReceipt {
 	/** The index of the round that holds the writer call, within its turn. */
 	readonly roundIndex: number;
 	readonly callIndex: number;
-	/** Present only on an invalidity chart's receipt; older receipts and other templates have none. */
-	readonly fallbacks?: { readonly fallbacksNotCovered: number; readonly rounds: number; readonly notCovered: string };
+	/** The ids of the open points the receipt lists; absent on older receipts and on other templates. */
+	readonly openPoints?: readonly string[];
 }
 
 const receiptPrefix = 'Prior-art artifact receipt: ';
 const fallbackFields = ' fallbacksNotCovered=';
-const fallbackFieldsPattern = /^ fallbacksNotCovered=(?<notCoveredCount>\d+) rounds=(?<rounds>\d+) notCovered=(?<notCovered>.*)$/;
+const openPointsHeader = 'Open points: ';
+const openPointLine = /^Open point \[(?<id>[^\]\s]+)\]: /;
 
-/** The words that mark the one-round nudge in a round's recorded hook context. */
-const searchRoundNudgeMarker = 'Run one Search Round aimed at those limitations';
+/** The words that mark the Round Report nudge in a round's recorded hook context. */
+const roundReportNudgeMarker = 'this turn ends without a Round Report';
+
+/** The prompt line that closes every Round Report (ADR 0016 amendment, decision 7). */
+export const ROUND_REPORT_PROMPT = 'Reply with the numbers to run, \'all\', or your own steer.';
 
 /**
  * Bind the report and its evidence revision to the bytes the structured writer actually saved. An
- * invalidity chart's receipt also states its Fallback Coverage counts, so the completion guard reads
- * no file to decide on a Search Round.
+ * invalidity chart's receipt also states its Fallback Coverage counts and, one line each, its open
+ * points, so the completion guard reads no file to decide on a Round Report.
  */
 export function priorArtReportReceipt(report: URI, document: string, evidence: URI, snapshot: string, fallbacks?: ReceiptFallbacks): string {
 	const line = receiptPrefix + JSON.stringify({ reportUri: report.toString(), reportDigest: sha256Hex(document), evidenceUri: evidence.toString(), evidenceDigest: sha256Hex(snapshot) } satisfies ReportReceipt);
 	if (!fallbacks) { return line; }
-	// One line: a description fallback's feature may hold line breaks, which would split the receipt.
-	const notCovered = fallbacks.notCovered.map(entry => entry.replace(/\s+/g, ' ').trim()).filter(Boolean).join(',');
-	return `${line}${fallbackFields}${fallbacks.fallbacksNotCovered} rounds=${fallbacks.rounds} notCovered=${notCovered}`;
+	// One line each: a description fallback's feature may hold line breaks, which would split a line.
+	const oneLine = (value: string) => value.replace(/\s+/g, ' ').trim();
+	const notCovered = fallbacks.notCovered.map(oneLine).filter(Boolean).join(',');
+	const criticalDate = fallbacks.criticalDate ? `Critical date: ${fallbacks.criticalDate}.` : 'Critical date: not given (no criticalDate), so the publication dates of the cited documents were not checked.';
+	const points = fallbacks.openPoints;
+	const header = points.length
+		? `${openPointsHeader}${points.length}. ${criticalDate} Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "${ROUND_REPORT_PROMPT}" Then end the turn; run a Search Round only on the expert's answer.`
+		: `${openPointsHeader}none. ${criticalDate}`;
+	return [`${line}${fallbackFields}${fallbacks.fallbacksNotCovered} rounds=${fallbacks.rounds} notCovered=${notCovered}`, header, ...points.map(point => `Open point [${point.id}]: ${oneLine(point.text)}`)].join('\n');
 }
 
 
@@ -145,48 +169,32 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 		}
 		return `The report or its evidence companion changed after validation: ${receipt.reportUri}. Its previous validation no longer applies. If this is the requested deliverable, re-save it through write_patent_results with template="${structuredTemplate}" and revised structured evidence. If it was intentionally removed, explain that no validated deliverable remains. Do not restore a deliberately deleted file without user authorization.`;
 	}
-	return invalidity ? searchRoundNudge([...activeHistory, current], current, currentReceipts, target) : undefined;
+	return invalidity ? roundReportNudge(current, currentReceipts, target) : undefined;
 }
 
 /**
- * The one Search Round loop of an invalidity chart (ADR 0016 decision 5): when the latest chart saved
- * in this turn for the requested path leaves fallbacks not covered and records no Search Round, ask
- * for exactly one round. A chart that records a round is accepted whatever its count, and the nudge
- * fires at most once per report path within the active request.
+ * The Round Report of an invalidity chart (ADR 0016 amendment, decision 7): when the latest chart
+ * saved in this turn for the requested path lists open points and the text the agent wrote after that
+ * save holds no numbered question that names one of them, ask once for the Round Report. The guard
+ * never asks for a Search Round: a round runs only on the expert's answer.
  */
-function searchRoundNudge(activeTurns: readonly ReportCompletionTurn[], current: ReportCompletionTurn, currentReceipts: readonly ParsedReportReceipt[], target: string | undefined): string | undefined {
+function roundReportNudge(current: ReportCompletionTurn, currentReceipts: readonly ParsedReportReceipt[], target: string | undefined): string | undefined {
 	const latest = [...currentReceipts].reverse().find(receipt => !target || matchesPath(receipt.reportUri, target));
-	const fallbacks = latest?.fallbacks;
-	if (!latest || !fallbacks || fallbacks.fallbacksNotCovered === 0 || fallbacks.rounds > 0 || nudgedPaths(activeTurns, current).has(latest.reportUri)) { return undefined; }
-	// The receipt joins the list without spaces; the nudge reads it back with a space after each comma.
-	const notCovered = fallbacks.notCovered.split(',').map(entry => entry.trim()).filter(Boolean).join(', ');
-	return `The saved chart leaves ${fallbacks.fallbacksNotCovered} ${fallbacks.fallbacksNotCovered === 1 ? 'fallback' : 'fallbacks'} not covered (${notCovered}). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; 'not covered' is then final. Do not repeat searches merely to pass validation.`;
+	const ids = latest?.openPoints ?? [];
+	if (!latest || !ids.length) { return undefined; }
+	const after = current.rounds.slice(latest.roundIndex + 1);
+	if (after.some(round => round.hookContext?.includes(roundReportNudgeMarker))) { return undefined; }
+	if (namesOpenPoint(after.map(round => round.response).join('\n'), ids)) { return undefined; }
+	return `The saved chart lists ${ids.length} open ${ids.length === 1 ? 'point' : 'points'} (${ids.join(', ')}) and ${roundReportNudgeMarker}. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "${ROUND_REPORT_PROMPT}" Then end the turn. Do not run a Search Round before the expert answers.`;
 }
 
-/**
- * The report paths the one-round nudge already covered in the active request, read off the history
- * alone: a path an earlier turn saved with fallbacks not covered and no round (that turn's guard asked
- * for the round), and a path whose nudgeable save precedes a round that records the nudge as its hook
- * context (the guard asked earlier in this turn).
- */
-function nudgedPaths(activeTurns: readonly ReportCompletionTurn[], current: ReportCompletionTurn): Set<string> {
-	const nudged = new Set<string>();
-	const nudgeable = (receipt: ParsedReportReceipt) => !!receipt.fallbacks && receipt.fallbacks.fallbacksNotCovered > 0 && receipt.fallbacks.rounds === 0;
-	for (const turn of activeTurns) {
-		const turnReceipts = receipts(turn);
-		// Per path, whether its latest save so far in this turn is one the nudge applies to.
-		const pending = new Map<string, boolean>();
-		turn.rounds.forEach((round, roundIndex) => {
-			for (const receipt of turnReceipts.filter(receipt => receipt.roundIndex === roundIndex)) {
-				pending.set(receipt.reportUri, nudgeable(receipt));
-				if (nudgeable(receipt) && turn !== current) { nudged.add(receipt.reportUri); }
-			}
-			if (round.hookContext?.includes(searchRoundNudgeMarker)) {
-				pending.forEach((applies, path) => { if (applies) { nudged.add(path); } });
-			}
-		});
-	}
-	return nudged;
+/** A numbered list item or question: `1.`, `1)`, `**1.**`, `- 1.`, `Q1:` or `#1`. */
+const numberedLine = /^\s*(?:[-*]\s+)?(?:\*\*)?(?:Q|#)?\d+(?:\*\*)?[.):]/i;
+
+/** Whether a numbered line of the text names one of the open-point ids, as `[rung-3]` or bare. */
+function namesOpenPoint(text: string, ids: readonly string[]): boolean {
+	const named = ids.map(id => new RegExp(`(?<![\\w.-])${escapeRegExpCharacters(id)}(?![\\w-]|\\.\\w)`, 'i'));
+	return text.split('\n').some(line => numberedLine.test(line) && named.some(pattern => pattern.test(line)));
 }
 
 function receipts(turn: ReportCompletionTurn): ParsedReportReceipt[] {
@@ -195,17 +203,18 @@ function receipts(turn: ReportCompletionTurn): ParsedReportReceipt[] {
 		const parts = turn.results[call.id]?.content ?? [];
 		return parts.flatMap(part => {
 			if (!isTextPart(part)) { return []; }
-			const line = part.value.split('\n').find(line => line.startsWith(receiptPrefix));
+			const lines = part.value.split('\n');
+			const line = lines.find(line => line.startsWith(receiptPrefix));
 			if (!line) { return []; }
 			// The JSON holds encoded URIs and hex digests only, so the first fallback field marks its end.
 			const body = line.slice(receiptPrefix.length);
 			const fieldsAt = body.indexOf(fallbackFields);
-			const counts = fieldsAt < 0 ? undefined : fallbackFieldsPattern.exec(body.slice(fieldsAt))?.groups;
+			// Only a receipt with the open-points header lists open points; an older one lists none.
+			const openPoints = lines.some(entry => entry.startsWith(openPointsHeader)) ? lines.flatMap(entry => { const id = openPointLine.exec(entry)?.groups?.id; return id ? [id] : []; }) : undefined;
 			try {
 				const value: Partial<ReportReceipt> = JSON.parse(fieldsAt < 0 ? body : body.slice(0, fieldsAt));
 				if ([value.reportUri, value.reportDigest, value.evidenceUri, value.evidenceDigest].every(field => typeof field === 'string') && value.reportUri && value.evidenceUri && value.reportDigest && value.evidenceDigest) {
-					const fallbacks = counts ? { fallbacksNotCovered: Number(counts.notCoveredCount), rounds: Number(counts.rounds), notCovered: counts.notCovered } : undefined;
-					return [{ reportUri: value.reportUri, reportDigest: value.reportDigest, evidenceUri: value.evidenceUri, evidenceDigest: value.evidenceDigest, roundIndex, callIndex, fallbacks }];
+					return [{ reportUri: value.reportUri, reportDigest: value.reportDigest, evidenceUri: value.evidenceUri, evidenceDigest: value.evidenceDigest, roundIndex, callIndex, openPoints }];
 				}
 			} catch { /* Older or malformed result: no receipt. */ }
 			return [];

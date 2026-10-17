@@ -21,8 +21,8 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IActivationTelemetryService } from '../../patentai/vscode-node/activationTelemetryService';
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
-import { deriveFallbackLadder, fallbackCoverage, fallbacksNotCovered, roundOrderErrors } from './patentFallbackLadder';
-import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
+import { deriveFallbackLadder, fallbackCoverage, fallbacksNotCovered, roundAnswerErrors, roundOrderErrors } from './patentFallbackLadder';
+import { CandidateReviewVariant, candidateWordingReview, challengedClaims, chartOpenPoints, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
 import { baselineIntegrityNote, baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields, incompleteSearch } from './patentFindBetter';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../util/vs/base/common/resources';
@@ -166,11 +166,13 @@ const SUMMARY_CONTRACT = 'Chat summary contract: repeat each coverage row\'s sta
 
 /**
  * The Fallback Coverage counts an invalidity chart's receipt states (PRD 0024 C3): the fallbacks the
- * validated rows leave not covered, their names, and the Search Rounds the chart records.
+ * validated rows leave not covered, their names, and the Search Rounds the chart records; and its open
+ * points (C4), computed from the record, which the Round Report numbers.
  */
 function receiptFallbacks(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, challengedPublication: string | undefined): ReceiptFallbacks {
 	const coverage = fallbackCoverage(review, deriveFallbackLadder(snapshot, challengedPublication));
-	return { fallbacksNotCovered: fallbacksNotCovered(coverage), rounds: review.rounds?.length ?? 0, notCovered: coverage.flatMap(claim => claim.notCovered) };
+	const criticalDate = review.criticalDate?.trim() || undefined;
+	return { fallbacksNotCovered: fallbacksNotCovered(coverage), rounds: review.rounds?.length ?? 0, notCovered: coverage.flatMap(claim => claim.notCovered), openPoints: chartOpenPoints(review, snapshot), criticalDate };
 }
 
 /**
@@ -302,7 +304,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 				// A Search Round added in a re-save of this chart must be a search that ran after the
 				// chart's previous save (#725); the path is the one the save record below names.
 				if (variant === 'invalidity') {
-					errors.push(...roundOrderErrors(checked, snapshot, reportWorkspacePath(uri, folders)));
+					errors.push(...roundOrderErrors(checked, snapshot, reportWorkspacePath(uri, folders)), ...roundAnswerErrors(checked, snapshot, reportWorkspacePath(uri, folders)));
 				}
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
@@ -390,13 +392,14 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const ignored = findBetter ? ignoredNumericFields(options.input) : [];
 			const integrityNote = findBetter ? baselineIntegrityNote(input.baseline) : undefined;
 			const sourceResult = findBetter ? `\nExaminer Baseline source: ${baselineSource(input)}.${integrityNote ? ` ${integrityNote}` : ''}` : '';
-			// An invalidity chart's receipt states its Fallback Coverage, so the completion guard can ask
-			// for the one Search Round without reading the report.
-			const fallbacks = snapshot && variant === 'invalidity' ? receiptFallbacks(input, snapshot, input.challengedPublication ?? options.input.matter) : undefined;
+			// An invalidity chart's receipt states its Fallback Coverage and its open points, so the
+			// completion guard can ask for the Round Report without reading the report.
+			const fallbacks = snapshot && variant === 'invalidity' ? receiptFallbacks(checked, snapshot, checked.challengedPublication) : undefined;
 			// The chart is on disk: mark the save in the ledger, so a Search Round added in a later
-			// save of this path can be checked against the position of this one (#725).
+			// save of this path can be checked against the position of this one (#725) and against the
+			// open points this receipt lists (C4).
 			if (fallbacks) {
-				await this.ledger.record(options.chatSessionResource, { kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: reportWorkspacePath(uri, folders), rounds: fallbacks.rounds });
+				await this.ledger.record(options.chatSessionResource, { kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: reportWorkspacePath(uri, folders), rounds: fallbacks.rounds, openPoints: fallbacks.openPoints.map(point => point.id) });
 			}
 			const ignoredResult = ignored.length ? `\nIgnored model-supplied numeric field(s): ${ignored.join(', ')}. A Find Better report counts disclosed elements from the validated rows only; no model-supplied number reaches the report.` : '';
 			return new LanguageModelToolResult([

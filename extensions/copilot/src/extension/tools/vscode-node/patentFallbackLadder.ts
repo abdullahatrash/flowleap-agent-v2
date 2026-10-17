@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { RECORDED_TOOLS, type PatentEvidenceSource, type PatentExecution, type PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
 import type { PatentCandidateReview } from './patentCandidateReview';
 import { queryKey } from './patentFindBetter';
 
@@ -118,7 +119,7 @@ export function parseClaimDependency(text: string, claimNumber: number): readonl
 }
 
 /** Country and number without separators or kind code, so `EP2110298B1` and `EP 2110298` meet. */
-function documentKey(publication: string): string {
+export function documentKey(publication: string): string {
 	return publication.replace(/[-.\s/]/g, '').toUpperCase().replace(/^([A-Z]{2}\d+)[A-Z]\d?$/, '$1');
 }
 
@@ -298,6 +299,29 @@ export function roundOrderErrors(review: PatentCandidateReview, snapshot: Patent
 }
 
 /**
+ * A Search Round runs on the expert's answer to a Round Report (ADR 0016 amendment, PRD 0024 C4), so
+ * a round that first appears in a re-save of `reportPath` must name in `answers` at least one open
+ * point of the receipt the previous save printed; the save record keeps those ids. A first save, a
+ * previous save from before open points were recorded, and a previous receipt with no open points
+ * are not checked. Rounds the previous save already recorded are not re-checked.
+ */
+export function roundAnswerErrors(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, reportPath: string): string[] {
+	const previous = previousSave(snapshot, reportPath);
+	const open = previous?.openPoints;
+	if (!previous || !open?.length) { return []; }
+	const known = new Set(open.map(id => id.trim().toLowerCase()));
+	const errors: string[] = [];
+	(review.rounds ?? []).forEach((round, index) => {
+		if (index < (previous.rounds ?? 0)) { return; }
+		const answers = (round?.answers ?? []).map(id => id.trim()).filter(Boolean);
+		if (!answers.some(id => known.has(id.toLowerCase()))) {
+			errors.push(`Round ${round.round} answers no open point of the previous receipt${answers.length ? ` (it names ${answers.join(', ')})` : ''}. A Search Round runs only on the expert's answer to the Round Report. In answers, give the ids of the open points the expert chose (the previous receipt listed ${open.join(', ')}). If the expert has not answered yet, save without the new round, write the Round Report and wait.`);
+		}
+	});
+	return errors;
+}
+
+/**
  * A round query through a tool the ledger records must match one of its executions (same tool, same
  * query text); a query through any other tool is accepted as unrecorded. Every round needs at least
  * one query the ledger confirms.
@@ -413,4 +437,60 @@ export function fallbackCoverage(review: PatentCandidateReview, derivation: Fall
 /** The number of fallbacks not covered across every independent claim; the receipt's `fallbacksNotCovered`. */
 export function fallbacksNotCovered(coverage: readonly FallbackCoverage[]): number {
 	return coverage.reduce((total, claim) => total + claim.notCovered.length, 0);
+}
+
+/** A model-written phrase cut to one short line, so an open point stays one line in the receipt. */
+export function shortPhrase(value: string, limit = 160): string {
+	const line = value.replace(/\s+/g, ' ').trim();
+	return line.length > limit ? `${line.slice(0, limit - 1).trimEnd()}…` : line;
+}
+
+/**
+ * A short reference to each coverage row that stays the same across saves of one chart: a dependent
+ * claim's rung is its claim number (`3`), a description fallback is `d1`, `d2` in row order, an
+ * element row is its claim and its place among that claim's element rows (`1.2`), a combination row
+ * is `1.whole`, and any other row is its place in the chart (`row4`).
+ */
+export function rowReferences(review: PatentCandidateReview): readonly string[] {
+	const counts = new Map<string, number>();
+	const next = (key: string) => { const value = (counts.get(key) ?? 0) + 1; counts.set(key, value); return value; };
+	return (review.coverage ?? []).map((row, index) => {
+		const claim = row.claimNumber?.trim();
+		if (row.kind === 'fallback') { return claim || `d${next('description')}`; }
+		if (row.kind === 'combination' && claim) { return `${claim}.whole`; }
+		if (row.kind === 'feature' && claim) { return `${claim}.${next(`claim ${claim}`)}`; }
+		return `row${index + 1}`;
+	});
+}
+
+/** The chart wording of a status that leaves a point open. */
+const OPEN_STATUS_TEXT = { partial: 'is partly disclosed in the cited art', unresolved: 'is not found in the cited art' } as const;
+
+/**
+ * The open points a chart's own rows give (PRD 0024 C4), in a stable order: rungs partly disclosed or
+ * not found, per independent claim in claim order and description fallbacks after the dependent
+ * claims; then independent-claim elements not found, in claim and row order. The writer adds the
+ * open points that only the record gives (scope, date, drawing, failed search) after these.
+ */
+export function rowOpenPoints(review: PatentCandidateReview): readonly ReceiptOpenPoint[] {
+	const rows = review.coverage ?? [];
+	const references = rowReferences(review);
+	const claimOrder = (value: string | undefined) => { const number = Number(value?.trim()); return value?.trim() && Number.isFinite(number) ? number : Number.MAX_SAFE_INTEGER; };
+	const indexes = rows.map((_, index) => index);
+	const rungs = indexes.filter(index => rows[index].kind === 'fallback' && rows[index].status !== 'supported')
+		.sort((first, second) => claimOrder(rows[first].fallbackOf) - claimOrder(rows[second].fallbackOf) || claimOrder(rows[first].claimNumber) - claimOrder(rows[second].claimNumber) || first - second);
+	const elements = indexes.filter(index => rows[index].kind === 'feature' && rows[index].status === 'unresolved')
+		.sort((first, second) => claimOrder(rows[first].claimNumber) - claimOrder(rows[second].claimNumber) || first - second);
+	return [
+		...rungs.map(index => {
+			const row = rows[index];
+			const parent = row.fallbackOf?.trim() || '?';
+			const subject = row.claimNumber?.trim() ? `Claim ${row.claimNumber.trim()} (fallback of claim ${parent})` : `Description fallback of claim ${parent}`;
+			return { id: `rung-${references[index]}`, text: `${subject} ${row.status === 'partial' ? OPEN_STATUS_TEXT.partial : OPEN_STATUS_TEXT.unresolved}: ${shortPhrase(row.feature ?? '')}` };
+		}),
+		...elements.map(index => {
+			const row = rows[index];
+			return { id: `element-${references[index]}`, text: `${row.claimNumber?.trim() ? `Claim ${row.claimNumber.trim()} element` : 'Element'} ${OPEN_STATUS_TEXT.unresolved}: ${shortPhrase(row.feature ?? '')}` };
+		}),
+	];
 }

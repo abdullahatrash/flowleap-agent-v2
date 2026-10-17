@@ -101,6 +101,8 @@ export interface PatentExecution {
 	readonly request?: string;
 	/** `save` only: how many Search Rounds the saved chart recorded. */
 	readonly rounds?: number;
+	/** `save` only: the ids of the open points the saved chart's receipt listed, so the next save's Search Round can be checked against them (PRD 0024 C4). */
+	readonly openPoints?: readonly string[];
 	/** `analytics` and `status` only: the backend's own row count, or the number of events or family members returned. */
 	readonly rowCount?: number;
 	/** `analytics` only: the PATSTAT edition or corpus label the numbers belong to. */
@@ -339,6 +341,7 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		request: text(record.request),
 		rowCount: count(record.rowCount),
 		rounds: count(record.rounds),
+		openPoints: list(record.openPoints),
 		dataEdition: text(record.dataEdition),
 		resultText: text(record.resultText),
 		summary: text(record.summary),

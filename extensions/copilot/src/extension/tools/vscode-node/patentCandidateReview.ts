@@ -9,7 +9,8 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
-import { deriveFallbackLadder, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus } from './patentFallbackLadder';
+import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
+import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase } from './patentFallbackLadder';
 import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
@@ -83,6 +84,11 @@ export interface PatentCandidateReview extends FindBetterFields {
 	readonly stopReason?: string;
 	/** invalidity-claim-chart: the patent whose claims are being charted against the cited art. */
 	readonly challengedPublication?: string;
+	/**
+	 * invalidity-claim-chart: the critical date as an ISO date (YYYY-MM-DD). With it, the receipt lists
+	 * every cited document published after it as an open point; without it, that check is skipped.
+	 */
+	readonly criticalDate?: string;
 	/** Report prose the template renders outside the appendix; checked like every other model-written field. */
 	readonly objective?: string;
 	readonly searchStrategy?: string;
@@ -120,6 +126,8 @@ interface FallbackNotCharted {
 interface SearchRound {
 	readonly round: number;
 	readonly targets: readonly string[];
+	/** The ids of the previous receipt's open points the expert chose and this round answers (PRD 0024 C4). */
+	readonly answers?: readonly string[];
 	readonly queries: readonly { readonly tool: string; readonly query: string; readonly count?: number }[];
 	readonly outcome: string;
 }
@@ -335,6 +343,68 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 		lines.push('Findings marked "rests on a drawing reading" rest on the model\'s reading of a retrieved figure, not on quoted text; a drawing discloses arrangement, never dimensions unless stated to scale.');
 	}
 	return lines;
+}
+
+/** A structured critical date must be an ISO date that exists, or be left out. */
+function criticalDateErrors(review: PatentCandidateReview): string[] {
+	const value = review.criticalDate?.trim();
+	if (!value) { return []; }
+	return isoDate(value) === value ? [] : [`criticalDate "${value}" is not an ISO date. Give it as YYYY-MM-DD (for example 2005-03-01), or leave criticalDate out and keep the basis in prose.`];
+}
+
+/** A recorded date as `YYYY-MM-DD`: the ledger holds `2008-07-16` or `20080716`; anything else is unknown. */
+function isoDate(value: string | undefined): string | undefined {
+	const match = /^(?<year>\d{4})-?(?<month>\d{2})-?(?<day>\d{2})/.exec(value?.trim() ?? '')?.groups;
+	if (!match) { return undefined; }
+	const date = `${match.year}-${match.month}-${match.day}`;
+	const parsed = new Date(`${date}T00:00:00Z`);
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : undefined;
+}
+
+/**
+ * The open points of a saved invalidity chart (ADR 0016 amendment, PRD 0024 C4), read from the record
+ * and never from the model, in a stable order the Round Report numbers: rungs partly disclosed or not
+ * found; independent-claim elements not found; cited documents outside the searched jurisdictions;
+ * cited documents published after the structured critical date, or with no recorded date when one is
+ * given; rows that rest on a drawing reading; searches that failed and did not run again. Each has a
+ * short id that a Search Round's `answers` names.
+ */
+export function chartOpenPoints(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly ReceiptOpenPoint[] {
+	const rows = review.coverage ?? [];
+	const references = rowReferences(review);
+	const sources = sourceIndex(snapshot);
+	const points: ReceiptOpenPoint[] = [...rowOpenPoints(review)];
+	const challenged = review.challengedPublication?.trim();
+	const cited = retrievedDocuments(review, snapshot).filter(document => document.cited && (!challenged || documentKey(document.publication) !== documentKey(challenged)))
+		.sort((first, second) => first.publication.localeCompare(second.publication));
+	const jurisdictions = searchedJurisdictions(snapshot);
+	for (const document of cited.filter(document => outsideScope(document.publication, jurisdictions))) {
+		points.push({ id: `scope-${document.publication}`, text: `Cited document ${document.publication} is outside the searched jurisdictions (${jurisdictions.join(', ')}).` });
+	}
+	const criticalDate = isoDate(review.criticalDate);
+	if (criticalDate) {
+		for (const document of cited) {
+			const published = isoDate(document.publicationDate);
+			if (!published) { points.push({ id: `date-${document.publication}`, text: `Cited document ${document.publication} has no recorded publication date, so it was not compared with the critical date ${criticalDate}.` }); }
+			else if (published > criticalDate) { points.push({ id: `date-${document.publication}`, text: `Cited document ${document.publication} was published on ${published}, after the critical date ${criticalDate}.` }); }
+		}
+	}
+	rows.forEach((row, index) => {
+		const suffix = drawingReadingSuffix(row, sources);
+		if (suffix) { points.push({ id: `drawing-${references[index]}`, text: `The row ${suffix.includes('in part') ? 'rests in part on a drawing reading' : 'rests on a drawing reading'}, not on quoted text: ${shortPhrase(row.feature)}` }); }
+	});
+	unretriedQueries(snapshot).forEach((query, index) => points.push({ id: `search-${index + 1}`, text: `A search failed and did not run again: ${shortPhrase(query)}` }));
+	return points;
+}
+
+/** The working record's list of the open points the receipt states, so a later session sees what the expert was asked. */
+function openPointsSection(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): string[] {
+	const points = chartOpenPoints(review, snapshot);
+	const date = isoDate(review.criticalDate);
+	return ['## Open points (generated)',
+		`Computed by the writer from the record. The Round Report asks the expert about each one, in this order. ${date ? `Critical date: ${date}.` : 'No structured critical date was given, so the publication dates of the cited documents were not checked.'}`,
+		...(points.length ? points.map(point => `- [${point.id}] ${inline(point.text)}`) : ['No open points.']),
+		''];
 }
 
 /** The recorded searches, in the order they were run; the client report shows only the succeeded ones. */
@@ -628,7 +698,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 	const anchors = new Set(sources.keys());
 	if (sided.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : variant === 'find-better' ? 'find-better-report' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
 	if (variant === 'find-better') { errors.push(...findBetterErrors(sided, sources)); }
-	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources), ...assertiveConclusionErrors(sided)); }
+	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources), ...assertiveConclusionErrors(sided), ...criticalDateErrors(sided)); }
 	// Each side of a find-better row is checked as a row of its own; every other review is unchanged.
 	const review = flattenSides(sided);
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
@@ -929,10 +999,11 @@ function searchRoundsSection(review: PatentCandidateReview, snapshot: PatentExec
 	const ledger = roundLedgerStatus(review, snapshot);
 	const target = (value: string) => /^\d+$/.test(value.trim()) ? `claim ${value.trim()}` : `description fallback "${inline(value)}"`;
 	return ['## Search rounds',
-		'Each Search Round targets fallbacks a saved chart left not covered. A query marked ledger-matched matches a tool execution recorded this session; a query marked not recorded by the ledger ran through a tool the ledger does not record and is not confirmed.',
+		'Each Search Round runs on the expert\'s answer to the Round Report of a saved chart and targets the open points the expert chose. A query marked ledger-matched matches a tool execution recorded this session; a query marked not recorded by the ledger ran through a tool the ledger does not record and is not confirmed.',
 		...rounds.flatMap((round, index) => [
 			'', `### Search Round ${round.round}`,
 			`Targets: ${(round.targets ?? []).map(target).join(', ') || 'none named'}`,
+			...(round.answers?.length ? [`Answers open points: ${round.answers.map(inline).join(', ')}`] : []),
 			'',
 			'| Tool | Query | Count | Ledger |',
 			'| --- | --- | --- | --- |',
@@ -1269,7 +1340,7 @@ export function renderWorkingRecord(sided: PatentCandidateReview, snapshot: Pate
 		'| --- | --- | --- | --- | --- | --- | --- |',
 		...searchExecutions(snapshot).map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown', searchPurpose(execution) ?? '—'].map(cell).join(' | ') + ' |'),
 		'',
-		...(variant === 'invalidity' ? fallbackRecordSections(review, snapshot) : []),
+		...(variant === 'invalidity' ? [...fallbackRecordSections(review, snapshot), ...openPointsSection(review, snapshot)] : []),
 		'## Retrieved but not read',
 		...uncitedDocumentTable(documents.filter(document => !document.cited)),
 		'',

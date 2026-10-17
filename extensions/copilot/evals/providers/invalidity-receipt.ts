@@ -6,7 +6,7 @@
 import { URI } from '../../src/util/vs/base/common/uri';
 import { priorArtReportReceipt } from '../../src/extension/tools/node/priorArtReportCompletion';
 import type { PatentCandidateReview } from '../../src/extension/tools/vscode-node/patentCandidateReview';
-import { fallbackCoverage, fallbacksNotCovered } from '../../src/extension/tools/vscode-node/patentFallbackLadder';
+import { fallbackCoverage, fallbacksNotCovered, rowOpenPoints } from '../../src/extension/tools/vscode-node/patentFallbackLadder';
 
 /** A mock `write_patent_results` whose receipt is computed from the save's own arguments. */
 export interface InvalidityReceiptMock {
@@ -19,9 +19,11 @@ export interface InvalidityReceiptMock {
 /**
  * The tool result the structured writer returns for an invalidity chart, with the Fallback Coverage
  * counts the real writer states: `fallbacksNotCovered` and `notCovered` from the fallback rows marked
- * `unresolved` (the writer's own `fallbackCoverage`), `rounds` from the save's `rounds`. The receipt
- * line is the writer's own `priorArtReportReceipt`; the digests hash the saved arguments, since a
- * mock save writes no file.
+ * `unresolved` (the writer's own `fallbackCoverage`), `rounds` from the save's `rounds`, and the open
+ * points the save's own rows give (the writer's own `rowOpenPoints`: rungs partly or not covered,
+ * elements not found). A mock has no ledger, so the open points only the record gives (scope, date,
+ * drawing, failed search) are absent. The receipt is the writer's own `priorArtReportReceipt`; the
+ * digests hash the saved arguments, since a mock save writes no file.
  */
 export function invalidityReceiptBody(mock: InvalidityReceiptMock, args: Record<string, unknown>): string {
 	// The arguments are the model's JSON; the writer's coverage reader takes only the fields it needs.
@@ -31,6 +33,8 @@ export function invalidityReceiptBody(mock: InvalidityReceiptMock, args: Record<
 		fallbacksNotCovered: fallbacksNotCovered(coverage),
 		rounds: Array.isArray(review.rounds) ? review.rounds.length : 0,
 		notCovered: coverage.flatMap(claim => claim.notCovered),
+		openPoints: rowOpenPoints(review),
+		criticalDate: typeof review.criticalDate === 'string' && review.criticalDate.trim() ? review.criticalDate.trim() : undefined,
 	};
 	const stem = mock.reportPath.replace(/\.md$/, '');
 	const report = URI.file(`/workspace/${mock.reportPath}`);

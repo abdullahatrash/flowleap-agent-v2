@@ -430,6 +430,10 @@ calls; the grader spend is negligible next to the loop.
 
 ### T11 — Fallback Coverage Search Round (2026-10-17, `anthropic/claude-sonnet-5`, `--no-cache`)
 
+**Retired by C4 (#741).** The one automatic Search Round is gone: after every save the agent
+writes a Round Report and waits for the expert. T12 below replaces this case; the section stays
+as history.
+
 PRD 0024 E1 (#710) adds the one case the Fallback Coverage loop needs: the invalidity chart
 leaves two fallbacks not covered, the agent runs ONE Search Round on their limitations, re-saves
 with the round recorded, and stops. Three provider opt-ins make the run match the app
@@ -468,6 +472,31 @@ loops on `uspto_api_guide` and hits the 8-round cap before the web fallback). It
 is re-recorded as expected `FAIL` (open debt, #734) in its own commit, so the gate can again
 answer yes or no for #725 and the skills chain; it flips back to `PASS` when a T1-only probe lands
 at 3/3 after the #734 fix.
+
+### T12 — Round Report (2026-10-17, `anthropic/claude-sonnet-5`, `--no-cache`)
+
+PRD 0024 C4 (#741, ADR 0016 amendment) replaces T11. The first save leaves rungs 3, 4 and 5 open
+(no mocked reference discloses the magnet detent, the vent hole or the drip groove). The mocked
+`write_patent_results` prints the open points the save's own rows give, with the writer's own
+`rowOpenPoints` and `priorArtReportReceipt`. The agent must end turn 0 with a Round Report that
+names every open point with a recommendation, and run no round. The scripted expert answer
+(`followUpPrompt: "Run 1 and 3. Do not run 2."`) picks two points by number. The round of turn 1
+must name exactly those two ids in `answers` and aim its queries at their limitations only. The
+provider now adds the stopping round to the guard's turn before the check (as the app loop does),
+and checks the follow-up turn with the first turn as history.
+
+| Case | Runs | Pass | Verdict |
+|---|---|---|---|
+| T12 | `P P F P P` (T12-only probe, `--runs 5 -- --filter-pattern '^T12'`) | 4/5 | **PASS**, recorded as expected PASS |
+
+In the four passing runs the model ended turn 0 with a numbered Round Report over `rung-3`,
+`rung-4` and `rung-5`, each with a recommendation, and ran no search after the save. After the
+answer it ran new queries on the magnet and drip-groove limitations only and saved with
+`answers: ["rung-3", "rung-5"]`. The failing run never reached a Round Report. Every mocked search
+returns the same two documents, the model read that as a broken search, and after the guard's
+structured-save nudge it wrote a prose report with no save. That is the fixture's catch-all
+search body, not the Round Report logic. No run ran a round before the answer, and no run
+answered points the expert did not choose.
 
 ### Baseline: key-gate suite (2026-08-07, same model)
 

@@ -45,7 +45,7 @@ Run the **prior-art** skill's broad-to-narrow engine with these overrides:
 - Check the applicant's own earlier filings and the inventors' own papers — self-collision is common
 - Aim at the allowance-winning feature identified in Phase 1.4
 
-Done when every element of every independent claim and the added limitation of every rung were searched with the date filter, each query is logged with its count, and each zero result went down the search-failure ladder below. Retries on that ladder are part of Phase 3; a Search Round is only the pass Phase 4b runs after a saved chart.
+Done when every element of every independent claim and the added limitation of every rung were searched with the date filter, each query is logged with its count, and each zero result went down the search-failure ladder below. Retries on that ladder are part of Phase 3; a Search Round is only the pass Phase 4b runs after the expert answers a Round Report.
 
 ## When a search fails
 
@@ -75,27 +75,28 @@ The structured chart for `write_patent_results` (`template: 'invalidity-claim-ch
 - **Description fallbacks** (optional): an amendment the proprietor can draw from the description, as a fallback row with no `claimNumber` and a `basis` that quotes the challenged patent's own description verbatim.
 - **Rungs left out**: each one goes in `fallbacksNotCharted` with a reason. The writer refuses a chart in which a rung has neither a row nor an entry.
 - `elements` carry literal fragments copied from the **prior art's** claims or description, and `sourceAnchors`/`evidence` cite those prior-art passages, never the challenged patent. Only a description fallback's `basis` quotes the challenged patent.
-- Set `challengedPublication` to the target patent, and put the critical-date basis in `objective`.
+- Set `challengedPublication` to the target patent, set `criticalDate` to the critical date as `YYYY-MM-DD` when you know it, and put the critical-date basis in `objective`. With `criticalDate`, the receipt lists every cited document published after it.
 - `status` stays supported / partial / unresolved; the chart renders them as disclosed / partially disclosed / not found in the cited art, counts fallbacks as covered / partly covered / not covered, and derives a reference-roles table from them. Your X/Y/A tagging and the §102/§103 grounds stay your own judgment in the prose above: the writer refuses a chart whose `gap`, `limitations`, `stopReason`, `outcome` or `reason` states a legal conclusion ("is obvious", "obvious over", "would have been obvious", "anticipates", "anticipated by", "is not novel"); a chart field says what the passage discloses and which element it meets or misses.
 
 Field detail, the EN/DE/FR dependency wording and a worked example: [references/fallback-coverage.md](references/fallback-coverage.md).
 
 Done when every element of every charted independent claim has a row, and every rung of its Fallback Ladder has a fallback row or a `fallbacksNotCharted` entry with a reason.
 
-## Phase 4b: Save, Then One Search Round
+## Phase 4b: Save, Then the Round Report, Then Wait
 
-Save via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it **structured**: leave `content` empty and supply the Phase 4 rows, so the writer validates the quotes, renders the chart and writes the evidence companion.
+The user is an expert. After every save, the expert decides what the next Search Round looks for.
 
-Read the receipt line: `fallbacksNotCovered=<n> rounds=<k> notCovered=<claims>`.
-- `fallbacksNotCovered=0`: the ladder is covered. Go to Phase 5.
-- `fallbacksNotCovered` above 0 and `rounds=0`: run ONE **Search Round** aimed only at the limitations those rungs add. The Search Round is a new search after the receipt: the writer refuses a round added in a re-save whose queries all ran before that save. Do not list Phase 3 queries as the round.
-  1. New **Discriminating Terms** for each added limitation (not the terms of the independent claim).
-  2. The search-failure ladder, in order: reformulate, other office, NPL (`search_npl`, then `search_academic`), web.
-  3. Chart what the round found on those fallback rows, and record the round in `rounds`: `round: 1`, `targets` (the claim numbers, or the `feature` of a description fallback), every query with its `tool` and the exact query text as you ran it, and an `outcome`. The ledger records `search_patents`, `search_register`, `patstat_*`, `patent_api_request`, `fetch_webpage` and `run_in_terminal` calls; the writer confirms those queries against it. NPL and academic queries (`search_npl`, `search_academic`) are listed in the round too and the chart marks them 'not recorded by the ledger'. Every round must contain at least one query through a recorded tool, exactly as run, or the writer refuses the save.
-  4. Save again. If the writer refuses a round query as matching no execution, correct the query text to the exact text you ran, or drop that query, and save again. A round counts only once the chart that records it is saved. Never re-run a search only to make a query match.
-- `rounds` at 1 or more: stop searching. A rung still not covered is a complete result. The report says "not covered after one Search Round" and names what the round tried.
+1. **Save** via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it **structured**: leave `content` empty and supply the Phase 4 rows, so the writer validates the quotes, renders the chart and writes the evidence companion.
+2. **Read the receipt**. The writer computes the open points from the record and prints one line each: `Open point [rung-3]: …`. You do not choose them, and you do not leave one out.
+3. **Write the Round Report**: the receipt in one or two sentences; then each open point as a numbered question, in receipt order, with its id in brackets and your recommended next step; then the line "Reply with the numbers to run, 'all', or your own steer." Then **end the turn**. Do not search and do not save again before the expert answers. If the receipt says "Open points: none.", go to Phase 5.
+4. **On the expert's answer**, run one **Search Round** aimed only at the points the expert chose, record it in `rounds` with `answers` (the ids of those points), and go back to step 1. The writer refuses a new round whose `answers` name no open point of the previous receipt, or whose queries all ran before the previous save.
+5. **Stop when the expert says so.** A rung still not covered after a round is a complete result.
 
-Done when every rung is covered, or one Search Round ran on every rung not covered and the chart that records it is saved.
+The jurisdiction rule does not change: search both offices first and ask about scope in the Round Report, never before the first search.
+
+Open-point ids, a Round Report example, the round fields and a worked example: [references/fallback-coverage.md](references/fallback-coverage.md).
+
+Done when the latest save is followed by a Round Report and the expert has answered, or the receipt lists no open points.
 
 ## Phase 5: Report
 
@@ -104,7 +105,7 @@ The saved chart covers:
 2. **Venue assessment** — which challenges are still open, on which grounds
 3. **Invalidity charts** — per claim, best grounds first, then its fallback coverage ("fallbacks: k of j covered; not covered: claims 3, 5")
 4. **Reference ranking** — the 3-5 strongest references, flagging which are NEW vs of record
-5. **Not covered after the Search Round** — each rung still not covered, the queries the round ran for it, and what a deeper search would target. What stays not covered is the patent's real strength.
+5. **Open points after the last round** — each rung still not covered, the queries the rounds ran for it, the points the expert chose not to run, and what a deeper search would target. What stays not covered is the patent's real strength.
 6. **Audit trail** (run the audit-report skill — invalidity work gets scrutinized)
 
 Done when the chart is saved with every section above, and the chat summary states the fallback coverage per independent claim.
