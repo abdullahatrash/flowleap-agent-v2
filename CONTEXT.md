@@ -360,13 +360,24 @@ _Avoid_: "fallback strength" or any model-rated score; reading "covered" as anti
 obviousness (the chart states neither).
 
 **Search Round**:
-One pass of the invalidity search aimed only at the fallbacks the last saved chart left not
-covered: new Discriminating Terms for each added limitation, the skill's search ladder, and a
+One pass of the invalidity search aimed only at the open points of the last Round Report that the
+expert chose: new Discriminating Terms for each added limitation, the skill's search ladder, and a
 re-save. Recorded in the chart as `rounds[]`; each query must match a tool execution in the
-ledger or the writer refuses the save. The completion guard asks for one Search Round when
-fallbacks are not covered and none has run; after it, an honest "not covered" is final.
-_Avoid_: a round the skill text promises but the chart does not record; repeating searches to
-pass validation.
+ledger that ran after the previous save, or the writer refuses the save. One round per expert
+answer; the expert ends the loop, and an honest "not covered" is a complete result.
+_Avoid_: a round the skill text promises but the chart does not record; a round the agent runs
+on its own guess of what matters; repeating searches to pass validation.
+
+**Round Report**:
+The agent's turn after every save of an Invalidity Analysis: the receipt, then the open points of
+the saved chart as numbered questions, each with the agent's recommended next step, then a wait
+for the expert. The open points are read from the record (rungs partly covered or not covered,
+independent-claim elements not found, cited documents outside the searched scope or published
+after the critical date, rows that rest on a drawing, searches that failed). The expert answers
+with numbers, "all", or a steer of their own, and the next Search Round runs on that answer
+(ADR 0016, amendment of 2026-10-17).
+_Avoid_: a question without a recommendation; a recommendation without a question; open points
+the model typed from its reading of the chart instead of the writer's list.
 
 ## UPC practice
 

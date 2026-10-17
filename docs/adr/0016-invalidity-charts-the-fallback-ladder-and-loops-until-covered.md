@@ -79,3 +79,37 @@ both checkable in code.
   1 to 3") is a rung under each parent it names.
 - The litigator's answer came in a private message. No public material names him without his
   written consent.
+
+## Amendment 2026-10-17: the expert steers each round
+
+The first live runs (US6778074B1, EP1809422B1) showed a gap in decision 5. The code triggers the
+one Search Round only when a rung is `unresolved`. On EP1809422 four of five rungs were `partial`,
+so no round ran, and the chart's stopping rationale said searching stopped because every row had
+partial support. The litigator's rule is "if the documents do not take care of all fallbacks, go
+back to search". Partly covered is not taken care of. The same run made five more decisions alone
+that belong to the expert: the search scope, an intermediate document, drawing-only evidence, a
+failed search. The user of this product is an expert. The chart is a conversation with that
+expert, not a one-shot deliverable.
+
+7. **After every save the agent writes a Round Report and waits.** The Round Report is the
+   receipt plus the open points of the saved chart, each as a numbered question with the agent's
+   recommended next step, so the expert can answer with numbers, "all", or a steer of their own.
+   The open points come from the record, not from the model: rungs `partial` or `unresolved`,
+   independent-claim elements `unresolved`, cited documents outside the searched scope, cited
+   documents published after the critical date, rows that rest on a drawing, searches that
+   failed. A Search Round runs only on the expert's answer and is aimed at the points the expert
+   chose. "Stop after one round" becomes "one round per answer": the expert ends the loop, and
+   the cost stays bounded. The Investigation Brief (ADR 0009) asks at the start of a matter;
+   the Round Report asks at the end of each round, with evidence in hand. The jurisdiction gate
+   (default to both offices, do not ask first) is unchanged: the Round Report asks after the
+   first result, not before the search.
+   Rejected: a round the agent runs on its own for `partial` rungs (it spends the expert's
+   budget on the agent's guess of what matters); a report that asks without recommending (the
+   expert then does the agent's work); a Round Report typed from the model's reading of the chart
+   (the writer already knows every open point and prints them, so the model cannot omit one).
+
+Consequence for decision 5: the completion guard no longer nudges a round. It nudges the Round
+Report when the agent saved and ended its turn without one. The writer's receipt gains the open
+points. A re-save round must answer at least one open point the expert chose, checked the same way
+#725 checks that a round ran after the previous save.
+

@@ -109,6 +109,29 @@ maps them to covered / partly covered / not covered.
   covered + round 1 → accepted; covered → accepted; prior-art template with the same receipt →
   no nudge.
 
+### C4 — Round Report: the expert steers each round (amendment of 2026-10-17)
+`writePatentResultsTool.ts` receipt, `priorArtReportCompletion.ts`, `patentFallbackLadder.ts`,
+the invalidity skill's Phase 4b.
+- The receipt gains the open points of the saved chart, computed in code: rungs `partial` and
+  `unresolved`, independent-claim elements `unresolved`, cited documents outside the searched
+  scope, cited documents published after the critical date (needs a structured
+  `criticalDate` on the chart; the free-text basis stays), rows that rest on a drawing, searches
+  that failed. One line each, stable order, so the skill can number them.
+- The skill's Phase 4b becomes: save, then write the Round Report (receipt, the open points as
+  numbered questions, a recommended next step for each, a one-line prompt "Reply with the numbers
+  to run, 'all', or your own steer"), then end the turn. A Search Round runs only on the expert's
+  answer and lists in `rounds[].answers` the open points it answers.
+- Completion guard, invalidity only: when the latest receipt lists open points and the agent's
+  turn ended without a Round Report (no numbered question that names an open point), nudge the
+  Round Report once. The guard never nudges a round.
+- Writer: a re-save round whose `answers` name no open point of the previous receipt is refused,
+  beside the #725 check.
+- Guardrail: the jurisdiction gate is unchanged (ask after the first result, never before the
+  search); the receipt stays one line per open point; no model call in the node layer.
+- Acceptance: `priorArtReportCompletion.spec.ts` cases: open points + no Round Report → nudge;
+  open points + Round Report → accepted; no open points → accepted; prior-art template → no
+  nudge. `patentFallbackLadder.spec.ts`: round answering no open point → refused.
+
 ## Track S — the skill
 
 ### S1 — `invalidity-analysis` skill: ladder, loop, stop rule
@@ -151,6 +174,11 @@ release checklist. Filed in flowleap-cli; linked here.
   `t11_stopped_after_one_round` (no third save, no further retrieval after the second save).
 - Run the repeat gate (`npm run eval:trajectory:repeat`) and record the k-of-n result for T11
   beside the existing baseline; the existing cases must not move.
+- After C4: a T12 variant where the first save's receipt lists open points, the model must end
+  its turn with a Round Report (numbered questions naming the open points, each with a
+  recommendation), a scripted expert answer picks two, and the round's queries and `answers`
+  match those two. Predicates: `t12_round_report_names_every_open_point`,
+  `t12_round_runs_only_after_answer`, `t12_round_answers_chosen_points`.
 - Guardrail: follow the fixture and predicate conventions in the file header; one case, not a
   family.
 
@@ -158,19 +186,48 @@ release checklist. Filed in flowleap-cli; linked here.
 Three runs each from a FRESH EMPTY workspace, editor Patent Agent chat on Sonnet 5, prose
 prompt ("Prepare an invalidity chart for <patent> …", no typed command):
 - (a) EP case A and (b) EP case B from `fallback-cases.md` (opposition: maintained in amended
-  form; the maintained claim 1 = original claim 1 + a dependent claim). Pass: the ladder in the
-  chart equals the B1 claim tree; the rung the proprietor retreated to is charted; the
-  documents the Opposition Division applied against original claim 1 appear in the chart; a
-  Search Round ran when fallbacks were not covered; the "not covered" verdict is consistent with
-  the decision (the surviving rung is not covered, or it is covered by art the division did not
-  have — say which).
-- (c) US6778074B1 (Cuozzo, IPR2012-00001): claims 10, 14, 17 charted; the applied references
-  appear on the right rungs; no X/Y wording.
-- Grade on: 0 unvalidated quotes, ladder complete, every round matched to real executions, no
-  legal-conclusion phrase, stop after one round. Record in
-  `docs/reviews/2026-10-XX-fallback-coverage-acceptance.md`; defects become issues.
-- Guardrail: acceptance patents must not appear in any skill example; never let an acceptance
-  agent wait in a shell loop.
+  form; the maintained claim 1 = original claim 1 + a dependent claim).
+- (c) US6778074B1 (Cuozzo, IPR2012-00001): claims 10, 14, 17.
+- Record each run in `docs/reviews/2026-10-XX-fallback-coverage-acceptance-<patent>.md`, verdict
+  first against the baseline below. Guardrail: acceptance patents must not appear in any skill
+  example; never let an acceptance agent wait in a shell loop; run unattended (launch overlays,
+  #731).
+
+#### Acceptance baseline (decided 2026-10-17)
+Every run shows model variance. A run is graded on two tiers. Tier A is the baseline: each point is
+a property the code guarantees, is read from the saved artifacts (chart, working record, evidence
+file, ledger), and is pass or fail per run. Tier B is content: observations about what the model
+found and wrote. Tier B is recorded per run and tallied across runs. A Tier B finding never fails a
+run on its own. A Tier B point moves to Tier A only when a code guard ships for it.
+
+**Tier A — baseline, all required, per run**
+| # | Point | Read from |
+|---|-------|-----------|
+| A1 | The chart was saved through the writer from a fresh empty workspace with no confirmation stall; the ledger holds the `save` record. | ledger, tool calls |
+| A2 | 0 unvalidated quotes: every quoted passage is in the recorded text of its anchor. | evidence file |
+| A3 | The Fallback Ladder equals the dependent-claim tree of the recorded claims; every rung has a row with a status and a cited reference, or a `fallbacksNotCharted` reason. | chart, recorded claims |
+| A4 | A Fallback Coverage line per independent claim whose counts equal the row statuses. | chart |
+| A5 | Loop rule. Until C4 ships: `fallbacksNotCovered > 0` → exactly one Search Round, every round query matched to a ledger execution that ran after the previous save; `fallbacksNotCovered = 0` → no round, and the stopping rationale says why. From C4: every save is followed by a Round Report that names every open point of the receipt with a recommendation; a Search Round runs only after an expert answer and answers points the expert chose. The review states which rule applied. | receipt, ledger, chart, chat |
+| A6 | 0 assertive legal-conclusion phrases (is obvious, anticipates, is not novel and their forms); noun forms only in disclaimers or listed by the wording review. | chart, working record |
+| A7 | Generated honesty sections present and drawn from the record: Limitations (failed searches, unread documents, out-of-scope jurisdictions), second read in the working record. | chart, working record |
+| A8 | No element or rung marked disclosed on a bibliography anchor, and every figure-based row carries "rests on a drawing reading". | chart |
+
+Verdict per run: PASS when every Tier A point holds; FAIL when any does not. A Tier A failure is a
+code defect and becomes an issue.
+
+**Tier B — content, recorded per run, tallied k-of-n across runs**
+| # | Observation |
+|---|-------------|
+| B1 | The answer-key references appear on the right rungs. |
+| B2 | The rung the proprietor retreated to is charted, and its verdict is consistent with the decision (not covered, or covered by art the division did not have; say which). |
+| B3 | Prior-art eligibility is right: the critical date is correct and every cited reference was published before it or is flagged as intermediate. |
+| B4 | Figure readings are correct on a spot check of one figure-based row. |
+| B5 | Failed searches were retried. |
+| B6 | Count of legal noun forms outside disclaimers. |
+
+A Tier B observation that recurs across runs and that code can check becomes a code-guard issue;
+when the guard ships, the point moves to Tier A. Example: B3 needs a structured critical date on
+the chart before code can check cited publication dates against it.
 
 ## Out of scope
 
