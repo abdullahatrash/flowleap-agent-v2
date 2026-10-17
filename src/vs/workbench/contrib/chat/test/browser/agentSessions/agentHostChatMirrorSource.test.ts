@@ -146,6 +146,36 @@ suite('Editor chat mirror converter', () => {
 		});
 	});
 
+	test('marks an editor terminal tool as a terminal tool in every state, so a Viewer keeps it after it completes (C3)', () => {
+		const terminal = (toolCallId: string, state: Partial<IChatToolInvocation.State> & { type: IChatToolInvocation.StateKind }) => ({
+			kind: 'toolInvocation',
+			toolCallId,
+			toolId: 'run_in_terminal',
+			invocationMessage: 'Running `echo c3-ok`',
+			toolSpecificData: { kind: 'terminal', language: 'sh', commandLine: { original: 'echo c3-ok' }, terminalCommandOutput: { text: 'c3-ok' } },
+			state: observableValue<IChatToolInvocation.State>('state', state as IChatToolInvocation.State),
+		}) as unknown as IChatProgressResponseContent;
+		const response = new FakeResponse([
+			terminal('tc-pending', { type: IChatToolInvocation.StateKind.WaitingForConfirmation, confirmationMessages: { title: 'Run zsh command?', message: 'echo c3-ok' } }),
+			terminal('tc-done', { type: IChatToolInvocation.StateKind.Completed, confirmed: { type: ToolConfirmKind.UserAction } }),
+		], true);
+		const model = { getRequests: () => [request('req-1', 'Run it', response)] } as unknown as IChatModel;
+
+		const [turn] = mirroredChatFromModel('chat', model).turns;
+		response.dispose();
+
+		assert.deepStrictEqual(turn.responseParts.filter(part => part.kind === ResponsePartKind.ToolCall).map(part => part.kind === ResponsePartKind.ToolCall && {
+			id: part.toolCall.toolCallId,
+			status: part.toolCall.status,
+			kind: part.toolCall._meta?.['toolKind'],
+			input: part.toolCall.status === 'streaming' ? undefined : part.toolCall.toolInput,
+			output: part.toolCall.status === 'completed' ? part.toolCall.content : undefined,
+		}), [
+			{ id: 'tc-pending', status: 'pending-confirmation', kind: 'terminal', input: '{"command":"echo c3-ok"}', output: undefined },
+			{ id: 'tc-done', status: 'completed', kind: 'terminal', input: '{"command":"echo c3-ok"}', output: [{ type: 'text', text: 'c3-ok' }] },
+		]);
+	});
+
 	test('splits finished turns from the running one, leaves hidden requests out and keeps system-initiated ones as agent turns', () => {
 		const done = new FakeResponse([markdown('one')], true);
 		const running = new FakeResponse([markdown('partial')], false);

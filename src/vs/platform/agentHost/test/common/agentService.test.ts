@@ -8,6 +8,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { IConfigurationService } from '../../../configuration/common/configuration.js';
 import { AgentSession, GITHUB_COPILOT_PROTECTED_RESOURCE, GITHUB_REPO_PROTECTED_RESOURCE, protectedResourcesRequireGitHubCopilotSignIn } from '../../common/agent.js';
+import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID } from '../../common/agentHostChatMirror.js';
 import { AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostOTelEnvVars, buildAgentHostOTelEnv, CodexPreferAgentHostEditorSettingId, isAgentEnabled, isCopilotAgentEnabled, readAgentHostOTelPolicySettings, sanitizeAgentHostOTelPolicySettings, shouldSurfaceLocalAgentHostProvider } from '../../common/agentService.js';
 import type { ProtectedResourceMetadata } from '../../common/state/protocol/state.js';
 import { buildChatUri, buildDefaultChatUri, resolveChatUri } from '../../common/state/sessionState.js';
@@ -109,6 +110,18 @@ suite('shouldSurfaceLocalAgentHostProvider', () => {
 			agentsCodex: true,
 			editorCodex: true,
 			otherProvider: true,
+		});
+	});
+
+	test('never surfaces the flowleap-chat agent in a local window (PRD 0018 C3)', () => {
+		const configurationService = new TestConfigurationService();
+
+		assert.deepStrictEqual({
+			agentsWindow: shouldSurfaceLocalAgentHostProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID, configurationService, true),
+			editorWindow: shouldSurfaceLocalAgentHostProvider(FLOWLEAP_CHAT_AGENT_PROVIDER_ID, configurationService, false),
+		}, {
+			agentsWindow: false,
+			editorWindow: false,
 		});
 	});
 

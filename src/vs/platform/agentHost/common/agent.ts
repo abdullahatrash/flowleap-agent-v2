@@ -1384,6 +1384,20 @@ export interface IAgent {
 	readonly sessionTitlePolicy?: IAgentSessionTitlePolicy;
 
 	/**
+	 * FlowLeap (PRD 0018 C3): for a provider whose sessions mirror chats that live elsewhere
+	 * (`isMirroredSessionProvider`), whether it offers `session` now. The host lists only the
+	 * sessions it offers; their registrations and catalog rows stay.
+	 */
+	offersSession?(session: URI): boolean;
+
+	/**
+	 * FlowLeap (PRD 0018 C3): sessions this provider no longer offers (the window that owned them
+	 * stopped publishing). The host drops their live state and tells clients they are gone; it
+	 * does not delete them, so they come back when the provider offers them again.
+	 */
+	readonly onDidRetractSessions?: Event<readonly URI[]>;
+
+	/**
 	 * Optionally warms metadata for a burst of {@link getChatMetadata} calls; the expected count lets providers avoid bulk reads for small bursts.
 	 * Callers release the returned lease after the burst; providers may retain a bounded cache across bursts.
 	 */

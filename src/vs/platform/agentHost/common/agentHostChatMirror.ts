@@ -25,11 +25,30 @@ import type { ResponsePart, Turn } from './state/sessionState.js';
 export const FLOWLEAP_CHAT_AGENT_PROVIDER_ID = 'flowleap-chat';
 
 /**
- * Whether the agent host registers the `flowleap-chat` agent and windows publish their chats.
- * Off until C3 (#720) hides the agent in the local Agents Window, which would otherwise list every
- * editor chat a second time (the Local provider already lists them).
+ * The `ctx` of the main process's connection to the agent host utility process (see
+ * `electronAgentHostStarter.ts`). Every other connection is a renderer window, whose `ctx` is its
+ * client id.
  */
-export const FLOWLEAP_CHAT_MIRROR_ENABLED = false;
+export const AGENT_HOST_MAIN_PROCESS_CLIENT_CTX = 'agentHost';
+
+/**
+ * Whether a connection to the agent host is a renderer window (spike gap 6, PRD 0018 C3). Only a
+ * window has a chat view and serves the reverse channel; the main process does not, and a call
+ * to it times out.
+ */
+export function isRendererWindowConnection(ctx: unknown): ctx is string {
+	return typeof ctx === 'string' && ctx.length > 0 && ctx !== AGENT_HOST_MAIN_PROCESS_CLIENT_CTX;
+}
+
+/**
+ * Whether the sessions of `provider` are mirrors of chats that live elsewhere (PRD 0018 C3). The
+ * agent host lists such a session only while its provider offers it now
+ * (`IAgent.offersSession`): when the window that owns the chat stops publishing, or the provider
+ * is not registered, the session is not listed, even though its catalog row stays.
+ */
+export function isMirroredSessionProvider(provider: string | undefined): boolean {
+	return provider === FLOWLEAP_CHAT_AGENT_PROVIDER_ID;
+}
 
 /** The version of {@link ChatMirrorPublication}. The agent host drops other versions. */
 export const CHAT_MIRROR_PUBLICATION_VERSION = 1;
@@ -179,6 +198,18 @@ export class AgentHostChatMirrorRegistry extends Disposable {
 	/** A window stopped publishing: its chats are gone. */
 	readonly onDidWithdraw = this._onDidWithdraw.event;
 
+	private readonly _onDidChangePublishers = this._register(new Emitter<void>());
+	/**
+	 * A window started or stopped publishing. It fires after {@link onDidChangeChats} or
+	 * {@link onDidWithdraw}, so that listeners of those see the change first.
+	 */
+	readonly onDidChangePublishers = this._onDidChangePublishers.event;
+
+	/** Whether at least one window publishes now. */
+	get hasPublishers(): boolean {
+		return this._publishers.size > 0;
+	}
+
 	get publishers(): Iterable<IChatMirrorPublisher> {
 		return this._publishers.values();
 	}
@@ -210,8 +241,12 @@ export class AgentHostChatMirrorRegistry extends Disposable {
 		switch (publication.kind) {
 			case 'chats': {
 				const publisher: IChatMirrorPublisher = { clientId: publication.clientId, window, chats: publication.chats };
+				const added = !this._publishers.has(publication.clientId);
 				this._publishers.set(publication.clientId, publisher);
 				this._onDidChangeChats.fire(publisher);
+				if (added) {
+					this._onDidChangePublishers.fire();
+				}
 				return true;
 			}
 			case 'chat':
@@ -229,6 +264,7 @@ export class AgentHostChatMirrorRegistry extends Disposable {
 	private _withdraw(clientId: string): void {
 		if (this._publishers.delete(clientId)) {
 			this._onDidWithdraw.fire(clientId);
+			this._onDidChangePublishers.fire();
 		}
 	}
 }

@@ -63,8 +63,8 @@ import { markNodeCompileCacheReady } from '../../../base/node/nodeCompileCache.j
 import { IRemoteAccessHostConfig, IRemoteAccessHostStatus, REMOTE_ACCESS_STOPPED_STATUS } from '../common/remoteAccessHost.js';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '../common/state/protocol/version/registry.js';
 import { RemoteAccessHostController } from './remoteAccessHostController.js';
-import { FlowLeapChatMirrorAgent } from './flowleapChatMirrorAgent.js';
-import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, FLOWLEAP_CHAT_MIRROR_ENABLED, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
+import { FlowLeapChatAgentRegistration, FlowLeapChatMirrorAgent } from './flowleapChatMirrorAgent.js';
+import { AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL, AgentHostChatMirrorRegistry, createAgentHostChatMirrorWindow, isRendererWindowConnection, type ChatMirrorPublication } from '../common/agentHostChatMirror.js';
 
 // Entry point for the agent host utility process.
 // Sets up IPC, logging, and registers agent providers (Copilot).
@@ -180,11 +180,15 @@ async function startAgentHost(): Promise<void> {
 		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
 		}
-		// FlowLeap (PRD 0018 C2): the editor chat bridge agent. It runs no model. Off until C3 (#720)
-		// hides it in the local Agents Window.
-		if (FLOWLEAP_CHAT_MIRROR_ENABLED) {
-			providerService.registerProvider(instantiationService.createInstance(FlowLeapChatMirrorAgent, chatMirrorRegistry));
-		}
+		// FlowLeap (PRD 0018 C2/C3): the editor chat bridge agent. It runs no model. It exists only
+		// while a window publishes, which a window does only while Remote Access is on (D5). The
+		// local Agents Window never shows it (`shouldSurfaceLocalAgentHostProvider`).
+		disposables.add(new FlowLeapChatAgentRegistration(
+			chatMirrorRegistry,
+			providerService,
+			() => instantiationService.createInstance(FlowLeapChatMirrorAgent, chatMirrorRegistry),
+			logService,
+		));
 		// Codex registration is one-way (register-on-enable): the env-var toggle
 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.
 		// Disabling requires an agent host restart.
@@ -293,8 +297,11 @@ async function startAgentHost(): Promise<void> {
 					const byokLmConnection = createAgentHostClientByokLmConnection(getChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL));
 					connectionStore.add(byokLmBridgeRegistry.register(clientId, byokLmConnection));
 				}
-				// Lazy: the agent host calls a window's mirror channel only after that window published.
-				connectionStore.add(chatMirrorRegistry.attachWindow(clientId, createAgentHostChatMirrorWindow(getChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL))));
+				// Renderer windows only (spike gap 6): the main process has no chat view and no mirror
+				// channel. Lazy: the agent host calls a window's mirror channel only after it published.
+				if (isRendererWindowConnection(clientId)) {
+					connectionStore.add(chatMirrorRegistry.attachWindow(clientId, createAgentHostChatMirrorWindow(getChannel(AGENT_HOST_CLIENT_CHAT_MIRROR_CHANNEL))));
+				}
 				authorityRegistrations.set(connection, connectionStore);
 			};
 			localDataPlaneDisposables.add(server.onDidAddConnection(registerConnection));

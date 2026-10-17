@@ -12,6 +12,7 @@ import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { ILogService } from '../../log/common/log.js';
 import { type AgentProvider, AgentSession, type AuthenticateParams, type AuthenticateResult, type IAgent, type IAgentHostNetworkEndpoint, type IMcpNotification } from '../common/agent.js';
 import type { IAgentHostManagedSettingsDiagnostics } from '../common/agentService.js';
+import { isMirroredSessionProvider } from '../common/agentHostChatMirror.js';
 import { IAgentHostAuthenticationController } from './agentHostAuthenticationService.js';
 import { parseMcpChannelUri } from './shared/mcpCustomizationController.js';
 
@@ -30,6 +31,11 @@ export interface IAgentHostProviderService {
 
 	registerProviderInitializer(initializer: (provider: IAgent) => IDisposable): IDisposable;
 	registerProvider(provider: IAgent): void;
+	/**
+	 * FlowLeap (PRD 0018 C3): removes and disposes a provider that registered at runtime, such as
+	 * the `flowleap-chat` agent, which exists only while a window publishes. No-op when absent.
+	 */
+	unregisterProvider(provider: AgentProvider): void;
 	resolveProvider(provider?: AgentProvider): IAgent | undefined;
 	getProvider(provider: AgentProvider): IAgent | undefined;
 	getProviderForSession(session: URI | string): IAgent | undefined;
@@ -97,7 +103,8 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 			for (const initializer of this._providerInitializers) {
 				registrations.add(initializer(provider));
 			}
-			if (!this._defaultProvider) {
+			// FlowLeap (PRD 0018 C3): a mirror provider runs no session of its own; never the default.
+			if (!this._defaultProvider && !isMirroredSessionProvider(provider.id)) {
 				this._defaultProvider = provider.id;
 			}
 			this._agents.set([...this._providers.values()], undefined);
@@ -116,6 +123,25 @@ export class AgentHostProviderService extends Disposable implements IAgentHostPr
 				this._authenticationReplays.delete(provider.id);
 			}
 		});
+	}
+
+	unregisterProvider(provider: AgentProvider): void {
+		if (!this._providers.has(provider)) {
+			return;
+		}
+		this._logService.info(`Unregistering agent provider: ${provider}`);
+		this._authenticationReplays.delete(provider);
+		this._providerRegistrations.deleteAndDispose(provider);
+		this._providers.deleteAndDispose(provider);
+		for (const [session, owner] of this._sessionToProvider) {
+			if (owner === provider) {
+				this._sessionToProvider.delete(session);
+			}
+		}
+		if (this._defaultProvider === provider) {
+			this._defaultProvider = [...this._providers.keys()].find(id => !isMirroredSessionProvider(id));
+		}
+		this._agents.set([...this._providers.values()], undefined);
 	}
 
 	resolveProvider(provider?: AgentProvider): IAgent | undefined {

@@ -18,6 +18,7 @@ import { extUriIgnorePathCase, isEqual } from '../../../../../../base/common/res
 import { mock, upcastPartial } from '../../../../../../base/test/common/mock.js';
 import { runWithFakedTimers } from '../../../../../../base/test/common/timeTravelScheduler.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
+import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID } from '../../../../../../platform/agentHost/common/agentHostChatMirror.js';
 import { AgentSession, CODEX_AGENT_PROVIDER_ID, type IAgentCreateChatRequestOptions, type IAgentCreateSessionConfig, type IAgentSessionConfigCompletionsParams, type IAgentSessionMetadata } from '../../../../../../platform/agentHost/common/agent.js';
 import { agentSdkSetupStatusKey } from '../../../../../../platform/agentHost/common/agentSdkSetup.js';
 import { AgentHostCodexAgentEnabledSettingId, IAgentHostService } from '../../../../../../platform/agentHost/common/agentService.js';
@@ -1166,6 +1167,27 @@ suite('LocalAgentHostSessionsProvider', () => {
 			provider.getSessions().map(s => s.sessionType).sort(),
 			['claude', 'copilotcli'],
 		);
+	});
+
+	test('hides the flowleap-chat agent and its Editor Chats: they are this window\'s own chats (PRD 0018 C3)', () => {
+		agentHost.setAgents([
+			{ provider: 'copilotcli', displayName: 'Copilot', description: '', models: [] } as AgentInfo,
+			{ provider: 'claude', displayName: 'Claude', description: '', models: [] } as AgentInfo,
+			{ provider: FLOWLEAP_CHAT_AGENT_PROVIDER_ID, displayName: 'Editor Chat', description: '', models: [{ provider: FLOWLEAP_CHAT_AGENT_PROVIDER_ID, id: 'editor', name: 'Model Chosen in the Editor' }] } as AgentInfo,
+		]);
+		const provider = createProvider(disposables, agentHost);
+		fireSessionAdded(agentHost, 'cli-sess', { title: 'CLI', provider: 'copilotcli' });
+		fireSessionAdded(agentHost, 'editor-chat-1', { title: 'Editor chat one', provider: FLOWLEAP_CHAT_AGENT_PROVIDER_ID });
+		fireSessionAdded(agentHost, 'claude-sess', { title: 'Claude', provider: 'claude' });
+		fireSessionAdded(agentHost, 'editor-chat-2', { title: 'Editor chat two', provider: FLOWLEAP_CHAT_AGENT_PROVIDER_ID });
+
+		assert.deepStrictEqual({
+			sessionTypes: provider.sessionTypes.map(t => t.id),
+			sessions: provider.getSessions().map(s => s.sessionType).sort(),
+		}, {
+			sessionTypes: ['copilotcli', 'claude'],
+			sessions: ['claude', 'copilotcli'],
+		});
 	});
 
 	test('session icons match the session type icon', () => {
