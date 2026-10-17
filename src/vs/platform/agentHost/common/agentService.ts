@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from './remoteAccessHost.js';
-import type { ChatMirrorPublication } from './agentHostChatMirror.js';
+import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID, type ChatMirrorPublication } from './agentHostChatMirror.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
 import { Event } from '../../../base/common/event.js';
@@ -309,6 +309,11 @@ export function affectsAgentHostProviderPreference(event: IConfigurationChangeEv
 
 export function shouldSurfaceLocalAgentHostProvider(provider: AgentProvider, configurationService: IConfigurationService, isSessionsWindow: boolean): boolean {
 	switch (provider) {
+		// FlowLeap (PRD 0018 C3, spike gap 7): the Editor Chats this window already shows. Only a
+		// remote Viewer lists them, through the `remoteAgentHost` provider. Hiding the agent here
+		// also keeps its pseudo model out of this window's language models and model picker.
+		case FLOWLEAP_CHAT_AGENT_PROVIDER_ID:
+			return false;
 		case CLAUDE_AGENT_PROVIDER_ID:
 			return configurationService.getValue<boolean>(AgentHostClaudeAgentEnabledSettingId) !== false;
 		case CODEX_AGENT_PROVIDER_ID:

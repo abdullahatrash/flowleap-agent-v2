@@ -32,6 +32,7 @@ import { ILogService, NullLogService } from '../../../../../../platform/log/comm
 import { NullManagedSettingsService } from '../../../../../../platform/policy/common/copilotManagedSettings.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IAgentCreateSessionConfig, IAgentHostService, IAgentSessionMetadata, AgentSession } from '../../../../../../platform/agentHost/common/agentService.js';
+import { FLOWLEAP_CHAT_AGENT_PROVIDER_ID } from '../../../../../../platform/agentHost/common/agentHostChatMirror.js';
 import type { ChatInputRequestWithPlanReview } from '../../../../../../platform/agentHost/common/agentHostPlanReview.js';
 import { agentHostAuthority, createAgentHostResourceUriMapper, fromAgentHostUri, identityAgentHostResourceUriMapper, toAgentHostUri } from '../../../../../../platform/agentHost/common/agentHostUri.js';
 import { withChatInputState } from '../../../../../../platform/agentHost/common/meta/agentHostChatInputState.js';
@@ -11870,6 +11871,33 @@ suite('AgentHostChatContribution', () => {
 				},
 			]);
 			assert.deepStrictEqual(chatSessionItemControllers.map(c => c.type), []);
+		});
+
+		test('never registers the flowleap-chat agent or its pseudo model in a local window (PRD 0018 C3)', () => {
+			const vendors: string[] = [];
+			const { instantiationService, agentHostService, chatSessionContributions } = createTestServices(disposables, undefined, undefined, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {
+				registerLanguageModelProvider: vendor => {
+					vendors.push(vendor);
+					return toDisposable(() => { });
+				},
+			});
+			disposables.add(instantiationService.createInstance(AgentHostContribution));
+
+			agentHostService.setRootState({
+				agents: [
+					{ provider: 'copilot' as const, displayName: 'Agent Host - Copilot', description: 'test', models: [] },
+					{ provider: FLOWLEAP_CHAT_AGENT_PROVIDER_ID, displayName: 'Editor Chat', description: 'test', models: [{ provider: FLOWLEAP_CHAT_AGENT_PROVIDER_ID, id: 'editor', name: 'Model Chosen in the Editor' }] },
+				],
+				activeSessions: 0,
+			});
+
+			assert.deepStrictEqual({
+				contributions: chatSessionContributions.map(c => c.type),
+				vendors,
+			}, {
+				contributions: ['agent-host-copilot'],
+				vendors: ['agent-host-copilot'],
+			});
 		});
 
 		test('Agent Host registrations follow enablement in both directions', () => {
