@@ -1306,13 +1306,39 @@
                   "type": "string",
                   "enum": [
                     "feature",
-                    "combination"
-                  ]
+                    "combination",
+                    "fallback"
+                  ],
+                  "description": "fallback is invalidity-claim-chart only: one rung of the Fallback Ladder, charting only the limitation that fallback adds, with the same status, sourceAnchors, evidence, elements and gap as a feature row. A dependent-claim fallback gives claimNumber (the dependent claim) and fallbackOf (the independent claim); a description-supported fallback gives no claimNumber, fallbackOf and basis."
                 },
                 "claimNumber": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"). The chart's header states the distinct claims its rows name. find-better-report: required on every row; the independent claim of the target patent this element belongs to."
+                  "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"); on a fallback row, the dependent claim it charts, which must be a rung of fallbackOf's Fallback Ladder as derived from the challenged patent's claims recorded by get_patent_details. The chart's header states the distinct claims its rows name. find-better-report: required on every row; the independent claim of the target patent this element belongs to."
+                },
+                "fallbackOf": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "invalidity-claim-chart, kind fallback only: the independent claim this fallback falls back from; it must have feature rows in this chart."
+                },
+                "basis": {
+                  "type": "object",
+                  "description": "invalidity-claim-chart, description-supported fallback only (no claimNumber): the challenged patent's description passage that supports the fallback. The quote is checked verbatim against the recorded text at anchor, and anchor must be a description anchor of the challenged patent.",
+                  "properties": {
+                    "anchor": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "quote": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "anchor",
+                    "quote"
+                  ],
+                  "additionalProperties": false
                 },
                 "elements": {
                   "type": "array",
@@ -1627,6 +1653,88 @@
                 "sourceAnchors",
                 "gap",
                 "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "fallbacksNotCharted": {
+            "type": "array",
+            "description": "invalidity-claim-chart: rungs of the Fallback Ladder the chart does not chart, each with the reason (e.g. \"claim 9 is a use claim outside the attack\"). Every rung under a charted independent claim has exactly one fallback row or one entry here.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claimNumber": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "claimNumber",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rounds": {
+            "type": "array",
+            "description": "invalidity-claim-chart: each Search Round run for the fallbacks the last saved chart left not covered. targets are claim numbers or the feature of a description fallback; every query must match a tool execution recorded this session (same tool name, same query text, whitespace aside), else the save is refused.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "round": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "targets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "queries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tool": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The tool the query ran through, e.g. search_patents."
+                      },
+                      "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The query exactly as it ran."
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Hits returned, 0 included."
+                      }
+                    },
+                    "required": [
+                      "tool",
+                      "query"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "outcome": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "What the round changed in the chart, or that it found nothing new."
+                }
+              },
+              "required": [
+                "round",
+                "targets",
+                "queries",
+                "outcome"
               ],
               "additionalProperties": false
             }
