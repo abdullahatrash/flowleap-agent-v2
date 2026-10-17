@@ -462,8 +462,9 @@ unchanged); T7 `P P P` (improvement, not banked). T1 `F F P` = 1/3 against expec
 T1 is model drift, not this change: a T1-only probe on E1's branch gave `F F F`, and a control
 probe on unchanged main the same hour gave `F F F` too (every failure is the old shape: the model
 loops on `uspto_api_guide` and hits the 8-round cap before the web fallback). Its baseline entry
-stays `PASS` with the September 2/3 margin on record; re-baseline it deliberately in its own
-commit, not here.
+is re-recorded as expected `FAIL` (open debt, #734) in its own commit, so the gate can again
+answer yes or no for #725 and the skills chain; it flips back to `PASS` when a T1-only probe lands
+at 3/3 after the #734 fix.
 
 ### Baseline: key-gate suite (2026-08-07, same model)
 

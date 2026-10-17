@@ -14,9 +14,9 @@
 	"notes": "Re-recorded on sonnet-5 with the #263 harness fix: the max_rounds wrap-up turn now carries an explicit user nudge and retries once on empty content. Before the fix, sonnet-5 returned EMPTY finalText on 7 of 9 cases at the cap, so every narration rubric graded noise — do not compare against anything recorded before 2026-08-21. DEFAULT_MAX_ROUNDS stays 8: raising it to 12 changed case semantics (t7_bounded_engagement's ≤16-call cap is calibrated to 8 rounds; T3a's eventual success drowned in the extra rounds). Sonnet-5 samples void occasionally (judge parse and provider errors) — the VOID rules apply, re-draw, never count as case failures. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:trajectory:repeat run. 2026-09-02: full gate re-run after the sourceAttributionRules block (#300): every case matched except T2 (see its note). Prompt caching added to the provider the same day; a full gate before caching cost ~$20 on this key.",
 	"cases": {
 		"T1": {
-			"expected": "PASS",
-			"observed": "2/3 (2026-09-02)",
-			"note": "US claim full text: backend route drops the record; recover via the web fallback. History (#200/#201 formatJsonForModel truncation belief): see git."
+			"expected": "FAIL",
+			"observed": "0/3 on unchanged main (2026-10-17); 2/3 at record time (2026-09-02)",
+			"note": "Open debt (#734): model drift, not a repo change. Since 2026-10-17 sonnet-5 loops on uspto_api_guide and hits the 8-round cap before the web fallback. Was: US claim full text: backend route drops the record; recover via the web fallback. History (#200/#201 formatJsonForModel truncation belief): see git. Flip back to PASS when a T1-only probe lands at 3/3 after the #734 fix."
 		},
 		"T2": {
 			"expected": "PASS",
