@@ -150,9 +150,11 @@ WebCrypto; ids as their 16 raw UUID bytes.
 | Data frame | `[0x02][counter, 8 bytes big-endian][AES-256-GCM ciphertext ‖ tag]`, nonce = `[direction, 4 bytes: 1 Host→Viewer, 2 Viewer→Host][counter, 8]`, aad = pairId |
 | Plaintext | `[flags][chunk]`, flags bit 0 = last chunk of one AHP message; chunks ≤ 1,000,000 bytes so a frame stays under the 1 MiB Relay limit |
 
-Order: **the Viewer sends its handshake first**; the Host answers each Viewer handshake with a
-fresh ephemeral key and opens a new AHP stream for that pair (any older stream for the pair
-closes). Counters start at 0 per direction per handshake and must arrive in order, so a
+Order: **the Viewer sends its handshake first**, on its `welcome` when `peer.online` is true and
+on every `{"t":"host","online":true}`; the Host answers each Viewer handshake with a fresh
+ephemeral key and opens a new AHP stream for that pair (any older stream for the pair closes).
+The Host does nothing on `{"t":"viewer","online":true}` and closes the pair's stream on
+`online:false`. Counters start at 0 per direction per handshake and must arrive in order, so a
 replayed, reordered or reflected frame fails. The Host sends `hello.ahp` as the AHP version
 strings it supports (`SUPPORTED_PROTOCOL_VERSIONS`, e.g. `["0.9.0", "0.8.0", …]`).
 
