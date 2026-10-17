@@ -21,6 +21,7 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IActivationTelemetryService } from '../../patentai/vscode-node/activationTelemetryService';
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { deriveFallbackLadder, fallbackCoverage, fallbacksNotCovered } from './patentFallbackLadder';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
 import { baselineIntegrityNote, baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields, incompleteSearch } from './patentFindBetter';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
@@ -33,7 +34,7 @@ import { buildSecondReadRequests, notJudgedFigureElements, parseSecondReadVerdic
 import { CopilotToolMode, ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildPatentReport, contentRequirementError, PatentReportTemplate } from '../common/patentReportTemplates';
 import { extractFigures, figureProvenance, figureSentence, ftoProvenanceResult, renderFtoAppendix, renderLandscapeAppendix } from '../common/patentReportProvenance';
-import { priorArtReportReceipt } from '../node/priorArtReportCompletion';
+import { priorArtReportReceipt, ReceiptFallbacks } from '../node/priorArtReportCompletion';
 import { assertFileOkForTool } from '../node/toolUtils';
 import { DRAFTING_FILE_NAMES, matchDraftingPath, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { saveDraftApplication } from './draftApplicationSave';
@@ -162,6 +163,15 @@ function networkFailure(response: ChatResponse | Error): string | undefined {
  * that record, so the save states the contract the summary has to keep.
  */
 const SUMMARY_CONTRACT = 'Chat summary contract: repeat each coverage row\'s status word exactly (supported / partial / unresolved), do not add novelty, anticipation, obviousness or teaching-away conclusions, and state the retrieved-but-not-cited count and any untranslated documents. The summary must not be more certain than the saved report.';
+
+/**
+ * The Fallback Coverage counts an invalidity chart's receipt states (PRD 0024 C3): the fallbacks the
+ * validated rows leave not covered, their names, and the Search Rounds the chart records.
+ */
+function receiptFallbacks(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, challengedPublication: string | undefined): ReceiptFallbacks {
+	const coverage = fallbackCoverage(review, deriveFallbackLadder(snapshot, challengedPublication));
+	return { fallbacksNotCovered: fallbacksNotCovered(coverage), rounds: review.rounds?.length ?? 0, notCovered: coverage.flatMap(claim => claim.notCovered) };
+}
 
 /**
  * The summary contract of a Find Better report, with the numbers the summary must repeat: the counts
@@ -375,9 +385,12 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const ignored = findBetter ? ignoredNumericFields(options.input) : [];
 			const integrityNote = findBetter ? baselineIntegrityNote(input.baseline) : undefined;
 			const sourceResult = findBetter ? `\nExaminer Baseline source: ${baselineSource(input)}.${integrityNote ? ` ${integrityNote}` : ''}` : '';
+			// An invalidity chart's receipt states its Fallback Coverage, so the completion guard can ask
+			// for the one Search Round without reading the report.
+			const fallbacks = snapshot && variant === 'invalidity' ? receiptFallbacks(input, snapshot, input.challengedPublication ?? options.input.matter) : undefined;
 			const ignoredResult = ignored.length ? `\nIgnored model-supplied numeric field(s): ${ignored.join(', ')}. A Find Better report counts disclosed elements from the validated rows only; no model-supplied number reaches the report.` : '';
 			return new LanguageModelToolResult([
-				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName, objectedSaves)}${sourceResult}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
+				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName, objectedSaves)}${sourceResult}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument, fallbacks)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))
 			]);
 
 		} catch (error) {

@@ -702,6 +702,38 @@ describe('candidate report save path', () => {
 				receipts: false,
 			});
 		});
+
+		it('states the Fallback Coverage counts on the receipt line, which the completion check reads for one Search Round', async () => {
+			// The challenged patent now has one rung: claim 2 falls back from claim 1.
+			const laddered: IPatentExecutionLedger = {
+				...ledger,
+				read: async () => {
+					const snapshot = await ledger.read(undefined);
+					return {
+						...snapshot,
+						executions: [...snapshot.executions, {
+							id: 'challenged-dependent', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP2000000A1'], sources: [
+								{ anchor: 'EP2000000A1:claims:2:en', text: '2. The quick release according to claim 1, wherein the lever arm is captive.', reference: { publicationNumber: 'EP2000000A1', section: 'claims', claimNumber: '2' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+							],
+						}],
+					};
+				},
+			};
+			const fallback = { feature: 'Claim 2 (depends on 1) — added limitation: the lever arm is captive', claimNumber: '2', fallbackOf: '1', kind: 'fallback' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'No cited passage makes the lever arm captive; figures not consulted: synthetic fixture with no drawings.' };
+			const charted = { ...input, coverage: [...input.coverage, fallback] };
+			const { tool, files } = setup(laddered);
+			const result = await tool.invoke({ input: charted, toolInvocationToken: undefined }, CancellationToken.None);
+			const message = (result.content[0] as LanguageModelTextPart).value;
+			const receipt = message.split('\n').find(line => line.startsWith('Prior-art artifact receipt: ')) ?? message;
+			const turn: ReportCompletionTurn = { message: 'Build the invalidity chart for EP2000000A1 and save /workspace/invalidity.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(charted) }] }], results: { write: result } };
+			expect({
+				counts: receipt.slice(receipt.indexOf(' fallbacksNotCovered=')),
+				completion: await checkPriorArtReportCompletion([], turn, files),
+			}).toEqual({
+				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
+				completion: 'The saved chart leaves 1 fallbacks not covered (2). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.',
+			});
+		});
 	});
 
 	describe('find-better report save path', () => {
