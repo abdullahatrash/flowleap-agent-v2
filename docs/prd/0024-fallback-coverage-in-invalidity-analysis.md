@@ -1,6 +1,6 @@
 # PRD 0024 — Fallback Coverage in Invalidity Analysis
 
-**Status:** ACTIVE 2026-10-17 — ADR 0016 accepted; issues filed per slice below (numbers in the Status line of each slice once filed)
+**Status:** ACTIVE 2026-10-17 — ADR 0016 accepted (#705); issues: C1 #706, C2 #707, C3 #708, S1 #709, E1 #710, E2 #711; S2 = flowleap-cli follow-up
 **Date:** 2026-10-17
 **Base:** main at `62638e93f24` (after #700)
 **Decides:** nothing new — executes ADR 0016.
