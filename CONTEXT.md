@@ -334,6 +334,32 @@ terms before running it; the working record keeps the version that ran.
 _Avoid_: "the query" when several statements exist per run; shipping a statement without its
 **Discriminating Term**.
 
+**Fallback Ladder**:
+The ordered set of fallback positions of one independent claim of a challenged patent: every
+dependent claim that depends on it, directly or through other dependent claims, each with the
+limitation it adds, in claim order. Computed in code from the challenged patent's own claims as
+recorded in the execution ledger; a dependent claim that refers to several parents is a rung
+under each of them. An Invalidity Analysis charts every rung or names why it did not (ADR 0016).
+_Avoid_: a ladder the model typed from memory; "the dependent claims" without their chain.
+
+**Fallback Coverage**:
+Per independent claim, the count of Fallback Ladder rungs whose added limitation the cited art
+discloses ("fallbacks: k of j covered; not covered: claims 3, 5"), read off validated chart rows
+exactly as the element count is. A model-proposed description-supported fallback counts only when
+its basis quote of the challenged patent validates. "Not covered" after a Search Round is a
+complete result, not a failure.
+_Avoid_: "fallback strength" or any model-rated score; reading "covered" as anticipation or
+obviousness (the chart states neither).
+
+**Search Round**:
+One pass of the invalidity search aimed only at the fallbacks the last saved chart left not
+covered: new Discriminating Terms for each added limitation, the skill's search ladder, and a
+re-save. Recorded in the chart as `rounds[]`; each query must match a tool execution in the
+ledger or the writer refuses the save. The completion guard asks for one Search Round when
+fallbacks are not covered and none has run; after it, an honest "not covered" is final.
+_Avoid_: a round the skill text promises but the chart does not record; repeating searches to
+pass validation.
+
 ## UPC practice
 
 **UPC Case**:
