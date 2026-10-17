@@ -178,4 +178,6 @@ dep-lists), and the `mainImpl` bootstrap entry in #490. Published 2026-10-05 09:
 without `--clean-old` (#494). Open follow-ups: #489, #493, #494, #495.
 
 ### Phase B
-B1 done 2026-10-17 (Q24 = both; contract written). B0 pending the chat-adapter spike.
+B1 done 2026-10-17 (Q24 = both; contract written). B0 pending the chat-adapter spike. B4 built 2026-10-17 (#482): `docs/remote-access/VIEWER.md`; proven
+locally against a local Relay and B3's Host transport; the phone, real Clerk sign-in and TLS wait
+for the ops steps and B5.
