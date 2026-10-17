@@ -366,7 +366,9 @@ async function startAgentHost(): Promise<void> {
 	const getRemoteAccessHost = (): RemoteAccessHostController => {
 		if (!remoteAccessHost) {
 			remoteAccessHost = protocolIngressDisposables.add(new RemoteAccessHostController(
-				productService.version,
+				// The Viewer picks its build by this (contract section 3, section 8):
+				// the FlowLeap release, not the upstream package version.
+				productService.flowleapVersion ?? productService.version,
 				SUPPORTED_PROTOCOL_VERSIONS,
 				relayServer => {
 					const handler = instantiationService.createInstance(

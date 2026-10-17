@@ -98,6 +98,12 @@ export interface IDictationRuntimeProductConfig {
 
 export interface IProductConfiguration {
 	readonly version: string;
+	/**
+	 * FlowLeap: the release version (for example `0.9.0`), stamped into the
+	 * built product.json by build/flowleap/stamp-flowleap-version.mjs. `version`
+	 * stays the upstream package version. Absent in dev builds.
+	 */
+	readonly flowleapVersion?: string;
 	readonly date?: string;
 	readonly quality?: string;
 	readonly commit?: string;
