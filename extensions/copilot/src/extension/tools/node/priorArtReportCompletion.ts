@@ -17,15 +17,43 @@ interface ReportReceipt {
 	readonly evidenceDigest: string;
 }
 
+/**
+ * Fallback Coverage of a saved invalidity chart, as its receipt states it (PRD 0024 C3): how many
+ * fallbacks the cited art does not cover, how many Search Rounds the chart records, and which
+ * fallbacks are not covered (claim numbers, or a description fallback's feature).
+ */
+export interface ReceiptFallbacks {
+	readonly fallbacksNotCovered: number;
+	readonly rounds: number;
+	readonly notCovered: readonly string[];
+}
+
 interface ParsedReportReceipt extends ReportReceipt {
+	/** The index of the round that holds the writer call, within its turn. */
+	readonly roundIndex: number;
 	readonly callIndex: number;
+	/** Present only on an invalidity chart's receipt; older receipts and other templates have none. */
+	readonly fallbacks?: { readonly fallbacksNotCovered: number; readonly rounds: number; readonly notCovered: string };
 }
 
 const receiptPrefix = 'Prior-art artifact receipt: ';
+const fallbackFields = ' fallbacksNotCovered=';
+const fallbackFieldsPattern = /^ fallbacksNotCovered=(?<notCoveredCount>\d+) rounds=(?<rounds>\d+) notCovered=(?<notCovered>.*)$/;
 
-/** Bind the report and its evidence revision to the bytes the structured writer actually saved. */
-export function priorArtReportReceipt(report: URI, document: string, evidence: URI, snapshot: string): string {
-	return receiptPrefix + JSON.stringify({ reportUri: report.toString(), reportDigest: sha256Hex(document), evidenceUri: evidence.toString(), evidenceDigest: sha256Hex(snapshot) } satisfies ReportReceipt);
+/** The words that mark the one-round nudge in a round's recorded hook context. */
+const searchRoundNudgeMarker = 'Run one Search Round aimed at those limitations';
+
+/**
+ * Bind the report and its evidence revision to the bytes the structured writer actually saved. An
+ * invalidity chart's receipt also states its Fallback Coverage counts, so the completion guard reads
+ * no file to decide on a Search Round.
+ */
+export function priorArtReportReceipt(report: URI, document: string, evidence: URI, snapshot: string, fallbacks?: ReceiptFallbacks): string {
+	const line = receiptPrefix + JSON.stringify({ reportUri: report.toString(), reportDigest: sha256Hex(document), evidenceUri: evidence.toString(), evidenceDigest: sha256Hex(snapshot) } satisfies ReportReceipt);
+	if (!fallbacks) { return line; }
+	// One line: a description fallback's feature may hold line breaks, which would split the receipt.
+	const notCovered = fallbacks.notCovered.map(entry => entry.replace(/\s+/g, ' ').trim()).filter(Boolean).join(',');
+	return `${line}${fallbackFields}${fallbacks.fallbacksNotCovered} rounds=${fallbacks.rounds} notCovered=${notCovered}`;
 }
 
 
@@ -117,21 +145,67 @@ export async function checkPriorArtReportCompletion(history: readonly ReportComp
 		}
 		return `The report or its evidence companion changed after validation: ${receipt.reportUri}. Its previous validation no longer applies. If this is the requested deliverable, re-save it through write_patent_results with template="${structuredTemplate}" and revised structured evidence. If it was intentionally removed, explain that no validated deliverable remains. Do not restore a deliberately deleted file without user authorization.`;
 	}
-	return undefined;
+	return invalidity ? searchRoundNudge([...activeHistory, current], current, currentReceipts, target) : undefined;
+}
+
+/**
+ * The one Search Round loop of an invalidity chart (ADR 0016 decision 5): when the latest chart saved
+ * in this turn for the requested path leaves fallbacks not covered and records no Search Round, ask
+ * for exactly one round. A chart that records a round is accepted whatever its count, and the nudge
+ * fires at most once per report path within the active request.
+ */
+function searchRoundNudge(activeTurns: readonly ReportCompletionTurn[], current: ReportCompletionTurn, currentReceipts: readonly ParsedReportReceipt[], target: string | undefined): string | undefined {
+	const latest = [...currentReceipts].reverse().find(receipt => !target || matchesPath(receipt.reportUri, target));
+	const fallbacks = latest?.fallbacks;
+	if (!latest || !fallbacks || fallbacks.fallbacksNotCovered === 0 || fallbacks.rounds > 0 || nudgedPaths(activeTurns, current).has(latest.reportUri)) { return undefined; }
+	// The receipt joins the list without spaces; the nudge reads it back with a space after each comma.
+	const notCovered = fallbacks.notCovered.split(',').map(entry => entry.trim()).filter(Boolean).join(', ');
+	return `The saved chart leaves ${fallbacks.fallbacksNotCovered} ${fallbacks.fallbacksNotCovered === 1 ? 'fallback' : 'fallbacks'} not covered (${notCovered}). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; 'not covered' is then final. Do not repeat searches merely to pass validation.`;
+}
+
+/**
+ * The report paths the one-round nudge already covered in the active request, read off the history
+ * alone: a path an earlier turn saved with fallbacks not covered and no round (that turn's guard asked
+ * for the round), and a path whose nudgeable save precedes a round that records the nudge as its hook
+ * context (the guard asked earlier in this turn).
+ */
+function nudgedPaths(activeTurns: readonly ReportCompletionTurn[], current: ReportCompletionTurn): Set<string> {
+	const nudged = new Set<string>();
+	const nudgeable = (receipt: ParsedReportReceipt) => !!receipt.fallbacks && receipt.fallbacks.fallbacksNotCovered > 0 && receipt.fallbacks.rounds === 0;
+	for (const turn of activeTurns) {
+		const turnReceipts = receipts(turn);
+		// Per path, whether its latest save so far in this turn is one the nudge applies to.
+		const pending = new Map<string, boolean>();
+		turn.rounds.forEach((round, roundIndex) => {
+			for (const receipt of turnReceipts.filter(receipt => receipt.roundIndex === roundIndex)) {
+				pending.set(receipt.reportUri, nudgeable(receipt));
+				if (nudgeable(receipt) && turn !== current) { nudged.add(receipt.reportUri); }
+			}
+			if (round.hookContext?.includes(searchRoundNudgeMarker)) {
+				pending.forEach((applies, path) => { if (applies) { nudged.add(path); } });
+			}
+		});
+	}
+	return nudged;
 }
 
 function receipts(turn: ReportCompletionTurn): ParsedReportReceipt[] {
-	return turn.rounds.flatMap(round => round.toolCalls).flatMap((call, callIndex) => {
+	return turn.rounds.flatMap((round, roundIndex) => round.toolCalls.map(call => ({ call, roundIndex }))).flatMap(({ call, roundIndex }, callIndex) => {
 		if (!finalizesStructuredReport(call)) { return []; }
 		const parts = turn.results[call.id]?.content ?? [];
 		return parts.flatMap(part => {
 			if (!isTextPart(part)) { return []; }
 			const line = part.value.split('\n').find(line => line.startsWith(receiptPrefix));
 			if (!line) { return []; }
+			// The JSON holds encoded URIs and hex digests only, so the first fallback field marks its end.
+			const body = line.slice(receiptPrefix.length);
+			const fieldsAt = body.indexOf(fallbackFields);
+			const counts = fieldsAt < 0 ? undefined : fallbackFieldsPattern.exec(body.slice(fieldsAt))?.groups;
 			try {
-				const value: Partial<ReportReceipt> = JSON.parse(line.slice(receiptPrefix.length));
+				const value: Partial<ReportReceipt> = JSON.parse(fieldsAt < 0 ? body : body.slice(0, fieldsAt));
 				if ([value.reportUri, value.reportDigest, value.evidenceUri, value.evidenceDigest].every(field => typeof field === 'string') && value.reportUri && value.evidenceUri && value.reportDigest && value.evidenceDigest) {
-					return [{ reportUri: value.reportUri, reportDigest: value.reportDigest, evidenceUri: value.evidenceUri, evidenceDigest: value.evidenceDigest, callIndex }];
+					const fallbacks = counts ? { fallbacksNotCovered: Number(counts.notCoveredCount), rounds: Number(counts.rounds), notCovered: counts.notCovered } : undefined;
+					return [{ reportUri: value.reportUri, reportDigest: value.reportDigest, evidenceUri: value.evidenceUri, evidenceDigest: value.evidenceDigest, roundIndex, callIndex, fallbacks }];
 				}
 			} catch { /* Older or malformed result: no receipt. */ }
 			return [];

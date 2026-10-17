@@ -8,7 +8,7 @@ import { MockFileSystemService } from '../../../../platform/filesystem/node/test
 import { URI } from '../../../../util/vs/base/common/uri';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { ToolName } from '../../common/toolNames';
-import { checkPriorArtReportCompletion, priorArtReportReceipt, ReportCompletionTurn, requestsPriorArtReport } from '../priorArtReportCompletion';
+import { checkPriorArtReportCompletion, priorArtReportReceipt, ReceiptFallbacks, ReportCompletionTurn, requestsPriorArtReport } from '../priorArtReportCompletion';
 
 const message = 'Search for prior art and save "outputs/研究 review.md".';
 const report = URI.file('/workspace/outputs/研究 review.md');
@@ -158,5 +158,59 @@ describe('prior-art report completion contract', () => {
 		expect(await checkPriorArtReportCompletion([valid], turn([ToolName.GetPatentDetails]), fs)).toContain('no successful structured finalization');
 		const afterSave = { ...valid, rounds: [...valid.rounds, ...turn([ToolName.GetPatentDetails]).rounds] };
 		expect(await checkPriorArtReportCompletion([], afterSave, fs)).toContain('More patent evidence');
+	});
+
+	describe('one Search Round for fallbacks not covered (invalidity chart)', () => {
+		const invalidityRequest = 'Build the invalidity case against EP2000000A1 and save "outputs/研究 review.md".';
+		const nudge = 'The saved chart leaves 2 fallbacks not covered (3, a rubber-lined band). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.';
+		/** A turn that saves the chart once, its receipt stating the given Fallback Coverage counts. */
+		async function chart(fs: MockFileSystemService, fallbacks: ReceiptFallbacks, request = invalidityRequest, template = 'invalidity-claim-chart'): Promise<ReportCompletionTurn> {
+			await fs.writeFile(report, new TextEncoder().encode('Evidence-backed chart'));
+			await fs.writeFile(evidence, new TextEncoder().encode('Snapshot'));
+			return {
+				message: request,
+				rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: '0', name: ToolName.SearchPatents, arguments: '{}' }, { id: '1', name: ToolName.WritePatentResults, arguments: JSON.stringify({ template, coverage: [{ feature: 'Claim 1 — element (a)' }] }) }] }],
+				results: { '1': new LanguageModelToolResult([new LanguageModelTextPart(priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot', fallbacks))]) },
+			};
+		}
+		const notCovered: ReceiptFallbacks = { fallbacksNotCovered: 2, rounds: 0, notCovered: ['3', 'a rubber-lined\nband'] };
+
+		it('asks for one Search Round when fallbacks are not covered and no round ran', async () => {
+			const fs = files();
+			expect(await checkPriorArtReportCompletion([], await chart(fs, notCovered), fs)).toBe(nudge);
+		});
+		it('accepts a chart that records a round, whatever it leaves not covered', async () => {
+			const fs = files();
+			expect(await checkPriorArtReportCompletion([], await chart(fs, { ...notCovered, rounds: 1 }), fs)).toBeUndefined();
+		});
+		it('accepts a chart whose fallbacks are all covered', async () => {
+			const fs = files();
+			expect(await checkPriorArtReportCompletion([], await chart(fs, { fallbacksNotCovered: 0, rounds: 0, notCovered: [] }), fs)).toBeUndefined();
+		});
+		it('never asks for a round on a prior-art or Find Better report with the same receipt fields', async () => {
+			const fs = files();
+			expect({
+				priorArt: await checkPriorArtReportCompletion([], await chart(fs, notCovered, message, 'prior-art-report'), fs),
+				findBetter: await checkPriorArtReportCompletion([], await chart(fs, notCovered, 'Find better art than the examiner for EP2000000A1 and save "outputs/研究 review.md".', 'find-better-report'), fs),
+			}).toEqual({ priorArt: undefined, findBetter: undefined });
+		});
+		it('does not ask again once the nudge fired for the path, in this turn or the next', async () => {
+			const fs = files();
+			const first = await chart(fs, notCovered);
+			// The loop records the nudge on the round that tried to stop; the model then re-saves without a round.
+			const nudged: ReportCompletionTurn = { ...first, rounds: [...first.rounds, { id: 'stop', response: '', toolInputRetry: 0, toolCalls: [], hookContext: `You were about to complete but a hook blocked you with the following message: "${nudge}".` }] };
+			const resaved = await chart(fs, notCovered, 'Continue');
+			const sameTurn: ReportCompletionTurn = { ...nudged, rounds: [...nudged.rounds, ...resaved.rounds.map(round => ({ ...round, id: 'again', toolCalls: round.toolCalls.map(call => ({ ...call, id: 'again-' + call.id })) }))], results: { ...nudged.results, 'again-1': resaved.results['1'] } };
+			expect({
+				sameTurn: await checkPriorArtReportCompletion([], sameTurn, fs),
+				nextTurn: await checkPriorArtReportCompletion([first], resaved, fs),
+			}).toEqual({ sameTurn: undefined, nextTurn: undefined });
+		});
+		it('reads an older receipt without the fallback fields as a plain receipt', async () => {
+			const fs = files();
+			const older = await chart(fs, notCovered);
+			const plain = { ...older, results: { '1': new LanguageModelToolResult([new LanguageModelTextPart(priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot'))]) } };
+			expect(await checkPriorArtReportCompletion([], plain, fs)).toBeUndefined();
+		});
 	});
 });
