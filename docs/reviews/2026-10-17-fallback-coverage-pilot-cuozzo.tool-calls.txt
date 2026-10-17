@@ -1,0 +1,150 @@
+# Evidence appendix: E2 pilot, US6778074B1, 2026-10-17
+# Source: IDE session transcript (copilot-agent jsonl) and debug log. Times are UTC.
+# Part 1: every tool call (arguments cut at 160 characters).
+
+06:41:54 session.start {"sessionId": "46ceaeb0-5688-4a6c-836e-4a5e2cbcb080", "version": 1, "producer": "copilot-agent", "copilotVersion": "0.55.0", "vscodeVersion": "1.127.0", "startTime": "2026-10-17T06:41:54.345Z"}
+06:41:58 CALL read_file {"filePath":"/Users/abdullahatrash/flowleap/wt-e2-pilot/extensions/copilot/assets/skills/invalidity-analysis/SKILL.md","startLine":1,"endLine":400}
+06:42:01 CALL read_file {"filePath":"/Users/abdullahatrash/flowleap/wt-e2-pilot/extensions/copilot/assets/skills/invalidity-analysis/references/fallback-coverage.md","startLine":1,"end
+06:42:05 CALL manage_todo_list {"todoList":[{"id":1,"title":"Phase 1: Fetch target patent, confirm grant/legal status, critical date, prosecution history/baseline","status":"in-progress"},{"i
+06:42:08 CALL get_patent_details {"publicationNumber":"US6778074B1"}
+06:42:08 CALL get_legal_status {"publicationNumber":"US6778074B1"}
+06:42:08 CALL get_patent_family {"publicationNumber":"US6778074B1"}
+06:42:08 CALL examiner_baseline {"publication":"US6778074B1"}
+06:42:18 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+06:42:18 CALL read_file {"filePath":"/private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-cuozzo-ws/references/US
+06:42:43 CALL search_patents {"query":"in=Aumayer and ic=G01P","countries":"all","purpose":"Verify Aumayer GPS speedometer reference used in IPR2012-00001 against US6778074 claim 10"}
+06:42:43 CALL search_patents {"query":"in=Wendt and ti=speedometer","countries":"all","purpose":"Verify Wendt speedometer reference (colored zones) used in IPR2012-00001"}
+06:42:43 CALL search_patents {"query":"in=Evans and ti=speed and ti=warning","countries":"all","purpose":"Verify Evans speed warning device reference used in IPR2012-00001"}
+06:42:53 CALL search_patents {"query":"ic=G01P and ab=speed and ab=limit and ab=global positioning and pd<20020318","countries":"US","purpose":"Find GPS-based speed limit comparator/indicat
+06:42:53 CALL search_patents {"query":"ti=speedometer and ti=colored and pd<20020318","countries":"US","purpose":"Find colored/filtered speedometer display art predating priority date (clai
+06:43:07 CALL search_patents {"query":"ab=\"global positioning\" and ab=\"speed limit\" and pd<20020318","countries":"US","purpose":"Find GPS-based speed limit comparator/indicator art pred
+06:43:07 CALL search_patents {"query":"ti=speedometer and ab=\"colored filter\" and pd<20020318","countries":"US","purpose":"Find colored filter speedometer display art predating priority d
+06:43:23 CALL search_patents {"query":"in=Aumayer","countries":"US","purpose":"Locate Aumayer reference used in IPR2012-00001 against claims 10/14/17 of US6778074"}
+06:43:23 CALL search_patents {"query":"in=Wendt and ic=G01D","countries":"DE,US,EP,WO","purpose":"Locate Wendt reference (colored speedometer display) used in IPR2012-00001"}
+06:43:23 CALL search_patents {"query":"in=Evans and ic=G01P","countries":"US","purpose":"Locate Evans reference used in IPR2012-00001 against claims 10/14/17 of US6778074"}
+06:44:03 CALL search_patents {"query":"ab=\"speed limit\" and ab=\"global positioning\" and ab=display and pd<20020318","countries":"US,EP,WO","purpose":"Find GPS-based speed limit display/
+06:44:03 CALL search_patents {"query":"ab=speedometer and ab=color and ab=zone and pd<20020318","countries":"US,EP,WO","purpose":"Find colored zone/sector speedometer display art predating 
+06:44:19 CALL get_patent_summary {"patentNumber":"US6161072"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US6134499"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US5995895"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US5819198"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US5680306"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US5485161"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US4935850"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US4315295"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US6265989"}
+06:44:19 CALL get_patent_summary {"patentNumber":"US6515596"}
+06:44:19 CALL get_patent_summary {"patentNumber":"USD270339"}
+06:44:19 CALL get_patent_summary {"patentNumber":"USD411122"}
+06:44:54 CALL get_patent_details {"publicationNumber":"US6633811B1"}
+06:44:54 CALL get_patent_details {"publicationNumber":"US4935850A"}
+06:44:54 CALL get_patent_details {"publicationNumber":"US6515596B2"}
+06:45:05 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+06:45:05 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+06:45:25 CALL search_patents {"query":"pn=US6480783","countries":"US","purpose":"Verify Evans GPS speed limit patent US6480783 used as IPR2012-00001 prior art against claims 10/14/17"}
+06:45:25 CALL search_patents {"query":"in=Wendt and ab=speedometer and ab=color","countries":"DE,EP,WO","purpose":"Locate Wendt DE speedometer reference with colored/rotating filter used in
+06:46:14 CALL search_patents {"query":"ti=gauge and ab=\"color filter\" and ab=motor and ab=rotat$ and pd<20020318","countries":"US","purpose":"Find art disclosing a motor/actuator-driven r
+06:46:14 CALL search_patents {"query":"ab=\"rotating color filter\" and ab=indicator and pd<20020318","countries":"US","purpose":"Find art disclosing an electronically-driven rotating color
+06:46:27 CALL search_patents {"query":"ab=\"color filter\" and ab=motor and ab=gauge and pd<20020318","countries":"US","purpose":"Find art disclosing motor-driven color filter gauge display
+06:46:27 CALL search_patents {"query":"ab=\"colored disc\" and ab=instrument and ab=stepper and pd<20020318","countries":"US","purpose":"Find art disclosing a stepper-motor-driven colored d
+06:46:44 CALL get_patent_figures {"publicationNumber":"US4935850A","saveDir":"references/figures"}
+06:46:44 CALL get_patent_figures {"publicationNumber":"US6778074B1","saveDir":"references/figures"}
+06:47:06 CALL get_patent_details {"publicationNumber":"US6480783B1"}
+06:47:42 CALL search_patents {"query":"in=Evans and ab=\"speed limit\" and ab=\"global positioning\"","countries":"US","purpose":"Locate the actual Evans GPS speed-limit reference used in I
+06:47:42 CALL search_patents {"query":"in=Wendt and ti=Kraftfahrzeug and ab=Geschwindigkeit","countries":"DE","purpose":"Locate the Wendt DE reference used in IPR2012-00001 against claims 1
+06:47:58 CALL search_patents {"query":"in=Evans and ab=\"speed\" and ab=\"violation\"","countries":"US","purpose":"Locate the Evans speed-violation detector reference used in IPR2012-00001 
+06:47:58 CALL search_patents {"query":"in=Wendt and ab=speedometer","countries":"US,EP,WO,DE","purpose":"Locate the Wendt colored speedometer display reference used in IPR2012-00001 (Cuozzo
+06:48:04 CALL uspto_api_guide {"action":"endpoint","endpoint":"search"}
+06:48:07 CALL search_patents {"query":"inventorNameText:Evans AND abstract:\"speed limit\""}
+06:48:11 CALL uspto_api_guide {"action":"list"}
+06:48:15 CALL search_patents {"query":"ab=\"speed limit\" and ab=\"global positioning\" and in=Evans","countries":"US","purpose":"Retry locating Evans GPS speed-limit reference after transi
+06:49:48 CALL search_patents {"query":"ab=\"color filter\" and ab=motor and ab=independent and ab=speedometer","countries":"US","purpose":"Search Round for claim 17: motor-driven colored fi
+06:49:48 CALL search_patents {"query":"ab=\"rotating filter\" and ab=speedometer and ab=actuator","countries":"US","purpose":"Search Round for claim 17: actuator-rotated colored filter disc
+06:49:55 CALL search_npl {"query":"rotating colored filter speedometer display driver warning","toYear":2002}
+06:49:55 CALL search_patents {"query":"ab=\"color filter\" and ab=speedometer and ab=controller","countries":"US","purpose":"Retry claim 17 Search Round query after transient 503 outage"}
+09:07:07 CALL search_patents {"query":"ab=\"color filter\" and ab=rotatable and ab=indicator","countries":"US","purpose":"Search Round for claim 17: rotatable colored filter in indicator di
+09:07:07 CALL search_patents {"query":"ti=gauge and ab=\"filter disc\" and ab=motor","countries":"US","purpose":"Search Round for claim 17: motor-driven filter disc in a gauge instrument"}
+09:07:35 CALL search_npl {"query":"Cuozzo Speed Technologies Garmin IPR2012-00001 Aumayer Evans Wendt prior art"}
+09:07:35 CALL fetch_webpage {"urls":["https://en.wikipedia.org/wiki/Cuozzo_Speed_Technologies,_LLC_v._Garmin_International,_Inc.","https://www.cafc.uscourts.gov/opinions-orders/15-1559.Opi
+10:36:55 CALL fetch_webpage {"urls":["https://en.wikipedia.org/wiki/Cuozzo_Speed_Technologies_v._Lee","https://www.google.com/search?q=IPR2012-00001+Garmin+Cuozzo+Aumayer+Evans+Wendt+67780
+10:38:48 CALL get_us_grant {"patentNumber":"6778074"}
+10:38:48 CALL get_transactions {"applicationNumber":"10100378"}
+10:38:54 CALL uspto_api_guide {"action":"endpoint","endpoint":"get_us_grant"}
+10:38:58 CALL patent_api_request {"path":"/tools/get_us_grant","method":"POST","body":"{\"patent_number\":\"6778074\"}"}
+10:39:28 CALL fetch_webpage {"urls":["https://www.courtlistener.com/docket/4147601/cuozzo-speed-technologies-llc-v-garmin-international-inc/","https://casetext.com/case/cuozzo-speed-techs-
+10:40:01 CALL fetch_webpage {"urls":["https://patents.google.com/patent/US6778074B1/en"],"query":"US6778074 claims 10 14 17 inter partes review certificate IPR2012-00001 cited references A
+10:41:01 CALL search_patents {"query":"ab=\"liquid crystal\" and ab=\"speed limit\" and ab=\"global positioning\" and pd<20020318","countries":"US","purpose":"Find art disclosing an LCD-bas
+10:41:01 CALL search_patents {"query":"ab=\"color filter\" and ab=motor and ab=\"independently\" and pd<20020318","countries":"US","purpose":"Search Round query for claim 17: motor-driven c
+10:41:26 CALL get_patent_details {"publicationNumber":"US5815382A"}
+10:41:26 CALL get_patent_details {"publicationNumber":"US6087961A"}
+10:41:55 CALL search_patents {"query":"ab=\"rotating\" and ab=\"color disk\" and ab=speed and ab=indicator","countries":"US","purpose":"Search Round: rotating color disk in a speed indicato
+10:41:55 CALL search_patents {"query":"ab=\"servo\" and ab=\"color filter\" and ab=gauge","countries":"US","purpose":"Search Round: servo-driven colored filter in a gauge/dial instrument fo
+10:42:55 CALL get_patent_summary {"patentNumber":"US6778074C1"}
+10:42:55 CALL get_patent_summary {"patentNumber":"US6778074K1"}
+10:42:55 CALL fetch_webpage {"urls":["https://patentimages.storage.googleapis.com/92/ed/59/2370a12192dac3/US6778074.pdf"],"query":"Inter Partes Review Certificate claims 10 14 17 cancelled
+10:43:10 CALL fetch_webpage {"urls":["https://ipo.org/wp-content/uploads/2013/01/IPR2012-00001.pdf","https://www.cafc.uscourts.gov/wp-content/uploads/opinions-orders/15-1300.Opinion.2-2-20
+10:43:52 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+10:43:52 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+10:45:16 CALL search_patents {"query":"ab=\"liquid crystal\" and ab=speedometer and ab=vehicle and pd<20020318","countries":"US","purpose":"Search Round for claim 12/18/13 fallback: LCD-bas
+10:45:16 CALL search_patents {"query":"ab=\"liquid crystal display\" and ab=speedometer and ab=color","countries":"US,EP,WO","purpose":"Search Round for claim 12/18/13 fallback: colored LCD
+10:46:52 CALL get_patent_details {"publicationNumber":"US6265989B1"}
+10:46:52 CALL get_patent_details {"publicationNumber":"US5485161A"}
+10:46:52 CALL get_patent_details {"publicationNumber":"US3868570A"}
+10:47:05 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+10:47:05 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+10:47:43 CALL search_patents {"query":"ab=\"warning zone\" and ab=adjustable and ab=tachometer","countries":"US","purpose":"Search Round claim 17: adjustable/movable warning-zone band on a 
+10:47:43 CALL search_patents {"query":"ab=\"movable\" and ab=band and ab=gauge and ab=redline","countries":"US","purpose":"Search Round claim 17: movable redline/warning band actuated indep
+10:49:49 CALL search_patents {"query":"ti=speedometer and ab=cable and ab=needle and ab=axle","countries":"US","purpose":"Search Round claim 15 fallback: mechanical speedometer with needle,
+10:50:42 CALL search_patents {"query":"ab=\"liquid crystal\" and ab=speedometer and ab=color and ab=zone","countries":"US,EP,WO","purpose":"Search Round claim 12/18 fallback: colored-zone L
+10:50:42 CALL search_patents {"query":"ti=speedometer and ab=\"speedometer cable\" and ab=needle and ab=backplate","countries":"US","purpose":"Search Round claim 15/16 fallback: mechanical 
+10:56:03 CALL write_patent_results {"filePath":"analysis/US6778074B1_invalidity_chart.md","content":"","template":"invalidity-claim-chart","challengedPublication":"US6778074B1","objective":"Earli
+10:56:04 DONE write_patent_results {"toolCallId": "toolu_01158M5z61vRHbvqdbSY18cY", "success": true}
+10:56:31 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+10:58:07 CALL get_patent_details {"publicationNumber":"US6633811B1","evidenceLookup":{"query":"freely programmable combined instrument"}}
+10:58:17 CALL get_patent_details {"publicationNumber":"US6633811B1","evidenceLookup":{"query":"GPS"}}
+10:58:17 CALL get_patent_details {"publicationNumber":"US4935850A","evidenceLookup":{"query":"color filter"}}
+10:58:17 CALL get_patent_details {"publicationNumber":"US3868570A","evidenceLookup":{"query":"liquid crystal"}}
+11:01:58 CALL write_patent_results {"filePath":"analysis/US6778074B1_invalidity_chart.md","content":"","template":"invalidity-claim-chart","challengedPublication":"US6778074B1","objective":"Earli
+11:04:14 user.message {"content": "Continue: \"Continue to iterate?\"", "attachments": []}
+11:04:14 DONE write_patent_results {"toolCallId": "toolu_01XvWJx3NPBN2dFj9Z5bVPr7", "success": true}
+11:05:35 CALL write_patent_results {"filePath":"analysis/US6778074B1_invalidity_chart.md","content":"","template":"invalidity-claim-chart","challengedPublication":"US6778074B1","objective":"Earli
+13:56:10 CALL manage_todo_list {"todoList":[{"id":1,"title":"Phase 1: Fetch target patent, confirm grant/legal status, critical date, prosecution history/baseline","status":"completed"},{"id"
+13:56:23 CALL search_legal {"query":"inter partes review 315(b) time bar 315(e) estoppel prior final written decision same claims","jurisdiction":"USPTO","comprehensive":true}
+13:56:23 CALL search_legal {"query":"inter partes review available after patent expired lapsed for nonpayment of maintenance fees","jurisdiction":"USPTO"}
+13:56:42 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+13:56:42 CALL read_file {"filePath":"/tmp/code-oss-dev/20261017-093901-88751/user-data/User/workspaceStorage/9348d0a74f8e8929e66c1f30e536e5cc/flowleap.patent-ai/chat-session-resources/
+
+# Part 2: write_patent_results tool results, verbatim from the debug log (call 1 is cut by the log at its own limit).
+
+=== write_patent_results call 1: start 10:56:03Z, dur 119 ms, status ok
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Feature support for US6633811B1:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Feature support for US6633811B1:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 10 as a whole" lists US6633811B1:claims:1:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for US6633811B1:claims:1:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 10 as a whole" lists US6633811B1:claims:12:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for US6633811B1:claims:12:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Every element of "Claim 11 (depends on 10) — added limitation: said GPS receiver further comprises a database of locations and their corresponding speed limits" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for US3868570A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- disclosedBy "said display device ... comprises a freely programmable combined instrument" for element "electronically-rendered/programmable display capable of LCD implementation" is not found in the recorded text of US6633811B1:claims:26:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 12 (depends on 10) — added limitation: said colored display is a liquid crystal display" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for US3868570A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- disclosedBy "said display device ... comprises a freely programmable combined instrument" for element "LCD display adjustable independently of a mechanical needle mechanism" is not found in the recorded text of US6633811B1:claims:26:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 13 (depends on 12) — added limitation: said display controller adjusts said liquid crystal display independently of said speedometer to continuously update the delineation of which speed readings are in violation of the speed limit" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for US4935850A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Evidence entry for US4935850:figure:2 quotes a recorded drawing page, which holds no text. Remove it and cite the drawing through an element with basis: figure and a reading of what it clearly shows.
+- Every element of "Claim 15 (depends on 14) — added limitation: said speedometer comprises a needle; an axle having opposing ends with one end attached to said needle; and a speedometer cable having opposing ends with one end attached to said axle" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Evidence entry for US4935850:figure:3 quotes a recorded drawing page, which holds no text. Remove it and cite the drawing through an element with basis: figure and a reading of what it clearly shows.
+- Every element of "Claim 16 (depends on 15) — added limitation: said speedometer further comprises a backplate; a plurality of speed denoting markings affixed to said backplate; and a housing enclosing said backplate" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed[truncated]
+
+=== write_patent_results call 2: start 11:04:14Z, dur 111 ms, status ok
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Search Round 1 lists search_patents query "ab="liquid crystal" and ab=speedometer and ab=color and ab=zone and pd<20020318", which matches no tool execution recorded this session. Run the query, or copy it exactly as it ran (same tool, same text), or remove it from the round.
+
+=== write_patent_results call 3: start 11:05:35Z, dur 58086 ms, status ok
+Successfully wrote patent results to analysis/US6778074B1_invalidity_chart.md
+Wording review: 9 phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.
+Second read (anthropic/claude-sonnet-5): 21 elements judged, 11 not confirmed. Not confirmed: Claim 10 — element (b): a display controller connected to said GPS receiver, wherein said display controller adjusts a colored display in response to signals from said GPS receiver to continuously update the delineation of which speed readings are in violation of the speed limit at the vehicle's present location / colored indication of a speed-limit violation on the display — The passage only shows a speed limit marked with a different colored scale mark, not a colored indication that the current speed violates that limit; Claim 10 — element (b): a display controller connected to said GPS receiver, wherein said display controller adjusts a colored display in response to signals from said GPS receiver to continuously update the delineation of which speed readings are in violation of the speed limit at the vehicle's present location / continuous/repeated updating of the delineation as the vehicle's position changes — The passage describes more frequent testing of whether a boundary has been crossed, not continuous updating of the colored display delineation itself; Claim 10 — element (c): a speedometer integrally attached to said colored display / speedometer with the colored scale integral to its own display — The cited passage describes a speedometer with switchable speed scales and a pointer, but makes no mention of any 'colored' scale or colored display, so it does not disclose the element as written; Claim 10 as a whole / colored display delineating a speed-limit violation, integral to the speedometer, automatically/continuously adjusted by location — The passage only discloses a static colored scale mark on a speedometer, not an automatically or continuously location-adjusted violation display as claimed; Claim 10 as a whole / speedometer integrally attached to the colored display — The passage describes automatic switching between different speed scales on a speedometer, not an integral attachment to a colored violation display; Claim 11 (depends on 10) — added limitation: said global positioning system receiver further comprises a database of locations and their corresponding speed limits / database of locations and corresponding speed limits, stored and updatable — The passage discloses storing and updating speed limits by road type/governmental region, not a database keyed to specific locations as claimed; and 5 more in the working record.
+If a disagreement is right, downgrade or reword that row and re-save; if the second read is wrong, leave the row and say why in its gap. Re-save at most 2 more times for second-read objections.
+Chat summary contract: repeat each coverage row's status word exactly (supported / partial / unresolved), do not add novelty, anticipation, obviousness or teaching-away conclusions, and state the retrieved-but-not-cited count and any untranslated documents. The summary must not be more certain than the saved report.
+Prior-art artifact receipt: {"reportUri":"file:///private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-cuozzo-ws/analysis/US6778074B1_invalidity_chart.md","reportDigest":"a2a4b78f9e8e1bbc2a104e121c7704afca23f0e8fe879ea6dd5b83444ded48cf","evidenceUri":"file:///private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-cuozzo-ws/analysis/US6778074B1_invalidity_chart.md.8f468052-9a9e-4f96-b53e-bddb68968c2d.evidence.json","evidenceDigest":"6cb8d939befaa5b909ca94ac056537221f12fdfe2ca5611dad8acd27f92a18dc"} fallbacksNotCovered=1 rounds=1 notCovered=17
+Working record: analysis/US6778074B1_invalidity_chart.working-record.md
+
