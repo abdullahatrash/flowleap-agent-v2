@@ -9,6 +9,7 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
+import { fallbackLadderErrors } from './patentFallbackLadder';
 import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
@@ -57,11 +58,16 @@ export interface FindBetterSide {
 export interface PatentCandidateReview extends FindBetterFields {
 	readonly coverage?: readonly {
 		readonly feature: string;
-		readonly kind?: 'feature' | 'combination';
+		/** `fallback` (invalidity-claim-chart only): a rung of the Fallback Ladder, charting only the limitation it adds. */
+		readonly kind?: 'feature' | 'combination' | 'fallback';
 		readonly importance: 'essential' | 'optional';
 		readonly status: 'supported' | 'partial' | 'unresolved';
 		/** invalidity-claim-chart: the challenged claim this row is an element of, e.g. `1`. */
 		readonly claimNumber?: string;
+		/** invalidity-claim-chart, kind fallback: the charted independent claim this row falls back from. */
+		readonly fallbackOf?: string;
+		/** invalidity-claim-chart, a description-supported fallback (no claimNumber): the challenged patent's passage that supports it. */
+		readonly basis?: FallbackBasis;
 		/** Required by the tool schema, but an unresolved row may arrive without it; never dereference unguarded. */
 		readonly sourceAnchors?: readonly string[];
 		readonly gap: string;
@@ -80,6 +86,10 @@ export interface PatentCandidateReview extends FindBetterFields {
 	/** Report prose the template renders outside the appendix; checked like every other model-written field. */
 	readonly objective?: string;
 	readonly searchStrategy?: string;
+	/** invalidity-claim-chart: rungs of the Fallback Ladder the chart does not chart, each with the reason. */
+	readonly fallbacksNotCharted?: readonly FallbackNotCharted[];
+	/** invalidity-claim-chart: the Search Rounds run for fallbacks the last saved chart left not covered. */
+	readonly rounds?: readonly SearchRound[];
 	/** The technology the report is about; the working record names it so a later session recognizes the matter. */
 	readonly subject?: string;
 	/**
@@ -89,6 +99,29 @@ export interface PatentCandidateReview extends FindBetterFields {
 	readonly concepts?: readonly PatentSearchConcept[];
 	/** The classification codes the search covered, each with its meaning in plain words. */
 	readonly classifications?: readonly PatentClassificationEntry[];
+}
+
+/** The challenged patent's description passage a description-supported fallback rests on, quoted verbatim. */
+interface FallbackBasis {
+	readonly anchor: string;
+	readonly quote: string;
+}
+
+/** A rung of the Fallback Ladder left out of the chart, and why. */
+interface FallbackNotCharted {
+	readonly claimNumber: string;
+	readonly reason: string;
+}
+
+/**
+ * One Search Round: the fallbacks it targeted (claim numbers, or a description fallback's feature),
+ * each query it ran with its tool, and what it changed. Every query must match a recorded execution.
+ */
+interface SearchRound {
+	readonly round: number;
+	readonly targets: readonly string[];
+	readonly queries: readonly { readonly tool: string; readonly query: string; readonly count?: number }[];
+	readonly outcome: string;
 }
 
 /** One concept the queries were built from, and the synonyms and variations searched for it. */
@@ -588,6 +621,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 	const anchors = new Set(sources.keys());
 	if (sided.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : variant === 'find-better' ? 'find-better-report' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
 	if (variant === 'find-better') { errors.push(...findBetterErrors(sided, sources)); }
+	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources)); }
 	// Each side of a find-better row is checked as a row of its own; every other review is unchanged.
 	const review = flattenSides(sided);
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
@@ -609,7 +643,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 		if (!row.feature?.trim() || !['essential', 'optional'].includes(row.importance) || !['supported', 'partial', 'unresolved'].includes(row.status)) { errors.push('Every coverage row needs a feature, importance, and valid status.'); }
 		if (row.status !== 'unresolved' && !row.sourceAnchors?.length) { errors.push(`Coverage for "${row.feature}" needs known source anchors or unresolved status.`); }
 		for (const anchor of row.sourceAnchors ?? []) { if (!anchors.has(anchor)) { errors.push(`Unknown source anchor: ${anchor}. Recover known IDs with get_patent_details(publicationNumber, evidenceLookup: {}); do not repeat searches or downgrade a conclusion merely to pass validation.`); } }
-		if (!['feature', 'combination'].includes(row.kind ?? '')) { errors.push(`Identify coverage kind (feature or combination) for "${row.feature}".`); }
+		if (!['feature', 'combination', ...(variant === 'invalidity' ? ['fallback'] : [])].includes(row.kind ?? '')) { errors.push(`Identify coverage kind (${variant === 'invalidity' ? 'feature, combination or fallback' : 'feature or combination'}) for "${row.feature}".`); }
 		for (const anchor of row.sourceAnchors ?? []) {
 			const source = sources.get(anchor);
 			const evidence = row.evidence?.find(item => item.anchor === anchor);

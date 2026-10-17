@@ -604,6 +604,12 @@ describe('candidate report save path', () => {
 						{ anchor: rod, text: rodClaim, reference: { publicationNumber: 'EP1000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
 						{ anchor: cam, text: camClaim, reference: { publicationNumber: 'US5000000A', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
 					],
+				}, {
+					// The challenged patent's own claims, from which the writer derives the Fallback Ladder
+					// (one independent claim, no rungs).
+					id: 'challenged', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP2000000A1'], sources: [
+						{ anchor: 'EP2000000A1:claims:1:en', text: '1. A quick release comprising a skewer rod and a cam surface on the head portion.', reference: { publicationNumber: 'EP2000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+					],
 				}],
 				limitation: 'Synthetic fixture; no live search.',
 			}),
