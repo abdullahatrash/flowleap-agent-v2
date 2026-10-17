@@ -4,7 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 // Stamps the FlowLeap release version into extensions/flowleap/package.json so the
-// running app knows its own identity. The bundled `flowleap` extension's update
+// running app knows its own identity, and into the root product.json as
+// `flowleapVersion` (the agent host sends it to the Remote Access Relay as the Host's
+// `appVersion`, and the Viewer loads the build of that version, PRD 0018 B4). The bundled `flowleap` extension's update
 // notifier reads `context.extension.packageJSON.version` and compares it against
 // the website's /api/latest-version. Without this, the extension ships the
 // placeholder version and the notifier would either nag forever or never fire.
@@ -30,3 +32,10 @@ pkg.version = version;
 writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
 
 console.log(`stamp-flowleap-version: set extensions/flowleap/package.json version to ${version}`);
+
+const productPath = new URL('../../product.json', import.meta.url);
+const product = JSON.parse(readFileSync(productPath, 'utf8'));
+product.flowleapVersion = version;
+writeFileSync(productPath, `${JSON.stringify(product, null, '\t')}\n`);
+
+console.log(`stamp-flowleap-version: set product.json flowleapVersion to ${version}`);

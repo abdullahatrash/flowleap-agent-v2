@@ -180,6 +180,12 @@ read `host.appVersion` → if the loaded build differs, reload into
 `https://remote.flowleap.co/<appVersion>/` (the last three builds are kept) → E2E handshake →
 AHP `initialize`. "Host offline" is a page state, not an error.
 
+`appVersion` is the FlowLeap release version (`product.json` `flowleapVersion`, stamped at
+release time), not the upstream package version; an unstamped dev Host sends the package
+version. The Viewer reads it once on a probe socket before it loads the workbench, and again on
+every `host` frame while the page is open. The page layout, the boot flow and the close-code
+messages are in `VIEWER.md` (B4).
+
 ## 9. What the Relay records
 
 Nothing from the stream. Two content-free activation events through the existing contract in

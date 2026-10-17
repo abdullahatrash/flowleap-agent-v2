@@ -48,12 +48,12 @@ const options = {
 	manglePrivates: process.argv.includes('--mangle-privates'),
 	excludeTests: process.argv.includes('--exclude-tests'),
 	out: getArgValue('--out'),
-	target: getArgValue('--target') ?? 'desktop', // 'desktop' | 'server' | 'server-web' | 'web'
+	target: getArgValue('--target') ?? 'desktop', // 'desktop' | 'server' | 'server-web' | 'web' | 'viewer'
 	sourceMapBaseUrl: getArgValue('--source-map-base-url'),
 };
 
 // Build targets
-type BuildTarget = 'desktop' | 'server' | 'server-web' | 'web';
+type BuildTarget = 'desktop' | 'server' | 'server-web' | 'web' | 'viewer';
 
 const SRC_DIR = 'src';
 const OUT_DIR = 'out';
@@ -124,6 +124,15 @@ const webOnlyEntryPoints = [
 	'vs/sessions/sessions.web.main.internal',
 ];
 
+// Remote Access Viewer (FlowLeap PRD 0018 B4): the sessions web workbench with
+// the remote agent host provider, its boot page and the site loader. Static,
+// no server (scripts/remote-access/build-viewer.sh).
+const viewerEntryPoints = [
+	'vs/sessions/sessions.viewer.main',
+	'vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerBoot',
+	'vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerLoader',
+];
+
 const keyboardMapEntryPoints = [
 	'vs/workbench/services/keybinding/browser/keyboardLayouts/layout.contribution.linux',
 	'vs/workbench/services/keybinding/browser/keyboardLayouts/layout.contribution.darwin',
@@ -183,6 +192,12 @@ function getEntryPointsForTarget(target: BuildTarget): string[] {
 				'vs/workbench/workbench.web.main.internal', // web workbench only (no browser shell)
 				...keyboardMapEntryPoints,
 			];
+		case 'viewer':
+			return [
+				...workerEntryPoints,
+				...viewerEntryPoints,
+				...keyboardMapEntryPoints,
+			];
 		default:
 			throw new Error(`Unknown target: ${target}`);
 	}
@@ -199,6 +214,7 @@ function getBootstrapEntryPointsForTarget(target: BuildTarget): string[] {
 		case 'server-web':
 			return bootstrapEntryPointsServer;
 		case 'web':
+		case 'viewer':
 			return []; // Web has no bootstrap files (served by external server)
 		default:
 			throw new Error(`Unknown target: ${target}`);
@@ -228,6 +244,10 @@ function getCssBundleEntryPointsForTarget(target: BuildTarget): Set<string> {
 			return new Set([
 				'vs/workbench/workbench.web.main.internal',
 				'vs/sessions/sessions.web.main.internal',
+			]);
+		case 'viewer':
+			return new Set([
+				'vs/sessions/sessions.viewer.main',
 			]);
 		default:
 			throw new Error(`Unknown target: ${target}`);
@@ -394,6 +414,7 @@ function getResourcePatternsForTarget(target: BuildTarget): string[] {
 		case 'server-web':
 			return serverWebResourcePatterns;
 		case 'web':
+		case 'viewer':
 			return webResourcePatterns;
 		default:
 			throw new Error(`Unknown target: ${target}`);
@@ -697,7 +718,7 @@ function fileContentMapperPlugin(outDir: string, target: BuildTarget): esbuild.P
 					if (builtinExtensionsReplacement === undefined) {
 						// Web target uses .build/web/extensions (from compileWebExtensionsBuildTask)
 						// Other targets use .build/extensions
-						const extensionsRoot = target === 'web' ? '.build/web/extensions' : '.build/extensions';
+						const extensionsRoot = target === 'web' || target === 'viewer' ? '.build/web/extensions' : '.build/extensions';
 						const builtinExtensions = JSON.stringify(scanBuiltinExtensions(extensionsRoot));
 						// Remove the outer brackets since the placeholder is inside an array literal
 						builtinExtensionsReplacement = builtinExtensions.substring(1, builtinExtensions.length - 1);
@@ -1225,7 +1246,7 @@ Options for 'bundle':
 	--nls              Process NLS (localization) strings
 	--mangle-privates  Convert native #private fields to regular properties
 	--out <dir>        Output directory (default: out-vscode)
-	--target <target>  Build target: desktop (default), server, server-web, web
+	--target <target>  Build target: desktop (default), server, server-web, web, viewer
 	--source-map-base-url <url>  Rewrite sourceMappingURL to CDN URL
 
 Examples:

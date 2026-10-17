@@ -1,0 +1,4 @@
+{
+	"clerkPublishableKey": "pk_live_REPLACE_WITH_THE_FLOWLEAP_CLERK_PUBLISHABLE_KEY",
+	"apiBaseUrl": "https://api.flowleap.co"
+}

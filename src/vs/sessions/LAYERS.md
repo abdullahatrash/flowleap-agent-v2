@@ -111,6 +111,7 @@ This is the **most permissive** contrib layer — providers can reach into non-p
 | `sessions.desktop.main.ts` | `electron-browser` | Desktop-specific, imports `sessions.common.main.js` |
 | `sessions.web.main.ts` | `browser` | Web-specific, imports `sessions.common.main.js` |
 | `sessions.web.main.internal.ts` | `browser` | Internal web variant, imports `sessions.web.main.js` |
+| `sessions.viewer.main.ts` | `browser` | Remote Access Viewer (PRD 0018 B4), imports `sessions.web.main.js` plus the remote agent host provider |
 
 Entry points can import from all sessions layers: `sessions/~`, `services/*/~`, `contrib/*/~`, and `contrib/providers/*/~`.
 

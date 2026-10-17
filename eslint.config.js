@@ -2104,6 +2104,23 @@ export default defineConfig(
 					]
 				},
 				{
+					'target': 'src/vs/sessions/sessions.viewer.main.ts',
+					'layer': 'browser',
+					'restrictions': [
+						'vs/base/~',
+						'vs/base/parts/*/~',
+						'vs/platform/*/~',
+						'vs/sessions/~',
+						'vs/sessions/contrib/*/~',
+						'vs/sessions/contrib/providers/*/~',
+						'vs/workbench/~',
+						'vs/workbench/browser/**',
+						'vs/workbench/services/*/~',
+						'vs/workbench/contrib/*/~',
+						'vs/sessions/sessions.web.main.js'
+					]
+				},
+				{
 					'target': 'src/vs/sessions/test/sessions.web.test.internal.ts',
 					'layer': 'browser',
 					'restrictions': [

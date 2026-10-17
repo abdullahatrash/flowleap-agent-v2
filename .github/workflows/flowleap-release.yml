@@ -170,6 +170,71 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # The Remote Access Viewer (PRD 0018 B4, docs/remote-access/VIEWER.md): the
+  # static web Agents Window that remote.flowleap.co serves, one folder per
+  # FlowLeap version. A Viewer reloads into the build whose version equals the
+  # Host's, so every release ships its own build: this job builds it and
+  # attaches flowleap-viewer-<version>.tar.gz next to the installers. Publishing
+  # it on the box is a manual step (install-viewer.sh), never this workflow.
+  #
+  # The output does not depend on the platform (no native modules), so it runs
+  # once, on Linux, for every `platforms` choice. On a dry run the tarball is
+  # only a workflow artifact, because create-release is skipped.
+  viewer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # The native modules npm ci builds (kerberos, native-keymap) need these
+      # headers even though the Viewer itself uses none of them.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libkrb5-dev libxkbfile-dev libx11-dev libsecret-1-dev
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm ci
+
+      - name: Build the Viewer
+        env:
+          FLOWLEAP_VERSION: ${{ inputs.version || github.ref_name }}
+        run: scripts/remote-access/build-viewer.sh --out out-viewer --tarball dist/viewer
+
+      - name: Check the Viewer tarball
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          tgz="dist/viewer/flowleap-viewer-$VERSION.tar.gz"
+          listing=$(tar -tzf "$tgz")
+          for path in "site/index.html" "site/loader.js" "site/config.example.json" \
+            "$VERSION/out/vs/sessions/sessions.viewer.main.js" "$VERSION/out/vs/sessions/sessions.viewer.main.css" \
+            "$VERSION/out/vs/sessions/contrib/remoteAccess/browser/viewer/remoteAccessViewerBoot.js"; do
+            grep -qx "$path" <<< "$listing" || { echo "::error::$tgz has no $path"; exit 1; }
+          done
+          if grep -q '^site/config.json$' <<< "$listing"; then
+            echo "::error::$tgz must not carry config.json (it is per site)"; exit 1
+          fi
+          ls -la dist/viewer
+
+      - name: Upload the Viewer tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-access-viewer
+          path: dist/viewer/*.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
   # Build for macOS (both architectures)
   build-macos:
     needs: agent-sdk
@@ -983,7 +1048,7 @@ jobs:
 
   # Create GitHub Release
   create-release:
-    needs: [agent-sdk, build-macos, build-windows, build-linux]
+    needs: [agent-sdk, viewer, build-macos, build-windows, build-linux]
     # `dry_run` is empty on a tag push, so `!inputs.dry_run` is true there and
     # the release is drafted as before. A dispatch with dry_run=true stops here,
     # leaving only the uploaded workflow artifacts.
@@ -1098,6 +1163,7 @@ jobs:
           echo "  - Windows: ${{ needs.build-windows.result }} (UNSIGNED)"
           echo "  - Linux:   ${{ needs.build-linux.result }} (unsigned; deb/rpm/tar.gz, glibc 2.35 baseline)"
           echo "  - Claude SDK tarballs: ${{ needs.agent-sdk.result }} (claude-agent-sdk-*.tgz, Anthropic-signed binaries)"
+          echo "  - Remote Access Viewer: ${{ needs.viewer.result }} (flowleap-viewer-*.tar.gz; install on the box with scripts/remote-access/install-viewer.sh)"
           echo ""
           echo "Next steps:"
           echo "  1. Sign the Windows .exe files locally with build/flowleap/sign-windows-release.ps1"

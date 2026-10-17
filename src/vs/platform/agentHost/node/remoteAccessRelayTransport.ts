@@ -19,28 +19,14 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { ILogService } from '../../log/common/log.js';
 import { AgentHostClientConnectionKind, AgentHostTransportKind } from '../common/agentHostTelemetry.js';
 import {
-	bytesToUuid, getRemoteAccessFrameKind, RemoteAccessChannelCipher, RemoteAccessCryptoError, RemoteAccessE2EFrameKind,
-	RemoteAccessHandshake, RemoteAccessRole, uuidToBytes,
+	getRemoteAccessFrameKind, RemoteAccessChannelCipher, RemoteAccessCryptoError, RemoteAccessE2EFrameKind,
+	RemoteAccessHandshake, RemoteAccessRole,
 } from '../common/remoteAccessCrypto.js';
+import { decodePairFrame, encodePairFrame, RELAY_PING_INTERVAL_MS, RelayCloseCode } from '../common/remoteAccessRelayProtocol.js';
 import { IRemoteAccessHostPair, IRemoteAccessHostStatus, RemoteAccessHostState } from '../common/remoteAccessHost.js';
 import { JSON_RPC_PARSE_ERROR, type AhpServerNotification, type JsonRpcNotification, type JsonRpcParseErrorResponse, type JsonRpcRequest, type JsonRpcResponse, type ProtocolMessage } from '../common/state/sessionProtocol.js';
 import type { IProtocolServer, IProtocolTransport } from '../common/state/sessionTransport.js';
 import type * as wsTypes from 'ws';
-
-/** Relay payload frame to or from one pair (section 4). */
-export const RELAY_FRAME_PAIR = 0x01;
-/** Relay payload frame from the Host to every live Viewer (section 4). AHP does not use it. */
-export const RELAY_FRAME_BROADCAST = 0x02;
-
-/** Relay close codes (section 3, section 4). */
-export const enum RelayCloseCode {
-	Unauthorized = 4401,
-	SubscriptionRequired = 4402,
-	Forbidden = 4403,
-	Idle = 4408,
-	Replaced = 4409,
-	TooLarge = 4413,
-}
 
 export interface IRemoteAccessRelayOptions {
 	/** `wss://…/v1/remote-access/host` */
@@ -63,36 +49,11 @@ export interface IRemoteAccessRelayTimings {
 const DEFAULT_TIMINGS: IRemoteAccessRelayTimings = {
 	initialRetryMs: 1_000,
 	maxRetryMs: 60_000,
-	pingIntervalMs: 25_000,
+	pingIntervalMs: RELAY_PING_INTERVAL_MS,
 	welcomeTimeoutMs: 10_000,
 };
 
 const LOG_PREFIX = '[RemoteAccess]';
-
-/** Builds the binary `[0x01][pairId 16 bytes][payload]` frame. */
-export function encodePairFrame(pairId: string, payload: Uint8Array): Uint8Array {
-	const frame = new Uint8Array(1 + 16 + payload.byteLength);
-	frame[0] = RELAY_FRAME_PAIR;
-	frame.set(uuidToBytes(pairId), 1);
-	frame.set(payload, 17);
-	return frame;
-}
-
-/** Builds the binary `[0x02][payload]` broadcast frame. Unused by AHP; kept for the attention work (B6). */
-export function encodeBroadcastFrame(payload: Uint8Array): Uint8Array {
-	const frame = new Uint8Array(1 + payload.byteLength);
-	frame[0] = RELAY_FRAME_BROADCAST;
-	frame.set(payload, 1);
-	return frame;
-}
-
-/** Parses a Relay → Host `[0x01][pairId 16 bytes][payload]` frame. */
-export function decodePairFrame(frame: Uint8Array): { readonly pairId: string; readonly payload: Uint8Array } | undefined {
-	if (frame.byteLength < 18 || frame[0] !== RELAY_FRAME_PAIR) {
-		return undefined;
-	}
-	return { pairId: bytesToUuid(frame.subarray(1, 17)), payload: frame.subarray(17) };
-}
 
 type ProtocolOutboundMessage = ProtocolMessage | AhpServerNotification | JsonRpcNotification | JsonRpcParseErrorResponse | JsonRpcResponse | JsonRpcRequest;
 

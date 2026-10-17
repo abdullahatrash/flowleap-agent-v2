@@ -19,6 +19,7 @@ import type { IFolderToOpen, IWorkspaceToOpen } from '../../platform/window/comm
 import type { EditorGroupLayout } from '../services/editor/common/editorGroupsService.js';
 import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 import type { IAuthenticationProvider } from '../services/authentication/common/authentication.js';
+import type { IRemoteAccessViewerOptions } from '../../platform/agentHost/common/remoteAccessViewer.js';
 
 /**
  * The `IWorkbench` interface is the API facade for web embedders
@@ -268,6 +269,12 @@ export interface IWorkbenchConstructionOptions {
 	 * in the browser (FlowLeap Hosted Workspace, #547). Requires `remoteAuthority`.
 	 */
 	readonly hostedUserData?: IHostedUserDataOptions;
+
+	/**
+	 * The pair a Remote Access Viewer follows (FlowLeap PRD 0018 B4). Set only
+	 * by the Viewer boot page, which signs in and picks the pair first.
+	 */
+	readonly remoteAccessViewer?: IRemoteAccessViewerOptions;
 
 	/**
 	 * Additional builtin extensions those cannot be uninstalled but only be disabled.
