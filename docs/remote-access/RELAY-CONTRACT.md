@@ -1,6 +1,6 @@
 # Remote Access — Relay wire contract (v1)
 
-**Status:** DRAFT 2026-10-17 (PRD 0018 B1, #479). Decides nothing new: executes ADR 0009
+**Status:** v1 2026-10-17 (PRD 0018 B1, #479); amended the same day with the readings the B2 implementation (flowleap-backend #596) settled. Decides nothing new: executes ADR 0009
 decisions 4 and 5. Vocabulary from `CONTEXT.md` → Remote Access: **Host**, **Viewer**,
 **Pairing**, **Relay**, **Agent Session**, **FlowLeap Session**.
 
@@ -58,8 +58,14 @@ close `4402 subscription_required`). A Host whose `hostId` already has a live so
 another user closes `4403`. On success the Relay answers:
 
 ```json
-{ "t": "welcome", "pairs": [ /* host only: live pairIds for this hostId */ ],
+{ "t": "welcome", "pairs": [ /* host only: the claimed pairIds for this hostId */ ],
   "peer": { "online": true|false, "appVersion": "0.8.0", "ahp": [3] } }   // viewer only
+```
+
+After a Host's `welcome` the Relay sends one `{"t":"viewer","pairId":…,"online":true}` per Viewer
+already connected. A sixth Viewer on one Host closes `4429` (too many viewers).
+
+```
 ```
 
 No token is ever echoed, logged or stored. The Relay keeps `userId`, `hostId`, `pairId`, the
@@ -75,7 +81,7 @@ can route the reply.
 | Direction | Frame | Relay action |
 |---|---|---|
 | Host → Relay | binary `[0x01][pairId 16 bytes][ciphertext]` | forward `[0x01][ciphertext]` to that Viewer |
-| Host → Relay | binary `[0x02][ciphertext]` | forward to **all** live Viewers of the Host (broadcast) |
+| Host → Relay | binary `[0x02][ciphertext]` | forward unchanged, type byte kept, to **all** live Viewers of the Host (broadcast) |
 | Viewer → Relay | binary `[0x01][ciphertext]` | forward `[0x01][pairId][ciphertext]` to the Host |
 | either → Relay | `{"t":"ping"}` | `{"t":"pong"}` |
 | Relay → Host | `{"t":"viewer","pairId":…,"online":true|false}` | on Viewer connect/disconnect |
@@ -83,7 +89,8 @@ can route the reply.
 | Host → Relay | `{"t":"attention","pairId":"*"}` | content-free; stored only as "last attention at" per pair for B6 push |
 | Relay → either | close `4408` | idle: no frame for 60 s (clients ping every 25 s) |
 
-Limits: payload frame ≤ 1 MiB; control frame ≤ 4 KiB; a frame over the limit closes `4413`.
+Limits: payload frame ≤ 1 MiB; control frame ≤ 4 KiB; a frame over the limit closes `4413`; a
+sixth Viewer on one Host closes `4429`.
 The Relay never buffers: if a Viewer is offline, Host payload to that pair is dropped; the Host
 learns through the `viewer` control frame and resends state on reconnect (the AHP client
 re-initializes anyway).
@@ -107,7 +114,9 @@ re-initializes anyway).
 
 Lifetime (grill Q14): a pair lives until removed on either end or until the Host signs out, which
 calls `DELETE /v1/remote-access/pairs?hostId=…`. `GET /v1/remote-access/pairs` lists the caller's
-pairs (`pairId`, `hostId`, `hostLabel`, `viewerLabel`, `createdAt`, `lastSeenAt`), never a key.
+pairs, offered and paired (`pairId`, `hostId`, `hostLabel`, `viewerLabel`, `state`, `createdAt`,
+`lastSeenAt` — in memory only, empty after a Relay restart), never a key or a proof. Offers are
+listed because the Viewer needs `hostId` to compute its claim proof.
 `DELETE /v1/remote-access/pairs/<pairId>` removes one.
 
 ## 6. End-to-end encryption
@@ -151,7 +160,8 @@ AHP `initialize`. "Host offline" is a page state, not an error.
 
 Nothing from the stream. Two content-free activation events through the existing contract in
 `flowleap-backend/src/lib/telemetry/activation.ts` (the event union grows by two):
-`remote_access_pair_created` and `remote_access_viewer_connected`, keyed by user and UTC day.
+`remote_access_pair_created` and `remote_access_viewer_connected`, at most once per user per
+UTC hour (the `hosted_workspace_opened` throttle).
 The request log line for the route carries the close code and the duration, no ids beyond the
 user's.
 
