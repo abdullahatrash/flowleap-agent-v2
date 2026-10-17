@@ -1,6 +1,6 @@
 # PRD 0018 — Agent host returns; Remote Access v1
 
-**Status:** ACTIVE — Phase A SHIPPED as v0.5.0 (2026-10-05); Phase B resumed 2026-10-17 with Q24 = BOTH surfaces (adapter spike running). ADR 0009 accepted; issues #472–#484 filed (A1+A2 #472, A3 #473, A4 #474, A5 #475, A6 #476, A7 #477, A8 #478, B1 #479, B2 #480, B3 #481, B4 #482, B5 #483, B6 #484)
+**Status:** ACTIVE — Phase A SHIPPED as v0.5.0 (2026-10-05); Phase B resumed 2026-10-17 with Q24 = BOTH surfaces; B1–B4 and B0 (C1–C3) built, B5 next. ADR 0009 accepted; issues #472–#484 filed (A1+A2 #472, A3 #473, A4 #474, A5 #475, A6 #476, A7 #477, A8 #478, B1 #479, B2 #480, B3 #481, B4 #482, B5 #483, B6 #484)
 **Date:** 2026-09-29
 **Base:** main at the PRD 0017 merge (`45a4c6d6ddc`, upstream 1.140 + fork intents)
 **Decides:** ADR 0009. **Glossary:** `CONTEXT.md` → Remote Access. **Evidence:** spike #469
@@ -107,6 +107,13 @@ proxy branch (ADR 0009 decision 2); mirrored content obeys the metadata-only log
 (`platform/agentHost/common/sessionLogContent.ts`, A4); no new chat surface — the adapter mirrors
 the existing one.
 
+Built as slices C1+C2 (#719, PR #724: contract, window source, the `flowleap-chat` bridge agent)
+and C3 (#720: wiring). C3 rules: the bridge agent exists only while a window publishes, and a
+window publishes only while Remote Access is on (D5, no other switch); only renderer windows
+serve the mirror; the local window never lists the agent, its Editor Chats or its pseudo model;
+a Viewer groups them under "Editor Chats"; a chat whose window stops publishing leaves the Host's
+list (its catalog row, with the neutral title only, stays).
+
 
 ### B1 (#479) — Q24 decision + Relay contract (docs, founder) — DONE 2026-10-17
 Q24 = both (founder, 2026-10-17). Contract: `docs/remote-access/RELAY-CONTRACT.md` (addresses,
@@ -149,6 +156,17 @@ Founder on the phone: pair, follow a running Agent Session, answer a permission 
 follow-up message, second Viewer at the same time, Host offline shows "Host offline", sign-out on
 the Host revokes the phone. Console on both ends clean of Relay errors.
 
+Editor Chats (B0, slices C1–C3), on the same pair:
+
+- Follow an Editor Chat: it is listed under "Editor Chats" with its real title, and a turn typed
+  in the editor streams into the phone.
+- Answer an editor tool prompt from the phone: only Allow Once and Skip are offered, and the
+  tool runs (or is skipped) in the Host's editor window.
+- Send to an Editor Chat with the chat view closed on the Host: the Host runs the turn with the
+  chat's mode, model and tools, and the phone shows the reply.
+- Switch Remote Access off on the Host: the phone's list loses the Editor Chats; the Host's own
+  Agents Window never lists them.
+
 ### B6 (#484) — Attention push (v1.5, after B5)
 Content-free web push from the Relay on the Host's `attention` frame; fixed text.
 
@@ -178,6 +196,8 @@ dep-lists), and the `mainImpl` bootstrap entry in #490. Published 2026-10-05 09:
 without `--clean-old` (#494). Open follow-ups: #489, #493, #494, #495.
 
 ### Phase B
-B1 done 2026-10-17 (Q24 = both; contract written). B0 pending the chat-adapter spike. B4 built 2026-10-17 (#482): `docs/remote-access/VIEWER.md`; proven
-locally against a local Relay and B3's Host transport; the phone, real Clerk sign-in and TLS wait
-for the ops steps and B5.
+B1–B4 merged 2026-10-17: B1 (Q24 = both; contract written), B2 (Relay route in
+flowleap-backend), B3 #722 (Host transport and Pairing UI), B4 #723 (Viewer page,
+`docs/remote-access/VIEWER.md`; proven locally against a local Relay and B3's Host transport).
+B0 as slices: C1+C2 merged (#724), C3 is #720 (wiring: on with Remote Access, hidden locally,
+grouped as Editor Chats). The phone, real Clerk sign-in and TLS wait for the ops steps and B5.
