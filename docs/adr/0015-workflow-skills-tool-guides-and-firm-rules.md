@@ -41,12 +41,21 @@ only in the skill text.
    decision 6, which had no ADR, and extends it with skill targeting and the order.
    Rejected: free-text rules with no targeting (a drafting rule then applies to every chat, or
    the model guesses); Firm Rules that win over the doctrine (a firm could make the agent say
-   "ready to file").
-4. **Doctrine that a machine can check moves into code.** Exact phrases and numbers (no dollar
-   amounts, "declared" never "essential", no calendar dates, no "filing-ready") are enforced in
-   tool results, validators and the report writer, as the drafting gates and
-   `LEGAL_CONCLUSION_PHRASES` already are. Doctrine that needs judgment (Phillips vs BRI, what a
-   clean zero means) stays in the Workflow Skill.
+   "ready to file"). Note the limit of decision 4: on a tool-written surface that promise is
+   code-backed; in a chat answer it rests on the Doctrine section and the precedence line the
+   package carries, checked by an eval case, not on code.
+4. **Doctrine that a machine can check moves into code where a tool writes the output.** Exact
+   phrases and numbers (no dollar amounts, "declared" never "essential", no calendar dates, no
+   "filing-ready") are enforced in tool results, validators and the report writer, as the
+   drafting gates and `LEGAL_CONCLUSION_PHRASES` already are. Code gates exist only on the
+   surfaces a tool writes (the drafting gates, the report writer, the candidate review); chat
+   answers have none. So a rule leaves the Workflow Skill text only when every surface it governs
+   has a code gate. A rule that also governs chat answers (today: no dollar amounts, "declared"
+   never "essential", no calendar dates for the UPC and fee skills, which answer in chat) stays
+   under the skill's Doctrine section as well, and an eval case checks the chat surface. Doctrine
+   that needs judgment (Phillips vs BRI, what a clean zero means) stays in the Workflow Skill.
+   Rejected for now: a response-level gate on chat answers (a new seam; can be added as an
+   amendment when a rule needs it).
 5. **The app delivers a skill as one package.** When a Workflow Skill loads, the app attaches
    its Tool Guides and the Firm Rules that target it, through the `skill` tool. The model never
    has to find them itself; today's evals depend on "one read gives the full context".
