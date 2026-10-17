@@ -50,6 +50,10 @@ sent within 5 s of open, as a text frame:
   "ahp": [ /* AHP protocol versions the host serves, e.g. [3] */ ] }
 ```
 
+`appVersion` is the FlowLeap release version (`product.json` `flowleapVersion`, stamped by
+`build/flowleap/stamp-flowleap-version.mjs` at release time), not the package.json version that
+every FlowLeap release shares. An unstamped dev Host sends the package version (B4, #482).
+
 The Relay runs the existing `requireAuth` logic on `token` (Clerk session or `flowleap`
 JWT-template token; personal API tokens and OAuth tokens are refused: close `4401`), then the
 subscription gate (`active` or `trialing`, the same answer `resolvePatentKeys` uses: otherwise
