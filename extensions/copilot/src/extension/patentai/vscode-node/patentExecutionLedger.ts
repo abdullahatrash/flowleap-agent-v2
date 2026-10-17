@@ -40,11 +40,21 @@ export type PatentAnalyticsTool = 'patstat_query' | 'patstat_portfolio' | 'paten
  */
 export type PatentStatusTool = 'get_legal_status' | 'get_patent_family' | 'get_patent_term' | 'get_register_events';
 
-/** Every tool identity a record may carry. */
+/** Every retrieval tool identity a record may carry. */
 export type PatentRecordedTool = PatentAnalyticsTool | PatentStatusTool;
 
-/** The tool identities the reader accepts; anything else is a dropped field, not a new tool. */
+/**
+ * The writer, whose successful structured saves a `save` record marks. A save is not a retrieval:
+ * it is outside {@link RECORDED_TOOLS}, which the report provenance audits, and exists so a Search
+ * Round added in a later save can be checked against the position of the save before it.
+ */
+export type PatentSaveTool = 'write_patent_results';
+
+/** The retrieval tool identities the reader accepts; anything else is a dropped field, not a new tool. */
 export const RECORDED_TOOLS: readonly PatentRecordedTool[] = ['patstat_query', 'patstat_portfolio', 'patent_analytics_viz', 'patstat_graph', 'patent_api_request', 'fetch_webpage', 'run_in_terminal', 'examiner_baseline', 'get_legal_status', 'get_patent_family', 'get_patent_term', 'get_register_events'];
+
+/** The kinds of outcome the ledger records; `save` is the writer's own mark, not a retrieval. */
+const EXECUTION_KINDS: readonly PatentExecution['kind'][] = ['search', 'details', 'figures', 'analytics', 'status', 'save'];
 
 /** Cap for a recorded request (SQL, a publication number, or the JSON of the request params). */
 export const ANALYTICS_REQUEST_CAP = 2_000;
@@ -65,7 +75,8 @@ export const SEARCH_PURPOSE_CAP = 200;
 export interface PatentExecution {
 	readonly id: string;
 	readonly recordedAt: string;
-	readonly kind: 'search' | 'details' | 'figures' | 'analytics' | 'status';
+	/** `save`: a successful structured save of an invalidity chart; `request` is the report's workspace path. */
+	readonly kind: 'search' | 'details' | 'figures' | 'analytics' | 'status' | 'save';
 	readonly status: 'succeeded' | 'failed' | 'cancelled';
 	readonly query?: string;
 	readonly requestedRange?: string;
@@ -84,10 +95,12 @@ export interface PatentExecution {
 	readonly publicationIds?: readonly string[];
 	readonly sources?: readonly PatentEvidenceSource[];
 	readonly unavailableSections?: readonly string[];
-	/** `analytics` and `status` only: which tool produced the outcome. */
-	readonly tool?: PatentRecordedTool;
-	/** `analytics` and `status` only: the SQL, the publication number, or the JSON of the request params, capped at {@link ANALYTICS_REQUEST_CAP}. */
+	/** `analytics` and `status` only: which tool produced the outcome; `save` only: the writer. */
+	readonly tool?: PatentRecordedTool | PatentSaveTool;
+	/** `analytics` and `status` only: the SQL, the publication number, or the JSON of the request params, capped at {@link ANALYTICS_REQUEST_CAP}; `save` only: the report's workspace-relative path. */
 	readonly request?: string;
+	/** `save` only: how many Search Rounds the saved chart recorded. */
+	readonly rounds?: number;
 	/** `analytics` and `status` only: the backend's own row count, or the number of events or family members returned. */
 	readonly rowCount?: number;
 	/** `analytics` only: the PATSTAT edition or corpus label the numbers belong to. */
@@ -253,7 +266,8 @@ function readFigurePage(value: unknown): { readonly page: number; readonly file?
 function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
 	const record = value as Record<string, unknown>;
-	if (typeof record.kind !== 'string' || !['search', 'details', 'figures', 'analytics', 'status'].includes(record.kind) || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
+	const kind = EXECUTION_KINDS.find(known => known === record.kind);
+	if (!kind || typeof record.status !== 'string' || !['succeeded', 'failed', 'cancelled'].includes(record.status)) { return undefined; }
 	let dropped = false;
 	// `null` is an absent value from JSON, not a corrupt one, so it never counts as a dropped field.
 	const absent = (raw: unknown) => raw === undefined || raw === null;
@@ -288,8 +302,14 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		if (items.length !== raw.length) { dropped = true; }
 		return items;
 	};
-	const recordedTool = (raw: unknown): PatentRecordedTool | undefined => {
+	// A save record names the writer; every other record names a retrieval tool.
+	const recordedTool = (raw: unknown): PatentRecordedTool | PatentSaveTool | undefined => {
 		if (absent(raw)) { return undefined; }
+		if (kind === 'save') {
+			if (raw === 'write_patent_results') { return raw; }
+			dropped = true;
+			return undefined;
+		}
 		const named = RECORDED_TOOLS.find(tool => tool === raw);
 		if (!named) { dropped = true; return undefined; }
 		return named;
@@ -297,7 +317,7 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 	const execution: PatentExecution = {
 		id: text(record.id) ?? '',
 		recordedAt: text(record.recordedAt) ?? '',
-		kind: record.kind === 'details' ? 'details' : record.kind === 'figures' ? 'figures' : record.kind === 'analytics' ? 'analytics' : record.kind === 'status' ? 'status' : 'search',
+		kind,
 		status: record.status === 'failed' ? 'failed' : record.status === 'cancelled' ? 'cancelled' : 'succeeded',
 		query: text(record.query),
 		requestedRange: text(record.requestedRange),
@@ -318,6 +338,7 @@ function readPatentExecution(value: unknown): RecoveredExecution | undefined {
 		tool: recordedTool(record.tool),
 		request: text(record.request),
 		rowCount: count(record.rowCount),
+		rounds: count(record.rounds),
 		dataEdition: text(record.dataEdition),
 		resultText: text(record.resultText),
 		summary: text(record.summary),

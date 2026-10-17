@@ -88,7 +88,7 @@ Save via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it 
 
 Read the receipt line: `fallbacksNotCovered=<n> rounds=<k> notCovered=<claims>`.
 - `fallbacksNotCovered=0`: the ladder is covered. Go to Phase 5.
-- `fallbacksNotCovered` above 0 and `rounds=0`: run ONE **Search Round** aimed only at the limitations those rungs add:
+- `fallbacksNotCovered` above 0 and `rounds=0`: run ONE **Search Round** aimed only at the limitations those rungs add. The Search Round is a new search after the receipt: the writer refuses a round added in a re-save whose queries all ran before that save. Do not list Phase 3 queries as the round.
   1. New **Discriminating Terms** for each added limitation (not the terms of the independent claim).
   2. The search-failure ladder, in order: reformulate, other office, NPL (`search_npl`, then `search_academic`), web.
   3. Chart what the round found on those fallback rows, and record the round in `rounds`: `round: 1`, `targets` (the claim numbers, or the `feature` of a description fallback), every query with its `tool` and the exact query text as you ran it, and an `outcome`. The ledger records `search_patents`, `search_register`, `patstat_*`, `patent_api_request`, `fetch_webpage` and `run_in_terminal` calls; the writer confirms those queries against it. NPL and academic queries (`search_npl`, `search_academic`) are listed in the round too and the chart marks them 'not recorded by the ledger'. Every round must contain at least one query through a recorded tool, exactly as run, or the writer refuses the save.

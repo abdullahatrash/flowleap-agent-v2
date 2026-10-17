@@ -206,9 +206,12 @@ function normalizeText(value: string): string {
 	return value.replace(/\s+/g, ' ').trim();
 }
 
-/** The tool identities a recorded execution answers to. A search record carries no tool name of its own. */
+/**
+ * The tool identities a recorded execution answers to. A search record carries no tool name of its
+ * own; a save record is the writer's own mark, not a query a round can cite.
+ */
 function executionTools(execution: PatentExecution): readonly string[] {
-	return execution.kind === 'search' ? ['search_patents', 'search_register'] : execution.tool ? [execution.tool] : [];
+	return execution.kind === 'save' ? [] : execution.kind === 'search' ? ['search_patents', 'search_register'] : execution.tool ? [execution.tool] : [];
 }
 
 /** The query texts a recorded execution ran, whitespace-normalised. */
@@ -225,14 +228,29 @@ const LEDGER_TOOLS: ReadonlySet<string> = new Set<string>([...SEARCH_TOOLS, ...R
 /** How the ledger stands to one Search Round query: confirmed by a recorded execution, or run through a tool the ledger does not record. */
 export type RoundQueryLedgerStatus = 'matched' | 'unrecorded';
 
-/** The `tool + query` keys of every recorded execution. */
-function executedKeys(snapshot: PatentExecutionSnapshot): ReadonlySet<string> {
-	return new Set(snapshot.executions.flatMap(execution => executionTools(execution).flatMap(tool => executionQueries(execution).map(query => `${tool}\u0000${query}`))));
+/** The `tool + query` key of every recorded execution, each with the `recordedAt` of its latest run. */
+function executedKeys(snapshot: PatentExecutionSnapshot): ReadonlyMap<string, string> {
+	const latest = new Map<string, string>();
+	for (const execution of snapshot.executions) {
+		for (const tool of executionTools(execution)) {
+			for (const query of executionQueries(execution)) {
+				const key = `${tool}\u0000${query}`;
+				const known = latest.get(key);
+				if (known === undefined || execution.recordedAt.localeCompare(known) > 0) { latest.set(key, execution.recordedAt); }
+			}
+		}
+	}
+	return latest;
 }
 
 /** One round query's tool, lower-cased and trimmed. */
 function roundTool(entry: { readonly tool?: string } | undefined): string {
 	return entry?.tool?.trim().toLowerCase() ?? '';
+}
+
+/** The `tool + query` key of one round query, as {@link executedKeys} keys an execution. */
+function roundKey(entry: { readonly tool?: string; readonly query?: string } | undefined): string {
+	return `${roundTool(entry)}\u0000${queryKey(entry?.query ?? '')}`;
 }
 
 /**
@@ -245,8 +263,38 @@ export function roundLedgerStatus(review: PatentCandidateReview, snapshot: Paten
 	const executed = executedKeys(snapshot);
 	return (review.rounds ?? []).map(round => ({
 		round: round.round,
-		queries: (round.queries ?? []).map(entry => executed.has(`${roundTool(entry)}\u0000${queryKey(entry?.query ?? '')}`) ? 'matched' : 'unrecorded'),
+		queries: (round.queries ?? []).map(entry => executed.has(roundKey(entry)) ? 'matched' : 'unrecorded'),
 	}));
+}
+
+/** The latest recorded save of the chart at `reportPath`, or nothing when this is its first save. */
+function previousSave(snapshot: PatentExecutionSnapshot, reportPath: string): PatentExecution | undefined {
+	return snapshot.executions
+		.filter(execution => execution.kind === 'save' && execution.status === 'succeeded' && execution.request === reportPath)
+		.reduce<PatentExecution | undefined>((latest, execution) => !latest || execution.recordedAt.localeCompare(latest.recordedAt) > 0 ? execution : latest, undefined);
+}
+
+/**
+ * A Search Round is a new search after the receipt (ADR 0016 decision 5), so a round that first
+ * appears in a re-save of `reportPath` must hold at least one query whose execution the ledger
+ * recorded after that chart's previous save. The first save of a path has no previous save and no
+ * order check: running the round before saving is honest. Rounds the previous save already recorded
+ * (index below its round count) are not re-checked. A round with no confirmed query at all is left
+ * to {@link fallbackLadderErrors}, which refuses it on its own ground.
+ */
+export function roundOrderErrors(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, reportPath: string): string[] {
+	const previous = previousSave(snapshot, reportPath);
+	if (!previous) { return []; }
+	const executed = executedKeys(snapshot);
+	const errors: string[] = [];
+	(review.rounds ?? []).forEach((round, index) => {
+		if (index < (previous.rounds ?? 0)) { return; }
+		const ranAt = (round?.queries ?? []).flatMap(entry => { const at = executed.get(roundKey(entry)); return at === undefined ? [] : [at]; });
+		if (ranAt.length && !ranAt.some(at => at.localeCompare(previous.recordedAt) > 0)) {
+			errors.push(`Round ${round.round} lists only queries that ran before the previous save of this chart (${previous.recordedAt}); a Search Round is a new search after the receipt. Run at least one new query aimed at the not-covered limitations and record it in the round, or save without the round.`);
+		}
+	});
+	return errors;
 }
 
 /**

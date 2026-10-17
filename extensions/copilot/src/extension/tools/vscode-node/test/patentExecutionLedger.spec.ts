@@ -111,6 +111,21 @@ describe('durable patent execution audit', () => {
 		}]);
 	});
 
+	it('round-trips the writer\'s save mark with its report path and round count, and drops any other tool on it', async () => {
+		const { ledger, session, files } = setup();
+		await ledger.record(session, { kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: 'outputs/invalidity-chart.md', rounds: 1 });
+		await ledger.record(session, { kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: 'outputs/other.md', rounds: 0 });
+		files.mockFile(files.committed[1], JSON.stringify({
+			id: 'odd', recordedAt: '2099-01-01T00:00:00Z', kind: 'save', status: 'succeeded', tool: 'patstat_query', request: 'outputs/other.md', rounds: 0,
+		}));
+		const snapshot = await ledger.read(session);
+		expect(snapshot.executions.map(row => ({ kind: row.kind, tool: row.tool, request: row.request, rounds: row.rounds }))).toEqual([
+			{ kind: 'save', tool: 'write_patent_results', request: 'outputs/invalidity-chart.md', rounds: 1 },
+			{ kind: 'save', tool: undefined, request: 'outputs/other.md', rounds: 0 },
+		]);
+		expect(snapshot.limitation).toContain('recovered with unreadable fields dropped');
+	});
+
 	it('keeps an analytics outcome whose rowCount and tool are unreadable, leaving both unknown', async () => {
 		const { ledger, session, files } = setup();
 		await ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'patstat_portfolio', request: '{"applicant":"Kia"}' });

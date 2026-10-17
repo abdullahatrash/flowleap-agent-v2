@@ -703,24 +703,25 @@ describe('candidate report save path', () => {
 			});
 		});
 
+		// The challenged patent with one rung: claim 2 falls back from claim 1.
+		const laddered: IPatentExecutionLedger = {
+			...ledger,
+			read: async () => {
+				const snapshot = await ledger.read(undefined);
+				return {
+					...snapshot,
+					executions: [...snapshot.executions, {
+						id: 'challenged-dependent', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP2000000A1'], sources: [
+							{ anchor: 'EP2000000A1:claims:2:en', text: '2. The quick release according to claim 1, wherein the lever arm is captive.', reference: { publicationNumber: 'EP2000000A1', section: 'claims', claimNumber: '2' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+						],
+					}],
+				};
+			},
+		};
+		const fallback = { feature: 'Claim 2 (depends on 1) — added limitation: the lever arm is captive', claimNumber: '2', fallbackOf: '1', kind: 'fallback' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'No cited passage makes the lever arm captive; figures not consulted: synthetic fixture with no drawings.' };
+		const charted = { ...input, coverage: [...input.coverage, fallback] };
+
 		it('states the Fallback Coverage counts on the receipt line, which the completion check reads for one Search Round', async () => {
-			// The challenged patent now has one rung: claim 2 falls back from claim 1.
-			const laddered: IPatentExecutionLedger = {
-				...ledger,
-				read: async () => {
-					const snapshot = await ledger.read(undefined);
-					return {
-						...snapshot,
-						executions: [...snapshot.executions, {
-							id: 'challenged-dependent', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP2000000A1'], sources: [
-								{ anchor: 'EP2000000A1:claims:2:en', text: '2. The quick release according to claim 1, wherein the lever arm is captive.', reference: { publicationNumber: 'EP2000000A1', section: 'claims', claimNumber: '2' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
-							],
-						}],
-					};
-				},
-			};
-			const fallback = { feature: 'Claim 2 (depends on 1) — added limitation: the lever arm is captive', claimNumber: '2', fallbackOf: '1', kind: 'fallback' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'No cited passage makes the lever arm captive; figures not consulted: synthetic fixture with no drawings.' };
-			const charted = { ...input, coverage: [...input.coverage, fallback] };
 			const { tool, files } = setup(laddered);
 			const result = await tool.invoke({ input: charted, toolInvocationToken: undefined }, CancellationToken.None);
 			const message = (result.content[0] as LanguageModelTextPart).value;
@@ -732,6 +733,37 @@ describe('candidate report save path', () => {
 			}).toEqual({
 				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
 				completion: 'The saved chart leaves 1 fallback not covered (2). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.',
+			});
+		});
+
+		it('marks each save in the ledger and refuses a round added in a re-save whose queries all ran before that save', async () => {
+			// One search ran in Phase 3, before the first save; the ledger stamps each save after it.
+			const search: PatentExecution = { id: 'vent', recordedAt: '2026-09-13T01:00:00Z', kind: 'search', status: 'succeeded', query: 'ti=captive AND ti=lever', effectiveQuery: 'ti=captive AND ti=lever', total: 0, returned: 0 };
+			const recorded: PatentExecution[] = [];
+			const ordered: IPatentExecutionLedger = {
+				...laddered,
+				read: async () => {
+					const snapshot = await laddered.read(undefined);
+					return { ...snapshot, executions: [...snapshot.executions, search, ...recorded] };
+				},
+				record: async (_session, execution) => {
+					recorded.push({ ...execution, id: `save-${recorded.length + 1}`, recordedAt: `2026-09-14T0${recorded.length + 1}:00:00Z` });
+					return 'Recorded.';
+				},
+			};
+			const { tool } = setup(ordered);
+			const first = (await tool.invoke({ input: charted, toolInvocationToken: undefined }, CancellationToken.None)).content[0] as LanguageModelTextPart;
+			const receipt = first.value.split('\n').find(line => line.startsWith('Prior-art artifact receipt: ')) ?? first.value;
+			const stale = { ...charted, rounds: [{ round: 1, targets: ['2'], queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=lever' }], outcome: 'Nothing new for claim 2.' }] };
+			const second = (await tool.invoke({ input: stale, toolInvocationToken: undefined }, CancellationToken.None)).content[0] as LanguageModelTextPart;
+			expect({
+				counts: receipt.slice(receipt.indexOf(' fallbacksNotCovered=')),
+				saves: recorded.map(execution => ({ kind: execution.kind, tool: execution.tool, request: execution.request, rounds: execution.rounds })),
+				second: second.value,
+			}).toEqual({
+				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
+				saves: [{ kind: 'save', tool: 'write_patent_results', request: 'invalidity.md', rounds: 0 }],
+				second: 'Candidate draft was not saved. Correct these issues and retry with the revised content:\n- Round 1 lists only queries that ran before the previous save of this chart (2026-09-14T01:00:00Z); a Search Round is a new search after the receipt. Run at least one new query aimed at the not-covered limitations and record it in the round, or save without the round.',
 			});
 		});
 	});
