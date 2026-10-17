@@ -731,7 +731,7 @@ describe('candidate report save path', () => {
 				completion: await checkPriorArtReportCompletion([], turn, files),
 			}).toEqual({
 				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
-				completion: 'The saved chart leaves 1 fallbacks not covered (2). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.',
+				completion: 'The saved chart leaves 1 fallback not covered (2). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.',
 			});
 		});
 	});

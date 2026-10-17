@@ -158,7 +158,9 @@ function searchRoundNudge(activeTurns: readonly ReportCompletionTurn[], current:
 	const latest = [...currentReceipts].reverse().find(receipt => !target || matchesPath(receipt.reportUri, target));
 	const fallbacks = latest?.fallbacks;
 	if (!latest || !fallbacks || fallbacks.fallbacksNotCovered === 0 || fallbacks.rounds > 0 || nudgedPaths(activeTurns, current).has(latest.reportUri)) { return undefined; }
-	return `The saved chart leaves ${fallbacks.fallbacksNotCovered} fallbacks not covered (${fallbacks.notCovered}). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; 'not covered' is then final. Do not repeat searches merely to pass validation.`;
+	// The receipt joins the list without spaces; the nudge reads it back with a space after each comma.
+	const notCovered = fallbacks.notCovered.split(',').map(entry => entry.trim()).filter(Boolean).join(', ');
+	return `The saved chart leaves ${fallbacks.fallbacksNotCovered} ${fallbacks.fallbacksNotCovered === 1 ? 'fallback' : 'fallbacks'} not covered (${notCovered}). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; 'not covered' is then final. Do not repeat searches merely to pass validation.`;
 }
 
 /**

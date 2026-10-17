@@ -162,7 +162,7 @@ describe('prior-art report completion contract', () => {
 
 	describe('one Search Round for fallbacks not covered (invalidity chart)', () => {
 		const invalidityRequest = 'Build the invalidity case against EP2000000A1 and save "outputs/研究 review.md".';
-		const nudge = 'The saved chart leaves 2 fallbacks not covered (3,a rubber-lined band). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.';
+		const nudge = 'The saved chart leaves 2 fallbacks not covered (3, a rubber-lined band). Run one Search Round aimed at those limitations (new Discriminating Terms, other office, NPL, web), record it in rounds, and re-save. If the round finds nothing, re-save with the round recorded; \'not covered\' is then final. Do not repeat searches merely to pass validation.';
 		/** A turn that saves the chart once, its receipt stating the given Fallback Coverage counts. */
 		async function chart(fs: MockFileSystemService, fallbacks: ReceiptFallbacks, request = invalidityRequest, template = 'invalidity-claim-chart'): Promise<ReportCompletionTurn> {
 			await fs.writeFile(report, new TextEncoder().encode('Evidence-backed chart'));
