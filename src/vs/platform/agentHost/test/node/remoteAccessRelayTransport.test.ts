@@ -15,7 +15,8 @@ import { RemoteAccessHostState } from '../../common/remoteAccessHost.js';
 import type { ProtocolMessage } from '../../common/state/sessionProtocol.js';
 import type { IProtocolTransport } from '../../common/state/sessionTransport.js';
 import { isAllowedRelayUrl, RemoteAccessHostController } from '../../node/remoteAccessHostController.js';
-import { decodePairFrame, encodeBroadcastFrame, encodePairFrame, IRemoteAccessRelayOptions, RemoteAccessRelayProtocolServer } from '../../node/remoteAccessRelayTransport.js';
+import { decodePairFrame, encodeBroadcastFrame, encodePairFrame } from '../../common/remoteAccessRelayProtocol.js';
+import { IRemoteAccessRelayOptions, RemoteAccessRelayProtocolServer } from '../../node/remoteAccessRelayTransport.js';
 
 const HOST_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 const PAIR_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
