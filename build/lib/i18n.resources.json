@@ -765,6 +765,10 @@
 			"project": "vscode-sessions"
 		},
 		{
+			"name": "vs/sessions/contrib/remoteAccess",
+			"project": "vscode-sessions"
+		},
+		{
 			"name": "vs/sessions/contrib/editor",
 			"project": "vscode-sessions"
 		},

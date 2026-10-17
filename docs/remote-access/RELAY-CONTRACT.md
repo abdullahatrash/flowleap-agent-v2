@@ -135,10 +135,34 @@ The plaintext inside is the AHP byte stream exactly as `webSocketTransport.ts` w
 over a local socket: the Viewer's `AgentHostProtocolClient` sends `initialize` as its first
 message and the Host's `ProtocolServerHandler` answers. Nothing in AHP changes.
 
+### 6.1 Byte layout (B3, `platform/agentHost/common/remoteAccessCrypto.ts`)
+
+The Host and the Viewer share one module for this, so they cannot drift. All
+WebCrypto; ids as their 16 raw UUID bytes.
+
+| Item | Bytes |
+|---|---|
+| Pairing proof | lowercase hex of `HMAC-SHA256(key = pairSecret (16 raw bytes), msg = UTF-8 hostId)` |
+| Pair key | `HKDF-SHA256(ikm = pairSecret, salt = pairId, info = "flowleap-remote-access-pair-v1")`, 32 bytes |
+| Pairing code | `<pairId>.<pairSecret as RFC 4648 base32, lowercase, no padding>` (26 characters of secret) |
+| Handshake frame | `[0x01][version 0x01][role 0x01 host / 0x02 viewer][X25519 public key, 32][tag, 32]`, tag = `HMAC-SHA256(pairKey, publicKey ‖ UTF-8 "host"/"viewer")` |
+| Session key | `HKDF-SHA256(ikm = X25519 shared secret, salt = pairId, info = "flowleap-remote-access-session-v1")` |
+| Data frame | `[0x02][counter, 8 bytes big-endian][AES-256-GCM ciphertext ‖ tag]`, nonce = `[direction, 4 bytes: 1 Host→Viewer, 2 Viewer→Host][counter, 8]`, aad = pairId |
+| Plaintext | `[flags][chunk]`, flags bit 0 = last chunk of one AHP message; chunks ≤ 1,000,000 bytes so a frame stays under the 1 MiB Relay limit |
+
+Order: **the Viewer sends its handshake first**, on its `welcome` when `peer.online` is true and
+on every `{"t":"host","online":true}`; the Host answers each Viewer handshake with a fresh
+ephemeral key and opens a new AHP stream for that pair (any older stream for the pair closes).
+The Host does nothing on `{"t":"viewer","online":true}` and closes the pair's stream on
+`online:false`. Counters start at 0 per direction per handshake and must arrive in order, so a
+replayed, reordered or reflected frame fails. The Host sends `hello.ahp` as the AHP version
+strings it supports (`SUPPORTED_PROTOCOL_VERSIONS`, e.g. `["0.9.0", "0.8.0", …]`).
+
 ## 7. Host transport
 
 The Host does not listen. A new `IProtocolServer` implementation (`platform/agentHost/node/
-relayTransport.ts`, PRD 0018 B3) dials the Relay, performs §3 and §6, and hands one duplex
+remoteAccessRelayTransport.ts`, PRD 0018 B3; not `relayTransport.ts`, which is upstream's unrelated
+shared-process relay in `common/`) dials the Relay, performs §3 and §6, and hands one duplex
 stream per live Viewer to `ProtocolServerHandler`, exactly as `startWebSocketServer` hands a
 local socket today. The transport reconnects with backoff (1 s → 60 s) while Remote Access is
 on, and stops on sign-out or toggle-off.

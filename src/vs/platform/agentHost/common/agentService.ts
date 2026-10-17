@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IRemoteAccessHostConfig, IRemoteAccessHostStatus } from './remoteAccessHost.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBuffer } from '../../../base/common/buffer.js';
 import { Event } from '../../../base/common/event.js';
@@ -759,6 +760,16 @@ export interface IConnectionTrackerService {
 	 * enabled (e.g. running in an environment without `node:inspector`).
 	 */
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+
+	/**
+	 * Switch the Remote Access Host transport on (or refresh its token and
+	 * pairs) with a config, or off with `undefined`. The token and pair keys
+	 * stay in the agent host's memory.
+	 */
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+
+	/** The Remote Access Host transport's current status. */
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
 }
 
 /**
@@ -794,6 +805,8 @@ export interface IAgentHostManagementService {
 	readDebugLogsChunk(resource: URI, position: number): Promise<IAgentHostDebugLogsChunk>;
 	startWebSocketServer(): Promise<IAgentHostSocketInfo>;
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+	setRemoteAccessHost(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+	getRemoteAccessHostStatus(): Promise<IRemoteAccessHostStatus>;
 }
 
 // ---- Service interfaces -----------------------------------------------------
@@ -1289,4 +1302,13 @@ export interface IAgentHostService extends IAgentConnection {
 	 * enabled.
 	 */
 	getInspectInfo(tryEnable: boolean): Promise<IAgentHostInspectInfo | undefined>;
+
+	/**
+	 * Remote Access (local agent host only): switch the Host transport on or
+	 * refresh it with a config, or off with `undefined`.
+	 */
+	setRemoteAccessHost?(config: IRemoteAccessHostConfig | undefined): Promise<void>;
+
+	/** Remote Access (local agent host only): the Host transport's status. */
+	getRemoteAccessHostStatus?(): Promise<IRemoteAccessHostStatus>;
 }

@@ -251,6 +251,9 @@ import './contrib/providers/remoteAgentHost/browser/devContainerAgentHostService
 // Chat
 import './contrib/agentFeedback/browser/agentFeedback.contribution.js';
 import './contrib/chat/electron-browser/chat.contribution.js';
+import '../workbench/contrib/chat/electron-browser/remoteAccess/remoteAccess.contribution.js';
+import './contrib/remoteAccess/browser/remoteAccess.contribution.js';
+import './contrib/remoteAccess/electron-browser/remoteAccessKeepAwake.contribution.js';
 
 // Local Agent Host
 import './contrib/providers/agentHost/browser/localAgentHost.contribution.js';
