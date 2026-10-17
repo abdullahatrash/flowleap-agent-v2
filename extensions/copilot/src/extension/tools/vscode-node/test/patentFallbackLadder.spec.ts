@@ -158,6 +158,19 @@ describe('fallback row checks (invalidity variant)', () => {
 		});
 	});
 
+	it('refuses an assertive legal conclusion in a model-written field, and names where', () => {
+		const stated = { ...review, coverage: [coverage[0], { ...coverage[1], gap: 'Claim 1 is obvious in view of EP1000000A1 and common knowledge.' }, ...coverage.slice(2)], stopReason: 'EP1000000A1 anticipates claim 1; one Search Round ran.' };
+		expect(validateCandidateReview(stated, snapshot, '', 'invalidity')).toEqual([
+			'The chart states a legal conclusion: "is obvious" in coverage gap for "Claim 1 as a whole". An invalidity chart states what each document discloses (disclosed / partially disclosed / not found in the cited art) and leaves anticipation and obviousness to counsel. Reword that passage to what the passage discloses and which claim element it meets or misses.',
+			'The chart states a legal conclusion: "anticipates" in stopReason. An invalidity chart states what each document discloses (disclosed / partially disclosed / not found in the cited art) and leaves anticipation and obviousness to counsel. Reword that passage to what the passage discloses and which claim element it meets or misses.',
+		]);
+	});
+
+	it('keeps the noun forms and disclaimers as a wording review, not a refusal', () => {
+		const nouns = { ...review, limitations: ['No assessment of anticipation or obviousness is made here.', 'Obviousness of claim 1 is not decided here.'] };
+		expect({ errors: validateCandidateReview(nouns, snapshot, '', 'invalidity'), wording: candidateWordingReview(nouns, 'invalidity') }).toEqual({ errors: [], wording: ['"Obviousness" in limitations[1]'] });
+	});
+
 	it('leaves prior-art reviews without fallback rows', () => {
 		expect(validateCandidateReview(review, snapshot, '', 'prior-art').filter(error => error.startsWith('Identify coverage kind'))).toEqual([
 			'Identify coverage kind (feature or combination) for "Claim 2 (depends on 1) — added limitation: the band is steel".',

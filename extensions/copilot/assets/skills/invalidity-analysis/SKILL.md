@@ -76,7 +76,7 @@ The structured chart for `write_patent_results` (`template: 'invalidity-claim-ch
 - **Rungs left out**: each one goes in `fallbacksNotCharted` with a reason. The writer refuses a chart in which a rung has neither a row nor an entry.
 - `elements` carry literal fragments copied from the **prior art's** claims or description, and `sourceAnchors`/`evidence` cite those prior-art passages, never the challenged patent. Only a description fallback's `basis` quotes the challenged patent.
 - Set `challengedPublication` to the target patent, and put the critical-date basis in `objective`.
-- `status` stays supported / partial / unresolved; the chart renders them as disclosed / partially disclosed / not found in the cited art, counts fallbacks as covered / partly covered / not covered, and derives a reference-roles table from them. Your X/Y/A tagging stays your own judgment in the prose above.
+- `status` stays supported / partial / unresolved; the chart renders them as disclosed / partially disclosed / not found in the cited art, counts fallbacks as covered / partly covered / not covered, and derives a reference-roles table from them. Your X/Y/A tagging and the §102/§103 grounds stay your own judgment in the prose above: the writer refuses a chart whose `gap`, `limitations`, `stopReason`, `outcome` or `reason` states a legal conclusion ("is obvious", "obvious over", "would have been obvious", "anticipates", "anticipated by", "is not novel"); a chart field says what the passage discloses and which element it meets or misses.
 
 Field detail, the EN/DE/FR dependency wording and a worked example: [references/fallback-coverage.md](references/fallback-coverage.md).
 

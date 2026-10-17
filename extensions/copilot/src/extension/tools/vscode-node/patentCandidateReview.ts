@@ -157,6 +157,13 @@ const LEGAL_CONCLUSION_PHRASES: readonly string[] = [
 const FIND_BETTER_CONCLUSION_PHRASES: readonly string[] = ['invalid', 'invalidates', 'invalidated', 'invalidating', 'invalidity', 'obvious'];
 
 /**
+ * The assertive forms an invalidity chart refuses outright (ADR 0016 decision 4: the chart states
+ * what each document discloses; the legal reading stays in the practitioner's prose). Unlike the
+ * noun forms above, which honest disclaimers also use, these only ever state a conclusion.
+ */
+const ASSERTIVE_CONCLUSION_PHRASES: readonly string[] = ['is obvious', 'are obvious', 'obvious over', 'would have been obvious', 'anticipates', 'anticipated by', 'is not novel', 'are not novel'];
+
+/**
  * Report the legal conclusions written into model-supplied prose. A disclaimer of the form
  * "does not establish novelty" is the opposite of a conclusion, so a match whose preceding 60
  * characters disclaim establishment is exempt.
@@ -621,7 +628,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 	const anchors = new Set(sources.keys());
 	if (sided.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : variant === 'find-better' ? 'find-better-report' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
 	if (variant === 'find-better') { errors.push(...findBetterErrors(sided, sources)); }
-	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources)); }
+	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources), ...assertiveConclusionErrors(sided)); }
 	// Each side of a find-better row is checked as a row of its own; every other review is unchanged.
 	const review = flattenSides(sided);
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
@@ -681,8 +688,22 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
  * verbatim source text and are never scanned; only prose the model wrote itself is.
  */
 export function candidateWordingReview(sided: PatentCandidateReview, variant: CandidateReviewVariant = 'prior-art'): string[] {
-	const review = flattenSides(sided);
-	return legalConclusions([
+	return legalConclusions(modelWrittenFields(flattenSides(sided)), variant === 'find-better' ? [...LEGAL_CONCLUSION_PHRASES, ...FIND_BETTER_CONCLUSION_PHRASES] : LEGAL_CONCLUSION_PHRASES);
+}
+
+/**
+ * The legal conclusions an invalidity chart refuses to save: the assertive forms in any
+ * model-written field. The noun forms stay a wording review the model may confirm, because a
+ * disclaimer uses them too. One error per finding, so the model sees exactly where to reword.
+ */
+function assertiveConclusionErrors(sided: PatentCandidateReview): string[] {
+	return legalConclusions(modelWrittenFields(flattenSides(sided)), ASSERTIVE_CONCLUSION_PHRASES)
+		.map(finding => `The chart states a legal conclusion: ${finding}. An invalidity chart states what each document discloses (disclosed / partially disclosed / not found in the cited art) and leaves anticipation and obviousness to counsel. Reword that passage to what the passage discloses and which claim element it meets or misses.`);
+}
+
+/** Every field the model writes in its own words, with a label for the finding; quotations are never included. */
+function modelWrittenFields(review: ReturnType<typeof flattenSides>): (readonly [string, string | undefined])[] {
+	return [
 		['objective', review.objective],
 		['searchStrategy', review.searchStrategy],
 		...(review.concepts ?? []).flatMap(entry => [
@@ -705,7 +726,7 @@ export function candidateWordingReview(sided: PatentCandidateReview, variant: Ca
 		// A description fallback's basis.quote is a quotation of the challenged patent and is never scanned.
 		...(review.fallbacksNotCharted ?? []).map(entry => [`fallbacksNotCharted reason for claim ${entry.claimNumber}`, entry.reason] as const),
 		...(review.rounds ?? []).map(round => [`outcome of Search Round ${round.round}`, round.outcome] as const),
-	], variant === 'find-better' ? [...LEGAL_CONCLUSION_PHRASES, ...FIND_BETTER_CONCLUSION_PHRASES] : LEGAL_CONCLUSION_PHRASES);
+	];
 }
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
