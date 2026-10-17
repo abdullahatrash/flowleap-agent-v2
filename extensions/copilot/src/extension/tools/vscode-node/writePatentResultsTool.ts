@@ -21,7 +21,7 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { IActivationTelemetryService } from '../../patentai/vscode-node/activationTelemetryService';
 import { FREE_FORM_TEMPLATE_KIND } from '../../patentai/common/activationTelemetry';
 import { IPatentExecutionLedger, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
-import { deriveFallbackLadder, fallbackCoverage, fallbacksNotCovered } from './patentFallbackLadder';
+import { deriveFallbackLadder, fallbackCoverage, fallbacksNotCovered, roundOrderErrors } from './patentFallbackLadder';
 import { CandidateReviewVariant, candidateWordingReview, challengedClaims, materializeCandidateReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from './patentCandidateReview';
 import { baselineIntegrityNote, baselineSource, claimComparisons, countLine, ExaminerBaseline, findBetterMissingInputs, flattenSides, gapCount, ignoredNumericFields, incompleteSearch } from './patentFindBetter';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
@@ -299,6 +299,11 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			const checked = variant === 'invalidity' ? { ...input, challengedPublication: input.challengedPublication ?? options.input.matter } : input;
 			if (snapshot) {
 				const errors = validateCandidateReview(checked, snapshot, [content, input.objective, input.searchStrategy, ...(input.concepts ?? []).flatMap(entry => [entry.concept, ...entry.synonyms]), ...(input.classifications ?? []).flatMap(entry => [entry.code, entry.meaning]), ...(flat.coverage ?? []).flatMap(row => [row.feature, row.gap, ...(row.evidence ?? []).flatMap(evidence => [evidence.quote, evidence.scope, evidence.qualifiers, evidence.quantityBasis])]), ...(input.limitations ?? []), input.stopReason].filter(Boolean).join('\n'), variant);
+				// A Search Round added in a re-save of this chart must be a search that ran after the
+				// chart's previous save (#725); the path is the one the save record below names.
+				if (variant === 'invalidity') {
+					errors.push(...roundOrderErrors(checked, snapshot, reportWorkspacePath(uri, folders)));
+				}
 				if (errors.length) {
 					return new LanguageModelToolResult([new LanguageModelTextPart('Candidate draft was not saved. Correct these issues and retry with the revised content:\n- ' + errors.join('\n- '))]);
 				}
@@ -388,6 +393,11 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			// An invalidity chart's receipt states its Fallback Coverage, so the completion guard can ask
 			// for the one Search Round without reading the report.
 			const fallbacks = snapshot && variant === 'invalidity' ? receiptFallbacks(input, snapshot, input.challengedPublication ?? options.input.matter) : undefined;
+			// The chart is on disk: mark the save in the ledger, so a Search Round added in a later
+			// save of this path can be checked against the position of this one (#725).
+			if (fallbacks) {
+				await this.ledger.record(options.chatSessionResource, { kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: reportWorkspacePath(uri, folders), rounds: fallbacks.rounds });
+			}
 			const ignoredResult = ignored.length ? `\nIgnored model-supplied numeric field(s): ${ignored.join(', ')}. A Find Better report counts disclosed elements from the validated rows only; no model-supplied number reaches the report.` : '';
 			return new LanguageModelToolResult([
 				new LanguageModelTextPart(`Successfully wrote patent results to ${filePath}` + provenanceResult + (evidenceDocument ? `${wording.length ? `\nWording review: ${wording.length} phrase(s) flagged in the working record; reword them in a follow-up save if they are conclusions rather than disclaimers.` : ''}${this.secondReadResult(mode, secondRead, verdictFileName, objectedSaves)}${sourceResult}${ignoredResult}\n${findBetter ? findBetterSummaryContract(input) : SUMMARY_CONTRACT}\n${priorArtReportReceipt(uri, document, evidenceUri, evidenceDocument, fallbacks)}${recordWritten ? `\nWorking record: ${workingRecordPath(filePath)}` : ''}` : provenance ? '' : '\nFree-form artifact: evidence validation was not performed.'))

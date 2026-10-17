@@ -6,7 +6,7 @@ import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { candidateWordingReview, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
-import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundLedgerStatus } from '../patentFallbackLadder';
+import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundLedgerStatus, roundOrderErrors } from '../patentFallbackLadder';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
@@ -259,6 +259,31 @@ describe('fallback row checks (invalidity variant)', () => {
 		const unsegmented: PatentEvidenceSource = { anchor: `${challenged}:claims:en`, text: challengedClaims.join(' '), reference: { publicationNumber: challenged, section: 'claims' }, language: 'en', retrieval: 'unsegmented', review: 'unknown', completeness: 'unknown' };
 		const flat = snapshotOf(snapshot.executions[0], details(challenged, [], 'en', [unsegmented, snapshot.executions[1].sources![3]]), snapshot.executions[2]);
 		expect(fallbackLadderErrors(review, flat, sources)).toEqual([]);
+	});
+
+	describe('a Search Round added in a re-save is a search after the previous save (#725)', () => {
+		const chart = 'outputs/invalidity-chart.md';
+		/** The writer's mark of a successful save of the chart, with the rounds that save recorded. */
+		const save = (recordedAt: string, rounds: number): PatentExecution => ({ id: `save-${recordedAt}`, recordedAt, kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: chart, rounds });
+		const laterSearch: PatentExecution = { id: 'later', recordedAt: '2026-10-17T04:00:00Z', kind: 'search', status: 'succeeded', query: 'ti=captive AND ti=bolt', effectiveQuery: 'ti=captive AND ti=bolt', total: 0, returned: 0 };
+		const refusal = 'Round 1 lists only queries that ran before the previous save of this chart (2026-10-17T03:00:00Z); a Search Round is a new search after the receipt. Run at least one new query aimed at the not-covered limitations and record it in the round, or save without the round.';
+
+		it('does not check the order of a round in the first save of a chart', () => {
+			expect(roundOrderErrors(review, snapshot, chart)).toEqual([]);
+		});
+
+		it('refuses a round added in a re-save whose only confirmed queries ran before the previous save', () => {
+			expect(roundOrderErrors(review, snapshotOf(...snapshot.executions, save('2026-10-17T03:00:00Z', 0)), chart)).toEqual([refusal]);
+		});
+
+		it('accepts a round added in a re-save once one of its queries ran after the previous save', () => {
+			const withNew: PatentCandidateReview = { ...review, rounds: [{ round: 1, targets: ['3'], queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=screw' }, { tool: 'search_patents', query: 'ti=captive AND ti=bolt' }], outcome: 'Nothing new for claim 3.' }] };
+			expect(roundOrderErrors(withNew, snapshotOf(...snapshot.executions, save('2026-10-17T03:00:00Z', 0), laterSearch), chart)).toEqual([]);
+		});
+
+		it('does not re-check a round the previous save already recorded', () => {
+			expect(roundOrderErrors(review, snapshotOf(...snapshot.executions, save('2026-10-17T03:00:00Z', 1)), chart)).toEqual([]);
+		});
 	});
 });
 

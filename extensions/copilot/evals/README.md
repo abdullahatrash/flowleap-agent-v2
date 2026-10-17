@@ -450,6 +450,9 @@ judgment. The predicate is right to refuse that. The product accepts it today, b
 writer only checks that each round query matches a ledger execution; #725 makes the writer
 refuse a round added in a re-save whose queries all predate the previous save. Flip the
 baseline entry to `PASS` when #725 merges and a T11-only probe lands at 4/5 or better.
+**Done with #725 (PR #737):** T11-only probe `P P P F P` = 4/5 on the branch with the Phase 4b
+sentence in place; no run relabelled a round, the one failure hit the 20-round cap before any
+save. Baseline entry flipped to expected `PASS` in that PR.
 
 Three earlier causes were eval design, fixed before the runs above: a fixed receipt sequence
 that contradicted a first save already recording a round; predicates that assumed the round
