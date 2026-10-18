@@ -23,6 +23,7 @@ import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README }
 import { validateDraft } from '../common/drafting/validateDraft';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, EXPORTED_DRAFT_HASH, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
+import { figureOfSvgFile } from '../../drawings/common/drawingFiles';
 import type { MatterFiles } from '../../drawings/node/ops/matterFiles';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
@@ -410,8 +411,8 @@ export class DraftingWorkspace {
 
 	/**
 	 * Writes the Drafting Checklist (`checklist.md`) from the files of the matter and returns it.
-	 * Every drafting tool calls it after it runs, also after a refusal. Nothing is written while the
-	 * matter has no folder and no drafting input.
+	 * Every drafting tool and every drawing tool calls it after it runs, also after a refusal.
+	 * Nothing is written while the matter has no folder and no drafting input.
 	 */
 	private async writeChecklist(): Promise<DraftingChecklist | undefined> {
 		const { folder } = this;
@@ -439,6 +440,7 @@ export class DraftingWorkspace {
 			draft,
 			draftStale: draft !== undefined && claims !== undefined && !!versionHash && versionHash !== claimsHash(claims),
 			figures: await this.read(folder.figures),
+			drawnFigures: (await this.listFiles(folder.drawings)).filter(name => figureOfSvgFile(name) !== undefined).length,
 			inventorAnswers: await this.read(folder.inventorAnswers),
 			findings,
 			findingsCurrent: findings !== undefined && !!currentHash && readRecordField(record, VALIDATED_DRAFT_HASH) === currentHash,
@@ -456,6 +458,12 @@ export class DraftingWorkspace {
 	async refusal(prefix: string, reason: string): Promise<LanguageModelToolResult> {
 		const pointer = await this.checklistLine(true);
 		return textResult(`${prefix} ${reason}${pointer ? `${reason.includes('\n') ? '\n' : ' '}${pointer}` : ''}`);
+	}
+
+	/** The text of a tool result that ran, then on a new line the next step of the Drafting Checklist, which is written first. */
+	async textWithChecklistLine(text: string): Promise<string> {
+		const line = await this.checklistLine(false);
+		return line ? `${text}\n${line}` : text;
 	}
 
 	/**

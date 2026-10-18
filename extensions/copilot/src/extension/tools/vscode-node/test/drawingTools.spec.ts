@@ -140,8 +140,8 @@ describe('render_figure tool', () => {
 			staleApproval: (await tools.render({ figure: 2, flowchart: { fromClaim: 2 } })).text,
 			claimsCleared: (await read('drafting/hinge/claims.md')).split('---')[1],
 		}).toEqual({
-			noHeading: { text: 'The Figure was not rendered. drafting/hinge/figures.md has no heading for FIG. 3 (`## FIG. 3` with its parts). Add the Figure and its parts to the figure list first.', images: [] },
-			staleApproval: 'The Figure was not rendered. A flowchart from a claim needs the Approved Claims. drafting/hinge/claims.md changed after it was approved, so `approved` was set to `false`. The attorney reviews the claims and sets `approved: true` again; then start_application_draft and a new save start the next draft version.',
+			noHeading: { text: 'The Figure was not rendered. drafting/hinge/figures.md has no heading for FIG. 3 (`## FIG. 3` with its parts). Add the Figure and its parts to the figure list first. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).', images: [] },
+			staleApproval: 'The Figure was not rendered. A flowchart from a claim needs the Approved Claims. drafting/hinge/claims.md changed after it was approved, so `approved` was set to `false`. The attorney reviews the claims and sets `approved: true` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 			claimsCleared: '\napproved: false\n',
 		});
 	});
@@ -156,6 +156,19 @@ describe('render_figure tool', () => {
 			rounds: JSON.parse(await read('drafting/hinge/drawings/rounds.json')).figures['2'].rounds.map((round: { seen: boolean }) => round.seen),
 		}).toEqual({ seen: ['image/png'], unseen: [], rounds: [true, false] });
 	}, KERNEL_TIMEOUT);
+	it('rewrites the Drafting Checklist after the render, with the drawn Figures counted', async () => {
+		const { tools, read, write } = setup();
+		await write('drafting/hinge/checklist.md', 'stale');
+		const result = await tools.render({ figure: 2, flowchart: { fromClaim: 2 } });
+		expect({
+			last: result.text.split('\n').at(-1),
+			figures: (await read('drafting/hinge/checklist.md')).split('\n').filter(line => line.startsWith('- Figures:')),
+		}).toEqual({
+			last: 'Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline).',
+			figures: ['- Figures: 2 in figures.md, 1 drawn in drawings/'],
+		});
+	}, KERNEL_TIMEOUT);
+
 	it('asks the attorney to confirm a new review cycle, and asks nothing for a normal round or after the cap of three cycles', async () => {
 		const { confirmation, write } = setup();
 		const rounds = (cycle: number) => write('drafting/hinge/drawings/rounds.json', JSON.stringify({ figures: { '2': { cycle, rounds: [{ round: 1, png: 'review/FIG-2.round-1.png', seen: true }] } } }));
@@ -175,8 +188,15 @@ describe('render_figure tool', () => {
 });
 
 describe('build_drawing_set tool', () => {
-	it('prefixes a refusal', async () => {
-		expect(await setup().tools.build()).toBe('The Drawing Set was not built. drafting/hinge/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first.');
+	it('prefixes a refusal, writes the Drafting Checklist and ends with its open steps', async () => {
+		const { tools, read } = setup();
+		expect({
+			text: await tools.build(),
+			figures: (await read('drafting/hinge/checklist.md')).split('\n').filter(line => line.startsWith('- Figures:')),
+		}).toEqual({
+			text: 'The Drawing Set was not built. drafting/hinge/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first. Open in drafting/hinge/checklist.md: step 3 (Write the outline).',
+			figures: ['- Figures: 2 in figures.md'],
+		});
 	});
 });
 

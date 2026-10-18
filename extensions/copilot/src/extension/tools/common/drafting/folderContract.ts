@@ -63,7 +63,7 @@ export const DRAFTING_FILE_NAMES = {
 } as const;
 
 /** The folder of the Drawing Set in a matter folder. */
-const DRAWINGS_FOLDER = 'drawings';
+export const DRAWINGS_FOLDER = 'drawings';
 
 /** True for the file name of one Drawing Sheet in `drawings/`: `sheet-1.svg`, `sheet-2.svg`, ... */
 export function isDrawingSheetFile(name: string): boolean {

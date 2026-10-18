@@ -48,7 +48,8 @@ interface AttachedImage {
  * Proposes a part the disclosure does not state (PRD 0023, slice D5) through
  * {@link proposeFigurePartOp}. This tool resolves the sketch: an image attached to the chat
  * request (read in `resolveInput`), else an image file in the workspace (a path relative to the
- * workspace, or `sketches/<file>` relative to the matter).
+ * workspace, or `sketches/<file>` relative to the matter). It writes the Drafting Checklist after
+ * it runs, also after a refusal.
  */
 export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartParams> {
 
@@ -81,12 +82,12 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 		if (input.sketch?.trim()) {
 			const resolved = await this.resolveSketch(workspace, input.sketch.trim());
 			if (typeof resolved === 'string') {
-				return textResult(`${refused} ${resolved}`);
+				return workspace.refusal(refused, resolved);
 			}
 			sketch = resolved;
 		}
 		const result = await proposeFigurePartOp(workspace.matterFiles(), { figure: input.figure, part: input.part, numeral: input.numeral, features: input.features, sketch });
-		return textResult(result.ok ? result.text : `${refused} ${result.reason}`);
+		return result.ok ? textResult(await workspace.textWithChecklistLine(result.text)) : workspace.refusal(refused, result.reason);
 	}
 
 	/** The sketch bytes: an attached image whose name matches, else a workspace image file; or the refusal. */

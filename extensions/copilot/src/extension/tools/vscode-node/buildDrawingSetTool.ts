@@ -26,7 +26,8 @@ const refused = 'The Drawing Set was not built.';
 /**
  * Builds the Drawing Set of a drafting matter (PRD 0023, slice D5) through
  * {@link buildDrawingSetOp}: the gates, the sheets, the PDF, the receipt and the manifest count.
- * It never says the set complies.
+ * It never says the set complies. It writes the Drafting Checklist after it runs, also after a
+ * refusal.
  */
 export class BuildDrawingSetTool implements ICopilotTool<IBuildDrawingSetParams> {
 
@@ -48,7 +49,7 @@ export class BuildDrawingSetTool implements ICopilotTool<IBuildDrawingSetParams>
 			return textResult(`${refused} ${workspace}`);
 		}
 		const result = await buildDrawingSetOp(workspace.matterFiles(), { partial: options.input.partial === true });
-		return textResult(result.ok ? result.text : `${refused} ${result.reason}`);
+		return result.ok ? textResult(await workspace.textWithChecklistLine(result.text)) : workspace.refusal(refused, result.reason);
 	}
 }
 
