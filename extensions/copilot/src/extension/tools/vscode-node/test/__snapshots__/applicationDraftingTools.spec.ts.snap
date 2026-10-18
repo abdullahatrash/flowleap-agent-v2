@@ -228,6 +228,45 @@ Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions).",
 }
 `;
 
+exports[`inventor_questions > sends eight open questions as eight rows, copies three answers from the returned .docx into empty slots only, and never over a filled slot 1`] = `
+{
+  "answers": [
+    "IQ-1: Grade 304.",
+    "IQ-2: ",
+    "IQ-3: Yes, by hand.",
+    "IQ-4: ",
+    "IQ-5: ",
+    "IQ-6: 4 mm.",
+    "IQ-7: ",
+    "IQ-8: ",
+  ],
+  "imported": "Copied 3 answer(s) from drafting/hinge/inventor-questions.docx into drafting/hinge/inventor-answers.md, in the inventor's words: IQ-1, IQ-3, IQ-6. Now apply the answers to the draft (application-drafting skill, Step 5).",
+  "outsideTheMatter": "No answer was copied. "drafting/hinge/inventor-answers.md" is not an answered file of the matter. Give a .docx or .md file in drafting/hinge/ other than drafting/hinge/inventor-answers.md, e.g. drafting/hinge/inventor-questions.docx. Open in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors), step 5 (Answer the Inventor Questions).",
+  "reimportUnchanged": true,
+  "reimported": "No answer was copied from drafting/hinge/inventor-questions.docx: it has no answer for a question with an empty answer in drafting/hinge/inventor-answers.md. Not changed, because their answer in drafting/hinge/inventor-answers.md is filled already: IQ-1, IQ-3, IQ-6.",
+  "resendBeforeImport": "The Inventor Questions document was not written. drafting/hinge/inventor-questions.docx has answers that are not in drafting/hinge/inventor-answers.md yet (IQ-1, IQ-3, IQ-6). Import them first (action "import"), so that a new document does not replace them. Open in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors), step 5 (Answer the Inventor Questions).",
+  "resent": "Wrote drafting/hinge/inventor-questions.docx: a table of 5 open Inventor Question(s) (IQ-2, IQ-4, IQ-5, IQ-7, IQ-8), each with an empty answer cell. The attorney sends the file to the inventor. The inventor writes each answer in the "Your answer" column and sends the file back; the attorney puts it in drafting/hinge/ and asks to apply the answers.",
+  "resentRows": [
+    "IQ-2",
+    "IQ-4",
+    "IQ-5",
+    "IQ-7",
+    "IQ-8",
+  ],
+  "rows": [
+    "IQ-1",
+    "IQ-2",
+    "IQ-3",
+    "IQ-4",
+    "IQ-5",
+    "IQ-6",
+    "IQ-7",
+    "IQ-8",
+  ],
+  "sent": "Wrote drafting/hinge/inventor-questions.docx: a table of 8 open Inventor Question(s) (IQ-1, IQ-2, IQ-3, IQ-4, IQ-5, IQ-6, IQ-7, IQ-8), each with an empty answer cell. The attorney sends the file to the inventor. The inventor writes each answer in the "Your answer" column and sends the file back; the attorney puts it in drafting/hinge/ and asks to apply the answers.",
+}
+`;
+
 exports[`start_application_draft > returns the inputs and the style exemplars, labelled style only, and records the approved claims 1`] = `
 {
   "pdfReads": [

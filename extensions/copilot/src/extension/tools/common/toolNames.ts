@@ -126,6 +126,7 @@ export enum ToolName {
 	StartApplicationDraft = 'start_application_draft',
 	ValidateDraft = 'validate_draft',
 	ExportDraftDocx = 'export_draft_docx',
+	InventorQuestions = 'inventor_questions',
 }
 
 /**
@@ -220,6 +221,7 @@ export enum ContributedToolName {
 	StartApplicationDraft = 'copilot_startApplicationDraft',
 	ValidateDraft = 'copilot_validateDraft',
 	ExportDraftDocx = 'copilot_exportDraftDocx',
+	InventorQuestions = 'copilot_inventorQuestions',
 }
 
 export const byokEditToolNamesToToolNames = {
@@ -384,6 +386,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.StartApplicationDraft]: ToolCategory.Core,
 	[ToolName.ValidateDraft]: ToolCategory.Core,
 	[ToolName.ExportDraftDocx]: ToolCategory.Core,
+	[ToolName.InventorQuestions]: ToolCategory.Core,
 } as const;
 
 

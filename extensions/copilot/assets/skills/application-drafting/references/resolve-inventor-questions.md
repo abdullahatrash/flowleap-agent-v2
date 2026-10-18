@@ -1,8 +1,13 @@
 # Resolve Inventor Questions
 
 The save writes each Inventor Question to `inventor-answers.md` with an empty
-`**Answer:**` slot. The attorney or the inventor fills it. When the attorney
-asks you to apply the answers:
+`**Answer:**` slot. The attorney or the inventor fills it. When the inventor
+answered in `inventor-questions.docx` or in a `.md` file in the matter
+folder, first call `inventor_questions` with action `import` and that file.
+It copies the answers into the empty slots of `inventor-answers.md`; you
+never copy them yourself.
+
+When the attorney asks you to apply the answers:
 
 1. Read `inventor-answers.md`. Use only the current answer of each question
    (the last `**Answer:**` of its section). An empty answer, "Not stated" or

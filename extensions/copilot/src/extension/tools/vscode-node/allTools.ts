@@ -9,6 +9,7 @@ import './citationApiGuideTool';
 import './compareClaimsTool';
 import './examinerBaselineTool';
 import './exportDraftDocxTool';
+import './inventorQuestionsTool';
 import './comparePatentsTool';
 import './fetchWebPageTool';
 import './getContinuityTool';
