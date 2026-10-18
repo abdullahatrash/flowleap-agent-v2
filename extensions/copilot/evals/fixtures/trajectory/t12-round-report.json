@@ -1,6 +1,6 @@
 {
 	"id": "t12-round-report",
-	"description": "Round Report (PRD 0024 C4, ADR 0016 amendment): the challenged patent's claim 1 and dependents 2-5 come back segmented from get_patent_details. WO2015012345A1 discloses claim 1 and claim 2 (thermoplastic elastomer slider). No mocked reference discloses the added limitations of claims 3 (magnet detent), 4 (vent hole) or 5 (drip groove), so the first save leaves those rungs open. Each invalidity-chart save returns the writer's receipt computed from that save: the Fallback Coverage counts and the open points its own rows give. The scripted expert answer picks two of the numbered open points.",
+	"description": "Round Report (PRD 0024 C4, ADR 0016 amendment): the challenged patent's claim 1 and dependents 2-5 come back segmented from get_patent_details. WO2015012345A1 discloses claim 1 and claim 2 (thermoplastic elastomer slider). No mocked reference discloses the added limitations of claims 3 (magnet detent), 4 (vent hole) or 5 (drip groove), so the first save leaves those rungs open. Each invalidity-chart save returns the writer's receipt computed from that save: the Fallback Coverage counts and the open points its own rows give. The scripted expert answer picks two of the open points by id (rung-3 and rung-5), as the Round Report asks.",
 	"rules": [
 		{
 			"tool": "get_patent_details",

@@ -178,7 +178,7 @@ describe('TrajectoryProvider', () => {
 			finalText: parsed.finalText,
 			modelCalls: call,
 		}).toEqual({
-			guardNudges: ['The saved chart lists 2 open points (rung-3, rung-4) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.'],
+			guardNudges: ['The saved chart lists 2 open points (rung-3, rung-4) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.'],
 			hookMessage: { role: 'user', content: `You were about to complete but a hook blocked you with the following message: "${parsed.guardNudges[0]}". Please address this requirement before completing.` },
 			finalText: 'stop 3',
 			modelCalls: 3,
@@ -188,7 +188,7 @@ describe('TrajectoryProvider', () => {
 	it('lets a Round Report end the turn, and checks the expert\'s follow-up turn with the first turn as history', async () => {
 		const script: MockScript = { id: 'guard', rules: [{ tool: 'write_patent_results', response: { tag: 'OK', body: `Successfully wrote patent results to chart.md\n${receipt}` } }] };
 		const save = (id: string) => ({ id, type: 'function', function: { name: 'write_patent_results', arguments: JSON.stringify({ template: 'invalidity-claim-chart', filePath: 'chart.md', content: '', coverage: [{ feature: 'Claim 1 as a whole' }] }) } });
-		const report = '1. [rung-3] Claim 3 is not found. Recommended: search magnet detents.\n2. [rung-4] Claim 4 is not found. Recommended: search vent holes.\nReply with the numbers to run, \'all\', or your own steer.';
+		const report = '1. [rung-3] Claim 3 is not found. Recommended: search magnet detents.\n2. [rung-4] Claim 4 is not found. Recommended: search vent holes.\nReply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer.';
 		// Turn 0: save, then a Round Report. Turn 1 (the expert's answer): save again, stop without a report, then report.
 		const replies = [{ tool_calls: [save('w1')] }, { content: report }, { tool_calls: [save('w2')] }, { content: 'Saved the round.' }, { content: report }];
 		let call = 0;

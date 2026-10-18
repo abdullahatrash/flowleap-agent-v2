@@ -736,10 +736,10 @@ describe('candidate report save path', () => {
 			}).toEqual({
 				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
 				openPoints: [
-					'Open points: 1. Critical date: not given (no criticalDate), so the publication dates of the cited documents were not checked. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
+					'Open points: 1. Critical date: not given (no criticalDate), so the publication dates of the cited documents were not checked. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
 					'Open point [rung-2]: Claim 2 (fallback of claim 1) is not found in the cited art: Claim 2 (depends on 1) — added limitation: the lever arm is captive',
 				],
-				completion: 'The saved chart lists 1 open point (rung-2) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.',
+				completion: 'The saved chart lists 1 open point (rung-2) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.',
 			});
 		});
 

@@ -96,19 +96,28 @@ computes them from the record. The ids stay the same across saves of one chart.
 
 The Round Report numbers them in receipt order. Each question names the id and gives your
 recommended next step: the terms, office or source you would search, or "accept as not covered".
-It ends with the line "Reply with the numbers to run, 'all', or your own steer." Then the turn ends.
+It ends with the line "Reply with the ids to run (for example rung-3, element-1.3), 'all', or your own steer." Then the turn ends.
+The question number is a reading aid. The expert answers with the ids.
 If the expert gives a steer of their own, name in `answers` the open points the steer is about.
+
+If the expert answers with bare numbers (for example "2, 6"), do not run a round. Question
+numbers and claim numbers share the same small integers, and a rung is named by a claim number
+(`rung-3` is claim 3, which can be question 2). Ask one short question: "Do you mean the question
+numbers or the claim numbers?" Run the round only when the expert confirms.
 
 ## Running a Search Round on the expert's answer
 
-1. New **Discriminating Terms** for the limitation of each chosen point (not the terms of the
+1. **Echo the mapping** in one line before any search: "Running: [rung-3] four-drum alternating
+   rotation; [element-1.3] deposit region of the inner pair." Each id with the limitation it
+   stands for. A wrong reading is then visible before the round costs anything.
+2. New **Discriminating Terms** for the limitation of each chosen point (not the terms of the
    independent claim). Run them after the receipt: the writer refuses a new round whose queries
    all ran before the previous save, so do not list Phase 3 queries as the round.
-2. The search-failure ladder of the skill, in order: reformulate, other office, NPL
+3. The search-failure ladder of the skill, in order: reformulate, other office, NPL
    (`search_npl`, then `search_academic`), web. Search only for the points the expert chose.
-3. Chart what the round found on those rows, and add the round to `rounds` with `answers` (the
+4. Chart what the round found on those rows, and add the round to `rounds` with `answers` (the
    chosen ids), `targets`, every query exactly as run, and an `outcome`.
-4. Save again. If the writer refuses a round query as matching no execution, correct the query
+5. Save again. If the writer refuses a round query as matching no execution, correct the query
    text to the exact text you ran, or drop that query, and save again. Never re-run a search only
    to make a query match. Then write the next Round Report.
 
@@ -193,9 +202,11 @@ Open point [rung-d1]: Description fallback of claim 1 is partly disclosed in the
 > 2. [rung-4] No cited document shows a retaining tab. Recommended: search "retaining tab" with the side-opening terms.
 > 3. [rung-d1] Bonding is disclosed, an overmould is not. Recommended: search overmoulded wire-to-plate joints in B62J.
 >
-> Reply with the numbers to run, 'all', or your own steer.
+> Reply with the ids to run (for example rung-3, element-1.3), 'all', or your own steer.
 
-The expert answers "1 and 2".
+The expert answers "rung-3, rung-4". The agent echoes the mapping before the first search:
+
+> Running: [rung-3] side opening for lateral insertion; [rung-4] resilient retaining tab at the side opening.
 
 **The Search Round**, aimed at claims 3 and 4 only. New Discriminating Terms for the added
 limitations: "side entry", "lateral insertion", "retaining tab", "side-loading cage". The

@@ -162,7 +162,7 @@ describe('prior-art report completion contract', () => {
 
 	describe('the Round Report after a saved invalidity chart (C4)', () => {
 		const invalidityRequest = 'Build the invalidity case against EP2000000A1 and save "outputs/研究 review.md".';
-		const nudge = 'The saved chart lists 3 open points (rung-3, element-1.2, search-1) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.';
+		const nudge = 'The saved chart lists 3 open points (rung-3, element-1.2, search-1) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.';
 		const openPoints: ReceiptFallbacks = {
 			fallbacksNotCovered: 1, rounds: 0, notCovered: ['3'], criticalDate: '2005-03-01',
 			openPoints: [
@@ -172,7 +172,7 @@ describe('prior-art report completion contract', () => {
 			],
 		};
 		const noOpenPoints: ReceiptFallbacks = { fallbacksNotCovered: 0, rounds: 0, notCovered: [], openPoints: [] };
-		const roundReport = ['Saved. Receipt: 1 fallback not covered, 3 open points.', '1. [rung-3] Claim 3 is partly covered. Recommended: search the captive-screw limitation in CPC F16L 3/10.', '2. [element-1.2] Element (b) is not found. Recommended: search US art for a screw clamp.', '3. [search-1] One search failed. Recommended: run it again.', 'Reply with the numbers to run, \'all\', or your own steer.'].join('\n');
+		const roundReport = ['Saved. Receipt: 1 fallback not covered, 3 open points.', '1. [rung-3] Claim 3 is partly covered. Recommended: search the captive-screw limitation in CPC F16L 3/10.', '2. [element-1.2] Element (b) is not found. Recommended: search US art for a screw clamp.', '3. [search-1] One search failed. Recommended: run it again.', 'Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer.'].join('\n');
 		/** A turn that saves the chart once, its receipt stating the given open points, then ends with the given text. */
 		async function chart(fs: MockFileSystemService, fallbacks: ReceiptFallbacks, closing = '', request = invalidityRequest, template = 'invalidity-claim-chart'): Promise<ReportCompletionTurn> {
 			await fs.writeFile(report, new TextEncoder().encode('Evidence-backed chart'));
@@ -192,7 +192,7 @@ describe('prior-art report completion contract', () => {
 			expect({ first: lines[0].replace(/^Prior-art artifact receipt: \{.*\}/, '<receipt>'), rest: lines.slice(1), none: priorArtReportReceipt(report, 'Evidence-backed chart', evidence, 'Snapshot', noOpenPoints).split('\n').slice(1) }).toEqual({
 				first: '<receipt> fallbacksNotCovered=1 rounds=0 notCovered=3',
 				rest: [
-					'Open points: 3. Critical date: 2005-03-01. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
+					'Open points: 3. Critical date: 2005-03-01. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
 					'Open point [rung-3]: Claim 3 (fallback of claim 1) is partly disclosed in the cited art: Claim 3 (depends on 2) — added limitation: the screw is captive',
 					'Open point [element-1.2]: Claim 1 element is not found in the cited art: Claim 1 — element (b): a screw',
 					'Open point [search-1]: A search failed and did not run again: captive screw (ti=captive AND ti=screw)',

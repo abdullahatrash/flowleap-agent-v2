@@ -480,7 +480,7 @@ PRD 0024 C4 (#741, ADR 0016 amendment) replaces T11. The first save leaves rungs
 `write_patent_results` prints the open points the save's own rows give, with the writer's own
 `rowOpenPoints` and `priorArtReportReceipt`. The agent must end turn 0 with a Round Report that
 names every open point with a recommendation, and run no round. The scripted expert answer
-(`followUpPrompt: "Run 1 and 3. Do not run 2."`) picks two points by number. The round of turn 1
+(`followUpPrompt: "Run rung-3 and rung-5. Do not run rung-4."`) picks two points by id, as the Round Report asks since #745. The round of turn 1
 must name exactly those two ids in `answers` and aim its queries at their limitations only. The
 provider now adds the stopping round to the guard's turn before the check (as the app loop does),
 and checks the follow-up turn with the first turn as history.
