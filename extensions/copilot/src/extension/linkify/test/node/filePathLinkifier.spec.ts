@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { suite, test } from 'vitest';
+import { expect, suite, test } from 'vitest';
 import { isWindows } from '../../../../util/vs/base/common/platform';
 import { URI } from '../../../../util/vs/base/common/uri';
+import { Location, Position, Range } from '../../../../vscodeTypes';
 import { PromptReference } from '../../../prompt/common/conversation';
 import { LinkifyLocationAnchor } from '../../common/linkifiedText';
 import { assertPartsEqual, createMultiRootLinkifierService, createTestLinkifierService, linkify, workspaceFile } from './util';
@@ -90,6 +91,16 @@ suite('File Path Linkifier', () => {
 				new LinkifyLocationAnchor(workspaceFile('src/file.ts'))
 			]
 		);
+	});
+
+	test(`Should open an inline code path with a :<line> suffix at that line`, async () => {
+		const linkifier = createTestLinkifierService('drafting/x/claims.md');
+		const parts = (await linkify(linkifier, 'Review `drafting/x/claims.md:3`, then `drafting/x/claims.md:3x`.')).parts;
+		expect(parts.map(part => part instanceof LinkifyLocationAnchor && part.value instanceof Location ? { uri: part.value.uri.toString(), range: part.value.range, title: part.title } : part)).toEqual([
+			'Review ',
+			{ uri: workspaceFile('drafting/x/claims.md').toString(), range: new Range(new Position(2, 0), new Position(2, 0)), title: 'drafting/x/claims.md:3' },
+			', then `drafting/x/claims.md:3x`.',
+		]);
 	});
 
 	test(`Should create file paths printed as plain text `, async () => {

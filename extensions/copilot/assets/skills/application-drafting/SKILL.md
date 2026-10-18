@@ -24,19 +24,25 @@ tool refuses, report the items and the open steps it names.
 
 ## Gates
 
-Three gates stop the work. The attorney sets each flag in the file, and the
+Three gates stop the work. The attorney opens each gate in its file, and the
 tools read it from the file:
 
-| Gate | File | Flag | Opens |
-|------|------|------|-------|
+| Gate | File | The attorney writes | Opens |
+|------|------|---------------------|-------|
 | Intake | `feature-list.md` | `confirmed: true` | Step 2 |
 | Claims | `claims.md` | `approved: true` | Step 3 |
 | Export | `findings.md` | no unwaived Error, no open Inventor Question | the export in Step 6 |
 
-At a gate, stop, name the file and the flag, and ask the attorney to set it.
-Then wait. Every flag is the attorney's to write: an "I approve" or "looks
-good" in chat opens no gate. When a tool refuses because a flag is missing or
-false, report the refusal and ask again.
+At a gate, stop. Tell the attorney the file, the action at the top of the
+file and the one word to change, in the sentence the tool or the checklist
+gives, for example: "Review `drafting/hinge/claims.md:3`, then click
+**Approve Claims** at the top of the file, or change `false` to `true` on
+line 3."
+Keep the path and its line in backticks: the chat opens the file at that line.
+Use only the words of that sentence, no technical terms for the file format.
+Then wait. Only the attorney writes `true`: an "I approve" or "looks good" in
+chat opens no gate. When a tool refuses at a gate, give its sentence and ask
+again.
 
 ## Step 1: Intake
 
@@ -78,7 +84,7 @@ approval, the attorney sets the flag again.
 2. Call `start_application_draft` with the matter folder. It returns the
    Feature List, the figures, the Approved Claims, the Draft Outline when it
    exists, and up to five style exemplars, or it refuses and names the
-   missing flag.
+   gate to open.
 
 The draft save refuses while `draft-outline.md` is missing or was made from
 other claims: after the attorney approves changed claims, plan again.

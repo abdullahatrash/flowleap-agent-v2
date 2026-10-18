@@ -216,7 +216,7 @@ const gatesOpen = {
 };
 
 describe('start_application_draft', () => {
-	it('refuses while the Feature List is missing, unconfirmed or the claims are unapproved, naming the flag and file', async () => {
+	it('refuses while the Feature List is missing, unconfirmed or the claims are unapproved, naming the file, the line and the word to change', async () => {
 		const results = [];
 		const cases: Record<string, string>[] = [
 			{ 'drafting/hinge/claims.md': claims() },
@@ -229,11 +229,11 @@ describe('start_application_draft', () => {
 			results.push(await setup(files).tools.start());
 		}
 		expect(results).toEqual([
-			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney sets `confirmed: true` in its frontmatter after review. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Drafting did not start. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Drafting did not start. drafting/hinge/feature-list.md has no `confirmed` flag in its frontmatter. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Drafting did not start. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
-			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney sets `approved: true` in its frontmatter after review. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney opens this gate in that file after review. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List). Next: Tell the agent: "Build the Feature List from the disclosure".',
+			'Drafting did not start. Review `drafting/hinge/feature-list.md:3`, then click **Confirm Feature List** at the top of the file, or change `false` to `true` on line 3. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. Review `drafting/hinge/feature-list.md:1`, then click **Confirm Feature List** at the top of the file, or add the line `confirmed: true` under the `---` on line 1. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Drafting did not start. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `"true"` to `true` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney opens this gate in that file after review. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Tell the agent: "Draft the claims".',
 		]);
 	});
 
@@ -344,18 +344,18 @@ describe('write_patent_results draft-application template', () => {
 			await tools.save(draft().replace('model: claude-sonnet-5\nprovider: anthropic\n', '')),
 			await tools.save(draft(), {}, 'outputs/draft-application.md'),
 		]).toEqual([
-			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider. Open in drafting/hinge/checklist.md: step 3 (Write the draft).',
+			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider. Open in drafting/hinge/checklist.md: step 3 (Write the draft). Next: Tell the agent: "Draft the application".',
 			'Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.',
 		]);
 	});
 
-	it('refuses the save while the Feature List is unconfirmed or the claims are unapproved, naming the flag and file', async () => {
+	it('refuses the save while the Feature List is unconfirmed or the claims are unapproved, naming the file, the line and the word to change', async () => {
 		expect([
 			await setup({ ...gatesOpen, 'drafting/hinge/feature-list.md': featureList('false') }).tools.save(draft()),
 			await setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false') }).tools.save(draft()),
 		]).toEqual([
-			'Draft was not saved. `confirmed` in drafting/hinge/feature-list.md is not `true`. The attorney sets `confirmed: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Draft was not saved. `approved` in drafting/hinge/claims.md is not `true`. The attorney sets `approved: true` after review; a statement in chat does not open this gate. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			'Draft was not saved. Review `drafting/hinge/feature-list.md:3`, then click **Confirm Feature List** at the top of the file, or change `false` to `true` on line 3. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
+			'Draft was not saved. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 		]);
 	});
 
@@ -451,6 +451,11 @@ describe('validate_draft', () => {
 		}).toEqual({ before: 10, waiversAfterValidate: 10, after: 'Exported the description, the claims and the abstract' });
 	});
 
+	it('a refusal while the claims are not approved names the file, the line and the word to change', async () => {
+		const { tools } = setup({ 'drafting/hinge/feature-list.md': featureList(), 'drafting/hinge/claims.md': claims('false') });
+		expect(await tools.validate()).toBe('The draft was not validated. drafting/hinge/draft-application.md does not exist: save the draft with write_patent_results, template draft-application, first. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2.');
+	});
+
 	it('refuses a matter name that leaves drafting/ and a matter folder that does not exist', async () => {
 		const { tools } = setup(gatesOpen);
 		expect([await tools.validate(undefined, '../secrets'), await tools.validate(undefined, 'pump')]).toEqual([
@@ -480,7 +485,7 @@ describe('export_draft_docx', () => {
 			result: await tools.exportDocx(),
 			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
-			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors).',
+			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors). Next: To waive, add under the item:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
 			docxWritten: false,
 		});
 	});

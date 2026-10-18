@@ -10,6 +10,7 @@ import { IWorkspaceService } from '../../../platform/workspace/common/workspaceS
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { officeAction } from '../common/drafting/checklist';
 import { parseClaims } from '../common/drafting/claims';
 import { claimTermsToPlan } from '../common/drafting/claimValidators';
 import { DRAFT_OUTLINE_SAVE } from '../common/drafting/folderContract';
@@ -75,7 +76,7 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		}
 		const office = readOffice(featureList.fields);
 		if (!office) {
-			return workspace.refusal(refused, `${folder.featureList} names no office. Its frontmatter needs \`office: US\` or \`office: EPO\`.`);
+			return workspace.refusal(refused, `${folder.featureList} names no office. ${officeAction(folder.featureList)}`);
 		}
 		await workspace.recordApprovedClaims(approval.hash);
 		const figures = await workspace.read(folder.figures);
