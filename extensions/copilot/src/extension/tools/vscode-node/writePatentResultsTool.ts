@@ -39,7 +39,7 @@ import { assertFileOkForTool } from '../node/toolUtils';
 import { DRAFTING_FILE_NAMES, matchDraftingPath, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { saveDraftApplication } from './draftApplicationSave';
 import { saveDraftOutline } from './draftOutlineSave';
-import { DraftingSaveResult, DraftingWorkspace } from './draftingWorkspace';
+import { DraftingEditors, DraftingSaveResult, DraftingWorkspace, vscodeEditors } from './draftingWorkspace';
 
 /** The templates that save a file of an Application Drafting matter, outside the report templates. */
 type DraftingTemplate = 'draft-application' | 'draft-outline';
@@ -220,6 +220,11 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 		@IEndpointProvider private readonly endpointProvider: IEndpointProvider,
 		@IActivationTelemetryService private readonly activationTelemetryService: IActivationTelemetryService,
 	) { }
+
+	/** The editors the Drafting Checklist is revealed in after a drafting save: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
 
 	async resolveInput(input: IWritePatentResultsParams, promptContext: IBuildPromptContext, _mode: CopilotToolMode): Promise<IWritePatentResultsParams> {
 		this._inputContext = promptContext;
@@ -431,7 +436,7 @@ export class WritePatentResultsTool implements ICopilotTool<IWritePatentResultsP
 			return new LanguageModelToolResult([new LanguageModelTextPart(`${label} was not saved. The ${template} template saves to drafting/<matter>/${file} inside a workspace folder.`)]);
 		}
 		try {
-			const workspace = new DraftingWorkspace(root, folder, this.fileSystemService, this.instantiationService);
+			const workspace = new DraftingWorkspace(root, folder, this.fileSystemService, this.instantiationService, this.editors());
 			const outcome = await save(workspace, input);
 			if (!outcome.saved) {
 				return new LanguageModelToolResult([new LanguageModelTextPart(`${label} was not saved. ${outcome.reason}`)]);

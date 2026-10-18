@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as mammoth from 'mammoth';
+import * as vscode from 'vscode';
 import { createDirectoryIfNotExists, IFileSystemService } from '../../../platform/filesystem/common/fileSystemService';
 import { FileType } from '../../../platform/filesystem/common/fileTypes';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
@@ -12,7 +13,7 @@ import { dirname } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { checklistPointer, DraftingChecklist, DraftingChecklistStep, gateActionText, gateEdit, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
+import { checklistPointer, DraftingChecklist, DraftingChecklistStep, gateActionText, gateEdit, nextChecklistStep, readDraftingChecklist, renderChecklist, stepActionText } from '../common/drafting/checklist';
 import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
@@ -26,6 +27,26 @@ import { assertFileOkForTool } from '../node/toolUtils';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
 export type PdfTextReader = (uri: URI) => Promise<string>;
+
+/**
+ * The editors of the window, as the drafting tools see them: a file is revealed beside the active
+ * editor once, when no visible editor shows it (PRD 0025 decision 3). The default is the VS Code
+ * window; the tests, which have no window, inject a fake.
+ */
+export interface DraftingEditors {
+	/** True when a visible editor shows the file. */
+	isVisible(uri: URI): boolean;
+	/** Opens the file beside the active editor, without taking the focus. */
+	showBeside(uri: URI): Promise<void>;
+}
+
+/** The VS Code window as {@link DraftingEditors}. */
+export const vscodeEditors: DraftingEditors = {
+	isVisible: uri => vscode.window.visibleTextEditors.some(editor => editor.document.uri.toString() === uri.toString()),
+	showBeside: async uri => {
+		await vscode.window.showTextDocument(vscode.Uri.from(uri), { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true });
+	},
+};
 
 /** Characters of one exemplar returned; the rest is cut and the cut is stated. */
 const MAX_EXEMPLAR_CHARS = 20_000;
@@ -143,7 +164,7 @@ export class DraftingWorkspace {
 	 * Finds the workspace folder of a matter: the only folder, or in a multi-root workspace the
 	 * folder that has `drafting/<matter>/`. Returns the refusal text when there is none.
 	 */
-	static async locate(matter: string | undefined, workspaceService: IWorkspaceService, fileSystemService: IFileSystemService, instantiationService: IInstantiationService): Promise<DraftingWorkspace | string> {
+	static async locate(matter: string | undefined, workspaceService: IWorkspaceService, fileSystemService: IFileSystemService, instantiationService: IInstantiationService, editors: DraftingEditors = vscodeEditors): Promise<DraftingWorkspace | string> {
 		matter ??= '';
 		const folders = workspaceService.getWorkspaceFolders();
 		const folder = resolveDraftingFolder(matter);
@@ -157,14 +178,14 @@ export class DraftingWorkspace {
 			for (const root of folders) {
 				try {
 					await fileSystemService.stat(URI.joinPath(root, folder.folder));
-					return new DraftingWorkspace(root, folder, fileSystemService, instantiationService);
+					return new DraftingWorkspace(root, folder, fileSystemService, instantiationService, editors);
 				} catch {
 					// Not in this folder.
 				}
 			}
 			return `No workspace folder has ${folder.folder}/.`;
 		}
-		return new DraftingWorkspace(folders[0], folder, fileSystemService, instantiationService);
+		return new DraftingWorkspace(folders[0], folder, fileSystemService, instantiationService, editors);
 	}
 
 	constructor(
@@ -172,6 +193,7 @@ export class DraftingWorkspace {
 		readonly folder: DraftingFolder,
 		private readonly fileSystemService: IFileSystemService,
 		private readonly instantiationService: IInstantiationService,
+		private readonly editors: DraftingEditors = vscodeEditors,
 	) { }
 
 	uri(path: string): URI {
@@ -412,7 +434,24 @@ export class DraftingWorkspace {
 			styleExemplars: await this.countStyleExemplars(),
 		});
 		await this.write(folder.checklist, renderChecklist(checklist));
+		await this.revealChecklist();
 		return checklist;
+	}
+
+	/**
+	 * Shows `checklist.md` beside the active editor, without the focus, when no visible editor
+	 * shows it: the checklist is revealed, not pushed (PRD 0025 decision 3). A reveal that fails
+	 * must not fail the tool call, so the error is swallowed; the result text names the file.
+	 */
+	private async revealChecklist(): Promise<void> {
+		const uri = this.uri(this.folder.checklist);
+		try {
+			if (!this.editors.isVisible(uri)) {
+				await this.editors.showBeside(uri);
+			}
+		} catch {
+			// The result text still names the checklist.
+		}
 	}
 
 	/**
@@ -445,12 +484,9 @@ export class DraftingWorkspace {
 		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).${nextAction}` : 'every step is done.'}`;
 	}
 
-	/** What the attorney does for a checklist step, with workspace paths for a gate. */
+	/** What the attorney does for a checklist step, with every `` `file:line` `` as a workspace path. */
 	private stepAction(entry: DraftingChecklistStep): string {
-		if (entry.gate) {
-			return gateActionText(entry.gate.flag === 'confirmed' ? this.folder.featureList : this.folder.claims, entry.gate);
-		}
-		return entry.actions.map(action => action.replace(/^→\s*/, '')).map(action => /[.!?]$/.test(action) ? action : `${action}.`).join(' ');
+		return stepActionText(entry, file => `${this.folder.folder}/${file}`);
 	}
 
 	/**

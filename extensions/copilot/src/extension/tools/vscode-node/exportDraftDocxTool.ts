@@ -19,7 +19,7 @@ import { emptyWorkingRecord, withAttorneyEdits } from '../common/drafting/workin
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { buildDraftDocx, buildFullReviewCopyDocx } from './draftDocx';
-import { DraftingWorkspace, findingLine, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, findingLine, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IExportDraftDocxParams {
 	/** The matter folder name under `drafting/`. */
@@ -48,6 +48,11 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IExportDraftDocxParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		return {
 			invocationMessage: l10n.t`Exporting the draft of ${options.input.matter} to Word`,
@@ -59,7 +64,7 @@ export class ExportDraftDocxTool implements ICopilotTool<IExportDraftDocxParams>
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IExportDraftDocxParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}
