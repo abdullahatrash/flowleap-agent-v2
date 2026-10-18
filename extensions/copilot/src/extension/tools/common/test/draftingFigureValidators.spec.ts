@@ -123,11 +123,11 @@ describe('Application Drafting figures.md validators', () => {
 		}).toEqual({
 			US: [
 				linkError,
-				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md. Link a confirmed part under a figure heading to it, e.g. "- 20: <part> [F4]" (37 CFR 1.83(a): the drawings must show every feature specified in the claims).' },
+				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md (37 CFR 1.83(a): the drawings must show every feature specified in the claims). The attorney decides: "Add a figure of a spring (F4)", then link its part under the figure heading, e.g. "- 20: <part> [F4]"; or "Remove claims 1 and 3 (this re-opens the claims approval)".' },
 			],
 			EPO: [
 				linkError,
-				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md. Link a confirmed part under a figure heading to it, e.g. "- 20: <part> [F4]" (the Drawing Set gate; the EPC has no rule like 37 CFR 1.83(a)).' },
+				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md (the Drawing Set gate; the EPC has no rule like 37 CFR 1.83(a)). The attorney decides: "Add a figure of a spring (F4)", then link its part under the figure heading, e.g. "- 20: <part> [F4]"; or "Remove claims 1 and 3 (this re-opens the claims approval)".' },
 			],
 		});
 	});

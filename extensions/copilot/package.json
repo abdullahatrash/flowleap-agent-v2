@@ -1582,6 +1582,33 @@
         }
       },
       {
+        "name": "copilot_removeClaim",
+        "displayName": "Remove Claim",
+        "toolReferenceName": "removeClaim",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(trash)",
+        "userDescription": "Remove one claim from the claims of a drafting matter and renumber the claims after it",
+        "modelDescription": "Remove one claim from drafting/<matter>/claims.md (application-drafting skill, Step 4). Call it only after the attorney chose \"Remove claim N\" in chat, for example on a figure-coverage Error (37 CFR 1.83(a): a claim cites a Feature List row that no figure shows) or an advisory item that says a claim has no figure support. VS Code shows the attorney the cost and runs the tool only after the attorney confirms. The tool deletes the claim, renumbers each later claim down by one, and changes the claim references in the other claims with them (\"of claim 5\" becomes \"of claim 4\"). It refuses, and changes nothing, when another claim refers to the claim (the refusal names those claims: the attorney decides about them first) or when claims.md has no claim with that number. The removal changes the claims, so it re-opens the claims approval: `approved` in claims.md becomes false and the attorney approves the claims again before drafting continues; then call start_application_draft. The tool records the old and new claim numbers in the Working Record. Report the renumbering and the re-opened approval to the attorney; never remove a claim on your own.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge' for drafting/hinge/."
+            },
+            "claim": {
+              "type": "number",
+              "description": "The number of the claim to remove, as claims.md numbers it now."
+            }
+          },
+          "required": [
+            "matter",
+            "claim"
+          ]
+        }
+      },
+      {
         "name": "copilot_validateDraft",
         "displayName": "Validate Draft",
         "toolReferenceName": "validateDraft",

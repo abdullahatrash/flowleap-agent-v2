@@ -54,6 +54,9 @@ export const OUTLINE_RESAVED = 'Outline re-saved';
 /** When a tool cleared `approved` because `claims.md` changed after approval. */
 export const APPROVAL_CLEARED = 'Approval cleared';
 
+/** A claim `remove_claim` removed from `claims.md` on the attorney's confirmation, with the claims it renumbered. */
+export const CLAIM_REMOVED = 'Claim removed';
+
 /** The hash of the draft and claims the last validator run checked: `findings.md` is current while it matches. */
 export const VALIDATED_DRAFT_HASH = 'Validated draft and claims SHA-256';
 

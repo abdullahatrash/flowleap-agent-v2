@@ -133,6 +133,11 @@ and the advisory items are written.
 2. Call `validate_draft` on the matter folder with the advisory items of
    Step 3c. It runs the code validators, also the outline rules, and writes
    `findings.md`.
+3. When a claim has no figure support (a `figure-coverage` Error, or an
+   advisory item on 37 CFR 1.83(a)), give the attorney two options in one
+   sentence: "Add a figure of the <part>" or "Remove claim <n> (this re-opens
+   the claims approval)". Call `remove_claim` only after the attorney chooses
+   the removal.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 

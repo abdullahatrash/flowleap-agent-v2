@@ -30,6 +30,7 @@ import './patstatGraphTool';
 import './patstatPortfolioTool';
 import './patstatQueryTool';
 import './proposeFigurePartTool';
+import './removeClaimTool';
 import './readPdfTool';
 import './renderFigureTool';
 import './searchAcademicTool';
