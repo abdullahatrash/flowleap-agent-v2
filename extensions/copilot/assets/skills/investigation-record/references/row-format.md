@@ -45,6 +45,6 @@ Retrievals that found what they were looking for. Tool calls that succeeded. For
 The scope a deliverable runs on — its subject, cutoff, jurisdictions, depth, output — is
 set once before any search, and every later finding depends on it. Those rows belong at the
 top of the trail even though each was chosen rather than weighed, because a reader checking
-a conclusion starts by checking what it was scoped to. The investigation-brief skill writes them: a value the user or their documents confirmed is `settled`, a value
+a conclusion starts by checking what it was scoped to. The model writes them under step 2 of this skill: a value the user or their documents confirmed is `settled`, a value
 nobody confirmed is `unresolved`. Everything after those rows is a judgment call in the
 ordinary sense, and the rest of this file governs it.
