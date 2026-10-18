@@ -15,7 +15,7 @@ import { DraftFinding } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
 import { DraftOutline } from './outline';
-import { featureRowIds } from './outlineValidators';
+import { featureRows } from './outlineValidators';
 import { FigurePart, figureHeadingNumbers, hasFigures, parseFigureParts, parseFigureSections } from './specValidators';
 
 const figuresFile = DRAFTING_FILE_NAMES.figures;
@@ -125,6 +125,20 @@ export interface FeatureCoverageInput {
 }
 
 /**
+ * The feature a figure must show, for the attorney: the row text with a small initial (an acronym
+ * stays) and the row ID, "a spring (F4)"; the row ID alone when the row has no text.
+ */
+function featureSubject(id: string, text: string | undefined): string {
+	const feature = (text ?? '').replace(/[.;,]+$/, '').replace(/^[A-Z](?=[a-z\s])/, initial => initial.toLowerCase());
+	return feature ? `${feature} (${id})` : id;
+}
+
+/** "claim 4", or "claims 1 and 3". */
+function claimList(numbers: readonly number[]): string {
+	return numbers.length > 1 ? `claims ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}` : `claim ${numbers[0]}`;
+}
+
+/**
  * Claimed-feature coverage through the Feature List links of `figures.md` (37 CFR 1.83(a): the
  * drawings show every feature specified in the claims):
  *
@@ -133,7 +147,9 @@ export interface FeatureCoverageInput {
  * - A row is drawn when a confirmed part (not `(proposed)`) under a figure heading, or in a
  *   list with no heading above it, links it (`- 12: housing [F3]`).
  * - An Error for each cited row that is not drawn, and for each link to a row that
- *   `feature-list.md` does not have.
+ *   `feature-list.md` does not have. The Error for a row that is not drawn names the two
+ *   actions of the attorney (PRD 0025, S5): add a figure of the feature, or remove the claims
+ *   that cite it, which re-opens the claims approval.
  * - When `figures.md` links no part at all, one Note instead: the coverage was not checked.
  *
  * No finding when the application has no figures. For EPO the gate is the same; the EPC has no
@@ -162,7 +178,7 @@ export function checkClaimedFeatureCoverage(input: FeatureCoverageInput): DraftF
 			: [];
 	}
 	const findings: DraftFinding[] = [];
-	const rows = featureRowIds(input.featureList);
+	const rows = featureRows(input.featureList);
 	for (const part of linked) {
 		for (const feature of part.features ?? []) {
 			if (!rows.has(feature)) {
@@ -177,7 +193,8 @@ export function checkClaimedFeatureCoverage(input: FeatureCoverageInput): DraftF
 	for (const [feature, claims] of cited) {
 		if (!drawn.has(feature)) {
 			const numbers = [...claims].sort((a, b) => a - b);
-			findings.push({ severity: 'Error', rule: 'figure-coverage', file: figuresFile, claim: numbers[0], message: `Feature List row ${feature}, which the Draft Outline cites for claim${numbers.length > 1 ? 's' : ''} ${numbers.join(', ')}, has no drawn part in ${figuresFile}. Link a confirmed part under a figure heading to it, e.g. "- 20: <part> [${feature}]" (${rule}).` });
+			const subject = featureSubject(feature, rows.get(feature));
+			findings.push({ severity: 'Error', rule: 'figure-coverage', file: figuresFile, claim: numbers[0], message: `Feature List row ${feature}, which the Draft Outline cites for claim${numbers.length > 1 ? 's' : ''} ${numbers.join(', ')}, has no drawn part in ${figuresFile} (${rule}). The attorney decides: "Add a figure of ${subject}", then link its part under the figure heading, e.g. "- 20: <part> [${feature}]"; or "Remove ${claimList(numbers)} (this re-opens the claims approval)".` });
 		}
 	}
 	return findings;

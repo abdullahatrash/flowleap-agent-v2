@@ -139,7 +139,7 @@ exports[`buildDrawingSetOp > refuses with no Figure, on a proposed part, on a fi
   "coverageGap": {
     "ok": false,
     "reason": "1 Error(s) of the figure list are open; fix each in drafting/hinge/figures.md, or the attorney waives it in drafting/hinge/findings.md:
-- \`figure-coverage\` (figures.md, claim 1): Feature List row F1, which the Draft Outline cites for claim 1, has no drawn part in figures.md. Link a confirmed part under a figure heading to it, e.g. "- 20: <part> [F1]" (37 CFR 1.83(a): the drawings must show every feature specified in the claims).",
+- \`figure-coverage\` (figures.md, claim 1): Feature List row F1, which the Draft Outline cites for claim 1, has no drawn part in figures.md (37 CFR 1.83(a): the drawings must show every feature specified in the claims). The attorney decides: "Add a figure of a housing 10 with a top face 12 (F1)", then link its part under the figure heading, e.g. "- 20: <part> [F1]"; or "Remove claim 1 (this re-opens the claims approval)".",
   },
   "epoLetter": {
     "ok": false,

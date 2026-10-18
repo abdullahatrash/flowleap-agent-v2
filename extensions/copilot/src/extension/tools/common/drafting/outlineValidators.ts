@@ -102,16 +102,25 @@ export function checkOutlineCoverage(outline: DraftOutline, claims: readonly Dra
  * The row ids of `feature-list.md`: an `F<n>` at the start of a table row, a list item or a
  * heading (`| F3 | ...`, `- F3: ...`, `## F3 ...`), optionally in bold.
  */
-export function featureRowIds(featureList: string): Set<string> {
+function featureRowIds(featureList: string): Set<string> {
+	return new Set(featureRows(featureList).keys());
+}
+
+/**
+ * The rows of `feature-list.md` by ID, each with its feature text: the cell after the ID in a
+ * table row, or the text after the ID in a list item or heading. Empty text when the row has none.
+ */
+export function featureRows(featureList: string): Map<string, string> {
 	const { body } = parseDraftingFrontmatter(featureList);
-	const ids = new Set<string>();
+	const rows = new Map<string, string>();
 	for (const content of body.split('\n')) {
-		const id = /^\s*(?:\|\s*|[-*]\s+|#{1,6}\s+)?(?:\*\*)?(?<id>F\d+)\b/.exec(content)?.groups?.id;
-		if (id) {
-			ids.add(id);
+		const row = /^\s*(?:(?<table>\|\s*)|[-*]\s+|#{1,6}\s+)?(?:\*\*)?(?<id>F\d+)\b(?:\*\*)?(?<rest>.*)$/.exec(content)?.groups;
+		if (row && !rows.has(row.id)) {
+			const text = row.table ? row.rest.split('|')[1] ?? '' : row.rest.replace(/^\s*[:.)\u2013\u2014-]?\s*/, '');
+			rows.set(row.id, text.trim());
 		}
 	}
-	return ids;
+	return rows;
 }
 
 function quoteList(texts: readonly string[]): string {

@@ -23,11 +23,13 @@ import { IInstantiationService, ServiceIdentifier, ServicesAccessor } from '../.
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
 import { ExportDraftDocxTool } from '../exportDraftDocxTool';
+import { RemoveClaimTool } from '../removeClaimTool';
 import { StartApplicationDraftTool } from '../startApplicationDraftTool';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
 import { parseDraftingFrontmatter } from '../../common/drafting/frontmatter';
 import { parseInventorAnswers } from '../../common/drafting/inventorAnswers';
+import { pipeClampClaims } from '../../common/test/draftingTestClaims';
 import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
@@ -188,6 +190,8 @@ function setup(files: Record<string, string> = {}) {
 		start: (matter = 'hinge') => run(new TestStartApplicationDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter }, toolInvocationToken: undefined }, CancellationToken.None)),
 		validate: (advisory?: { message: string; line?: number; claim?: number }[], matter = 'hinge') => run(new ValidateDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter, advisory }, toolInvocationToken: undefined }, CancellationToken.None)),
 		exportDocx: () => run(new ExportDraftDocxTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge' }, toolInvocationToken: undefined }, CancellationToken.None)),
+		removeClaim: (claim: number) => run(new RemoveClaimTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge', claim }, toolInvocationToken: undefined }, CancellationToken.None)),
+		prepareRemoveClaim: async (claim: number) => (await new RemoveClaimTool(fileSystem, workspace, instantiation).prepareInvocation({ input: { matter: 'hinge', claim } }, CancellationToken.None)).confirmationMessages,
 		save: (content: string, extra: Record<string, string> = {}, filePath = 'drafting/hinge/draft-application.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
 			.invoke({ input: { filePath, content, template: 'draft-application', ...extra }, toolInvocationToken: undefined }, CancellationToken.None)),
 		saveOutline: (content = outlineTable, filePath = 'drafting/hinge/draft-outline.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
@@ -747,6 +751,42 @@ describe('style folder', () => {
 			readmeKept: await read('style/README.md'),
 			exemplarHeadings: second.match(/^### Style exemplar.*$/gm),
 			checklistStyleLine: (await read('drafting/hinge/checklist.md')).match(/^- Style exemplars:.*$/m)?.[0],
+		}).toMatchSnapshot();
+	});
+});
+
+describe('remove_claim', () => {
+	const pipeClamp = { 'drafting/hinge/feature-list.md': featureList(), 'drafting/hinge/claims.md': pipeClampClaims, 'drafting/hinge/figures.md': figures };
+
+	it('asks the attorney with the cost, removes claim 4 of 14, renumbers, records it, and the next start refuses on the re-opened approval', async () => {
+		const { tools, read } = setup(pipeClamp);
+		const confirmation = await tools.prepareRemoveClaim(4);
+		const result = await tools.removeClaim(4);
+		const claimsAfter = await read('drafting/hinge/claims.md');
+		expect({
+			confirmation,
+			result,
+			frontmatter: frontmatterOf(claimsAfter),
+			claims: claimsAfter.split('\n').filter(line => /^\d+\./.test(line)).map(line => line.slice(0, 32)),
+			record: (await read('drafting/hinge/draft-application.working-record.md')).split('\n').filter(line => line.startsWith('- **')).map(line => line.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/, '<time>')),
+			start: await tools.start(),
+		}).toMatchSnapshot();
+	});
+
+	it('refuses a claim other claims refer to, names them, and changes nothing', async () => {
+		const { tools, read } = setup(pipeClamp);
+		expect({
+			confirmation: await tools.prepareRemoveClaim(1),
+			result: await tools.removeClaim(1),
+			unchanged: parseDraftingFrontmatter(await read('drafting/hinge/claims.md')).body === parseDraftingFrontmatter(pipeClampClaims).body,
+		}).toMatchSnapshot();
+	});
+
+	it('refuses a number with no claim and changes nothing', async () => {
+		const { tools, read } = setup(pipeClamp);
+		expect({
+			result: await tools.removeClaim(15),
+			unchanged: parseDraftingFrontmatter(await read('drafting/hinge/claims.md')).body === parseDraftingFrontmatter(pipeClampClaims).body,
 		}).toMatchSnapshot();
 	});
 });
