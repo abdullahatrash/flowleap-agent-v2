@@ -132,7 +132,7 @@ const enParticiples = new Set(['driven', 'broken', 'woven', 'given', 'taken', 'c
 
 /**
  * True for a participle: a word in -ing, -ed or an irregular -en or -n form. Only a word after the first
- * word of a phrase is tested, so "the locking pin" and "the threaded rod" stay whole terms.
+ * word of a phrase (modifiers and quantifiers not counted) is tested, so "the locking pin" and "the threaded rod" stay whole terms.
  * Accepted false negative: a noun in -ing or -ed after the first word also ends the phrase, so
  * "the spring loading mechanism" reads as "the spring" and a missing "loading mechanism" is not found.
  * Short words and -eed words are kept (`bed`, `led`, `speed`), and so are the nouns in `ingNouns`.
@@ -161,7 +161,8 @@ const isWord = (token: ClaimToken | undefined) => !!token && /^[a-zµ]/.test(tok
 
 /**
  * The noun phrase from token `start`: quantifiers skipped, up to the next stop word, number or
- * punctuation, or a verb, adverb, particle or participle after the first word.
+ * punctuation, a verb after the first word, or an adverb, particle or participle after the
+ * first word that is not a modifier or quantifier (`first`, `upper`, `two`).
  */
 function readPhrase(tokens: readonly ClaimToken[], start: number): { readonly words: string[]; readonly end: number } {
 	let index = start;
@@ -169,8 +170,11 @@ function readPhrase(tokens: readonly ClaimToken[], start: number): { readonly wo
 		index++;
 	}
 	const words: string[] = [];
-	while (isWord(tokens[index]) && !termStops.has(tokens[index].word) && !(words.length && (isVerb(tokens, index) || phraseBreaks.has(tokens[index].word) || isParticiple(tokens[index].word)))) {
+	// A modifier or quantifier is not the first word of the term: "the first locking pin" keeps "locking".
+	let hasNoun = false;
+	while (isWord(tokens[index]) && !termStops.has(tokens[index].word) && !(words.length && isVerb(tokens, index)) && !(hasNoun && (phraseBreaks.has(tokens[index].word) || isParticiple(tokens[index].word)))) {
 		words.push(tokens[index].word);
+		hasNoun ||= !termModifiers.has(tokens[index].word) && !quantifiers.has(tokens[index].word);
 		index++;
 	}
 	return { words, end: index };
