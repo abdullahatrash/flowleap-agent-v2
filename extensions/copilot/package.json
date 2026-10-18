@@ -1650,6 +1650,41 @@
         }
       },
       {
+        "name": "copilot_inventorQuestions",
+        "displayName": "Inventor Questions Document",
+        "toolReferenceName": "inventorQuestions",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(person)",
+        "userDescription": "Write the open Inventor Questions to a Word table for the inventor, or copy the inventor's answers back",
+        "modelDescription": "The Inventor Questions document of one matter folder drafting/<matter>/ (application-drafting skill, Step 5). action \"send\": when the attorney asks to send the questions to the inventor, it writes drafting/<matter>/inventor-questions.docx from inventor-answers.md: a heading, one sentence on what the inventor does, and one table with a row per open question (a question whose current answer is empty) with the question, where the answer goes and an empty answer cell. It refuses while the existing inventor-questions.docx holds answers that are not imported yet. action \"import\": when the attorney asks to apply the answers and the inventor answered in a file, call it first with that file (default drafting/<matter>/inventor-questions.docx; also a .md file in the format of inventor-answers.md, in the matter folder). Code copies each answer, in the inventor's words, into the empty answer slot of its question in inventor-answers.md and never writes over a filled answer; the result names the questions filled, the questions not changed and the ids it does not know. Then apply the answers to the draft as the skill says. Never write an answer into inventor-answers.md yourself.",
+        "tags": [],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge'."
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "send",
+                "import"
+              ],
+              "description": "\"send\" writes inventor-questions.docx for the inventor; \"import\" copies the inventor's answers into inventor-answers.md."
+            },
+            "file": {
+              "type": "string",
+              "description": "For \"import\" only: the workspace-relative path of the answered file in drafting/<matter>/, a .docx or a .md. Default: drafting/<matter>/inventor-questions.docx."
+            }
+          },
+          "required": [
+            "matter",
+            "action"
+          ]
+        }
+      },
+      {
         "name": "copilot_getPatentTerm",
         "displayName": "Get Patent Term",
         "toolReferenceName": "patentTerm",

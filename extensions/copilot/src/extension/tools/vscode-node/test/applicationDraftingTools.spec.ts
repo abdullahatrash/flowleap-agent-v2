@@ -23,12 +23,15 @@ import { IInstantiationService, ServiceIdentifier, ServicesAccessor } from '../.
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
 import { ExportDraftDocxTool } from '../exportDraftDocxTool';
+import { InventorQuestionsTool } from '../inventorQuestionsTool';
+import { readInventorQuestionsDocx } from '../inventorQuestionsDocx';
 import { StartApplicationDraftTool } from '../startApplicationDraftTool';
 import { draftingGateEdit, draftingWaiverEdit, DraftingWaiverLensProvider } from '../draftingGateLens';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
 import { parseDraftingFrontmatter } from '../../common/drafting/frontmatter';
-import { parseInventorAnswers } from '../../common/drafting/inventorAnswers';
+import { currentAnswer, parseInventorAnswers } from '../../common/drafting/inventorAnswers';
+import { answerInWord } from './inventorQuestionsDocxTestUtils';
 import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
@@ -189,6 +192,7 @@ function setup(files: Record<string, string> = {}) {
 		start: (matter = 'hinge') => run(new TestStartApplicationDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter }, toolInvocationToken: undefined }, CancellationToken.None)),
 		validate: (advisory?: { message: string; line?: number; claim?: number }[], matter = 'hinge') => run(new ValidateDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter, advisory }, toolInvocationToken: undefined }, CancellationToken.None)),
 		exportDocx: () => run(new ExportDraftDocxTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge' }, toolInvocationToken: undefined }, CancellationToken.None)),
+		inventor: (action: 'send' | 'import', file?: string) => run(new InventorQuestionsTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge', action, file }, toolInvocationToken: undefined }, CancellationToken.None)),
 		save: (content: string, extra: Record<string, string> = {}, filePath = 'drafting/hinge/draft-application.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
 			.invoke({ input: { filePath, content, template: 'draft-application', ...extra }, toolInvocationToken: undefined }, CancellationToken.None)),
 		saveOutline: (content = outlineTable, filePath = 'drafting/hinge/draft-outline.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
@@ -575,6 +579,37 @@ describe('Inventor Question answers', () => {
 		expect((await read('drafting/hinge/findings.md')).match(/- `source-marker`[^\n]*/g)).toEqual([
 			'- `source-marker` (draft-application.md, line 30): The paragraph at line 30 cites inventor:IQ-1, but inventor-answers.md has no answer to IQ-1.',
 		]);
+	});
+});
+
+describe('inventor_questions', () => {
+	it('sends eight open questions as eight rows, copies three answers from the returned .docx into empty slots only, and never over a filled slot', async () => {
+		const { tools, read, fileSystem } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft(`\n## Inventor Questions\n${Array.from({ length: 8 }, (_, index) => `\n> **Inventor Question IQ-${index + 1}:** Question ${index + 1} on the lever 14?\n`).join('')}`));
+		const docx = URI.file(`${root}/inventor-questions.docx`);
+		/** The result without the closing next-step line of the checklist. */
+		const upTo = (text: string) => text.replace(/ Wrote drafting\/hinge\/checklist\.md.*$/s, '');
+		const sent = upTo(await tools.inventor('send'));
+		const rows = [...(await readInventorQuestionsDocx(await fileSystem.readFile(docx))).keys()];
+		fileSystem.mockBytes(docx, await answerInWord(await fileSystem.readFile(docx), { 'IQ-1': 'Grade 304.', 'IQ-3': 'Yes, by hand.', 'IQ-6': '4 mm.' }));
+		const resendBeforeImport = upTo(await tools.inventor('send'));
+		const imported = upTo(await tools.inventor('import'));
+		const afterImport = await read('drafting/hinge/inventor-answers.md');
+		const reimported = upTo(await tools.inventor('import'));
+		const resent = upTo(await tools.inventor('send'));
+		expect({
+			sent,
+			rows,
+			resendBeforeImport,
+			imported,
+			answers: parseInventorAnswers(afterImport).map(section => `${section.id}: ${currentAnswer(section)}`),
+			reimported,
+			reimportUnchanged: await read('drafting/hinge/inventor-answers.md') === afterImport,
+			resentRows: [...(await readInventorQuestionsDocx(await fileSystem.readFile(docx))).keys()],
+			resent,
+			outsideTheMatter: upTo(await tools.inventor('import', 'drafting/hinge/inventor-answers.md')),
+		}).toMatchSnapshot();
 	});
 });
 

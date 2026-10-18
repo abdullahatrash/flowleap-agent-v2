@@ -143,6 +143,13 @@ Done when `findings.md` holds the validator findings and the advisory items.
 The save writes each Inventor Question to `inventor-answers.md`; the attorney
 or the inventor fills the answers. When the attorney asks you to apply them,
 follow [references/resolve-inventor-questions.md](references/resolve-inventor-questions.md).
+When the attorney asks to send the questions to the inventor, call
+`inventor_questions` with action `send`: it writes `inventor-questions.docx`,
+a Word table with one row per open question and an empty answer cell. When
+the inventor answered in that file (or in a `.md` file in the matter folder),
+call `inventor_questions` with action `import` and that file before you apply
+the answers: code copies each answer into its empty slot and never changes a
+filled one.
 
 Done when each filled answer is in the draft and `checklist.md` step 5 shows
 no answered question that is not applied.

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { isAnswered, newlyAppliedAnswers, parseInventorAnswers, updateInventorAnswers } from '../drafting/inventorAnswers';
+import { currentAnswer, fillInventorAnswers, isAnswered, newlyAppliedAnswers, openInventorQuestions, parseInventorAnswers, updateInventorAnswers } from '../drafting/inventorAnswers';
 import { InventorQuestion } from '../drafting/sourceMarkers';
 
 const questions: InventorQuestion[] = [
@@ -96,5 +96,38 @@ describe('Application Drafting inventor answers file', () => {
 			unchanged: [...newlyAppliedAnswers(cite('The lever is steel.'), cite('The lever is steel.'))],
 			changed: [...newlyAppliedAnswers(cite('The lever is steel.'), cite('The lever is steel, 4 mm thick.'))],
 		}).toEqual({ first: ['IQ-1', 'IQ-2'], unchanged: [], changed: ['IQ-1'] });
+	});
+});
+
+describe('Application Drafting inventor answers import', () => {
+
+	/** `inventor-answers.md` of eight questions; IQ-2 has a filled slot, IQ-4 the narrowed question with an empty slot. */
+	const eight = () => updateInventorAnswers(undefined, 'hinge', Array.from({ length: 8 }, (_, index) => ({ id: `IQ-${index + 1}`, line: index, text: `Question ${index + 1}?` })), new Set())
+		.replace('**Question:** Question 2?\n\n**Belongs:** see the question\n\n**Answer:**\n', '**Question:** Question 2?\n\n**Belongs:** see the question\n\n**Answer:**\nNot stated.\n')
+		.replace('**Question:** Question 4?\n\n**Belongs:** see the question\n\n**Answer:**\n', '**Question:** Question 4?\n\n**Belongs:** see the question\n\n**Answer:**\nSteel.\n\n**Narrowed question:** Which steel?\n\n**Answer:**\n');
+
+	it('the open questions are the sections whose current answer slot is empty, with the current question', () => {
+		expect(openInventorQuestions(eight()).map(question => `${question.id}: ${question.question}`)).toEqual([
+			'IQ-1: Question 1?', 'IQ-3: Question 3?', 'IQ-4: Which steel?', 'IQ-5: Question 5?', 'IQ-6: Question 6?', 'IQ-7: Question 7?', 'IQ-8: Question 8?',
+		]);
+	});
+
+	it('three filled cells fill three empty slots; a filled slot, an empty cell and an unknown id change nothing; a re-run changes nothing', () => {
+		const answers = new Map([['IQ-1', 'Grade 304.'], ['IQ-2', 'A new answer.'], ['IQ-3', ''], ['IQ-4', 'Stainless.\n**Answer:** a line like a field'], ['IQ-6', '4 mm.'], ['IQ-9', 'No such question.']]);
+		const first = fillInventorAnswers(eight(), answers);
+		const second = fillInventorAnswers(first.text, answers);
+		expect({
+			filled: first.filled,
+			kept: first.kept,
+			unknown: first.unknown,
+			answers: parseInventorAnswers(first.text).map(section => `${section.id}: ${currentAnswer(section)}`),
+			rerun: { unchanged: second.text === first.text, filled: second.filled, kept: second.kept },
+		}).toEqual({
+			filled: ['IQ-1', 'IQ-4', 'IQ-6'],
+			kept: ['IQ-2'],
+			unknown: ['IQ-9'],
+			answers: ['IQ-1: Grade 304.', 'IQ-2: Not stated.', 'IQ-3: ', 'IQ-4: Stainless.\n **Answer:** a line like a field', 'IQ-5: ', 'IQ-6: 4 mm.', 'IQ-7: ', 'IQ-8: '],
+			rerun: { unchanged: true, filled: [], kept: ['IQ-1', 'IQ-2', 'IQ-4', 'IQ-6'] },
+		});
 	});
 });

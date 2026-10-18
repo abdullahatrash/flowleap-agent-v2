@@ -23,6 +23,7 @@ describe('Application Drafting folder contract', () => {
 				workingRecord: 'drafting/acme-hinge/draft-application.working-record.md',
 				findings: 'drafting/acme-hinge/findings.md',
 				inventorAnswers: 'drafting/acme-hinge/inventor-answers.md',
+				inventorQuestionsDocx: 'drafting/acme-hinge/inventor-questions.docx',
 				checklist: 'drafting/acme-hinge/checklist.md',
 				docx: {
 					description: 'drafting/acme-hinge/draft-application.description.docx',
