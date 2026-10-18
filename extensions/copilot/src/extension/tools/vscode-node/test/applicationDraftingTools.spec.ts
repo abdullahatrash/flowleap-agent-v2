@@ -24,7 +24,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vsco
 import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
 import { ExportDraftDocxTool } from '../exportDraftDocxTool';
 import { StartApplicationDraftTool } from '../startApplicationDraftTool';
-import { draftingGateEdit } from '../draftingGateLens';
+import { draftingGateEdit, draftingWaiverEdit, DraftingWaiverLensProvider } from '../draftingGateLens';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
 import { parseDraftingFrontmatter } from '../../common/drafting/frontmatter';
@@ -418,6 +418,33 @@ describe('validate_draft', () => {
 		await tools.validate();
 		expect((await read('drafting/hinge/findings.md')).match(/- `claims-unsearched`[^\n]*/)?.[0]).toBe(
 			'- `claims-unsearched` (claims.md): The Approved Claims carry status "not searched — scope unvalidated": they were drafted without a prior-art search. Run the prior-art step and re-approve, or record in the review that the claims are deliberately unsearched.');
+	});
+
+	it('a click on "Waive all 10 Errors of this rule" waives each antecedent-basis Error; the next run keeps the waivers and the export no longer lists them', async () => {
+		const tenClaims = claims().replace(/2\. The hinge[^\n]*\n/, Array.from({ length: 10 }, (_, index) => `${index + 2}. The hinge of claim 1, wherein the pin is steel.\n`).join(''));
+		const { tools, read, write } = setup({ ...gatesOpen, 'drafting/hinge/claims.md': tenClaims, 'drafting/hinge/draft-outline.md': outline(tenClaims).replace('| 1, 2 |', '| 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 |') });
+		await tools.start();
+		await tools.save(draft().replace(/## CLAIMS\n\n[\s\S]*?\n\n## ABSTRACT/, `## CLAIMS\n\n${parseDraftingFrontmatter(tenClaims).body.trim()}\n\n## ABSTRACT`));
+		const before = await tools.exportDocx();
+		const findings = await read('drafting/hinge/findings.md');
+		const document = { uri: URI.file(`${root}/findings.md`), getText: () => findings };
+		const bulk = new DraftingWaiverLensProvider().provideCodeLenses(document).find(lens => lens.command?.title === 'Waive all 10 Errors of this rule')!;
+		const edit = await draftingWaiverEdit(document, bulk.command!.arguments![1], async () => 'The pin is introduced in claim 1 of the parent application.');
+		const lines = findings.split('\n');
+		for (const [, edits] of edit!.entries()) {
+			for (const { range, newText } of edits) {
+				lines[range.start.line] += newText;
+			}
+		}
+		write('drafting/hinge/findings.md', lines.join('\n'));
+		await tools.validate();
+		const after = await tools.exportDocx();
+		const count = (text: string, pattern: RegExp) => text.match(pattern)?.length ?? 0;
+		expect({
+			before: count(before, /- `antecedent-basis`/g),
+			waiversAfterValidate: count(await read('drafting/hinge/findings.md'), /- Waived: The pin is introduced in claim 1 of the parent application\./g),
+			after: after.split(' as ')[0],
+		}).toEqual({ before: 10, waiversAfterValidate: 10, after: 'Exported the description, the claims and the abstract' });
 	});
 
 	it('refuses a matter name that leaves drafting/ and a matter folder that does not exist', async () => {

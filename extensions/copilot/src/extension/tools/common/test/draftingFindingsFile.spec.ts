@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { DraftFinding } from '../drafting/finding';
-import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../drafting/findingsFile';
+import { blockingFindings, findingsWaiverInsertions, mergeFindings, parseFindingsFile, parseFindingsFileItems, renderFindingsFile } from '../drafting/findingsFile';
 
 const findings: DraftFinding[] = [
 	{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 3, claim: 3, message: 'Claim 3: "the spring" has no antecedent basis.', waived: { reason: 'Spring is inherent in the hinge type.' } },
@@ -72,6 +72,22 @@ describe('Application Drafting findings file', () => {
 				previous[4],
 			],
 			blocking: [],
+		});
+	});
+
+	it('round-trips the waivers a click writes: each Error waived, the waived item and the Inventor Question left alone', () => {
+		const text = renderFindingsFile(findings);
+		const lines = text.split('\n');
+		const insertions = findingsWaiverInsertions(text, parseFindingsFileItems(text).map(item => item.fileLine), 'Reviewed by the attorney.');
+		for (const { afterLine, text: waiver } of [...insertions].reverse()) {
+			lines.splice(afterLine, 0, waiver);
+		}
+		const written = lines.join('\n');
+		const waived = findings.map((finding, index) => index === 1 ? { ...finding, waived: { reason: 'Reviewed by the attorney.' } } : finding);
+		expect({ insertions, written: written === renderFindingsFile(waived), blocking: blockingFindings(parseFindingsFile(written)) }).toEqual({
+			insertions: [{ afterLine: 9, text: '  - Waived: Reviewed by the attorney.' }],
+			written: true,
+			blocking: [findings[2]],
 		});
 	});
 
