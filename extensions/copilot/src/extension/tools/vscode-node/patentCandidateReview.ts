@@ -9,6 +9,8 @@ import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLin
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
+import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
+import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase } from './patentFallbackLadder';
 import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
@@ -57,11 +59,16 @@ export interface FindBetterSide {
 export interface PatentCandidateReview extends FindBetterFields {
 	readonly coverage?: readonly {
 		readonly feature: string;
-		readonly kind?: 'feature' | 'combination';
+		/** `fallback` (invalidity-claim-chart only): a rung of the Fallback Ladder, charting only the limitation it adds. */
+		readonly kind?: 'feature' | 'combination' | 'fallback';
 		readonly importance: 'essential' | 'optional';
 		readonly status: 'supported' | 'partial' | 'unresolved';
 		/** invalidity-claim-chart: the challenged claim this row is an element of, e.g. `1`. */
 		readonly claimNumber?: string;
+		/** invalidity-claim-chart, kind fallback: the charted independent claim this row falls back from. */
+		readonly fallbackOf?: string;
+		/** invalidity-claim-chart, a description-supported fallback (no claimNumber): the challenged patent's passage that supports it. */
+		readonly basis?: FallbackBasis;
 		/** Required by the tool schema, but an unresolved row may arrive without it; never dereference unguarded. */
 		readonly sourceAnchors?: readonly string[];
 		readonly gap: string;
@@ -77,9 +84,18 @@ export interface PatentCandidateReview extends FindBetterFields {
 	readonly stopReason?: string;
 	/** invalidity-claim-chart: the patent whose claims are being charted against the cited art. */
 	readonly challengedPublication?: string;
+	/**
+	 * invalidity-claim-chart: the critical date as an ISO date (YYYY-MM-DD). With it, the receipt lists
+	 * every cited document published after it as an open point; without it, that check is skipped.
+	 */
+	readonly criticalDate?: string;
 	/** Report prose the template renders outside the appendix; checked like every other model-written field. */
 	readonly objective?: string;
 	readonly searchStrategy?: string;
+	/** invalidity-claim-chart: rungs of the Fallback Ladder the chart does not chart, each with the reason. */
+	readonly fallbacksNotCharted?: readonly FallbackNotCharted[];
+	/** invalidity-claim-chart: the Search Rounds run for fallbacks the last saved chart left not covered. */
+	readonly rounds?: readonly SearchRound[];
 	/** The technology the report is about; the working record names it so a later session recognizes the matter. */
 	readonly subject?: string;
 	/**
@@ -89,6 +105,31 @@ export interface PatentCandidateReview extends FindBetterFields {
 	readonly concepts?: readonly PatentSearchConcept[];
 	/** The classification codes the search covered, each with its meaning in plain words. */
 	readonly classifications?: readonly PatentClassificationEntry[];
+}
+
+/** The challenged patent's description passage a description-supported fallback rests on, quoted verbatim. */
+interface FallbackBasis {
+	readonly anchor: string;
+	readonly quote: string;
+}
+
+/** A rung of the Fallback Ladder left out of the chart, and why. */
+interface FallbackNotCharted {
+	readonly claimNumber: string;
+	readonly reason: string;
+}
+
+/**
+ * One Search Round: the fallbacks it targeted (claim numbers, or a description fallback's feature),
+ * each query it ran with its tool, and what it changed. Every query must match a recorded execution.
+ */
+interface SearchRound {
+	readonly round: number;
+	readonly targets: readonly string[];
+	/** The ids of the previous receipt's open points the expert chose and this round answers (PRD 0024 C4). */
+	readonly answers?: readonly string[];
+	readonly queries: readonly { readonly tool: string; readonly query: string; readonly count?: number }[];
+	readonly outcome: string;
 }
 
 /** One concept the queries were built from, and the synonyms and variations searched for it. */
@@ -122,6 +163,13 @@ const LEGAL_CONCLUSION_PHRASES: readonly string[] = [
  * states no invalidity, anticipation or obviousness (ADR 0010).
  */
 const FIND_BETTER_CONCLUSION_PHRASES: readonly string[] = ['invalid', 'invalidates', 'invalidated', 'invalidating', 'invalidity', 'obvious'];
+
+/**
+ * The assertive forms an invalidity chart refuses outright (ADR 0016 decision 4: the chart states
+ * what each document discloses; the legal reading stays in the practitioner's prose). Unlike the
+ * noun forms above, which honest disclaimers also use, these only ever state a conclusion.
+ */
+const ASSERTIVE_CONCLUSION_PHRASES: readonly string[] = ['is obvious', 'are obvious', 'obvious over', 'would have been obvious', 'anticipates', 'anticipated by', 'is not novel', 'are not novel'];
 
 /**
  * Report the legal conclusions written into model-supplied prose. A disclaimer of the form
@@ -295,6 +343,68 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 		lines.push('Findings marked "rests on a drawing reading" rest on the model\'s reading of a retrieved figure, not on quoted text; a drawing discloses arrangement, never dimensions unless stated to scale.');
 	}
 	return lines;
+}
+
+/** A structured critical date must be an ISO date that exists, or be left out. */
+function criticalDateErrors(review: PatentCandidateReview): string[] {
+	const value = review.criticalDate?.trim();
+	if (!value) { return []; }
+	return isoDate(value) === value ? [] : [`criticalDate "${value}" is not an ISO date. Give it as YYYY-MM-DD (for example 2005-03-01), or leave criticalDate out and keep the basis in prose.`];
+}
+
+/** A recorded date as `YYYY-MM-DD`: the ledger holds `2008-07-16` or `20080716`; anything else is unknown. */
+function isoDate(value: string | undefined): string | undefined {
+	const match = /^(?<year>\d{4})-?(?<month>\d{2})-?(?<day>\d{2})/.exec(value?.trim() ?? '')?.groups;
+	if (!match) { return undefined; }
+	const date = `${match.year}-${match.month}-${match.day}`;
+	const parsed = new Date(`${date}T00:00:00Z`);
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : undefined;
+}
+
+/**
+ * The open points of a saved invalidity chart (ADR 0016 amendment, PRD 0024 C4), read from the record
+ * and never from the model, in a stable order the Round Report numbers: rungs partly disclosed or not
+ * found; independent-claim elements not found; cited documents outside the searched jurisdictions;
+ * cited documents published after the structured critical date, or with no recorded date when one is
+ * given; rows that rest on a drawing reading; searches that failed and did not run again. Each has a
+ * short id that a Search Round's `answers` names.
+ */
+export function chartOpenPoints(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly ReceiptOpenPoint[] {
+	const rows = review.coverage ?? [];
+	const references = rowReferences(review);
+	const sources = sourceIndex(snapshot);
+	const points: ReceiptOpenPoint[] = [...rowOpenPoints(review)];
+	const challenged = review.challengedPublication?.trim();
+	const cited = retrievedDocuments(review, snapshot).filter(document => document.cited && (!challenged || documentKey(document.publication) !== documentKey(challenged)))
+		.sort((first, second) => first.publication.localeCompare(second.publication));
+	const jurisdictions = searchedJurisdictions(snapshot);
+	for (const document of cited.filter(document => outsideScope(document.publication, jurisdictions))) {
+		points.push({ id: `scope-${document.publication}`, text: `Cited document ${document.publication} is outside the searched jurisdictions (${jurisdictions.join(', ')}).` });
+	}
+	const criticalDate = isoDate(review.criticalDate);
+	if (criticalDate) {
+		for (const document of cited) {
+			const published = isoDate(document.publicationDate);
+			if (!published) { points.push({ id: `date-${document.publication}`, text: `Cited document ${document.publication} has no recorded publication date, so it was not compared with the critical date ${criticalDate}.` }); }
+			else if (published > criticalDate) { points.push({ id: `date-${document.publication}`, text: `Cited document ${document.publication} was published on ${published}, after the critical date ${criticalDate}.` }); }
+		}
+	}
+	rows.forEach((row, index) => {
+		const suffix = drawingReadingSuffix(row, sources);
+		if (suffix) { points.push({ id: `drawing-${references[index]}`, text: `The row ${suffix.includes('in part') ? 'rests in part on a drawing reading' : 'rests on a drawing reading'}, not on quoted text: ${shortPhrase(row.feature)}` }); }
+	});
+	unretriedQueries(snapshot).forEach((query, index) => points.push({ id: `search-${index + 1}`, text: `A search failed and did not run again: ${shortPhrase(query)}` }));
+	return points;
+}
+
+/** The working record's list of the open points the receipt states, so a later session sees what the expert was asked. */
+function openPointsSection(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): string[] {
+	const points = chartOpenPoints(review, snapshot);
+	const date = isoDate(review.criticalDate);
+	return ['## Open points (generated)',
+		`Computed by the writer from the record. The Round Report asks the expert about each one, in this order. ${date ? `Critical date: ${date}.` : 'No structured critical date was given, so the publication dates of the cited documents were not checked.'}`,
+		...(points.length ? points.map(point => `- [${point.id}] ${inline(point.text)}`) : ['No open points.']),
+		''];
 }
 
 /** The recorded searches, in the order they were run; the client report shows only the succeeded ones. */
@@ -588,6 +698,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 	const anchors = new Set(sources.keys());
 	if (sided.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : variant === 'find-better' ? 'find-better-report' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
 	if (variant === 'find-better') { errors.push(...findBetterErrors(sided, sources)); }
+	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources), ...assertiveConclusionErrors(sided), ...criticalDateErrors(sided)); }
 	// Each side of a find-better row is checked as a row of its own; every other review is unchanged.
 	const review = flattenSides(sided);
 	// Only application-owned source URLs are checked; external citations and semantic assertions need review.
@@ -609,7 +720,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 		if (!row.feature?.trim() || !['essential', 'optional'].includes(row.importance) || !['supported', 'partial', 'unresolved'].includes(row.status)) { errors.push('Every coverage row needs a feature, importance, and valid status.'); }
 		if (row.status !== 'unresolved' && !row.sourceAnchors?.length) { errors.push(`Coverage for "${row.feature}" needs known source anchors or unresolved status.`); }
 		for (const anchor of row.sourceAnchors ?? []) { if (!anchors.has(anchor)) { errors.push(`Unknown source anchor: ${anchor}. Recover known IDs with get_patent_details(publicationNumber, evidenceLookup: {}); do not repeat searches or downgrade a conclusion merely to pass validation.`); } }
-		if (!['feature', 'combination'].includes(row.kind ?? '')) { errors.push(`Identify coverage kind (feature or combination) for "${row.feature}".`); }
+		if (!['feature', 'combination', ...(variant === 'invalidity' ? ['fallback'] : [])].includes(row.kind ?? '')) { errors.push(`Identify coverage kind (${variant === 'invalidity' ? 'feature, combination or fallback' : 'feature or combination'}) for "${row.feature}".`); }
 		for (const anchor of row.sourceAnchors ?? []) {
 			const source = sources.get(anchor);
 			const evidence = row.evidence?.find(item => item.anchor === anchor);
@@ -647,8 +758,22 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
  * verbatim source text and are never scanned; only prose the model wrote itself is.
  */
 export function candidateWordingReview(sided: PatentCandidateReview, variant: CandidateReviewVariant = 'prior-art'): string[] {
-	const review = flattenSides(sided);
-	return legalConclusions([
+	return legalConclusions(modelWrittenFields(flattenSides(sided)), variant === 'find-better' ? [...LEGAL_CONCLUSION_PHRASES, ...FIND_BETTER_CONCLUSION_PHRASES] : LEGAL_CONCLUSION_PHRASES);
+}
+
+/**
+ * The legal conclusions an invalidity chart refuses to save: the assertive forms in any
+ * model-written field. The noun forms stay a wording review the model may confirm, because a
+ * disclaimer uses them too. One error per finding, so the model sees exactly where to reword.
+ */
+function assertiveConclusionErrors(sided: PatentCandidateReview): string[] {
+	return legalConclusions(modelWrittenFields(flattenSides(sided)), ASSERTIVE_CONCLUSION_PHRASES)
+		.map(finding => `The chart states a legal conclusion: ${finding}. An invalidity chart states what each document discloses (disclosed / partially disclosed / not found in the cited art) and leaves anticipation and obviousness to counsel. Reword that passage to what the passage discloses and which claim element it meets or misses.`);
+}
+
+/** Every field the model writes in its own words, with a label for the finding; quotations are never included. */
+function modelWrittenFields(review: ReturnType<typeof flattenSides>): (readonly [string, string | undefined])[] {
+	return [
 		['objective', review.objective],
 		['searchStrategy', review.searchStrategy],
 		...(review.concepts ?? []).flatMap(entry => [
@@ -668,7 +793,10 @@ export function candidateWordingReview(sided: PatentCandidateReview, variant: Ca
 		]),
 		...(review.limitations ?? []).map((value, index) => [`limitations[${index}]`, value] as const),
 		['stopReason', review.stopReason],
-	], variant === 'find-better' ? [...LEGAL_CONCLUSION_PHRASES, ...FIND_BETTER_CONCLUSION_PHRASES] : LEGAL_CONCLUSION_PHRASES);
+		// A description fallback's basis.quote is a quotation of the challenged patent and is never scanned.
+		...(review.fallbacksNotCharted ?? []).map(entry => [`fallbacksNotCharted reason for claim ${entry.claimNumber}`, entry.reason] as const),
+		...(review.rounds ?? []).map(round => [`outcome of Search Round ${round.round}`, round.outcome] as const),
+	];
 }
 
 function cell(value: string): string { return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' '); }
@@ -695,11 +823,7 @@ interface ReferenceRole {
 export function referenceRoles(review: PatentCandidateReview, sources: Map<string, PatentEvidenceSource>): readonly ReferenceRole[] {
 	const roles = new Map<string, { rows: string[]; alone: boolean }>();
 	for (const row of review.coverage ?? []) {
-		const publications = new Set([...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor), ...(row.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
-			.flatMap(anchor => {
-				const publication = sources.get(anchor)?.reference.publicationNumber;
-				return publication ? [publicationKey(publication)] : [];
-			}));
+		const publications = rowPublications(row, sources);
 		for (const publication of publications) {
 			const role = roles.get(publication) ?? { rows: [], alone: false };
 			role.rows.push(row.feature);
@@ -708,6 +832,15 @@ export function referenceRoles(review: PatentCandidateReview, sources: Map<strin
 		}
 	}
 	return [...roles].map(([publication, role]) => ({ publication, rows: role.rows, alone: role.alone }));
+}
+
+/** The publications one row cites through its source anchors, its evidence and its element map, in the order first cited. */
+function rowPublications(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): ReadonlySet<string> {
+	return new Set([...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor), ...(row.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
+		.flatMap(anchor => {
+			const publication = sources.get(anchor)?.reference.publicationNumber;
+			return publication ? [publicationKey(publication)] : [];
+		}));
 }
 
 /** The distinct challenged claims the rows name, in the order the rows name them. */
@@ -725,6 +858,172 @@ function referenceRoleTable(review: PatentCandidateReview, sources: Map<string, 
 		'| --- | --- | --- |',
 		...roles.map(role => '| ' + [role.publication, role.rows.join('; '), role.alone ? 'discloses element(s) on its own' : 'contributes in combination'].map(cell).join(' | ') + ' |'),
 		''];
+}
+
+/** The rows of one charted claim, with the rows that name no claim kept beside the claim rows they follow. */
+interface ClaimGroup {
+	readonly claim: string | undefined;
+	readonly rows: readonly PatentCoverageRow[];
+}
+
+/**
+ * The non-fallback rows grouped by the claim they chart, in the order each claim is first named. A row
+ * without a claim number stays with the claim before it, so a chart of one claim renders in input order.
+ */
+function claimGroups(rows: readonly PatentCoverageRow[]): readonly ClaimGroup[] {
+	const groups: { claim: string | undefined; rows: PatentCoverageRow[] }[] = [];
+	for (const row of rows) {
+		const claim = row.claimNumber?.trim() || groups[groups.length - 1]?.claim;
+		const group = groups.find(entry => entry.claim === claim);
+		if (group) { group.rows.push(row); } else { groups.push({ claim, rows: [row] }); }
+	}
+	return groups;
+}
+
+/** The fallback rows that fall back from one independent claim. */
+function fallbackRowsOf(review: PatentCandidateReview, claim: string): readonly PatentCoverageRow[] {
+	return (review.coverage ?? []).filter(row => row.kind === 'fallback' && row.fallbackOf?.trim() === claim);
+}
+
+/** Claim numbers as "claim 3" or "claims 3, 5"; a description fallback by its quoted name. */
+function fallbackList(labels: readonly string[]): string {
+	if (!labels.length) { return 'none'; }
+	const claims = labels.filter(label => /^\d+$/.test(label));
+	const descriptions = labels.filter(label => !/^\d+$/.test(label)).map(label => `description fallback "${inline(label)}"`);
+	return [...(claims.length ? [`${claims.length === 1 ? 'claim' : 'claims'} ${claims.join(', ')}`] : []), ...descriptions].join(', ');
+}
+
+/**
+ * The coverage line of one independent claim: its disclosed elements, then its Fallback Coverage counted
+ * off the validated fallback rows ("Claim 1: 2 of 3 elements disclosed; fallbacks: 1 of 3 covered (1
+ * partly); not covered: claim 3"). The counts are read off statuses, never rated.
+ */
+function fallbackCoverageLine(review: PatentCandidateReview, coverage: FallbackCoverage, derivation: FallbackLadderDerivation): string {
+	const elements = (review.coverage ?? []).filter(row => row.kind === 'feature' && row.claimNumber?.trim() === coverage.claimNumber);
+	const head = `Claim ${coverage.claimNumber}: ${elements.filter(row => row.status === 'supported').length} of ${elements.length} elements disclosed`;
+	const charted = [...coverage.covered, ...coverage.partly, ...coverage.notCovered];
+	const total = new Set([...coverage.rungs, ...charted]).size;
+	const unavailable = derivation.kind === 'unavailable' ? `; ${LADDER_UNAVAILABLE}` : '';
+	if (!total) { return `${head}${unavailable || `; fallbacks: none (no dependent claim refers to claim ${coverage.claimNumber})`}.`; }
+	return `${head}${unavailable}; fallbacks: ${coverage.covered.length} of ${total} covered (${coverage.partly.length} partly); not covered: ${fallbackList(coverage.notCovered)}`
+		+ (coverage.notCharted.length ? `; not charted: ${fallbackList(coverage.notCharted)}` : '') + '.';
+}
+
+/** The generated label of a charted rung: the claim and the chain that leads to it from the independent claim. */
+function rungLabel(claim: string, chain: readonly string[] | undefined): string {
+	return chain?.length ? `Claim ${claim} (${chain.join(' → ')})` : `Claim ${claim}`;
+}
+
+/**
+ * One independent claim's Fallback Coverage: the coverage line, then one table row per rung in claim
+ * order with the claim text the ledger recorded (never the model's `feature`), the status and the
+ * references the row cites; a rung the chart does not chart reads "not charted: <reason>".
+ * Description fallbacks follow the rungs. With `details`, each charted fallback is then rendered as an
+ * ordinary row under its generated label, a description fallback with its basis quote first.
+ */
+function fallbackCoverageSection(review: PatentCandidateReview, coverage: FallbackCoverage, derivation: FallbackLadderDerivation, sources: Map<string, PatentEvidenceSource>, rowSection?: (row: PatentCoverageRow) => string[]): string[] {
+	const claim = coverage.claimNumber;
+	const ladder = ladderOf(derivation, claim);
+	const rows = fallbackRowsOf(review, claim);
+	const notCharted = new Map((review.fallbacksNotCharted ?? []).map(entry => [entry.claimNumber.trim(), entry.reason]));
+	const references = (row: PatentCoverageRow) => [...rowPublications(row, sources)].join(', ') || '—';
+	const rungs = (ladder?.rungs ?? []).map(rung => ({ rung, row: rows.find(row => row.claimNumber?.trim() === rung.claimNumber) }));
+	// Without a ladder a claim-numbered fallback row has no recorded claim text to show beside it.
+	const unladdered = rows.filter(row => row.claimNumber?.trim() && !rungs.some(entry => entry.rung.claimNumber === row.claimNumber?.trim()));
+	const descriptions = rows.filter(row => !row.claimNumber?.trim());
+	const table = [
+		...rungs.map(({ rung, row }) => [rungLabel(rung.claimNumber, rung.chain), inline(rung.text), row ? INVALIDITY_STATUS[row.status] : `not charted: ${inline(notCharted.get(rung.claimNumber) ?? '')}`, row ? references(row) : '—']),
+		...unladdered.map(row => [rungLabel(row.claimNumber!.trim(), undefined), 'claim text not established', INVALIDITY_STATUS[row.status], references(row)]),
+		...descriptions.map(row => [`Description fallback: ${inline(row.feature)}`, 'description-supported; basis quote below', INVALIDITY_STATUS[row.status], references(row)]),
+	];
+	const detail = (row: PatentCoverageRow, label: string): string[] => {
+		const section = rowSection?.({ ...row, feature: label }) ?? [];
+		const anchor = row.basis?.anchor?.trim();
+		if (row.claimNumber?.trim() || !anchor) { return section; }
+		const source = sources.get(anchor);
+		return [section[0], `Basis in the challenged patent: ${source ? patentCitationLink(anchor, source.reference) : anchor}`, quotation(row.basis?.quote ?? ''), ...section.slice(1)];
+	};
+	return [
+		`## Fallback coverage (generated) — claim ${cell(claim)}`,
+		fallbackCoverageLine(review, coverage, derivation),
+		'',
+		...(table.length ? [
+			'Each rung is a dependent claim of the challenged patent, read from its recorded claims; a fallback row charts only the limitation that claim adds. Covered means the cited art discloses that limitation in this chart; it is a reading of the statuses, not a legal conclusion.',
+			'| Fallback | Claim text (recorded) | Status | References cited |',
+			'| --- | --- | --- | --- |',
+			...table.map(cells => '| ' + cells.map(cell).join(' | ') + ' |'),
+			'',
+		] : []),
+		...(rowSection ? [
+			...rungs.flatMap(({ rung, row }) => row ? detail(row, `${rungLabel(rung.claimNumber, rung.chain)} — fallback of claim ${claim}`) : []),
+			...unladdered.flatMap(row => detail(row, `${rungLabel(row.claimNumber!.trim(), undefined)} — fallback of claim ${claim}`)),
+			...descriptions.flatMap(row => detail(row, `Description fallback of claim ${claim}: ${row.feature}`)),
+		] : []),
+	];
+}
+
+/**
+ * The coverage body of a structured invalidity chart: per charted claim its rows under "Claim N —
+ * elements", then its Fallback Coverage. Without recorded claims of the challenged patent (the writer refuses such a save) the rows
+ * render as a plain list, exactly as before the ladder existed.
+ */
+function invalidityCoverageSections(review: PatentCandidateReview, derivation: FallbackLadderDerivation, sources: Map<string, PatentEvidenceSource>, rowSection: (row: PatentCoverageRow) => string[]): string[] {
+	if (derivation.kind === 'missing') { return ['## Coverage and remaining search tracks', ...(review.coverage ?? []).flatMap(rowSection)]; }
+	const coverage = fallbackCoverage(review, derivation);
+	// Each claim opens with its own elements heading and closes with its Fallback Coverage; rows that
+	// name no claim before the first claim keep the general heading.
+	return claimGroups((review.coverage ?? []).filter(row => row.kind !== 'fallback')).flatMap(group => {
+		const claimCoverage = group.claim ? coverage.find(entry => entry.claimNumber === group.claim) : undefined;
+		return [
+			group.claim ? `## Claim ${cell(group.claim)} — elements` : '## Coverage and remaining search tracks',
+			...group.rows.flatMap(rowSection),
+			...(claimCoverage ? fallbackCoverageSection(review, claimCoverage, derivation, sources, rowSection) : []),
+		];
+	});
+}
+
+/** How the ledger stands to a round query, in the chart's words. */
+const ROUND_LEDGER_LABEL: Readonly<Record<RoundQueryLedgerStatus, string>> = {
+	matched: 'ledger-matched',
+	unrecorded: 'not recorded by the ledger',
+};
+
+/**
+ * The Search Rounds the chart records: per round its targets, each query with its tool, its result
+ * count and whether the execution ledger holds it, and the model-written outcome. With no round and a
+ * fallback not covered, the section says that no round ran; with every fallback covered it is omitted.
+ */
+function searchRoundsSection(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot, coverage: readonly FallbackCoverage[]): string[] {
+	const rounds = review.rounds ?? [];
+	if (!rounds.length) { return fallbacksNotCovered(coverage) > 0 ? ['## Search rounds', 'No Search Round ran.', ''] : []; }
+	const ledger = roundLedgerStatus(review, snapshot);
+	const target = (value: string) => /^\d+$/.test(value.trim()) ? `claim ${value.trim()}` : `description fallback "${inline(value)}"`;
+	return ['## Search rounds',
+		'Each Search Round runs on the expert\'s answer to the Round Report of a saved chart and targets the open points the expert chose. A query marked ledger-matched matches a tool execution recorded this session; a query marked not recorded by the ledger ran through a tool the ledger does not record and is not confirmed.',
+		...rounds.flatMap((round, index) => [
+			'', `### Search Round ${round.round}`,
+			`Targets: ${(round.targets ?? []).map(target).join(', ') || 'none named'}`,
+			...(round.answers?.length ? [`Answers open points: ${round.answers.map(inline).join(', ')}`] : []),
+			'',
+			'| Tool | Query | Count | Ledger |',
+			'| --- | --- | --- | --- |',
+			...(round.queries ?? []).map((query, position) => '| ' + [query.tool, query.query, query.count === undefined ? 'not stated' : String(query.count), ROUND_LEDGER_LABEL[ledger[index]?.queries[position] ?? 'unrecorded']].map(cell).join(' | ') + ' |'),
+			'',
+			`Outcome (model judgment): ${inline(round.outcome ?? '') || 'none stated'}`,
+		]),
+		''];
+}
+
+/**
+ * The working record's mirror of the chart's Fallback Coverage and Search Rounds: the coverage line and
+ * table of every charted claim, without the row evidence the client report carries.
+ */
+function fallbackRecordSections(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): string[] {
+	const derivation = deriveFallbackLadder(snapshot, review.challengedPublication);
+	if (derivation.kind === 'missing') { return []; }
+	const sources = sourceIndex(snapshot);
+	const coverage = fallbackCoverage(review, derivation);
+	return [...coverage.flatMap(entry => fallbackCoverageSection(review, entry, derivation, sources)), ...searchRoundsSection(review, snapshot, coverage)];
 }
 
 /** Render retrieved text as literal quotation content, never as Markdown or active source HTML. */
@@ -884,8 +1183,9 @@ const CHECKED_MECHANICALLY = 'Anchor identity, quotation identity and required f
  * provenance boilerplate — lives in the working record this report's last line names, which also
  * links the detailed tool-outcome and source-metadata evidence.
  *
- * @param variant `invalidity` relabels the statuses for a claim chart and adds the generated
- * reference-roles table. Rendering is byte-identical to a prior-art review when it is omitted.
+ * @param variant `invalidity` relabels the statuses for a claim chart, adds per charted claim its
+ * Fallback Coverage, and adds the generated reference-roles table and the Search Rounds. Rendering
+ * is byte-identical to a prior-art review when it is omitted.
  * @param reportWorkspacePath the report's own workspace-relative path, e.g.
  * `outputs/prior-art-review.md`. A drawing page saved to disk is linked relative to it; without it
  * such a page is linked to its document, as an unsaved page always is.
@@ -902,6 +1202,8 @@ export function renderCandidateReview(sided: PatentCandidateReview, snapshot: Pa
 	const scope = (document: RetrievedDocument) => jurisdictions.length
 		? [outsideScope(document.publication, jurisdictions) ? `outside searched jurisdictions (${publicationCountry(document.publication)})` : 'in scope']
 		: [];
+	// Derived only for an invalidity chart, which is the only report with a Fallback Ladder.
+	const derivation: FallbackLadderDerivation = variant === 'invalidity' ? deriveFallbackLadder(snapshot, review.challengedPublication) : { kind: 'missing' };
 	return [
 		...conceptTable(review),
 		...classificationTable(review),
@@ -914,8 +1216,11 @@ export function renderCandidateReview(sided: PatentCandidateReview, snapshot: Pa
 		'',
 		...(variant === 'find-better'
 			? findBetterSections(sided, snapshot, row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '####'))
-			: ['## Coverage and remaining search tracks', ...(review.coverage ?? []).flatMap(row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '###'))]),
+			: variant === 'invalidity'
+				? invalidityCoverageSections(review, derivation, sources, row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '###'))
+				: ['## Coverage and remaining search tracks', ...(review.coverage ?? []).flatMap(row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '###'))]),
 		...(variant === 'invalidity' ? referenceRoleTable(review, sources) : []),
+		...(variant === 'invalidity' && derivation.kind !== 'missing' ? searchRoundsSection(review, snapshot, fallbackCoverage(review, derivation)) : []),
 		'', '## Retrieved but not cited in coverage',
 		'Retrieved text that no coverage row cites was not reviewed for this report; its content is unknown, not absent.',
 		...uncitedDocumentTable(uncited),
@@ -1035,6 +1340,7 @@ export function renderWorkingRecord(sided: PatentCandidateReview, snapshot: Pate
 		'| --- | --- | --- | --- | --- | --- | --- |',
 		...searchExecutions(snapshot).map(execution => '| ' + [execution.status, execution.effectiveQuery ?? `${execution.query ?? 'unknown'} (effective query unknown)`, execution.countryFilter?.join(', ') ?? 'unknown', String(execution.total ?? 'unknown'), String(execution.returned ?? 'unknown'), execution.range ? `${execution.range.begin}-${execution.range.end}` : execution.requestedRange ? `${execution.requestedRange} (requested)` : 'unknown', searchPurpose(execution) ?? '—'].map(cell).join(' | ') + ' |'),
 		'',
+		...(variant === 'invalidity' ? [...fallbackRecordSections(review, snapshot), ...openPointsSection(review, snapshot)] : []),
 		'## Retrieved but not read',
 		...uncitedDocumentTable(documents.filter(document => !document.cited)),
 		'',

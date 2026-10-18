@@ -581,6 +581,118 @@ export function calledWithValue(traj, names, needle) {
 	);
 }
 
+/**
+ * Words of the added limitation of each T12 rung, by open-point id: claim 2's elastomer slider,
+ * claim 3's magnet detent, claim 4's vent hole and claim 5's drip groove. A Search Round query aims
+ * at an open point when it names one of its words.
+ */
+const T12_POINT_TERMS = {
+	'rung-2': /elastomer|\btpe\b/i,
+	'rung-3': /magnet/i,
+	'rung-4': /vent|air[\s-]?(?:hole|inlet|passage|opening)|breath/i,
+	'rung-5': /drip|groove|return[\s-]?hole/i,
+};
+/**
+ * The numbered open points the scripted expert answer of T12 picks ("Run 1 and 3. Do not run 2."
+ * in trajectory-cases.yaml). Change both together.
+ */
+const T12_CHOSEN_NUMBERS = [1, 3];
+/** Tools a Search Round query runs through: the ledger-recorded tools plus NPL, academic and web search. */
+const ROUND_SEARCH_TOOLS = ['search_patents', 'search_register', 'patstat_query', 'patent_api_request', 'fetch_webpage', 'web_search', 'search_npl', 'search_academic'];
+
+/**
+ * Is this call a retrieval of patent evidence? Every search tool, and a document lookup that is
+ * not a local `evidenceLookup` (the completion guard draws the same line).
+ * @param {FlatCall} call
+ */
+function isRoundRetrieval(call) {
+	if (ROUND_SEARCH_TOOLS.includes(call.name)) {
+		return true;
+	}
+	return ['get_patent_details', 'get_patent_summary'].includes(call.name) && !call.args?.evidenceLookup;
+}
+
+/**
+ * The open-point ids a writer receipt lists, one `Open point [id]: …` line each, in receipt order.
+ * @param {string} body
+ * @returns {string[]}
+ */
+function receiptOpenPoints(body) {
+	return [...String(body ?? '').matchAll(/^Open point \[(?<id>[^\]\s]+)\]: /gm)].map(match => match.groups.id);
+}
+
+/** A numbered list item or question: `1.`, `1)`, `**1.**`, `- 1.`, `Q1:` or `#1` (the guard's own shape). */
+const NUMBERED_LINE = /^\s*(?:[-*]\s+)?(?:\*\*)?(?:Q|#)?(?<number>\d+)(?:\*\*)?[.):]/i;
+
+/**
+ * The numbered items of a Round Report: each numbered line with the lines under it, up to the next
+ * numbered line.
+ * @param {string} text
+ * @returns {Array<{ number: number, text: string }>}
+ */
+function numberedItems(text) {
+	const items = [];
+	for (const line of String(text ?? '').split('\n')) {
+		const match = NUMBERED_LINE.exec(line);
+		if (match) {
+			items.push({ number: Number(match.groups.number), text: line });
+		} else if (items.length) {
+			items[items.length - 1].text += '\n' + line;
+		}
+	}
+	return items;
+}
+
+/**
+ * Whether a text names an open-point id, bracketed or bare, as the completion guard reads it.
+ * @param {string} text
+ * @param {string} id
+ */
+function namesPoint(text, id) {
+	const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return new RegExp(`(?<![\\w.-])${escaped}(?![\\w-]|\\.\\w)`, 'i').test(text);
+}
+
+/**
+ * The T12 calls split by turn, with the invalidity-chart saves of each turn.
+ * @param {Trajectory} traj
+ */
+function t12Turns(traj) {
+	const tagged = traj.rounds.flatMap(round => (round.toolCalls || []).map(call => ({ call, turn: round.turn ?? 0 })));
+	const of = turn => {
+		const calls = tagged.filter(entry => entry.turn === turn).map(entry => entry.call);
+		const saves = calls.flatMap((call, i) => call.name === 'write_patent_results' && String(call.args?.template ?? '').includes('invalidity') ? [i] : []);
+		return { calls, saves };
+	};
+	return { first: of(0), answer: of(1) };
+}
+
+/**
+ * The open points of the last turn-0 receipt, and the ids the expert chose by number, read from the
+ * Round Report the model ended turn 0 with (the first open-point id on each chosen numbered item).
+ * @param {Trajectory} traj
+ */
+function t12Choice(traj) {
+	const { first } = t12Turns(traj);
+	const last = first.saves.length ? first.calls[first.saves[first.saves.length - 1]] : undefined;
+	const open = last ? receiptOpenPoints(last.resultBody) : [];
+	const items = numberedItems(traj.turnTexts?.[0] ?? '');
+	const chosen = T12_CHOSEN_NUMBERS.map(number => {
+		const item = items.find(entry => entry.number === number);
+		return item ? open.find(id => namesPoint(item.text.split('\n')[0], id)) ?? open.find(id => namesPoint(item.text, id)) : undefined;
+	});
+	return { open, chosen };
+}
+
+/**
+ * The Search Rounds a chart save records (its `rounds` argument), or none.
+ * @param {FlatCall} call
+ * @returns {Array<{ queries?: Array<{ query?: unknown }> }>}
+ */
+function roundsOf(call) {
+	return Array.isArray(call.args?.rounds) ? call.args.rounds : [];
+}
+
 /** The two T9 fixture documents (number core without kind code, so 'EP 3123456' and 'EP3123456B1' both match) and the lookup tools that return them. */
 const T9_DOCUMENTS = ['EP3123456', 'US10123456'];
 const T9_LOOKUP_TOOLS = ['get_patent_details', 'get_patent_summary'];
@@ -687,5 +799,53 @@ export const cases = {
 		const searchIdx = calls.findIndex(c => ['search_patents', 'build_patent_query', 'build_uspto_query'].includes(c.name));
 		const askIdx = calls.findIndex(c => c.name === 'vscode_askQuestions');
 		return searchIdx >= 0 && (askIdx < 0 || askIdx > searchIdx);
+	},
+	/**
+	 * T12 — the model ended turn 0 with a Round Report: one numbered item per open point of the
+	 * last turn-0 receipt, each naming its id and a recommended next step, and the closing prompt line.
+	 */
+	t12_round_report_names_every_open_point: traj => {
+		const { open } = t12Choice(traj);
+		const report = traj.turnTexts?.[0] ?? '';
+		const items = numberedItems(report);
+		return open.length > 0
+			&& /Reply with the numbers to run/i.test(report)
+			&& open.every(id => items.some(item => namesPoint(item.text, id) && /recommend/i.test(item.text)));
+	},
+	/**
+	 * T12 — no Search Round before the expert answered: no turn-0 save records a round and nothing is
+	 * retrieved after the last turn-0 save; after the answer, a retrieval runs and a later save
+	 * records a round.
+	 */
+	t12_round_runs_only_after_answer: traj => {
+		const { first, answer } = t12Turns(traj);
+		if (!first.saves.length || !answer.saves.length) {
+			return false;
+		}
+		const lastFirst = first.saves[first.saves.length - 1];
+		const quietBefore = first.saves.every(i => roundsOf(first.calls[i]).length === 0) && !first.calls.slice(lastFirst + 1).some(isRoundRetrieval);
+		const roundSave = answer.saves.find(i => roundsOf(answer.calls[i]).length > 0);
+		return quietBefore && roundSave !== undefined && answer.calls.slice(0, roundSave).some(isRoundRetrieval);
+	},
+	/**
+	 * T12 — the round answers the two points the expert chose: its `answers` are exactly their ids,
+	 * every chosen rung is named by one of its queries, and no query names an open rung the expert
+	 * did not choose.
+	 */
+	t12_round_answers_chosen_points: traj => {
+		const { open, chosen } = t12Choice(traj);
+		const { answer } = t12Turns(traj);
+		const last = answer.saves.length ? answer.calls[answer.saves[answer.saves.length - 1]] : undefined;
+		const rounds = last ? roundsOf(last) : [];
+		const round = rounds[rounds.length - 1];
+		if (!round || chosen.some(id => !id) || new Set(chosen).size !== chosen.length) {
+			return false;
+		}
+		const answers = (Array.isArray(round.answers) ? round.answers : []).map(id => String(id).trim().toLowerCase());
+		const sameAnswers = answers.length === chosen.length && chosen.every(id => answers.includes(id.toLowerCase()));
+		const queries = (round.queries ?? []).map(q => String(q?.query ?? ''));
+		const aimed = chosen.filter(id => T12_POINT_TERMS[id]).every(id => queries.some(query => T12_POINT_TERMS[id].test(query)));
+		const offTarget = open.filter(id => !chosen.includes(id) && T12_POINT_TERMS[id]).some(id => queries.some(query => T12_POINT_TERMS[id].test(query)));
+		return sameAnswers && aimed && !offTarget;
 	},
 };

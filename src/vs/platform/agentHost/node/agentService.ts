@@ -20,6 +20,7 @@ import { localize } from '../../../nls.js';
 import { FileChangeType, FileOperationResult, IFileChange, IFileService, toFileOperationResult, type FileChangesEvent } from '../../files/common/files.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILogService } from '../../log/common/log.js';
+import { isMirroredSessionProvider } from '../common/agentHostChatMirror.js';
 import { AgentChatMigrationDeferred, AgentProvider, AgentSession, AgentSignal, IAgent, type IAgentAdoptedWorktree, IAgentChatContext, IAgentChatDataChange, IAgentChatMetadata, IAgentCreateChatOptions, IAgentCreateChatRequestOptions, IAgentCreateChatResult, IAgentCreateChatSideChatSelection, IAgentCreateChatSideChatSource, IAgentCreateSessionConfig, IAgentCreateSessionResult, IAgentDiscoveredChat, IAgentLegacyChat, IAgentMaterializeChatEvent, IAgentModelInfo, IAgentResolveSessionConfigParams, IAgentChatAdoptionResult, type AgentChatAdoptionReason, IAgentSessionConfigCompletionsParams, type IAgentSessionChatMetadata, IAgentSessionMetadata, IAgentSpawnChatEvent, AuthenticateParams, AuthenticateResult, SubagentChatSignal, subagentChatTitle } from '../common/agent.js';
 import { type AgentHostDebugLogsArtifactKind, type IAgentHostDebugLogsArtifact, type IAgentHostDebugLogsChunk, IAgentHostManagedSettingsDiagnostics, IAgentHostNetworkDiagnosticsInfo, IAgentHostNetworkFetchResult, IAgentService } from '../common/agentService.js';
 import { ISessionDatabase, ISessionDataService, ISessionStorageAccessCounts, SESSION_ATTACHMENTS_DIRNAME } from '../common/sessionDataService.js';
@@ -817,6 +818,7 @@ export class AgentService extends Disposable implements IAgentService {
 		this._catalogSourceResolver = new AgentHostCatalogSourceResolver({
 			isUnpersistedChatBacking: session => this._unpersistedChatBackings.has(session.toString()),
 			worktreeProjectFromRepositoryRoot,
+			persistedTitle: session => this._providerService.getProviderForSession(session)?.sessionTitlePolicy?.persisted(session),
 		});
 		this._peerChatStore = core.peerChatStore;
 		this._sessionsV2MigrationService = new AgentHostSessionsV2MigrationService(
@@ -1382,6 +1384,11 @@ export class AgentService extends Disposable implements IAgentService {
 					.then(() => this._migrateAndRegisterDiscoveredChats(provider, chats))
 					.then(() => { }, err => this._logService.warn(`[AgentService] registering discovered chats for provider ${provider.id} failed`, err));
 				this._providerDiscoveryRegistrations.set(provider.id, registration);
+				if (isMirroredSessionProvider(provider.id)) {
+					// FlowLeap (PRD 0018 C3): a mirrored chat offered again after a withdrawal is
+					// registered already, so registration announces nothing; announce it here.
+					void registration.then(() => this._announceMirroredSessions(provider, chats));
+				}
 				void registration.finally(() => {
 					if (this._providerDiscoveryRegistrations.get(provider.id) === registration) {
 						this._providerDiscoveryRegistrations.delete(provider.id);
@@ -1398,6 +1405,9 @@ export class AgentService extends Disposable implements IAgentService {
 				}));
 			}
 			subscriptions.add(provider.onDidSpawnChat(e => this._onChatSpawned(e)));
+			if (provider.onDidRetractSessions) {
+				subscriptions.add(provider.onDidRetractSessions(sessions => this._retractMirroredSessions(sessions)));
+			}
 			this._providerSubscriptions.set(provider.id, subscriptions);
 			return toDisposable(() => {
 				this._providerSubscriptions.deleteAndDispose(provider.id);
@@ -1409,6 +1419,44 @@ export class AgentService extends Disposable implements IAgentService {
 		} catch (error) {
 			subscriptions.dispose();
 			throw error;
+		}
+	}
+
+	/**
+	 * FlowLeap (PRD 0018 C3): whether the listing hides a registered session because it mirrors a
+	 * chat that no window offers now (the provider is not registered, or does not offer it).
+	 */
+	private _isWithdrawnMirroredSession(session: URI, provider: AgentProvider): boolean {
+		return isMirroredSessionProvider(provider) && this._providerService.getProvider(provider)?.offersSession?.(session) !== true;
+	}
+
+	/** FlowLeap (PRD 0018 C3): drops withdrawn mirrored sessions from live state and from clients' lists. */
+	private _retractMirroredSessions(sessions: readonly URI[]): void {
+		for (const session of sessions) {
+			const key = session.toString();
+			this._stateManager.deleteSession(key);
+			this._stateManager.retractSurfacedSession(key);
+			this._announcedSurfacedKeys.delete(key);
+		}
+		if (sessions.length > 0) {
+			this._invalidateSessionList();
+			this._logService.info(`[AgentService] retracted ${sessions.length} mirrored session(s)`);
+		}
+	}
+
+	/** FlowLeap (PRD 0018 C3): tells clients about mirrored sessions that are offered again. */
+	private async _announceMirroredSessions(provider: IAgent, chats: readonly IAgentDiscoveredChat[]): Promise<void> {
+		this._invalidateSessionList();
+		for (const { external: _external, ...metadata } of chats) {
+			const sessionMetadata = this._toSessionMetadata(metadata);
+			if (this._providerService.getProvider(provider.id) !== provider || !provider.offersSession?.(sessionMetadata.session)) {
+				continue;
+			}
+			try {
+				await this._announceSurfacedSession(sessionMetadata, provider.id);
+			} catch (error) {
+				this._logService.warn(`[AgentService] announcing a mirrored session failed`, error);
+			}
 		}
 	}
 
@@ -3512,9 +3560,9 @@ export class AgentService extends Disposable implements IAgentService {
 		const hiddenExternal = this._hidesAllExternalSessions(mode)
 			? new Set(allRegistered.filter(entry => entry.external).map(entry => entry.session.toString()))
 			: new Set<string>();
-		const registered = hiddenExternal.size > 0
-			? allRegistered.filter(entry => !hiddenExternal.has(entry.session.toString()))
-			: allRegistered;
+		const registered = allRegistered.filter(entry => !hiddenExternal.has(entry.session.toString())
+			// FlowLeap (PRD 0018 C3): a mirrored chat lists only while a window offers it.
+			&& !this._isWithdrawnMirroredSession(entry.session, entry.provider));
 		const providersWithRegistrations = new Set(allRegistered.map(entry => entry.provider));
 		this._retryInitialProviderMigrationsInBackground(provider => !providersWithRegistrations.has(provider));
 		const catalogCandidates = (await Promise.all(registered.map(async registeredSession => {
@@ -3656,9 +3704,12 @@ export class AgentService extends Disposable implements IAgentService {
 				? this._withLiveSessionMetadata(s, liveSummary, false, !this._stateManager.getSurfacedSessionSummary(s.session.toString()))
 				: s;
 			const persistedTitle = persistedFallbackTitles.get(s.session.toString());
-			return persistedTitle && !this._stateManager.getSessionState(s.session.toString())
+			const listed = persistedTitle && !this._stateManager.getSessionState(s.session.toString())
 				? { ...metadata, summary: persistedTitle }
 				: metadata;
+			// FlowLeap (PRD 0018 D1): a provider that keeps its titles off disk lists the live one.
+			const liveTitle = this._providerService.getProviderForSession(s.session)?.sessionTitlePolicy?.live(s.session);
+			return liveTitle ? { ...listed, summary: liveTitle } : listed;
 		});
 
 		// Overlay any session known to state but missing from the providers'

@@ -631,6 +631,29 @@
   {
     "type": "function",
     "function": {
+      "name": "search_register",
+      "description": "PRIMARY tool for REPRESENTATIVE or OPPONENT questions: searches the EP Register with register CQL and returns OPS's total for the whole query plus one row per EP application (publication, application number, representative, status, applicant, title). The EP Register is the ONLY search with a representative index: use re=<name> for the professional representative (agent) of record ('how many EP filings does representative X handle', 'which applications does firm Y represent') and op=<name> for an opponent ('which oppositions did Z file'). nm=<name> matches a name in ANY role (applicant, inventor, representative, opponent): when a role index (re/op/ia/pa/in) returns 0, retry with nm= to find which role the person holds. The register stores names surname-first, so use the surname alone (nm=Boniberger) or nm=\"Surname, First\" (nm=\"Boniberger, Bernhard\"); nm=\"First Surname\" returns 0. Other register indexes: ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. NOT register indexes (they return nothing): ag, rep, ab, cpc, st, ps, fd, ctr. Quote a multi-word value: re=\"Muster Patentanwälte\". search_patents has NO representative index at any office, so never answer a representative question from a bare name there. EP applications only: say so when you report a count. The total is capped at 10000; report it as the count and the rows as examples. For the US attorney of record, search_patents provider=uspto on recordAttorney.attorneyBag.lastName names the USPTO-registered practitioner; an EP agent is not a USPTO practitioner, so expect 0 there for the same firm. Grammar: get_search_syntax provider=epo_register. For one application's register events use get_register_events.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "EP Register CQL, e.g. 're=Kreuels', 'op=Siemens and pd>=20200101', 're=\"Kreuels\" and ia=Syntegon', 'nm=Boniberger' (a name in any role). Combine field=value terms with and/or/not; quote multi-word values. Names are surname-first: 'nm=\"Boniberger, Bernhard\"', not 'nm=\"Bernhard Boniberger\"'."
+          },
+          "range": {
+            "type": "string",
+            "description": "Optional result range 'start-end', max 100 per page. Default '1-25'. The total is reported for the whole query whatever the range."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "read_pdf",
       "description": "Extract text content from a local PDF file. Use this tool when users reference PDF documents (patent PDFs, research papers, technical documents) and need to analyze their content. Reads all pages by default, a single page via 'pageNumber', or a range via 'startPage'/'endPage'. Returns extracted text plus metadata (title, author, page count). The PDF must be a local file accessible from the workspace. If the user attached the PDF to the chat message, its full content — including figures and scanned pages — is already visible to you; do not use this tool for attached PDFs. Use it only for PDF files on disk that are not attached.",
       "parameters": {
@@ -1243,6 +1266,10 @@
             "type": "string",
             "description": "invalidity-claim-chart and find-better-report: the publication number of the patent whose claims are being charted against the cited art (for find-better-report, the granted target patent). Falls back to matter when unset."
           },
+          "criticalDate": {
+            "type": "string",
+            "description": "invalidity-claim-chart: the critical date as an ISO date (YYYY-MM-DD), e.g. the priority date of the challenged patent. With it, the receipt lists every cited document published after it as an open point. Keep the basis of the date in objective. Leave it out when the date is not known; the receipt then says the date check was skipped."
+          },
           "coverage": {
             "type": "array",
             "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 — element (b): …\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report: one row per element of each independent claim (claimNumber required), each with an examiner side and a found side; the row's own status, sourceAnchors, evidence and elements are unused there.",
@@ -1283,13 +1310,39 @@
                   "type": "string",
                   "enum": [
                     "feature",
-                    "combination"
-                  ]
+                    "combination",
+                    "fallback"
+                  ],
+                  "description": "fallback is invalidity-claim-chart only: one rung of the Fallback Ladder, charting only the limitation that fallback adds, with the same status, sourceAnchors, evidence, elements and gap as a feature row. A dependent-claim fallback gives claimNumber (the dependent claim) and fallbackOf (the independent claim); a description-supported fallback gives no claimNumber, fallbackOf and basis."
                 },
                 "claimNumber": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"). The chart's header states the distinct claims its rows name. find-better-report: required on every row; the independent claim of the target patent this element belongs to."
+                  "description": "invalidity-claim-chart: the challenged claim this row is an element of (e.g. \"1\"); on a fallback row, the dependent claim it charts, which must be a rung of fallbackOf's Fallback Ladder as derived from the challenged patent's claims recorded by get_patent_details. The chart's header states the distinct claims its rows name. find-better-report: required on every row; the independent claim of the target patent this element belongs to."
+                },
+                "fallbackOf": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "invalidity-claim-chart, kind fallback only: the independent claim this fallback falls back from; it must have feature rows in this chart."
+                },
+                "basis": {
+                  "type": "object",
+                  "description": "invalidity-claim-chart, description-supported fallback only (no claimNumber): the challenged patent's description passage that supports the fallback. The quote is checked verbatim against the recorded text at anchor, and anchor must be a description anchor of the challenged patent.",
+                  "properties": {
+                    "anchor": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "quote": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "anchor",
+                    "quote"
+                  ],
+                  "additionalProperties": false
                 },
                 "elements": {
                   "type": "array",
@@ -1604,6 +1657,96 @@
                 "sourceAnchors",
                 "gap",
                 "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "fallbacksNotCharted": {
+            "type": "array",
+            "description": "invalidity-claim-chart: rungs of the Fallback Ladder the chart does not chart, each with the reason (e.g. \"claim 9 is a use claim outside the attack\"). Every rung under a charted independent claim has exactly one fallback row or one entry here.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claimNumber": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "claimNumber",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "rounds": {
+            "type": "array",
+            "description": "invalidity-claim-chart: each Search Round, run only on the expert's answer to the Round Report. answers are the ids of the open points of the previous receipt that the expert chose (e.g. rung-3); a new round must name at least one, else the save is refused. targets are claim numbers or the feature of a description fallback; every query must match a tool execution recorded this session (same tool name, same query text, whitespace aside), else the save is refused.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "round": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "targets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "answers": {
+                  "type": "array",
+                  "description": "The ids of the previous receipt's open points the expert chose and this round answers, e.g. [\"rung-3\", \"search-1\"].",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "queries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tool": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The tool the query ran through, e.g. search_patents."
+                      },
+                      "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The query exactly as it ran."
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Hits returned, 0 included."
+                      }
+                    },
+                    "required": [
+                      "tool",
+                      "query"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "outcome": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "What the round changed in the chart, or that it found nothing new."
+                }
+              },
+              "required": [
+                "round",
+                "targets",
+                "queries",
+                "outcome"
               ],
               "additionalProperties": false
             }

@@ -1,0 +1,288 @@
+# Evidence appendix: E2 acceptance, EP1809422B1, 2026-10-17
+# Source: IDE session transcript (copilot-agent jsonl) and chat-session-resources. Times are UTC.
+# Part 1: every tool call (arguments cut at 160 characters).
+
+15:06:35 session.start {"sessionId": "b45ca927-03fb-4680-b4b4-463ddeb3b7ab", "version": 1, "producer": "copilot-agent", "copilotVersion": "0.55.0", "vscodeVersion": "1.127.0", "startTime": "2026-10-17T15:06:35.579Z"}
+15:06:39 CALL read_file {"filePath": "/Users/abdullahatrash/flowleap/wt-e2-ep1809422/extensions/copilot/assets/skills/invalidity-analysis/SKILL.md", "startLine": 1, "endLine": 400}
+15:06:40 CALL get_patent_details {"publicationNumber": "EP1809422B1"}
+15:06:48 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:06:48 CALL read_file {"filePath": "/Users/abdullahatrash/flowleap/wt-e2-ep1809422/extensions/copilot/assets/skills/invalidity-analysis/references/fallback-coverage.md", "startLine":
+15:06:59 CALL examiner_baseline {"publication": "EP1809422B1"}
+15:07:12 CALL get_legal_status {"publicationNumber": "EP1809422B1"}
+15:07:12 CALL get_patent_family {"publicationNumber": "EP1809422B1"}
+15:07:12 CALL get_register_events {"publicationNumber": "EP1809422B1"}
+15:07:20 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:07:20 CALL read_file {"filePath": "/private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-ep1809422-ws/reference
+15:07:24 CALL read_file {"filePath": "/private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-ep1809422-ws/reference
+15:07:57 CALL get_patent_details {"publicationNumber": "JP2004174393A"}
+15:07:57 CALL get_patent_details {"publicationNumber": "DE20208107U1"}
+15:07:58 CALL get_patent_details {"publicationNumber": "EP0167178A2"}
+15:08:25 CALL fetch_webpage {"urls": ["https://patents.google.com/patent/JP2004174393A/en", "https://patents.google.com/patent/DE20208107U1/en"], "query": "roll rotation type sieving appar
+15:09:34 CALL search_patents {"query": "(ti=breaker or ti=crusher or ab=breaker) and (ab=drum or ab=roll) and ab=oversized and ab=outer", "countries": "EP,WO", "range": "1-25", "purpose": "
+15:09:35 CALL uspto_api_guide {"action": "endpoint", "endpoint": "search"}
+15:09:41 CALL search_citations {"applicationNumber": "11691869"}
+15:09:41 CALL search_patents {"query": "(ti=breaker or ti=crusher) and ab=drum and ab=teeth and ab=\"four\" and not pa=\"MMD\"", "countries": "EP,WO", "range": "1-25", "purpose": "row of 4+
+15:09:52 CALL search_patents {"query": "ti=breaker and ab=drum and ab=teeth and ab=four", "countries": "EP,WO", "range": "1-25", "purpose": "row of 4+ toothed breaker drums with inner pair 
+15:09:53 CALL get_patent_details {"publicationNumber": "US3151645A"}
+15:09:54 CALL get_patent_details {"publicationNumber": "US3578252A"}
+15:10:01 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:10:10 CALL get_patent_details {"publicationNumber": "US4702422A"}
+15:10:11 CALL get_patent_details {"publicationNumber": "US4799627A"}
+15:10:12 CALL get_patent_details {"publicationNumber": "US5163629A"}
+15:10:13 CALL get_patent_details {"publicationNumber": "US5215265A"}
+15:10:14 CALL get_patent_details {"publicationNumber": "US5516050A"}
+15:10:15 CALL get_patent_details {"publicationNumber": "US5562255A"}
+15:10:16 CALL get_patent_details {"publicationNumber": "US6439486B1"}
+15:10:36 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:10:36 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:10:36 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:10:36 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:10:36 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:10:36 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:11:24 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:11:25 CALL search_npl {"query": "roll crusher four rolls inner outer oversize mineral breaker drum", "limit": 10}
+15:12:05 CALL get_patent_details {"publicationNumber": "WO2006035209A1"}
+15:12:14 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:12:36 CALL get_patent_details {"publicationNumber": "EP1809422B2"}
+15:12:41 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:14:38 CALL get_patent_details {"publicationNumber": "GB2088746A"}
+15:14:39 CALL get_patent_details {"publicationNumber": "WO9829201A1"}
+15:14:40 CALL get_patent_details {"publicationNumber": "WO0035585A1"}
+15:14:51 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:14:51 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:16:48 CALL search_patents {"query": "ti=crusher and ab=roll and ab=adjustable and ab=gap and ab=spacing", "countries": "EP,WO", "range": "1-25", "purpose": "adjustable spacing between a 
+15:16:53 CALL search_patents {"query": "ti=crusher and ab=housing and ab=slidable and ab=frame", "countries": "EP,WO", "range": "1-25", "purpose": "two crusher drum-casings mounted on commo
+15:17:04 CALL search_patents {"query": "ab=crusher and ab=roll and ab=adjustable and ab=gap", "countries": "EP,WO", "range": "1-25", "purpose": "adjustable spacing between a pair of counter
+15:17:05 CALL search_patents {"query": "ab=breaker and ab=casing and ab=slidable and ab=frame", "countries": "EP,WO", "range": "1-25", "purpose": "breaker drum casings mounted on common sup
+15:17:10 CALL search_patents {"query": "ab=breaker and ab=drum and ab=feed and ab=\"same direction\"", "countries": "EP,WO", "range": "1-25", "purpose": "feed breaker drum between inner and
+15:18:53 CALL search_patents {"query": "ab=crusher and ab=housing and ab=slide and ab=rail and ab=spacing", "countries": "EP,WO", "range": "1-25", "purpose": "two crusher units/housings on 
+15:18:57 CALL search_npl {"query": "double roll crusher two units side by side adjustable spacing frame", "toYear": 2004, "limit": 10}
+15:21:36 CALL fetch_webpage {"urls": ["https://patents.google.com/patent/GB2088746A/en"], "query": "mineral breaker pair of drums side walls teeth cooperate break oversized material adjust
+15:21:40 CALL search_patents {"query": "ab=crusher and ab=roll and ab=spacing and ab=hydraulic and ab=cylinder", "countries": "EP,WO", "range": "1-25", "purpose": "adjustable gap between co
+15:21:50 CALL get_patent_details {"publicationNumber": "WO2005072877A1"}
+15:21:58 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:22:26 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:25:08 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:25:59 CALL get_patent_details {"publicationNumber": "EP1725335B1"}
+15:26:05 CALL get_patent_family {"publicationNumber": "EP1725335B1"}
+15:26:51 CALL get_patent_figures {"publicationNumber": "JP2004174393A", "saveDir": "references/figures"}
+15:30:51 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:33:15 CALL search_patents {"query": "ab=crusher and ab=roll and ab=center and ab=outward and ab=oversize", "countries": "EP,WO", "range": "1-25", "purpose": "center-fed roll/drum crusher
+15:33:20 CALL search_patents {"query": "ti=breaker and ab=drums and ab=\"opposite directions\" and ab=teeth", "countries": "EP,WO", "range": "1-25", "purpose": "row of breaker drums with in
+15:35:13 CALL search_patents {"query": "ab=crusher and ab=shaft and ab=package and ab=adjacent and ab=opposite", "countries": "EP,WO", "range": "1-25", "purpose": "row of exactly four break
+15:35:17 CALL search_patents {"query": "ti=crusher and ab=module and ab=side and ab=by and ab=side", "countries": "EP,WO", "range": "1-25", "purpose": "two separate twin-drum crusher housin
+15:39:24 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+15:39:24 DONE write_patent_results success=True
+15:39:29 CALL read_file {"filePath": "/tmp/code-oss-dev/20261017-180034-57316/user-data/User/workspaceStorage/d7508bd0016bf337f603398394b65ef6/flowleap.patent-ai/chat-session-resources
+15:42:29 CALL get_patent_figures {"publicationNumber": "GB2088746A", "saveDir": "references/figures"}
+15:43:33 CALL get_patent_details {"publicationNumber": "GB2088746A", "evidenceLookup": {}}
+15:43:33 CALL get_patent_details {"publicationNumber": "JP2004174393A", "evidenceLookup": {}}
+15:44:04 CALL view_image {"filePath": "/private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-ep1809422-ws/reference
+15:44:04 CALL view_image {"filePath": "/private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-ep1809422-ws/reference
+15:46:04 CALL get_patent_details {"publicationNumber": "EP0167178A2", "evidenceLookup": {"query": "rotated in opposite directions so that material deposited thereon is moved toward the side wal
+15:46:04 CALL get_patent_details {"publicationNumber": "WO2005072877A1", "evidenceLookup": {"query": "last two drum assemblies 120, 220"}}
+15:47:38 CALL get_patent_details {"publicationNumber": "WO2005072877A1", "evidenceLookup": {"query": "spacing between modules may be easily adjusted"}}
+15:47:38 CALL get_patent_details {"publicationNumber": "WO2005072877A1", "evidenceLookup": {"query": "independent breaker drum module 60"}}
+15:47:38 CALL get_patent_details {"publicationNumber": "WO2005072877A1", "evidenceLookup": {"query": "end wall assemblies 66 are conveniently mounted on beams"}}
+16:40:16 USER "Try Again"
+16:42:17 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+16:42:17 DONE write_patent_results success=True
+16:44:21 MSG "The repeated `elements` validation errors suggest the `elements` array items need the `element` field only when no anchor, but maybe an empty-string `disclosedBy` placeholder is required rather than o"
+16:44:41 MSG "The save keeps failing with a generic \"must be array\" error even though the structure matches the working test case — likely a size/length limit on the `coverage` parameter given how large this array "
+16:44:52 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+16:44:52 DONE write_patent_results success=True
+16:46:08 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+16:46:08 DONE write_patent_results success=True
+16:46:20 MSG "The confirmed test case (minimal single-row feature) consistently fails for the full 15-row payload with the same generic \"must be array\" error — this strongly suggests a payload size/length ceiling i"
+16:46:28 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+16:46:29 DONE write_patent_results success=True
+16:47:20 MSG "Found it — `limitations` must be an array of strings, not a plain string. Let me fix that."
+16:47:20 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+16:47:20 DONE write_patent_results success=True
+16:48:12 CALL write_patent_results {"filePath": "analysis/EP1809422B1_invalidity_chart.md", "content": "", "template": "invalidity-claim-chart", "challengedPublication": "EP1809422B1", "objective
+16:48:12 DONE write_patent_results success=True
+16:49:05 MSG "Now I have the exact passages. Let me fix the evidence quotes."
+
+# Part 2: every write_patent_results call and its full result text.
+
+## 15:39:24 write_patent_results (toolu_01RguJjofwshS6QTX7A22Yc6)
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Fallback row "Claim 4 (depends on 3) — added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" falls back from claim 3, which has no feature rows. Chart the elements of claim 3 first, or name the charted independent claim in fallbackOf.
+- Fallback row "Claim 4 (depends on 3) — added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" charts claim 4, which is not a rung of claim 3's Fallback Ladder (claim 3 has no dependent claims). Name the independent claim claim 4 depends on in fallbackOf, or chart a rung of claim 3.
+- Fallback row "Claim 5 (depends on 4) — added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" falls back from claim 4, which has no feature rows. Chart the elements of claim 4 first, or name the charted independent claim in fallbackOf.
+- Fallback row "Claim 5 (depends on 4) — added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" charts claim 5, which is not a rung of claim 4's Fallback Ladder (claim 4 has no dependent claims). Name the independent claim claim 5 depends on in fallbackOf, or chart a rung of claim 4.
+- Claim 4 (chain 1 → 3 → 4) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 4, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 5 (chain 1 → 3 → 4 → 5) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 5, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (a): a mineral breaker including a row of side-by-side breaker drum assemblies having radially projecting breaker teeth" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 — element (c): the row arranged to define an inner pair of adjacent breaker drum assemblies located in-between a pair of outer breaker drum assemblies" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "at least two neighbouring drums adjacent to the first end being arranged to continuously rotate in the same direction to define feeder drums... at least a further one of said drums... adjacent to the endmost feeder drum... arranged to continuously rotate in the opposite direction" for element "a row of breaker drums in which a functionally distinct zone of drums is positioned relative to the other drums of the row" is not found in the recorded text of WO2005072877A1:description:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 1 — element (c): the row arranged to define an inner pair of adjacent breaker drum assemblies located in-between a pair of outer breaker drum assemblies" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (d): said inner pair of breaker drum assemblies defining therebetween a mineral deposit region for receiving mineral in-flow" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Every element of "Claim 1 — element (d): said inner pair of breaker drum assemblies defining therebetween a mineral deposit region for receiving mineral in-flow" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (e): the breaker drum assemblies of said inner pair rotated in opposite directions such that breaker teeth act upon mineral deposited in the deposit region to cause agitation encouraging undersized mineral to pass therebetween whilst preventing oversized mineral passing therebetween" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Feature support for GB2088746A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (e): the breaker drum assemblies of said inner pair rotated in opposite directions such that breaker teeth act upon mineral deposited in the deposit region to cause agitation encouraging undersized mineral to pass therebetween whilst preventing oversized mineral passing therebetween" lists GB2088746A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for GB2088746A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "the adjacent rolls 14 and 14 are rotated in opposite directions to face each other... the small raw material is passed through the gap" for element "adjacent drums rotated in opposite directions to engage and size the in-flow material, passing undersized and retaining oversized" is not found in the recorded text of JP2004174393A:bibliography; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 1 — element (e): the breaker drum assemblies of said inner pair rotated in opposite directions such that breaker teeth act upon mineral deposited in the deposit region to cause agitation encouraging undersized mineral to pass therebetween whilst preventing oversized mineral passing therebetween" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for GB2088746A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (f): each breaker drum assembly of the inner pair acting upon oversized mineral to cause it to be moved outwardly towards a respective one of said outer breaker drum assemblies" lists GB2088746A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for GB2088746A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "the drums being arranged to rotate in opposite directions so that each drum directs mineral deposited on the drums away from the other drum toward an adjacent side wall of the passageway" for element "each drum of the pair directing oversized material outward/away from the other drum toward an adjacent cooperating member" is not found in the recorded text of GB2088746A:bibliography; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 1 — element (f): each breaker drum assembly of the inner pair acting upon oversized mineral to cause it to be moved outwardly towards a respective one of said outer breaker drum assemblies" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for GB2088746A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (g): which outer breaker drum assemblies grip and break down oversized mineral" lists GB2088746A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for GB2088746A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 — element (g): which outer breaker drum assemblies grip and break down oversized mineral" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "the last two drum assemblies 120, 220... define a twin drum breaker... in which the teeth on both drum assemblies act to cause breakage of mineral in-between the drum assemblies" for element "the breaking member is itself a rotating drum assembly (not a static wall), cooperating with a neighbouring drum to grip and break oversized material by its teeth" is not found in the recorded text of WO2005072877A1:description:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 1 — element (g): which outer breaker drum assemblies grip and break down oversized mineral" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 as a whole" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Feature support for GB2088746A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 as a whole" lists GB2088746A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for GB2088746A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 as a whole" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Every element of "Claim 1 as a whole" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Row "Claim 2 (depends on 1) — added limitation: the distance in-between the breaker drum assemblies of the inner pair is adjustable" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 3 (depends on 1) — added limitation: the row is defined by four side-by-side breaker drum assemblies, each arranged to rotate in an opposite direction to its adjacent breaker drum assembly" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "the adjacent rolls 14 and 14 are rotated in opposite directions to face each other" for element "adjacent drums in the row rotated in opposite directions to one another" is not found in the recorded text of JP2004174393A:bibliography; copy a literal fragment from evidenceLookup output.
+- Row "Claim 4 (depends on 3) — added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "each drum assembly 20 and associated motor 50 are constructed to form part of an independent breaker drum module 60 including a pair of opposed end wall assemblies 66... The breaker 10 is therefore constructed from a series of identical modules 60" for element "discrete drum-unit/module construction within a multi-drum breaker" is not found in the recorded text of WO2005072877A1:description:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 4 (depends on 3) — added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Row "Claim 5 (depends on 4) — added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "the end wall assemblies 66 are conveniently mounted on beams 67 running either side of a conveyor 80... the spacing between modules may be easily adjusted in order to vary the spacing between adjacent drum assemblies" for element "drum-carrying structures mounted on a common frame with adjustable spacing between them" is not found in the recorded text of WO2005072877A1:description:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 5 (depends on 4) — added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Row "Claim 6 (depends on 1 or 2) — added limitation: one or more feed breaker drum assemblies located in-between an inner breaker drum assembly and its adjacent outer breaker drum assembly, each feed drum arranged to rotate in the same direction as said inner breaker drum assembly" lists WO2005072877A1:claims:1:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:claims:1:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 6 (depends on 1 or 2) — added limitation: one or more feed breaker drum assemblies located in-between an inner breaker drum assembly and its adjacent outer breaker drum assembly, each feed drum arranged to rotate in the same direction as said inner breaker drum assembly" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Every element of "Claim 6 (depends on 1 or 2) — added limitation: one or more feed breaker drum assemblies located in-between an inner breaker drum assembly and its adjacent outer breaker drum assembly, each feed drum arranged to rotate in the same direction as said inner breaker drum assembly" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Supply the search and evidence limitations.
+- Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.
+
+## 16:42:17 write_patent_results (toolu_0166PpmiDx6x1Cvzg9i2XTA5)
+(result text not found in chat-session-resources; see debug log)
+
+## 16:44:52 write_patent_results (toolu_01BS5Dp8uKLbnzLo1Y46dQYL)
+(result text not found in chat-session-resources; see debug log)
+
+## 16:46:08 write_patent_results (toolu_01J1FuMERp1BYGUDW6YF24qT)
+(result text not found in chat-session-resources; see debug log)
+
+## 16:46:28 write_patent_results (toolu_01UimH2ALquh7tUd9NSURzWS)
+(result text not found in chat-session-resources; see debug log)
+
+## 16:47:20 write_patent_results (toolu_01817tnRtHHgizyGoVRM57He)
+(result text not found in chat-session-resources; see debug log)
+
+## 16:48:12 write_patent_results (toolu_014ZarkrzZbGSSM4RjpMnXmC)
+(result text not found in chat-session-resources; see debug log)
+
+
+# Part 1b: writer requests the harness rejected before execution (tool-input schema validation; no execution span,
+# no ledger entry). Source: chatSessions store. The rejected arguments themselves are not recorded anywhere.
+15:51:27 REQUEST write_patent_results toolu_017pDcsAb1FiEeQe32CVF9Bi -> "ERROR: Your input to the tool was invalid (must NOT have fewer than 1 characters) Please check your input and try again."
+15:52:12 REQUEST write_patent_results toolu_01Mfz7g6WVbfVjQmvpfst4LL -> "ERROR: Your input to the tool was invalid (must be array) Please check your input and try again."
+15:53:04 REQUEST write_patent_results toolu_01Mpqv9H7C9mnV11a93yFFPM -> "ERROR: Your input to the tool was invalid (must be array) Please check your input and try again."
+15:53:06 TURN ENDED with error (chatSessions errorDetails, code "failed"): "Sorry, your request failed. Please try again. Client Request Id: 278debe4-95e2-49a7-850b-9d8c80f83001 Reason: 400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}"
+16:40:16 USER "Try Again" (sent from the chat UI; not sent by the acceptance operator)
+16:41:56 REQUEST write_patent_results toolu_015NXya2X9JQRBA8pCVj2tLd -> "(must be array)"
+16:42:59 REQUEST write_patent_results toolu_017Fgm3BSQoWePQNzWZA7pKW -> "(must be array)"
+16:43:43 REQUEST write_patent_results toolu_015oEG7vq5JAqBRnySgZZrpq -> "(must be array)"
+16:44:21 REQUEST write_patent_results toolu_012kBz5qPjLzzbu3GQr9VBQA -> "(must be array)"
+16:44:41 REQUEST write_patent_results toolu_013cvoXoX7udqXfX67oY14hH -> "(must be array)"
+16:45:27 REQUEST write_patent_results toolu_01ATuDKQduGgW8SfCvDY67ts -> "(must be array)"
+16:45:59 REQUEST write_patent_results toolu_01AogvLNoNA3pzCNAahuUb1g -> "(must be array)"
+16:46:20 REQUEST write_patent_results toolu_01G5ZRbedGFw9o3eRWrZv9Tk -> "(must be array)"
+# 11 rejections in all (10 "must be array", 1 "must NOT have fewer than 1 characters"). At 16:47:20 the agent
+# wrote: "Found it - `limitations` must be an array of strings, not a plain string." The error names no field.
+
+# Part 2: every write_patent_results execution and its full result text (debug log main.jsonl spans; the
+# transcript stops at 16:49:05 and lacks the final save's execution events).
+===== 15:39:24 dur_ms=104 status=ok span=0000000000000095
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Fallback row "Claim 4 (depends on 3) — added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" falls back from claim 3, which has no feature rows. Chart the elements of claim 3 first, or name the charted independent claim in fallbackOf.
+- Fallback row "Claim 4 (depends on 3) — added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" charts claim 4, which is not a rung of claim 3's Fallback Ladder (claim 3 has no dependent claims). Name the independent claim claim 4 depends on in fallbackOf, or chart a rung of claim 3.
+- Fallback row "Claim 5 (depends on 4) — added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" falls back from claim 4, which has no feature rows. Chart the elements of claim 4 first, or name the charted independent claim in fallbackOf.
+- Fallback row "Claim 5 (depends on 4) — added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" charts claim 5, which is not a rung of claim 4's Fallback Ladder (claim 4 has no dependent claims). Name the independent claim claim 5 depends on in fallbackOf, or chart a rung of claim 4.
+- Claim 4 (chain 1 → 3 → 4) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 4, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 5 (chain 1 → 3 → 4 → 5) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 5, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (a): a mineral breaker including a row of side-by-side breaker drum assemblies having radially projecting breaker teeth" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 — element (c): the row arranged to define an inner pair of adjacent breaker drum assemblies located in-between a pair of outer breaker drum assemblies" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- disclosedBy "at least two neighbouring drums adjacent to the first end being arranged to continuously rotate in the same direction to define feeder drums... at least a further one of said drums... adjacent to the endmost feeder drum... arranged to continuously rotate in the opposite direction" for element "a row of breaker drums in which a functionally distinct zone of drums is positioned relative to the other drums of the row" is not found in the recorded text of WO2005072877A1:description:en; copy a literal fragment from evidenceLookup output.
+- Every element of "Claim 1 — element (c): the row arranged to define an inner pair of adjacent breaker drum assemblies located in-between a pair of outer breaker drum assemblies" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Feature support for JP2004174393A:bibliography requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.
+- Row "Claim 1 — element (d): said inner pair of breaker drum assemblies defining therebetween a mineral deposit region for receiving mineral in-flow" lists JP2004174393A:bibliography in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for JP2004174393A:bibliography with scope, qualifiers and quantityB[truncated]
+
+===== 16:42:17 dur_ms=63 status=ok span=00000000000000bb
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Claim 2 (chain 1 → 2) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 2, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 3 (chain 1 → 3) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 3, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 4 (chain 1 → 3 → 4) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 4, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 5 (chain 1 → 3 → 4 → 5) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 5, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 6 (chain 1 → 6) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 6, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Supply the search and evidence limitations.
+- Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.
+- Include an explicit essential combination row; it may honestly remain unresolved.
+
+===== 16:44:52 dur_ms=53 status=ok span=00000000000000c6
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Claim 2 (chain 1 → 2) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 2, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 3 (chain 1 → 3) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 3, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 4 (chain 1 → 3 → 4) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 4, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 5 (chain 1 → 3 → 4 → 5) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 5, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 6 (chain 1 → 6) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 6, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Supply the search and evidence limitations.
+- Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.
+- Include an explicit essential combination row; it may honestly remain unresolved.
+
+===== 16:46:08 dur_ms=48 status=ok span=00000000000000cd
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Claim 2 (chain 1 → 2) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 2, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 3 (chain 1 → 3) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 3, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 4 (chain 1 → 3 → 4) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 4, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 5 (chain 1 → 3 → 4 → 5) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 5, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 6 (chain 1 → 6) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 6, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Supply the search and evidence limitations.
+- Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.
+- Include an explicit essential combination row; it may honestly remain unresolved.
+
+===== 16:46:28 dur_ms=85 status=ok span=00000000000000d2
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Claim 2 (chain 1 → 2) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 2, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 3 (chain 1 → 3) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 3, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 4 (chain 1 → 3 → 4) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 4, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 5 (chain 1 → 3 → 4 → 5) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 5, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Claim 6 (chain 1 → 6) is a rung of claim 1's Fallback Ladder but has no fallback row and no fallbacksNotCharted entry. Chart the limitation it adds in one row (kind fallback, claimNumber 6, fallbackOf 1), or name it in fallbacksNotCharted with the reason.
+- Supply the search and evidence limitations.
+- Supply stopReason: explain synthesis, remaining gaps, or the user-requested boundary.
+- Include an explicit essential combination row; it may honestly remain unresolved.
+
+===== 16:47:20 dur_ms=53 status=ok span=00000000000000d5
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Row "Claim 1 - element (e): the breaker drum assemblies of said inner pair rotated in opposite directions such that breaker teeth act upon mineral deposited in the deposit region to cause agitation encouraging undersized mineral to pass therebetween whilst preventing oversized mineral passing therebetween" lists EP0167178A2:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for EP0167178A2:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 - element (f): each breaker drum assembly of the inner pair acting upon oversized mineral to cause it to be moved outwardly towards a respective one of said outer breaker drum assemblies" lists EP0167178A2:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for EP0167178A2:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 - element (g): which outer breaker drum assemblies grip and break down oversized mineral" lists WO2005072877A1:claims:1:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:claims:1:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 as a whole" lists EP0167178A2:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for EP0167178A2:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 1 as a whole" lists WO2005072877A1:claims:1:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:claims:1:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 2 (depends on 1) - added limitation: the distance in-between the breaker drum assemblies of the inner pair is adjustable" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Row "Claim 4 (depends on 3, which depends on 1) - added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Every element of "Claim 4 (depends on 3, which depends on 1) - added limitation: a first pair of breaker drum assemblies rotatably mounted in a first drum casing to define a first breaker unit, and a second pair mounted in a second drum casing to define a second breaker unit, the units positioned side-by-side" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unmet qualifier, a constituent) with no anchor and no disclosedBy; do not remove the disclosed elements.
+- Row "Claim 5 (depends on 4, which depends on 3 and 1) - added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" lists WO2005072877A1:description:en in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for WO2005072877A1:description:en with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.
+- Every element of "Claim 5 (depends on 4, which depends on 3 and 1) - added limitation: the first and second drum casings are mounted on a common support frame, at least one casing being slidably movable to enable the distance between the breaker units to be adjusted" is disclosed. Either mark the row supported, or keep it partial and ADD one element naming what the cited text does not disclose (the missing part of a range, an unme[truncated]
+
+===== 16:48:12 dur_ms=46 status=ok span=00000000000000d8
+Candidate draft was not saved. Correct these issues and retry with the revised content:
+- Evidence for EP0167178A2:description:en needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.
+- Evidence for EP0167178A2:description:en needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.
+- Evidence for EP0167178A2:description:en needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.
+- Evidence for WO2005072877A1:description:en needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.
+- Evidence for WO2005072877A1:description:en needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.
+- Evidence for WO2005072877A1:description:en needs a verbatim quote: a description passage must be quoted exactly as returned (only numbered claims may omit quote). Copy it from evidenceLookup.anchor output.
+
+===== 16:49:06 dur_ms=45892 status=ok span=00000000000000db
+Successfully wrote patent results to analysis/EP1809422B1_invalidity_chart.md
+Second read (anthropic/claude-sonnet-5): 18 elements judged, 0 not confirmed.
+Chat summary contract: repeat each coverage row's status word exactly (supported / partial / unresolved), do not add novelty, anticipation, obviousness or teaching-away conclusions, and state the retrieved-but-not-cited count and any untranslated documents. The summary must not be more certain than the saved report.
+Prior-art artifact receipt: {"reportUri":"file:///private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-ep1809422-ws/analysis/EP1809422B1_invalidity_chart.md","reportDigest":"c8e1a6e518ec936c1a80a87c91b096422e741acc59aff825c62a2d5f9d7810db","evidenceUri":"file:///private/tmp/claude-501/-Users-abdullahatrash-flowleap-flowleap-agent-v2/3ccf9c6f-236a-4d99-8efc-af83ce043110/scratchpad/e2-ep1809422-ws/analysis/EP1809422B1_invalidity_chart.md.233a07f6-efb4-4535-a2eb-30f82995c024.evidence.json","evidenceDigest":"28464da5ad022328925c8443900e82ba29eb550cfb67af15d3932286db56de8a"} fallbacksNotCovered=0 rounds=0 notCovered=
+Working record: analysis/EP1809422B1_invalidity_chart.working-record.md
+

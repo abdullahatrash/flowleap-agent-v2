@@ -1,0 +1,58 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.remote-access-pairing {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 420px;
+}
+
+.remote-access-pairing p {
+	margin: 0;
+}
+
+.remote-access-pairing-qr {
+	align-self: center;
+	width: 220px;
+	height: 220px;
+	padding: 4px;
+	background: #ffffff;
+	border-radius: 4px;
+}
+
+.remote-access-pairing-qr svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.remote-access-pairing-code-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.remote-access-pairing-code {
+	flex: 1;
+	min-width: 0;
+	padding: 4px 6px;
+	font-family: var(--monaco-monospace-font);
+	font-size: 12px;
+	word-break: break-all;
+	user-select: all;
+	background-color: var(--vscode-textCodeBlock-background);
+	border-radius: 4px;
+}
+
+.remote-access-pairing-code-row .monaco-button {
+	width: auto;
+	flex: none;
+	padding: 4px 12px;
+}
+
+.remote-access-pairing-note {
+	color: var(--vscode-descriptionForeground);
+}

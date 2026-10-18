@@ -204,6 +204,14 @@ One conversation with the Patent Agent in the Agents Window: its messages, tool 
 permission prompts and outputs. Distinct from the **FlowLeap Session** (sign-in).
 _Avoid_: bare "session" wherever the two could be confused.
 
+**Editor Chat**:
+One conversation with the Patent Agent in the chat view of an editor window (or a Local chat of
+the Agents Window). Its model calls run in that window's extension host with the user's own key.
+With Remote Access on, the Host also offers its Editor Chats to Viewers, next to its Agent
+Sessions; on disk the Host keeps only a neutral title ("Editor chat, <date>"). A Viewer can
+allow or skip one tool call at a time; it cannot allow a tool for the rest of the chat.
+_Avoid_: calling it an Agent Session — it runs in the editor window, not in the agent host.
+
 **Host**:
 A desktop running FlowLeap, signed in, that offers its Agent Sessions to paired **Viewers**.
 A user may have several Hosts. A Host that is closed or asleep offers nothing.
@@ -333,6 +341,43 @@ one-click hand-off (copy, or open in Espacenet). The user may add, remove or edi
 terms before running it; the working record keeps the version that ran.
 _Avoid_: "the query" when several statements exist per run; shipping a statement without its
 **Discriminating Term**.
+
+**Fallback Ladder**:
+The ordered set of fallback positions of one independent claim of a challenged patent: every
+dependent claim that depends on it, directly or through other dependent claims, each with the
+limitation it adds, in claim order. Computed in code from the challenged patent's own claims as
+recorded in the execution ledger; a dependent claim that refers to several parents is a rung
+under each of them. An Invalidity Analysis charts every rung or names why it did not (ADR 0016).
+_Avoid_: a ladder the model typed from memory; "the dependent claims" without their chain.
+
+**Fallback Coverage**:
+Per independent claim, the count of Fallback Ladder rungs whose added limitation the cited art
+discloses ("fallbacks: k of j covered; not covered: claims 3, 5"), read off validated chart rows
+exactly as the element count is. A model-proposed description-supported fallback counts only when
+its basis quote of the challenged patent validates. "Not covered" after a Search Round is a
+complete result, not a failure.
+_Avoid_: "fallback strength" or any model-rated score; reading "covered" as anticipation or
+obviousness (the chart states neither).
+
+**Search Round**:
+One pass of the invalidity search aimed only at the open points of the last Round Report that the
+expert chose: new Discriminating Terms for each added limitation, the skill's search ladder, and a
+re-save. Recorded in the chart as `rounds[]`; each query must match a tool execution in the
+ledger that ran after the previous save, or the writer refuses the save. One round per expert
+answer; the expert ends the loop, and an honest "not covered" is a complete result.
+_Avoid_: a round the skill text promises but the chart does not record; a round the agent runs
+on its own guess of what matters; repeating searches to pass validation.
+
+**Round Report**:
+The agent's turn after every save of an Invalidity Analysis: the receipt, then the open points of
+the saved chart as numbered questions, each with the agent's recommended next step, then a wait
+for the expert. The open points are read from the record (rungs partly covered or not covered,
+independent-claim elements not found, cited documents outside the searched scope or published
+after the critical date, rows that rest on a drawing, searches that failed). The expert answers
+with numbers, "all", or a steer of their own, and the next Search Round runs on that answer
+(ADR 0016, amendment of 2026-10-17).
+_Avoid_: a question without a recommendation; a recommendation without a question; open points
+the model typed from its reading of the chart instead of the writer's list.
 
 ## UPC practice
 

@@ -6,7 +6,7 @@
 # <name>           the DNS label: the workspace is served at https://<name>.app.flowleap.co
 # <tarball>        flowleap-server-web-<version>-linux-x64.tar.gz from build-package.sh
 # <clerk-user-id>  the invitee (user_...). Recorded on the VM; add it to the backend's
-#                  HOSTED_ALLOWLIST yourself (docs/hosted/README.md).
+#                  HOSTED_ALLOWLIST yourself as <clerk-user-id>@<name> (docs/hosted/README.md).
 #
 # The real Anthropic key is read from FLOWLEAP_ANTHROPIC_API_KEY, or asked for (hidden).
 # It goes only into /etc/flowleap/anthropic-proxy.env (root, 0600), read by the proxy unit.
@@ -360,6 +360,9 @@ server {
 		proxy_set_header Origin "";
 		proxy_set_header Referer "";
 		proxy_set_header Authorization \$hosted_authorization;
+		# The workspace label. Scoped allowlist entries (user_x@$name) match it, so an
+		# invitee of another VM on the same backend cannot open this one.
+		proxy_set_header X-FlowLeap-Hosted-Workspace "$name";
 		proxy_ssl_server_name on;
 		proxy_ssl_name $api_host;
 		# No proxy_cache here (#542): a cached 204 failed the next auth_request with 500.
@@ -456,7 +459,7 @@ cat <<EOF
 
 Installed: https://$host  (owner $owner)
 Next (docs/hosted/README.md):
-  1. Add $owner to HOSTED_ALLOWLIST in /opt/flowleap-backend/.env on the backend, then
+  1. Add $owner@$name to HOSTED_ALLOWLIST in /opt/flowleap-backend/.env on the backend, then
      docker compose up -d  (never restart).
   2. Run: sudo $script_dir/verify.sh $name
 EOF

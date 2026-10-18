@@ -1208,6 +1208,14 @@ export interface IAgentTelemetryContext {
 	readonly copilotSku: string | undefined;
 }
 
+/** The titles a provider allows on disk and on the wire (see {@link IAgent.sessionTitlePolicy}). */
+export interface IAgentSessionTitlePolicy {
+	/** The neutral title the host may write to disk for `session`. */
+	persisted(session: URI): string;
+	/** The real title, held in memory by the provider, or `undefined` when it does not know it. */
+	live(session: URI): string | undefined;
+}
+
 /**
  * Implemented by each agent backend (e.g. Copilot SDK).
  * The {@link IAgentService} dispatches to the appropriate agent based on
@@ -1367,6 +1375,27 @@ export interface IAgent {
 	listLegacyChatBackings?(configurationResource: URI): Promise<readonly IAgentLegacyChat[]>;
 
 	// ---- Metadata -----------------------------------------------------------
+
+	/**
+	 * FlowLeap (PRD 0018 C2, decision D1): keeps this provider's real session titles off disk.
+	 * When set, the host writes {@link IAgentSessionTitlePolicy.persisted} wherever it would store
+	 * a title, and lists sessions with {@link IAgentSessionTitlePolicy.live}.
+	 */
+	readonly sessionTitlePolicy?: IAgentSessionTitlePolicy;
+
+	/**
+	 * FlowLeap (PRD 0018 C3): for a provider whose sessions mirror chats that live elsewhere
+	 * (`isMirroredSessionProvider`), whether it offers `session` now. The host lists only the
+	 * sessions it offers; their registrations and catalog rows stay.
+	 */
+	offersSession?(session: URI): boolean;
+
+	/**
+	 * FlowLeap (PRD 0018 C3): sessions this provider no longer offers (the window that owned them
+	 * stopped publishing). The host drops their live state and tells clients they are gone; it
+	 * does not delete them, so they come back when the provider offers them again.
+	 */
+	readonly onDidRetractSessions?: Event<readonly URI[]>;
 
 	/**
 	 * Optionally warms metadata for a burst of {@link getChatMetadata} calls; the expected count lets providers avoid bulk reads for small bursts.

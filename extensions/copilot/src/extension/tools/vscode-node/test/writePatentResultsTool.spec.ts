@@ -604,6 +604,12 @@ describe('candidate report save path', () => {
 						{ anchor: rod, text: rodClaim, reference: { publicationNumber: 'EP1000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
 						{ anchor: cam, text: camClaim, reference: { publicationNumber: 'US5000000A', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
 					],
+				}, {
+					// The challenged patent's own claims, from which the writer derives the Fallback Ladder
+					// (one independent claim, no rungs).
+					id: 'challenged', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP2000000A1'], sources: [
+						{ anchor: 'EP2000000A1:claims:1:en', text: '1. A quick release comprising a skewer rod and a cam surface on the head portion.', reference: { publicationNumber: 'EP2000000A1', section: 'claims', claimNumber: '1' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+					],
 				}],
 				limitation: 'Synthetic fixture; no live search.',
 			}),
@@ -694,6 +700,103 @@ describe('candidate report save path', () => {
 				practitionerFields: true,
 				structuredFields: false,
 				receipts: false,
+			});
+		});
+
+		// The challenged patent with one rung: claim 2 falls back from claim 1.
+		const laddered: IPatentExecutionLedger = {
+			...ledger,
+			read: async () => {
+				const snapshot = await ledger.read(undefined);
+				return {
+					...snapshot,
+					executions: [...snapshot.executions, {
+						id: 'challenged-dependent', recordedAt: '2026-09-13', kind: 'details', status: 'succeeded', publicationIds: ['EP2000000A1'], sources: [
+							{ anchor: 'EP2000000A1:claims:2:en', text: '2. The quick release according to claim 1, wherein the lever arm is captive.', reference: { publicationNumber: 'EP2000000A1', section: 'claims', claimNumber: '2' }, language: 'en', retrieval: 'returned', review: 'unknown', completeness: 'unknown' },
+						],
+					}],
+				};
+			},
+		};
+		const fallback = { feature: 'Claim 2 (depends on 1) — added limitation: the lever arm is captive', claimNumber: '2', fallbackOf: '1', kind: 'fallback' as const, importance: 'essential' as const, status: 'unresolved' as const, sourceAnchors: [], gap: 'No cited passage makes the lever arm captive; figures not consulted: synthetic fixture with no drawings.' };
+		const charted = { ...input, coverage: [...input.coverage, fallback] };
+
+		it('states the Fallback Coverage counts and the open points on the receipt, which the completion check reads for the Round Report', async () => {
+			const { tool, files } = setup(laddered);
+			const result = await tool.invoke({ input: charted, toolInvocationToken: undefined }, CancellationToken.None);
+			const message = (result.content[0] as LanguageModelTextPart).value;
+			const lines = message.split('\n');
+			const at = lines.findIndex(line => line.startsWith('Prior-art artifact receipt: '));
+			const receipt = lines[at] ?? message;
+			const turn: ReportCompletionTurn = { message: 'Build the invalidity chart for EP2000000A1 and save /workspace/invalidity.md', rounds: [{ id: 'round', response: '', toolInputRetry: 0, toolCalls: [{ id: 'write', name: ToolName.WritePatentResults, arguments: JSON.stringify(charted) }] }], results: { write: result } };
+			expect({
+				counts: receipt.slice(receipt.indexOf(' fallbacksNotCovered=')),
+				openPoints: lines.slice(at + 1).filter(line => line.startsWith('Open point')),
+				completion: await checkPriorArtReportCompletion([], turn, files),
+			}).toEqual({
+				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
+				openPoints: [
+					'Open points: 1. Critical date: not given (no criticalDate), so the publication dates of the cited documents were not checked. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
+					'Open point [rung-2]: Claim 2 (fallback of claim 1) is not found in the cited art: Claim 2 (depends on 1) — added limitation: the lever arm is captive',
+				],
+				completion: 'The saved chart lists 1 open point (rung-2) and this turn ends without a Round Report. Write the Round Report now: the receipt, then each open point as a numbered question that names its id, with your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn. Do not run a Search Round before the expert answers.',
+			});
+		});
+
+		it('marks each save in the ledger and refuses a round added in a re-save whose queries all ran before that save', async () => {
+			// One search ran in Phase 3, before the first save; the ledger stamps each save after it.
+			const search: PatentExecution = { id: 'vent', recordedAt: '2026-09-13T01:00:00Z', kind: 'search', status: 'succeeded', query: 'ti=captive AND ti=lever', effectiveQuery: 'ti=captive AND ti=lever', total: 0, returned: 0 };
+			const recorded: PatentExecution[] = [];
+			const ordered: IPatentExecutionLedger = {
+				...laddered,
+				read: async () => {
+					const snapshot = await laddered.read(undefined);
+					return { ...snapshot, executions: [...snapshot.executions, search, ...recorded] };
+				},
+				record: async (_session, execution) => {
+					recorded.push({ ...execution, id: `save-${recorded.length + 1}`, recordedAt: `2026-09-14T0${recorded.length + 1}:00:00Z` });
+					return 'Recorded.';
+				},
+			};
+			const { tool } = setup(ordered);
+			const first = (await tool.invoke({ input: charted, toolInvocationToken: undefined }, CancellationToken.None)).content[0] as LanguageModelTextPart;
+			const receipt = first.value.split('\n').find(line => line.startsWith('Prior-art artifact receipt: ')) ?? first.value;
+			const stale = { ...charted, rounds: [{ round: 1, targets: ['2'], answers: ['rung-2'], queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=lever' }], outcome: 'Nothing new for claim 2.' }] };
+			const second = (await tool.invoke({ input: stale, toolInvocationToken: undefined }, CancellationToken.None)).content[0] as LanguageModelTextPart;
+			expect({
+				counts: receipt.slice(receipt.indexOf(' fallbacksNotCovered=')),
+				saves: recorded.map(execution => ({ kind: execution.kind, tool: execution.tool, request: execution.request, rounds: execution.rounds, openPoints: execution.openPoints })),
+				second: second.value,
+			}).toEqual({
+				counts: ' fallbacksNotCovered=1 rounds=0 notCovered=2',
+				saves: [{ kind: 'save', tool: 'write_patent_results', request: 'invalidity.md', rounds: 0, openPoints: ['rung-2'] }],
+				second: 'Candidate draft was not saved. Correct these issues and retry with the revised content:\n- Round 1 lists only queries that ran before the previous save of this chart (2026-09-14T01:00:00Z); a Search Round is a new search after the receipt. Run at least one new query aimed at the not-covered limitations and record it in the round, or save without the round.',
+			});
+		});
+
+		it('refuses a round added in a re-save whose answers name no open point of the previous receipt (C4)', async () => {
+			const recorded: PatentExecution[] = [];
+			// A search the round can cite, run after the first save, so only the answers are wrong.
+			const fresh: PatentExecution = { id: 'fresh', recordedAt: '2026-09-15T01:00:00Z', kind: 'search', status: 'succeeded', query: 'ti=captive AND ti=arm', effectiveQuery: 'ti=captive AND ti=arm', total: 0, returned: 0 };
+			const answered: IPatentExecutionLedger = {
+				...laddered,
+				read: async () => {
+					const snapshot = await laddered.read(undefined);
+					return { ...snapshot, executions: [...snapshot.executions, ...recorded, ...(recorded.length ? [fresh] : [])] };
+				},
+				record: async (_session, execution) => {
+					recorded.push({ ...execution, id: `save-${recorded.length + 1}`, recordedAt: `2026-09-14T0${recorded.length + 1}:00:00Z` });
+					return 'Recorded.';
+				},
+			};
+			const { tool } = setup(answered);
+			await tool.invoke({ input: charted, toolInvocationToken: undefined }, CancellationToken.None);
+			const round = (answers: readonly string[]) => ({ ...charted, rounds: [{ round: 1, targets: ['2'], answers, queries: [{ tool: 'search_patents', query: 'ti=captive AND ti=arm' }], outcome: 'Nothing new for claim 2.' }] });
+			const unanswered = (await tool.invoke({ input: round(['element-1.9']), toolInvocationToken: undefined }, CancellationToken.None)).content[0] as LanguageModelTextPart;
+			const accepted = (await tool.invoke({ input: round(['rung-2']), toolInvocationToken: undefined }, CancellationToken.None)).content[0] as LanguageModelTextPart;
+			expect({ unanswered: unanswered.value, accepted: accepted.value.split('\n')[0] }).toEqual({
+				unanswered: 'Candidate draft was not saved. Correct these issues and retry with the revised content:\n- Round 1 answers no open point of the previous receipt (it names element-1.9). A Search Round runs only on the expert\'s answer to the Round Report. In answers, give the ids of the open points the expert chose (the previous receipt listed rung-2). If the expert has not answered yet, save without the new round, write the Round Report and wait.',
+				accepted: 'Successfully wrote patent results to /workspace/invalidity.md',
 			});
 		});
 	});

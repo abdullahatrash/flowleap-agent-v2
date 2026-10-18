@@ -184,7 +184,7 @@ describe('mock-table resolver (deterministic sequences)', () => {
 describe('every fixture is a well-formed MockScript', () => {
 	const ids = fs.readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
 
-	it('all 9 T-case fixtures are present', () => {
+	it('all T-case fixtures are present', () => {
 		expect(ids.sort()).toStrictEqual([
 			't1-us-claims-exhausted',
 			't2-empty-citation-sibling',
@@ -196,6 +196,7 @@ describe('every fixture is a well-formed MockScript', () => {
 			't7-negative-control-bounded',
 			't8-jurisdiction-nonblock',
 			't9-source-attribution-quoting',
+			't12-round-report',
 		].sort());
 	});
 
@@ -205,7 +206,7 @@ describe('every fixture is a well-formed MockScript', () => {
 		expect(Array.isArray(script.rules)).toBe(true);
 		for (const rule of script.rules) {
 			expect(typeof rule.tool).toBe('string');
-			const hasOne = Boolean(rule.response) || (Array.isArray(rule.responses) && rule.responses.length > 0);
+			const hasOne = Boolean(rule.response) || (Array.isArray(rule.responses) && rule.responses.length > 0) || Boolean(rule.invalidityReceipt);
 			expect(hasOne).toBe(true);
 		}
 	});
@@ -617,5 +618,82 @@ describe('T9 source attribution: copied runs, quoting marks, and the worked-exam
 			summaryUs: resolveMock(t9Script, state, 'get_patent_summary', { patentNumber: 'US10123456' }).body.startsWith('US10123456B2'),
 			unknownIsBare: resolveMock(t9Script, state, 'search_patents', { query: 'helmet' }).body,
 		}).toEqual({ detailsEp: true, summaryUs: true, unknownIsBare: 'OK. Request acknowledged (no data payload).' });
+	});
+});
+
+describe('T12 Round Report: the expert steers each Search Round', () => {
+	const t12Script = loadFixture('t12-round-report');
+	type TurnCall = [turn: number, ...call: CallSpec];
+	/** A two-turn trajectory: each call with its turn, and the final text of each turn. */
+	function turns(calls: TurnCall[], turnTexts: [string, string]) {
+		return {
+			rounds: calls.map(([turn, name, tag, args, resultBody]) => ({ turn, toolCalls: [{ name, args: args ?? {}, mockTag: tag, resultBody: resultBody ?? '' }] })),
+			finalText: turnTexts[1],
+			turnTexts,
+			stoppedReason: 'no_more_tools' as const,
+		};
+	}
+	const receipt = 'Successfully wrote patent results to chart.md\nPrior-art artifact receipt: {} fallbacksNotCovered=3 rounds=0 notCovered=3,4,5\nOpen points: 3. Critical date: 2018-03-15. Write the Round Report now: …\nOpen point [rung-3]: magnet\nOpen point [rung-4]: vent hole\nOpen point [rung-5]: drip groove';
+	const search = (turn: number, query: string): TurnCall => [turn, 'search_patents', 'OK', { query }];
+	const save = (turn: number, rounds?: unknown[]): TurnCall => [turn, 'write_patent_results', 'OK', { template: 'invalidity-claim-chart', content: '', coverage: [{}], ...(rounds ? { rounds } : {}) }, receipt];
+	const round = (answers: string[], queries: string[]) => ({ round: 1, targets: ['3', '5'], answers, queries: queries.map(query => ({ tool: 'search_patents', query })), outcome: 'not found in the cited art' });
+	const report = [
+		'Saved. Fallbacks: 1 of 4 covered; 3 open points.',
+		'1. **[rung-3]** Claim 3 (magnet detent) is not found. Recommended: search magnet closures in A47G 19/22.',
+		'2. **[rung-4]** Claim 4 (vent hole) is not found.',
+		'   Recommended next step: search vented sliding lids.',
+		'3. **[rung-5]** Claim 5 (drip groove) is not found. Recommended: search drip return grooves.',
+		'Reply with the numbers to run, \'all\', or your own steer.',
+	].join('\n');
+	const good = [search(0, 'ti=lid and ab=slider'), save(0), search(1, 'ab=(magnet) and ab=lid'), search(1, 'ab=(drip groove) and ab=lid'), save(1, [round(['rung-3', 'rung-5'], ['ab=(magnet) and ab=lid', 'ab=(drip groove) and ab=lid'])])];
+	const all = (calls: TurnCall[], first = report) => {
+		const t = turns(calls, [first, report]);
+		return {
+			report: H.cases.t12_round_report_names_every_open_point(t),
+			afterAnswer: H.cases.t12_round_runs_only_after_answer(t),
+			chosen: H.cases.t12_round_answers_chosen_points(t),
+		};
+	};
+
+	it('grades the Round Report, the wait and the chosen round, and each way a run can miss them', () => {
+		expect({
+			good: all(good),
+			noReport: all(good, 'Saved the chart. Claims 3 to 5 are not covered.'),
+			missingPoint: all(good, report.split('\n').filter(line => !line.includes('rung-4') && !line.includes('vented')).join('\n')),
+			noRecommendation: all(good, report.replace(/Recommended[^\n]*/g, '')),
+			roundBeforeAnswer: all([search(0, 'ti=lid'), save(0), search(0, 'ab=magnet'), save(0, [round(['rung-3'], ['ab=magnet'])]), save(1, [round(['rung-3'], ['ab=magnet'])])]),
+			noRoundAfterAnswer: all([search(0, 'ti=lid'), save(0), search(1, 'ab=magnet'), save(1)]),
+			wrongAnswers: all([search(0, 'ti=lid'), save(0), search(1, 'ab=magnet'), save(1, [round(['rung-3', 'rung-4'], ['ab=magnet', 'ab=drip'])])]),
+			offTargetQuery: all([search(0, 'ti=lid'), save(0), search(1, 'ab=magnet'), save(1, [round(['rung-3', 'rung-5'], ['ab=magnet', 'ab=drip', 'ab=(vent hole)'])])]),
+		}).toEqual({
+			good: { report: true, afterAnswer: true, chosen: true },
+			noReport: { report: false, afterAnswer: true, chosen: false },
+			missingPoint: { report: false, afterAnswer: true, chosen: true },
+			noRecommendation: { report: false, afterAnswer: true, chosen: true },
+			roundBeforeAnswer: { report: true, afterAnswer: false, chosen: false },
+			noRoundAfterAnswer: { report: true, afterAnswer: false, chosen: false },
+			wrongAnswers: { report: true, afterAnswer: true, chosen: false },
+			offTargetQuery: { report: true, afterAnswer: true, chosen: false },
+		});
+	});
+
+	it('the fixture serves the segmented claims and a receipt with the open points of each save', () => {
+		const state = createMockScriptState(t12Script);
+		const fallback = (claimNumber: string, status: string) => ({ kind: 'fallback', claimNumber, fallbackOf: '1', feature: `Claim ${claimNumber} (depends on 1) — added limitation`, status });
+		const chart = (rows: object[], rounds?: object[]) => ({ template: 'invalidity-claim-chart', content: '', criticalDate: '2018-03-15', coverage: [{ kind: 'feature', claimNumber: '1', feature: 'Claim 1 — element (a)', status: 'supported' }, ...rows], ...(rounds ? { rounds } : {}) });
+		const receiptLines = (body: string) => body.split('\n').filter(line => line.startsWith('Open point'));
+		const rungs = [fallback('2', 'supported'), fallback('3', 'unresolved'), fallback('4', 'unresolved'), fallback('5', 'partial')];
+		expect({
+			claims: resolveMock(t12Script, state, 'get_patent_details', { publicationNumber: 'EP3654321B1' }).body.match(/^(?:\d\.|\([a-c]\)) /gm),
+			first: receiptLines(resolveMock(t12Script, state, 'write_patent_results', chart(rungs)).body),
+		}).toEqual({
+			claims: ['1. ', '(a) ', '(b) ', '(c) ', '2. ', '3. ', '4. ', '5. '],
+			first: [
+				'Open points: 3. Critical date: 2018-03-15. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
+				'Open point [rung-3]: Claim 3 (fallback of claim 1) is not found in the cited art: Claim 3 (depends on 1) — added limitation',
+				'Open point [rung-4]: Claim 4 (fallback of claim 1) is not found in the cited art: Claim 4 (depends on 1) — added limitation',
+				'Open point [rung-5]: Claim 5 (fallback of claim 1) is partly disclosed in the cited art: Claim 5 (depends on 1) — added limitation',
+			],
+		});
 	});
 });

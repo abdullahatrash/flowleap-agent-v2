@@ -14,6 +14,36 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-17
+
+### Added
+
+- **Remote Access: follow your Agent Sessions and Editor Chats from your phone.** Switch
+  Remote Access on in the Agents Window title bar, pair your phone by scanning the QR code
+  (or paste the pairing code on another computer), and open `remote.flowleap.co`. The phone
+  lists this computer's Agent Sessions and Editor Chats, shows each turn as it streams,
+  lets you allow or skip a tool call, and sends the next message. Several phones can follow
+  one computer, and one phone can follow several computers.
+- **Nothing readable leaves your machine.** The phone and the computer share a key at
+  pairing time, and everything between them is encrypted end to end. FlowLeap's relay only
+  checks that both sides are the same signed-in user and forwards bytes it cannot read; it
+  stores no content and nothing while your computer is offline. Remote Access needs an
+  active subscription or trial.
+- **Keep awake while followed.** While Remote Access is on and an Agent Session runs, the
+  Mac stays awake so the phone keeps following. The setting
+  `flowleap.remoteAccess.keepAwake` turns this off.
+- **Manage Viewers** lists the paired phones and computers and removes any of them. Signing
+  out of FlowLeap on the computer removes all of them.
+
+### Changed
+
+- **Editor Chats are stored with a neutral title** on the computer's session catalog while
+  Remote Access is on ("Editor chat, <date>"); the real title stays in memory and on the
+  encrypted wire only.
+- **From the phone, a tool call can be allowed once or skipped**, never allowed for the
+  rest of the chat. Standing approvals are given at the computer.
+
+
 ### Fixed
 
 - A user's own Anthropic key works on a Hosted Workspace. The BYOK Anthropic provider now

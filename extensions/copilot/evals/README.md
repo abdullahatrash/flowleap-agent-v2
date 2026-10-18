@@ -428,6 +428,76 @@ rather than passing it.
 concurrency 4). One agent-loop round-trip per case per run on `gemini-2.5-pro` plus ~2 grader
 calls; the grader spend is negligible next to the loop.
 
+### T11 — Fallback Coverage Search Round (2026-10-17, `anthropic/claude-sonnet-5`, `--no-cache`)
+
+**Retired by C4 (#741).** The one automatic Search Round is gone: after every save the agent
+writes a Round Report and waits for the expert. T12 below replaces this case; the section stays
+as history.
+
+PRD 0024 E1 (#710) adds the one case the Fallback Coverage loop needs: the invalidity chart
+leaves two fallbacks not covered, the agent runs ONE Search Round on their limitations, re-saves
+with the round recorded, and stops. Three provider opt-ins make the run match the app
+(`skill` replays the invalidity-analysis skill, `completionGuard` runs the extension's real
+completion guard, `maxRounds`/`maxTokens` raise the case's own caps). The mocked
+`write_patent_results` computes its receipt from the save's own arguments (`invalidityReceipt`
+in the fixture), so the receipt never contradicts what the model saved.
+
+| Case | Runs | Pass | Verdict | Note |
+|---|---|---|---|---|
+| T11 | `P P P F F` (T11-only probe) then `F P F` (full gate) | 3/5, then 1/3 | **FAIL**, recorded as expected | Open debt until #725 — see below |
+
+**Why it fails, and why that is the right answer.** The two probe failures and both gate
+failures trip `t11_ran_one_round_after_not_covered` alone. The model runs its vent searches
+in Phase 3, saves with no round, reads the receipt, and in the very next call re-saves with
+"round 1" listing only queries that ran before the first save: no new search after the
+judgment. The predicate is right to refuse that. The product accepts it today, because the
+writer only checks that each round query matches a ledger execution; #725 makes the writer
+refuse a round added in a re-save whose queries all predate the previous save. Flip the
+baseline entry to `PASS` when #725 merges and a T11-only probe lands at 4/5 or better.
+**Done with #725 (PR #737):** T11-only probe `P P P F P` = 4/5 on the branch with the Phase 4b
+sentence in place; no run relabelled a round, the one failure hit the 20-round cap before any
+save. Baseline entry flipped to expected `PASS` in that PR.
+
+Three earlier causes were eval design, fixed before the runs above: a fixed receipt sequence
+that contradicted a first save already recording a round; predicates that assumed the round
+sits between two saves (a round run before the first save, with a new search for the uncovered
+term, is honest and now counts); and the skill replay exposing `read_file` while the tool list
+lacked it (a case with `skill` now gets a `read_file` mock answered from the skill's files).
+
+**The rest of the gate, same run:** T2, T3b, T4–T6, T8, T9 3/3; T3a `F F F` (expected FAIL,
+unchanged); T7 `P P P` (improvement, not banked). T1 `F F P` = 1/3 against expected PASS.
+T1 is model drift, not this change: a T1-only probe on E1's branch gave `F F F`, and a control
+probe on unchanged main the same hour gave `F F F` too (every failure is the old shape: the model
+loops on `uspto_api_guide` and hits the 8-round cap before the web fallback). Its baseline entry
+is re-recorded as expected `FAIL` (open debt, #734) in its own commit, so the gate can again
+answer yes or no for #725 and the skills chain; it flips back to `PASS` when a T1-only probe lands
+at 3/3 after the #734 fix.
+
+### T12 — Round Report (2026-10-17, `anthropic/claude-sonnet-5`, `--no-cache`)
+
+PRD 0024 C4 (#741, ADR 0016 amendment) replaces T11. The first save leaves rungs 3, 4 and 5 open
+(no mocked reference discloses the magnet detent, the vent hole or the drip groove). The mocked
+`write_patent_results` prints the open points the save's own rows give, with the writer's own
+`rowOpenPoints` and `priorArtReportReceipt`. The agent must end turn 0 with a Round Report that
+names every open point with a recommendation, and run no round. The scripted expert answer
+(`followUpPrompt: "Run 1 and 3. Do not run 2."`) picks two points by number. The round of turn 1
+must name exactly those two ids in `answers` and aim its queries at their limitations only. The
+provider now adds the stopping round to the guard's turn before the check (as the app loop does),
+and checks the follow-up turn with the first turn as history.
+
+| Case | Runs | Pass | Verdict |
+|---|---|---|---|
+| T12 | `P P F P P` (T12-only probe, `--runs 5 -- --filter-pattern '^T12'`) | 4/5 | **PASS**, recorded as expected PASS |
+
+In the four passing runs the model ended turn 0 with a numbered Round Report over `rung-3`,
+`rung-4` and `rung-5`, each with a recommendation, and ran no search after the save. After the
+answer it ran new queries on the magnet and drip-groove limitations only and saved with
+`answers: ["rung-3", "rung-5"]`. The failing run never reached a Round Report. Every mocked search
+returns the same two documents, the model read that as a broken search, and after the guard's
+structured-save nudge it wrote a prose report with no save. That is the fixture's catch-all
+search body, not the Round Report logic. No run ran a round before the answer, and no run
+answered points the expert did not choose.
+
 ### Baseline: key-gate suite (2026-08-07, same model)
 
 **6/6 on all three runs, 18/18 case-runs, zero voids** (181s + 264s + 272s ≈ 12 minutes). This
