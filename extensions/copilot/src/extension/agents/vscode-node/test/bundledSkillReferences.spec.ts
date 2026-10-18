@@ -35,6 +35,14 @@ describe('bundled skill references', () => {
 		expect({ scanned: skillDirs.length > 0, dangling }).toEqual({ scanned: true, dangling: [] });
 	});
 
+	it('tells the application-drafting gates in plain words: no "frontmatter", no "flag"', () => {
+		// The attorney reads these words in chat when the model repeats them (PRD 0025 S1/S3):
+		// the gate is a line at the top of the file, not a frontmatter flag.
+		const body = fs.readFileSync(path.join(SKILLS_DIR, 'application-drafting', 'SKILL.md'), 'utf8');
+		const jargon = body.split('\n').map((line, index) => ({ line: index + 1, text: line })).filter(({ text }) => /frontmatter|\bflags?\b/i.test(text));
+		expect(jargon).toEqual([]);
+	});
+
 	it('keeps the decision-row example parseable as the format it teaches', () => {
 		// The investigation record's worked rows ARE the format spec: an agent copies their
 		// shape. A row with the wrong column count or an unknown status teaches that instead.

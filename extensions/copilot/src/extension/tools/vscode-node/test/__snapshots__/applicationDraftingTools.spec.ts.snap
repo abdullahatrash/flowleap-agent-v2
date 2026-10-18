@@ -34,7 +34,7 @@ Code writes this file from the files of this folder after every drafting tool ca
 - [ ] 4. Fix or waive the Errors: not checked yet
       → Tell the agent: "Validate the draft"
 - [ ] 5. Answer the Inventor Questions: 1 open
-      → Fill each **Answer:** in inventor-answers.md (line 11), or send the file to the inventor
+      → Fill each **Answer:** in \`inventor-answers.md:11\`, or send the file to the inventor
       → Then tell the agent: "Apply the answers"
 - [ ] 6. Export to Word: blocked by steps 4 and 5
 
@@ -93,7 +93,7 @@ exports[`Inventor Question answers > the save writes inventor-answers.md; an app
   "answersKept": true,
   "exportResult": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
 - \`inventor-question\` (draft-application.md, line 44): Inventor Question IQ-2 is open: How thick is the lever?
-Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions). Next: Fill each **Answer:** in inventor-answers.md (line 20), or send the file to the inventor. Then tell the agent: "Apply the answers".",
+Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions). Next: Fill each **Answer:** in \`drafting/hinge/inventor-answers.md:20\`, or send the file to the inventor. Then tell the agent: "Apply the answers".",
   "recorded": [
     "- **Inventor answer applied:** IQ-1, answer 1, from inventor-answers.md at <time>",
   ],
@@ -223,7 +223,7 @@ exports[`export_draft_docx > refuses on an open Inventor Question and on claims 
   "claimsChanged": "The draft was not exported. drafting/hinge/claims.md changed after it was approved, so the approval was withdrawn. Review \`drafting/hinge/claims.md:2\`, then click **Approve Claims** at the top of the file, or change \`false\` to \`true\` on line 2. Then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Fix or waive the Errors), step 5 (Answer the Inventor Questions).",
   "openQuestionRefusal": "The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (\`  - Waived: <reason>\` under the item):
 - \`inventor-question\` (draft-application.md, line 41): Inventor Question IQ-1 is open: Which steel grade is the lever made of?
-Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions). Next: Fill each **Answer:** in inventor-answers.md (line 11), or send the file to the inventor. Then tell the agent: "Apply the answers".",
+Open in drafting/hinge/checklist.md: step 5 (Answer the Inventor Questions). Next: Fill each **Answer:** in \`drafting/hinge/inventor-answers.md:11\`, or send the file to the inventor. Then tell the agent: "Apply the answers".",
   "unapproved": "The draft was not exported. Review \`drafting/hinge/claims.md:2\`, then click **Approve Claims** at the top of the file, or change \`false\` to \`true\` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims), step 4 (Fix or waive the Errors), step 5 (Answer the Inventor Questions).",
 }
 `;
