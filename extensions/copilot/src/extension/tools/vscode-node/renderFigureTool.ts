@@ -40,7 +40,8 @@ const refused = 'The Figure was not rendered.';
  * Renders one Figure of a drafting matter (PRD 0023, slice D5) through {@link renderFigureOp}: the
  * figure-list gate, the render, the fault list, the files and the round. This tool locates the
  * matter, decides whether the model sees the render (the request flag and the model's image
- * input), checks the Approved Claims with the drafting gate, and attaches the review render.
+ * input), checks the Approved Claims with the drafting gate, and attaches the review render. It
+ * writes the Drafting Checklist after it runs, also after a refusal.
  *
  * `newCycle` starts the next review cycle of the Figure. {@link prepareInvocation} then asks the
  * attorney to confirm it in chat. VS Code runs {@link invoke} only after the click: a denied
@@ -110,9 +111,9 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 			},
 		});
 		if (!result.ok) {
-			return textResult(`${refused} ${result.reason}`);
+			return workspace.refusal(refused, result.reason);
 		}
-		const parts: (LanguageModelTextPart | LanguageModelDataPart)[] = [new LanguageModelTextPart(result.text)];
+		const parts: (LanguageModelTextPart | LanguageModelDataPart)[] = [new LanguageModelTextPart(await workspace.textWithChecklistLine(result.text))];
 		if (result.seen) {
 			parts.push(LanguageModelDataPart.image(result.png, 'image/png'));
 		}

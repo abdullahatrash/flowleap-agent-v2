@@ -21,7 +21,7 @@
  *       → Then tell the agent: "Apply the answers"
  *
  * Not blocking:
- * - Figures: 10 in figures.md
+ * - Figures: 10 in figures.md, 3 drawn in drawings/
  *
  * Next step for you: step 5.
  * ```
@@ -30,7 +30,7 @@
 import { isInventorQuestion } from './finding';
 import { FindingsFileItem, parseFindingsFileItems } from './findingsFile';
 import { missingParts } from './filingDocuments';
-import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER } from './folderContract';
+import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DRAWINGS_FOLDER } from './folderContract';
 import { DraftingGateFlag, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice } from './frontmatter';
 import { currentAnswer, currentRound, isAnswered, parseInventorAnswers } from './inventorAnswers';
 import { parseInventorQuestions } from './sourceMarkers';
@@ -52,6 +52,8 @@ export interface DraftingChecklistFiles {
 	/** True when the saved draft was generated against other claims than the current `claims.md`. */
 	readonly draftStale?: boolean;
 	readonly figures?: string;
+	/** The Figures drawn in `drawings/` (one `FIG-N.svg` each); absent when not counted. */
+	readonly drawnFigures?: number;
 	readonly inventorAnswers?: string;
 	readonly findings?: string;
 	/** True when `findings.md` was written by a validator run over the current draft and claims. */
@@ -274,14 +276,14 @@ function questionsStep(input: DraftingChecklistFiles, findingsItems: readonly Fi
 	]);
 }
 
-/** The notes of the checklist: figures, required sections of the office, style exemplars. */
+/** The notes of the checklist: figures (with the drawn count when Figures are drawn), required sections of the office, style exemplars. */
 function checklistNotes(input: DraftingChecklistFiles, office: DraftingOffice | undefined): DraftingChecklistNote[] {
 	const notes: DraftingChecklistNote[] = [];
 	const figures = parseFigureSections(input.figures ?? '').figures;
 	const figureCount = figures.reduce((sum, figure) => sum + figure.count, 0);
 	notes.push(input.figures === undefined || !figureCount
 		? { name: CHECKLIST_NOTE.figures, detail: input.figures === undefined ? `${DRAFTING_FILE_NAMES.figures} does not exist` : `none in ${DRAFTING_FILE_NAMES.figures}`, actions: [`→ When the application has drawings, add one heading per figure to ${DRAFTING_FILE_NAMES.figures} (e.g. "## FIG. 1") with its parts, or tell the agent: "Build figures.md from the disclosure"`] }
-		: { name: CHECKLIST_NOTE.figures, detail: `${figureCount} in ${DRAFTING_FILE_NAMES.figures}`, actions: [] });
+		: { name: CHECKLIST_NOTE.figures, detail: `${figureCount} in ${DRAFTING_FILE_NAMES.figures}${input.drawnFigures ? `, ${input.drawnFigures} drawn in ${DRAWINGS_FOLDER}/` : ''}`, actions: [] });
 	if (input.draft !== undefined && office) {
 		const missing = missingParts(input.draft, office, figureCount > 0);
 		notes.push(missing.length
