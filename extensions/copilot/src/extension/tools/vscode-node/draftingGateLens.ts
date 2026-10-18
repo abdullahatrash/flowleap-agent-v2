@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import type * as vscode from 'vscode';
 import { Position, Range, WorkspaceEdit } from '../../../vscodeTypes';
 import { fieldLine } from '../common/drafting/checklist';
+import { DRAFTING_WAIVE_COMMAND_ID, findingsWaiverInsertions, isWaivableError, parseFindingsFileItems } from '../common/drafting/findingsFile';
 import { DRAFTING_FILE_NAMES } from '../common/drafting/folderContract';
 import { DRAFTING_GATE_COMMAND_ID, DraftingGateFlag, parseDraftingFrontmatter, readGateFlag } from '../common/drafting/frontmatter';
 
@@ -77,4 +78,62 @@ export class DraftingGateLensProvider implements vscode.CodeLensProvider {
 		const title = flag === 'confirmed' ? l10n.t('Confirm Feature List') : l10n.t('Approve Claims');
 		return [{ range, isResolved: true, command: { title, command: DRAFTING_GATE_COMMAND_ID, arguments: [document.uri] } }];
 	}
+}
+
+/** The file the waiver CodeLens shows on: the findings of a matter. */
+export const DRAFTING_FINDINGS_SELECTOR: vscode.DocumentFilter = { language: 'markdown', pattern: '**/drafting/*/findings.md' };
+
+/** Asks the attorney for the reason of a waiver; `undefined` when the attorney cancels. */
+export type AskWaiverReason = (prompt: string) => Thenable<string | undefined>;
+
+/**
+ * Shows "Waive…" on each unwaived Error line of `findings.md`. When one rule has more than two
+ * unwaived Errors, the first of them also shows "Waive all N Errors of this rule". Both run
+ * {@link DRAFTING_WAIVE_COMMAND_ID} with the file and the 1-based lines of the items.
+ */
+export class DraftingWaiverLensProvider implements vscode.CodeLensProvider {
+
+	provideCodeLenses(document: DraftingGateDocument): vscode.CodeLens[] {
+		const errors = parseFindingsFileItems(document.getText()).filter(isWaivableError);
+		const lens = (fileLine: number, title: string, fileLines: number[]): vscode.CodeLens => ({
+			range: new Range(fileLine - 1, 0, fileLine - 1, 0),
+			isResolved: true,
+			command: { title, command: DRAFTING_WAIVE_COMMAND_ID, arguments: [document.uri, fileLines] },
+		});
+		return errors.flatMap((item, index) => {
+			const lenses = [lens(item.fileLine, l10n.t('Waive…'), [item.fileLine])];
+			const rule = errors.filter(other => other.finding.rule === item.finding.rule);
+			if (rule.length > 2 && errors.findIndex(other => other.finding.rule === item.finding.rule) === index) {
+				lenses.push(lens(item.fileLine, l10n.t('Waive all {0} Errors of this rule', rule.length), rule.map(other => other.fileLine)));
+			}
+			return lenses;
+		});
+	}
+}
+
+/**
+ * Asks the reason, then returns the edit that writes `  - Waived: <reason>` under each item of
+ * `findings.md` at the 1-based `fileLines`, after the sub-lines of the item. `undefined` when
+ * the attorney cancels or gives an empty reason, or when no item there is an unwaived Error.
+ */
+export async function draftingWaiverEdit(document: DraftingGateDocument, fileLines: readonly number[], askReason: AskWaiverReason): Promise<WorkspaceEdit | undefined> {
+	const items = parseFindingsFileItems(document.getText()).filter(item => isWaivableError(item) && fileLines.includes(item.fileLine));
+	if (!items.length) {
+		return undefined;
+	}
+	const prompt = items.length === 1
+		? l10n.t('Reason to waive the "{0}" Error. The reason is written under the item in findings.md.', items[0].finding.rule)
+		: l10n.t('Reason to waive {0} Errors. The same reason is written under each item in findings.md.', items.length);
+	const reason = await askReason(prompt);
+	const text = document.getText();
+	const insertions = findingsWaiverInsertions(text, items.map(item => item.fileLine), reason ?? '');
+	if (!insertions.length) {
+		return undefined;
+	}
+	const lines = text.split(/\r?\n/);
+	const edit = new WorkspaceEdit();
+	for (const { afterLine, text: waiver } of insertions) {
+		edit.insert(document.uri, new Position(afterLine - 1, lines[afterLine - 1].length), `\n${waiver}`);
+	}
+	return edit;
 }

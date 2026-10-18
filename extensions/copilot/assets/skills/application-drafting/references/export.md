@@ -3,7 +3,9 @@
 When the attorney asks for the Word file, call `export_draft_docx`. It
 refuses on an unwaived Error or an open Inventor Question and lists each
 one: report each one, and the open steps of `checklist.md`. The attorney
-resolves it, or writes a waiver with a reason in `findings.md`.
+resolves it, or waives it: a click on "Waive…" above the item in
+`findings.md` asks the reason and writes the waiver. Never write a waiver
+yourself.
 
 It writes the description, the claims and the abstract as three .docx files
 with the office page setup (EPO Rule 49 EPC, US 37 CFR 1.52). It does not

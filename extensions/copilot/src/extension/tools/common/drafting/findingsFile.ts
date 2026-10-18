@@ -36,7 +36,12 @@ function oneLine(text: string): string {
 function renderItem(finding: DraftFinding): string[] {
 	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined, finding.question].filter(Boolean).join(', ');
 	const item = `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${oneLine(finding.message)}`;
-	return finding.waived ? [item, `  - Waived: ${oneLine(finding.waived.reason)}`] : [item];
+	return finding.waived ? [item, renderWaiverLine(finding.waived.reason)] : [item];
+}
+
+/** The waiver line under an item: `  - Waived: <reason>`, the reason on one line. */
+function renderWaiverLine(reason: string): string {
+	return `  - Waived: ${oneLine(reason)}`;
 }
 
 /** Renders `findings.md`. Each finding goes to the section of its severity. */
@@ -84,6 +89,44 @@ export function parseFindingsFileItems(text: string): FindingsFileItem[] {
 		}
 	});
 	return items;
+}
+
+/**
+ * The editor command of the waiver CodeLens on `findings.md`: it writes the waiver the attorney
+ * typed under the items the attorney clicked. It is not a tool, and `run_vscode_command` refuses
+ * it: the model never writes a waiver.
+ */
+export const DRAFTING_WAIVE_COMMAND_ID = 'flowleap.drafting.waiveFindings';
+
+/** True for an Error item without a waiver. Inventor Questions are not included: the inventor answers them. */
+export function isWaivableError(item: FindingsFileItem): boolean {
+	return item.finding.severity === 'Error' && !isInventorQuestion(item.finding) && !item.finding.waived;
+}
+
+/** One waiver line to insert into `findings.md`, after the 1-based line `afterLine`. */
+export interface FindingsWaiverInsertion {
+	readonly afterLine: number;
+	readonly text: string;
+}
+
+/**
+ * The waiver lines that waive the items at the 1-based `fileLines` of `text` with `reason`.
+ * Each line goes after the item and its indented sub-lines. An item that is not an unwaived
+ * Error gets no line (the file changed after the click), and an empty reason gives no lines.
+ */
+export function findingsWaiverInsertions(text: string, fileLines: readonly number[], reason: string): FindingsWaiverInsertion[] {
+	if (!oneLine(reason)) {
+		return [];
+	}
+	const lines = text.replace(/\r\n/g, '\n').split('\n');
+	const waivable = new Set(parseFindingsFileItems(text).filter(isWaivableError).map(item => item.fileLine));
+	return [...new Set(fileLines)].filter(fileLine => waivable.has(fileLine)).sort((a, b) => a - b).map(fileLine => {
+		let afterLine = fileLine;
+		while (afterLine < lines.length && /^\s+\S/.test(lines[afterLine])) {
+			afterLine++;
+		}
+		return { afterLine, text: renderWaiverLine(reason) };
+	});
 }
 
 /** Parses `findings.md`, including the attorney's waivers. */
