@@ -1,6 +1,14 @@
 # Patent Skills split into Workflow Skills and Tool Guides; firms customize with Firm Rules, never by override
 
-**Status:** accepted (2026-10-16)
+**Status:** parked (2026-10-18), not accepted. Proposed 2026-10-16.
+
+> Parked by the founder on 2026-10-18. The PRD (#675) and its tickets (#676–#688) are closed as
+> not planned. The proposal grew from the question "do user edits to a built-in skill survive an
+> update?", not from an attorney request. In FlowLeap a Patent Skill is the vehicle for
+> FlowLeap's own knowledge of the data, not a user customization surface. The open question is
+> where that data knowledge lives: skill text, tool description and result, or the backend
+> facade. The measured content shares below stay valid as input to that rethink. The side
+> findings #689–#692 stay open.
 
 Attorneys want to adapt the Patent Skills to their firm (house style, report sections, claim
 format). Today they can open a Patent Skill's `SKILL.md` in the app install folder and save it,
