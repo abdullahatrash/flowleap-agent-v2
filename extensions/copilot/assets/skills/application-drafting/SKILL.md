@@ -49,9 +49,9 @@ again.
 Build the Feature List and the figures list from the disclosure, or from the
 invention record of the **invention-disclosure** skill.
 
-1. Write `feature-list.md` with frontmatter `office` (`US` or `EPO`; ask the
-   attorney when it is not stated) and `confirmed: false`. Put this comment
-   line directly above `confirmed: false`:
+1. Write `feature-list.md` with `office` (`US` or `EPO`; ask the
+   attorney when it is not stated) and `confirmed: false` in the top block of
+   the file. Put this comment line directly above `confirmed: false`:
    `# Review, then change false to true below, or click the action at the top.`
    One row per
    element, embodiment and alternative the disclosure states, each with an ID
@@ -62,9 +62,9 @@ invention record of the **invention-disclosure** skill.
    figures. Put the Feature List rows the part shows in brackets. A part that
    shows no row has no brackets. The claimed-feature coverage check
    (37 CFR 1.83(a)) in Step 4 reads these links. Without them it is skipped.
-   Leave `pageSize` out of the frontmatter: the drawings then use the page of
-   the office's export (letter for US, A4 for EPO), one page size per
-   application.
+   Leave `pageSize` out of the top block of the file: the drawings then use
+   the page of the office's export (letter for US, A4 for EPO), one page size
+   per application.
 3. A feature the disclosure only implies goes to the attorney as a question,
    not into a row.
 
@@ -74,11 +74,12 @@ Intake gate.
 ## Step 2: Claims
 
 Hand the confirmed Feature List and the prior-art results to the
-**claim-drafting** skill. Save its claim set as `claims.md` with frontmatter
-`approved: false`, and put the same comment line directly above it:
+**claim-drafting** skill. Save its claim set as `claims.md` with
+`approved: false` in the top block of the file, and put the same comment line
+directly above it:
 `# Review, then change false to true below, or click the action at the top.`
 Stop at the Claims gate. When the claims change after
-approval, the attorney sets the flag again.
+approval, the attorney sets `approved: true` again.
 
 ## Step 3: Plan, draft and integrate the specification
 
@@ -104,7 +105,7 @@ other claims: after the attorney approves changed claims, plan again.
    `drafting/<matter>/draft-outline.md`. The save returns the Findings on the
    outline. Fix every Error the save reports before 3b.
 3. Tell the attorney the outline is in the folder and they can edit it
-   before drafting. It is not a gate: do not wait for a flag.
+   before drafting. It is not a gate.
 
 ### 3b: Draft by item
 

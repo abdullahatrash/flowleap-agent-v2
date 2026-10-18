@@ -19,6 +19,7 @@ import { ChatReferenceBinaryData, LanguageModelDataPart, LanguageModelTextPart, 
 import type { DrawingScene } from '../../../drawings/common/scene/drawingScene';
 import { ChatVariablesCollection } from '../../../prompt/common/chatVariablesCollection';
 import { BuildDrawingSetTool } from '../buildDrawingSetTool';
+import { DraftingEditors } from '../draftingWorkspace';
 import { ProposeFigurePartTool } from '../proposeFigurePartTool';
 import { RenderFigureTool } from '../renderFigureTool';
 
@@ -110,9 +111,18 @@ function setup(files: Record<string, string> = matter) {
 		const content = (await result).content;
 		return { text: (content[0] as LanguageModelTextPart).value, images: content.filter(part => part instanceof LanguageModelDataPart).map(part => (part as LanguageModelDataPart).mimeType) };
 	};
-	const render = new RenderFigureTool(fileSystem, workspace, instantiation);
-	const build = new BuildDrawingSetTool(fileSystem, workspace, instantiation);
-	const propose = new ProposeFigurePartTool(fileSystem, workspace, instantiation);
+	// The editors of the window, as a fake: the tests have no window to reveal the checklist in.
+	const editors = new class implements DraftingEditors {
+		readonly visible = new Set<string>();
+		isVisible(uri: URI): boolean { return this.visible.has(uri.path); }
+		async showBeside(uri: URI): Promise<void> { this.visible.add(uri.path); }
+	}();
+	class TestRenderFigureTool extends RenderFigureTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestBuildDrawingSetTool extends BuildDrawingSetTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestProposeFigurePartTool extends ProposeFigurePartTool { protected override editors(): DraftingEditors { return editors; } }
+	const render = new TestRenderFigureTool(fileSystem, workspace, instantiation);
+	const build = new TestBuildDrawingSetTool(fileSystem, workspace, instantiation);
+	const propose = new TestProposeFigurePartTool(fileSystem, workspace, instantiation);
 	type RenderInput = Parameters<RenderFigureTool['invoke']>[0]['input'];
 	type ProposeInput = Parameters<ProposeFigurePartTool['invoke']>[0]['input'];
 	const tools = {

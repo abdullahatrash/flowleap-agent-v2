@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { checklistPointer, DraftingChecklistFiles, readDraftingChecklist, renderChecklist } from '../drafting/checklist';
+import { checklistPointer, DraftingChecklistFiles, readDraftingChecklist, renderChecklist, stepActionText } from '../drafting/checklist';
 import { DraftFinding } from '../drafting/finding';
 import { renderFindingsFile } from '../drafting/findingsFile';
 import { updateInventorAnswers } from '../drafting/inventorAnswers';
@@ -96,10 +96,10 @@ describe('Application Drafting checklist', () => {
 			- [x] 3. Outline written for the approved claims: draft-outline.md
 			- [x] 3. Draft written: draft-application.md
 			- [ ] 4. Fix or waive the Errors: 2 open (findings.md lines 7, 8)
-			      → To waive, add under the item:   - Waived: <your reason>
+			      → To waive, click **Waive…** on the item in \`findings.md:7\` and line 8, or add under it:   - Waived: <your reason>
 			      → To fix, tell the agent: "Fix the Errors in findings.md"
 			- [ ] 5. Answer the Inventor Questions: 2 open
-			      → Fill each **Answer:** in inventor-answers.md (lines 11, 19), or send the file to the inventor
+			      → Fill each **Answer:** in \`inventor-answers.md:11\` and line 19, or send the file to the inventor
 			      → Then tell the agent: "Apply the answers"
 			- [ ] 6. Export to Word: blocked by steps 4 and 5
 
@@ -128,7 +128,7 @@ describe('Application Drafting checklist', () => {
 			- [ ] 4. Fix or waive the Errors: findings.md is older than the draft or the claims
 			      → Tell the agent: "Validate the draft"
 			- [ ] 5. Answer the Inventor Questions: 1 open, 1 answered but not yet in the draft (IQ-1)
-			      → Fill each **Answer:** in inventor-answers.md (line 20), or send the file to the inventor
+			      → Fill each **Answer:** in \`inventor-answers.md:20\`, or send the file to the inventor
 			      → Then tell the agent: "Apply the answers"
 			- [ ] 6. Export to Word: blocked by steps 4 and 5
 
@@ -271,8 +271,17 @@ describe('Application Drafting checklist', () => {
 		}
 		expect([step5.detail, ...step5.actions]).toEqual([
 			'2 open, 1 removed from the draft without an answer (IQ-1)',
-			'→ Fill each **Answer:** in inventor-answers.md (lines 24, 16), or send the file to the inventor',
+			'→ Fill each **Answer:** in `inventor-answers.md:24` and line 16, or send the file to the inventor',
 			'→ Then tell the agent: "Apply the answers"',
+		]);
+	});
+
+	it('the next-step sentence of a tool result names every `file:line` of the step as a workspace path', () => {
+		const checklist = readDraftingChecklist({ matter: 'hinge', featureList: featureList(), claims: claims(), draftOutline: outline, draft, inventorAnswers: answers(), findings: renderFindingsFile(errors), findingsCurrent: true, exported: false });
+		const pathOf = (file: string) => `drafting/hinge/${file}`;
+		expect(checklist.steps.filter(entry => !entry.done && entry.actions.length).map(entry => stepActionText(entry, pathOf))).toEqual([
+			'To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7` and line 8, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
+			'Fill each **Answer:** in `drafting/hinge/inventor-answers.md:11` and line 19, or send the file to the inventor. Then tell the agent: "Apply the answers".',
 		]);
 	});
 

@@ -22,6 +22,7 @@ import { URI } from '../../../../util/vs/base/common/uri';
 import { IInstantiationService, ServiceIdentifier, ServicesAccessor } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
+import { DraftingEditors } from '../draftingWorkspace';
 import { ExportDraftDocxTool } from '../exportDraftDocxTool';
 import { RemoveClaimTool } from '../removeClaimTool';
 import { InventorQuestionsTool } from '../inventorQuestionsTool';
@@ -183,30 +184,43 @@ function setup(files: Record<string, string> = {}) {
 	const configuration = new class extends mock<IConfigurationService>() { override getNonExtensionConfig<T>(): T | undefined { return 'off' as T; } }();
 	const telemetry = new class extends mock<IActivationTelemetryService>() { override recordReportSaved() { } }();
 	const pdfReads: string[] = [];
+	// The editors of the window, as a fake: a shown file stays visible, as in the real window.
+	const editors = new class implements DraftingEditors {
+		readonly visible = new Set<string>();
+		readonly shown: string[] = [];
+		isVisible(uri: URI): boolean { return this.visible.has(uri.path); }
+		async showBeside(uri: URI): Promise<void> { this.shown.push(uri.path); this.visible.add(uri.path); }
+	}();
 	class TestStartApplicationDraftTool extends StartApplicationDraftTool {
 		protected override async readPdf(uri: URI): Promise<string> {
 			pdfReads.push(uri.path);
 			return 'Text of the PDF exemplar.';
 		}
+		protected override editors(): DraftingEditors { return editors; }
 	}
+	class TestValidateDraftTool extends ValidateDraftTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestExportDraftDocxTool extends ExportDraftDocxTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestInventorQuestionsTool extends InventorQuestionsTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestWritePatentResultsTool extends WritePatentResultsTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestRemoveClaimTool extends RemoveClaimTool { protected override editors(): DraftingEditors { return editors; } }
 	const run = async (result: Promise<LanguageModelToolResult | vscode.LanguageModelToolResult>) => ((await result).content[0] as LanguageModelTextPart).value;
 	const tools = {
 		start: (matter = 'hinge') => run(new TestStartApplicationDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter }, toolInvocationToken: undefined }, CancellationToken.None)),
-		validate: (advisory?: { message: string; line?: number; claim?: number }[], matter = 'hinge') => run(new ValidateDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter, advisory }, toolInvocationToken: undefined }, CancellationToken.None)),
-		exportDocx: () => run(new ExportDraftDocxTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge' }, toolInvocationToken: undefined }, CancellationToken.None)),
-		removeClaim: (claim: number) => run(new RemoveClaimTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge', claim }, toolInvocationToken: undefined }, CancellationToken.None)),
-		prepareRemoveClaim: async (claim: number) => (await new RemoveClaimTool(fileSystem, workspace, instantiation).prepareInvocation({ input: { matter: 'hinge', claim } }, CancellationToken.None)).confirmationMessages,
-		inventor: (action: 'send' | 'import', file?: string) => run(new InventorQuestionsTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge', action, file }, toolInvocationToken: undefined }, CancellationToken.None)),
-		save: (content: string, extra: Record<string, string> = {}, filePath = 'drafting/hinge/draft-application.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
+		validate: (advisory?: { message: string; line?: number; claim?: number }[], matter = 'hinge') => run(new TestValidateDraftTool(fileSystem, workspace, instantiation).invoke({ input: { matter, advisory }, toolInvocationToken: undefined }, CancellationToken.None)),
+		exportDocx: () => run(new TestExportDraftDocxTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge' }, toolInvocationToken: undefined }, CancellationToken.None)),
+		removeClaim: (claim: number) => run(new TestRemoveClaimTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge', claim }, toolInvocationToken: undefined }, CancellationToken.None)),
+		prepareRemoveClaim: async (claim: number) => (await new TestRemoveClaimTool(fileSystem, workspace, instantiation).prepareInvocation({ input: { matter: 'hinge', claim } }, CancellationToken.None)).confirmationMessages,
+		inventor: (action: 'send' | 'import', file?: string) => run(new TestInventorQuestionsTool(fileSystem, workspace, instantiation).invoke({ input: { matter: 'hinge', action, file }, toolInvocationToken: undefined }, CancellationToken.None)),
+		save: (content: string, extra: Record<string, string> = {}, filePath = 'drafting/hinge/draft-application.md') => run(new TestWritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
 			.invoke({ input: { filePath, content, template: 'draft-application', ...extra }, toolInvocationToken: undefined }, CancellationToken.None)),
-		saveOutline: (content = outlineTable, filePath = 'drafting/hinge/draft-outline.md') => run(new WritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
+		saveOutline: (content = outlineTable, filePath = 'drafting/hinge/draft-outline.md') => run(new TestWritePatentResultsTool(log, fileSystem, new PromptPathRepresentationService(workspace), instantiation, unrecordedPatentLedger, workspace, configuration, new (mock<IEndpointProvider>())(), telemetry)
 			.invoke({ input: { filePath, content, template: 'draft-outline' }, toolInvocationToken: undefined }, CancellationToken.None)),
 	};
 	const read = async (path: string) => new TextDecoder().decode(await fileSystem.readFile(URI.file(`/workspace/${path}`)));
 	const write = (path: string, contents: string) => fileSystem.mockFile(URI.file(`/workspace/${path}`), contents);
 	/** Changes a file the way an edit in the editor does: the rest of the file, frontmatter included, stays. */
 	const edit = async (path: string, from: string, to: string) => write(path, (await read(path)).replace(from, to));
-	return { fileSystem, tools, read, write, edit, pdfReads, ignored };
+	return { fileSystem, tools, read, write, edit, pdfReads, ignored, editors };
 }
 
 /** The frontmatter block of a drafting file, with hashes replaced. */
@@ -489,8 +503,23 @@ describe('export_draft_docx', () => {
 			result: await tools.exportDocx(),
 			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
-			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors). Next: To waive, add under the item:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
+			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors). Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
 			docxWritten: false,
+		});
+	});
+
+	it('reveals the checklist beside the chat once: a second refusal opens no second editor, and the text ends with the file, the line and the action', async () => {
+		const { tools, editors } = setup(gatesOpen);
+		await tools.start();
+		await tools.save(draft().replace('<!-- src: disclosure:§1, item:O1 -->\n', ''));
+		editors.shown.length = 0;
+		editors.visible.clear();
+		const first = await tools.exportDocx();
+		const second = await tools.exportDocx();
+		expect({ shown: editors.shown, sameText: first === second, ending: first.slice(first.indexOf('Next:')) }).toEqual({
+			shown: [`${root}/checklist.md`],
+			sameText: true,
+			ending: 'Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
 		});
 	});
 
@@ -653,6 +682,33 @@ describe('Drafting Checklist', () => {
 		await tools.start();
 		await tools.save(draft(openQuestion));
 		expect({ refused, afterRefusal, afterSave: await read('drafting/hinge/checklist.md') }).toMatchSnapshot();
+	});
+
+	it('every drafting tool reveals checklist.md once, and not when a visible editor shows it', async () => {
+		const calls: Record<string, (tools: ReturnType<typeof setup>['tools']) => Promise<string>> = {
+			start: tools => tools.start(),
+			save: tools => tools.save(draft(openQuestion)),
+			saveOutline: tools => tools.saveOutline(),
+			validate: tools => tools.validate(),
+			exportDocx: tools => tools.exportDocx(),
+			inventor: tools => tools.inventor('send'),
+		};
+		const shown: Record<string, string[]> = {};
+		const shownWhileVisible: Record<string, string[]> = {};
+		for (const [name, call] of Object.entries(calls)) {
+			const fresh = setup(gatesOpen);
+			await call(fresh.tools);
+			shown[name] = fresh.editors.shown;
+			const visible = setup(gatesOpen);
+			visible.editors.visible.add(`${root}/checklist.md`);
+			await call(visible.tools);
+			shownWhileVisible[name] = visible.editors.shown;
+		}
+		const once = [`${root}/checklist.md`];
+		expect({ shown, shownWhileVisible }).toEqual({
+			shown: { start: once, save: once, saveOutline: once, validate: once, exportDocx: once, inventor: once },
+			shownWhileVisible: { start: [], save: [], saveOutline: [], validate: [], exportDocx: [], inventor: [] },
+		});
 	});
 });
 

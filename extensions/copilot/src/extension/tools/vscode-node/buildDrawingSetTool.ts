@@ -12,7 +12,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { buildDrawingSetOp } from '../../drawings/node/ops/buildDrawingSetOp';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IBuildDrawingSetParams {
 	/** The matter folder name under `drafting/`. */
@@ -39,12 +39,17 @@ export class BuildDrawingSetTool implements ICopilotTool<IBuildDrawingSetParams>
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IBuildDrawingSetParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		return { invocationMessage: l10n.t`Building the Drawing Set of ${options.input.matter}` };
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IBuildDrawingSetParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}

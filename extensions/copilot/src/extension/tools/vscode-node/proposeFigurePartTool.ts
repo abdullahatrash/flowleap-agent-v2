@@ -17,7 +17,7 @@ import { proposeFigurePartOp, SketchFile } from '../../drawings/node/ops/propose
 import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IProposeFigurePartParams {
 	/** The matter folder name under `drafting/`. */
@@ -63,6 +63,11 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	async resolveInput(input: IProposeFigurePartParams, promptContext: IBuildPromptContext): Promise<IProposeFigurePartParams> {
 		this.promptContext = promptContext;
 		return input;
@@ -74,7 +79,7 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IProposeFigurePartParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const input = options.input;
-		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}

@@ -17,7 +17,7 @@
  *
  * - [x] 1. Feature List confirmed: feature-list.md has `confirmed: true`
  * - [ ] 5. Answer the Inventor Questions: 9 open
- *       → Fill each **Answer:** in inventor-answers.md (lines 9, 17), or send the file to the inventor
+ *       → Fill each **Answer:** in `inventor-answers.md:9` and line 17, or send the file to the inventor
  *       → Then tell the agent: "Apply the answers"
  *
  * Not blocking:
@@ -123,6 +123,32 @@ function stepList(steps: readonly number[]): string {
 
 function lineList(lines: readonly number[]): string {
 	return lines.length === 1 ? `line ${lines[0]}` : `lines ${lines.join(', ')}`;
+}
+
+/**
+ * A file with the lines an action points to, the first as `` `file:line` `` (the chat and the
+ * editor open the file at that line), e.g. "`inventor-answers.md:9`" or "`findings.md:7` and
+ * lines 8, 12".
+ */
+function fileLines(file: string, lines: readonly number[]): string {
+	const [first, ...rest] = lines;
+	return `\`${file}:${first}\`${rest.length ? ` and ${lineList(rest)}` : ''}`;
+}
+
+/** `` `file:line` `` in an action line: a bare file name of the matter folder and a 1-based line. */
+const FILE_LINE = /`(?<file>[^`:\s/\\]+):(?<line>[1-9]\d*)`/g;
+
+/**
+ * What the attorney does for a step, as one sentence for a tool result, with every
+ * `` `file:line` `` renamed through `pathOf` (the tool result names the workspace path, the
+ * checklist in the matter folder the bare name).
+ */
+export function stepActionText(entry: DraftingChecklistStep, pathOf: (file: string) => string): string {
+	return entry.actions
+		.map(action => action.replace(/^→\s*/, ''))
+		.map(action => /[.!?]$/.test(action) ? action : `${action}.`)
+		.join(' ')
+		.replace(FILE_LINE, (_match, file: string, line: string) => `\`${pathOf(file)}:${line}\``);
 }
 
 /** The 1-based line of a frontmatter field, or `undefined` when the frontmatter has no such field. */
@@ -255,7 +281,7 @@ export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingCh
 		const errors = findingsItems.filter(item => item.finding.severity === 'Error' && !isInventorQuestion(item.finding) && !item.finding.waived);
 		steps.push(errors.length
 			? step(errorsStep, errorsTitle, `${errors.length} open (${DRAFTING_FILE_NAMES.findings} ${lineList(errors.map(item => item.fileLine))})`, [
-				'→ To waive, add under the item:   - Waived: <your reason>',
+				`→ To waive, click **Waive…** on the item in ${fileLines(DRAFTING_FILE_NAMES.findings, errors.map(item => item.fileLine))}, or add under it:   - Waived: <your reason>`,
 				`→ To fix, tell the agent: "Fix the Errors in ${DRAFTING_FILE_NAMES.findings}"`,
 			])
 			: done(errorsStep, 'Errors fixed or waived', `none open in ${DRAFTING_FILE_NAMES.findings}`));
@@ -329,7 +355,7 @@ function questionsStep(input: DraftingChecklistFiles, findingsItems: readonly Fi
 	}
 	const slots = open.map(id => currentRound(section(id))?.answerLine).filter((line): line is number => line !== undefined);
 	return step(number, title, detail, [
-		`→ Fill each **Answer:** in ${DRAFTING_FILE_NAMES.inventorAnswers}${slots.length ? ` (${lineList(slots)})` : ''}, or send the file to the inventor`,
+		`→ Fill each **Answer:** in ${slots.length ? fileLines(DRAFTING_FILE_NAMES.inventorAnswers, slots) : DRAFTING_FILE_NAMES.inventorAnswers}, or send the file to the inventor`,
 		`→ Then tell the agent: ${apply}`,
 	]);
 }

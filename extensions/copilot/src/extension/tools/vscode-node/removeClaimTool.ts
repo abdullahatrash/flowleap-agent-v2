@@ -13,7 +13,7 @@ import { ClaimRemoval, removeClaim } from '../common/drafting/claims';
 import { addRecordLine, CLAIM_REMOVED, emptyWorkingRecord } from '../common/drafting/workingRecord';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IRemoveClaimParams {
 	/** The matter folder name under `drafting/`. */
@@ -63,10 +63,15 @@ export class RemoveClaimTool implements ICopilotTool<IRemoveClaimParams> {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IRemoveClaimParams>, _token: CancellationToken): Promise<vscode.PreparedToolInvocation> {
 		const { matter, claim } = options.input;
 		const invocationMessage = l10n.t('Removing claim {0} of {1}', claim, matter);
-		const workspace = await DraftingWorkspace.locate(matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return { invocationMessage };
 		}
@@ -87,7 +92,7 @@ export class RemoveClaimTool implements ICopilotTool<IRemoveClaimParams> {
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IRemoveClaimParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const { matter, claim } = options.input;
 		const refused = `Claim ${claim} was not removed.`;
-		const workspace = await DraftingWorkspace.locate(matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}

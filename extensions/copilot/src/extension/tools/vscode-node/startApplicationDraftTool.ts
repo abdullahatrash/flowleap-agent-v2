@@ -18,7 +18,7 @@ import { parseDraftingFrontmatter, readOffice } from '../common/drafting/frontma
 import { STYLE_INSTRUCTION } from '../common/drafting/styleFolder';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 import { readPdfText } from './pdfPreviewApi';
 
 interface IStartApplicationDraftParams {
@@ -56,12 +56,17 @@ export class StartApplicationDraftTool implements ICopilotTool<IStartApplication
 		return readPdfText(uri);
 	}
 
+	/** The editors the Drafting Checklist is revealed in; the same seam for tests as {@link readPdf}. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IStartApplicationDraftParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		return { invocationMessage: l10n.t`Reading the drafting inputs of ${options.input.matter}` };
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IStartApplicationDraftParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}

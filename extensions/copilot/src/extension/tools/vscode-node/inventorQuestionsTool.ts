@@ -12,7 +12,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { currentAnswer, fillInventorAnswers, openInventorQuestions, parseInventorAnswers } from '../common/drafting/inventorAnswers';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 import { buildInventorQuestionsDocx, readInventorQuestionsDocx } from './inventorQuestionsDocx';
 
 interface IInventorQuestionsParams {
@@ -42,6 +42,11 @@ export class InventorQuestionsTool implements ICopilotTool<IInventorQuestionsPar
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IInventorQuestionsParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		const { matter } = options.input;
 		return options.input.action === 'import'
@@ -64,7 +69,7 @@ export class InventorQuestionsTool implements ICopilotTool<IInventorQuestionsPar
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IInventorQuestionsParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const importing = options.input.action === 'import';
 		const refused = importing ? 'No answer was copied.' : 'The Inventor Questions document was not written.';
-		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}

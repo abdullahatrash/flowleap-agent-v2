@@ -15,7 +15,7 @@ import { figureId } from '../../drawings/common/drawingFiles';
 import { BlockRequest, FlowchartRequest, readReviewState, renderFigureOp, reviewCycleRefusal } from '../../drawings/node/ops/renderFigureOp';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IRenderFigureParams {
 	/** The matter folder name under `drafting/`. */
@@ -58,6 +58,11 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IRenderFigureParams>, _token: CancellationToken): Promise<vscode.PreparedToolInvocation> {
 		const input = options.input;
 		const label = `${input.figure}${input.partial ?? ''}`;
@@ -85,7 +90,7 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 		if (typeof figure === 'string') {
 			return undefined;
 		}
-		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return undefined;
 		}
@@ -99,7 +104,7 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IRenderFigureParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const input = options.input;
-		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`${refused} ${workspace}`);
 		}

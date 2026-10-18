@@ -13,7 +13,7 @@ import { DraftFinding } from '../common/drafting/finding';
 import { DRAFTING_FILE_NAMES } from '../common/drafting/folderContract';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
-import { DraftingWorkspace, findingsSummary, textResult } from './draftingWorkspace';
+import { DraftingEditors, DraftingWorkspace, findingsSummary, textResult, vscodeEditors } from './draftingWorkspace';
 
 /** One item of the model's advisory review. */
 interface IAdvisoryItem {
@@ -48,12 +48,17 @@ export class ValidateDraftTool implements ICopilotTool<IValidateDraftParams> {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) { }
 
+	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
+	protected editors(): DraftingEditors {
+		return vscodeEditors;
+	}
+
 	prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IValidateDraftParams>, _token: CancellationToken): vscode.ProviderResult<vscode.PreparedToolInvocation> {
 		return { invocationMessage: l10n.t`Validating the draft of ${options.input.matter}` };
 	}
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IValidateDraftParams>, _token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
-		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService);
+		const workspace = await DraftingWorkspace.locate(options.input.matter, this.workspaceService, this.fileSystemService, this.instantiationService, this.editors());
 		if (typeof workspace === 'string') {
 			return textResult(`The draft was not validated. ${workspace}`);
 		}
