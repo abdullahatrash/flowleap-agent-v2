@@ -34,6 +34,7 @@ import { PowerStateLogger } from '../../power/vscode-node/powerStateLogger';
 import { DebugCommandsContribution } from '../../prompt/vscode-node/debugCommands';
 import { PromptFileContextContribution } from '../../promptFileContext/vscode-node/promptFileContextService';
 import { SettingsSchemaFeature } from '../../settingsSchema/vscode-node/settingsSchemaFeature';
+import { DraftingGateContribution } from '../../tools/vscode-node/draftingGateContribution';
 import { ToolsContribution } from '../../tools/vscode-node/tools';
 import { OTelChatDebugLogProviderContribution } from '../../trajectory/vscode-node/otelChatDebugLogProvider';
 import vscodeContributions from '../vscode/contributions';
@@ -52,6 +53,7 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(ConversationFeature),
 	asContributionFactory(AuthenticationContrib),
 	asContributionFactory(PatentAIContribution),
+	asContributionFactory(DraftingGateContribution),
 	chatBlockLanguageContribution,
 	asContributionFactory(LoggingActionsContrib),
 	asContributionFactory(FetcherTelemetryContribution),

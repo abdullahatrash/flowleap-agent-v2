@@ -107,7 +107,7 @@ function lineList(lines: readonly number[]): string {
 }
 
 /** The 1-based line of a frontmatter field, or `undefined` when the frontmatter has no such field. */
-function fieldLine(text: string, field: string): number | undefined {
+export function fieldLine(text: string, field: string): number | undefined {
 	const { bodyStartLine } = parseDraftingFrontmatter(text);
 	const lines = text.replace(/\r\n/g, '\n').split('\n').slice(0, bodyStartLine - 1);
 	const index = lines.findIndex(content => new RegExp(`^${field}\\s*:`).test(content));

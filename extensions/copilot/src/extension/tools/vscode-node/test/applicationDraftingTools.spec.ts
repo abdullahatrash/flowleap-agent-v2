@@ -24,6 +24,7 @@ import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vsco
 import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
 import { ExportDraftDocxTool } from '../exportDraftDocxTool';
 import { StartApplicationDraftTool } from '../startApplicationDraftTool';
+import { draftingGateEdit } from '../draftingGateLens';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
 import { parseDraftingFrontmatter } from '../../common/drafting/frontmatter';
@@ -293,6 +294,21 @@ describe('start_application_draft', () => {
 			forgot: { result: 'Drafting did not start', claims: '\napproved: false\n', approvalCleared: true },
 			reapproved: { result: 'Drafting started for matter "hinge"', claims: '\napproved: true\napprovedHash: <sha>\n', approvalCleared: true },
 			untouched: { result: 'Drafting started for matter "hinge"', claims: '\napproved: true\napprovedHash: <sha>\n', approvalCleared: false },
+		});
+	});
+
+	it('a click on "Approve Claims" sets the flag, and the help line stays after start_application_draft adds approvedHash', async () => {
+		const help = '# Review, then change false to true below, or click the action at the top.';
+		const run = setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false').replace('approved: false', `${help}\napproved: false`) });
+		const before = await run.read('drafting/hinge/claims.md');
+		const [[, [{ range, newText }]]] = draftingGateEdit({ uri: URI.file(`${root}/claims.md`), getText: () => before })!.entries();
+		const lines = before.split('\n');
+		lines[range.start.line] = newText;
+		run.write('drafting/hinge/claims.md', lines.join('\n'));
+		const result = await run.tools.start();
+		expect({ result: result.split('.')[0], claims: frontmatterOf(await run.read('drafting/hinge/claims.md')) }).toEqual({
+			result: 'Drafting started for matter "hinge"',
+			claims: `\n${help}\napproved: true\napprovedHash: <sha>\n`,
 		});
 	});
 

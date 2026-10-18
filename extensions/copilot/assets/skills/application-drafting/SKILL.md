@@ -44,7 +44,10 @@ Build the Feature List and the figures list from the disclosure, or from the
 invention record of the **invention-disclosure** skill.
 
 1. Write `feature-list.md` with frontmatter `office` (`US` or `EPO`; ask the
-   attorney when it is not stated) and `confirmed: false`. One row per
+   attorney when it is not stated) and `confirmed: false`. Put this comment
+   line directly above `confirmed: false`:
+   `# Review, then change false to true below, or click the action at the top.`
+   One row per
    element, embodiment and alternative the disclosure states, each with an ID
    (`F1`, `F2`, ...) and the disclosure span it comes from. Mark each example
    as working (the inventor ran it) or prophetic.
@@ -63,7 +66,9 @@ Intake gate.
 
 Hand the confirmed Feature List and the prior-art results to the
 **claim-drafting** skill. Save its claim set as `claims.md` with frontmatter
-`approved: false`. Stop at the Claims gate. When the claims change after
+`approved: false`, and put the same comment line directly above it:
+`# Review, then change false to true below, or click the action at the top.`
+Stop at the Claims gate. When the claims change after
 approval, the attorney sets the flag again.
 
 ## Step 3: Plan, draft and integrate the specification

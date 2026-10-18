@@ -1,0 +1,104 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Drafting gate CodeLens > names the action at line 1, is inert on a set flag, and writes only the flag line 1`] = `
+[
+  {
+    "after": "---
+office: US
+# Review, then change false to true below, or click the action at the top.
+confirmed: true
+---
+| F1 | lever |
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/feature-list.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Confirm Feature List",
+      },
+    ],
+  },
+  {
+    "after": "---
+# Review, then change false to true below, or click the action at the top.
+approved: true
+---
+1. A hinge.
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/claims.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Approve Claims",
+      },
+    ],
+  },
+  {
+    "after": "---
+office: US
+approved: true
+---
+1. A hinge.
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/claims.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Approve Claims",
+      },
+    ],
+  },
+  {
+    "after": "---
+approved: true
+---
+1. A hinge.
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/claims.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Approve Claims",
+      },
+    ],
+  },
+  {
+    "after": undefined,
+    "lenses": [
+      {
+        "arguments": undefined,
+        "command": "",
+        "line": 0,
+        "title": "Claims approved",
+      },
+    ],
+  },
+  {
+    "after": undefined,
+    "lenses": [
+      {
+        "arguments": undefined,
+        "command": "",
+        "line": 0,
+        "title": "Feature List confirmed",
+      },
+    ],
+  },
+  {
+    "after": undefined,
+    "lenses": [],
+  },
+]
+`;
