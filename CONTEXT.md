@@ -373,11 +373,14 @@ The agent's turn after every save of an Invalidity Analysis: the receipt, then t
 the saved chart as numbered questions, each with the agent's recommended next step, then a wait
 for the expert. The open points are read from the record (rungs partly covered or not covered,
 independent-claim elements not found, cited documents outside the searched scope or published
-after the critical date, rows that rest on a drawing, searches that failed). The expert answers
-with numbers, "all", or a steer of their own, and the next Search Round runs on that answer
-(ADR 0016, amendment of 2026-10-17).
+after the critical date, rows that rest on a drawing, searches that failed). The questions are
+numbered as a reading aid; each shows its id in brackets. The expert answers with the ids (for
+example `rung-3`, `element-1.3`), "all", or a steer of their own, and the next Search Round runs
+on that answer, after the agent echoes the ids and their limitations in one line
+(ADR 0016, amendment of 2026-10-17; #745).
 _Avoid_: a question without a recommendation; a recommendation without a question; open points
-the model typed from its reading of the chart instead of the writer's list.
+the model typed from its reading of the chart instead of the writer's list; a round run on a
+bare-number answer (question numbers and claim numbers share the same integers: ask first).
 
 ## UPC practice
 

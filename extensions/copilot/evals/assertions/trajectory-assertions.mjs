@@ -593,10 +593,11 @@ const T12_POINT_TERMS = {
 	'rung-5': /drip|groove|return[\s-]?hole/i,
 };
 /**
- * The numbered open points the scripted expert answer of T12 picks ("Run 1 and 3. Do not run 2."
- * in trajectory-cases.yaml). Change both together.
+ * The open-point ids the scripted expert answer of T12 picks ("Run rung-3 and rung-5. Do not run
+ * rung-4." in trajectory-cases.yaml). The answer names ids, not question numbers (#745). Change both
+ * together.
  */
-const T12_CHOSEN_NUMBERS = [1, 3];
+const T12_CHOSEN_IDS = ['rung-3', 'rung-5'];
 /** Tools a Search Round query runs through: the ledger-recorded tools plus NPL, academic and web search. */
 const ROUND_SEARCH_TOOLS = ['search_patents', 'search_register', 'patstat_query', 'patent_api_request', 'fetch_webpage', 'web_search', 'search_npl', 'search_academic'];
 
@@ -668,19 +669,15 @@ function t12Turns(traj) {
 }
 
 /**
- * The open points of the last turn-0 receipt, and the ids the expert chose by number, read from the
- * Round Report the model ended turn 0 with (the first open-point id on each chosen numbered item).
+ * The open points of the last turn-0 receipt, and the ids the expert chose: the scripted answer names
+ * ids, so a chosen id counts only when that receipt lists it as an open point.
  * @param {Trajectory} traj
  */
 function t12Choice(traj) {
 	const { first } = t12Turns(traj);
 	const last = first.saves.length ? first.calls[first.saves[first.saves.length - 1]] : undefined;
 	const open = last ? receiptOpenPoints(last.resultBody) : [];
-	const items = numberedItems(traj.turnTexts?.[0] ?? '');
-	const chosen = T12_CHOSEN_NUMBERS.map(number => {
-		const item = items.find(entry => entry.number === number);
-		return item ? open.find(id => namesPoint(item.text.split('\n')[0], id)) ?? open.find(id => namesPoint(item.text, id)) : undefined;
-	});
+	const chosen = T12_CHOSEN_IDS.map(id => open.includes(id) ? id : undefined);
 	return { open, chosen };
 }
 
@@ -809,7 +806,7 @@ export const cases = {
 		const report = traj.turnTexts?.[0] ?? '';
 		const items = numberedItems(report);
 		return open.length > 0
-			&& /Reply with the numbers to run/i.test(report)
+			&& /Reply with the ids to run/i.test(report)
 			&& open.every(id => items.some(item => namesPoint(item.text, id) && /recommend/i.test(item.text)));
 	},
 	/**

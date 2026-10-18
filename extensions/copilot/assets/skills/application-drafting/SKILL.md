@@ -49,7 +49,10 @@ invention record of the **invention-disclosure** skill.
    (`F1`, `F2`, ...) and the disclosure span it comes from. Mark each example
    as working (the inventor ran it) or prophetic.
 2. Write `figures.md`: a heading per figure the user supplied, then one list
-   item per part, `- 12: housing`, one numeral per part across all figures.
+   item per part, `- 12: housing [F3]`, one numeral per part across all
+   figures. Put the Feature List rows the part shows in brackets. A part that
+   shows no row has no brackets. The claimed-feature coverage check
+   (37 CFR 1.83(a)) in Step 4 reads these links. Without them it is skipped.
    Leave `pageSize` out of the frontmatter: the drawings then use the page of
    the office's export (letter for US, A4 for EPO), one page size per
    application.

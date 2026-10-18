@@ -88,9 +88,11 @@ The user is an expert. After every save, the expert decides what the next Search
 
 1. **Save** via `write_patent_results` (`template: 'invalidity-claim-chart'`). Save it **structured**: leave `content` empty and supply the Phase 4 rows, so the writer validates the quotes, renders the chart and writes the evidence companion.
 2. **Read the receipt**. The writer computes the open points from the record and prints one line each: `Open point [rung-3]: …`. You do not choose them, and you do not leave one out.
-3. **Write the Round Report**: the receipt in one or two sentences; then each open point as a numbered question, in receipt order, with its id in brackets and your recommended next step; then the line "Reply with the numbers to run, 'all', or your own steer." Then **end the turn**. Do not search and do not save again before the expert answers. If the receipt says "Open points: none.", go to Phase 5.
-4. **On the expert's answer**, run one **Search Round** aimed only at the points the expert chose, record it in `rounds` with `answers` (the ids of those points), and go back to step 1. The writer refuses a new round whose `answers` name no open point of the previous receipt, or whose queries all ran before the previous save.
-5. **Stop when the expert says so.** A rung still not covered after a round is a complete result.
+3. **Write the Round Report**: the receipt in one or two sentences; then each open point as a numbered question, in receipt order, with its id in brackets and your recommended next step; then the line "Reply with the ids to run (for example rung-3, element-1.3), 'all', or your own steer." Then **end the turn**. Do not search and do not save again before the expert answers. If the receipt says "Open points: none.", go to Phase 5. The question number is a reading aid. The id is the answer key.
+4. **Read the expert's answer as ids.** If the expert answers with bare numbers (for example "2, 6"), do not run a round. Question numbers and claim numbers share the same small integers, and a rung is named by a claim number. Ask one short question: "Do you mean the question numbers or the claim numbers?" Wait for the confirmation.
+5. **Echo the mapping** before any search, in one line: "Running: [rung-3] four-drum alternating rotation; [element-1.3] deposit region of the inner pair." A wrong reading is then visible before the round costs anything.
+6. **Run one Search Round** aimed only at the points the expert chose, record it in `rounds` with `answers` (the ids of those points), and go back to step 1. The writer refuses a new round whose `answers` name no open point of the previous receipt, or whose queries all ran before the previous save.
+7. **Stop when the expert says so.** A rung still not covered after a round is a complete result.
 
 The jurisdiction rule does not change: search both offices first and ask about scope in the Round Report, never before the first search.
 
