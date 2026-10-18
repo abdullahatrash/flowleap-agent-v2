@@ -116,7 +116,36 @@ const bareIntroducers = new Set(['comprising', 'comprises', 'comprise', 'contain
 const quantifiers = new Set(['at', 'least', 'most', 'one', 'or', 'more', 'no', 'than', 'plurality', 'of', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'several', 'multiple']);
 
 /** Words that end a claim term phrase: connectors, prepositions, verbs of being and having, articles. */
-const termStops = new Set(['and', 'or', 'but', 'that', 'which', 'wherein', 'whereby', 'where', 'when', 'while', 'whose', 'so', 'as', 'than', 'configured', 'adapted', 'arranged', 'suitable', 'for', 'to', 'of', 'in', 'on', 'at', 'by', 'with', 'without', 'from', 'into', 'onto', 'below', 'above', 'between', 'within', 'through', 'over', 'under', 'via', 'per', 'based', 'having', 'has', 'have', 'had', 'comprising', 'comprises', 'comprise', 'including', 'includes', 'containing', 'contains', 'consisting', 'consists', 'is', 'are', 'was', 'were', 'be', 'being', 'been', 'a', 'an', 'the', 'said', 'each', 'claim', 'claims']);
+const termStops = new Set(['and', 'or', 'but', 'that', 'which', 'wherein', 'whereby', 'where', 'when', 'while', 'whose', 'so', 'as', 'than', 'configured', 'adapted', 'arranged', 'suitable', 'for', 'to', 'of', 'in', 'on', 'at', 'by', 'with', 'without', 'from', 'into', 'onto', 'below', 'above', 'between', 'within', 'through', 'over', 'under', 'via', 'per', 'toward', 'towards', 'against', 'about', 'around', 'along', 'across', 'upon', 'during', 'after', 'before', 'until', 'since', 'beside', 'behind', 'beyond', 'based', 'having', 'has', 'have', 'had', 'comprising', 'comprises', 'comprise', 'including', 'includes', 'containing', 'contains', 'consisting', 'consists', 'is', 'are', 'was', 'were', 'be', 'being', 'been', 'a', 'an', 'the', 'said', 'each', 'claim', 'claims']);
+
+/**
+ * Adverbs and particles that end a claim term phrase after its first word: "the cap away from",
+ * "the locking pin out of", "the spring then lifting". As the first word they stay: "an open position".
+ */
+const phraseBreaks = new Set(['away', 'out', 'up', 'down', 'off', 'apart', 'together', 'then', 'thereby', 'therein', 'thereto', 'therefrom', 'open', 'closed']);
+
+/** Nouns in -ing that are claim terms, not participles: "the leaf spring", "the motor housing". */
+const ingNouns = new Set(['spring', 'string', 'ring', 'thing', 'wing', 'swing', 'sling', 'bearing', 'housing', 'fitting', 'opening', 'coating', 'casing', 'bushing', 'coupling', 'lining', 'tubing', 'wiring', 'packing', 'padding', 'winding', 'molding', 'moulding', 'fastening', 'ceiling', 'building', 'railing', 'shielding']);
+
+/** Irregular participles in -en or -n: "the shaft driven by", "the seal worn". A general -en rule would also stop at nouns (`screen`, `oxygen`). */
+const enParticiples = new Set(['driven', 'broken', 'woven', 'given', 'taken', 'chosen', 'hidden', 'frozen', 'shaken', 'written', 'swollen', 'beaten', 'bitten', 'fallen', 'forgotten', 'proven', 'risen', 'stolen', 'sworn', 'torn', 'worn']);
+
+/**
+ * True for a participle: a word in -ing, -ed or an irregular -en or -n form. Only a word after the first
+ * word of a phrase (modifiers and quantifiers not counted) is tested, so "the locking pin" and "the threaded rod" stay whole terms.
+ * Accepted false negative: a noun in -ing or -ed after the first word also ends the phrase, so
+ * "the spring loading mechanism" reads as "the spring" and a missing "loading mechanism" is not found.
+ * Short words and -eed words are kept (`bed`, `led`, `speed`), and so are the nouns in `ingNouns`.
+ */
+function isParticiple(word: string): boolean {
+	if (/ing$/.test(word)) {
+		return !ingNouns.has(word);
+	}
+	if (/ed$/.test(word)) {
+		return word.length > 4 && !/eed$/.test(word);
+	}
+	return enParticiples.has(word);
+}
 
 interface ClaimToken {
 	readonly word: string;
@@ -130,15 +159,22 @@ function tokenize(text: string): ClaimToken[] {
 
 const isWord = (token: ClaimToken | undefined) => !!token && /^[a-zµ]/.test(token.word);
 
-/** The noun phrase from token `start`: quantifiers skipped, up to the next stop word, verb, number or punctuation. */
+/**
+ * The noun phrase from token `start`: quantifiers skipped, up to the next stop word, number or
+ * punctuation, a verb after the first word, or an adverb, particle or participle after the
+ * first word that is not a modifier or quantifier (`first`, `upper`, `two`).
+ */
 function readPhrase(tokens: readonly ClaimToken[], start: number): { readonly words: string[]; readonly end: number } {
 	let index = start;
 	while (isWord(tokens[index]) && quantifiers.has(tokens[index].word) && isWord(tokens[index + 1])) {
 		index++;
 	}
 	const words: string[] = [];
-	while (isWord(tokens[index]) && !termStops.has(tokens[index].word) && !(words.length && isVerb(tokens, index))) {
+	// A modifier or quantifier is not the first word of the term: "the first locking pin" keeps "locking".
+	let hasNoun = false;
+	while (isWord(tokens[index]) && !termStops.has(tokens[index].word) && !(words.length && isVerb(tokens, index)) && !(hasNoun && (phraseBreaks.has(tokens[index].word) || isParticiple(tokens[index].word)))) {
 		words.push(tokens[index].word);
+		hasNoun ||= !termModifiers.has(tokens[index].word) && !quantifiers.has(tokens[index].word);
 		index++;
 	}
 	return { words, end: index };
