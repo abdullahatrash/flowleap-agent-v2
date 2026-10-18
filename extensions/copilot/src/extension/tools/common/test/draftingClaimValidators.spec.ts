@@ -148,6 +148,18 @@ describe('Application Drafting claim validators', () => {
 		]);
 	});
 
+	it('antecedent basis: a modifier is not the first word, so a participle after it stays in the term', () => {
+		expect(checkAntecedentBasis(claims(
+			'1. A tool comprising a first mounting hole and a first sealing ring.',
+			'2. The tool of claim 1, wherein the first locking pin and the second sealing ring are steel.',
+			'3. A latch comprising a base and a first locking pin.',
+			'4. The latch of claim 3, wherein the first locking pin pivoting on the base is steel.',
+		))).toEqual([
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the first locking pin" has no antecedent basis ("a first locking pin") earlier in claim 2 or in the claims it depends on.' },
+			{ severity: 'Error', rule: 'antecedent-basis', file: 'claims.md', line: 2, claim: 2, message: 'Claim 2: "the second sealing ring" has no antecedent basis ("a second sealing ring") earlier in claim 2 or in the claims it depends on.' },
+		]);
+	});
+
 	it('claim terms to plan: the terms each claim introduces, in order, and the independent claims a dependent claim depends on through a chain', () => {
 		expect(claimTermsToPlan(claims(
 			'1. A cable clamp comprising a channel and a damping insert.',
