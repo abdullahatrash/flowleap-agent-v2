@@ -643,7 +643,7 @@ describe('T12 Round Report: the expert steers each Search Round', () => {
 		'2. **[rung-4]** Claim 4 (vent hole) is not found.',
 		'   Recommended next step: search vented sliding lids.',
 		'3. **[rung-5]** Claim 5 (drip groove) is not found. Recommended: search drip return grooves.',
-		'Reply with the numbers to run, \'all\', or your own steer.',
+		'Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer.',
 	].join('\n');
 	const good = [search(0, 'ti=lid and ab=slider'), save(0), search(1, 'ab=(magnet) and ab=lid'), search(1, 'ab=(drip groove) and ab=lid'), save(1, [round(['rung-3', 'rung-5'], ['ab=(magnet) and ab=lid', 'ab=(drip groove) and ab=lid'])])];
 	const all = (calls: TurnCall[], first = report) => {
@@ -655,6 +655,8 @@ describe('T12 Round Report: the expert steers each Search Round', () => {
 		};
 	};
 
+	// The expert answers with ids (#745), so the chosen round is graded from the receipt and the round
+	// alone: a missing Round Report fails `report`, not `chosen`.
 	it('grades the Round Report, the wait and the chosen round, and each way a run can miss them', () => {
 		expect({
 			good: all(good),
@@ -667,7 +669,7 @@ describe('T12 Round Report: the expert steers each Search Round', () => {
 			offTargetQuery: all([search(0, 'ti=lid'), save(0), search(1, 'ab=magnet'), save(1, [round(['rung-3', 'rung-5'], ['ab=magnet', 'ab=drip', 'ab=(vent hole)'])])]),
 		}).toEqual({
 			good: { report: true, afterAnswer: true, chosen: true },
-			noReport: { report: false, afterAnswer: true, chosen: false },
+			noReport: { report: false, afterAnswer: true, chosen: true },
 			missingPoint: { report: false, afterAnswer: true, chosen: true },
 			noRecommendation: { report: false, afterAnswer: true, chosen: true },
 			roundBeforeAnswer: { report: true, afterAnswer: false, chosen: false },
@@ -689,7 +691,7 @@ describe('T12 Round Report: the expert steers each Search Round', () => {
 		}).toEqual({
 			claims: ['1. ', '(a) ', '(b) ', '(c) ', '2. ', '3. ', '4. ', '5. '],
 			first: [
-				'Open points: 3. Critical date: 2018-03-15. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the numbers to run, \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
+				'Open points: 3. Critical date: 2018-03-15. Write the Round Report now: this receipt, then one numbered question per open point in this order, each with its id and your recommended next step, then the line "Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer." Then end the turn; run a Search Round only on the expert\'s answer.',
 				'Open point [rung-3]: Claim 3 (fallback of claim 1) is not found in the cited art: Claim 3 (depends on 1) — added limitation',
 				'Open point [rung-4]: Claim 4 (fallback of claim 1) is not found in the cited art: Claim 4 (depends on 1) — added limitation',
 				'Open point [rung-5]: Claim 5 (fallback of claim 1) is partly disclosed in the cited art: Claim 5 (depends on 1) — added limitation',

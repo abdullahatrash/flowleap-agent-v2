@@ -58,8 +58,12 @@ const openPointLine = /^Open point \[(?<id>[^\]\s]+)\]: /;
 /** The words that mark the Round Report nudge in a round's recorded hook context. */
 const roundReportNudgeMarker = 'this turn ends without a Round Report';
 
-/** The prompt line that closes every Round Report (ADR 0016 amendment, decision 7). */
-export const ROUND_REPORT_PROMPT = 'Reply with the numbers to run, \'all\', or your own steer.';
+/**
+ * The prompt line that closes every Round Report (ADR 0016 amendment, decision 7). It asks for the
+ * open-point ids, not the question numbers: question numbers and claim numbers share the same small
+ * integers, and a rung is named by a claim number (#745).
+ */
+export const ROUND_REPORT_PROMPT = 'Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer.';
 
 /**
  * Bind the report and its evidence revision to the bytes the structured writer actually saved. An

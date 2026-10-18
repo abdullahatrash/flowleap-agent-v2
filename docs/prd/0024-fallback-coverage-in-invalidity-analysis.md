@@ -118,9 +118,13 @@ the invalidity skill's Phase 4b.
   `criticalDate` on the chart; the free-text basis stays), rows that rest on a drawing, searches
   that failed. One line each, stable order, so the skill can number them.
 - The skill's Phase 4b becomes: save, then write the Round Report (receipt, the open points as
-  numbered questions, a recommended next step for each, a one-line prompt "Reply with the numbers
-  to run, 'all', or your own steer"), then end the turn. A Search Round runs only on the expert's
-  answer and lists in `rounds[].answers` the open points it answers.
+  numbered questions that show their ids, a recommended next step for each, a one-line prompt
+  "Reply with the ids to run (for example rung-3, element-1.3), 'all', or your own steer"), then
+  end the turn. A Search Round runs only on the expert's answer and lists in `rounds[].answers`
+  the open points it answers. Follow-up #745 (2026-10-18): the prompt asks for ids because
+  question numbers and claim numbers share the same small integers; before the first search of a
+  round the agent echoes the ids it read with their limitations in one line, and a bare-number
+  answer gets one short question (question numbers or claim numbers?) instead of a round.
 - Completion guard, invalidity only: when the latest receipt lists open points and the agent's
   turn ended without a Round Report (no numbered question that names an open point), nudge the
   Round Report once. The guard never nudges a round.

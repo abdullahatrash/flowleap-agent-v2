@@ -335,9 +335,10 @@
 # 5 (drip groove), so the first save leaves those rungs open. The agent must end its first turn with
 # a Round Report (every open point as a numbered question with its id and a recommendation, then
 # the closing prompt line) and run no Search Round. The scripted expert answer (`followUpPrompt`)
-# picks open points 1 and 3 by number; the round of the second turn must name exactly those two ids
-# in `answers` and aim its queries at their limitations only. `T12_CHOSEN_NUMBERS` in
-# trajectory-assertions.mjs mirrors the answer: change both together.
+# picks open points rung-3 and rung-5 by id (the Round Report asks for ids, not question numbers,
+# #745); the round of the second turn must name exactly those two ids in `answers` and aim its
+# queries at their limitations only. `T12_CHOSEN_IDS` in trajectory-assertions.mjs mirrors the
+# answer: change both together.
 #
 # `skill` replays the invalidity-analysis skill run (SKILL.md and its references, Phase 4b
 # included). `completionGuard` runs the extension's real completion guard whenever the model stops,
@@ -350,7 +351,7 @@
 - description: "T12 — invalidity chart leaves rungs 3, 4 and 5 open: end the turn with a Round Report, then run the round on the two points the expert picks"
   vars:
     prompt: "Build an invalidity chart for EP3654321B1, claims 1 to 5, against EP and WO prior art published before its 2018-03-15 priority date, and save it."
-    followUpPrompt: "Run 1 and 3. Do not run 2."
+    followUpPrompt: "Run rung-3 and rung-5. Do not run rung-4."
     mockScript: t12-round-report
     skill: invalidity-analysis
     completionGuard: true

@@ -93,7 +93,12 @@ expert, not a one-shot deliverable.
 
 7. **After every save the agent writes a Round Report and waits.** The Round Report is the
    receipt plus the open points of the saved chart, each as a numbered question with the agent's
-   recommended next step, so the expert can answer with numbers, "all", or a steer of their own.
+   recommended next step, so the expert can answer with the ids of the open points (for example
+   `rung-3`, `element-1.3`), "all", or a steer of their own. The question number is a reading
+   aid, not the answer key: question numbers and claim numbers share the same small integers, and
+   a rung is named by a claim number. So the agent echoes the ids it read, each with its
+   limitation, in one line before the first search of a round, and asks which the expert means
+   when an answer gives bare numbers (#745, 2026-10-18).
    The open points come from the record, not from the model: rungs `partial` or `unresolved`,
    independent-claim elements `unresolved`, cited documents outside the searched scope, cited
    documents published after the critical date, rows that rest on a drawing, searches that
