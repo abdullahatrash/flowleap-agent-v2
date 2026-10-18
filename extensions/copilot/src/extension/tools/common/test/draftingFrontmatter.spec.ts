@@ -47,4 +47,16 @@ describe('Application Drafting frontmatter', () => {
 			reparsed: { office: 'US', approved: true, version: 3 },
 		});
 	});
+
+	it('keeps the comment lines of the existing block above their field, and a comment of a removed field after the fields', () => {
+		const help = '# Review, then change false to true below, or click the action at the top.';
+		const text = `---\n${help}\napproved: true\n# old hash\napprovedHash: abc\n---\n1. A device.\n`;
+		const added = writeDraftingFrontmatter({ office: 'US', approved: true, approvedHash: 'def' }, text);
+		const removed = writeDraftingFrontmatter({ approved: false }, text);
+		expect({ added, removed, reparsed: parseDraftingFrontmatter(added).fields }).toEqual({
+			added: `---\noffice: US\n${help}\napproved: true\n# old hash\napprovedHash: def\n---\n1. A device.\n`,
+			removed: `---\n${help}\napproved: false\n# old hash\n---\n1. A device.\n`,
+			reparsed: { office: 'US', approved: true, approvedHash: 'def' },
+		});
+	});
 });
