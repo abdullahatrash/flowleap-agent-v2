@@ -12,7 +12,7 @@ import * as path from '../../../util/vs/base/common/path';
 import { isWindows } from '../../../util/vs/base/common/platform';
 import * as resources from '../../../util/vs/base/common/resources';
 import { isUriComponents } from '../../../util/vs/base/common/uri';
-import { Uri } from '../../../vscodeTypes';
+import { Location, Position, Range, Uri } from '../../../vscodeTypes';
 import { LinkifiedPart, LinkifiedText, LinkifyLocationAnchor, coalesceParts, singleMatch } from './linkifiedText';
 import { IContributedLinkifier, LinkifierContext } from './linkifyService';
 import { IStatCache } from './statCache';
@@ -28,11 +28,15 @@ const pathMatchRe = new RegExp(
 	].join('|'),
 	'gu');
 
+/** An inline code path with a 1-based line after a colon, e.g. `drafting/x/claims.md:3`. */
+const lineSuffixRe = /^(?<path>[^:]+):(?<line>[1-9]\d*)$/;
+
 /**
  * Linkifies file paths in responses. This includes:
  *
  * ```
  * `file.md`
+ * `file.md:3` (opens the file at line 3)
  * foo.ts
  * ```
  */
@@ -63,10 +67,15 @@ export class FilePathLinkifier implements IContributedLinkifier {
 
 			const matched = match[0];
 
-			const pathText = match.groups?.['inlineCodePath'] ?? match.groups?.['plainTextPath'] ?? '';
+			const inlineCodePath = match.groups?.['inlineCodePath'];
+			const pathText = inlineCodePath ?? match.groups?.['plainTextPath'] ?? '';
 
-			parts.push(this.resolvePathText(pathText, context)
-				.then(uri => {
+			parts.push(this.resolveLineLocation(inlineCodePath, context)
+				.then(async anchor => {
+					if (anchor) {
+						return anchor;
+					}
+					const uri = await this.resolvePathText(pathText, context);
 					if (uri) {
 						return new LinkifyLocationAnchor(uri);
 					}
@@ -82,6 +91,23 @@ export class FilePathLinkifier implements IContributedLinkifier {
 		}
 
 		return { parts: coalesceParts(await Promise.all(parts)) };
+	}
+
+	/**
+	 * The anchor of an inline code path with a `:<line>` suffix, which opens the file at that line;
+	 * `undefined` when the text has no such suffix or the path is not a file.
+	 */
+	private async resolveLineLocation(inlineCodePath: string | undefined, context: LinkifierContext): Promise<LinkifyLocationAnchor | undefined> {
+		const groups = inlineCodePath ? lineSuffixRe.exec(inlineCodePath)?.groups : undefined;
+		if (!inlineCodePath || !groups) {
+			return undefined;
+		}
+		const uri = await this.resolvePathText(groups.path, context);
+		if (!uri || uri.path.endsWith('/')) {
+			return undefined;
+		}
+		const position = new Position(Number(groups.line) - 1, 0);
+		return new LinkifyLocationAnchor(new Location(uri, new Range(position, position)), inlineCodePath);
 	}
 
 	private async resolvePathText(pathText: string, context: LinkifierContext): Promise<Uri | undefined> {

@@ -1,0 +1,305 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Drafting gate CodeLens > names the action at line 1, is inert on a set flag, and writes only the flag line 1`] = `
+[
+  {
+    "after": "---
+office: US
+# Review, then change false to true below, or click the action at the top.
+confirmed: true
+---
+| F1 | lever |
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/feature-list.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Confirm Feature List",
+      },
+    ],
+  },
+  {
+    "after": "---
+# Review, then change false to true below, or click the action at the top.
+approved: true
+---
+1. A hinge.
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/claims.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Approve Claims",
+      },
+    ],
+  },
+  {
+    "after": "---
+office: US
+approved: true
+---
+1. A hinge.
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/claims.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Approve Claims",
+      },
+    ],
+  },
+  {
+    "after": "---
+approved: true
+---
+1. A hinge.
+",
+    "lenses": [
+      {
+        "arguments": [
+          "file:///workspace/drafting/hinge/claims.md",
+        ],
+        "command": "flowleap.drafting.setGateFlag",
+        "line": 0,
+        "title": "Approve Claims",
+      },
+    ],
+  },
+  {
+    "after": undefined,
+    "lenses": [
+      {
+        "arguments": undefined,
+        "command": "",
+        "line": 0,
+        "title": "Claims approved",
+      },
+    ],
+  },
+  {
+    "after": undefined,
+    "lenses": [
+      {
+        "arguments": undefined,
+        "command": "",
+        "line": 0,
+        "title": "Feature List confirmed",
+      },
+    ],
+  },
+  {
+    "after": undefined,
+    "lenses": [],
+  },
+]
+`;
+
+exports[`Drafting waiver CodeLens > shows "Waive…" on each unwaived Error and "Waive all" on the first of a rule with more than two; writes the reason under each item, nothing on cancel or an empty reason 1`] = `
+{
+  "bulk": "# Findings
+
+Errors and Inventor Questions block export until they are resolved or waived. To waive one, add a line \`  - Waived: <reason>\` under it. Notes never block. Advisory items come from the model review; they are advice, not a pass.
+
+## Errors
+
+- \`antecedent-basis\` (claims.md, line 3, claim 2): Claim 2: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 2 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 4, claim 3): Claim 3: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 3 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 5, claim 4): Claim 4: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 4 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 6, claim 5): Claim 5: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 5 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 7, claim 6): Claim 6: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 6 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 8, claim 7): Claim 7: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 7 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 9, claim 8): Claim 8: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 8 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 10, claim 9): Claim 9: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 9 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 11, claim 10): Claim 10: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 10 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 12, claim 11): Claim 11: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 11 or in the claims it depends on.
+  - Waived: False positive of #747: "a clamp body" is in claim 1.
+- \`defined-term\` (draft-application.md, line 12): Line 12 writes "clamp-body"; the defined term is "clamp body".
+  - Note: client spelling?
+  - Waived:
+- \`source-marker\` (draft-application.md, line 20): The paragraph at line 20 has no source marker.
+  - Waived: Boilerplate.
+
+## Inventor Questions
+
+- \`inventor-question\` (draft-application.md, line 40): Inventor Question IQ-1 is open: What is the clamp made of?
+
+## Notes
+
+- \`claim-count\` (claims.md): 11 claims in total.
+
+## Advisory
+
+None.
+",
+  "cancelled": undefined,
+  "empty": undefined,
+  "gateLensesOnFindings": [],
+  "lenses": [
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        7,
+      ],
+      "line": 7,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+      ],
+      "line": 7,
+      "title": "Waive all 10 Errors of this rule",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        8,
+      ],
+      "line": 8,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        9,
+      ],
+      "line": 9,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        10,
+      ],
+      "line": 10,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        11,
+      ],
+      "line": 11,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        12,
+      ],
+      "line": 12,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        13,
+      ],
+      "line": 13,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        14,
+      ],
+      "line": 14,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        15,
+      ],
+      "line": 15,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        16,
+      ],
+      "line": 16,
+      "title": "Waive…",
+    },
+    {
+      "command": "flowleap.drafting.waiveFindings",
+      "fileLines": [
+        17,
+      ],
+      "line": 17,
+      "title": "Waive…",
+    },
+  ],
+  "prompts": [
+    "Reason to waive 10 Errors. The same reason is written under each item in findings.md.",
+    "Reason to waive the "defined-term" Error. The reason is written under the item in findings.md.",
+    "Reason to waive the "defined-term" Error. The reason is written under the item in findings.md.",
+    "Reason to waive the "defined-term" Error. The reason is written under the item in findings.md.",
+  ],
+  "single": "# Findings
+
+Errors and Inventor Questions block export until they are resolved or waived. To waive one, add a line \`  - Waived: <reason>\` under it. Notes never block. Advisory items come from the model review; they are advice, not a pass.
+
+## Errors
+
+- \`antecedent-basis\` (claims.md, line 3, claim 2): Claim 2: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 2 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 4, claim 3): Claim 3: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 3 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 5, claim 4): Claim 4: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 4 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 6, claim 5): Claim 5: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 5 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 7, claim 6): Claim 6: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 6 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 8, claim 7): Claim 7: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 7 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 9, claim 8): Claim 8: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 8 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 10, claim 9): Claim 9: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 9 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 11, claim 10): Claim 10: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 10 or in the claims it depends on.
+- \`antecedent-basis\` (claims.md, line 12, claim 11): Claim 11: "the clamp body" has no antecedent basis ("a clamp body") earlier in claim 11 or in the claims it depends on.
+- \`defined-term\` (draft-application.md, line 12): Line 12 writes "clamp-body"; the defined term is "clamp body".
+  - Note: client spelling?
+  - Waived:
+  - Waived: Client spelling.
+- \`source-marker\` (draft-application.md, line 20): The paragraph at line 20 has no source marker.
+  - Waived: Boilerplate.
+
+## Inventor Questions
+
+- \`inventor-question\` (draft-application.md, line 40): Inventor Question IQ-1 is open: What is the clamp made of?
+
+## Notes
+
+- \`claim-count\` (claims.md): 11 claims in total.
+
+## Advisory
+
+None.
+",
+  "waivedItem": undefined,
+}
+`;

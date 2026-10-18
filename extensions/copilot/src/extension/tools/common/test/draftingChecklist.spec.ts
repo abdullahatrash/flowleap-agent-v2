@@ -66,9 +66,9 @@ describe('Application Drafting checklist', () => {
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
 			- [ ] 1. Confirm the Feature List: feature-list.md has no \`confirmed: true\`
-			      → Review feature-list.md, then on line 3 write:   confirmed: true
-			- [ ] 2. Approve the claims: claims.md has no \`approved\` flag
-			      → Review claims.md, then add to its frontmatter (between the \`---\` lines at the top):   approved: true
+			      → Review \`feature-list.md:3\`, then click **Confirm Feature List** at the top of the file, or change \`false\` to \`true\` on line 3.
+			- [ ] 2. Approve the claims: claims.md has no \`approved: true\`
+			      → Review \`claims.md:1\`, then click **Approve Claims** at the top of the file, or add the line \`approved: true\` under the \`---\` on line 1.
 			- [ ] 3. Write the outline: blocked by steps 1 and 2
 			- [ ] 3. Write the draft: blocked by steps 1 and 2
 			- [ ] 4. Fix or waive the Errors: blocked by step 3
@@ -234,6 +234,7 @@ describe('Application Drafting checklist', () => {
 		const base = { featureList: featureList(), claims: claims(), draftOutline: outline, draft: applied, findings: renderFindingsFile([]) };
 		expect({
 			claimsChanged: steps({ ...base, claimsChangedSinceApproval: true, exported: true }),
+			claimsChangedAction: readDraftingChecklist({ matter: 'hinge', findingsCurrent: true, exported: false, ...base, claimsChangedSinceApproval: true }).steps[1].actions,
 			draftStale: steps({ ...base, draftStale: true }),
 			exportedOlderDraft: steps({ ...base, exported: false }).at(-1),
 		}).toEqual({
@@ -246,6 +247,7 @@ describe('Application Drafting checklist', () => {
 				'5 x none open in draft-application.md',
 				'6   blocked by steps 2 and 3',
 			],
+			claimsChangedAction: ['→ Review `claims.md:2`: it changed after the approval on line 2. The next drafting step changes `true` to `false` there; then click **Approve Claims** at the top of the file, or change `false` to `true`.'],
 			draftStale: [
 				'1 x feature-list.md has `confirmed: true`',
 				'2 x claims.md has `approved: true`',

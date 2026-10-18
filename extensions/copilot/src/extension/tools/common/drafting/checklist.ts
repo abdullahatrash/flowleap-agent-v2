@@ -82,6 +82,23 @@ export interface DraftingChecklistStep {
 	readonly actions: readonly string[];
 	/** The open earlier steps this step waits for. */
 	readonly blockedBy: readonly number[];
+	/** For an open gate step: the edit that opens the gate, to name it with another path (see {@link gateActionText}). */
+	readonly gate?: DraftingGateEdit;
+}
+
+/**
+ * The one edit that opens a gate, for the attorney: change the value on a line to `true`, write
+ * `true` after an empty field, add the line, or add the three lines at the top of a file that has
+ * none.
+ */
+export interface DraftingGateEdit {
+	readonly flag: DraftingGateFlag;
+	/** The 1-based line to open the file at. */
+	readonly line: number;
+	/** `change`: the line has another value; `fill`: the line has no value; `add`: the line is missing; `block`: the top lines are missing. */
+	readonly kind: 'change' | 'fill' | 'add' | 'block';
+	/** The value written on the line now, for `change`. */
+	readonly value?: string;
 }
 
 /** One note of the checklist: a state that never blocks, with what to do about it. */
@@ -109,7 +126,7 @@ function lineList(lines: readonly number[]): string {
 }
 
 /** The 1-based line of a frontmatter field, or `undefined` when the frontmatter has no such field. */
-function fieldLine(text: string, field: string): number | undefined {
+export function fieldLine(text: string, field: string): number | undefined {
 	const { bodyStartLine } = parseDraftingFrontmatter(text);
 	const lines = text.replace(/\r\n/g, '\n').split('\n').slice(0, bodyStartLine - 1);
 	const index = lines.findIndex(content => new RegExp(`^${field}\\s*:`).test(content));
@@ -124,12 +141,53 @@ function done(number: number, title: string, detail: string): DraftingChecklistS
 	return { step: number, done: true, title, detail, actions: [], blockedBy: [] };
 }
 
-/** The open step of a gate flag the attorney sets: names the file, the line and the text. */
-function gateStep(number: number, title: string, file: string, text: string, flag: DraftingGateFlag, detail?: string): DraftingChecklistStep {
+/** The edit that opens the gate `flag` in a file with the text `text`. */
+export function gateEdit(text: string, flag: DraftingGateFlag): DraftingGateEdit {
 	const line = fieldLine(text, flag);
-	return line === undefined
-		? step(number, title, detail ?? `${file} has no \`${flag}\` flag`, [`→ Review ${file}, then add to its frontmatter (between the \`---\` lines at the top):   ${flag}: true`])
-		: step(number, title, detail ?? `${file} has no \`${flag}: true\``, [`→ Review ${file}, then on line ${line} write:   ${flag}: true`]);
+	if (line === undefined) {
+		return parseDraftingFrontmatter(text).bodyStartLine > 1 ? { flag, line: 1, kind: 'add' } : { flag, line: 1, kind: 'block' };
+	}
+	const content = text.replace(/\r\n/g, '\n').split('\n')[line - 1];
+	const value = /^[^:]*:\s*(?<value>.*?)\s*(?:\s#.*)?$/.exec(content)?.groups?.value ?? '';
+	return value ? { flag, line, kind: 'change', value } : { flag, line, kind: 'fill' };
+}
+
+/** The labels of the gate actions at the top of the gate files (the gate CodeLens). */
+const GATE_BUTTON: Record<DraftingGateFlag, string> = { confirmed: 'Confirm Feature List', approved: 'Approve Claims' };
+
+/**
+ * The sentence that tells the attorney how to open a gate: the file with its line as
+ * `path:<line>` (the chat opens the file at that line), the action at the top of the file, and the
+ * one word to change by hand, e.g. "Review `drafting/x/claims.md:3`, then click **Approve Claims**
+ * at the top of the file, or change `false` to `true` on line 3."
+ */
+export function gateActionText(path: string, edit: DraftingGateEdit): string {
+	if (edit.kind === 'change' && edit.value === 'true') {
+		// `true` on the line while the gate is open: the file changed after the approval, and the next drafting tool call writes `false`.
+		return `Review \`${path}:${edit.line}\`: it changed after the approval on line ${edit.line}. The next drafting step changes \`true\` to \`false\` there; then click **${GATE_BUTTON[edit.flag]}** at the top of the file, or change \`false\` to \`true\`.`;
+	}
+	const review = `Review \`${path}:${edit.line}\`, then click **${GATE_BUTTON[edit.flag]}** at the top of the file, or`;
+	switch (edit.kind) {
+		case 'change':
+			return `${review} change \`${edit.value}\` to \`true\` on line ${edit.line}.`;
+		case 'fill':
+			return `${review} write \`true\` after \`${edit.flag}:\` on line ${edit.line}.`;
+		case 'add':
+			return `${review} add the line \`${edit.flag}: true\` under the \`---\` on line 1.`;
+		case 'block':
+			return `${review} add three lines above line 1: \`---\`, then \`${edit.flag}: true\`, then \`---\`.`;
+	}
+}
+
+/** The open step of a gate the attorney opens: names the file, the line and the word to change. */
+function gateStep(number: number, title: string, file: string, text: string, flag: DraftingGateFlag, detail?: string): DraftingChecklistStep {
+	const edit = gateEdit(text, flag);
+	return { ...step(number, title, detail ?? `${file} has no \`${flag}: true\``, [`→ ${gateActionText(file, edit)}`]), gate: edit };
+}
+
+/** The sentence that tells the attorney to name the office in a file. */
+export function officeAction(path: string): string {
+	return `In \`${path}:1\`, add the line \`office: US\` or \`office: EPO\` under the \`---\` on line 1.`;
 }
 
 /** The numbers of the open steps, each once: step 3 has two lines. */
@@ -148,7 +206,7 @@ export function readDraftingChecklist(input: DraftingChecklistFiles): DraftingCh
 	} else if (readGateFlag(featureFields, 'confirmed') !== 'set') {
 		steps.push(gateStep(featureListStep, featureTitle, DRAFTING_FILE_NAMES.featureList, input.featureList, 'confirmed'));
 	} else if (!readOffice(featureFields)) {
-		steps.push(step(featureListStep, featureTitle, `${DRAFTING_FILE_NAMES.featureList} names no office`, [`→ Add to the frontmatter of ${DRAFTING_FILE_NAMES.featureList}:   office: US   (or   office: EPO)`]));
+		steps.push(step(featureListStep, featureTitle, `${DRAFTING_FILE_NAMES.featureList} names no office`, [`→ ${officeAction(DRAFTING_FILE_NAMES.featureList)}`]));
 	} else {
 		steps.push(done(featureListStep, 'Feature List confirmed', `${DRAFTING_FILE_NAMES.featureList} has \`confirmed: true\``));
 	}

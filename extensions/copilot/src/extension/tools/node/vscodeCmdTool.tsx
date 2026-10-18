@@ -11,6 +11,8 @@ import { IWorkbenchService } from '../../../platform/workbench/common/workbenchS
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart, LanguageModelToolResult, MarkdownString } from '../../../vscodeTypes';
 import { commandUri } from '../../linkify/common/commands';
+import { DRAFTING_WAIVE_COMMAND_ID } from '../common/drafting/findingsFile';
+import { DRAFTING_GATE_COMMAND_ID } from '../common/drafting/frontmatter';
 import { ToolName } from '../common/toolNames';
 import { ToolRegistry } from '../common/toolsRegistry';
 
@@ -121,6 +123,14 @@ class VSCodeCmdTool implements vscode.LanguageModelTool<IVSCodeCmdToolToolInput>
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IVSCodeCmdToolToolInput>, token: CancellationToken): Promise<vscode.LanguageModelToolResult> {
 		const command = options.input.commandId;
 		const args = options.input.args ?? [];
+
+		if (command === DRAFTING_GATE_COMMAND_ID) {
+			return new LanguageModelToolResult([new LanguageModelTextPart(`Command \`${options.input.name}\` writes a drafting gate flag. Only the attorney sets a gate flag: ask the attorney to click the action at the top of the file.`)]);
+		}
+
+		if (command === DRAFTING_WAIVE_COMMAND_ID) {
+			return new LanguageModelToolResult([new LanguageModelTextPart(`Command \`${options.input.name}\` writes a waiver into findings.md. Only the attorney waives a finding: ask the attorney to click "Waive…" above the item in findings.md.`)]);
+		}
 
 		if (!options.input.skipCheck) {
 			const allCommands = (await this._workbenchService.getAllCommands(/* filterByPreCondition */true));

@@ -12,7 +12,7 @@ import { dirname } from '../../../util/vs/base/common/resources';
 import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
-import { checklistPointer, DraftingChecklist, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
+import { checklistPointer, DraftingChecklist, DraftingChecklistStep, gateActionText, gateEdit, nextChecklistStep, readDraftingChecklist, renderChecklist } from '../common/drafting/checklist';
 import { DraftFinding, findingLine, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
@@ -123,14 +123,16 @@ export function textResult(text: string): LanguageModelToolResult {
 	return new LanguageModelToolResult([new LanguageModelTextPart(text)]);
 }
 
-/** The refusal sentence for a gate flag that is not set. */
-function gateRefusal(path: string, flag: DraftingGateFlag, state: DraftingGateState | 'no-file'): string {
-	if (state === 'no-file') {
-		return `${path} does not exist. The attorney sets \`${flag}: true\` in its frontmatter after review.`;
+/**
+ * The refusal sentence for a gate that is not open: the one edit that opens it, with the file and
+ * the line, e.g. "Review `drafting/x/claims.md:3`, then change `false` to `true` on line 3."
+ * `text` is the file, absent when the file does not exist.
+ */
+function gateRefusal(path: string, flag: DraftingGateFlag, text: string | undefined): string {
+	if (text === undefined) {
+		return `${path} does not exist. The attorney opens this gate in that file after review.`;
 	}
-	return state === 'missing'
-		? `${path} has no \`${flag}\` flag in its frontmatter. The attorney sets \`${flag}: true\` after review; a statement in chat does not open this gate.`
-		: `\`${flag}\` in ${path} is not \`true\`. The attorney sets \`${flag}: true\` after review; a statement in chat does not open this gate.`;
+	return `${gateActionText(path, gateEdit(text, flag))} Only the attorney opens this gate; a statement in chat does not open it.`;
 }
 
 /**
@@ -231,7 +233,7 @@ export class DraftingWorkspace {
 				gate: 'not-true',
 				hash,
 				cleared: true,
-				changed: `${this.folder.claims} changed after it was approved, so \`approved\` was set to \`false\`. The attorney reviews the claims and sets \`approved: true\` again; then start_application_draft and a new save start the next draft version.`,
+				changed: `${this.folder.claims} changed after it was approved, so the approval was withdrawn. ${gateActionText(this.folder.claims, gateEdit(await this.read(this.folder.claims) ?? '', 'approved'))} Then start_application_draft and a new save start the next draft version.`,
 			};
 		}
 		if (gate === 'set' && approvedHash === undefined) {
@@ -253,11 +255,10 @@ export class DraftingWorkspace {
 	async requireConfirmedFeatureList(): Promise<{ readonly text: string; readonly fields: DraftingFrontmatterFields } | string> {
 		const text = await this.read(this.folder.featureList);
 		if (text === undefined) {
-			return gateRefusal(this.folder.featureList, 'confirmed', 'no-file');
+			return gateRefusal(this.folder.featureList, 'confirmed', undefined);
 		}
 		const { fields } = parseDraftingFrontmatter(text);
-		const confirmed = readGateFlag(fields, 'confirmed');
-		return confirmed === 'set' ? { text, fields } : gateRefusal(this.folder.featureList, 'confirmed', confirmed);
+		return readGateFlag(fields, 'confirmed') === 'set' ? { text, fields } : gateRefusal(this.folder.featureList, 'confirmed', text);
 	}
 
 	/**
@@ -271,7 +272,7 @@ export class DraftingWorkspace {
 			return approval.changed;
 		}
 		if (approval.gate !== 'set' || !approval.hash) {
-			return gateRefusal(this.folder.claims, 'approved', approval.gate);
+			return gateRefusal(this.folder.claims, 'approved', approval.gate === 'no-file' ? undefined : await this.read(this.folder.claims) ?? '');
 		}
 		return { ...approval, hash: approval.hash };
 	}
@@ -318,7 +319,7 @@ export class DraftingWorkspace {
 	 * next step. The checklist is written also after a refusal.
 	 */
 	async withChecklistLine(result: DraftingSaveResult): Promise<DraftingSaveResult> {
-		const checklist = await this.checklistLine(!result.saved);
+		const checklist = await this.checklistLine(!result.saved, result.saved ? undefined : result.reason);
 		if (!checklist) {
 			return result;
 		}
@@ -456,7 +457,7 @@ export class DraftingWorkspace {
 	 * which is written first. `prefix` says what did not happen, e.g. "The draft was not exported.".
 	 */
 	async refusal(prefix: string, reason: string): Promise<LanguageModelToolResult> {
-		const pointer = await this.checklistLine(true);
+		const pointer = await this.checklistLine(true, reason);
 		return textResult(`${prefix} ${reason}${pointer ? `${reason.includes('\n') ? '\n' : ' '}${pointer}` : ''}`);
 	}
 
@@ -468,20 +469,31 @@ export class DraftingWorkspace {
 
 	/**
 	 * Creates the style folder when it has no README, writes the Drafting Checklist and returns the
-	 * sentence a tool result ends with: after a refusal the open steps, else the next step. Empty
-	 * when no checklist was written.
+	 * sentence a tool result ends with: after a refusal the open steps, else the next step; then
+	 * what the attorney does for the next step, with the file and the line, unless `said` (the
+	 * refusal reason) already says it. Empty when no checklist was written.
 	 */
-	async checklistLine(refused: boolean): Promise<string> {
+	async checklistLine(refused: boolean, said?: string): Promise<string> {
 		await this.ensureStyleFolder();
 		const checklist = await this.writeChecklist();
 		if (!checklist) {
 			return '';
 		}
-		if (refused) {
-			return checklistPointer(checklist, this.folder.checklist);
-		}
 		const next = nextChecklistStep(checklist);
-		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).` : 'every step is done.'}`;
+		const action = next ? this.stepAction(next) : '';
+		const nextAction = action && !said?.includes(action) ? ` Next: ${action}` : '';
+		if (refused) {
+			return `${checklistPointer(checklist, this.folder.checklist)}${nextAction}`;
+		}
+		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).${nextAction}` : 'every step is done.'}`;
+	}
+
+	/** What the attorney does for a checklist step, with workspace paths for a gate. */
+	private stepAction(entry: DraftingChecklistStep): string {
+		if (entry.gate) {
+			return gateActionText(entry.gate.flag === 'confirmed' ? this.folder.featureList : this.folder.claims, entry.gate);
+		}
+		return entry.actions.map(action => action.replace(/^→\s*/, '')).map(action => /[.!?]$/.test(action) ? action : `${action}.`).join(' ');
 	}
 
 	/**

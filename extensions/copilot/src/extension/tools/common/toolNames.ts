@@ -130,6 +130,7 @@ export enum ToolName {
 	BuildDrawingSet = 'build_drawing_set',
 	ProposeFigurePart = 'propose_figure_part',
 	RemoveClaim = 'remove_claim',
+	InventorQuestions = 'inventor_questions',
 }
 
 /**
@@ -228,6 +229,7 @@ export enum ContributedToolName {
 	BuildDrawingSet = 'copilot_buildDrawingSet',
 	ProposeFigurePart = 'copilot_proposeFigurePart',
 	RemoveClaim = 'copilot_removeClaim',
+	InventorQuestions = 'copilot_inventorQuestions',
 }
 
 export const byokEditToolNamesToToolNames = {
@@ -396,6 +398,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.BuildDrawingSet]: ToolCategory.Core,
 	[ToolName.ProposeFigurePart]: ToolCategory.Core,
 	[ToolName.RemoveClaim]: ToolCategory.Core,
+	[ToolName.InventorQuestions]: ToolCategory.Core,
 } as const;
 
 

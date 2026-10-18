@@ -3,12 +3,12 @@
 exports[`propose_figure_part tool > copies an image attached in chat, or a workspace image, to sketches/ 1`] = `
 {
   "attached": "Wrote to drafting/hinge/figures.md: \`- 14: bracket (proposed from sketches/bracket-sketch.png)\`. The sketch is at drafting/hinge/sketches/bracket-sketch.png. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.
-Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline).",
+Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).",
   "figures": [
     "- 14: bracket (proposed from sketches/bracket-sketch.png)",
     "- 16: clip (proposed from sketches/clip.png)",
   ],
-  "notFound": "No part was proposed. "napkin.png" is neither an image attached in this chat (attached: bracket sketch.png) nor an image file in the workspace. Open in drafting/hinge/checklist.md: step 3 (Write the outline).",
+  "notFound": "No part was proposed. "napkin.png" is neither an image attached in this chat (attached: bracket sketch.png) nor an image file in the workspace. Open in drafting/hinge/checklist.md: step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).",
   "sketch": [
     137,
     80,
@@ -19,6 +19,6 @@ Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Wri
     3,
   ],
   "workspace": "Wrote to drafting/hinge/figures.md: \`- 16: clip (proposed from sketches/clip.png)\`. The sketch is at drafting/hinge/sketches/clip.png. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.
-Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline).",
+Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).",
 }
 `;

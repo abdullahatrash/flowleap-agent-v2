@@ -10,6 +10,7 @@ import './compareClaimsTool';
 import './examinerBaselineTool';
 import './buildDrawingSetTool';
 import './exportDraftDocxTool';
+import './inventorQuestionsTool';
 import './comparePatentsTool';
 import './fetchWebPageTool';
 import './getContinuityTool';

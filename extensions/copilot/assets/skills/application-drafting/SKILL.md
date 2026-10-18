@@ -24,19 +24,25 @@ tool refuses, report the items and the open steps it names.
 
 ## Gates
 
-Three gates stop the work. The attorney sets each flag in the file, and the
+Three gates stop the work. The attorney opens each gate in its file, and the
 tools read it from the file:
 
-| Gate | File | Flag | Opens |
-|------|------|------|-------|
+| Gate | File | The attorney writes | Opens |
+|------|------|---------------------|-------|
 | Intake | `feature-list.md` | `confirmed: true` | Step 2 |
 | Claims | `claims.md` | `approved: true` | Step 3 |
 | Export | `findings.md` | no unwaived Error, no open Inventor Question | the export in Step 6 |
 
-At a gate, stop, name the file and the flag, and ask the attorney to set it.
-Then wait. Every flag is the attorney's to write: an "I approve" or "looks
-good" in chat opens no gate. When a tool refuses because a flag is missing or
-false, report the refusal and ask again.
+At a gate, stop. Tell the attorney the file, the action at the top of the
+file and the one word to change, in the sentence the tool or the checklist
+gives, for example: "Review `drafting/hinge/claims.md:3`, then click
+**Approve Claims** at the top of the file, or change `false` to `true` on
+line 3."
+Keep the path and its line in backticks: the chat opens the file at that line.
+Use only the words of that sentence, no technical terms for the file format.
+Then wait. Only the attorney writes `true`: an "I approve" or "looks good" in
+chat opens no gate. When a tool refuses at a gate, give its sentence and ask
+again.
 
 ## Step 1: Intake
 
@@ -44,7 +50,10 @@ Build the Feature List and the figures list from the disclosure, or from the
 invention record of the **invention-disclosure** skill.
 
 1. Write `feature-list.md` with frontmatter `office` (`US` or `EPO`; ask the
-   attorney when it is not stated) and `confirmed: false`. One row per
+   attorney when it is not stated) and `confirmed: false`. Put this comment
+   line directly above `confirmed: false`:
+   `# Review, then change false to true below, or click the action at the top.`
+   One row per
    element, embodiment and alternative the disclosure states, each with an ID
    (`F1`, `F2`, ...) and the disclosure span it comes from. Mark each example
    as working (the inventor ran it) or prophetic.
@@ -66,7 +75,9 @@ Intake gate.
 
 Hand the confirmed Feature List and the prior-art results to the
 **claim-drafting** skill. Save its claim set as `claims.md` with frontmatter
-`approved: false`. Stop at the Claims gate. When the claims change after
+`approved: false`, and put the same comment line directly above it:
+`# Review, then change false to true below, or click the action at the top.`
+Stop at the Claims gate. When the claims change after
 approval, the attorney sets the flag again.
 
 ## Step 3: Plan, draft and integrate the specification
@@ -76,7 +87,7 @@ approval, the attorney sets the flag again.
 2. Call `start_application_draft` with the matter folder. It returns the
    Feature List, the figures, the Approved Claims, the Draft Outline when it
    exists, and up to five style exemplars, or it refuses and names the
-   missing flag.
+   gate to open.
 
 The draft save refuses while `draft-outline.md` is missing or was made from
 other claims: after the attorney approves changed claims, plan again.
@@ -146,6 +157,13 @@ Done when `findings.md` holds the validator findings and the advisory items.
 The save writes each Inventor Question to `inventor-answers.md`; the attorney
 or the inventor fills the answers. When the attorney asks you to apply them,
 follow [references/resolve-inventor-questions.md](references/resolve-inventor-questions.md).
+When the attorney asks to send the questions to the inventor, call
+`inventor_questions` with action `send`: it writes `inventor-questions.docx`,
+a Word table with one row per open question and an empty answer cell. When
+the inventor answered in that file (or in a `.md` file in the matter folder),
+call `inventor_questions` with action `import` and that file before you apply
+the answers: code copies each answer into its empty slot and never changes a
+filled one.
 
 Done when each filled answer is in the draft and `checklist.md` step 5 shows
 no answered question that is not applied.

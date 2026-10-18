@@ -140,8 +140,8 @@ describe('render_figure tool', () => {
 			staleApproval: (await tools.render({ figure: 2, flowchart: { fromClaim: 2 } })).text,
 			claimsCleared: (await read('drafting/hinge/claims.md')).split('---')[1],
 		}).toEqual({
-			noHeading: { text: 'The Figure was not rendered. drafting/hinge/figures.md has no heading for FIG. 3 (`## FIG. 3` with its parts). Add the Figure and its parts to the figure list first. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).', images: [] },
-			staleApproval: 'The Figure was not rendered. A flowchart from a claim needs the Approved Claims. drafting/hinge/claims.md changed after it was approved, so `approved` was set to `false`. The attorney reviews the claims and sets `approved: true` again; then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			noHeading: { text: 'The Figure was not rendered. drafting/hinge/figures.md has no heading for FIG. 3 (`## FIG. 3` with its parts). Add the Figure and its parts to the figure list first. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Review `drafting/hinge/claims.md:2`: it changed after the approval on line 2. The next drafting step changes `true` to `false` there; then click **Approve Claims** at the top of the file, or change `false` to `true`.', images: [] },
+			staleApproval: 'The Figure was not rendered. A flowchart from a claim needs the Approved Claims. drafting/hinge/claims.md changed after it was approved, so the approval was withdrawn. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2. Then start_application_draft and a new save start the next draft version. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
 			claimsCleared: '\napproved: false\n',
 		});
 	});
@@ -164,7 +164,7 @@ describe('render_figure tool', () => {
 			last: result.text.split('\n').at(-1),
 			figures: (await read('drafting/hinge/checklist.md')).split('\n').filter(line => line.startsWith('- Figures:')),
 		}).toEqual({
-			last: 'Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline).',
+			last: 'Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).',
 			figures: ['- Figures: 2 in figures.md, 1 drawn in drawings/'],
 		});
 	}, KERNEL_TIMEOUT);
@@ -194,7 +194,7 @@ describe('build_drawing_set tool', () => {
 			text: await tools.build(),
 			figures: (await read('drafting/hinge/checklist.md')).split('\n').filter(line => line.startsWith('- Figures:')),
 		}).toEqual({
-			text: 'The Drawing Set was not built. drafting/hinge/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first. Open in drafting/hinge/checklist.md: step 3 (Write the outline).',
+			text: 'The Drawing Set was not built. drafting/hinge/drawings/ has no Figure (FIG-N.svg). Render each Figure with render_figure first. Open in drafting/hinge/checklist.md: step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).',
 			figures: ['- Figures: 2 in figures.md'],
 		});
 	});

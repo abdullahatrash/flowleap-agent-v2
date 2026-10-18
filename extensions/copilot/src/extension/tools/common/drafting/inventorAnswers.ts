@@ -261,6 +261,76 @@ export function updateInventorAnswers(previous: string | undefined, matter: stri
 	return lines.join('\n') + '\n';
 }
 
+/** One open Inventor Question, for the document the inventor fills: the current question of its section. */
+export interface OpenInventorQuestion {
+	readonly id: string;
+	readonly question: string;
+	readonly belongs?: string;
+}
+
+/**
+ * The open questions of `inventor-answers.md`, in file order: the sections whose current
+ * `**Answer:**` slot is empty. A slot with any text, "Not stated" included, is filled: the
+ * attorney or the inventor wrote it.
+ */
+export function openInventorQuestions(text: string): OpenInventorQuestion[] {
+	return parseInventorAnswers(text).flatMap(section => {
+		const round = currentRound(section);
+		if (round?.answerLine === undefined || currentAnswer(section)) {
+			return [];
+		}
+		return [{ id: section.id, question: round.question, ...(section.belongs ? { belongs: section.belongs } : {}) }];
+	});
+}
+
+/** The result of {@link fillInventorAnswers}: the new file text and the question ids by outcome. */
+export interface InventorAnswersFill {
+	readonly text: string;
+	/** The questions whose empty slot got the answer. */
+	readonly filled: readonly string[];
+	/** The questions whose slot was filled already: not changed. */
+	readonly kept: readonly string[];
+	/** The answers for a question id that `inventor-answers.md` does not have. */
+	readonly unknown: readonly string[];
+}
+
+/**
+ * Copies the inventor's answers (question id to answer text, e.g. the answer cells of
+ * `inventor-questions.docx`) into the empty current `**Answer:**` slots of `inventor-answers.md`,
+ * in the inventor's words. Never writes over a filled slot; an empty answer changes nothing. A
+ * line of an answer that reads as a field or a section heading gets a leading space, so the
+ * answer stays one answer. Every other line stays as it is.
+ */
+export function fillInventorAnswers(text: string, answers: ReadonlyMap<string, string>): InventorAnswersFill {
+	const lines = splitLines(text);
+	const sections = parseInventorAnswers(text);
+	const inserts: { readonly at: number; readonly lines: readonly string[] }[] = [];
+	const filled: string[] = [];
+	const kept: string[] = [];
+	const unknown: string[] = [];
+	for (const [id, answer] of answers) {
+		if (!answer.trim()) {
+			continue;
+		}
+		const section = sections.find(candidate => candidate.id === id);
+		const answerLine = currentRound(section)?.answerLine;
+		if (!section || answerLine === undefined) {
+			unknown.push(id);
+		} else if (currentAnswer(section)) {
+			kept.push(id);
+		} else {
+			// `answerLine` is 1-based: the answer goes on the line after the slot.
+			inserts.push({ at: answerLine, lines: splitLines(answer.trim()).map(line => line.trimEnd()).map(line => sectionPattern.test(line) || fieldPattern.test(line) ? ` ${line}` : line) });
+			filled.push(id);
+		}
+	}
+	for (const insert of inserts.sort((a, b) => b.at - a.at)) {
+		lines.splice(insert.at, 0, ...insert.lines);
+	}
+	const byFileOrder = (ids: string[]) => ids.sort((a, b) => sections.findIndex(section => section.id === a) - sections.findIndex(section => section.id === b));
+	return { text: lines.join('\n'), filled: byFileOrder(filled), kept: byFileOrder(kept), unknown };
+}
+
 /** The Working Record value of one applied answer: `IQ-2, answer 1, from inventor-answers.md`. */
 export function appliedAnswerLabel(id: string, round: number): string {
 	return `${id}, answer ${round}, from ${answersFile}`;
