@@ -49,7 +49,10 @@ invention record of the **invention-disclosure** skill.
    (`F1`, `F2`, ...) and the disclosure span it comes from. Mark each example
    as working (the inventor ran it) or prophetic.
 2. Write `figures.md`: a heading per figure the user supplied, then one list
-   item per part, `- 12: housing`, one numeral per part across all figures.
+   item per part, `- 12: housing [F3]`, one numeral per part across all
+   figures. Put the Feature List rows the part shows in brackets. A part that
+   shows no row has no brackets. The claimed-feature coverage check
+   (37 CFR 1.83(a)) in Step 4 reads these links. Without them it is skipped.
 3. A feature the disclosure only implies goes to the attorney as a question,
    not into a row.
 
