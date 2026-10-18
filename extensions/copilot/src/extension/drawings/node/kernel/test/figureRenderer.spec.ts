@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { flattenSvgPath } from '../../../common/lineArt/planar';
+import { flattenSvgPath, parallelOverlap, Segment, toSegments } from '../../../common/lineArt/planar';
 import { figureHatchStyles } from '../../../common/scene/drawingFaults';
 import type { DrawingScene, Vec2 } from '../../../common/scene/drawingScene';
 import { renderFigure } from '../figureRenderer';
@@ -41,6 +41,26 @@ function corners(svg: string, part: string, degrees = 10): Vec2[] {
 		}
 	}
 	return result.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+}
+
+/** The parts that draw visible edges, with their edge count, and the edge length two parts both draw, in whole sheet millimetres (two collinear edges that meet at a corner count a few hundredths). */
+function edgeOwners(svg: string): { edges: Record<string, number>; drawnTwice: number } {
+	const edges: Record<string, number> = {};
+	const pieces: { part: string; segment: Segment }[] = [];
+	for (const match of svg.matchAll(/class="edge" data-part="(?<part>[^"]+)"[^>]* d="(?<d>[^"]+)"/g)) {
+		const part = match.groups!.part;
+		edges[part] = (edges[part] ?? 0) + 1;
+		pieces.push(...toSegments(flattenSvgPath(match.groups!.d)).map(segment => ({ part, segment })));
+	}
+	let drawnTwice = 0;
+	for (let i = 0; i < pieces.length; i++) {
+		for (let j = i + 1; j < pieces.length; j++) {
+			if (pieces[i].part !== pieces[j].part) {
+				drawnTwice += parallelOverlap(pieces[i].segment, pieces[j].segment, 1, 0.05);
+			}
+		}
+	}
+	return { edges, drawnTwice: Math.round(drawnTwice) };
 }
 
 /** The drawing size of a scene drawn at `scale: 1`, in model millimetres. */
@@ -125,6 +145,59 @@ describe('Patent Drawings engine: scene to FIG-N.svg', () => {
 		const result = await renderFigure({ ...scene, numerals: [{ numeral: '10', part: 'housing', face: 'front', point: [200, -50, 10] }] });
 		expect(rules(result.findings)).toEqual(['lead-line-off-part']);
 	}, KERNEL_TIMEOUT);
+
+	it('touching parts in a section each own their outline; a lead on the shared boundary passes for both (#752)', async () => {
+		const errors = (result: { findings: readonly { severity: string; rule: string }[] }) => rules(result.findings.filter(finding => finding.severity === 'Error'));
+		const clamp = await renderFigure(fixture('pipe-clamp-section'));
+		const blocks = await renderFigure(fixture('stacked-blocks-section'));
+		const boxes = await renderFigure(fixture('stacked-boxes-section'));
+		const scene = fixture('stacked-blocks-section');
+		// The cap port lies 28 mm above the cap: its lead ends in empty space.
+		const offPart = await renderFigure({ ...scene, numerals: [scene.numerals[0], { ...scene.numerals[1], point: [-12, 70, 20] }] });
+		expect({
+			clamp: { errors: errors(clamp), ...edgeOwners(clamp.svg!) },
+			blocks: { errors: errors(blocks), ...edgeOwners(blocks.svg!) },
+			boxes: { errors: errors(boxes), ...edgeOwners(boxes.svg!) },
+			offPart: errors(offPart),
+		}).toMatchInlineSnapshot(`
+			{
+			  "blocks": {
+			    "drawnTwice": 0,
+			    "edges": {
+			      "block": 3,
+			      "cap": 1,
+			    },
+			    "errors": [],
+			  },
+			  "boxes": {
+			    "drawnTwice": 0,
+			    "edges": {
+			      "base": 4,
+			      "lid": 3,
+			    },
+			    "errors": [],
+			  },
+			  "clamp": {
+			    "drawnTwice": 0,
+			    "edges": {
+			      "base-plate": 4,
+			      "cap": 3,
+			      "hinge-lug": 4,
+			      "hinge-pin": 1,
+			      "latch-lug": 4,
+			      "locking-pin": 1,
+			      "pipe": 6,
+			      "saddle-block": 9,
+			      "spring": 34,
+			    },
+			    "errors": [],
+			  },
+			  "offPart": [
+			    "lead-line-off-part",
+			  ],
+			}
+		`);
+	}, 4 * KERNEL_TIMEOUT);
 
 	it('an arc segment and a spline segment round-trip through the kernel as smooth sides', async () => {
 		const plate = await renderFigure({

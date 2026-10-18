@@ -1,0 +1,15 @@
+{
+	"figure": "FIG-1",
+	"camera": "front",
+	"section": { "origin": [0, 0, 0], "normal": "y", "keep": "positive" },
+	"parts": [
+		{ "id": "block", "shape": { "kind": "extrudedPolygon", "points": [[-20, 0], [20, 0], [20, 20], [-20, 20]], "height": 40 }, "placement": { "translate": [0, 20, 0], "rotate": [90, 0, 0] } },
+		{ "id": "cap", "shape": { "kind": "extrudedPolygon", "points": [[-20, 20], [20, 20], [20, 42], [-20, 42]], "height": 40 }, "placement": { "translate": [0, 20, 0], "rotate": [90, 0, 0] } }
+	],
+	"numerals": [
+		{ "numeral": "10", "part": "block", "face": "side-4", "point": [-20, 8, 20] },
+		{ "numeral": "12", "part": "cap", "face": "side-3", "point": [-12, 42, 20] },
+		{ "numeral": "14", "part": "block", "face": "side-3", "point": [14, 20, 20] },
+		{ "numeral": "16", "part": "cap", "face": "side-1", "point": [-14, 20, 20] }
+	]
+}

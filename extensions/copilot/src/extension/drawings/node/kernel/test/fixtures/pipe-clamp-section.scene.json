@@ -1,0 +1,491 @@
+{
+	"camera": "front",
+	"hiddenEdges": "omit",
+	"section": {
+		"origin": [
+			0,
+			0,
+			0
+		],
+		"normal": "y",
+		"keep": "positive"
+	},
+	"parts": [
+		{
+			"id": "base-plate",
+			"name": "base plate",
+			"shape": {
+				"kind": "box",
+				"size": [
+					60,
+					40,
+					8
+				]
+			},
+			"placement": {
+				"translate": [
+					-30,
+					-20,
+					0
+				]
+			},
+			"hatch": {
+				"angle": 45,
+				"pitch": 2
+			},
+			"subtract": [
+				{
+					"shape": {
+						"kind": "cylinder",
+						"radius": 3,
+						"height": 10
+					},
+					"placement": {
+						"translate": [
+							6,
+							8,
+							-1
+						]
+					}
+				},
+				{
+					"shape": {
+						"kind": "cylinder",
+						"radius": 3,
+						"height": 10
+					},
+					"placement": {
+						"translate": [
+							54,
+							8,
+							-1
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "saddle-block",
+			"name": "saddle block",
+			"shape": {
+				"kind": "extrudedPolygon",
+				"points": [
+					[
+						-20,
+						8
+					],
+					[
+						20,
+						8
+					],
+					[
+						20,
+						28
+					],
+					[
+						13,
+						28
+					],
+					{
+						"arc": [
+							-13,
+							28
+						],
+						"through": [
+							0,
+							15
+						]
+					},
+					[
+						-20,
+						28
+					]
+				],
+				"height": 40
+			},
+			"placement": {
+				"translate": [
+					0,
+					20,
+					0
+				],
+				"rotate": [
+					90,
+					0,
+					0
+				]
+			},
+			"hatch": {
+				"angle": 45,
+				"pitch": 2
+			},
+			"subtract": [
+				{
+					"shape": {
+						"kind": "cylinder",
+						"radius": 3,
+						"height": 7
+					},
+					"placement": {
+						"translate": [
+							16.5,
+							22,
+							20
+						],
+						"rotate": [
+							-90,
+							0,
+							0
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "hinge-lug",
+			"name": "hinge lug",
+			"shape": {
+				"kind": "box",
+				"size": [
+					10,
+					10,
+					22
+				]
+			},
+			"placement": {
+				"translate": [
+					-30,
+					-5,
+					18
+				]
+			},
+			"subtract": [
+				{
+					"shape": {
+						"kind": "cylinder",
+						"radius": 2.6,
+						"height": 12
+					},
+					"placement": {
+						"translate": [
+							5,
+							-1,
+							16
+						],
+						"rotate": [
+							-90,
+							0,
+							0
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "latch-lug",
+			"name": "latch lug",
+			"shape": {
+				"kind": "box",
+				"size": [
+					10,
+					10,
+					22
+				]
+			},
+			"placement": {
+				"translate": [
+					20,
+					-5,
+					18
+				]
+			},
+			"subtract": [
+				{
+					"shape": {
+						"kind": "cylinder",
+						"radius": 2.6,
+						"height": 12
+					},
+					"placement": {
+						"translate": [
+							5,
+							-1,
+							16
+						],
+						"rotate": [
+							-90,
+							0,
+							0
+						]
+					}
+				}
+			]
+		},
+		{
+			"id": "cap",
+			"name": "cap",
+			"shape": {
+				"kind": "extrudedPolygon",
+				"points": [
+					[
+						-20,
+						28
+					],
+					[
+						-13,
+						28
+					],
+					{
+						"arc": [
+							13,
+							28
+						],
+						"through": [
+							0,
+							41
+						]
+					},
+					[
+						20,
+						28
+					],
+					[
+						20,
+						50
+					],
+					[
+						-20,
+						50
+					]
+				],
+				"height": 40
+			},
+			"placement": {
+				"translate": [
+					0,
+					20,
+					0
+				],
+				"rotate": [
+					90,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "hinge-pin",
+			"name": "hinge pin",
+			"shape": {
+				"kind": "cylinder",
+				"radius": 2.5,
+				"height": 44
+			},
+			"placement": {
+				"translate": [
+					-25,
+					-22,
+					34
+				],
+				"rotate": [
+					-90,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "locking-pin",
+			"name": "locking pin",
+			"shape": {
+				"kind": "revolve",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						5,
+						0
+					],
+					[
+						5,
+						3
+					],
+					[
+						2.5,
+						3
+					],
+					[
+						2.5,
+						44
+					],
+					[
+						0,
+						44
+					]
+				]
+			},
+			"placement": {
+				"translate": [
+					25,
+					-18,
+					34
+				],
+				"rotate": [
+					-90,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "spring",
+			"name": "spring",
+			"shape": {
+				"kind": "spring",
+				"coilDiameter": 5,
+				"wireDiameter": 0.8,
+				"pitch": 1.2,
+				"length": 6
+			},
+			"placement": {
+				"translate": [
+					16.5,
+					0,
+					22
+				]
+			}
+		},
+		{
+			"id": "pipe",
+			"name": "pipe",
+			"shape": {
+				"kind": "pipe",
+				"outerDiameter": 25,
+				"wall": 2,
+				"length": 70
+			},
+			"placement": {
+				"translate": [
+					0,
+					-35,
+					28
+				],
+				"rotate": [
+					-90,
+					0,
+					0
+				]
+			}
+		}
+	],
+	"numerals": [
+		{
+			"numeral": "12",
+			"part": "base-plate",
+			"face": "left",
+			"point": [
+				0,
+				20,
+				4
+			]
+		},
+		{
+			"numeral": "16",
+			"part": "saddle-block",
+			"face": "side-6",
+			"point": [
+				-20,
+				12,
+				20
+			]
+		},
+		{
+			"numeral": "18",
+			"part": "saddle-block",
+			"face": "side-4",
+			"point": [
+				-11.26,
+				21.5,
+				20
+			]
+		},
+		{
+			"numeral": "40",
+			"part": "saddle-block",
+			"face": "side-3",
+			"point": [
+				13.25,
+				28,
+				20
+			]
+		},
+		{
+			"numeral": "20",
+			"part": "hinge-lug",
+			"face": "left",
+			"point": [
+				0,
+				5,
+				6
+			]
+		},
+		{
+			"numeral": "32",
+			"part": "latch-lug",
+			"face": "right",
+			"point": [
+				10,
+				5,
+				6
+			]
+		},
+		{
+			"numeral": "22",
+			"part": "hinge-pin",
+			"face": "axis"
+		},
+		{
+			"numeral": "34",
+			"part": "locking-pin",
+			"face": "axis"
+		},
+		{
+			"numeral": "24",
+			"part": "cap",
+			"face": "side-5",
+			"point": [
+				-12,
+				50,
+				20
+			]
+		},
+		{
+			"numeral": "26",
+			"part": "cap",
+			"face": "side-2",
+			"point": [
+				-11.26,
+				34.5,
+				20
+			]
+		},
+		{
+			"numeral": "38",
+			"part": "spring",
+			"face": "coil"
+		},
+		{
+			"numeral": "42",
+			"part": "pipe",
+			"face": "bore",
+			"point": [
+				0,
+				-10.5,
+				35
+			]
+		}
+	],
+	"figure": "FIG-2"
+}

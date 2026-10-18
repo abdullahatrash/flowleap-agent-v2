@@ -9,9 +9,11 @@
 <path class="edge" data-part="body" stroke-width="0.4" d="M124 64 L124 49.33 L124 49.32 L124 49.31 L124 49.3 L124 49.29 L124 49.27 L124 49.25 L124 49.22 L124 49.2 L124 49.17 L124 49.14 L124 49.11 L124 49.07"/>
 <path class="edge" data-part="body" stroke-width="0.4" d="M44 49.33 L124 49.33"/>
 <path class="edge" data-part="body" stroke-width="0.4" d="M44 38.67 L124 38.67 L124 24"/>
-<path class="edge" data-part="shaft" stroke-width="0.4" d="M24 38.67 L24 38.8 L24 39.19 L24 39.83 L24 40.67 L24 41.69 L24 42.81 L24 44 L24 45.19 L24 46.31 L24 47.33 L24 48.17 L24 48.81 L24 49.2 L24 49.33 L144 49.33"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M24 38.67 L24 38.8 L24 39.19 L24 39.83 L24 40.67 L24 41.69 L24 42.81 L24 44 L24 45.19 L24 46.31 L24 47.33 L24 48.17 L24 48.81 L24 49.2 L24 49.33 L44 49.33"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M124 49.33 L144 49.33"/>
 <path class="edge" data-part="shaft" stroke-width="0.4" d="M144 38.67 L144 38.8 L144 39.19 L144 39.83 L144 40.67 L144 41.69 L144 42.81 L144 44 L144 45.19 L144 46.31 L144 47.33 L144 48.17 L144 48.81 L144 49.2 L144 49.33"/>
-<path class="edge" data-part="shaft" stroke-width="0.4" d="M24 38.67 L144 38.67"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M24 38.67 L44 38.67"/>
+<path class="edge" data-part="shaft" stroke-width="0.4" d="M124 38.67 L144 38.67"/>
 <path class="hatch" data-part="body" stroke-width="0.2" d="M44 26.71 L46.71 24"/>
 <path class="hatch" data-part="body" stroke-width="0.2" d="M44 29.54 L49.54 24"/>
 <path class="hatch" data-part="body" stroke-width="0.2" d="M44 32.37 L52.37 24"/>
