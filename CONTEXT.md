@@ -355,7 +355,10 @@ Per independent claim, the count of Fallback Ladder rungs whose added limitation
 discloses ("fallbacks: k of j covered; not covered: claims 3, 5"), read off validated chart rows
 exactly as the element count is. A model-proposed description-supported fallback counts only when
 its basis quote of the challenged patent validates. "Not covered" after a Search Round is a
-complete result, not a failure.
+complete result, not a failure. A row whose validated quote comes from a fetched patent page
+(web text recorded under the publication anchor, for a document the tools hold no text for)
+counts as covered and carries the label "Source: web page (<host>), not official full text" with
+the open point `source-<pub>` (#750).
 _Avoid_: "fallback strength" or any model-rated score; reading "covered" as anticipation or
 obviousness (the chart states neither).
 

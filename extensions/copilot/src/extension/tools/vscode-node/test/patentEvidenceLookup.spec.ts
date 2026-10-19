@@ -51,6 +51,36 @@ describe('bounded local patent evidence inspection', () => {
 		expect(lookupPatentEvidence(snapshot([bare]), publication, {})).toContain(bare.anchor);
 	});
 
+	it('says in the index that a source is web page text, and takes the title and date from the record that states them', () => {
+		const web: PatentEvidenceSource = { ...source, anchor: `${publication}:description`, language: undefined, text: 'Page line one.\nPage line two.', textSource: 'web', url: 'https://patents.google.com/patent/EP1000000A1/en' };
+		const mixed: PatentExecutionSnapshot = {
+			limitation: 'Returned evidence only.',
+			executions: [
+				{ id: 'official', recordedAt: '2026-09-10', kind: 'details', status: 'succeeded', publicationIds: [publication], publicationTitle: 'Official title', publicationDate: '2001-02-03', sources: [{ ...source, text: undefined }] },
+				{ id: 'web', recordedAt: '2026-09-11', kind: 'details', status: 'succeeded', publicationIds: [publication], sources: [web] },
+			],
+		};
+		const index = lookupPatentEvidence(mixed, publication, {});
+		expect({
+			metadata: index.split('\n')[1],
+			web: index.split('\n').find(line => line.startsWith(`${web.anchor} `)),
+			official: index.split('\n').find(line => line.startsWith(`${source.anchor} `)),
+			line: lookupPatentEvidence(mixed, publication, { anchor: web.anchor }).split('\n')[1],
+		}).toEqual({
+			metadata: 'Recorded publication: EP1000000A1. Publication date: 2001-02-03. Title: Official title.',
+			web: 'EP1000000A1:description — 2 lines — web page text (patents.google.com), not official full text; a row that cites it is labelled so — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP1000000A1&section=description)',
+			official: 'EP1000000A1:description:de — text unavailable in this older record — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP1000000A1&section=description)',
+			line: '[EP1000000A1:description; line 1] Page line one.',
+		});
+	});
+
+	it('keeps official text over web text recorded later at the same anchor', () => {
+		const official = { ...source, anchor: `${publication}:description`, language: undefined, text: 'Official passage.' };
+		const web: PatentEvidenceSource = { ...official, text: 'Web passage.', textSource: 'web', url: 'https://patents.google.com/patent/EP1000000A1/en' };
+		const result = lookupPatentEvidence(snapshot([official, web]), publication, { anchor: official.anchor });
+		expect(result.split('\n')[1]).toBe('[EP1000000A1:description; line 1] Official passage.');
+	});
+
 	it('names the recorded publications when none matches, instead of repeating the same failed lookup', () => {
 		const sources = ['EP1000001A1', 'EP1000002A1', 'EP1000003A1', 'EP1000004A1', 'EP1000005A1', 'EP1000006A1']
 			.map(number => ({ ...source, anchor: `${number}:description`, reference: { publicationNumber: number, section: 'description' as const }, language: undefined, text: 'Text.' }));

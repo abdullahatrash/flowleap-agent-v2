@@ -80,6 +80,13 @@ X or Y tag and no anticipation or obviousness statement; that judgment stays in 
 **`criticalDate`**: the critical date as `YYYY-MM-DD`. Keep the basis in `objective`. Without it,
 the receipt says the publication dates of the cited documents were not checked.
 
+**Web page text**: when the tools hold no text for a cited document, the Google Patents page
+fetched with `fetch_webpage` is recorded under `<PUB>:description` and `<PUB>:claims` as web
+text. Cite those anchors like any other; the writer checks the fragment against the page text
+and refuses a fragment the page does not hold. The row carries the label "Source: web page
+(<host>), not official full text" and the receipt lists `source-<PUB>`. Official text wins: a web
+anchor cited while the tools hold that section's text is refused with the official anchor.
+
 ## Open points and the Round Report
 
 The receipt lists the open points of the saved chart, one line each, in a fixed order. The writer
@@ -92,6 +99,7 @@ computes them from the record. The ids stay the same across saves of one chart.
 | `scope-XX0000004A` | a cited document outside the searched jurisdictions |
 | `date-XX0000005A` | a cited document published after `criticalDate`, or with no recorded date |
 | `drawing-1.1` | a row that rests on a drawing reading, not on quoted text |
+| `source-XX0000004A` | a row that rests on web page text of that document (a fetched patent page), not official full text; recommend that the expert confirms it against the official full text or a certified copy |
 | `search-1` | a search that failed and did not run again |
 
 The Round Report numbers them in receipt order. Each question names the id and gives your

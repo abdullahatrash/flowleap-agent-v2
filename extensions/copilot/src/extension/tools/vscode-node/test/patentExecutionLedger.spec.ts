@@ -71,6 +71,19 @@ describe('durable patent execution audit', () => {
 		expect(snapshot.limitation).not.toContain('unreadable or incomplete');
 	});
 
+	it('round-trips a web page source with its page, and drops a source whose text source is neither official nor web', async () => {
+		const { ledger, session, files } = setup();
+		const reference = { publicationNumber: 'GB2000000A', section: 'description' as const };
+		const web = { anchor: evidenceAnchor(reference), reference, text: 'Page text.', textSource: 'web' as const, url: 'https://patents.google.com/patent/GB2000000A/en', retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const };
+		await ledger.record(session, { kind: 'details', status: 'succeeded', publicationIds: ['GB2000000A'], sources: [web] });
+		files.mockFile(files.committed[0], JSON.stringify({
+			id: 'mixed', recordedAt: '2026-10-19', kind: 'details', status: 'succeeded', publicationIds: ['GB2000000A'],
+			sources: [web, { ...web, textSource: 'scan' }, { ...web, url: undefined }],
+		}));
+		const snapshot = await ledger.read(session);
+		expect({ sources: snapshot.executions[0].sources, partial: snapshot.limitation.includes('recovered with unreadable fields dropped') }).toEqual({ sources: [web], partial: true });
+	});
+
 	it('preserves publication kind, language and claim identity while review remains unknown', async () => {
 		const { ledger, session } = setup();
 		const reference = { publicationNumber: 'WO2020123456A1', section: 'claims' as const, claimNumber: '1' };

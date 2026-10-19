@@ -135,6 +135,13 @@ the invalidity skill's Phase 4b.
 - Acceptance: `priorArtReportCompletion.spec.ts` cases: open points + no Round Report → nudge;
   open points + Round Report → accepted; no open points → accepted; prior-art template → no
   nudge. `patentFallbackLadder.spec.ts`: round answering no open point → refused.
+- #750 (2026-10-19): a cited document the tools hold no text for (GB, JP, DE utility model,
+  older US) gets its fetched patent page recorded under the publication anchor as web text
+  (`textSource: 'web'`, URL). The writer checks a quote against it as against official text,
+  labels the row, counts it as covered, and adds the open point `source-<pub>` ("Row(s) … rest on
+  web page text of <pub> (<host>), not official full text"); the Round Report carries the
+  recommendation to confirm against the official full text or a certified copy. Official text
+  wins where both exist. Eval T13.
 
 ## Track S — the skill
 
@@ -214,7 +221,7 @@ run on its own. A Tier B point moves to Tier A only when a code guard ships for 
 | A5 | Loop rule (C4): every save is followed by a Round Report that names every open point of the receipt with a recommendation, and the turn ends there; a Search Round runs only after an expert answer, records in `rounds[].answers` the open points the expert chose, and every round query matches a ledger execution that ran after the previous save. A receipt with no open points needs no Round Report. | receipt, ledger, chart, chat |
 | A6 | 0 assertive legal-conclusion phrases (is obvious, anticipates, is not novel and their forms); noun forms only in disclaimers or listed by the wording review. | chart, working record |
 | A7 | Generated honesty sections present and drawn from the record: Limitations (failed searches, unread documents, out-of-scope jurisdictions), second read in the working record. | chart, working record |
-| A8 | No element or rung marked disclosed on a bibliography anchor, and every figure-based row carries "rests on a drawing reading". | chart |
+| A8 | No element or rung marked disclosed on a bibliography anchor; every figure-based row carries "rests on a drawing reading"; every row that rests on web page text carries "Source: web page (<host>), not official full text", the Limitations count such rows, and the receipt lists `source-<pub>` for each such document (#750). A web source is never a bibliography anchor. | chart, receipt |
 
 Verdict per run: PASS when every Tier A point holds; FAIL when any does not. A Tier A failure is a
 code defect and becomes an issue.

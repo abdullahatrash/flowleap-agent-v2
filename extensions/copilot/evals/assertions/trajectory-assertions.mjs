@@ -682,6 +682,42 @@ function t12Choice(traj) {
 }
 
 /**
+ * The document T13's tools hold no text for; its Google Patents page is the only text it has (#750).
+ * The fixture (t13-web-text-evidence.json) names the same document: change both together.
+ */
+const T13_WEB_DOCUMENT = 'GB2208140A';
+/** The open-point id the writer gives a row that rests on that page's text. */
+const T13_SOURCE_POINT = `source-${T13_WEB_DOCUMENT}`;
+
+/** The invalidity-chart saves of a trajectory, in order. */
+function chartSaves(traj) {
+	return flatCalls(traj).filter(call => call.name === 'write_patent_results' && String(call.args?.template ?? '').includes('invalidity'));
+}
+
+/** Collapse whitespace and case, as the writer's quotation check does. */
+function normalizeText(value) {
+	return String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/** Whether an anchor is one of the T13 web document's anchors (`GB2208140A:description`, `GB2208140A:claims`). */
+function citesWebDocument(anchor) {
+	return String(anchor ?? '').toLowerCase().startsWith(`${T13_WEB_DOCUMENT.toLowerCase()}:`);
+}
+
+/**
+ * The rows of the last chart save that rest on the web document: a row not marked unresolved
+ * whose sources, elements or evidence cite one of its anchors.
+ * @param {Trajectory} traj
+ */
+function t13WebRows(traj) {
+	const saves = chartSaves(traj);
+	const last = saves[saves.length - 1];
+	const rows = Array.isArray(last?.args?.coverage) ? last.args.coverage : [];
+	return rows.filter(row => row && row.status !== 'unresolved'
+		&& [...(row.sourceAnchors ?? []), ...(row.elements ?? []).map(element => element?.anchor), ...(row.evidence ?? []).map(entry => entry?.anchor)].some(citesWebDocument));
+}
+
+/**
  * The Search Rounds a chart save records (its `rounds` argument), or none.
  * @param {FlatCall} call
  * @returns {Array<{ queries?: Array<{ query?: unknown }> }>}
@@ -844,5 +880,48 @@ export const cases = {
 		const aimed = chosen.filter(id => T12_POINT_TERMS[id]).every(id => queries.some(query => T12_POINT_TERMS[id].test(query)));
 		const offTarget = open.filter(id => !chosen.includes(id) && T12_POINT_TERMS[id]).some(id => queries.some(query => T12_POINT_TERMS[id].test(query)));
 		return sameAnswers && aimed && !offTarget;
+	},
+
+	/**
+	 * T13 — the GB document was retrieved (no text came back) and its patent page was fetched after
+	 * that: the fallback the skill names for a document the tools hold no text for (#750).
+	 */
+	t13_fetched_page_for_textless_document: traj => {
+		const calls = flatCalls(traj);
+		const number = squashNumber(T13_WEB_DOCUMENT).replace(/[A-Z]\d?$/, '');
+		const details = calls.findIndex(call => call.name === 'get_patent_details' && !call.args?.evidenceLookup && squashNumber(String(call.args?.publicationNumber ?? '')).includes(number));
+		const fetched = calls.findIndex((call, index) => index > details && call.name === 'fetch_webpage' && squashNumber(JSON.stringify(call.args?.urls ?? '')).includes(number));
+		return details >= 0 && fetched > details;
+	},
+	/**
+	 * T13 — the last save has a disclosed row on the web document's recorded anchors, and every
+	 * fragment and quote it cites there is in the fetched page text: the row validates as the writer
+	 * validates it, and nothing was typed from memory.
+	 */
+	t13_row_rests_on_validated_web_text: traj => {
+		const pages = normalizeText(flatCalls(traj).filter(call => call.name === 'fetch_webpage').map(call => call.resultBody ?? '').join('\n'));
+		const rows = t13WebRows(traj);
+		if (!rows.length || !pages) {
+			return false;
+		}
+		const cited = rows.flatMap(row => [
+			...(row.elements ?? []).filter(element => citesWebDocument(element?.anchor) && element?.disclosedBy).map(element => element.disclosedBy),
+			...(row.evidence ?? []).filter(entry => citesWebDocument(entry?.anchor) && entry?.quote).map(entry => entry.quote),
+		]);
+		return cited.length > 0 && cited.every(fragment => pages.includes(normalizeText(fragment)));
+	},
+	/** T13 — the last receipt lists the source open point of the web document. */
+	t13_receipt_lists_source_point: traj => {
+		const saves = chartSaves(traj);
+		const last = saves[saves.length - 1];
+		return !!last && receiptOpenPoints(last.resultBody).includes(T13_SOURCE_POINT);
+	},
+	/**
+	 * T13 — the Round Report names the source point as a numbered question with a recommendation that
+	 * speaks of the official or certified text, so the expert decides whether to confirm it.
+	 */
+	t13_round_report_names_source_point: traj => {
+		const report = traj.turnTexts?.[0] ?? traj.finalText ?? '';
+		return numberedItems(report).some(item => namesPoint(item.text, T13_SOURCE_POINT) && /recommend/i.test(item.text) && /official|certified|original/i.test(item.text));
 	},
 };
