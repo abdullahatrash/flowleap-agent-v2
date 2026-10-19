@@ -12,8 +12,14 @@
  * sections, style exemplars), and one "Next step for you:" line. Code writes it from the files
  * after every drafting tool call; the model never writes it.
  *
+ * The file opens with the loop (PRD 0026 S1): the steps in order, what re-opens what, and the
+ * name of the Prompts view page that shows the loop before the first matter.
+ *
  * ```
  * # Drafting checklist: hinge (EPO)
+ *
+ * The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+ * ...
  *
  * - [x] 1. Feature List confirmed: feature-list.md has `confirmed: true`
  * - [ ] 5. Answer the Inventor Questions: 9 open
@@ -394,11 +400,30 @@ export function nextChecklistStep(checklist: DraftingChecklist): DraftingCheckli
 	return checklist.steps.find(entry => !entry.done && !entry.blockedBy.length);
 }
 
+/** The title of the Prompts view page that shows the loop before the first matter (PRD 0026 S3). */
+const LOOP_PAGE = 'Drafting with drawings: the loop';
+
+/**
+ * The map of the loop at the top of `checklist.md` (PRD 0026 S1): the steps in order, what
+ * re-opens what, and the Prompts view page. At most six lines; the attorney reads them, so no
+ * technical term for the file format and no command name.
+ */
+const LOOP_HEADER: readonly string[] = [
+	'The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.',
+	`A change to ${DRAFTING_FILE_NAMES.claims} re-opens the claims approval.`,
+	`After a change to ${DRAFTING_FILE_NAMES.figures}, the next check of the figures runs the coverage again.`,
+	'A new render of a drawn Figure needs a new review cycle.',
+	'A waived Error stays waived until the Error changes.',
+	`The Prompts view page "${LOOP_PAGE}" shows this loop before the first matter.`,
+];
+
 /** Renders `checklist.md`. */
 export function renderChecklist(checklist: DraftingChecklist): string {
 	const next = nextChecklistStep(checklist);
 	const lines = [
 		`# Drafting checklist: ${checklist.matter}${checklist.office ? ` (${checklist.office})` : ''}`,
+		'',
+		...LOOP_HEADER,
 		'',
 		'Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.',
 		'',
