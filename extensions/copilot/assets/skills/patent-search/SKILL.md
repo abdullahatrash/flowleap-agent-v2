@@ -25,9 +25,9 @@ its count calls for.
    intelligence") is never discriminating. For "thing A applied to domain B", the pair is the
    discriminating term: keep both.
 
-3. **Write the query.** A query of one applicant or title term needs no preparation. Before a
-   query with other fields, grouping or wildcards, read the grammar once per session with
-   `get_search_syntax` (provider epo_ops, or uspto); do not guess a field name. Spend terms on discrimination, not
+3. **Write the query.** The `search_patents` query field lists the CQL fields: write from it
+   and do not guess a field name. After a grammar fault, or when you need a field it does not
+   list, read the full grammar with `get_search_syntax` (provider epo_ops, or uspto). Spend terms on discrimination, not
    coverage: two precise title-or-abstract terms beat five vague ones. Uncertain phrasing
    ("glass ceramic" or "glass-ceramic") is a reason to OR both forms, never to drop the term.
    When the invention spans classes, OR the classes together. To find the codes in use for a
@@ -37,9 +37,13 @@ its count calls for.
    holds a discriminating term.
 
 4. **Probe the count.** Run the query with a small range and read the total and the
-   `Next step` line of the result. Over about 1,000 hits: add the next discriminating term from
-   your list. Under 10: read the hits before you widen. Use the same `countries` value for the
-   probe and for the search it serves. Done when the count is one you would read in full.
+   `Next step` line of the result; it names the move the count calls for (add the next
+   discriminating term, or read before you widen). Off-topic hits mean a term names a
+   category: replace it with the specific subject matter. A prior-art search starts broad and
+   narrows, because you cannot notice what a too-narrow query never returned; a precise query
+   (a second subject term, a subgroup, tight dates) finds the closest few to read in full. Use
+   the same `countries` value for the probe and for the search it serves. Done when the count
+   is one you would read in full.
 
 5. **Read the set, then stop.** Page `range` through the whole set, or narrow until one page
    holds it; never judge a set from its first page. The same terms in another order are the

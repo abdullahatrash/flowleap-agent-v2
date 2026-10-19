@@ -17,7 +17,7 @@ import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
-import { opsFaultHint, searchCountHint } from './cqlSearchHints';
+import { opsFaultHint, searchCountHint, SearchResultPage } from './cqlSearchHints';
 
 interface ISearchPatentsParams {
 	query: string;
@@ -46,10 +46,7 @@ interface PatentSearchData {
 	countryFilter?: string[];
 	/** The CQL actually sent to OPS — carries the compiled country clause when a filter was requested. */
 	effectiveQuery?: string;
-	range?: {
-		begin: number;
-		end: number;
-	};
+	range?: SearchResultPage;
 	docs?: PatentDoc[];
 }
 

@@ -10,13 +10,19 @@ const NARROW_SET_THRESHOLD = 10;
 /** The most documents OPS serves per `range` call. */
 const OPS_PAGE_LIMIT = 100;
 
+/** The page of a result set OPS served, as `search_patents` echoes it in `range`. */
+export interface SearchResultPage {
+	readonly begin: number;
+	readonly end: number;
+}
+
 /**
  * The next step a `search_patents` result tells the model, computed from the count OPS returned
  * and the page it served. The method (extract terms, probe, refine, read the set) lives in the
  * patent-search skill; the numbers and the OPS facts that decide the step live here, next to the
  * tool that produced them.
  */
-export function searchCountHint(total: number, page?: { begin: number; end: number }): string | undefined {
+export function searchCountHint(total: number, page?: SearchResultPage): string | undefined {
 	if (total > BROAD_SET_THRESHOLD) {
 		return `Next step: ${total} hits is a technology area, not an invention. Add the next discriminating term from your extraction list and probe again; do not read pages of this set.`;
 	}
