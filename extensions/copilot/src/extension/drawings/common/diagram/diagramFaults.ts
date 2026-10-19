@@ -3,11 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DraftFinding } from '../../../tools/common/drafting/finding';
+import type { DrawingFinding } from '../scene/drawingFaults';
 import { countWords, DiagramOffice, EPO_MAX_WORDS, FONT_SIZE, textWidth, US_MAX_WORDS } from './diagramText';
 
-/** The rule ids of the diagram fault check, one per check of {@link checkDiagramSvg}. */
-export const DIAGRAM_RULES = ['us-keywords-only', 'epo-short-sentence', 'label-overlap', 'numeral-set', 'lead-line', 'lead-crosses-edge'] as const;
+/**
+ * The rules of the diagram fault check, one per check of {@link checkDiagramSvg}, rule id to the
+ * citation the receipt shows (01-formal-drawing-rules.md sections 5 and 9).
+ */
+export const DIAGRAM_RULES = {
+	'us-keywords-only': '37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible"); PCT Rule 11.11',
+	'epo-short-sentence': 'OJ EPO 2025 A49 Art. 1(2)(j); GL A-IX 8 (a short sentence per method step); PCT Rule 11.11',
+	'label-overlap': '37 CFR 1.84(p)(1), (p)(3) ("plain and legible", "should not cross or mingle with the lines"); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h)',
+	'numeral-set': '37 CFR 1.84(p)(4), (p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (one item, one character; the drawn set equals the step set)',
+	'lead-line': '37 CFR 1.84(q) (a lead line per reference character); OJ EPO 2025 A49 Art. 2; PCT IP 5.145',
+	'lead-crosses-edge': '37 CFR 1.84(q) ("Lead lines must not cross each other" or other lines); OJ EPO 2025 A49 Art. 2',
+} as const;
+
+/** A diagram rule id. */
+type DiagramRule = keyof typeof DIAGRAM_RULES;
 
 /** What the fault check compares the SVG against. */
 export interface DiagramFaultInput {
@@ -42,9 +55,10 @@ interface SvgText {
  * set against the step set, a lead line per numeral, and no numeral or lead line on a
  * connector. Each fault is an Error that cites its rule.
  */
-export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DraftFinding[] {
+export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DrawingFinding[] {
 	const file = `FIG-${input.figure}.svg`;
-	const findings: DraftFinding[] = [];
+	const findings: DrawingFinding[] = [];
+	const fault = (rule: DiagramRule, message: string): DrawingFinding => ({ severity: 'Error', rule, file, message, citation: DIAGRAM_RULES[rule] });
 	const texts = [...svg.matchAll(/<text (?<attrs>[^>]*)>(?<content>[^<]*)<\/text>/g)].map(match => toText(match.groups?.attrs ?? '', match.groups?.content ?? ''));
 	const labels = texts.filter(text => text.attrs.get('class') === 'label');
 	const numerals = texts.filter(text => text.attrs.get('class') === 'numeral');
@@ -65,8 +79,8 @@ export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DraftFin
 		const words = countWords(lines.join(' '));
 		if (words > maxWords) {
 			findings.push(input.office === 'US'
-				? { severity: 'Error', rule: 'us-keywords-only', file, message: `The label of ${key} has ${words} words. A US drawing takes keywords only, at most ${US_MAX_WORDS} words: legends with "as few words as possible" (37 CFR 1.84(o); MPEP 608.02).` }
-				: { severity: 'Error', rule: 'epo-short-sentence', file, message: `The label of ${key} has ${words} words. The EPO allows a short sentence per method step, at most ${EPO_MAX_WORDS} words here (Guidelines A-IX 8; OJ EPO 2025 A49 Art. 1(2)(j)).` });
+				? fault('us-keywords-only', `The label of ${key} has ${words} words. A US drawing takes keywords only, at most ${US_MAX_WORDS} words: legends with "as few words as possible" (37 CFR 1.84(o); MPEP 608.02).`)
+				: fault('epo-short-sentence', `The label of ${key} has ${words} words. The EPO allows a short sentence per method step, at most ${EPO_MAX_WORDS} words here (Guidelines A-IX 8; OJ EPO 2025 A49 Art. 1(2)(j)).`));
 		}
 	}
 
@@ -75,7 +89,7 @@ export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DraftFin
 	for (let i = 0; i < all.length; i++) {
 		for (let j = i + 1; j < all.length; j++) {
 			if (overlaps(all[i].box, all[j].box)) {
-				findings.push({ severity: 'Error', rule: 'label-overlap', file, message: `The text "${all[i].content}" overlaps the text "${all[j].content}". Characters must be plain and legible (37 CFR 1.84(p)(1); PCT Rule 11.13(h)).` });
+				findings.push(fault('label-overlap', `The text "${all[i].content}" overlaps the text "${all[j].content}". Characters must be plain and legible (37 CFR 1.84(p)(1); PCT Rule 11.13(h)).`));
 			}
 		}
 	}
@@ -86,18 +100,18 @@ export function checkDiagramSvg(svg: string, input: DiagramFaultInput): DraftFin
 	const missing = input.numerals.filter(numeral => !drawn.includes(numeral));
 	const extra = drawn.filter(numeral => !expected.has(numeral));
 	if (missing.length || extra.length || drawn.length !== input.numerals.length) {
-		findings.push({ severity: 'Error', rule: 'numeral-set', file, message: `The drawn numerals [${drawn.join(', ')}] differ from the step numerals [${input.numerals.join(', ')}]. No character may be absent from the description, and one item takes one character (37 CFR 1.84(p)(4), (p)(5)).` });
+		findings.push(fault('numeral-set', `The drawn numerals [${drawn.join(', ')}] differ from the step numerals [${input.numerals.join(', ')}]. No character may be absent from the description, and one item takes one character (37 CFR 1.84(p)(4), (p)(5)).`));
 	}
 	for (const numeral of drawn) {
 		const lead = leads.find(attrs => Number(attrs.get('data-numeral')) === numeral);
 		if (!lead) {
-			findings.push({ severity: 'Error', rule: 'lead-line', file, message: `Numeral ${numeral} has no lead line. A lead line connects each reference character to its item (37 CFR 1.84(q)).` });
+			findings.push(fault('lead-line', `Numeral ${numeral} has no lead line. A lead line connects each reference character to its item (37 CFR 1.84(q)).`));
 			continue;
 		}
 		const leadSegments = segmentsOf(lead.get('d') ?? '');
 		const text = numerals.find(candidate => Number(candidate.attrs.get('data-numeral')) === numeral);
 		if (connectors.some(segment => leadSegments.some(leadSegment => crosses(segment, leadSegment)) || (text && segmentInBox(segment, text.box)))) {
-			findings.push({ severity: 'Error', rule: 'lead-crosses-edge', file, message: `Numeral ${numeral} or its lead line touches a connector. Lead lines must not cross each other or other lines (37 CFR 1.84(q)).` });
+			findings.push(fault('lead-crosses-edge', `Numeral ${numeral} or its lead line touches a connector. Lead lines must not cross each other or other lines (37 CFR 1.84(q)).`));
 		}
 	}
 	return findings;

@@ -390,7 +390,11 @@ export function runSheetChecks(office: DrawingOffice, pageSize: DrawingPageSize,
 	return results;
 }
 
-/** Merges the Figure-level Findings into check rows: a rule fails on an unwaived Error, else passes; a Note shows in the detail. */
+/**
+ * Merges the Figure-level Findings into check rows: a rule fails on an unwaived Error, else
+ * passes; a Note shows in the detail. A rule whose only Findings are Notes that record the check
+ * did not run (`notChecked`) is `not-checked`.
+ */
 function figureRows(rules: Readonly<Record<string, string>>, findings: readonly FigureFinding[]): CheckResult[] {
 	const ids = [...new Set([...Object.keys(rules), ...findings.map(finding => finding.rule)])];
 	return ids.map(id => {
@@ -398,12 +402,13 @@ function figureRows(rules: Readonly<Record<string, string>>, findings: readonly 
 		const errors = own.filter(finding => finding.severity === 'Error' && !finding.waived);
 		const waived = own.filter(finding => finding.waived);
 		const notes = own.filter(finding => finding.severity === 'Note');
+		const notChecked = own.length > 0 && own.every(finding => finding.severity === 'Note' && finding.notChecked);
 		const citation = rules[id] ?? own.find(finding => finding.citation)?.citation ?? '-';
 		const line = (finding: FigureFinding) => finding.file ? `${finding.file}: ${finding.message}` : finding.message;
 		const detail = errors.length
 			? errors.map(line).join('; ')
-			: waived.length ? `Waived: ${waived.map(finding => finding.waived!.reason).join('; ')}` : notes.length ? `Note: ${notes.map(line).join('; ')}` : 'No finding.';
-		return { id, citation, result: errors.length ? 'fail' : 'pass', detail };
+			: waived.length ? `Waived: ${waived.map(finding => finding.waived!.reason).join('; ')}` : notChecked ? notes.map(line).join('; ') : notes.length ? `Note: ${notes.map(line).join('; ')}` : 'No finding.';
+		return { id, citation, result: errors.length ? 'fail' : notChecked ? 'not-checked' : 'pass', detail };
 	});
 }
 

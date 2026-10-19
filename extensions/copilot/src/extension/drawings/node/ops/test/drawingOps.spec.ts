@@ -341,6 +341,37 @@ describe('buildDrawingSetOp', () => {
 	}, KERNEL_TIMEOUT);
 });
 
+describe('coverage and numeral checks at build', () => {
+	it('with no Draft Outline and no draft, the receipt rows figure-coverage and numeral-not-drawn show not-checked (#804, #802)', async () => {
+		const flowchartOnly = `---\nnumerals: even\n---\n## FIG. 2\n\n- 2: measuring a cell temperature [F2]\n- 4: comparing the cell temperature\n- 6: opening a coolant valve\n`;
+		const { render, read, files } = await setup({ 'feature-list.md': featureList, 'claims.md': claims, 'figures.md': flowchartOnly });
+		await render({ figure: 2, flowchart: { fromClaim: 2 } });
+		const result = await buildDrawingSetOp(files);
+		const receipt = await read('drawings/drawings-compliance.md') ?? '';
+		expect({
+			result: result.ok ? result.text.split('\n').slice(1, 3) : result,
+			rows: receipt.split('\n').filter(line => /^\| (figure-coverage|numeral-not-drawn|us-keywords-only|numeral-set) /.test(line)),
+		}).toMatchSnapshot();
+	}, KERNEL_TIMEOUT);
+
+	it('refuses the D7 pipe-clamp set on numeral 10, cited in the description for FIG. 1 and FIG. 2 and drawn in no Figure; builds once the attorney waives it (#802)', async () => {
+		const fixture = (name: string) => readFileSync(path.join(__dirname, `fixtures/pipe-clamp.${name}`), 'utf8');
+		const { render, read, files } = await setup({ 'feature-list.md': fixture('feature-list.md'), 'figures.md': pipeClampFigures, 'draft-application.md': fixture('draft-application.md') });
+		await files.write('drawings/FIG-1.svg', fixture('FIG-1.svg'));
+		await files.write('drawings/FIG-2.svg', fixture('FIG-2.svg'));
+		await render({ figure: 3, flowchart: { steps: pipeClampSteps } });
+		const refused = await buildDrawingSetOp(files);
+		await files.write('findings.md', '# Findings\n\n## Errors\n\n- `numeral-not-drawn` (draft-application.md, line 42): Numeral 10 ("pipe clamp") is cited.\n  - Waived: The whole clamp gets numeral 10 in FIG. 1 in the next render.\n');
+		const built = await buildDrawingSetOp(files);
+		const receipt = await read('drawings/drawings-compliance.md') ?? '';
+		expect({
+			refused,
+			built: built.ok ? built.text.split('\n').slice(1, 3) : built,
+			rows: receipt.split('\n').filter(line => /^\| (numeral-not-drawn|figure-coverage|figure-parts-not-drawn) /.test(line)),
+		}).toMatchSnapshot();
+	}, KERNEL_TIMEOUT);
+});
+
 describe('figure-parts-not-drawn', () => {
 	it('names the numerals figures.md lists for a Figure but the Figure does not draw, in the render text and as a receipt Note (live FIG. 2)', async () => {
 		const quickRelease: DrawingScene = JSON.parse(readFileSync(path.join(__dirname, '../../kernel/test/fixtures/quick-release-section.scene.json'), 'utf8'));

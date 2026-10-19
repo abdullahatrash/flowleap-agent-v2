@@ -134,7 +134,36 @@ describe('Application Drafting figures.md validators', () => {
 
 	it('coverage: one Note when figures.md links no part, so the coverage was not checked', () => {
 		expect(checkClaimedFeatureCoverage({ office: 'US', figures: '## FIG. 1\n\n- 12: housing\n', outline, featureList })).toEqual([
-			{ severity: 'Note', rule: 'figure-coverage', file: 'figures.md', message: 'figures.md links no part to a Feature List row (`- 12: housing [F3]`), so the claimed-feature coverage was not checked. The Approved Claims cite F2, F3, F4.' },
+			{ severity: 'Note', rule: 'figure-coverage', file: 'figures.md', notChecked: true, message: 'figures.md links no part to a Feature List row (`- 12: housing [F3]`), so the claimed-feature coverage was not checked. The Approved Claims cite F2, F3, F4.' },
 		]);
+	});
+
+	it('coverage: a not-checked Note with no Draft Outline, or with no Technical item that lists claims; a bad link is still an Error (#804)', () => {
+		const figures = '## FIG. 1\n\n- 12: housing [F2]\n- 18: pin [F9]\n';
+		const noClaims = parseDraftOutline([
+			'---',
+			'office: US',
+			'claims: 0',
+			'---',
+			'# Draft Outline',
+			'',
+			'| Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question |',
+			'|------|---------|------|--------|-------------|---------|---------|----------|',
+			'| O1 | Detailed Description | Technical |  |  | F2, FIG. 1 | yes |  |',
+		].join('\n'));
+		expect({
+			noOutline: checkClaimedFeatureCoverage({ office: 'US', figures, outline: parseDraftOutline(''), featureList }),
+			noClaims: checkClaimedFeatureCoverage({ office: 'US', figures: '## FIG. 1\n\n- 12: housing [F2]\n', outline: noClaims, featureList }),
+			noFigures: checkClaimedFeatureCoverage({ office: 'US', figures: '', outline: parseDraftOutline(''), featureList }),
+		}).toEqual({
+			noOutline: [
+				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', line: 4, message: 'Part 18 ("pin") links F9, which is not a row of feature-list.md.' },
+				{ severity: 'Note', rule: 'figure-coverage', file: 'figures.md', notChecked: true, message: 'Not checked: no Draft Outline yet. The claimed-feature coverage (37 CFR 1.83(a)) is checked once draft-outline.md has Technical items that list claims.' },
+			],
+			noClaims: [
+				{ severity: 'Note', rule: 'figure-coverage', file: 'figures.md', notChecked: true, message: 'Not checked: draft-outline.md has no Technical item that lists claims. The claimed-feature coverage (37 CFR 1.83(a)) is checked once it has.' },
+			],
+			noFigures: [],
+		});
 	});
 });

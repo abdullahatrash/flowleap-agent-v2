@@ -12,13 +12,13 @@ import { blockingFindings, mergeFindings, parseFindingsFile } from '../../../too
 import { DRAFTING_FILE_NAMES, isDrawingSheetFile, resolveDraftingFolder } from '../../../tools/common/drafting/folderContract';
 import { parseDraftOutline } from '../../../tools/common/drafting/outline';
 import { parseFigureParts } from '../../../tools/common/drafting/specValidators';
-import { checkDiagramSvg } from '../../common/diagram/diagramFaults';
+import { checkDiagramSvg, DIAGRAM_RULES } from '../../common/diagram/diagramFaults';
 import { diagramNumerals } from '../../common/diagram/diagramText';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../common/scene/drawingFaults';
 import { validateScene } from '../../common/scene/sceneValidator';
 import { CheckResult, FigureFinding, FigureSetFacts, runSheetChecks, SHEET_CHECKS, writeDrawingsReceipt } from '../../common/sheets/receipt';
 import { DrawingPageSize, FigureInput, layoutDrawingSheets } from '../../common/sheets/sheetLayout';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, FIGURE_LIST_RULES, FigureId, figureListText, figureOfSvgFile, figureSetStatus, parseReviewRounds, partsNotDrawn, partsNotDrawnFindings, partsNotDrawnLine, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, FIGURE_LIST_RULES, FigureId, figureListText, figureOfSvgFile, figureSetStatus, numeralsNotCheckedFinding, numeralsNotDrawn, numeralsNotDrawnFindings, parseReviewRounds, partsNotDrawn, partsNotDrawnFindings, partsNotDrawnLine, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
 import { MatterFiles, readMatterOffice } from './matterFiles';
 
 /** The result of a build: the written Drawing Set, or the refusal reason (nothing was written). */
@@ -101,7 +101,10 @@ export interface BuildDrawingSetOptions {
  * build lays the FIG labels out by the figure-list count, starts the receipt with
  * `INCOMPLETE SET: <Figures> not drawn` and never rewrites the manifest. The receipt row
  * `figure-parts-not-drawn` lists, as a Note, the numerals a heading of `figures.md` lists but its
- * drawn Figures do not carry; it never blocks the build. No model call.
+ * drawn Figures do not carry; it never blocks the build. The row `numeral-not-drawn` is an Error
+ * per reference sign the description (`draft-application.md`) cites that no Figure draws
+ * (37 CFR 1.84(p)(5)); it is `not-checked` with no draft or in a partial build (#802). The row
+ * `figure-coverage` is `not-checked` while the matter has no Draft Outline (#804). No model call.
  */
 export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawingSetOptions = {}): Promise<BuildDrawingSetResult> {
 	const refuse = (reason: string): BuildDrawingSetResult => ({ ok: false, reason });
@@ -139,7 +142,8 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		...checkFiguresSettings(figures, office),
 		...checkClaimedFeatureCoverage({ office, figures, outline, featureList: await files.read(DRAFTING_FILE_NAMES.featureList) ?? '' }),
 	];
-	const blocking = blockingFindings(mergeFindings(listChecks, previous));
+	const listChecksWaived = mergeFindings(listChecks, previous);
+	const blocking = blockingFindings(listChecksWaived);
 	if (blocking.length) {
 		return refuse(`${blocking.length} Error(s) of the figure list are open; fix each in ${path(DRAFTING_FILE_NAMES.figures)}, or the attorney waives it in ${path(DRAFTING_FILE_NAMES.findings)}:\n${blocking.map(findingLine).join('\n')}`);
 	}
@@ -152,8 +156,11 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		inputs.push({ number: figure.number, partial: figure.partial, svg });
 		found.push(...await figureFindings(files, figure, svg, allowedNumerals));
 	}
-	const notDrawn = partsNotDrawn(figures, figureFiles.map((figure, index) => ({ figure, svg: inputs[index].svg })));
+	const drawnFigures = figureFiles.map((figure, index) => ({ figure, svg: inputs[index].svg }));
+	const notDrawn = partsNotDrawn(figures, drawnFigures);
 	found.push(...partsNotDrawnFindings(notDrawn));
+	found.push(...(draft === undefined ? [numeralsNotCheckedFinding('no-draft')] : status.missing.length ? [numeralsNotCheckedFinding('partial')] : numeralsNotDrawnFindings(numeralsNotDrawn(draft, figures, drawnFigures))));
+	found.push(...listChecksWaived.filter(finding => finding.rule === 'figure-coverage').map(finding => ({ ...finding, citation: FIGURE_LIST_RULES['figure-coverage'] })));
 	const figureFindingsWaived = withFigureWaivers(found, previous);
 	const openFigureErrors = blockingFindings(figureFindingsWaived);
 	if (openFigureErrors.length) {
@@ -188,7 +195,7 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		office,
 		pageSize,
 		sheets,
-		figureRules: { ...DRAWING_RULES, ...FIGURE_LIST_RULES },
+		figureRules: { ...DRAWING_RULES, ...DIAGRAM_RULES, ...FIGURE_LIST_RULES },
 		figureFindings: figureFindingsWaived,
 		reviewRounds: reviewRecords(rounds, figureFiles.map(figure => figure.key)),
 		pdf: inspectPdf(pdfBytes),
