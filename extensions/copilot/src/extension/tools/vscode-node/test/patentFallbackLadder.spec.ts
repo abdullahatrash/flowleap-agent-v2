@@ -6,7 +6,7 @@ import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../../patentai/vscode-node/patentExecutionLedger';
 import { candidateWordingReview, chartOpenPoints, PatentCandidateReview, renderCandidateReview, renderWorkingRecord, validateCandidateReview } from '../patentCandidateReview';
-import { deriveFallbackLadder, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, roundAnswerErrors, roundLedgerStatus, roundOrderErrors } from '../patentFallbackLadder';
+import { deriveFallbackLadder, distinctPublications, FallbackLadderDerivation, fallbackCoverage, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, parseClaimDependency, publicationIdentities, roundAnswerErrors, roundLedgerStatus, roundOrderErrors } from '../patentFallbackLadder';
 
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
 
@@ -387,6 +387,42 @@ describe('fallback row checks (invalidity variant)', () => {
 			expect(validateCandidateReview({ ...review, criticalDate: '1 March 2005' }, snapshot, '', 'invalidity')).toEqual([
 				'criticalDate "1 March 2005" is not an ISO date. Give it as YYYY-MM-DD (for example 2005-03-01), or leave criticalDate out and keep the basis in prose.',
 			]);
+		});
+
+		// A figures call made with the bare number records `US5000000:figure:2` beside the dated
+		// `US5000000A` (#729): one publication, so one Retrieved documents row, one Reference roles row
+		// and no `date-US5000000` open point for the bare spelling.
+		it('reads a figure anchor without a kind code as the dated publication it belongs to (#729)', () => {
+			const bare = 'US5000000';
+			const bareFigure = `${bare}:figure:2`;
+			const swap = (anchor: string) => anchor === usFigure ? bareFigure : anchor;
+			const bareRecord = snapshotOf(...scoped.executions.map(execution => execution.id === 'us-figure'
+				? { ...execution, publicationIds: [bare], sources: [{ anchor: bareFigure, reference: { publicationNumber: bare, section: 'bibliography' as const }, figure: { page: 2 }, retrieval: 'returned' as const, review: 'unknown' as const, completeness: 'unknown' as const }] }
+				: execution));
+			const bareReview: PatentCandidateReview = { ...chartReview, coverage: chartReview.coverage!.map(row => ({ ...row, sourceAnchors: row.sourceAnchors?.map(swap), elements: row.elements?.map(element => element.anchor ? { ...element, anchor: swap(element.anchor) } : element) })) };
+			const chart = renderCandidateReview(bareReview, bareRecord, 'chart.working-record.md', 'invalidity').split('\n');
+			const table = (heading: string) => chart.slice(chart.indexOf(heading)).slice(1).filter((line, index, lines) => index < lines.findIndex(next => next.startsWith('## '))).filter(line => line.startsWith('| US'));
+			expect({
+				retrieved: table('## Retrieved documents'),
+				roles: table('## Reference roles (generated)'),
+				points: chartOpenPoints(bareReview, bareRecord).map(point => point.id).filter(id => /^(scope|date)-/.test(id)),
+			}).toEqual({
+				retrieved: ['| US5000000A | 1991-03-19 | Unknown | en | official | outside searched jurisdictions (US) |'],
+				roles: ['| US5000000A | Claim 1 — element (a): a band; Claim 1 as a whole | discloses element(s) on its own |'],
+				points: ['scope-US5000000A', 'date-EP1000000A1'],
+			});
+		});
+	});
+
+	describe('publication identity (#729)', () => {
+		it('joins a bare number to the one kind-coded publication of its document, and keeps an A1 and a B1 apart', () => {
+			expect({
+				identities: [...publicationIdentities(['US4935850A', 'US4935850', 'EP1234567A1', 'EP1234567B1', 'EP1234567', 'EP 1234567 A1', 'JP2004174393'])],
+				distinct: distinctPublications(['US4935850', 'US4935850A', 'EP1234567B1', 'EP1234567', 'EP1234567A1', 'US4935850']),
+			}).toEqual({
+				identities: [['US4935850A', 'US4935850A'], ['US4935850', 'US4935850A'], ['EP1234567A1', 'EP1234567A1'], ['EP1234567B1', 'EP1234567B1'], ['EP1234567', 'EP1234567'], ['JP2004174393', 'JP2004174393']],
+				distinct: ['US4935850A', 'EP1234567B1', 'EP1234567', 'EP1234567A1'],
+			});
 		});
 	});
 });

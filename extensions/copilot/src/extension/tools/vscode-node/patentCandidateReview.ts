@@ -10,7 +10,7 @@ import { evidenceSourceIndex, PatentEvidenceSource, PatentExecution, PatentExecu
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
 import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
-import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, hasKindCode, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase, webSourceOpenPoints, webSourcesOf } from './patentFallbackLadder';
+import { deriveFallbackLadder, distinctPublications, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, hasKindCode, LADDER_UNAVAILABLE, ladderOf, publicationIdentities, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase, webSourceOpenPoints, webSourcesOf } from './patentFallbackLadder';
 import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
@@ -227,25 +227,27 @@ function citedAnchors(review: PatentCandidateReview): Set<string> {
 function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly RetrievedDocument[] {
 	const cited = citedAnchors(review);
 	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; figurePages: Set<number>; languages: Map<string, string>; official: boolean; webHosts: Set<string>; cited: boolean }
-	// The backend echoes ids as `EP0983762.A1` while source references carry `EP0983762A1`; both
-	// name one document, so records are keyed on the separator-free form and shown that way.
+	// The backend echoes ids as `EP0983762.A1` while source references carry `EP0983762A1`, and a
+	// figure anchor may carry no kind code at all (`US4935850:figure:2` beside `US4935850A`). Each
+	// names one publication (#729), so records are keyed and shown by the publication its spelling
+	// names; an A1 and a B1 of one number stay two records with two dates.
+	const retrievals = snapshot.executions.filter(execution => (execution.kind === 'details' || execution.kind === 'figures') && execution.status === 'succeeded' && (execution.kind !== 'figures' || !!execution.sources?.length));
+	const identities = publicationIdentities(retrievals.flatMap(execution => [...(execution.publicationIds ?? []), ...(execution.sources ?? []).map(source => source.reference.publicationNumber)]));
 	const documents = new Map<string, DocumentRecord>();
 	const entry = (publication: string): DocumentRecord => {
-		const key = publicationKey(publication);
+		const key = identities.get(publicationKey(publication)) ?? publicationKey(publication);
 		const existing = documents.get(key);
 		if (existing) { return existing; }
 		const created: DocumentRecord = { sections: new Set<string>(), figurePages: new Set<number>(), languages: new Map<string, string>(), official: false, webHosts: new Set<string>(), cited: false };
 		documents.set(key, created);
 		return created;
 	};
-	for (const execution of snapshot.executions) {
-		// A drawing retrieval brings a document into the session exactly as a text retrieval does; what
-		// it records is pages, not passages.
-		if ((execution.kind !== 'details' && execution.kind !== 'figures') || execution.status !== 'succeeded') { continue; }
-		// A figures call that returned no drawing retrieved nothing. The record keeps the call as an
-		// audit fact, but an inventory of retrieved documents must not list it, and the count of
-		// retrieved-but-uncited documents must not hold a document no page was ever returned for.
-		if (execution.kind === 'figures' && !execution.sources?.length) { continue; }
+	// A drawing retrieval brings a document into the session exactly as a text retrieval does; what it
+	// records is pages, not passages. A figures call that returned no drawing retrieved nothing: the
+	// record keeps the call as an audit fact, but an inventory of retrieved documents must not list
+	// it, and the count of retrieved-but-uncited documents must not hold a document no page was ever
+	// returned for.
+	for (const execution of retrievals) {
 		for (const publication of execution.publicationIds ?? []) {
 			const document = entry(publication);
 			document.date ??= execution.publicationDate;
@@ -544,12 +546,12 @@ function outsideScope(publication: string, jurisdictions: readonly string[]): bo
  */
 function rowScopeNotes(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>, jurisdictions: readonly string[]): string[] {
 	if (!jurisdictions.length) { return []; }
-	const publications = new Set<string>();
+	const publications: string[] = [];
 	for (const anchor of [...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor)]) {
 		const publication = sources.get(anchor)?.reference.publicationNumber;
-		if (publication && outsideScope(publication, jurisdictions)) { publications.add(publicationKey(publication)); }
+		if (publication && outsideScope(publication, jurisdictions)) { publications.push(publication); }
 	}
-	return [...publications].map(publication => `Scope note (generated): ${publication} is outside the searched jurisdictions (${jurisdictions.join(', ')}).`);
+	return distinctPublications(publications).map(publication => `Scope note (generated): ${publication} is outside the searched jurisdictions (${jurisdictions.join(', ')}).`);
 }
 
 type PatentCoverageRow = NonNullable<PatentCandidateReview['coverage']>[number];
@@ -663,9 +665,9 @@ const FIGURES_SAVE_DIR = 'references/figures';
  * drawings of nothing at all could only invent a reason for not having read them.
  */
 function figureCandidates(snapshot: PatentExecutionSnapshot): string | undefined {
-	const publications = [...new Set(snapshot.executions
+	const publications = distinctPublications(snapshot.executions
 		.filter(execution => execution.kind === 'details' && execution.status === 'succeeded')
-		.flatMap(execution => execution.publicationIds?.[0] ? [publicationKey(execution.publicationIds[0])] : []))];
+		.flatMap(execution => execution.publicationIds?.[0] ? [execution.publicationIds[0]] : []));
 	if (!publications.length) { return undefined; }
 	const listed = publications.slice(0, FIGURES_CANDIDATE_CAP).join(', ');
 	return publications.length > FIGURES_CANDIDATE_CAP ? `${listed}, and ${publications.length - FIGURES_CANDIDATE_CAP} more in the working record` : listed;
@@ -715,11 +717,11 @@ function elementMapErrors(row: PatentCoverageRow, sources: Map<string, PatentEvi
 		if (!disclosed) { errors.push(`No element of "${row.feature}" is disclosed by cited text. Either mark the row unresolved, or keep it partial and give at least one element an anchor and a literal disclosedBy fragment; a partial row needs both a disclosed and an undisclosed element.`); }
 	}
 	if (row.kind === 'combination' && row.status === 'supported') {
-		const publications = new Set(elements.flatMap(element => {
+		const publications = distinctPublications(elements.flatMap(element => {
 			const publication = element.anchor ? sources.get(element.anchor)?.reference.publicationNumber : undefined;
-			return publication ? [publicationKey(publication)] : [];
+			return publication ? [publication] : [];
 		}));
-		if (publications.size > 1) { errors.push(`Elements of "${row.feature}" are disclosed by ${[...publications].join(' and ')}: separate documents do not establish the combination; mark partial and say which document lacks which element.`); }
+		if (publications.length > 1) { errors.push(`Elements of "${row.feature}" are disclosed by ${publications.join(' and ')}: separate documents do not establish the combination; mark partial and say which document lacks which element.`); }
 	}
 	return errors;
 }
@@ -874,25 +876,29 @@ interface ReferenceRole {
  * X/Y/A category and not a conclusion about anticipation or obviousness.
  */
 export function referenceRoles(review: PatentCandidateReview, sources: Map<string, PatentEvidenceSource>): readonly ReferenceRole[] {
+	// Grouped by the publication each spelling names across the whole chart (#729): a figure anchor
+	// without a kind code joins the dated publication it belongs to; an A1 and a B1 stay two references.
+	const perRow = (review.coverage ?? []).map(row => ({ row, publications: rowPublications(row, sources) }));
+	const identities = publicationIdentities(perRow.flatMap(entry => entry.publications));
 	const roles = new Map<string, { rows: string[]; alone: boolean }>();
-	for (const row of review.coverage ?? []) {
-		const publications = rowPublications(row, sources);
+	for (const { row, publications } of perRow) {
 		for (const publication of publications) {
-			const role = roles.get(publication) ?? { rows: [], alone: false };
+			const identity = identities.get(publication) ?? publication;
+			const role = roles.get(identity) ?? { rows: [], alone: false };
 			role.rows.push(row.feature);
-			role.alone ||= row.status === 'supported' && publications.size === 1;
-			roles.set(publication, role);
+			role.alone ||= row.status === 'supported' && publications.length === 1;
+			roles.set(identity, role);
 		}
 	}
 	return [...roles].map(([publication, role]) => ({ publication, rows: role.rows, alone: role.alone }));
 }
 
-/** The publications one row cites through its source anchors, its evidence and its element map, in the order first cited. */
-function rowPublications(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): ReadonlySet<string> {
-	return new Set([...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor), ...(row.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
+/** The publications one row cites through its source anchors, its evidence and its element map, one per publication in the order first cited. */
+function rowPublications(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): readonly string[] {
+	return distinctPublications([...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor), ...(row.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]
 		.flatMap(anchor => {
 			const publication = sources.get(anchor)?.reference.publicationNumber;
-			return publication ? [publicationKey(publication)] : [];
+			return publication ? [publication] : [];
 		}));
 }
 
