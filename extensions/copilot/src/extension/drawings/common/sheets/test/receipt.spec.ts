@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { checkDiagramSvg, DIAGRAM_RULES } from '../../diagram/diagramFaults';
+import { DIAGRAM_RULES } from '../../../../tools/common/drafting/figureRules';
+import { checkDiagramSvg } from '../../diagram/diagramFaults';
 import { writeDrawingsReceipt } from '../receipt';
 import { layoutDrawingSheets } from '../sheetLayout';
 import { figure, figureSvg } from './figureFixtures';

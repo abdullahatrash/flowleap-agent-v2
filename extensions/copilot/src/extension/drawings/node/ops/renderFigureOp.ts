@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { parseClaims } from '../../../tools/common/drafting/claims';
+import { DRAWING_RULES } from '../../../tools/common/drafting/figureRules';
 import { readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { DraftFinding } from '../../../tools/common/drafting/finding';
 import { DRAFTING_FILE_NAMES } from '../../../tools/common/drafting/folderContract';
@@ -13,7 +14,7 @@ import type { DiagramResult } from '../../common/diagram/diagram';
 import type { FlowchartProposal } from '../../common/diagram/flowchart';
 import { DiagramNumeralScheme, numeralFor } from '../../common/diagram/diagramText';
 import type { DiagramStep } from '../../common/diagram/steps';
-import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
+import { checkFigureSvgFaults, checkSceneFaults, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
 import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewCycleState, ReviewRound, ReviewRounds, reviewPngName, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';

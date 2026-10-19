@@ -3,24 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { DIAGRAM_RULES, DiagramRule } from '../../../tools/common/drafting/figureRules';
 import type { DrawingFinding } from '../scene/drawingFaults';
 import { countWords, DiagramOffice, EPO_MAX_WORDS, FONT_SIZE, textWidth, US_MAX_WORDS } from './diagramText';
-
-/**
- * The rules of the diagram fault check, one per check of {@link checkDiagramSvg}, rule id to the
- * citation the receipt shows (01-formal-drawing-rules.md sections 5 and 9).
- */
-export const DIAGRAM_RULES = {
-	'us-keywords-only': '37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible"); PCT Rule 11.11',
-	'epo-short-sentence': 'OJ EPO 2025 A49 Art. 1(2)(j); GL A-IX 8 (a short sentence per method step); PCT Rule 11.11',
-	'label-overlap': '37 CFR 1.84(p)(1), (p)(3) ("plain and legible", "should not cross or mingle with the lines"); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h)',
-	'numeral-set': '37 CFR 1.84(p)(4), (p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (one item, one character; the drawn set equals the step set)',
-	'lead-line': '37 CFR 1.84(q) (a lead line per reference character); OJ EPO 2025 A49 Art. 2; PCT IP 5.145',
-	'lead-crosses-edge': '37 CFR 1.84(q) ("Lead lines must not cross each other" or other lines); OJ EPO 2025 A49 Art. 2',
-} as const;
-
-/** A diagram rule id. */
-type DiagramRule = keyof typeof DIAGRAM_RULES;
 
 /** What the fault check compares the SVG against. */
 export interface DiagramFaultInput {

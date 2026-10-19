@@ -20,10 +20,11 @@
  */
 
 import { basename } from '../../../util/vs/base/common/path';
-import { DRAWING_RULES, DrawingRule, figureSvgNumerals } from './scene/drawingFaults';
+import { figureSvgNumerals } from './scene/drawingFaults';
 import type { BlockDiagramInput } from './diagram/blockDiagram';
 import type { FlowchartInput } from './diagram/flowchart';
 import type { CheckResult, FigureFinding, FigureReviewRecord } from './sheets/receipt';
+import { DRAWING_RULES, DrawingRule } from '../../tools/common/drafting/figureRules';
 import { NumeralScheme } from '../../tools/common/drafting/figures';
 import { formatFindingLine } from '../../tools/common/drafting/finding';
 import { DRAFTING_FILE_NAMES } from '../../tools/common/drafting/folderContract';
