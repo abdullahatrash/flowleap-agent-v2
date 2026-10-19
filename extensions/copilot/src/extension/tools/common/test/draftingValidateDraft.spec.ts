@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { readFileSync } from 'fs';
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import { DraftFinding } from '../drafting/finding';
+import { parseDraftingFrontmatter } from '../drafting/frontmatter';
 import { validateDraft } from '../drafting/validateDraft';
 
 const claims = [
@@ -134,7 +137,8 @@ describe('Application Drafting validateDraft', () => {
 			'---',
 			'| Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question |',
 			'|---|---|---|---|---|---|---|---|',
-			'| O1 | Detailed Description | Technical | 1, 2, 3, 4 | a hinge, a housing, a lever, a spring | F2, F3 | yes |  |',
+			'| O1 | Detailed Description | Technical | 1, 2 | a hinge, a housing, a lever | F2, F3 | yes |  |',
+			'| O2 | Detailed Description | Technical | 3, 4 | a spring | F3 | yes |  |',
 		].join('\n');
 		const run = (office: 'US' | 'EPO') => summary(validateDraft({ office, draft, claims, figures: drawn, outline: { text: outline, approvedClaimsHash: 'c1', featureList: '| F1 | A hinge. |\n| F2 | A housing. |\n| F3 | A lever. |' } }))
 			.filter(line => /figure-|numeral|figures-settings|page-size/.test(line));
@@ -142,16 +146,31 @@ describe('Application Drafting validateDraft', () => {
 			US: [
 				'Error reference-numeral figures.md:9',
 				'Error figure-proposal figures.md:8',
-				'Error figure-coverage figures.md:- claim 1',
+				'Error figure-coverage figures.md:- claim 3',
 				'Note numeral-scheme figures.md:9',
 			],
 			EPO: [
 				'Error reference-numeral figures.md:9',
 				'Error page-size-mismatch figures.md:-',
 				'Error figure-proposal figures.md:8',
-				'Error figure-coverage figures.md:- claim 1',
+				'Error figure-coverage figures.md:- claim 3',
 				'Note numeral-scheme figures.md:9',
 			],
 		});
+	});
+
+	it('raises no Error on the D7 pipe-clamp matter: flowchart steps are cited as "step 44", alternatives and tests need no drawn part (#782, #783)', () => {
+		// A copy of the IDF-D7 drafting folder of the 2026-10-19 live run (docs/reviews/2026-10-19-drawings-d7-acceptance-pipe-clamp.md).
+		const matter = (name: string) => readFileSync(path.join(__dirname, 'fixtures/pipe-clamp', name), 'utf8');
+		const claimsText = matter('claims.md');
+		const findings = validateDraft({
+			office: 'US',
+			draft: matter('draft-application.md'),
+			claims: claimsText,
+			figures: matter('figures.md'),
+			inventorAnswers: matter('inventor-answers.md'),
+			outline: { text: matter('draft-outline.md'), approvedClaimsHash: String(parseDraftingFrontmatter(claimsText).fields.approvedHash), featureList: matter('feature-list.md') },
+		});
+		expect(findings.filter(finding => finding.severity === 'Error').map(finding => `${finding.rule} ${finding.file}:${finding.line ?? '-'}${finding.claim ? ` claim ${finding.claim}` : ''} ${finding.message}`)).toEqual([]);
 	});
 });

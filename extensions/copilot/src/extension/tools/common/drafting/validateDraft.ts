@@ -87,7 +87,7 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		...checkFiguresSettings(figures, input.office),
 		...checkNumeralScheme(figures),
 		...checkFigureProposals(figures),
-		...(input.outline?.text !== undefined ? checkClaimedFeatureCoverage({ office: input.office, figures, outline: parseDraftOutline(input.outline.text), featureList: input.outline.featureList }) : []),
+		...(input.outline?.text !== undefined ? checkClaimedFeatureCoverage({ office: input.office, figures, outline: parseDraftOutline(input.outline.text), featureList: input.outline.featureList, claims }) : []),
 		...checkSourceMarkers(paragraphs, answers, figures),
 		...checkInventorQuestions(input.draft, answers),
 		...checkClaimCount(claims, input.office),

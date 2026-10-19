@@ -3,7 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { readFileSync } from 'fs';
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
+import { parseClaims } from '../drafting/claims';
 import { checkClaimedFeatureCoverage, checkFigureProposals, checkFiguresSettings, checkNumeralScheme } from '../drafting/figureValidators';
 import { parseDraftOutline } from '../drafting/outline';
 
@@ -17,6 +20,9 @@ const featureList = [
 	'| F3 | A lever. |',
 	'| F4 | A spring. |',
 ].join('\n');
+
+/** Claim 1 is independent; 2 and 3 depend on it. */
+const claims = parseClaims('1. A hinge comprising a housing, a lever and a spring.\n2. The hinge of claim 1, wherein the lever is steel.\n3. The hinge of claim 1, wherein the spring is coiled.');
 
 const outline = parseDraftOutline([
 	'---',
@@ -97,12 +103,12 @@ describe('Application Drafting figures.md validators', () => {
 	it('coverage: pass when every row the claims cite has a confirmed part in a figure', () => {
 		const figures = '## FIG. 1\n\n- 12: housing [F2]\n- 14: lever [F3, F4]\n';
 		expect([
-			checkClaimedFeatureCoverage({ office: 'US', figures, outline, featureList }),
-			checkClaimedFeatureCoverage({ office: 'US', figures: '', outline, featureList }),
+			checkClaimedFeatureCoverage({ office: 'US', figures, outline, featureList, claims }),
+			checkClaimedFeatureCoverage({ office: 'US', figures: '', outline, featureList, claims }),
 		]).toEqual([[], []]);
 	});
 
-	it('coverage: Errors for a cited row with no drawn part and for a link to no row, per office (37 CFR 1.83(a))', () => {
+	it('coverage: Errors for a cited row with no drawn part and for a link to no row, per office (37 CFR 1.83(a)); no removal option when a citing claim is independent (#783)', () => {
 		const figures = [
 			'## FIG. 1',
 			'',
@@ -118,22 +124,64 @@ describe('Application Drafting figures.md validators', () => {
 		].join('\n');
 		const linkError = { severity: 'Error', rule: 'figure-coverage', file: 'figures.md', line: 7, message: 'Part 18 ("pin") links F9, which is not a row of feature-list.md.' };
 		expect({
-			US: checkClaimedFeatureCoverage({ office: 'US', figures, outline, featureList }),
-			EPO: checkClaimedFeatureCoverage({ office: 'EPO', figures, outline, featureList }),
+			US: checkClaimedFeatureCoverage({ office: 'US', figures, outline, featureList, claims }),
+			EPO: checkClaimedFeatureCoverage({ office: 'EPO', figures, outline, featureList, claims }),
 		}).toEqual({
 			US: [
 				linkError,
-				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md (37 CFR 1.83(a): the drawings must show every feature specified in the claims). The attorney decides: "Add a figure of a spring (F4)", then link its part under the figure heading, e.g. "- 20: <part> [F4]"; or "Remove claims 1 and 3 (this re-opens the claims approval)".' },
+				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md (37 CFR 1.83(a): the drawings must show every feature specified in the claims). The attorney decides: "Add a figure of a spring (F4)", then link its part under the figure heading, e.g. "- 20: <part> [F4]". Claim 1 is independent, so the claims are not removed.' },
 			],
 			EPO: [
 				linkError,
-				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md (the Drawing Set gate; the EPC has no rule like 37 CFR 1.83(a)). The attorney decides: "Add a figure of a spring (F4)", then link its part under the figure heading, e.g. "- 20: <part> [F4]"; or "Remove claims 1 and 3 (this re-opens the claims approval)".' },
+				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 1, message: 'Feature List row F4, which the Draft Outline cites for claims 1, 3, has no drawn part in figures.md (the Drawing Set gate; the EPC has no rule like 37 CFR 1.83(a)). The attorney decides: "Add a figure of a spring (F4)", then link its part under the figure heading, e.g. "- 20: <part> [F4]". Claim 1 is independent, so the claims are not removed.' },
 			],
 		});
 	});
 
+	it('coverage: an item is covered by one drawn row among its sources, or by a claim term that names a drawn part; an alternative or test row is not demanded unless it is the only source (#783)', () => {
+		const sections = [
+			'---',
+			'office: US',
+			'---',
+			'## Elements',
+			'| F1 | A hinge. | §1 | working |',
+			'| F2 | A housing. | §1 | working |',
+			'| F3 | A lever. | §1 | working |',
+			'| F4 | A spring. | §1 | working |',
+			'## Alternatives',
+			'| F5 | Leaf spring fixed to the housing in place of the spring. | §6 | prophetic ("Not built") |',
+			'| F6 | A damper. | §6 | prophetic |',
+			'## Tests',
+			'| F7 | Fitted 40 times with one hand. | §7 | working |',
+			'| F8 | Held 400 N. | §7 | working |',
+		].join('\n');
+		const items = parseDraftOutline([
+			'---',
+			'office: US',
+			'claims: c1',
+			'---',
+			'| Item | Section | Kind | Claims | Claim terms | Sources | Explain | Question |',
+			'|------|---------|------|--------|-------------|---------|---------|----------|',
+			'| O1 | Detailed Description | Technical | 1 | a housing | F2, F7, F8 | yes |  |',
+			'| O2 | Detailed Description | Technical | 1 | a spring arranged between | F5 | yes |  |',
+			'| O3 | Detailed Description | Technical | 2 | a lever | F3, F7 | yes |  |',
+			'| O4 | Detailed Description | Technical | 3 | a damper | F6 | yes |  |',
+			'| O5 | Detailed Description | Technical | 3 | a cam | F8 | yes |  |',
+		].join('\n'));
+		const figures = '## FIG. 1\n\n- 10: hinge [F1]\n- 12: housing [F2]\n- 14: lever\n- 16: spring [F4]\n';
+		expect(checkClaimedFeatureCoverage({ office: 'US', figures, outline: items, featureList: sections, claims })).toEqual([
+			{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 3, message: 'Feature List row F6, which the Draft Outline cites for claim 3, has no drawn part in figures.md (37 CFR 1.83(a): the drawings must show every feature specified in the claims). The attorney decides: "Add a figure of a damper (F6)", then link its part under the figure heading, e.g. "- 20: <part> [F6]"; or "Remove claim 3 (this re-opens the claims approval)".' },
+			{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', claim: 3, message: 'Feature List row F8, which the Draft Outline cites for claim 3, has no drawn part in figures.md (37 CFR 1.83(a): the drawings must show every feature specified in the claims). The attorney decides: "Add a figure of held 400 N (F8)", then link its part under the figure heading, e.g. "- 20: <part> [F8]"; or "Remove claim 3 (this re-opens the claims approval)".' },
+		]);
+	});
+
+	it('coverage: the D7 pipe-clamp matter raises no Error (alternatives, a material, use and test rows beside drawn claim elements) (#783)', () => {
+		const matter = (name: string) => readFileSync(path.join(__dirname, 'fixtures/pipe-clamp', name), 'utf8');
+		expect(checkClaimedFeatureCoverage({ office: 'US', figures: matter('figures.md'), outline: parseDraftOutline(matter('draft-outline.md')), featureList: matter('feature-list.md'), claims: parseClaims(matter('claims.md')) })).toEqual([]);
+	});
+
 	it('coverage: one Note when figures.md links no part, so the coverage was not checked', () => {
-		expect(checkClaimedFeatureCoverage({ office: 'US', figures: '## FIG. 1\n\n- 12: housing\n', outline, featureList })).toEqual([
+		expect(checkClaimedFeatureCoverage({ office: 'US', figures: '## FIG. 1\n\n- 12: housing\n', outline, featureList, claims })).toEqual([
 			{ severity: 'Note', rule: 'figure-coverage', file: 'figures.md', notChecked: true, message: 'figures.md links no part to a Feature List row (`- 12: housing [F3]`), so the claimed-feature coverage was not checked. The Approved Claims cite F2, F3, F4.' },
 		]);
 	});
@@ -152,9 +200,9 @@ describe('Application Drafting figures.md validators', () => {
 			'| O1 | Detailed Description | Technical |  |  | F2, FIG. 1 | yes |  |',
 		].join('\n'));
 		expect({
-			noOutline: checkClaimedFeatureCoverage({ office: 'US', figures, outline: parseDraftOutline(''), featureList }),
-			noClaims: checkClaimedFeatureCoverage({ office: 'US', figures: '## FIG. 1\n\n- 12: housing [F2]\n', outline: noClaims, featureList }),
-			noFigures: checkClaimedFeatureCoverage({ office: 'US', figures: '', outline: parseDraftOutline(''), featureList }),
+			noOutline: checkClaimedFeatureCoverage({ office: 'US', figures, outline: parseDraftOutline(''), featureList, claims }),
+			noClaims: checkClaimedFeatureCoverage({ office: 'US', figures: '## FIG. 1\n\n- 12: housing [F2]\n', outline: noClaims, featureList, claims }),
+			noFigures: checkClaimedFeatureCoverage({ office: 'US', figures: '', outline: parseDraftOutline(''), featureList, claims }),
 		}).toEqual({
 			noOutline: [
 				{ severity: 'Error', rule: 'figure-coverage', file: 'figures.md', line: 4, message: 'Part 18 ("pin") links F9, which is not a row of feature-list.md.' },

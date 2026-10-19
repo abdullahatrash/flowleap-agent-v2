@@ -9,14 +9,15 @@
  * the proposal gate and the claimed-feature coverage. No model call.
  */
 
+import { DraftClaim } from './claims';
 import { DrawingPageSize, readFiguresSettings } from './figures';
 import { OFFICE_PAGE_SETUP, officeDrawingPageSize } from './filingDocuments';
 import { DraftFinding } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
 import { DraftOutline } from './outline';
-import { featureRows } from './outlineValidators';
-import { FigurePart, figureHeadingNumbers, hasFigures, parseFigureParts, parseFigureSections } from './specValidators';
+import { FeatureRow, parseFeatureRows } from './outlineValidators';
+import { FigurePart, figureHeadingNumbers, hasFigures, parseFigureParts, parseFigureSections, partNameHasWord } from './specValidators';
 
 const figuresFile = DRAFTING_FILE_NAMES.figures;
 
@@ -122,6 +123,8 @@ export interface FeatureCoverageInput {
 	readonly outline: DraftOutline;
 	/** `feature-list.md`. */
 	readonly featureList: string;
+	/** The parsed claims: the Error never offers to remove an independent claim (#783). */
+	readonly claims: readonly DraftClaim[];
 }
 
 /**
@@ -138,18 +141,57 @@ function claimList(numbers: readonly number[]): string {
 	return numbers.length > 1 ? `claims ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}` : `claim ${numbers[0]}`;
 }
 
+/** An alternative embodiment: a prophetic row whose text says "in place of" another feature. */
+const alternativePattern = /\bin place of\b/i;
+
+/** The heading of a test or results section of `feature-list.md`. */
+const testSectionPattern = /\b(?:tests?|results?)\b/i;
+
+/**
+ * True for a Feature List row that is no part to draw: an alternative embodiment (prophetic, "in
+ * place of"), or a row of a test or results section (#783). A row `feature-list.md` does not have
+ * is reported by the link check, not here.
+ */
+function notDrawable(row: FeatureRow | undefined): boolean {
+	return !!row && ((row.prophetic && alternativePattern.test(row.text)) || testSectionPattern.test(row.section));
+}
+
+/** True when a word of a claim term, of three letters or more, is a word of a drawn part name: "spring arranged between" names the part "spring". */
+function claimTermsDrawn(terms: readonly string[], drawnParts: readonly FigurePart[]): boolean {
+	return terms.some(term => (term.match(/[A-Za-z][A-Za-z-]*/g) ?? []).filter(word => word.length >= 3).some(word => drawnParts.some(part => partNameHasWord(part.part, word))));
+}
+
+/**
+ * The second action of a coverage Error: remove the claims that cite the row, which re-opens the
+ * claims approval. Not offered when one of the claims is independent (#783): the sentence says
+ * which claim is independent instead. A claim `claims.md` does not have counts as independent.
+ */
+function removalAction(numbers: readonly number[], claims: readonly DraftClaim[]): string {
+	const independent = numbers.filter(number => !claims.find(claim => claim.number === number)?.dependsOn.length);
+	if (!independent.length) {
+		return `; or "Remove ${claimList(numbers)} (this re-opens the claims approval)".`;
+	}
+	const subject = claimList(independent);
+	return `. ${subject.charAt(0).toUpperCase()}${subject.slice(1)} ${independent.length > 1 ? 'are' : 'is'} independent, so the claim${numbers.length > 1 ? 's are' : ' is'} not removed.`;
+}
+
 /**
  * Claimed-feature coverage through the Feature List links of `figures.md` (37 CFR 1.83(a): the
  * drawings show every feature specified in the claims):
  *
- * - The rows an Approved Claim cites are the Feature List sources of the Technical items of the
- *   Draft Outline that list claims.
- * - A row is drawn when a confirmed part (not `(proposed)`) under a figure heading, or in a
- *   list with no heading above it, links it (`- 12: housing [F3]`).
- * - An Error for each cited row that is not drawn, and for each link to a row that
- *   `feature-list.md` does not have. The Error for a row that is not drawn names the two
- *   actions of the attorney (PRD 0025, S5): add a figure of the feature, or remove the claims
- *   that cite it, which re-opens the claims approval.
+ * - A Technical item of the Draft Outline that lists claims maps claim elements to the Feature
+ *   List rows it cites. A row is drawn when a confirmed part (not `(proposed)`) under a figure
+ *   heading, or in a list with no heading above it, links it (`- 12: housing [F3]`).
+ * - The item is covered when one of its cited rows is drawn, or when a word of one of its claim
+ *   terms names a drawn part (`spring arranged between` and the part `spring`) (#783).
+ * - For an item that is not covered, an Error for each cited row that is not drawn. An
+ *   alternative row (prophetic, "in place of") and a row of a test or results section are not
+ *   demanded, unless they are the only rows of the item: then the row is the only source of the
+ *   claim element and the Error stays.
+ * - An Error for each link to a row that `feature-list.md` does not have.
+ * - The Error for a row that is not drawn names the actions of the attorney (PRD 0025, S5): add
+ *   a figure of the feature; or, when no citing claim is independent, remove the claims that
+ *   cite it, which re-opens the claims approval.
  * - When `figures.md` links no part at all, or the Draft Outline has no Technical item that
  *   lists claims (no outline yet), one Note marked `notChecked` instead: the coverage was not
  *   checked. The receipt of the Drawing Set shows the row as `not-checked` (#804).
@@ -161,27 +203,21 @@ export function checkClaimedFeatureCoverage(input: FeatureCoverageInput): DraftF
 	if (!hasFigures(input.figures)) {
 		return [];
 	}
-	const cited = new Map<string, Set<number>>();
-	for (const item of input.outline.items) {
-		if (item.kind !== 'Technical' || !item.claims.length) {
-			continue;
-		}
-		for (const source of item.sources.filter(entry => entry.kind === 'feature')) {
-			const claims = cited.get(source.ref) ?? new Set<number>();
-			item.claims.forEach(claim => claims.add(claim));
-			cited.set(source.ref, claims);
-		}
-	}
+	const items = input.outline.items
+		.filter(item => item.kind === 'Technical' && item.claims.length)
+		.map(item => ({ claims: item.claims, claimTerms: item.claimTerms, rows: item.sources.filter(entry => entry.kind === 'feature').map(entry => entry.ref) }))
+		.filter(item => item.rows.length);
+	const cited = [...new Set(items.flatMap(item => item.rows))];
 	const parts = parseFigureParts(input.figures);
 	const linked = parts.filter(part => part.features?.length);
 	const notChecked = (message: string): DraftFinding => ({ severity: 'Note', rule: 'figure-coverage', file: figuresFile, notChecked: true, message });
 	if (!linked.length) {
-		return cited.size
-			? [notChecked(`${figuresFile} links no part to a Feature List row (\`- 12: housing [F3]\`), so the claimed-feature coverage was not checked. The Approved Claims cite ${[...cited.keys()].join(', ')}.`)]
+		return cited.length
+			? [notChecked(`${figuresFile} links no part to a Feature List row (\`- 12: housing [F3]\`), so the claimed-feature coverage was not checked. The Approved Claims cite ${cited.join(', ')}.`)]
 			: [];
 	}
 	const findings: DraftFinding[] = [];
-	const rows = featureRows(input.featureList);
+	const rows = parseFeatureRows(input.featureList);
 	for (const part of linked) {
 		for (const feature of part.features ?? []) {
 			if (!rows.has(feature)) {
@@ -189,22 +225,33 @@ export function checkClaimedFeatureCoverage(input: FeatureCoverageInput): DraftF
 			}
 		}
 	}
-	if (!cited.size) {
+	if (!cited.length) {
 		findings.push(notChecked(input.outline.items.length
 			? `Not checked: ${DRAFTING_FILE_NAMES.draftOutline} has no Technical item that lists claims. The claimed-feature coverage (37 CFR 1.83(a)) is checked once it has.`
 			: `Not checked: no Draft Outline yet. The claimed-feature coverage (37 CFR 1.83(a)) is checked once ${DRAFTING_FILE_NAMES.draftOutline} has Technical items that list claims.`));
 		return findings;
 	}
-	const drawn = new Set(parseFigureSections(input.figures).drawnParts.filter(part => !part.proposed).flatMap(part => part.features ?? []));
+	const drawnParts = parseFigureSections(input.figures).drawnParts.filter(part => !part.proposed);
+	const drawn = new Set(drawnParts.flatMap(part => part.features ?? []));
+	const demanded = new Map<string, Set<number>>();
+	for (const item of items) {
+		if (item.rows.some(row => drawn.has(row)) || claimTermsDrawn(item.claimTerms, drawnParts)) {
+			continue;
+		}
+		const drawable = item.rows.filter(row => !notDrawable(rows.get(row)));
+		for (const row of drawable.length ? drawable : item.rows) {
+			const claims = demanded.get(row) ?? new Set<number>();
+			item.claims.forEach(claim => claims.add(claim));
+			demanded.set(row, claims);
+		}
+	}
 	const rule = input.office === 'US'
 		? '37 CFR 1.83(a): the drawings must show every feature specified in the claims'
 		: 'the Drawing Set gate; the EPC has no rule like 37 CFR 1.83(a)';
-	for (const [feature, claims] of cited) {
-		if (!drawn.has(feature)) {
-			const numbers = [...claims].sort((a, b) => a - b);
-			const subject = featureSubject(feature, rows.get(feature));
-			findings.push({ severity: 'Error', rule: 'figure-coverage', file: figuresFile, claim: numbers[0], message: `Feature List row ${feature}, which the Draft Outline cites for claim${numbers.length > 1 ? 's' : ''} ${numbers.join(', ')}, has no drawn part in ${figuresFile} (${rule}). The attorney decides: "Add a figure of ${subject}", then link its part under the figure heading, e.g. "- 20: <part> [${feature}]"; or "Remove ${claimList(numbers)} (this re-opens the claims approval)".` });
-		}
+	for (const [feature, claims] of demanded) {
+		const numbers = [...claims].sort((a, b) => a - b);
+		const subject = featureSubject(feature, rows.get(feature)?.text);
+		findings.push({ severity: 'Error', rule: 'figure-coverage', file: figuresFile, claim: numbers[0], message: `Feature List row ${feature}, which the Draft Outline cites for claim${numbers.length > 1 ? 's' : ''} ${numbers.join(', ')}, has no drawn part in ${figuresFile} (${rule}). The attorney decides: "Add a figure of ${subject}", then link its part under the figure heading, e.g. "- 20: <part> [${feature}]"${removalAction(numbers, input.claims)}` });
 	}
 	return findings;
 }

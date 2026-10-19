@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { parseClaims } from '../../../tools/common/drafting/claims';
 import { DIAGRAM_RULES, DRAWING_RULES } from '../../../tools/common/drafting/figureRules';
 import { readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { checkClaimedFeatureCoverage, checkFigureProposals, checkFiguresSettings } from '../../../tools/common/drafting/figureValidators';
@@ -139,9 +140,10 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 	}
 	const previous = parseFindingsFile(await files.read(DRAFTING_FILE_NAMES.findings) ?? '');
 	const outline = parseDraftOutline(await files.read(DRAFTING_FILE_NAMES.draftOutline) ?? '');
+	const claims = await files.read(DRAFTING_FILE_NAMES.claims);
 	const listChecks: DraftFinding[] = [
 		...checkFiguresSettings(figures, office),
-		...checkClaimedFeatureCoverage({ office, figures, outline, featureList: await files.read(DRAFTING_FILE_NAMES.featureList) ?? '' }),
+		...checkClaimedFeatureCoverage({ office, figures, outline, featureList: await files.read(DRAFTING_FILE_NAMES.featureList) ?? '', claims: parseClaims(claims ?? '') }),
 	];
 	const listChecksWaived = mergeFindings(listChecks, previous);
 	const blocking = blockingFindings(listChecksWaived);
@@ -208,7 +210,6 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 
 	let manifestUpdated = false;
 	let manifestLine = `The Filing Manifest is written by export_draft_docx; it will count the ${sheets.length} sheet(s).`;
-	const claims = await files.read(DRAFTING_FILE_NAMES.claims);
 	if (status.missing.length) {
 		manifestLine = `${path(DRAFTING_FILE_NAMES.filingManifest)} was not changed: a partial build never counts as the Drawing Set.`;
 	} else if (draftingFolder && draft !== undefined && claims !== undefined && await files.exists(DRAFTING_FILE_NAMES.filingManifest)) {

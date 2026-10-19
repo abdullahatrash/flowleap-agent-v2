@@ -62,6 +62,10 @@ invention record of the **invention-disclosure** skill.
    figures. Put the Feature List rows the part shows in brackets. A part that
    shows no row has no brackets. The claimed-feature coverage check
    (37 CFR 1.83(a)) in Step 4 reads these links. Without them it is skipped.
+   An alternative row (prophetic, "in place of") and a test row need no part
+   when the claim element has a drawn part. A flowchart step is a part too:
+   `- 44: placing the pipe in the groove [F19]`; the draft cites it as
+   "step 44".
    Leave `pageSize` out of the top block of the file: the drawings then use
    the page of the office's export (letter for US, A4 for EPO), one page size
    per application.
@@ -148,8 +152,9 @@ and the advisory items are written.
 3. When a claim has no figure support (a `figure-coverage` Error, or an
    advisory item on 37 CFR 1.83(a)), give the attorney two options in one
    sentence: "Add a figure of the <part>" or "Remove claim <n> (this re-opens
-   the claims approval)". Call `remove_claim` only after the attorney chooses
-   the removal.
+   the claims approval)". When claim <n> is independent, offer only the
+   figure: the Error text names no removal then. Call `remove_claim` only
+   after the attorney chooses the removal.
 
 Done when `findings.md` holds the validator findings and the advisory items.
 

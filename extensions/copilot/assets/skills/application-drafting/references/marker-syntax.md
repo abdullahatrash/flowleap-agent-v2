@@ -65,7 +65,8 @@ The sealing ring 18 is made of an elastomer.
 
 Write a part as its name followed by its numeral: "the housing 12". Use the
 name and the numeral that `figures.md` gives the part, the same pair every
-time.
+time. A step of a flowchart or a block of a block diagram is named by what it
+does; write it as "step 44", "block 60", "operation 44" or "box 44".
 
 ## Inventor Questions
 

@@ -252,7 +252,7 @@ describe('buildDrawingSetOp', () => {
 			noFigure: await buildDrawingSetOp((await setup()).files),
 			proposed: await withFigure({ 'figures.md': `${figures}- 8: spring (proposed from sketches/sketch-1.png)\n` }),
 			epoLetter: await withFigure({ 'feature-list.md': featureList.replace('office: US', 'office: EPO'), 'figures.md': figures.replace('numerals: even', 'numerals: even\npageSize: letter') }),
-			coverageGap: await withFigure({ 'figures.md': figures.replace('- 10: housing [F1]', '- 10: housing') }),
+			coverageGap: await withFigure({ 'figures.md': figures.replace('- 10: housing [F1]', '- 10: body') }),
 		}).toMatchSnapshot();
 	});
 
