@@ -45,15 +45,27 @@ function renameTools(text: string, names: ReadonlyMap<string, string>): string {
 	return text.replace(pattern, name => names.get(name) ?? name);
 }
 
+/** The tag `package.json` puts on every Patent Agent tool: patent data, drafting and drawings. */
+const PATENT_TOOL_TAG = 'patent_ai';
+
+/** Words of the Patent Agent's work. A tool whose contribution uses one must carry {@link PATENT_TOOL_TAG}. */
+const PATENT_TOOL_WORDS = /patent|patstat|draft|drawing|figure|claim|inventor/i;
+
 interface ContributedTool {
 	readonly name: string;
 	readonly toolReferenceName: string;
+	readonly tags?: readonly string[];
 }
 
-/** The Patent Agent's patent-data tools, as contributed in `package.json`. */
-function contributedPatentTools(): readonly ContributedTool[] {
+/** Every tool contributed in `package.json`. */
+function contributedTools(): readonly ContributedTool[] {
 	const manifest = JSON.parse(readFileSync(PACKAGE_JSON, 'utf8')) as { contributes: { languageModelTools: (ContributedTool & object)[] } };
-	return manifest.contributes.languageModelTools.filter(tool => /patent/i.test(JSON.stringify(tool)));
+	return manifest.contributes.languageModelTools;
+}
+
+/** The Patent Agent's tools, as contributed in `package.json`: the tools tagged {@link PATENT_TOOL_TAG}. */
+function contributedPatentTools(): readonly ContributedTool[] {
+	return contributedTools().filter(tool => tool.tags?.includes(PATENT_TOOL_TAG));
 }
 
 function toolInfo(name: string): vscode.LanguageModelToolInformation {
@@ -126,5 +138,15 @@ suite('Patent AI agent for Claude sessions', () => {
 		const coreSource = readFileSync(CORE_TOOL_SET, 'utf8');
 		const listed = Array.from(coreSource.matchAll(/^\t'([A-Za-z]+)',$/gm), match => match[1]);
 		expect(listed).toEqual(contributedPatentTools().map(tool => tool.toolReferenceName));
+	});
+
+	test('every contributed tool that speaks of patent work carries the patent_ai tag', () => {
+		// The tag is the one membership signal of the core set and of the agent file. This
+		// tripwire catches a new drafting or drawings tool whose contribution forgot the tag;
+		// remove_claim and inventor_questions slipped past a /patent/ text filter that way (#814).
+		const untagged = contributedTools()
+			.filter(tool => !tool.tags?.includes(PATENT_TOOL_TAG) && PATENT_TOOL_WORDS.test(JSON.stringify(tool)))
+			.map(tool => tool.toolReferenceName);
+		expect(untagged).toEqual([]);
 	});
 });
