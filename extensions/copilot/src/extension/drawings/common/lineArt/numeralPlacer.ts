@@ -19,10 +19,10 @@ export const NUMERAL_FONT_SIZE = 4.5;
 export const DIGIT_HEIGHT_RATIO = 0.716;
 
 /** Mean digit advance as a fraction of the font size (every digit is 0.556 em in Arial). */
-export const DIGIT_WIDTH_RATIO = 0.556;
+const DIGIT_WIDTH_RATIO = 0.556;
 
 /** Gap in millimetres between a numeral and the start of its lead line. */
-export const LEAD_GAP = 0.8;
+const LEAD_GAP = 0.8;
 
 /**
  * A lead line ends on a visible edge or on a centre mark: its end is within this distance of one,
@@ -30,7 +30,7 @@ export const LEAD_GAP = 0.8;
  */
 export const LEAD_END_TOLERANCE = 0.3;
 /** Half the length of each arm of a centre mark, in millimetres: each arm is 3 mm long. */
-export const CENTRE_MARK_ARM = 1.5;
+const CENTRE_MARK_ARM = 1.5;
 /** A lead line runs along an edge when the lines differ by less than this angle, in degrees... */
 export const ALONG_EDGE_ANGLE = 5;
 /** ...and the lead stays within `LEAD_END_TOLERANCE` of the edge for more than this length, in millimetres. */
@@ -208,7 +208,7 @@ const INSIDE_DIRECTIONS = 8;
  * is an interior anchor: its numeral goes inside the outline first (37 CFR 1.84(q), "as short as possible").
  * A centre mark is always an interior anchor.
  */
-export const INTERIOR_DEPTH = 8;
+const INTERIOR_DEPTH = 8;
 
 /** The number of segments a ray from `point` crosses. `axis` 0 is x, 1 is y; `sign` is the ray direction. */
 function rayCrossings(point: Vec2, segments: readonly Segment[], axis: 0 | 1, sign: 1 | -1): number {

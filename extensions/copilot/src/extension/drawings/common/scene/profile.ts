@@ -27,7 +27,7 @@ export type ProfileSegment =
 	| { readonly kind: 'spline'; readonly from: Vec2; readonly to: Vec2; readonly chain: readonly Vec2[]; readonly pieces: readonly BezierPiece[] };
 
 /** True when the item is an arc segment. */
-export function isArcItem(item: ProfileItem): item is ArcSegment {
+function isArcItem(item: ProfileItem): item is ArcSegment {
 	return !Array.isArray(item) && 'arc' in item;
 }
 
@@ -112,7 +112,7 @@ function catmullRom(points: readonly Vec2[]): BezierPiece[] {
 }
 
 /** The point at parameter `t` (0 to 1) of a Bezier piece. */
-export function bezierPoint(piece: BezierPiece, t: number): Vec2 {
+function bezierPoint(piece: BezierPiece, t: number): Vec2 {
 	const u = 1 - t;
 	const a = u * u * u;
 	const b = 3 * u * u * t;
@@ -156,7 +156,7 @@ function angleDifference(a: number, b: number): number {
 }
 
 /** The cam radius at an angle in degrees: the base circle plus a raised-cosine bump per lobe. */
-export function camRadius(shape: CamShape, degrees: number): number {
+function camRadius(shape: CamShape, degrees: number): number {
 	let radius = shape.base;
 	for (const lobe of shape.lobes) {
 		const offset = angleDifference(degrees, lobe.angle);

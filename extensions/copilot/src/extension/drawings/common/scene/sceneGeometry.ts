@@ -71,7 +71,7 @@ function rotateAbout(point: Vec3, axis: 0 | 1 | 2, degrees: number): Vec3 {
 }
 
 /** Applies a placement to a part-local point: rotate about X, then Y, then Z, then translate. */
-export function applyPlacement(placement: Placement | undefined, point: Vec3): Vec3 {
+function applyPlacement(placement: Placement | undefined, point: Vec3): Vec3 {
 	const rotation = placement?.rotate ?? [0, 0, 0];
 	let result = rotateAbout(point, 0, rotation[0]);
 	result = rotateAbout(result, 1, rotation[1]);
