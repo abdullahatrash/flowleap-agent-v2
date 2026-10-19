@@ -120,7 +120,7 @@ This file lists each code check, the rule it applies and its result. It is not a
 Receipt: 38 pass, 0 fail, 1 not checked.
 No code check fails.
 Updated drafting/hinge/filing-manifest.md: 2 drawing sheet(s), measured.
-Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
+Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; the receipt is a check record, not a verdict: never call the drawings ready to file.",
   },
   "review": [
     "FIG-1.round-1.png",
@@ -343,7 +343,7 @@ exports[`renderFigureOp > renders a 3D scene: writes the source, the SVG and the
 Still to draw: FIG. 2 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
-Do not call the Figure compliant or ready to file.",
+The findings are check results, not a verdict: do not call the Figure ready to file.",
   },
   "pngSignature": "PNG",
   "review": [
@@ -381,7 +381,7 @@ Do not call the Figure compliant or ready to file.",
 Still to draw: FIG. 2 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 No render is attached (the model reads the findings only); the receipt records that no render was seen in this round.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
-Do not call the Figure compliant or ready to file.",
+The findings are check results, not a verdict: do not call the Figure ready to file.",
   },
   "sourceFigure": "FIG-1",
   "svgStart": "<svg",
@@ -402,7 +402,7 @@ exports[`renderFigureOp > renders a flowchart from an approved method claim 1`] 
 Still to draw: FIG. 1 (drafting/hinge/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
-Do not call the Figure compliant or ready to file.",
+The findings are check results, not a verdict: do not call the Figure ready to file.",
   },
   "source": {
     "figure": "FIG-2",

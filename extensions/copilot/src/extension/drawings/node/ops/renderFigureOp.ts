@@ -161,7 +161,7 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 			: 'The mechanical fault list found nothing. The attorney still reviews the Figure.',
 		errors.length
 			? `Fix the Errors in the source and render again${round < MAX_REVIEW_ROUNDS ? '' : '; this was the last round of this review cycle, so report the open Errors to the attorney'}. build_drawing_set refuses while an Error is open and not waived.`
-			: 'Do not call the Figure compliant or ready to file.',
+			: 'The findings are check results, not a verdict: do not call the Figure ready to file.',
 	].join('\n');
 	return { ok: true, text, png: image.png, seen: input.seen, cycle, round, review: `${drawings}/${png}`, findings: rendered.findings };
 }

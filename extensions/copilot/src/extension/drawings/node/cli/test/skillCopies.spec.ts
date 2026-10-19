@@ -77,4 +77,15 @@ describe('patent-drawings skill copies', () => {
 		const sessions = stepOutline(readFileSync(path.join(SESSIONS, 'SKILL.md'), 'utf8'));
 		expect(editor).toEqual(sessions);
 	});
+
+	it('never use the word "compliant", nor do the tool descriptions (#796)', () => {
+		const skillFiles = [EDITOR, SESSIONS].flatMap(copy => ['SKILL.md', ...readdirSync(path.join(copy, 'references')).map(name => `references/${name}`)].map(name => path.join(copy, name)));
+		const tools: { contributes: { languageModelTools: { name: string; modelDescription: string }[] } } = JSON.parse(readFileSync(path.join(REPO_ROOT, 'extensions/copilot/package.json'), 'utf8'));
+		const texts = [
+			...skillFiles.map(file => ({ name: path.relative(REPO_ROOT, file), text: readFileSync(file, 'utf8') })),
+			...tools.contributes.languageModelTools.map(tool => ({ name: `package.json ${tool.name}`, text: tool.modelDescription })),
+		];
+		const hits = texts.flatMap(({ name, text }) => text.split('\n').flatMap((line, index) => /\bcompliant\b/i.test(line) ? [`${name}:${index + 1}`] : []));
+		expect(hits).toEqual([]);
+	});
 });

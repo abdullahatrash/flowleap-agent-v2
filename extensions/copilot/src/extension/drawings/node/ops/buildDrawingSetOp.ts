@@ -226,7 +226,7 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		failing.length ? `Failing checks:\n${failing.map(checkLine).join('\n')}` : 'No code check fails.',
 		...(notDrawn.length ? [`Parts listed but not drawn (Note, \`figure-parts-not-drawn\`):\n${notDrawn.map(item => `- ${partsNotDrawnLine(item)}`).join('\n')}`] : []),
 		manifestLine,
-		'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.',
+		'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; the receipt is a check record, not a verdict: never call the drawings ready to file.',
 	].join('\n');
 	return { ok: true, text, sheets: sheets.length, pageSize, checks: receipt.checks, manifestUpdated, missing: status.missing };
 }
