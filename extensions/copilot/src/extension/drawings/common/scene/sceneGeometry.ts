@@ -93,6 +93,9 @@ function toLocalDirection(placement: Placement | undefined, direction: Vec3): Ve
  */
 export const AXIS_PORT = 'axis';
 
+/** The shape kinds that have a Z axis, and so an `axis` port and a chain centre line. */
+export const AXIS_KINDS: readonly PartShape['kind'][] = ['cylinder', 'extrudedPolygon', 'revolve', 'shaft', 'cam'];
+
 /** The face and port names of a shape; `undefined` for a code part, which takes any name with a point. */
 export function faceNames(shape: PartShape): readonly string[] | undefined {
 	switch (shape.kind) {
@@ -193,6 +196,20 @@ export function isPortEdgeOn(port: NumeralPort, part: ScenePart | undefined, cam
 /** True when the port gets a centre mark: `mark: "centre"`, or the `axis` port. */
 export function hasCentreMark(port: NumeralPort): boolean {
 	return port.mark === 'centre' || port.face === AXIS_PORT;
+}
+
+/**
+ * The direction of a part's Z axis on the drawing plane: the projection of one unit of the placed
+ * axis, in model millimetres. Near zero length when the camera looks along the axis. `undefined`
+ * for a shape without an axis.
+ */
+export function projectedAxis(part: ScenePart, camera: CameraBasis): Vec2 | undefined {
+	if (!AXIS_KINDS.includes(part.shape.kind)) {
+		return undefined;
+	}
+	const origin = projectPoint(camera, applyPlacement(part.placement, [0, 0, 0]));
+	const tip = projectPoint(camera, applyPlacement(part.placement, [0, 0, 1]));
+	return [tip[0] - origin[0], tip[1] - origin[1]];
 }
 
 /**
