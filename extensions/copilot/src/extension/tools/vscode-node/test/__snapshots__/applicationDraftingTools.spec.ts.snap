@@ -315,6 +315,17 @@ exports[`remove_claim > refuses a number with no claim and changes nothing 1`] =
 }
 `;
 
+exports[`remove_claim > removing the claim that claim 9 depends on refuses, names claim 9 and changes nothing (PRD 0025, S5) 1`] = `
+{
+  "namesClaim9": true,
+  "parents": [
+    1,
+  ],
+  "result": "Claim 1 was not removed. Claims 2, 4, 5, 7, 8, 9, 11 refer to claim 1. The attorney decides about those claims first: remove them, the highest number first, or change the claim they refer to. Open in drafting/hinge/checklist.md: step 3 (Write the outline). Next: Tell the agent: "Plan the draft" (it saves draft-outline.md with write_patent_results, template draft-outline).",
+  "unchanged": true,
+}
+`;
+
 exports[`start_application_draft > returns the inputs and the style exemplars, labelled style only, and records the approved claims 1`] = `
 {
   "pdfReads": [

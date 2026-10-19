@@ -31,6 +31,7 @@ import { StartApplicationDraftTool } from '../startApplicationDraftTool';
 import { draftingGateEdit, draftingWaiverEdit, DraftingWaiverLensProvider } from '../draftingGateLens';
 import { ValidateDraftTool } from '../validateDraftTool';
 import { WritePatentResultsTool } from '../writePatentResultsTool';
+import { parseClaims } from '../../common/drafting/claims';
 import { parseDraftingFrontmatter } from '../../common/drafting/frontmatter';
 import { pipeClampClaims } from '../../common/test/draftingTestClaims';
 import { currentAnswer, parseInventorAnswers } from '../../common/drafting/inventorAnswers';
@@ -917,6 +918,18 @@ describe('remove_claim', () => {
 		expect({
 			confirmation: await tools.prepareRemoveClaim(1),
 			result: await tools.removeClaim(1),
+			unchanged: parseDraftingFrontmatter(await read('drafting/hinge/claims.md')).body === parseDraftingFrontmatter(pipeClampClaims).body,
+		}).toMatchSnapshot();
+	});
+
+	it('removing the claim that claim 9 depends on refuses, names claim 9 and changes nothing (PRD 0025, S5)', async () => {
+		const { tools, read } = setup(pipeClamp);
+		const parents = parseClaims(pipeClampClaims).find(claim => claim.number === 9)?.dependsOn ?? [];
+		const result = await tools.removeClaim(parents[0]);
+		expect({
+			parents,
+			result,
+			namesClaim9: / 9[,.]/.test(result),
 			unchanged: parseDraftingFrontmatter(await read('drafting/hinge/claims.md')).body === parseDraftingFrontmatter(pipeClampClaims).body,
 		}).toMatchSnapshot();
 	});
