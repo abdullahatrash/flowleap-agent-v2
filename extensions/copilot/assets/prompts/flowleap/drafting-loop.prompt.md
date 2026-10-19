@@ -36,6 +36,6 @@ You click three buttons, at the top of the file:
 - Approve Claims, on the claims, after each change.
 - Waive Errors…, on the findings, when a check is wrong and you accept the risk.
 
-Stay in one chat for one matter. Start a new chat after you restart the app or rebuild, and when the agent refuses the same thing twice.
+Stay in one chat for one matter. Start a new chat after you restart the app or after an update, and when the agent refuses the same thing twice.
 
 Your matter is in the folder drafting/<matter>/. Open checklist.md there first: it says what is open and what you do next.
