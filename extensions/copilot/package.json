@@ -4380,6 +4380,21 @@
     ],
     "commands": [
       {
+        "command": "flowleap.drafting.confirmFeatureList",
+        "title": "%flowleap.drafting.confirmFeatureList.title%",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.drafting.approveClaims",
+        "title": "%flowleap.drafting.approveClaims.title%",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.drafting.waiveErrors",
+        "title": "%flowleap.drafting.waiveErrors.title%",
+        "category": "FlowLeap"
+      },
+      {
         "command": "flowleap.signIn",
         "title": "Sign In",
         "category": "FlowLeap"
@@ -7019,6 +7034,21 @@
     "menus": {
       "editor/title": [
         {
+          "command": "flowleap.drafting.confirmFeatureList",
+          "when": "resourcePath =~ /[\\\\/]drafting[\\\\/][^\\\\/]+[\\\\/]feature-list\\.md$/ || activeWebviewPanelId == 'markdown.preview' && flowleap.drafting.previewFile == 'feature-list.md'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowleap.drafting.approveClaims",
+          "when": "resourcePath =~ /[\\\\/]drafting[\\\\/][^\\\\/]+[\\\\/]claims\\.md$/ || activeWebviewPanelId == 'markdown.preview' && flowleap.drafting.previewFile == 'claims.md'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowleap.drafting.waiveErrors",
+          "when": "resourcePath =~ /[\\\\/]drafting[\\\\/][^\\\\/]+[\\\\/]findings\\.md$/ || activeWebviewPanelId == 'markdown.preview' && flowleap.drafting.previewFile == 'findings.md'",
+          "group": "navigation@1"
+        },
+        {
           "command": "github.copilot.chat.notebook.enableFollowCellExecution",
           "when": "config.github.copilot.chat.notebook.followCellExecution.enabled && !github.copilot.notebookFollowInSessionEnabled && github.copilot.notebookAgentModeUsage && !config.notebook.globalToolbar",
           "group": "navigation@10"
@@ -7072,6 +7102,18 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "flowleap.drafting.confirmFeatureList",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.drafting.approveClaims",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.drafting.waiveErrors",
+          "when": "false"
+        },
         {
           "command": "patent-ai.signIn",
           "when": "false"

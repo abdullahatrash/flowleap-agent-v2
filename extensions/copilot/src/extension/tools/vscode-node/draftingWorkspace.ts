@@ -434,10 +434,11 @@ export class DraftingWorkspace {
 
 	/**
 	 * Writes the Drafting Checklist (`checklist.md`) from the files of the matter and returns it.
-	 * Every drafting tool and every drawing tool calls it after it runs, also after a refusal.
-	 * Nothing is written while the matter has no folder and no drafting input.
+	 * Every drafting tool and every drawing tool calls it after it runs, also after a refusal; the
+	 * gate and waiver clicks of the editor call it too, so the file shows the new state at once
+	 * (#785). Nothing is written while the matter has no folder and no drafting input.
 	 */
-	private async writeChecklist(): Promise<DraftingChecklist | undefined> {
+	async writeChecklist(): Promise<DraftingChecklist | undefined> {
 		const { folder } = this;
 		const [featureList, claims, draftOutline, draft] = [await this.read(folder.featureList), await this.read(folder.claims), await this.read(folder.draftOutline), await this.read(folder.draft)];
 		if (featureList === undefined && claims === undefined && draftOutline === undefined && draft === undefined && !await this.exists(folder.folder)) {
