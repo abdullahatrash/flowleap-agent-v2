@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import { checkDiagramSvg, DIAGRAM_RULES } from '../../diagram/diagramFaults';
 import { writeDrawingsReceipt } from '../receipt';
 import { layoutDrawingSheets } from '../sheetLayout';
 import { figure, figureSvg } from './figureFixtures';
@@ -91,6 +92,55 @@ describe('drawings-compliance.md receipt', () => {
 			citation: '37 CFR 1.84(h)(3)',
 			result: 'pass',
 			detail: 'Note: FIG-1.svg: Parts "b" and "c" touch and have the same hatch (45°, 2 mm); they read as one body.',
+		});
+	});
+
+	it('shows a pass row per diagram rule of a flowchart set, and a failing diagram finding with its citation, not "-" (#791)', () => {
+		// A flowchart Figure with numeral 2 and no lead line for it: `lead-line` fails, the other five diagram rules pass.
+		const flowchart = [
+			'<svg xmlns="http://www.w3.org/2000/svg" width="120mm" height="90mm" viewBox="0 0 120 90" data-figure="1" data-kind="flowchart">',
+			'<rect width="120" height="90" fill="#fff"/>',
+			'<text class="numeral" data-numeral="2" x="100" y="20" font-size="4.5" text-anchor="middle" fill="#000">2</text>',
+			'</svg>',
+		].join('\n');
+		const sheets = sheetsOf(layoutDrawingSheets('US', 'A4', [{ number: 1, svg: flowchart }]));
+		const receipt = writeDrawingsReceipt({
+			office: 'US',
+			pageSize: 'A4',
+			sheets,
+			figureRules: DIAGRAM_RULES,
+			figureFindings: checkDiagramSvg(flowchart, { office: 'US', figure: 1, numerals: [2] }),
+			reviewRounds: [],
+			date: '2026-10-19',
+		});
+		expect(receipt.checks.filter(row => row.id in DIAGRAM_RULES).map(row => `${row.id} | ${row.citation} | ${row.result} | ${row.detail}`)).toMatchInlineSnapshot(`
+			[
+			  "us-keywords-only | 37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible"); PCT Rule 11.11 | pass | No finding.",
+			  "epo-short-sentence | OJ EPO 2025 A49 Art. 1(2)(j); GL A-IX 8 (a short sentence per method step); PCT Rule 11.11 | pass | No finding.",
+			  "label-overlap | 37 CFR 1.84(p)(1), (p)(3) ("plain and legible", "should not cross or mingle with the lines"); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h) | pass | No finding.",
+			  "numeral-set | 37 CFR 1.84(p)(4), (p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (one item, one character; the drawn set equals the step set) | pass | No finding.",
+			  "lead-line | 37 CFR 1.84(q) (a lead line per reference character); OJ EPO 2025 A49 Art. 2; PCT IP 5.145 | fail | FIG-1.svg: Numeral 2 has no lead line. A lead line connects each reference character to its item (37 CFR 1.84(q)).",
+			  "lead-crosses-edge | 37 CFR 1.84(q) ("Lead lines must not cross each other" or other lines); OJ EPO 2025 A49 Art. 2 | pass | No finding.",
+			]
+		`);
+	});
+
+	it('a Note that records a check did not run gives a not-checked row (#804)', () => {
+		const sheets = sheetsOf(layoutDrawingSheets('US', 'A4', [figure(1, 120, 90)]));
+		const receipt = writeDrawingsReceipt({
+			office: 'US',
+			pageSize: 'A4',
+			sheets,
+			figureRules: { 'figure-coverage': '37 CFR 1.83(a)' },
+			figureFindings: [{ severity: 'Note', rule: 'figure-coverage', file: 'figures.md', notChecked: true, message: 'Not checked: no Draft Outline yet.', citation: '37 CFR 1.83(a)' }],
+			reviewRounds: [],
+			date: '2026-10-19',
+		});
+		expect(receipt.checks.find(row => row.id === 'figure-coverage')).toEqual({
+			id: 'figure-coverage',
+			citation: '37 CFR 1.83(a)',
+			result: 'not-checked',
+			detail: 'figures.md: Not checked: no Draft Outline yet.',
 		});
 	});
 

@@ -26,8 +26,10 @@ import type { FlowchartInput } from './diagram/flowchart';
 import type { FigureFinding, FigureReviewRecord } from './sheets/receipt';
 import { NumeralScheme } from '../../tools/common/drafting/figures';
 import { DraftFinding } from '../../tools/common/drafting/finding';
+import { DRAFTING_FILE_NAMES } from '../../tools/common/drafting/folderContract';
 import { parseDraftingFrontmatter } from '../../tools/common/drafting/frontmatter';
-import { figureHeadingNumbers, FigurePart, hasFigure, parseFigureSections } from '../../tools/common/drafting/specValidators';
+import { parseDraftParagraphs } from '../../tools/common/drafting/sourceMarkers';
+import { figureHeadingNumbers, figureNamePattern, FigurePart, hasFigure, isClaimsParagraph, parseFigureParts, parseFigureSections, readReferenceSigns } from '../../tools/common/drafting/specValidators';
 
 /** Three review rounds per review cycle of a Figure (PRD 0023, D5 guardrail; #696). */
 export const MAX_REVIEW_ROUNDS = 3;
@@ -172,9 +174,14 @@ export function partsOfFigure(figures: string, figure: FigureId): FigurePart[] {
 		.flatMap(section => section.parts);
 }
 
-/** The Figure-list rules of the receipt that compare `figures.md` with the drawn Figures, rule id to citation. */
+/**
+ * The rules of the receipt that compare the drawn Figures with the figure list, the Draft Outline
+ * and the description, rule id to citation.
+ */
 export const FIGURE_LIST_RULES = {
 	'figure-parts-not-drawn': '37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (reference signs not in the description are not in the drawings, and the reverse)',
+	'figure-coverage': '37 CFR 1.83(a) (the drawings show every feature specified in the claims; the EPC has no rule like it, the Drawing Set gate applies)',
+	'numeral-not-drawn': '37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every reference sign the description cites is drawn in a Figure of the Drawing Set)',
 } as const;
 
 /** A drawn Figure and its SVG. */
@@ -221,6 +228,92 @@ export function partsNotDrawnLine(item: PartsNotDrawn): string {
 /** The receipt Notes of {@link partsNotDrawn}: one per heading, never blocking. */
 export function partsNotDrawnFindings(items: readonly PartsNotDrawn[]): FigureFinding[] {
 	return items.map(item => ({ severity: 'Note', rule: 'figure-parts-not-drawn', message: partsNotDrawnLine(item), citation: FIGURE_LIST_RULES['figure-parts-not-drawn'] }));
+}
+
+/** A reference sign the description cites that no drawn Figure carries. */
+export interface NumeralNotDrawn {
+	readonly numeral: string;
+	/** The part name `figures.md` gives the numeral, else the word before the sign in the text. */
+	readonly part: string;
+	/** The first line of the draft that cites the numeral. */
+	readonly line: number;
+	/** The Figures the citing paragraphs name (marker `figure:` sources and figure names in the text), as Figure keys. */
+	readonly figures: readonly string[];
+}
+
+const figureNames = new RegExp(figureNamePattern.source, 'g');
+
+/** The Figure key (`1`, `2A`) of a figure name `FIG. 1`, `Figure 2a`. */
+function figureKeyOf(name: string): string {
+	return (/(?<key>\d+[a-zA-Z]?)$/.exec(name)?.groups?.key ?? name).toUpperCase();
+}
+
+/**
+ * The reference signs the description cites (every text paragraph of the draft outside the
+ * claims, read with {@link readReferenceSigns}) that no drawn Figure of the set carries
+ * (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i)). The rule is one for the whole Drawing Set:
+ * a sign is drawn when any Figure carries it. The Figures the citing paragraphs name are kept
+ * for the message only; a method paragraph names apparatus parts of other Figures, so a
+ * per-Figure Error would be wrong.
+ */
+export function numeralsNotDrawn(draft: string, figures: string, drawn: readonly DrawnFigure[]): NumeralNotDrawn[] {
+	const carried = new Set(drawn.flatMap(item => figureSvgNumerals(item.svg)));
+	const partNames = new Map<string, string>();
+	for (const part of parseFigureParts(figures)) {
+		if (!partNames.has(part.numeral)) {
+			partNames.set(part.numeral, part.part);
+		}
+	}
+	const found = new Map<string, { part: string; line: number; figures: Set<string> }>();
+	for (const paragraph of parseDraftParagraphs(draft)) {
+		if (paragraph.kind !== 'text' || isClaimsParagraph(paragraph)) {
+			continue;
+		}
+		const named = [
+			...(paragraph.sources ?? []).filter(source => source.kind === 'figure' && source.ref).map(source => source.ref!),
+			...paragraph.text.match(figureNames) ?? [],
+		].map(figureKeyOf);
+		for (const sign of readReferenceSigns(paragraph.text)) {
+			if (carried.has(sign.numeral)) {
+				continue;
+			}
+			const line = paragraph.line + (paragraph.text.slice(0, sign.index).match(/\n/g)?.length ?? 0);
+			const entry = found.get(sign.numeral) ?? { part: partNames.get(sign.numeral) ?? sign.word, line, figures: new Set<string>() };
+			named.forEach(key => entry.figures.add(key));
+			found.set(sign.numeral, entry);
+		}
+	}
+	return [...found.entries()].map(([numeral, entry]) => ({
+		numeral,
+		part: entry.part,
+		line: entry.line,
+		figures: [...entry.figures].sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10) || a.localeCompare(b)),
+	}));
+}
+
+/** The receipt Findings of the `numeral-not-drawn` check: an Error per sign, on its first line of the draft. */
+export function numeralsNotDrawnFindings(items: readonly NumeralNotDrawn[]): FigureFinding[] {
+	return items.map(item => ({
+		severity: 'Error',
+		rule: 'numeral-not-drawn',
+		file: DRAFTING_FILE_NAMES.draft,
+		line: item.line,
+		citation: FIGURE_LIST_RULES['numeral-not-drawn'],
+		message: `Numeral ${item.numeral} ("${item.part}") is cited in the description (line ${item.line}${item.figures.length ? `, for ${figureListText(item.figures)}` : ''}), but no Figure of the Drawing Set draws it. Every reference character mentioned in the description appears in the drawings (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i)). Draw the part with its numeral in a Figure that shows it, or remove the numeral from the text; or the attorney waives this in findings.md.`,
+	}));
+}
+
+/** The receipt Note of the `numeral-not-drawn` check when it cannot run: no draft yet, or a partial build. */
+export function numeralsNotCheckedFinding(reason: 'no-draft' | 'partial'): FigureFinding {
+	return {
+		severity: 'Note',
+		rule: 'numeral-not-drawn',
+		notChecked: true,
+		citation: FIGURE_LIST_RULES['numeral-not-drawn'],
+		message: reason === 'no-draft'
+			? `Not checked: ${DRAFTING_FILE_NAMES.draft} does not exist yet. The build compares the reference signs the description cites with the numerals the Figures draw once the draft is written.`
+			: 'Not checked: partial build (INCOMPLETE SET); the Figures not drawn yet may carry the signs the description cites.',
+	};
 }
 
 /** The review render of a round, relative to `drawings/`. Cycle 1 keeps the first file name. */

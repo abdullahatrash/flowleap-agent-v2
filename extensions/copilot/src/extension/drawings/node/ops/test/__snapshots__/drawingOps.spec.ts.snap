@@ -57,7 +57,7 @@ exports[`buildDrawingSetOp > lays out the Figures, writes the sheets, the PDF an
 - Page size: letter
 - Drawing Sheets: 2
 - Date: <date>
-- Results: 29 pass, 0 fail, 1 not checked
+- Results: 37 pass, 0 fail, 1 not checked
 
 This file lists each code check, the rule it applies and its result. It is not a verdict on the drawings. The rules a person must judge (sufficient views, every claimed feature shown, suitable legends) are not checked here; the attorney reviews them.
 
@@ -94,7 +94,15 @@ This file lists each code check, the rule it applies and its result. It is not a
 | lead-ends-on-nothing | 37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | lead-along-edge | 37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | lead-crosses-outline | 37 CFR 1.84(q) (lead lines "as short as possible"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
+| us-keywords-only | 37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible"); PCT Rule 11.11 | pass | No finding. |
+| epo-short-sentence | OJ EPO 2025 A49 Art. 1(2)(j); GL A-IX 8 (a short sentence per method step); PCT Rule 11.11 | pass | No finding. |
+| label-overlap | 37 CFR 1.84(p)(1), (p)(3) ("plain and legible", "should not cross or mingle with the lines"); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h) | pass | No finding. |
+| numeral-set | 37 CFR 1.84(p)(4), (p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (one item, one character; the drawn set equals the step set) | pass | No finding. |
+| lead-line | 37 CFR 1.84(q) (a lead line per reference character); OJ EPO 2025 A49 Art. 2; PCT IP 5.145 | pass | No finding. |
+| lead-crosses-edge | 37 CFR 1.84(q) ("Lead lines must not cross each other" or other lines); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | figure-parts-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (reference signs not in the description are not in the drawings, and the reverse) | pass | No finding. |
+| figure-coverage | 37 CFR 1.83(a) (the drawings show every feature specified in the claims; the EPC has no rule like it, the Drawing Set gate applies) | pass | No finding. |
+| numeral-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every reference sign the description cites is drawn in a Figure of the Drawing Set) | pass | No finding. |
 
 ## Review rounds
 
@@ -108,7 +116,7 @@ This file lists each code check, the rule it applies and its result. It is not a
     "pageSize": "letter",
     "sheets": 2,
     "text": "Built the Drawing Set of 2 Figure(s) on 2 letter sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/sheet-2.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.
-Receipt: 29 pass, 0 fail, 1 not checked.
+Receipt: 37 pass, 0 fail, 1 not checked.
 No code check fails.
 Updated drafting/hinge/filing-manifest.md: 2 drawing sheet(s), measured.
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
@@ -155,6 +163,40 @@ exports[`buildDrawingSetOp > refuses with no Figure, on a proposed part, on a fi
     "reason": "drafting/hinge/figures.md has 1 proposed part(s); the attorney confirms each by removing "(proposed)", or deletes the line:
 - \`figure-proposal\` (figures.md, line 14): Part 8 ("spring") is a proposal from sketches/sketch-1.png: the disclosure does not state it. The attorney confirms it by removing "(proposed)", or deletes the line.",
   },
+}
+`;
+
+exports[`coverage and numeral checks at build > refuses the D7 pipe-clamp set on numeral 10, cited in the description for FIG. 1 and FIG. 2 and drawn in no Figure; builds once the attorney waives it (#802) 1`] = `
+{
+  "built": [
+    "Receipt: 36 pass, 0 fail, 2 not checked.",
+    "No code check fails.",
+  ],
+  "refused": {
+    "ok": false,
+    "reason": "1 Error(s) of the Figures are open. Fix each in the Figure source and render again, or the attorney waives it: copy the item under "## Errors" in drafting/hinge/findings.md and add a line \`  - Waived: <reason>\` under it.
+- \`numeral-not-drawn\` (draft-application.md, line 42): Numeral 10 ("pipe clamp") is cited in the description (line 42, for FIG. 1–3), but no Figure of the Drawing Set draws it. Every reference character mentioned in the description appears in the drawings (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i)). Draw the part with its numeral in a Figure that shows it, or remove the numeral from the text; or the attorney waives this in findings.md.",
+  },
+  "rows": [
+    "| figure-parts-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (reference signs not in the description are not in the drawings, and the reverse) | pass | Note: FIG. 1 lists but does not draw: 10, 20; FIG. 2 lists but does not draw: 14, 28, 30 |",
+    "| figure-coverage | 37 CFR 1.83(a) (the drawings show every feature specified in the claims; the EPC has no rule like it, the Drawing Set gate applies) | not-checked | figures.md: Not checked: no Draft Outline yet. The claimed-feature coverage (37 CFR 1.83(a)) is checked once draft-outline.md has Technical items that list claims. |",
+    "| numeral-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every reference sign the description cites is drawn in a Figure of the Drawing Set) | pass | Waived: The whole clamp gets numeral 10 in FIG. 1 in the next render. |",
+  ],
+}
+`;
+
+exports[`coverage and numeral checks at build > with no Draft Outline and no draft, the receipt rows figure-coverage and numeral-not-drawn show not-checked (#804, #802) 1`] = `
+{
+  "result": [
+    "Receipt: 35 pass, 0 fail, 3 not checked.",
+    "No code check fails.",
+  ],
+  "rows": [
+    "| us-keywords-only | 37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible"); PCT Rule 11.11 | pass | No finding. |",
+    "| numeral-set | 37 CFR 1.84(p)(4), (p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (one item, one character; the drawn set equals the step set) | pass | No finding. |",
+    "| figure-coverage | 37 CFR 1.83(a) (the drawings show every feature specified in the claims; the EPC has no rule like it, the Drawing Set gate applies) | not-checked | figures.md: Not checked: no Draft Outline yet. The claimed-feature coverage (37 CFR 1.83(a)) is checked once draft-outline.md has Technical items that list claims. |",
+    "| numeral-not-drawn | 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i) (every reference sign the description cites is drawn in a Figure of the Drawing Set) | not-checked | Not checked: draft-application.md does not exist yet. The build compares the reference signs the description cites with the numerals the Figures draw once the draft is written. |",
+  ],
 }
 `;
 

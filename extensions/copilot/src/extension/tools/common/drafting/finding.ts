@@ -28,6 +28,8 @@ export interface DraftFinding {
 	readonly question?: string;
 	/** The attorney's waiver, kept in the findings file. */
 	readonly waived?: { readonly reason: string };
+	/** True for a Note that records that its check did not run; the Drawing Set receipt shows the row as `not-checked`. */
+	readonly notChecked?: boolean;
 }
 
 /** The findings with the Errors first, each group in its given order. */

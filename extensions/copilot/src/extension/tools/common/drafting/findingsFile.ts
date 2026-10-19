@@ -157,7 +157,7 @@ function findingKey(finding: DraftFinding): string {
 }
 
 /** The rule ids of the Figure checks of the Drawing Set (PRD 0023); no drafting validator emits them. */
-const drawingRules: ReadonlySet<string> = new Set([...Object.keys(DRAWING_RULES), ...DIAGRAM_RULES]);
+const drawingRules: ReadonlySet<string> = new Set([...Object.keys(DRAWING_RULES), ...Object.keys(DIAGRAM_RULES)]);
 
 /**
  * Merges a new validator run with the previous findings file: a current finding keeps the

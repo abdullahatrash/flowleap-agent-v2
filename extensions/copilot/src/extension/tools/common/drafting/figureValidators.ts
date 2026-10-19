@@ -150,7 +150,9 @@ function claimList(numbers: readonly number[]): string {
  *   `feature-list.md` does not have. The Error for a row that is not drawn names the two
  *   actions of the attorney (PRD 0025, S5): add a figure of the feature, or remove the claims
  *   that cite it, which re-opens the claims approval.
- * - When `figures.md` links no part at all, one Note instead: the coverage was not checked.
+ * - When `figures.md` links no part at all, or the Draft Outline has no Technical item that
+ *   lists claims (no outline yet), one Note marked `notChecked` instead: the coverage was not
+ *   checked. The receipt of the Drawing Set shows the row as `not-checked` (#804).
  *
  * No finding when the application has no figures. For EPO the gate is the same; the EPC has no
  * rule like 37 CFR 1.83(a), and the message says so.
@@ -172,9 +174,10 @@ export function checkClaimedFeatureCoverage(input: FeatureCoverageInput): DraftF
 	}
 	const parts = parseFigureParts(input.figures);
 	const linked = parts.filter(part => part.features?.length);
+	const notChecked = (message: string): DraftFinding => ({ severity: 'Note', rule: 'figure-coverage', file: figuresFile, notChecked: true, message });
 	if (!linked.length) {
 		return cited.size
-			? [{ severity: 'Note', rule: 'figure-coverage', file: figuresFile, message: `${figuresFile} links no part to a Feature List row (\`- 12: housing [F3]\`), so the claimed-feature coverage was not checked. The Approved Claims cite ${[...cited.keys()].join(', ')}.` }]
+			? [notChecked(`${figuresFile} links no part to a Feature List row (\`- 12: housing [F3]\`), so the claimed-feature coverage was not checked. The Approved Claims cite ${[...cited.keys()].join(', ')}.`)]
 			: [];
 	}
 	const findings: DraftFinding[] = [];
@@ -185,6 +188,12 @@ export function checkClaimedFeatureCoverage(input: FeatureCoverageInput): DraftF
 				findings.push({ severity: 'Error', rule: 'figure-coverage', file: figuresFile, line: part.line, message: `Part ${part.numeral} ("${part.part}") links ${feature}, which is not a row of ${DRAFTING_FILE_NAMES.featureList}.` });
 			}
 		}
+	}
+	if (!cited.size) {
+		findings.push(notChecked(input.outline.items.length
+			? `Not checked: ${DRAFTING_FILE_NAMES.draftOutline} has no Technical item that lists claims. The claimed-feature coverage (37 CFR 1.83(a)) is checked once it has.`
+			: `Not checked: no Draft Outline yet. The claimed-feature coverage (37 CFR 1.83(a)) is checked once ${DRAFTING_FILE_NAMES.draftOutline} has Technical items that list claims.`));
+		return findings;
 	}
 	const drawn = new Set(parseFigureSections(input.figures).drawnParts.filter(part => !part.proposed).flatMap(part => part.features ?? []));
 	const rule = input.office === 'US'
