@@ -6,7 +6,7 @@
 import { DraftFinding } from '../../../tools/common/drafting/finding';
 import { DiagramResult, refuse, renderGraph } from './diagram';
 import { boxSize, DiagramEdge, DiagramNode } from './diagramLayout';
-import { countWords, DiagramNumeralScheme, DiagramOffice, keywordLabel, numeralFor, shortSentence, US_MAX_WORDS, wrapText } from './diagramText';
+import { countWords, diagramNumerals, DiagramNumeralScheme, DiagramOffice, keywordLabel, shortSentence, US_MAX_WORDS, wrapText } from './diagramText';
 
 /** The most characters of one text line in a block. */
 const BLOCK_LINE_CHARS = 24;
@@ -35,12 +35,18 @@ export interface BlockDiagramInput {
 	readonly figure: number;
 	readonly blocks: readonly DiagramBlock[];
 	readonly connections: readonly DiagramConnection[];
+	/**
+	 * The numeral of each block, in block order, as the figure list gives them (#786). Without it
+	 * the blocks take the scheme series 2, 4, 6 ... (or 402, 404 ... in FIG. 4).
+	 */
+	readonly numerals?: readonly number[];
 }
 
 /**
- * Draws a block-diagram Figure: one numbered block per given block, in order, joined by the
- * given connections with orthogonal lines and arrowheads. A connection that names an unknown
- * block refuses the Figure with the reason and no SVG.
+ * Draws a block-diagram Figure: one numbered block per given block, in order, numbered by the
+ * given numerals or else by the scheme, joined by the given connections with orthogonal lines
+ * and arrowheads. A connection that names an unknown block, or a numeral list of another length
+ * than the blocks, refuses the Figure with the reason and no SVG.
  */
 export async function drawBlockDiagram(input: BlockDiagramInput): Promise<DiagramResult> {
 	const file = `FIG-${input.figure}.svg`;
@@ -50,7 +56,10 @@ export async function drawBlockDiagram(input: BlockDiagramInput): Promise<Diagra
 	if (input.blocks.length === 0) {
 		refusals.push({ severity: 'Error', rule: 'no-blocks', file, message: 'The block list is empty.' });
 	}
-	if (input.scheme === 'hundreds' && 2 * input.blocks.length >= 100) {
+	if (input.numerals && input.numerals.length !== input.blocks.length) {
+		refusals.push({ severity: 'Error', rule: 'numeral-count', file, message: `FIG. ${input.figure} lists ${input.numerals.length} numeral(s) for ${input.blocks.length} blocks. One numeral per block, in block order.` });
+	}
+	if (!input.numerals && input.scheme === 'hundreds' && 2 * input.blocks.length >= 100) {
 		refusals.push({ severity: 'Error', rule: 'numeral-range', file, message: `${input.blocks.length} blocks do not fit the ${input.figure}02-${input.figure}98 series of FIG. ${input.figure}.` });
 	}
 	for (const block of input.blocks) {
@@ -70,8 +79,9 @@ export async function drawBlockDiagram(input: BlockDiagramInput): Promise<Diagra
 		return refuse(refusals);
 	}
 
+	const numerals = diagramNumerals(input.scheme, input.figure, input.blocks.length, input.numerals);
 	const items = input.blocks.map((block, index) => {
-		const numeral = numeralFor(input.scheme, input.figure, index);
+		const numeral = numerals[index];
 		let text = block.label.trim();
 		if (input.office === 'US' && countWords(text) > US_MAX_WORDS) {
 			text = keywordLabel(text);

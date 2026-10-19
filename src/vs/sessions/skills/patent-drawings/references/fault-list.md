@@ -41,7 +41,8 @@ refusal returns no SVG.
 | `no-steps` | Refusal: the step list is empty. | Give the numbered steps or the approved method claim. |
 | `no-blocks` | Refusal: the block list is empty. | Give the blocks. |
 | `node-count` | Refusal: a proposal adds a process box. One box per step, never more. | Remove the `process` node; a proposal adds decisions and edges only. |
-| `numeral-range` | Refusal: too many steps or blocks for the `hundreds` series of this Figure (more than 49). | Split the method into two Figures. |
+| `numeral-count` | Refusal: the numeral list has another length than the steps or blocks. The render passes the numerals of the `figures.md` heading, one per step or block, in order. | List one numeral per step or block under the Figure heading. |
+| `numeral-range` | Refusal: too many steps or blocks for the `hundreds` series of this Figure (more than 49) when the heading lists no numerals. | Split the method into two Figures. |
 | `duplicate-node` | Refusal: an id is used twice or is `start` / `end`. | Rename the node. |
 | `unknown-node` | Refusal: a decision, edge or connection names a node that is not in the Figure, or a decision is not reachable. | Use the step ids (`s1`, `s2`, ...), the decision ids and `start` / `end` only. |
 | `terminal-edge` | Refusal: a proposed edge enters START or leaves END. | Reverse or remove the edge. |
@@ -51,7 +52,7 @@ refusal returns no SVG.
 | `epo-short-sentence` | An EPO label has more than 12 words (GL A-IX 8). As a Note, the label was cut. | Shorten the label to a short sentence. |
 | `label-overlap` | Two texts overlap. | Shorten the labels, or remove an edge label. |
 | `numeral-set` | The drawn numerals differ from the step or block numerals. | Render again from the same step list; do not edit the SVG. |
-| step numerals not listed | Refusal: a step or block numeral of the `numerals:` scheme (`2, 4, 6` or `502, 504`) is not under the Figure's heading in `figures.md`. The refusal lists the lines to add. | Add the listed `- N: text` lines under the heading, then render again. |
+| step numerals not listed | Refusal: the Figure's heading in `figures.md` lists no numerals (the refusal lists the lines to add, with the next free numerals of the `numerals:` scheme), lists another count than the steps or blocks, or lists a numeral that names another part of the figure list. The steps or blocks take the numerals under the heading, in order. | List one `- N: text` line per step or block under the heading, in order, each with its own numeral, then render again. |
 | `lead-line` | A numeral has no lead line. | Render again; if it stays, report it. |
 | `lead-crosses-edge` | A numeral or its lead line touches a connector. | Remove or move a proposed edge, or shorten the labels so the layout changes. |
 | `decision-branch` | Note: a decision has fewer than two outgoing edges. | Add the second branch edge, or remove the decision. |

@@ -129,7 +129,19 @@ export function shortSentence(text: string): { readonly text: string; readonly t
 	return { text: `${capitalize(kept)}…`, truncated: true };
 }
 
-/** The reference numeral of the item at `index` (0-based) in figure `figure` under `scheme`. */
+/**
+ * The reference numeral of the item at `index` (0-based) in figure `figure` under `scheme`: the
+ * series a diagram takes when the figure list does not list its numerals (see {@link diagramNumerals}).
+ */
 export function numeralFor(scheme: DiagramNumeralScheme, figure: number, index: number): number {
 	return scheme === 'hundreds' ? figure * 100 + 2 * (index + 1) : 2 * (index + 1);
+}
+
+/**
+ * The numerals of the `count` steps or blocks of a diagram, in order: the numerals the figure
+ * list gives when `listed` is set (the figure list is the authority, #786), else the scheme
+ * series of {@link numeralFor}. A `listed` of another length is the caller's refusal.
+ */
+export function diagramNumerals(scheme: DiagramNumeralScheme, figure: number, count: number, listed?: readonly number[]): number[] {
+	return listed && listed.length === count ? [...listed] : Array.from({ length: count }, (_, index) => numeralFor(scheme, figure, index));
 }

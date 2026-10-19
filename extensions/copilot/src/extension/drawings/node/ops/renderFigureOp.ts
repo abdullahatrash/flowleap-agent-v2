@@ -7,15 +7,16 @@ import { parseClaims } from '../../../tools/common/drafting/claims';
 import { readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { DraftFinding } from '../../../tools/common/drafting/finding';
 import { DRAFTING_FILE_NAMES } from '../../../tools/common/drafting/folderContract';
-import { figureHeadingNumbers, hasFigure, parseFigureParts, parseFigureSections } from '../../../tools/common/drafting/specValidators';
+import { figureHeadingNumbers, FigurePart, hasFigure, parseFigureParts, parseFigureSections } from '../../../tools/common/drafting/specValidators';
 import type { DiagramBlock, DiagramConnection } from '../../common/diagram/blockDiagram';
 import type { DiagramResult } from '../../common/diagram/diagram';
 import type { FlowchartProposal } from '../../common/diagram/flowchart';
+import { DiagramNumeralScheme, numeralFor } from '../../common/diagram/diagramText';
 import type { DiagramStep } from '../../common/diagram/steps';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
 import { ApprovedClaims, MatterFiles, readApprovedClaims, readMatterOffice } from './matterFiles';
 
 /** A flowchart Figure: the steps in order, or the approved method claim to read them from. */
@@ -266,19 +267,19 @@ async function renderDiagram(files: MatterFiles, input: RenderFigureInput, figur
 		labels = blocks.map(block => block.label);
 	}
 
-	const { numeralFor } = await import('../../common/diagram/diagramText');
-	const listed = new Set(partsOfFigure(figures, figure).map(part => part.numeral));
-	const missing = labels.map((text, index) => ({ numeral: String(numeralFor(scheme, figure.number, index)), text })).filter(item => !listed.has(item.numeral));
-	if (missing.length) {
-		return `Every numeral in a Figure is a numeral of the figure list (${DRAWING_RULES['numeral-not-allowed']}). The ${source.mode === 'flowchart' ? 'steps' : 'blocks'} of FIG. ${figure.key} take these numerals (\`numerals: ${scheme}\`), which are not under its heading in ${files.folder}/${DRAFTING_FILE_NAMES.figures}:\n${missing.map(item => `- ${item.numeral}: ${item.text}`).join('\n')}\nAdd these lines under the FIG. ${figure.key} heading, then render again.`;
+	const numerals = diagramNumeralsOfHeading(files, figures, figure, scheme, source.mode, labels);
+	if (typeof numerals === 'string') {
+		return numerals;
 	}
 
 	let result: DiagramResult;
 	if (source.mode === 'flowchart') {
 		const { drawFlowchart } = await import('../../common/diagram/flowchart');
+		source = { ...source, input: { ...source.input, numerals } };
 		result = await drawFlowchart(source.input);
 	} else {
 		const { drawBlockDiagram } = await import('../../common/diagram/blockDiagram');
+		source = { ...source, input: { ...source.input, numerals } };
 		result = await drawBlockDiagram(source.input);
 	}
 	if (!result.svg) {
@@ -286,6 +287,55 @@ async function renderDiagram(files: MatterFiles, input: RenderFigureInput, figur
 	}
 	const svgFindings: DrawingFinding[] = checkFigureSvgFaults(result.svg, { file: `${fig}.svg`, checks: DIAGRAM_SVG_CHECKS });
 	return { svg: result.svg, source: `${JSON.stringify(source, null, '\t')}\n`, findings: [...result.findings, ...svgFindings] };
+}
+
+/**
+ * The numerals of the steps or blocks of a 2D Figure, as the lines under its heading in
+ * `figures.md` list them, in order: the figure list is the authority (ADR 0014, #786). The
+ * refusal text when the heading lists nothing (the lines to add, with the next free numerals of
+ * the scheme after the parts of the matter), lists another count than the diagram has items, lists
+ * a numeral that is not a plain number, or lists a numeral that names another part elsewhere in
+ * the figure list.
+ */
+function diagramNumeralsOfHeading(files: MatterFiles, figures: string, figure: FigureId, scheme: DiagramNumeralScheme, mode: DiagramSource['mode'], labels: readonly string[]): number[] | string {
+	const figuresPath = `${files.folder}/${DRAFTING_FILE_NAMES.figures}`;
+	const items = mode === 'flowchart' ? 'steps' : 'blocks';
+	const item = mode === 'flowchart' ? 'step' : 'block';
+	const heading = `FIG. ${figure.key}`;
+	const listed = partsOfFigure(figures, figure);
+	const elsewhere = parseFigureSections(figures).figures
+		.filter(section => {
+			const numbers = figureHeadingNumbers(section.label);
+			return !hasFigure(numbers, figure.key) && !hasFigure(numbers, String(figure.number));
+		})
+		.flatMap(section => section.parts.map(part => ({ ...part, heading: section.label })));
+	if (listed.length === 0) {
+		// The next free numerals of the scheme after the parts of the matter: 2, 4, 6 on a fresh matter.
+		const taken: FigurePart[] = [...elsewhere];
+		const suggested = labels.map((text, index) => {
+			const numeral = nextNumeral(taken, scheme, figure.number) ?? String(numeralFor(scheme, figure.number, index));
+			taken.push({ numeral, part: text, line: 0 });
+			return numeral;
+		});
+		return `Every numeral in a Figure is a numeral of the figure list (${DRAWING_RULES['numeral-not-allowed']}). The heading of ${heading} in ${figuresPath} lists no numerals. The ${items} of a 2D Figure take the numerals listed under its heading, in order; the next free numerals of the \`numerals: ${scheme}\` scheme are:\n${labels.map((text, index) => `- ${suggested[index]}: ${text}`).join('\n')}\nAdd one line per ${item} under the ${heading} heading, then render again.`;
+	}
+	if (listed.length !== labels.length) {
+		return `The ${items} of ${heading} take the numerals listed under its heading in ${figuresPath}, in order; the figure list is the authority (ADR 0014). The heading lists ${listed.length} numeral(s) (${listed.map(part => part.numeral).join(', ')}) for ${labels.length} ${items}:\n${labels.map((text, index) => `${index + 1}. ${text}`).join('\n')}\nList one numeral per ${item} under the ${heading} heading, in ${item} order, then render again.`;
+	}
+	const faults: string[] = [];
+	for (const part of listed) {
+		if (!/^\d+$/.test(part.numeral)) {
+			faults.push(`Numeral ${part.numeral} (${figuresPath}, line ${part.line}) is not a plain number; a ${item} numeral has no letter suffix.`);
+		}
+		const other = elsewhere.find(candidate => candidate.numeral === part.numeral && candidate.part.trim().toLowerCase() !== part.part.trim().toLowerCase());
+		if (other) {
+			faults.push(`Numeral ${part.numeral} under the ${heading} heading (${figuresPath}, line ${part.line}) is already "${other.part}" of ${other.heading} (line ${other.line}). One numeral names one part.`);
+		}
+	}
+	if (faults.length) {
+		return `${faults.join('\n')}\nGive each ${item} of ${heading} its own numeral of the \`numerals: ${scheme}\` scheme in ${figuresPath}, then render again.`;
+	}
+	return listed.map(part => Number(part.numeral));
 }
 
 /** The steps given in order, or the steps of the approved method claim. */

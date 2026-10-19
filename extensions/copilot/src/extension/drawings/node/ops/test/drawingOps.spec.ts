@@ -49,6 +49,18 @@ numerals: even
 - 6: opening a coolant valve
 `;
 
+/** The figure list of the founder's D7 pipe-clamp matter (2026-10-19): parts 10 to 42 in FIG. 1 and FIG. 2, the FIG. 3 flowchart steps 44 to 52. */
+const pipeClampFigures = readFileSync(path.join(__dirname, 'fixtures/pipe-clamp.figures.md'), 'utf8');
+
+/** The five steps of the D7 method claim, as the FIG. 3 heading lists them. */
+const pipeClampSteps = [
+	'placing the pipe in the saddle groove',
+	'pivoting the cap about the hinge pin onto the pipe',
+	'compressing the spring with the cap',
+	'pushing the locking pin through the latch lug and the cap latch lug',
+	'releasing the cap, the locking pin holding the cap closed against the spring',
+];
+
 const outline = `---
 office: US
 claims: 0
@@ -117,6 +129,32 @@ describe('renderFigureOp', () => {
 	it('refuses 2D numerals that are not under the Figure heading, listing the lines to add', async () => {
 		const { render } = await setup();
 		expect(await render({ figure: 2, flowchart: { steps: ['measure the temperature', 'compare it with a limit', 'open the valve', 'close the valve'] } })).toMatchSnapshot();
+	});
+
+	it('draws the FIG. 3 flowchart of the D7 matter with the numerals 44 to 52 listed under its heading, not the scheme series (#786)', async () => {
+		const { render, read } = await setup({ ...matter, 'figures.md': pipeClampFigures });
+		const result = await render({ figure: 3, flowchart: { steps: pipeClampSteps } });
+		const svg = await read('drawings/FIG-3.svg') ?? '';
+		expect({
+			ok: result.ok,
+			errors: result.ok ? result.findings.filter(finding => finding.severity === 'Error') : result.reason,
+			numerals: [...svg.matchAll(/<text class="numeral" data-numeral="(?<numeral>\d+)"/g)].map(match => Number(match.groups?.numeral)),
+			sourceNumerals: JSON.parse(await read('drawings/FIG-3.scene.json') ?? '{}').input?.numerals,
+		}).toEqual({ ok: true, errors: [], numerals: [44, 46, 48, 50, 52], sourceNumerals: [44, 46, 48, 50, 52] });
+	}, KERNEL_TIMEOUT);
+
+	it('refuses a 2D Figure whose heading lists nothing (free numerals suggested), another count, or a numeral of another Figure (#786)', async () => {
+		const noLines = pipeClampFigures.replace(/- 4[4-9]:[^\n]*\n|- 5[0-2]:[^\n]*\n/g, '');
+		const fourLines = pipeClampFigures.replace(/- 52:[^\n]*\n/, '');
+		const clash = pipeClampFigures.replace('- 44: placing', '- 10: placing');
+		const hundreds = pipeClampFigures.replace('numerals: even', 'numerals: hundreds');
+		const run = async (figures: string, input: Omit<RenderFigureInput, 'seen'>) => (await setup({ ...matter, 'figures.md': figures })).render(input);
+		expect({
+			noLines: await run(noLines, { figure: 3, flowchart: { steps: pipeClampSteps } }),
+			fourLines: await run(fourLines, { figure: 3, flowchart: { steps: pipeClampSteps } }),
+			clash: await run(clash, { figure: 3, flowchart: { steps: pipeClampSteps } }),
+			hundredsNoLines: await run(hundreds.replace(/- 4[4-9]:[^\n]*\n|- 5[0-2]:[^\n]*\n/g, ''), { figure: 3, block: { blocks: [{ id: 'a', label: 'Pump' }, { id: 'b', label: 'Valve' }] } }),
+		}).toMatchSnapshot();
 	});
 
 	it('refuses a flowchart from a claim while the claims are not approved', async () => {

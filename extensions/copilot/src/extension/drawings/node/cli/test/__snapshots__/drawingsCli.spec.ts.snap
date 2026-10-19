@@ -185,9 +185,12 @@ exports[`drawings CLI > refusals > refuses step numerals that are not under the 
 {
   "exitCode": 1,
   "ok": false,
-  "reason": "Every numeral in a Figure is a numeral of the figure list (37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l)). The steps of FIG. 2 take these numerals (\`numerals: hundreds\`), which are not under its heading in drafting/widget/figures.md:
-- 208: close the valve
-Add these lines under the FIG. 2 heading, then render again.",
+  "reason": "The steps of FIG. 2 take the numerals listed under its heading in drafting/widget/figures.md, in order; the figure list is the authority (ADR 0014). The heading lists 3 numeral(s) (202, 204, 206) for 4 steps:
+1. measure the cell temperature
+2. compare with the limit
+3. open the coolant valve
+4. close the valve
+List one numeral per step under the FIG. 2 heading, in step order, then render again.",
   "wrote": [],
 }
 `;

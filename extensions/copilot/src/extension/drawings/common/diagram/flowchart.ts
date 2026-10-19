@@ -6,7 +6,7 @@
 import { DraftFinding } from '../../../tools/common/drafting/finding';
 import { DiagramResult, refuse, renderGraph } from './diagram';
 import { boxSize, DiagramEdge, DiagramNode } from './diagramLayout';
-import { DiagramNumeralScheme, DiagramOffice, keywordLabel, numeralFor, shortSentence, wrapText } from './diagramText';
+import { diagramNumerals, DiagramNumeralScheme, DiagramOffice, keywordLabel, shortSentence, wrapText } from './diagramText';
 import { DiagramStep } from './steps';
 
 /** The ids of the optional START and END terminals. */
@@ -51,6 +51,11 @@ export interface FlowchartInput {
 	readonly figure: number;
 	/** The ordered steps; the authority for the process boxes (ADR 0014). */
 	readonly steps: readonly DiagramStep[];
+	/**
+	 * The numeral of each step, in step order, as the figure list gives them (#786). Without it
+	 * the steps take the scheme series 2, 4, 6 ... (or 302, 304 ... in FIG. 3).
+	 */
+	readonly numerals?: readonly number[];
 	/** Draws START and END terminals; off by default. */
 	readonly terminals?: boolean;
 	readonly proposal?: FlowchartProposal;
@@ -58,9 +63,10 @@ export interface FlowchartInput {
 
 /**
  * Draws a flowchart Figure: exactly one process box per step, in step order, numbered by the
- * scheme, chained top to bottom. The proposal may add decision diamonds and edges only. A
- * process-box count other than the step count, or a proposal that names an unknown node, is
- * refused with the reason and no SVG.
+ * given numerals or else by the scheme, chained top to bottom. The proposal may add decision
+ * diamonds and edges only. A process-box count other than the step count, a numeral list of
+ * another length than the steps, or a proposal that names an unknown node, is refused with the
+ * reason and no SVG.
  */
 export async function drawFlowchart(input: FlowchartInput): Promise<DiagramResult> {
 	const file = `FIG-${input.figure}.svg`;
@@ -72,7 +78,10 @@ export async function drawFlowchart(input: FlowchartInput): Promise<DiagramResul
 	if (input.steps.length === 0) {
 		refusals.push({ severity: 'Error', rule: 'no-steps', file, message: 'The step list is empty. A flowchart takes one box per method step (ADR 0014).' });
 	}
-	if (input.scheme === 'hundreds' && 2 * input.steps.length >= 100) {
+	if (input.numerals && input.numerals.length !== input.steps.length) {
+		refusals.push({ severity: 'Error', rule: 'numeral-count', file, message: `FIG. ${input.figure} lists ${input.numerals.length} numeral(s) for ${input.steps.length} steps. One numeral per step, in step order.` });
+	}
+	if (!input.numerals && input.scheme === 'hundreds' && 2 * input.steps.length >= 100) {
 		refusals.push({ severity: 'Error', rule: 'numeral-range', file, message: `${input.steps.length} steps do not fit the ${input.figure}02-${input.figure}98 series of FIG. ${input.figure}.` });
 	}
 	const processCount = input.steps.length + proposedNodes.filter(node => node.kind === 'process').length;
@@ -114,8 +123,9 @@ export async function drawFlowchart(input: FlowchartInput): Promise<DiagramResul
 	}
 
 	// One process box per step, uniform in size.
+	const numerals = diagramNumerals(input.scheme, input.figure, input.steps.length, input.numerals);
 	const stepLines = input.steps.map((step, index) => {
-		const numeral = numeralFor(input.scheme, input.figure, index);
+		const numeral = numerals[index];
 		let text: string;
 		if (input.office === 'US') {
 			text = keywordLabel(step.text);
