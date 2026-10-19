@@ -101,6 +101,25 @@ describe('buildPromptTree', () => {
 		]);
 	});
 
+	it('lists the drafting-loop guide with its spelled-out label right behind the drafting prompt it explains', () => {
+		const bundled = [
+			entry('flowleap-patent-dossier', 'bundled'),
+			entry('flowleap-drafting-loop', 'bundled'),
+			entry('flowleap-application-drafting', 'bundled'),
+		];
+
+		expect(shape(buildPromptTree(bundled, []))).toEqual([
+			{
+				group: 'FlowLeap', children: [
+					'prompt:Application drafting',
+					'prompt:Drafting with drawings: the loop',
+					'prompt:Patent dossier',
+				]
+			},
+			{ group: 'My prompts', children: ['placeholder:Add a prompt to reuse it later'] },
+		]);
+	});
+
 	it('shows a non-copyable placeholder when the user has written no prompts yet', () => {
 		expect(shape(buildPromptTree([entry('flowleap-patent-dossier', 'bundled')], []))).toEqual([
 			{ group: 'FlowLeap', children: ['prompt:Patent dossier'] },
