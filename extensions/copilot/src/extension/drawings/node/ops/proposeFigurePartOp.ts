@@ -7,7 +7,7 @@ import { formatFigurePart, readFiguresSettings } from '../../../tools/common/dra
 import { DRAFTING_FILE_NAMES } from '../../../tools/common/drafting/folderContract';
 import { parseFigureParts } from '../../../tools/common/drafting/specValidators';
 import { insertPartLine, nextNumeral, sameBytes, schemeFault, sketchFileName } from '../../common/drawingFiles';
-import { MatterFiles } from './matterFiles';
+import { figuresPath, MatterFiles } from './matterFiles';
 
 /** A sketch the caller resolved: its original file name and its bytes. */
 export interface SketchFile {
@@ -72,7 +72,7 @@ async function storeSketch(files: MatterFiles, sketch: SketchFile): Promise<stri
  */
 export async function proposeFigurePartOp(files: MatterFiles, input: ProposeFigurePartInput): Promise<ProposeFigurePartResult> {
 	const refuse = (reason: string): ProposeFigurePartResult => ({ ok: false, reason });
-	const figuresPath = `${files.folder}/${DRAFTING_FILE_NAMES.figures}`;
+	const figureList = figuresPath(files);
 	const part = input.part?.trim().replace(/\s+/g, ' ');
 	if (!part || /[\[\]()]/.test(part)) {
 		return refuse('Give the part name in `part`, without brackets or parentheses.');
@@ -86,7 +86,7 @@ export async function proposeFigurePartOp(files: MatterFiles, input: ProposeFigu
 	}
 	const figures = await files.read(DRAFTING_FILE_NAMES.figures);
 	if (figures === undefined) {
-		return refuse(`${figuresPath} does not exist.`);
+		return refuse(`${figureList} does not exist.`);
 	}
 	const scheme = readFiguresSettings(figures).numerals;
 	const parts = parseFigureParts(figures);
@@ -97,7 +97,7 @@ export async function proposeFigurePartOp(files: MatterFiles, input: ProposeFigu
 		}
 		const used = parts.find(item => item.numeral === numeral);
 		if (used) {
-			return refuse(`Numeral ${numeral} is already used for "${used.part}" (${figuresPath}, line ${used.line}). One numeral names one part.`);
+			return refuse(`Numeral ${numeral} is already used for "${used.part}" (${figureList}, line ${used.line}). One numeral names one part.`);
 		}
 		const fault = schemeFault(numeral, scheme, input.figure);
 		if (fault) {
@@ -113,6 +113,6 @@ export async function proposeFigurePartOp(files: MatterFiles, input: ProposeFigu
 	const sketch = input.sketch ? await storeSketch(files, input.sketch) : undefined;
 	const line = formatFigurePart({ numeral, part, ...(features.length ? { features } : {}), proposed: sketch ? { source: sketch } : {} });
 	await files.write(DRAFTING_FILE_NAMES.figures, insertPartLine(figures, input.figure, line));
-	const text = `Wrote to ${figuresPath}: \`${line}\`${sketch ? `. The sketch is at ${files.folder}/${sketch}` : ''}. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.`;
+	const text = `Wrote to ${figureList}: \`${line}\`${sketch ? `. The sketch is at ${files.folder}/${sketch}` : ''}. This part is a proposal: build_drawing_set and the export stay blocked until the attorney confirms it by removing "(proposed)", or deletes the line. Tell the attorney what you proposed and why.`;
 	return { ok: true, text, line, numeral, ...(sketch ? { sketch } : {}) };
 }

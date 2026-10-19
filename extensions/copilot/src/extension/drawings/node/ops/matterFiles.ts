@@ -29,6 +29,11 @@ export interface MatterFiles {
 	exists(path: string): Promise<boolean>;
 }
 
+/** The figure list of the matter as the messages name it, e.g. `drafting/hinge/figures.md`. */
+export function figuresPath(files: MatterFiles): string {
+	return `${files.folder}/${DRAFTING_FILE_NAMES.figures}`;
+}
+
 /** The matter files on disk through `node:fs`, for the drawings CLI and the tests. */
 export class NodeMatterFiles implements MatterFiles {
 

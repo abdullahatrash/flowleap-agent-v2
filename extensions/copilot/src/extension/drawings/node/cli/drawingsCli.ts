@@ -32,11 +32,11 @@
 import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
 import { resolveDraftingFolder } from '../../../tools/common/drafting/folderContract';
-import { DraftFinding } from '../../../tools/common/drafting/finding';
 import type { DrawingScene } from '../../common/scene/drawingScene';
+import type { FigureFinding } from '../../common/sheets/receipt';
 import { buildDrawingSetOp } from '../ops/buildDrawingSetOp';
 import { RequestValidation, validateBlockRequest, validateFlowchartRequest } from '../ops/diagramRequestValidator';
-import { drawingFindingLine, figureId, MAX_REVIEW_ROUNDS } from '../../common/drawingFiles';
+import { drawingFindingLine, figureId, MAX_REVIEW_ROUNDS, receiptCounts } from '../../common/drawingFiles';
 import { NodeMatterFiles } from '../ops/matterFiles';
 import { proposeFigurePartOp } from '../ops/proposeFigurePartOp';
 import { renderFigureOp, resetReviewRoundsOp } from '../ops/renderFigureOp';
@@ -155,7 +155,7 @@ function checkedRequest<T>(validation: RequestValidation<T>, what: string): T {
 	return validation.request;
 }
 
-function toCliFinding(finding: DraftFinding & { readonly citation?: string }): { [key: string]: CliValue } {
+function toCliFinding(finding: FigureFinding): { [key: string]: CliValue } {
 	return {
 		severity: finding.severity,
 		rule: finding.rule,
@@ -207,18 +207,12 @@ async function build(args: ParsedArgs, root: string): Promise<CliOutput> {
 	if (!result.ok) {
 		throw new Refusal(result.reason);
 	}
-	const count = (value: string) => result.checks.filter(check => check.result === value).length;
 	return {
 		ok: true,
 		command: 'build',
 		sheets: result.sheets,
 		pageSize: result.pageSize,
-		receipt: {
-			file: `${files.folder}/drawings/drawings-compliance.md`,
-			pass: count('pass'),
-			fail: count('fail'),
-			notChecked: count('not-checked'),
-		},
+		receipt: { file: `${files.folder}/drawings/drawings-compliance.md`, ...receiptCounts(result.checks) },
 		manifestUpdated: result.manifestUpdated,
 		missing: result.missing,
 		text: result.text,

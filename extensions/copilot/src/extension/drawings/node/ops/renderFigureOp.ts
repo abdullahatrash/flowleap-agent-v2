@@ -16,8 +16,8 @@ import type { DiagramStep } from '../../common/diagram/steps';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
-import { ApprovedClaims, MatterFiles, readApprovedClaims, readMatterOffice } from './matterFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewCycleState, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
+import { ApprovedClaims, figuresPath, MatterFiles, readApprovedClaims, readMatterOffice } from './matterFiles';
 
 /** A flowchart Figure: the steps in order, or the approved method claim to read them from. */
 export interface FlowchartRequest {
@@ -97,7 +97,7 @@ interface RenderedSource {
 export async function renderFigureOp(files: MatterFiles, input: RenderFigureInput, options: RenderFigureOptions = {}): Promise<RenderFigureResult> {
 	const refuse = (reason: string): RenderFigureResult => ({ ok: false, reason });
 	const drawings = `${files.folder}/drawings`;
-	const figuresPath = `${files.folder}/${DRAFTING_FILE_NAMES.figures}`;
+	const figureList = figuresPath(files);
 	const figure = figureId(input.figure, input.partial);
 	if (typeof figure === 'string') {
 		return refuse(figure);
@@ -108,12 +108,12 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 	}
 	const figures = await files.read(DRAFTING_FILE_NAMES.figures);
 	if (figures === undefined) {
-		return refuse(`${figuresPath} does not exist. Every numeral in a Figure is a numeral of the figure list, so write the figure list first.`);
+		return refuse(`${figureList} does not exist. Every numeral in a Figure is a numeral of the figure list, so write the figure list first.`);
 	}
 	const label = `FIG. ${figure.key}`;
 	const sectionNumbers = parseFigureSections(figures).figures.flatMap(section => figureHeadingNumbers(section.label));
 	if (!hasFigure(sectionNumbers, figure.key) && !hasFigure(sectionNumbers, String(figure.number))) {
-		return refuse(`${figuresPath} has no heading for ${label} (\`## ${label}\` with its parts). Add the Figure and its parts to the figure list first.`);
+		return refuse(`${figureList} has no heading for ${label} (\`## ${label}\` with its parts). Add the Figure and its parts to the figure list first.`);
 	}
 
 	const { rounds, state } = await readReviewState(files, figure);
@@ -152,9 +152,9 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 	const errors = rendered.findings.filter(finding => finding.severity === 'Error');
 	const text = [
 		`Rendered ${label}: wrote ${drawings}/FIG-${figure.key}.scene.json, ${drawings}/FIG-${figure.key}.svg and the review render ${drawings}/${png}. Round ${round} of ${MAX_REVIEW_ROUNDS} in review cycle ${cycle}.`,
-		missing.length ? `Still to draw: ${figureListText(missing)} (${figuresPath} names ${expected.length} Figure(s)); build_drawing_set refuses until every one is drawn.` : `Every Figure ${figuresPath} names is drawn.`,
+		missing.length ? `Still to draw: ${figureListText(missing)} (${figureList} names ${expected.length} Figure(s)); build_drawing_set refuses until every one is drawn.` : `Every Figure ${figureList} names is drawn.`,
 		...notDrawn.map(partsNotDrawnLine),
-		...(notDrawn.length ? [`Draw each part ${figuresPath} lists for the Figure, or tell the attorney which parts the Figure leaves out. The receipt records the list as a Note; it does not block the build.`] : []),
+		...(notDrawn.length ? [`Draw each part ${figureList} lists for the Figure, or tell the attorney which parts the Figure leaves out. The receipt records the list as a Note; it does not block the build.`] : []),
 		input.seen ? 'The review render of this round is attached; it is not a deliverable.' : 'No render is attached (the model reads the findings only); the receipt records that no render was seen in this round.',
 		rendered.findings.length
 			? `Findings (${errors.length} Error(s)):\n${rendered.findings.map(drawingFindingLine).join('\n')}`
@@ -167,7 +167,7 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 }
 
 /** The recorded rounds of the matter, and the current review cycle of the Figure with the rounds used in it. */
-export async function readReviewState(files: MatterFiles, figure: FigureId): Promise<{ readonly rounds: ReviewRounds; readonly state: { readonly cycle: number; readonly used: number } }> {
+export async function readReviewState(files: MatterFiles, figure: FigureId): Promise<{ readonly rounds: ReviewRounds; readonly state: ReviewCycleState }> {
 	const rounds = parseReviewRounds(await files.read(`drawings/${ROUNDS_FILE}`));
 	return { rounds, state: reviewState(rounds, await files.listFiles('drawings/review'), figure) };
 }
@@ -178,7 +178,7 @@ export async function readReviewState(files: MatterFiles, figure: FigureId): Pro
  * clears the rounds with the CLI command `reset-rounds`. `newCycle` on a cycle with no round yet
  * renders round 1 of that cycle.
  */
-export function reviewCycleRefusal(folder: string, figure: FigureId, state: { readonly cycle: number; readonly used: number }, newCycle: boolean): string | undefined {
+export function reviewCycleRefusal(folder: string, figure: FigureId, state: ReviewCycleState, newCycle: boolean): string | undefined {
 	const label = `FIG. ${figure.key}`;
 	const wantsNext = newCycle && state.used > 0;
 	if (state.cycle >= MAX_REVIEW_CYCLES && (wantsNext || state.used >= MAX_REVIEW_ROUNDS)) {
@@ -252,34 +252,36 @@ async function renderDiagram(files: MatterFiles, input: RenderFigureInput, figur
 	}
 	const scheme = readFiguresSettings(figures).numerals;
 	const fig = `FIG-${figure.key}`;
-	let source: DiagramSource;
+	/** The source once the figure list gave the numerals of the steps or blocks. */
+	let withNumerals: (numerals: readonly number[]) => DiagramSource;
 	let labels: string[];
 	if (input.flowchart) {
+		const { terminals, proposal } = input.flowchart;
 		const steps = await flowchartSteps(files, input.flowchart, approvedClaims);
 		if (typeof steps === 'string') {
 			return steps;
 		}
-		source = { figure: fig, mode: 'flowchart', input: { office, scheme, figure: figure.number, steps, terminals: input.flowchart.terminals, proposal: input.flowchart.proposal } };
+		withNumerals = numerals => ({ figure: fig, mode: 'flowchart', input: { office, scheme, figure: figure.number, steps, terminals, proposal, numerals } });
 		labels = steps.map(step => step.text);
 	} else {
 		const blocks = input.block?.blocks ?? [];
-		source = { figure: fig, mode: 'block', input: { office, scheme, figure: figure.number, blocks, connections: input.block?.connections ?? [] } };
+		const connections = input.block?.connections ?? [];
+		withNumerals = numerals => ({ figure: fig, mode: 'block', input: { office, scheme, figure: figure.number, blocks, connections, numerals } });
 		labels = blocks.map(block => block.label);
 	}
 
-	const numerals = diagramNumeralsOfHeading(files, figures, figure, scheme, source.mode, labels);
+	const numerals = diagramNumeralsOfHeading(files, figures, figure, scheme, input.flowchart ? 'flowchart' : 'block', labels);
 	if (typeof numerals === 'string') {
 		return numerals;
 	}
 
+	const source = withNumerals(numerals);
 	let result: DiagramResult;
 	if (source.mode === 'flowchart') {
 		const { drawFlowchart } = await import('../../common/diagram/flowchart');
-		source = { ...source, input: { ...source.input, numerals } };
 		result = await drawFlowchart(source.input);
 	} else {
 		const { drawBlockDiagram } = await import('../../common/diagram/blockDiagram');
-		source = { ...source, input: { ...source.input, numerals } };
 		result = await drawBlockDiagram(source.input);
 	}
 	if (!result.svg) {
@@ -298,7 +300,7 @@ async function renderDiagram(files: MatterFiles, input: RenderFigureInput, figur
  * the figure list.
  */
 function diagramNumeralsOfHeading(files: MatterFiles, figures: string, figure: FigureId, scheme: DiagramNumeralScheme, mode: DiagramSource['mode'], labels: readonly string[]): number[] | string {
-	const figuresPath = `${files.folder}/${DRAFTING_FILE_NAMES.figures}`;
+	const figureList = figuresPath(files);
 	const items = mode === 'flowchart' ? 'steps' : 'blocks';
 	const item = mode === 'flowchart' ? 'step' : 'block';
 	const heading = `FIG. ${figure.key}`;
@@ -317,23 +319,23 @@ function diagramNumeralsOfHeading(files: MatterFiles, figures: string, figure: F
 			taken.push({ numeral, part: text, line: 0 });
 			return numeral;
 		});
-		return `Every numeral in a Figure is a numeral of the figure list (${DRAWING_RULES['numeral-not-allowed']}). The heading of ${heading} in ${figuresPath} lists no numerals. The ${items} of a 2D Figure take the numerals listed under its heading, in order; the next free numerals of the \`numerals: ${scheme}\` scheme are:\n${labels.map((text, index) => `- ${suggested[index]}: ${text}`).join('\n')}\nAdd one line per ${item} under the ${heading} heading, then render again.`;
+		return `Every numeral in a Figure is a numeral of the figure list (${DRAWING_RULES['numeral-not-allowed']}). The heading of ${heading} in ${figureList} lists no numerals. The ${items} of a 2D Figure take the numerals listed under its heading, in order; the next free numerals of the \`numerals: ${scheme}\` scheme are:\n${labels.map((text, index) => `- ${suggested[index]}: ${text}`).join('\n')}\nAdd one line per ${item} under the ${heading} heading, then render again.`;
 	}
 	if (listed.length !== labels.length) {
-		return `The ${items} of ${heading} take the numerals listed under its heading in ${figuresPath}, in order; the figure list is the authority (ADR 0014). The heading lists ${listed.length} numeral(s) (${listed.map(part => part.numeral).join(', ')}) for ${labels.length} ${items}:\n${labels.map((text, index) => `${index + 1}. ${text}`).join('\n')}\nList one numeral per ${item} under the ${heading} heading, in ${item} order, then render again.`;
+		return `The ${items} of ${heading} take the numerals listed under its heading in ${figureList}, in order; the figure list is the authority (ADR 0014). The heading lists ${listed.length} numeral(s) (${listed.map(part => part.numeral).join(', ')}) for ${labels.length} ${items}:\n${labels.map((text, index) => `${index + 1}. ${text}`).join('\n')}\nList one numeral per ${item} under the ${heading} heading, in ${item} order, then render again.`;
 	}
 	const faults: string[] = [];
 	for (const part of listed) {
 		if (!/^\d+$/.test(part.numeral)) {
-			faults.push(`Numeral ${part.numeral} (${figuresPath}, line ${part.line}) is not a plain number; a ${item} numeral has no letter suffix.`);
+			faults.push(`Numeral ${part.numeral} (${figureList}, line ${part.line}) is not a plain number; a ${item} numeral has no letter suffix.`);
 		}
 		const other = elsewhere.find(candidate => candidate.numeral === part.numeral && candidate.part.trim().toLowerCase() !== part.part.trim().toLowerCase());
 		if (other) {
-			faults.push(`Numeral ${part.numeral} under the ${heading} heading (${figuresPath}, line ${part.line}) is already "${other.part}" of ${other.heading} (line ${other.line}). One numeral names one part.`);
+			faults.push(`Numeral ${part.numeral} under the ${heading} heading (${figureList}, line ${part.line}) is already "${other.part}" of ${other.heading} (line ${other.line}). One numeral names one part.`);
 		}
 	}
 	if (faults.length) {
-		return `${faults.join('\n')}\nGive each ${item} of ${heading} its own numeral of the \`numerals: ${scheme}\` scheme in ${figuresPath}, then render again.`;
+		return `${faults.join('\n')}\nGive each ${item} of ${heading} its own numeral of the \`numerals: ${scheme}\` scheme in ${figureList}, then render again.`;
 	}
 	return listed.map(part => Number(part.numeral));
 }
