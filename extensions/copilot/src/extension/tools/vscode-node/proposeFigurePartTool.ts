@@ -9,14 +9,13 @@ import { IFileSystemService } from '../../../platform/filesystem/common/fileSyst
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { basename } from '../../../util/vs/base/common/path';
-import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { ChatReferenceBinaryData } from '../../../vscodeTypes';
 import { SKETCH_EXTENSIONS } from '../../drawings/common/drawingFiles';
 import { proposeFigurePartOp, SketchFile } from '../../drawings/node/ops/proposeFigurePartOp';
 import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { attachedImages } from './attachedSketches';
 import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IProposeFigurePartParams {
@@ -35,14 +34,6 @@ interface IProposeFigurePartParams {
 }
 
 const refused = 'No part was proposed.';
-
-/** One image attached to the chat request. */
-interface AttachedImage {
-	readonly names: readonly string[];
-	readonly fileName: string;
-	readonly mimeType?: string;
-	readonly bytes: () => Promise<Uint8Array>;
-}
 
 /**
  * Proposes a part the disclosure does not state (PRD 0023, slice D5) through
@@ -97,7 +88,7 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 
 	/** The sketch bytes: an attached image whose name matches, else a workspace image file; or the refusal. */
 	private async resolveSketch(workspace: DraftingWorkspace, sketch: string): Promise<SketchFile | string> {
-		const attached = this.attachedImages();
+		const attached = attachedImages(this.promptContext, this.fileSystemService);
 		const wanted = sketch.toLowerCase();
 		const image = attached.find(item => item.names.some(name => name.toLowerCase() === wanted || basename(name).toLowerCase() === basename(wanted)));
 		if (image) {
@@ -111,22 +102,6 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 			return `"${sketch}" is neither an image attached in this chat${names.length ? ` (attached: ${names.join(', ')})` : ' (none is attached)'} nor an image file in the workspace.`;
 		}
 		return { name: path, bytes };
-	}
-
-	/** The images attached to the chat request this tool call belongs to. */
-	private attachedImages(): AttachedImage[] {
-		const images: AttachedImage[] = [];
-		for (const variable of this.promptContext?.chatVariables ?? []) {
-			const value = variable.value;
-			const names = [variable.originalName, variable.uniqueName, variable.reference.name].filter(Boolean);
-			if (value instanceof ChatReferenceBinaryData && value.mimeType.startsWith('image/')) {
-				const reference = value.reference ? basename(value.reference.path) : undefined;
-				images.push({ names: reference ? [...names, reference] : names, fileName: reference ?? variable.originalName, mimeType: value.mimeType, bytes: async () => value.data() });
-			} else if (URI.isUri(value) && SKETCH_EXTENSIONS.test(value.path)) {
-				images.push({ names: [...names, basename(value.path)], fileName: basename(value.path), bytes: () => this.fileSystemService.readFile(value, true) });
-			}
-		}
-		return images;
 	}
 }
 

@@ -13,8 +13,10 @@ import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult }
 import type { DrawingScene } from '../../drawings/common/scene/drawingScene';
 import { figureId } from '../../drawings/common/drawingFiles';
 import { BlockRequest, FlowchartRequest, readReviewState, renderFigureOp, reviewCycleRefusal } from '../../drawings/node/ops/renderFigureOp';
+import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
+import { attachedImages, copyAttachedSketches } from './attachedSketches';
 import { DraftingEditors, DraftingWorkspace, textResult, vscodeEditors } from './draftingWorkspace';
 
 interface IRenderFigureParams {
@@ -41,7 +43,9 @@ const refused = 'The Figure was not rendered.';
  * figure-list gate, the render, the fault list, the files and the round. This tool locates the
  * matter, decides whether the model sees the render (the request flag and the model's image
  * input), checks the Approved Claims with the drafting gate, and attaches the review render. It
- * writes the Drafting Checklist after it runs, also after a refusal.
+ * copies every image attached to the turn to `sketches/` (read in `resolveInput`), so a sketch
+ * used for a render stays with the matter (#800). It writes the Drafting Checklist after it runs,
+ * also after a refusal.
  *
  * `newCycle` starts the next review cycle of the Figure. {@link prepareInvocation} then asks the
  * attorney to confirm it in chat. VS Code runs {@link invoke} only after the click: a denied
@@ -52,6 +56,8 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 
 	public static readonly toolName = ToolName.RenderFigure;
 
+	private promptContext: IBuildPromptContext | undefined;
+
 	constructor(
 		@IFileSystemService private readonly fileSystemService: IFileSystemService,
 		@IWorkspaceService private readonly workspaceService: IWorkspaceService,
@@ -61,6 +67,16 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 	/** The editors the Drafting Checklist is revealed in: a seam for tests, which override it. */
 	protected editors(): DraftingEditors {
 		return vscodeEditors;
+	}
+
+	/** The date a copied sketch is named with, `yyyy-mm-dd`: a seam for tests, which override it. */
+	protected today(): string {
+		return new Date().toISOString().slice(0, 10);
+	}
+
+	async resolveInput(input: IRenderFigureParams, promptContext: IBuildPromptContext): Promise<IRenderFigureParams> {
+		this.promptContext = promptContext;
+		return input;
 	}
 
 	async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<IRenderFigureParams>, _token: CancellationToken): Promise<vscode.PreparedToolInvocation> {
@@ -118,7 +134,9 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 		if (!result.ok) {
 			return workspace.refusal(refused, result.reason);
 		}
-		const parts: (LanguageModelTextPart | LanguageModelDataPart)[] = [new LanguageModelTextPart(await workspace.textWithChecklistLine(result.text))];
+		const sketches = await copyAttachedSketches(workspace.matterFiles(), attachedImages(this.promptContext, this.fileSystemService), `${input.figure}${input.partial ?? ''}`, this.today());
+		const text = sketches.length ? `${result.text}\nCopied the attached ${sketches.length === 1 ? 'sketch' : 'sketches'} to ${workspace.folder.folder}/sketches/: ${sketches.map(sketch => sketch.slice('sketches/'.length)).join(', ')}.` : result.text;
+		const parts: (LanguageModelTextPart | LanguageModelDataPart)[] = [new LanguageModelTextPart(await workspace.textWithChecklistLine(text))];
 		if (result.seen) {
 			parts.push(LanguageModelDataPart.image(result.png, 'image/png'));
 		}

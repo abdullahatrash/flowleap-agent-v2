@@ -117,7 +117,10 @@ function setup(files: Record<string, string> = matter) {
 		isVisible(uri: URI): boolean { return this.visible.has(uri.path); }
 		async showBeside(uri: URI): Promise<void> { this.visible.add(uri.path); }
 	}();
-	class TestRenderFigureTool extends RenderFigureTool { protected override editors(): DraftingEditors { return editors; } }
+	class TestRenderFigureTool extends RenderFigureTool {
+		protected override editors(): DraftingEditors { return editors; }
+		protected override today(): string { return '2026-10-19'; }
+	}
 	class TestBuildDrawingSetTool extends BuildDrawingSetTool { protected override editors(): DraftingEditors { return editors; } }
 	class TestProposeFigurePartTool extends ProposeFigurePartTool { protected override editors(): DraftingEditors { return editors; } }
 	const render = new TestRenderFigureTool(fileSystem, workspace, instantiation);
@@ -126,7 +129,10 @@ function setup(files: Record<string, string> = matter) {
 	type RenderInput = Parameters<RenderFigureTool['invoke']>[0]['input'];
 	type ProposeInput = Parameters<ProposeFigurePartTool['invoke']>[0]['input'];
 	const tools = {
-		render: (input: Omit<RenderInput, 'matter'>) => parts(render.invoke({ input: { matter: 'hinge', ...input }, toolInvocationToken: undefined }, CancellationToken.None)),
+		render: async (input: Omit<RenderInput, 'matter'>, chatVariables = new ChatVariablesCollection()) => {
+			const resolved = await render.resolveInput({ matter: 'hinge', ...input }, { query: '', history: [], chatVariables });
+			return parts(render.invoke({ input: resolved, toolInvocationToken: undefined }, CancellationToken.None));
+		},
 		build: async () => (await parts(build.invoke({ input: { matter: 'hinge' }, toolInvocationToken: undefined }, CancellationToken.None))).text,
 		propose: async (input: Omit<ProposeInput, 'matter'>, chatVariables = new ChatVariablesCollection()) => {
 			const resolved = await propose.resolveInput({ matter: 'hinge', ...input }, { query: '', history: [], chatVariables });
@@ -177,6 +183,24 @@ describe('render_figure tool', () => {
 			last: 'Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).',
 			figures: ['- Figures: 2 in figures.md, 1 drawn in drawings/'],
 		});
+	}, KERNEL_TIMEOUT);
+
+	it('copies every image attached to the turn to sketches/, named by figure and date, and copies nothing when the bytes are there already', async () => {
+		const { tools, list, fileSystem } = setup();
+		const napkin = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+		const photo = new Uint8Array([255, 216, 255, 4, 5]);
+		const attached = new ChatVariablesCollection([
+			{ id: 'vscode.image', name: 'napkin sketch.png', value: new ChatReferenceBinaryData('image/png', async () => napkin) },
+			{ id: 'vscode.image', name: 'photo', value: new ChatReferenceBinaryData('image/jpeg', async () => photo) },
+		]);
+		const first = await tools.render({ figure: 2, flowchart: { fromClaim: 2 }, includeRender: false }, attached);
+		const second = await tools.render({ figure: 2, flowchart: { fromClaim: 2 }, includeRender: false }, attached);
+		expect({
+			first: first.text.split('\n').filter(line => line.startsWith('Copied')),
+			second: second.text.split('\n').filter(line => line.startsWith('Copied')),
+			sketches: await list('drafting/hinge/sketches'),
+			photo: [...await fileSystem.readFile(URI.file('/workspace/drafting/hinge/sketches/FIG-2-2026-10-19-2.jpg'))],
+		}).toMatchSnapshot();
 	}, KERNEL_TIMEOUT);
 
 	it('asks the attorney to confirm a new review cycle, and asks nothing for a normal round or after the cap of three cycles', async () => {

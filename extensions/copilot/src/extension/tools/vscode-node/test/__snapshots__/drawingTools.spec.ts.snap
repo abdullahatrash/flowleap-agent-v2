@@ -22,3 +22,23 @@ Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Wri
 Wrote drafting/hinge/checklist.md: the next step for the attorney is step 3 (Write the outline). Next: Tell the agent: "Plan the draft again" (it saves draft-outline.md with write_patent_results, template draft-outline).",
 }
 `;
+
+exports[`render_figure tool > copies every image attached to the turn to sketches/, named by figure and date, and copies nothing when the bytes are there already 1`] = `
+{
+  "first": [
+    "Copied the attached sketches to drafting/hinge/sketches/: FIG-2-2026-10-19-1.png, FIG-2-2026-10-19-2.jpg.",
+  ],
+  "photo": [
+    255,
+    216,
+    255,
+    4,
+    5,
+  ],
+  "second": [],
+  "sketches": [
+    "FIG-2-2026-10-19-1.png",
+    "FIG-2-2026-10-19-2.jpg",
+  ],
+}
+`;
