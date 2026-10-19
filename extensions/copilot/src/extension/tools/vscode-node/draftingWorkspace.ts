@@ -14,7 +14,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { checklistPointer, DraftingChecklist, DraftingChecklistStep, gateActionText, gateEdit, nextChecklistStep, readDraftingChecklist, renderChecklist, stepActionText } from '../common/drafting/checklist';
-import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
+import { DraftFinding, findingLine, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
@@ -24,6 +24,8 @@ import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README }
 import { validateDraft } from '../common/drafting/validateDraft';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, EXPORTED_DRAFT_HASH, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
+import { figureOfSvgFile } from '../../drawings/common/drawingFiles';
+import type { MatterFiles } from '../../drawings/node/ops/matterFiles';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
 export type PdfTextReader = (uri: URI) => Promise<string>;
@@ -387,7 +389,41 @@ export class DraftingWorkspace {
 		await this.write(this.folder.workingRecord, setRecordField(record, EXPORTED_DRAFT_HASH, draftHash(draft, claims)));
 	}
 
-	private async exists(path: string): Promise<boolean> {
+	/** The files of this matter for the drawing operations: paths relative to `drafting/<matter>/`. */
+	matterFiles(): MatterFiles {
+		const at = (path: string) => `${this.folder.folder}/${path}`;
+		return {
+			folder: this.folder.folder,
+			read: path => this.read(at(path)),
+			readBytes: path => this.readBytes(at(path)),
+			write: (path, content) => this.write(at(path), content),
+			listFiles: folder => this.listFiles(at(folder)),
+			delete: path => this.delete(at(path)),
+			exists: path => this.exists(at(path)),
+		};
+	}
+
+	/** The names of the files in a workspace-relative folder, sorted; empty when the folder does not exist. */
+	async listFiles(path: string): Promise<string[]> {
+		const uri = this.uri(path);
+		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+		try {
+			return (await this.fileSystemService.readDirectory(uri)).filter(([, type]) => type === FileType.File).map(([name]) => name).sort();
+		} catch {
+			return [];
+		}
+	}
+
+	/** Deletes a workspace-relative file; nothing happens when it does not exist. */
+	async delete(path: string): Promise<void> {
+		const uri = this.uri(path);
+		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+		if (await this.exists(path)) {
+			await this.fileSystemService.delete(uri);
+		}
+	}
+
+	async exists(path: string): Promise<boolean> {
 		try {
 			await this.fileSystemService.stat(this.uri(path));
 			return true;
@@ -398,8 +434,8 @@ export class DraftingWorkspace {
 
 	/**
 	 * Writes the Drafting Checklist (`checklist.md`) from the files of the matter and returns it.
-	 * Every drafting tool calls it after it runs, also after a refusal. Nothing is written while the
-	 * matter has no folder and no drafting input.
+	 * Every drafting tool and every drawing tool calls it after it runs, also after a refusal.
+	 * Nothing is written while the matter has no folder and no drafting input.
 	 */
 	private async writeChecklist(): Promise<DraftingChecklist | undefined> {
 		const { folder } = this;
@@ -427,6 +463,7 @@ export class DraftingWorkspace {
 			draft,
 			draftStale: draft !== undefined && claims !== undefined && !!versionHash && versionHash !== claimsHash(claims),
 			figures: await this.read(folder.figures),
+			drawnFigures: (await this.listFiles(folder.drawings)).filter(name => figureOfSvgFile(name) !== undefined).length,
 			inventorAnswers: await this.read(folder.inventorAnswers),
 			findings,
 			findingsCurrent: findings !== undefined && !!currentHash && readRecordField(record, VALIDATED_DRAFT_HASH) === currentHash,
@@ -461,6 +498,12 @@ export class DraftingWorkspace {
 	async refusal(prefix: string, reason: string): Promise<LanguageModelToolResult> {
 		const pointer = await this.checklistLine(true, reason);
 		return textResult(`${prefix} ${reason}${pointer ? `${reason.includes('\n') ? '\n' : ' '}${pointer}` : ''}`);
+	}
+
+	/** The text of a tool result that ran, then on a new line the next step of the Drafting Checklist, which is written first. */
+	async textWithChecklistLine(text: string): Promise<string> {
+		const line = await this.checklistLine(false);
+		return line ? `${text}\n${line}` : text;
 	}
 
 	/**
@@ -545,12 +588,6 @@ export class DraftingWorkspace {
 		}
 		return new TextDecoder().decode(bytes);
 	}
-}
-
-/** One line per finding, for a tool result. */
-export function findingLine(finding: DraftFinding): string {
-	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
-	return `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}`;
 }
 
 /** Counts by severity and the blocking list, for a tool result. */

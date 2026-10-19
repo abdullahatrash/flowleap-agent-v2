@@ -8,6 +8,7 @@
 import './citationApiGuideTool';
 import './compareClaimsTool';
 import './examinerBaselineTool';
+import './buildDrawingSetTool';
 import './exportDraftDocxTool';
 import './inventorQuestionsTool';
 import './comparePatentsTool';
@@ -29,7 +30,10 @@ import './patstatApiGuideTool';
 import './patstatGraphTool';
 import './patstatPortfolioTool';
 import './patstatQueryTool';
+import './proposeFigurePartTool';
+import './removeClaimTool';
 import './readPdfTool';
+import './renderFigureTool';
 import './searchAcademicTool';
 import './searchNplTool';
 import './getNplWorkTool';

@@ -1,0 +1,24 @@
+{
+	"figure": "FIG-3",
+	"camera": "front",
+	"section": { "origin": [0, 0, 0], "normal": "y", "keep": "positive" },
+	"parts": [
+		{
+			"id": "body",
+			"name": "body",
+			"shape": { "kind": "box", "size": [60, 30, 30] },
+			"placement": { "translate": [-30, -15, -15] },
+			"subtract": [{ "shape": { "kind": "cylinder", "radius": 4, "height": 62 }, "placement": { "rotate": [0, 90, 0], "translate": [-1, 15, 15] } }]
+		},
+		{
+			"id": "shaft",
+			"name": "shaft",
+			"shape": { "kind": "shaft", "steps": [{ "diameter": 8, "length": 90 }] },
+			"placement": { "rotate": [0, 90, 0], "translate": [-45, 0, 0] }
+		}
+	],
+	"numerals": [
+		{ "numeral": "30", "part": "body", "face": "top" },
+		{ "numeral": "32", "part": "shaft", "face": "end-2", "point": [4, 0, 85] }
+	]
+}

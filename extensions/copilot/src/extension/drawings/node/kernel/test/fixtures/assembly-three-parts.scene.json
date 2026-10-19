@@ -1,0 +1,28 @@
+{
+	"figure": "FIG-3",
+	"camera": "isometric",
+	"parts": [
+		{
+			"id": "shaft",
+			"name": "shaft",
+			"shape": { "kind": "shaft", "steps": [{ "diameter": 12, "length": 20 }, { "diameter": 16, "length": 30 }, { "diameter": 12, "length": 25 }] }
+		},
+		{
+			"id": "bearing",
+			"name": "bearing",
+			"shape": { "kind": "bearing", "innerDiameter": 12, "outerDiameter": 32, "width": 10 },
+			"placement": { "translate": [0, 0, 5] }
+		},
+		{
+			"id": "gear",
+			"name": "gear",
+			"shape": { "kind": "gear", "teeth": 24, "module": 2, "width": 10, "bore": 12 },
+			"placement": { "translate": [0, 0, 60] }
+		}
+	],
+	"numerals": [
+		{ "numeral": "40", "part": "shaft", "face": "step-2" },
+		{ "numeral": "42", "part": "bearing", "face": "outer-race" },
+		{ "numeral": "44", "part": "gear", "face": "teeth" }
+	]
+}

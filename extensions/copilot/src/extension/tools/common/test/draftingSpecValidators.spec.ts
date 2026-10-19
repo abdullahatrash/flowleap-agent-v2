@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import { parseClaims } from '../drafting/claims';
 import { parseInventorAnswers } from '../drafting/inventorAnswers';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
 import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, figureHeadingCount, hasFigures, parseFigureParts, parseFigureSections, readReferenceSigns } from '../drafting/specValidators';
@@ -90,6 +91,33 @@ describe('Application Drafting specification validators', () => {
 			{ numeral: '12', part: 'housing', line: 5 },
 			{ numeral: '14', part: 'coil spring', line: 6 },
 		]);
+	});
+
+	it('figure parts: reads the part name without its Feature List links and proposal marker', () => {
+		expect(parseFigureParts('## FIG. 1\n- 12: housing [F2]\n- 14: bracket [F3, F5] (proposed from sketches/sketch-2.png)\n| 16 | coil spring (proposed) |\n')).toEqual([
+			{ numeral: '12', part: 'housing', features: ['F2'], line: 2 },
+			{ numeral: '14', part: 'bracket', features: ['F3', 'F5'], proposed: { source: 'sketches/sketch-2.png' }, line: 3 },
+			{ numeral: '16', part: 'coil spring', proposed: {}, line: 4 },
+		]);
+	});
+
+	it('reference numerals: the numeral sets of drawings and text cite the office rule; for EPO the claims count as text', () => {
+		const linked = '## FIG. 1\n- 10: hinge [F1]\n- 12: housing [F2] (proposed)\n- 14: coil spring\n- 16: pin\n';
+		const text = draft('The hinge 10 has a housing 12, a spring 14 and a damper 18.');
+		const claims = parseClaims('1. A hinge (10) with a pin (16), a latch (20) and 2 arms.\n2. The hinge of claim 1, wherein the latch (20) is steel.');
+		expect({
+			US: checkReferenceNumerals(text, linked, 'US', claims),
+			EPO: checkReferenceNumerals(text, linked, 'EPO', claims),
+		}).toEqual({
+			US: [
+				{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 uses numeral 18 ("damper 18"), which figures.md does not list (37 CFR 1.84(p)(5)).' },
+				{ severity: 'Error', rule: 'reference-numeral', file: 'figures.md', line: 5, message: 'Numeral 16 ("pin") in figures.md does not appear in the draft text (37 CFR 1.84(p)(5)).' },
+			],
+			EPO: [
+				{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 uses numeral 18 ("damper 18"), which figures.md does not list (OJ EPO 2025 A49 Art. 1(2)(i)).' },
+				{ severity: 'Error', rule: 'reference-numeral', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 uses reference sign 20 ("latch (20)"), which figures.md does not list (OJ EPO 2025 A49 Art. 1(2)(i)).' },
+			],
+		});
 	});
 
 	it('reference numerals: pass when text and figures.md agree', () => {

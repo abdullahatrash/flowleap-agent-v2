@@ -1,0 +1,31 @@
+<!-- findings: [] -->
+<svg xmlns="http://www.w3.org/2000/svg" width="105.25mm" height="84.9mm" viewBox="0 0 105.25 84.9" data-figure="FIG-4" data-kind="block">
+<rect width="105.25" height="84.9" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-node="sensor" data-role="block" stroke-width="0.4" d="M38.63 2 L84.23 2 L84.23 11.85 L38.63 11.85 Z"/>
+<path class="edge" data-node="processor" data-role="block" stroke-width="0.4" d="M38.63 35.35 L84.23 35.35 L84.23 45.2 L38.63 45.2 Z"/>
+<path class="edge" data-node="memory" data-role="block" stroke-width="0.4" d="M2 54.2 L47.6 54.2 L47.6 64.05 L2 64.05 Z"/>
+<path class="edge" data-node="display" data-role="block" stroke-width="0.4" d="M46.23 73.05 L91.83 73.05 L91.83 82.9 L46.23 82.9 Z"/>
+<path class="edge" data-role="connector" data-from="sensor" data-to="processor" stroke-width="0.4" d="M61.43 11.85 L61.43 35.35"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M61.43 35.35 L60.63 33.35 L62.23 33.35 Z"/>
+<path class="edge" data-role="connector" data-from="processor" data-to="memory" stroke-width="0.4" d="M53.83 45.2 L53.83 49.2 L24.8 49.2 L24.8 54.2"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M24.8 54.2 L24 52.2 L25.6 52.2 Z"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M53.83 45.2 L54.63 47.2 L53.03 47.2 Z"/>
+<path class="edge" data-role="connector" data-from="processor" data-to="display" stroke-width="0.4" d="M69.03 45.2 L69.03 73.05"/>
+<path class="arrow" fill="#000" stroke-width="0.2" d="M69.03 73.05 L68.23 71.05 L69.83 71.05 Z"/>
+<path class="lead" data-numeral="402" data-node="sensor" stroke-width="0.2" d="M87.73 6.93 L84.23 6.93"/>
+<path class="lead" data-numeral="404" data-node="processor" stroke-width="0.2" d="M87.73 40.28 L84.23 40.28"/>
+<path class="lead" data-numeral="406" data-node="memory" stroke-width="0.2" d="M51.1 59.13 L47.6 59.13"/>
+<path class="lead" data-numeral="408" data-node="display" stroke-width="0.2" d="M95.33 77.98 L91.83 77.98"/>
+</g>
+<text class="label" data-node="sensor" x="61.43" y="8.5" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Vibration sensor</text>
+<text class="label" data-node="processor" x="61.43" y="41.85" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Processor</text>
+<text class="label" data-node="memory" x="24.8" y="60.7" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Memory</text>
+<text class="label" data-node="display" x="69.03" y="79.55" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Alert display</text>
+<text class="label" data-edge="c1" x="54.98" y="25.18" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Data</text>
+<text class="label" data-edge="c3" x="77.71" y="60.7" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">Alert</text>
+<text class="numeral" data-numeral="402" data-node="sensor" x="91.94" y="8.28" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">402</text>
+<text class="numeral" data-numeral="404" data-node="processor" x="91.94" y="41.63" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">404</text>
+<text class="numeral" data-numeral="406" data-node="memory" x="55.31" y="60.48" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">406</text>
+<text class="numeral" data-numeral="408" data-node="display" x="99.54" y="79.33" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">408</text>
+</svg>

@@ -126,6 +126,10 @@ export enum ToolName {
 	StartApplicationDraft = 'start_application_draft',
 	ValidateDraft = 'validate_draft',
 	ExportDraftDocx = 'export_draft_docx',
+	RenderFigure = 'render_figure',
+	BuildDrawingSet = 'build_drawing_set',
+	ProposeFigurePart = 'propose_figure_part',
+	RemoveClaim = 'remove_claim',
 	InventorQuestions = 'inventor_questions',
 }
 
@@ -221,6 +225,10 @@ export enum ContributedToolName {
 	StartApplicationDraft = 'copilot_startApplicationDraft',
 	ValidateDraft = 'copilot_validateDraft',
 	ExportDraftDocx = 'copilot_exportDraftDocx',
+	RenderFigure = 'copilot_renderFigure',
+	BuildDrawingSet = 'copilot_buildDrawingSet',
+	ProposeFigurePart = 'copilot_proposeFigurePart',
+	RemoveClaim = 'copilot_removeClaim',
 	InventorQuestions = 'copilot_inventorQuestions',
 }
 
@@ -386,6 +394,10 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.StartApplicationDraft]: ToolCategory.Core,
 	[ToolName.ValidateDraft]: ToolCategory.Core,
 	[ToolName.ExportDraftDocx]: ToolCategory.Core,
+	[ToolName.RenderFigure]: ToolCategory.Core,
+	[ToolName.BuildDrawingSet]: ToolCategory.Core,
+	[ToolName.ProposeFigurePart]: ToolCategory.Core,
+	[ToolName.RemoveClaim]: ToolCategory.Core,
 	[ToolName.InventorQuestions]: ToolCategory.Core,
 } as const;
 

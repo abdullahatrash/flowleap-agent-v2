@@ -1,0 +1,17 @@
+{
+	"figure": "FIG-2",
+	"camera": "front",
+	"section": { "origin": [0, 0, 0], "normal": "y", "keep": "positive" },
+	"parts": [
+		{
+			"id": "bushing",
+			"name": "bushing",
+			"shape": { "kind": "revolve", "profile": [[10, 0], [25, 0], [25, 8], [16, 8], [16, 40], [10, 40]] }
+		}
+	],
+	"numerals": [
+		{ "numeral": "20", "part": "bushing", "face": "profile-2", "point": [25, 0, 4] },
+		{ "numeral": "22", "part": "bushing", "face": "profile-4", "point": [16, 0, 30] },
+		{ "numeral": "24", "part": "bushing", "face": "profile-6", "point": [-10, 0, 20] }
+	]
+}

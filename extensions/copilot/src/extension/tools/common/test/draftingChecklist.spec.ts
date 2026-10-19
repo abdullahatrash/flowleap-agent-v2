@@ -210,7 +210,7 @@ describe('Application Drafting checklist', () => {
 		const noSections = `---\noffice: EPO\n---\n# Hinge\n\n## Summary\n\n<!-- src: feature:F1 -->\nA lever.\n`;
 		expect({
 			nothing: notes({ styleExemplars: 7 }),
-			gaps: notes({ featureList: featureList(), claims: claims(), draftOutline: outline, draft: noSections, figures: '# Figures\n\n## FIG. 1\n\n- 10: lever\n\n## FIGS. 2 to 4\n', styleExemplars: 1 }),
+			gaps: notes({ featureList: featureList(), claims: claims(), draftOutline: outline, draft: noSections, figures: '# Figures\n\n## FIG. 1\n\n- 10: lever\n\n## FIGS. 2 to 4\n', drawnFigures: 3, styleExemplars: 1 }),
 		}).toEqual({
 			nothing: [
 				'- Figures: figures.md does not exist',
@@ -219,7 +219,7 @@ describe('Application Drafting checklist', () => {
 				'      → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.',
 			],
 			gaps: [
-				'- Figures: 4 in figures.md',
+				'- Figures: 4 in figures.md, 3 drawn in drawings/',
 				'- Required sections: missing in draft-application.md: Technical Field, Background Art, Brief Description of the Drawings, Description of Embodiments, Claims, Abstract',
 				'      → Tell the agent: "Add the missing sections: Technical Field, Background Art, Brief Description of the Drawings, Description of Embodiments, Claims, Abstract"',
 				'- Style exemplars: 1 file in style/',

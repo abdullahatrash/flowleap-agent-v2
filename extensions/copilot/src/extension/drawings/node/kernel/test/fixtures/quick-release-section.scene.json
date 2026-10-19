@@ -1,0 +1,288 @@
+{
+	"camera": "front",
+	"section": {
+		"origin": [
+			0,
+			0,
+			0
+		],
+		"normal": "y",
+		"keep": "positive"
+	},
+	"parts": [
+		{
+			"id": "skewer",
+			"name": "skewer",
+			"shape": {
+				"kind": "shaft",
+				"steps": [
+					{
+						"diameter": 5,
+						"length": 156
+					}
+				]
+			},
+			"placement": {
+				"rotate": [
+					0,
+					90,
+					0
+				],
+				"translate": [
+					-10,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "head1",
+			"name": "first head portion",
+			"shape": {
+				"kind": "revolve",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						12,
+						0
+					],
+					[
+						12,
+						40
+					],
+					[
+						3,
+						40
+					],
+					[
+						3,
+						36
+					],
+					[
+						8,
+						36
+					],
+					[
+						8,
+						4
+					],
+					[
+						0,
+						4
+					]
+				]
+			},
+			"placement": {
+				"rotate": [
+					0,
+					90,
+					0
+				],
+				"translate": [
+					-40,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "spring",
+			"name": "spring",
+			"shape": {
+				"kind": "spring",
+				"coilDiameter": 10,
+				"wireDiameter": 1.5,
+				"pitch": 3,
+				"length": 12
+			},
+			"placement": {
+				"rotate": [
+					0,
+					90,
+					0
+				],
+				"translate": [
+					-36,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "shuttle",
+			"name": "shuttle body",
+			"shape": {
+				"kind": "cylinder",
+				"radius": 7.5,
+				"height": 14
+			},
+			"placement": {
+				"rotate": [
+					0,
+					90,
+					0
+				],
+				"translate": [
+					-24,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"id": "lever",
+			"name": "lever",
+			"shape": {
+				"kind": "extrudedPolygon",
+				"points": [
+					[
+						-52,
+						10
+					],
+					[
+						-40,
+						10
+					],
+					[
+						-40,
+						-14
+					],
+					[
+						-30,
+						-40
+					],
+					[
+						-14,
+						-62
+					],
+					[
+						-20,
+						-68
+					],
+					[
+						-38,
+						-48
+					],
+					[
+						-52,
+						-18
+					]
+				],
+				"height": 8
+			},
+			"placement": {
+				"rotate": [
+					90,
+					0,
+					0
+				],
+				"translate": [
+					0,
+					4,
+					0
+				]
+			}
+		},
+		{
+			"id": "head2",
+			"name": "second head portion",
+			"shape": {
+				"kind": "revolve",
+				"profile": [
+					[
+						2.6,
+						0
+					],
+					[
+						9,
+						0
+					],
+					[
+						9,
+						4
+					],
+					[
+						12,
+						4
+					],
+					[
+						12,
+						18
+					],
+					[
+						2.6,
+						18
+					]
+				]
+			},
+			"placement": {
+				"rotate": [
+					0,
+					90,
+					0
+				],
+				"translate": [
+					128,
+					0,
+					0
+				]
+			}
+		}
+	],
+	"numerals": [
+		{
+			"numeral": "93",
+			"part": "skewer",
+			"face": "step-1"
+		},
+		{
+			"numeral": "108",
+			"part": "head1",
+			"face": "profile-2",
+			"point": [
+				12,
+				0,
+				10
+			]
+		},
+		{
+			"numeral": "132",
+			"part": "head1",
+			"face": "profile-6",
+			"point": [
+				8,
+				0,
+				33
+			]
+		},
+		{
+			"numeral": "140",
+			"part": "spring",
+			"face": "coil"
+		},
+		{
+			"numeral": "130",
+			"part": "shuttle",
+			"face": "side"
+		},
+		{
+			"numeral": "112",
+			"part": "lever",
+			"face": "side-3"
+		},
+		{
+			"numeral": "110",
+			"part": "head2",
+			"face": "profile-4",
+			"point": [
+				12,
+				0,
+				11
+			]
+		}
+	],
+	"figure": "FIG-2"
+}

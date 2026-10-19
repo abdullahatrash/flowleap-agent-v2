@@ -39,3 +39,9 @@ export function errorsFirst(findings: readonly DraftFinding[]): DraftFinding[] {
 export function isInventorQuestion(finding: DraftFinding): boolean {
 	return finding.rule === INVENTOR_QUESTION;
 }
+
+/** One line per finding, for a tool result: `- \`rule\` (file, line N, claim N): message`. */
+export function findingLine(finding: DraftFinding): string {
+	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
+	return `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}`;
+}

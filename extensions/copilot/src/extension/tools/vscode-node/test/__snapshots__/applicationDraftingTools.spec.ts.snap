@@ -267,6 +267,54 @@ exports[`inventor_questions > sends eight open questions as eight rows, copies t
 }
 `;
 
+exports[`remove_claim > asks the attorney with the cost, removes claim 4 of 14, renumbers, records it, and the next start refuses on the re-opened approval 1`] = `
+{
+  "claims": [
+    "1. A pipe clamp, comprising: a b",
+    "2. The pipe clamp of claim 1, wh",
+    "3. The pipe clamp of claim 2, wh",
+    "4. The pipe clamp of claim 1, wh",
+    "5. The pipe clamp of claim 4, wh",
+    "6. The pipe clamp of claim 1, wh",
+    "7. The pipe clamp of claim 1, fu",
+    "8. The pipe clamp of claim 1, wh",
+    "9. The pipe clamp of claim 8, wh",
+    "10. The pipe clamp of claim 1, w",
+    "11. A method of securing a pipe ",
+    "12. The method of claim 11, furt",
+    "13. The method of claim 11, furt",
+  ],
+  "confirmation": {
+    "message": "Remove claim 4 of 14 from drafting/hinge/claims.md? Claims 5 to 14 are now claims 4 to 13. This re-opens the claims approval: you approve the claims again before drafting continues.",
+    "title": "Remove Claim",
+  },
+  "frontmatter": "
+approved: false
+",
+  "record": [
+    "- **Claim removed:** <time> claim 4 of 14, on the attorney's confirmation. Claims 5 to 14 are now claims 4 to 13.",
+    "- **Approval cleared:** <time> (claims.md changed after approval)",
+  ],
+  "result": "Removed claim 4 of 14 from drafting/hinge/claims.md. Claims 5 to 14 are now claims 4 to 13. The claim references in the other claims changed with them. This re-opened the claims approval: \`approved\` in drafting/hinge/claims.md is now \`false\`. The attorney reviews the claims and approves them again; then call start_application_draft. Wrote drafting/hinge/checklist.md: the next step for the attorney is step 2 (Approve the claims). Next: Review \`drafting/hinge/claims.md:2\`, then click **Approve Claims** at the top of the file, or change \`false\` to \`true\` on line 2.",
+  "start": "Drafting did not start. Review \`drafting/hinge/claims.md:2\`, then click **Approve Claims** at the top of the file, or change \`false\` to \`true\` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).",
+}
+`;
+
+exports[`remove_claim > refuses a claim other claims refer to, names them, and changes nothing 1`] = `
+{
+  "confirmation": undefined,
+  "result": "Claim 1 was not removed. Claims 2, 4, 5, 7, 8, 9, 11 refer to claim 1. The attorney decides about those claims first: remove them, the highest number first, or change the claim they refer to. Open in drafting/hinge/checklist.md: step 3 (Write the outline). Next: Tell the agent: "Plan the draft" (it saves draft-outline.md with write_patent_results, template draft-outline).",
+  "unchanged": true,
+}
+`;
+
+exports[`remove_claim > refuses a number with no claim and changes nothing 1`] = `
+{
+  "result": "Claim 15 was not removed. drafting/hinge/claims.md has no claim 15. Open in drafting/hinge/checklist.md: step 3 (Write the outline). Next: Tell the agent: "Plan the draft" (it saves draft-outline.md with write_patent_results, template draft-outline).",
+  "unchanged": true,
+}
+`;
+
 exports[`start_application_draft > returns the inputs and the style exemplars, labelled style only, and records the approved claims 1`] = `
 {
   "pdfReads": [
@@ -369,14 +417,14 @@ None.
 
 ## Notes
 
-None.
+- \`figure-coverage\` (figures.md): figures.md links no part to a Feature List row (\`- 12: housing [F3]\`), so the claimed-feature coverage was not checked. The Approved Claims cite F1.
 
 ## Advisory
 
 - \`advisory\` (draft-application.md, line 27, claim 2): Claim 2: "steel" has literal basis, but no passage supports steel in combination with the housing.
 ",
   "second": "Wrote drafting/hinge/findings.md (US validators, 1 advisory item(s); waivers kept).
-Errors: 0 (0 waived). Inventor Questions: 1 (1 waived). Notes: 0. Advisory: 1.
+Errors: 0 (0 waived). Inventor Questions: 1 (1 waived). Notes: 1. Advisory: 1.
 No unwaived Error and no open Inventor Question.
 Report these by severity with their line references. Do not call the draft passed or ready to file.
 Wrote drafting/hinge/checklist.md: the next step for the attorney is step 6 (Export to Word). Next: Tell the agent: "Export to Word".",

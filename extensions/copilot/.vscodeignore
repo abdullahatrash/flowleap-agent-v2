@@ -5,6 +5,9 @@ assets/walkthroughs/**
 !dist/extension.js
 !dist/extension.js.LICENSE.txt
 !dist/*.wasm
+!dist/replicad_single.mjs
+!dist/LICENSE-opencascade.txt
+!dist/resvg.wasm.LICENSE.txt
 !dist/*.json
 !dist/*.bpe
 !dist/*.tiktoken
@@ -14,6 +17,7 @@ assets/walkthroughs/**
 !dist/diffWorker.js
 !dist/webview.js
 !dist/cli.js
+!dist/drawings-cli.js
 !dist/suggestionsPanelWebview.js
 !node_modules/@vscode/copilot-typescript-server-plugin/package.json
 !node_modules/@vscode/copilot-typescript-server-plugin/dist/*.js

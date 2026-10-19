@@ -1,0 +1,13 @@
+{
+	"figure": "FIG-1",
+	"camera": "front",
+	"section": { "origin": [0, 0, 0], "normal": "y", "keep": "positive" },
+	"parts": [
+		{ "id": "base", "shape": { "kind": "box", "size": [40, 40, 20] }, "placement": { "translate": [-20, -20, 0] }, "hatch": { "angle": 45, "pitch": 2 } },
+		{ "id": "lid", "shape": { "kind": "box", "size": [40, 40, 22] }, "placement": { "translate": [-20, -20, 20] }, "hatch": { "angle": 135, "pitch": 2 } }
+	],
+	"numerals": [
+		{ "numeral": "10", "part": "base", "face": "left", "point": [0, 20, 10] },
+		{ "numeral": "12", "part": "lid", "face": "top", "point": [30, 20, 22] }
+	]
+}

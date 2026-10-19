@@ -17,6 +17,8 @@
  * (ADR 0012 decision 5).
  */
 
+import { DIAGRAM_RULES } from '../../../drawings/common/diagram/diagramFaults';
+import { DRAWING_RULES } from '../../../drawings/common/scene/drawingFaults';
 import { DraftFinding, isInventorQuestion } from './finding';
 
 const sections: readonly { heading: string; severity: DraftFinding['severity']; accepts: (finding: DraftFinding) => boolean }[] = [
@@ -154,10 +156,15 @@ function findingKey(finding: DraftFinding): string {
 	return `${finding.rule}|${finding.claim ?? ''}|${oneLine(finding.message).replace(/\bline \d+\b/gi, 'line #')}`;
 }
 
+/** The rule ids of the Figure checks of the Drawing Set (PRD 0023); no drafting validator emits them. */
+const drawingRules: ReadonlySet<string> = new Set([...Object.keys(DRAWING_RULES), ...DIAGRAM_RULES]);
+
 /**
  * Merges a new validator run with the previous findings file: a current finding keeps the
  * waiver of the same finding in `previous` (same rule, claim and message; line numbers may
- * move). When `current` has no Advisory items, the Advisory items of `previous` are kept.
+ * move). When `current` has no Advisory items, the Advisory items of `previous` are kept. A
+ * waived item of a Drawing Set Figure check is kept too: the drafting validators never emit
+ * those rules, and build_drawing_set reads the waiver.
  */
 export function mergeFindings(current: readonly DraftFinding[], previous: readonly DraftFinding[]): DraftFinding[] {
 	const waivers = new Map<string, DraftFinding['waived']>();
@@ -173,6 +180,8 @@ export function mergeFindings(current: readonly DraftFinding[], previous: readon
 	if (!current.some(finding => finding.severity === 'Advisory')) {
 		merged.push(...previous.filter(finding => finding.severity === 'Advisory'));
 	}
+	const currentKeys = new Set(current.map(findingKey));
+	merged.push(...previous.filter(finding => finding.waived && drawingRules.has(finding.rule) && !currentKeys.has(findingKey(finding))));
 	return merged;
 }
 

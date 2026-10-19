@@ -9,6 +9,7 @@
  * filing manifest read the same paragraphs, so the page estimate counts what the export writes.
  */
 
+import type { DrawingPageSize } from './figures';
 import { INVENTOR_QUESTION } from './finding';
 import { DraftDocumentType } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
@@ -68,6 +69,15 @@ export const OFFICE_PAGE_SETUP: Readonly<Record<DraftingOffice, OfficePageSetup>
 		pageNumbers: 'bottom',
 	},
 };
+
+/**
+ * The page size of the Drawing Sheets that matches the export page setup of the office: letter
+ * for US, A4 for EPO. One page size per application (37 CFR 1.52(a)(1)(ii), 1.84(f); OJ EPO 2025
+ * A49 Art. 1(1)(a); PCT Rule 11.5), so `figures.md` defaults to it.
+ */
+export function officeDrawingPageSize(office: DraftingOffice): DrawingPageSize {
+	return OFFICE_PAGE_SETUP[office].paper === 'Letter' ? 'letter' : 'A4';
+}
 
 /** One paragraph of an exported document, as plain text. */
 export interface FilingParagraph {
