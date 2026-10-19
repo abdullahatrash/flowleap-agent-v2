@@ -91,23 +91,6 @@ describe('Patent Drawings engine: scene to FIG-N.svg', () => {
 		expect(results).toEqual(Object.fromEntries(scene.parts.map(part => [part.id, []])));
 	}, KERNEL_TIMEOUT);
 
-	it('the code escape hatch is refused unless the caller opts in', async () => {
-		const scene = {
-			figure: 'FIG-5',
-			camera: 'front',
-			parts: [{ id: 'cam', shape: { kind: 'code', code: 'return replicad.makeCylinder(10, 5, [0, 0, 0], [0, 0, 1]).cut(replicad.makeBox([-2, -2, 0], [2, 2, 5]));' } }],
-			numerals: [{ numeral: '80', part: 'cam', face: 'body', point: [10, 0, 2.5] }],
-		};
-		const refused = await renderFigure(scene);
-		const allowed = await renderFigure(scene, { allowCode: true });
-		const escape = await renderFigure({ ...scene, parts: [{ id: 'cam', shape: { kind: 'code', code: 'return process.exit(1);' } }] }, { allowCode: true });
-		expect({ refused: rules(refused.findings), allowed: [allowed.svg !== undefined, ...rules(allowed.findings)], escape: rules(escape.findings) }).toEqual({
-			refused: ['code-not-allowed'],
-			allowed: [true],
-			escape: ['scene-build'],
-		});
-	}, KERNEL_TIMEOUT);
-
 	it('a shaft along the section plane stays unhatched; the body around it is hatched', async () => {
 		const result = await renderFigure(fixture('shaft-through-body'));
 		await expect(`<!-- findings: ${JSON.stringify(rules(result.findings))} hatch: ${JSON.stringify(figureHatchStyles(result.svg ?? ''))} -->\n${result.svg}`).toMatchFileSnapshot('fixtures/shaft-through-body.svg');

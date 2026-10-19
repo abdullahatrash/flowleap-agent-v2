@@ -30,7 +30,7 @@ Figure to an illustrator.
 | Colour, greyscale, shading, photographs as drawings, design patents | Filing line art only (black lines, hatching only). |
 | Chemical structures and reaction schemes | Not in this version. |
 | CAD file import | Not in this version. |
-| A fourth render of a Figure in one review cycle | Three rounds per cycle. Report the open Errors and stop. Start a new cycle (`--new-cycle`) only when the attorney asked for more work on this Figure or the engine changed, never on your own. After three cycles a person must clear the rounds. |
+| A fourth render of a Figure in one review cycle | Three rounds per cycle. Report the open Errors and stop. Start a new cycle (`--new-cycle`) only when the attorney asked for more work on this Figure or the engine changed, never on your own. There is no cap on cycles; the attorney confirms each one. |
 | A part that `figures.md` does not list | Never drawn silently. Propose it (the `propose` command) and stop for the attorney. |
 
 ## More than 15 listed parts under one heading

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { DraftFinding } from '../../../tools/common/drafting/finding';
+import { DRAWING_RULES, DrawingRule } from '../../../tools/common/drafting/figureRules';
 import type { DrawingScene, Vec2 } from './drawingScene';
 import { HATCH_NEIGHBOUR_DISTANCE } from '../lineArt/lineArt';
 import { DIGIT_HEIGHT_RATIO, insidePosition, LEAD_END_TOLERANCE, leadCrossesEdges, leadRunsAlong, numeralBox } from '../lineArt/numeralPlacer';
@@ -20,29 +21,6 @@ export interface DrawingFinding extends DraftFinding {
 	readonly numeral?: string;
 	readonly part?: string;
 }
-
-/** The mechanical checks, each with its rule citation (01-formal-drawing-rules.md sections 3, 5 and 9). */
-export const DRAWING_RULES = {
-	'part-without-numeral': 'CONTEXT.md Figure ("every part drawn has one"); 37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i)',
-	'numeral-without-port': '37 CFR 1.84(q) ("extend to the feature indicated"); GL A-IX 7.5.1',
-	'numeral-not-allowed': '37 CFR 1.84(p)(5); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(l)',
-	'numeral-two-parts': '37 CFR 1.84(p)(4); OJ EPO 2025 A49 Art. 1(2)(i); PCT Rule 11.13(m)',
-	'lead-lines-cross': '37 CFR 1.84(q) ("Lead lines must not cross each other")',
-	'lead-line-off-part': '37 CFR 1.84(q) ("extend to the feature indicated"); GL A-IX 7.5.1',
-	'lead-line-far-from-numeral': '37 CFR 1.84(q) ("originate in the immediate proximity of the reference character")',
-	'lead-line-missing': '37 CFR 1.84(q) (lead line required unless the numeral is underlined); PCT IP 5.145',
-	'glyph-too-small': '37 CFR 1.84(p)(3); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h) (0.32 cm minimum)',
-	'text-beyond-keywords': '37 CFR 1.84(o); OJ EPO 2025 A49 Art. 1(2)(j) ("a few short keywords"); PCT Rule 11.11; 37 CFR 1.84(k) (no scale text)',
-	'numeral-overlap': '37 CFR 1.84(p)(3) ("should not cross or mingle with the lines")',
-	'numeral-on-line': '37 CFR 1.84(p)(3) ("should not cross or mingle with the lines", not on hatched surfaces); OJ EPO 2025 A49 Art. 1(2)(b)',
-	'hatch-same-as-neighbour': '37 CFR 1.84(h)(3) ("regularly spaced oblique parallel lines"; juxtaposed parts hatched differently); OJ EPO 2025 A49 Art. 1(2)(b); PCT Rule 11.13(b)',
-	'lead-ends-on-nothing': '37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2',
-	'lead-along-edge': '37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2',
-	'lead-crosses-outline': '37 CFR 1.84(q) (lead lines "as short as possible"); OJ EPO 2025 A49 Art. 2',
-	'centre-line-crosses-part': '37 CFR 1.84(l) (lines "uniformly thick and well-defined"; a chain line through another part reads as a line of that part); OJ EPO 2025 A49 Art. 1(2)(b)',
-} as const;
-
-export type DrawingRule = keyof typeof DRAWING_RULES;
 
 /** Minimum glyph height in millimetres (01-formal-drawing-rules.md section 3). */
 export const MIN_GLYPH_HEIGHT = 3.2;

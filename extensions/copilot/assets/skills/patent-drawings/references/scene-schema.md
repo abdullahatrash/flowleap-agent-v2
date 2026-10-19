@@ -113,13 +113,6 @@ Use a library part for every standard part. Its ports are in
 { "kind": "cam", "base": 6, "lobes": [{ "angle": 0, "lift": 4, "width": 100 }], "height": 6 }
 ```
 
-## The `code` kind
-
-`{ "kind": "code", "code": "..." }` is an opt-in escape hatch. The drawing
-tools and the drawings CLI do not opt in, so a scene with a `code` part is
-refused (`code-not-allowed`). When a shape needs it, the shape is out of scope:
-see [scope-and-refusals.md](scope-and-refusals.md).
-
 ## Numeral ports
 
 ```json

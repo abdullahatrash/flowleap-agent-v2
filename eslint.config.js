@@ -2596,6 +2596,11 @@ export default defineConfig(
 							from: './extensions/copilot/test/'
 						},
 						{
+							// One direction only (#798): drawings depends on drafting, never the reverse.
+							target: './extensions/copilot/src/extension/tools/common/drafting',
+							from: './extensions/copilot/src/extension/drawings'
+						},
+						{
 							target: './extensions/copilot/src/shared-fetch-utils',
 							from: ['./extensions/copilot/src/extension', './extensions/copilot/src/platform', './extensions/copilot/src/util', './extensions/copilot/src/lib']
 						},

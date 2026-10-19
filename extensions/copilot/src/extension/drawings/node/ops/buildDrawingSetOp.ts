@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { DIAGRAM_RULES, DRAWING_RULES } from '../../../tools/common/drafting/figureRules';
 import { readFiguresSettings } from '../../../tools/common/drafting/figures';
 import { checkClaimedFeatureCoverage, checkFigureProposals, checkFiguresSettings } from '../../../tools/common/drafting/figureValidators';
 import { officeDrawingPageSize } from '../../../tools/common/drafting/filingDocuments';
@@ -12,9 +13,9 @@ import { blockingFindings, mergeFindings, parseFindingsFile } from '../../../too
 import { DRAFTING_FILE_NAMES, isDrawingSheetFile, resolveDraftingFolder } from '../../../tools/common/drafting/folderContract';
 import { parseDraftOutline } from '../../../tools/common/drafting/outline';
 import { parseFigureParts } from '../../../tools/common/drafting/specValidators';
-import { checkDiagramSvg, DIAGRAM_RULES } from '../../common/diagram/diagramFaults';
+import { checkDiagramSvg } from '../../common/diagram/diagramFaults';
 import { diagramNumerals } from '../../common/diagram/diagramText';
-import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../common/scene/drawingFaults';
+import { checkFigureSvgFaults, checkSceneFaults } from '../../common/scene/drawingFaults';
 import { validateScene } from '../../common/scene/sceneValidator';
 import { CheckResult, FigureFinding, FigureSetFacts, runSheetChecks, SHEET_CHECKS, writeDrawingsReceipt } from '../../common/sheets/receipt';
 import { DrawingPageSize, FigureInput, layoutDrawingSheets } from '../../common/sheets/sheetLayout';

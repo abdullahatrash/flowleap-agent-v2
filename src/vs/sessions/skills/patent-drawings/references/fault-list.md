@@ -12,7 +12,6 @@ From the scene validator, the renderer and `drawingFaults.ts`.
 | Rule | Meaning | Fix |
 |---|---|---|
 | `scene-schema` | A field of the scene has a wrong type, value or range (the message gives the path, e.g. `parts[1].shape.radius`). | Correct that field per [scene-schema.md](scene-schema.md). |
-| `code-not-allowed` | A part uses the `code` kind; the tools do not opt in. | Build the part from primitives or a library part. If neither can, the part is out of scope. |
 | `scene-build` | The geometry kernel could not build the solids (bad boolean, zero-size cut, self-crossing profile). | Simplify the part: check that `subtract` shapes overlap the part, that a polygon or profile does not cross itself, that a tube bend radius fits its segments. |
 | `part-without-numeral` | Refusal: a drawn part has no numeral port. Every part drawn has one. Nothing is written. | Add a port for the part with its numeral from `figures.md`, or remove the part. |
 | `numeral-without-port` | A port names a part or face that does not exist (the message lists the faces). | Use a face from the list, or add a `point` on the face. |

@@ -72,6 +72,7 @@ describe('Patent Drawings engine: smooth profiles and the cam part', () => {
 			shortSpline: messages([[0, 0], [20, 0], { spline: [[0, 10]] }]),
 			unknownItem: messages([[0, 0], [20, 0], { bezier: [0, 10] }]),
 			badCam: validateScene({ figure: 'FIG-1', camera: 'top', parts: [{ id: 'c', shape: { kind: 'cam', base: 5, lobes: [{ angle: 0, lift: 0, width: 400 }], height: 2 } }], numerals: [] }).findings.map(finding => finding.message),
+			codeKind: validateScene({ figure: 'FIG-1', camera: 'top', parts: [{ id: 'c', shape: { kind: 'code', code: 'return replicad.makeBox([0, 0, 0], [1, 1, 1]);' } }], numerals: [] }).findings.map(finding => `${finding.rule}: ${finding.message}`),
 		}).toEqual({
 			good: [],
 			startsWithCurve: ['parts[0].shape.points[0]: must be a plain point [x, y]: a profile starts with a point'],
@@ -80,6 +81,7 @@ describe('Patent Drawings engine: smooth profiles and the cam part', () => {
 			shortSpline: ['parts[0].shape.points[2].spline: must be an array of at least 2 points'],
 			unknownItem: ['parts[0].shape.points[2]: must be a point [x, y], an arc { "arc": [x, y], "through": [x, y] } or a spline { "spline": [[x, y], ...] }'],
 			badCam: ['parts[0].shape.lobes[0].lift: must be a positive number', 'parts[0].shape.lobes[0].width: must be a number of degrees in (0, 360]'],
+			codeKind: ['scene-schema: parts[0].shape.kind: the "code" kind was dropped (#799, 2026-10-19): build the part from primitives or a library part'],
 		});
 	});
 });

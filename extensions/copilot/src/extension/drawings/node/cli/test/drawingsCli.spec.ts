@@ -124,7 +124,7 @@ describe('drawings CLI', () => {
 		expect({ exitCode: run.exitCode, seen: run.output.seen, rounds }).toEqual({ exitCode: 0, seen: false, rounds: { figures: { '1': { cycle: 1, rounds: [{ round: 1, png: 'review/FIG-1.round-1.png', seen: false }] } } } });
 	}, 120_000);
 
-	it('starts a new review cycle with --new-cycle, and reset-rounds prints what it clears', async () => {
+	it('starts a new review cycle with --new-cycle, and reset-rounds is no command', async () => {
 		await fs.mkdir(path.join(matterDir, 'drawings'), { recursive: true });
 		const rounds = [1, 2, 3].map(round => ({ round, png: `review/FIG-1.round-${round}.png`, seen: false }));
 		await fs.writeFile(path.join(matterDir, 'drawings', 'rounds.json'), JSON.stringify({ figures: { '1': rounds } }));
@@ -135,20 +135,13 @@ describe('drawings CLI', () => {
 		expect({
 			refused: refusal(refused),
 			next: { exitCode: next.exitCode, cycle: next.output.cycle, round: next.output.round, roundsLeft: next.output.roundsLeft, review: next.output.review },
-			reset: reset.output,
+			reset: { exitCode: reset.exitCode, ok: reset.output.ok, command: reset.output.command },
 			roundsAfter,
 		}).toEqual({
 			refused: { exitCode: 1, ok: false, reason: 'Three review rounds used for FIG. 1 in cycle 1. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).' },
 			next: { exitCode: 0, cycle: 2, round: 1, roundsLeft: 2, review: 'drafting/widget/drawings/review/FIG-1.cycle-2.round-1.png' },
-			reset: {
-				ok: true,
-				command: 'reset-rounds',
-				figure: 'FIG. 1',
-				cleared: { cycle: 2, rounds: 1 },
-				deleted: ['drafting/widget/drawings/review/FIG-1.cycle-2.round-1.png'],
-				text: 'Cleared FIG. 1: review cycle 2 with 1 round(s) used, and 1 review render(s). The next render is round 1 of cycle 1.',
-			},
-			roundsAfter: { figures: {} },
+			reset: { exitCode: 2, ok: false, command: 'reset-rounds' },
+			roundsAfter: { figures: { '1': { cycle: 2, rounds: [{ round: 1, png: 'review/FIG-1.cycle-2.round-1.png', seen: false }] } } },
 		});
 	}, 120_000);
 

@@ -17,8 +17,7 @@
  * (ADR 0012 decision 5).
  */
 
-import { DIAGRAM_RULES } from '../../../drawings/common/diagram/diagramFaults';
-import { DRAWING_RULES } from '../../../drawings/common/scene/drawingFaults';
+import { DIAGRAM_RULES, DRAWING_RULES } from './figureRules';
 import { DraftFinding, isInventorQuestion } from './finding';
 
 const sections: readonly { heading: string; severity: DraftFinding['severity']; accepts: (finding: DraftFinding) => boolean }[] = [

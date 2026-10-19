@@ -20,10 +20,11 @@
  */
 
 import { basename } from '../../../util/vs/base/common/path';
-import { DRAWING_RULES, DrawingRule, figureSvgNumerals } from './scene/drawingFaults';
+import { figureSvgNumerals } from './scene/drawingFaults';
 import type { BlockDiagramInput } from './diagram/blockDiagram';
 import type { FlowchartInput } from './diagram/flowchart';
 import type { CheckResult, FigureFinding, FigureReviewRecord } from './sheets/receipt';
+import { DRAWING_RULES, DrawingRule } from '../../tools/common/drafting/figureRules';
 import { NumeralScheme } from '../../tools/common/drafting/figures';
 import { formatFindingLine } from '../../tools/common/drafting/finding';
 import { DRAFTING_FILE_NAMES } from '../../tools/common/drafting/folderContract';
@@ -33,9 +34,6 @@ import { figureHeadingNumbers, figureNamePattern, FigurePart, hasFigure, isClaim
 
 /** Three review rounds per review cycle of a Figure (PRD 0023, D5 guardrail; #696). */
 export const MAX_REVIEW_ROUNDS = 3;
-
-/** Three review cycles per Figure. After that, only a person clears the rounds (`reset-rounds`, #696). */
-export const MAX_REVIEW_CYCLES = 3;
 
 /** The file that records the review rounds, in `drawings/`. */
 export const ROUNDS_FILE = 'rounds.json';
@@ -96,7 +94,7 @@ export interface ReviewRound {
 
 /** The review rounds of the current cycle of one Figure. */
 export interface FigureReview {
-	/** The cycle number, from 1. A new cycle starts only on `newCycle` (#696). */
+	/** The cycle number, from 1, with no upper bound. A new cycle starts only on `newCycle`, after the attorney confirmed it (#696, #803). */
 	readonly cycle: number;
 	/** The rounds of this cycle, in order. */
 	readonly rounds: readonly ReviewRound[];
@@ -327,7 +325,7 @@ export function reviewPngName(figure: FigureId, cycle: number, round: number): s
 }
 
 /** The review renders of a Figure among the file names of `drawings/review/`, with their cycle and round. */
-export function reviewPngs(files: readonly string[], figure: FigureId): { readonly name: string; readonly cycle: number; readonly round: number }[] {
+function reviewPngs(files: readonly string[], figure: FigureId): { readonly name: string; readonly cycle: number; readonly round: number }[] {
 	const pattern = new RegExp(`^FIG-${figure.key}\\.(?:cycle-(?<cycle>\\d+)\\.)?round-(?<round>\\d+)\\.png$`);
 	return files.flatMap(name => {
 		const match = pattern.exec(name);

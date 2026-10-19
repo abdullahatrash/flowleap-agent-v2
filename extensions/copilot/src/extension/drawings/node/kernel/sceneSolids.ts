@@ -3,14 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vm from 'node:vm';
-import type { CodeShape, LibraryShape, PartShape, Placement, PrimitiveShape, ProfileItem, ScenePart, Vec2, Vec3 } from '../../common/scene/drawingScene';
+import type { LibraryShape, PartShape, Placement, PrimitiveShape, ProfileItem, ScenePart, Vec2, Vec3 } from '../../common/scene/drawingScene';
 import { camProfile, hasCurves, profileSegments, sampleSpline } from '../../common/scene/profile';
 import { add, BEARING_BALL, BEARING_RING, FASTENER_HEAD_HEIGHT, FASTENER_HEAD_RADIUS, MOTOR_BOSS_HEIGHT, MOTOR_BOSS_RADIUS, normalize, scale } from '../../common/scene/sceneGeometry';
 import { KernelCurve, KernelShape, KernelSketch, point3, ReplicadApi } from './drawingKernel';
-
-/** Time limit for one code escape hatch part, in milliseconds. */
-const CODE_TIMEOUT = 5000;
 
 /** Points per Catmull-Rom piece that the B-spline edge of a spline segment is fitted through. */
 const SPLINE_SAMPLES = 8;
@@ -208,21 +204,6 @@ function library(r: ReplicadApi, shape: LibraryShape): KernelShape {
 	}
 }
 
-/**
- * Runs a code escape hatch part. The code is a function body that gets only `replicad` and returns
- * one solid. It runs in a separate VM context (no `require`, `process` or file system in scope)
- * with a time limit. A VM context limits scope; it is not a security boundary, which is why the
- * escape hatch is opt-in for the caller.
- */
-function codePart(r: ReplicadApi, shape: CodeShape): KernelShape {
-	const context = vm.createContext({ replicad: r });
-	const result: unknown = vm.runInContext(`(function (replicad) {\n${shape.code}\n})(replicad)`, context, { timeout: CODE_TIMEOUT });
-	if (result instanceof r.Solid || result instanceof r.Compound || result instanceof r.CompSolid || result instanceof r.Shell) {
-		return result as KernelShape;
-	}
-	throw new Error('the code must return one replicad solid');
-}
-
 function place(shape: KernelShape, placement: Placement | undefined): KernelShape {
 	const [rx, ry, rz] = placement?.rotate ?? [0, 0, 0];
 	let result = shape;
@@ -240,8 +221,6 @@ function place(shape: KernelShape, placement: Placement | undefined): KernelShap
 
 function partShape(r: ReplicadApi, shape: PartShape): KernelShape {
 	switch (shape.kind) {
-		case 'code':
-			return codePart(r, shape);
 		case 'box':
 		case 'cylinder':
 		case 'extrudedPolygon':
