@@ -12,7 +12,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { LanguageModelDataPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import type { DrawingScene } from '../../drawings/common/scene/drawingScene';
 import { figureId } from '../../drawings/common/drawingFiles';
-import { BlockRequest, FlowchartRequest, readReviewState, renderFigureOp, reviewCycleRefusal } from '../../drawings/node/ops/renderFigureOp';
+import { BlockRequest, FlowchartRequest, readReviewState, renderFigureOp } from '../../drawings/node/ops/renderFigureOp';
 import { IBuildPromptContext } from '../../prompt/common/intents';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
@@ -88,7 +88,7 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 		}
 		const cycle = await this.nextCycle(input);
 		if (cycle === undefined) {
-			// The call refuses anyway (no matter, a bad Figure, or the cap of three cycles): nothing to confirm.
+			// The call refuses anyway (no matter or a bad Figure): nothing to confirm.
 			return { invocationMessage };
 		}
 		return {
@@ -112,9 +112,6 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 		}
 		const files = workspace.matterFiles();
 		const { state } = await readReviewState(files, figure);
-		if (reviewCycleRefusal(files.folder, figure, state, true)) {
-			return undefined;
-		}
 		return state.used > 0 ? state.cycle + 1 : state.cycle;
 	}
 

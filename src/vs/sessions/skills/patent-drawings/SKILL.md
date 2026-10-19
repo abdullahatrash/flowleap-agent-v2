@@ -29,8 +29,8 @@ sh "<skill base directory>/drawings.sh" build <matter>
 
 Add `--new-cycle` to `render` to start the next review cycle of a Figure
 (three more rounds). Unlike the editor tool, it has no chat confirmation. The
-guard is the host's approval of the command and a hard cap of three cycles per
-Figure: after that, `render` refuses until a person clears the rounds.
+guard is the host's approval of the command, so ask the attorney in chat first
+(Step 3). There is no cap on cycles: each one needs the attorney's word.
 
 `<N>` is the Figure number, or `1A` for a partial view. Each command prints
 one JSON object. `"ok": false` is a refusal: it wrote nothing; report its

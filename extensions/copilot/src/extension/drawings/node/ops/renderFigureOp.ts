@@ -16,7 +16,7 @@ import type { DiagramStep } from '../../common/diagram/steps';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES, DrawingFinding } from '../../common/scene/drawingFaults';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { validateScene } from '../../common/scene/sceneValidator';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_CYCLES, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewCycleState, ReviewRound, ReviewRounds, reviewPngName, reviewPngs, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, DrawnFigure, drawingFindingLine, FigureId, figureId, figureListText, figureOfSvgFile, figureSetStatus, MAX_REVIEW_ROUNDS, nextNumeral, parseReviewRounds, partsNotDrawn, partsNotDrawnLine, partsOfFigure, renderReviewRounds, ReviewCycleState, ReviewRound, ReviewRounds, reviewPngName, reviewState, ROUNDS_FILE } from '../../common/drawingFiles';
 import { ApprovedClaims, figuresPath, MatterFiles, readApprovedClaims, readMatterOffice } from './matterFiles';
 
 /** A flowchart Figure: the steps in order, or the approved method claim to read them from. */
@@ -89,8 +89,8 @@ interface RenderedSource {
  * Renders one Figure of a drafting matter (PRD 0023, slice D5) from a 3D scene, a flowchart or a
  * block diagram. It checks the input against `figures.md` first and refuses with the reason, and
  * writes nothing, when the figure list has no heading for the Figure, a part has no numeral or a
- * numeral is not in the figure list (for a 2D Figure: not under its heading), on a fourth round
- * in a review cycle, and after {@link MAX_REVIEW_CYCLES} cycles (see {@link reviewCycleRefusal}). Then it renders (the kernel and the layout engine load on the first call), runs the
+ * numeral is not in the figure list (for a 2D Figure: not under its heading), and on a fourth round
+ * in a review cycle (see {@link reviewCycleRefusal}). Then it renders (the kernel and the layout engine load on the first call), runs the
  * mechanical fault list, and writes `drawings/FIG-N.scene.json`, `drawings/FIG-N.svg`, the review
  * render `drawings/review/FIG-N.round-R.png` and the round in `drawings/rounds.json`. No model call.
  */
@@ -117,7 +117,7 @@ export async function renderFigureOp(files: MatterFiles, input: RenderFigureInpu
 	}
 
 	const { rounds, state } = await readReviewState(files, figure);
-	const blocked = reviewCycleRefusal(files.folder, figure, state, input.newCycle === true);
+	const blocked = reviewCycleRefusal(figure, state, input.newCycle === true);
 	if (blocked) {
 		return refuse(blocked);
 	}
@@ -174,54 +174,16 @@ export async function readReviewState(files: MatterFiles, figure: FigureId): Pro
 
 /**
  * The refusal of the review-round guard (#696), or `undefined` when a round is free. Three rounds
- * per cycle; `newCycle` starts the next cycle; after {@link MAX_REVIEW_CYCLES} cycles only a person
- * clears the rounds with the CLI command `reset-rounds`. `newCycle` on a cycle with no round yet
- * renders round 1 of that cycle.
+ * per cycle; `newCycle` starts the next cycle, with no cap on cycles: the attorney's confirmation
+ * of each new cycle is the only brake (#803). `newCycle` on a cycle with no round yet renders
+ * round 1 of that cycle.
  */
-export function reviewCycleRefusal(folder: string, figure: FigureId, state: ReviewCycleState, newCycle: boolean): string | undefined {
-	const label = `FIG. ${figure.key}`;
+export function reviewCycleRefusal(figure: FigureId, state: ReviewCycleState, newCycle: boolean): string | undefined {
 	const wantsNext = newCycle && state.used > 0;
-	if (state.cycle >= MAX_REVIEW_CYCLES && (wantsNext || state.used >= MAX_REVIEW_ROUNDS)) {
-		const matter = folder.split('/').pop() ?? folder;
-		return `${label} used ${MAX_REVIEW_CYCLES} review cycles; a person must clear it: drawings reset-rounds ${matter} ${figure.key}`;
-	}
 	if (!wantsNext && state.used >= MAX_REVIEW_ROUNDS) {
-		return `Three review rounds used for ${label} in cycle ${state.cycle}. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).`;
+		return `Three review rounds used for FIG. ${figure.key} in cycle ${state.cycle}. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).`;
 	}
 	return undefined;
-}
-
-/** What `reset-rounds` cleared for one Figure. */
-export interface ResetReviewRoundsResult {
-	/** The review cycle the Figure was in; 0 when it had no record. */
-	readonly cycle: number;
-	/** The rounds recorded in that cycle. */
-	readonly rounds: number;
-	/** The review renders deleted, relative to the matter folder. */
-	readonly deleted: readonly string[];
-}
-
-/**
- * Clears the review rounds of one Figure (#696): deletes its entry in `rounds.json` and its review
- * renders, so the Figure starts again at cycle 1, round 1. A human step only: the CLI command
- * `reset-rounds` calls it, no editor tool does, and the skill does not name it.
- */
-export async function resetReviewRoundsOp(files: MatterFiles, figure: FigureId): Promise<ResetReviewRoundsResult> {
-	const { rounds, state } = await readReviewState(files, figure);
-	const entry = rounds[figure.key];
-	const pngs = reviewPngs(await files.listFiles('drawings/review'), figure);
-	for (const png of pngs) {
-		await files.delete(`drawings/review/${png.name}`);
-	}
-	if (entry) {
-		const rest = Object.fromEntries(Object.entries(rounds).filter(([key]) => key !== figure.key));
-		await files.write(`drawings/${ROUNDS_FILE}`, renderReviewRounds(rest));
-	}
-	return {
-		cycle: entry || pngs.length ? state.cycle : 0,
-		rounds: state.used,
-		deleted: pngs.map(png => `${files.folder}/drawings/review/${png.name}`),
-	};
 }
 
 /** Checks the scene against the figure list, then renders it on the kernel. */

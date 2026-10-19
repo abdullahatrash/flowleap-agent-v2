@@ -100,7 +100,8 @@ as a data part plus the fault report; refuses a part without a numeral or a nume
 proposal, an unwaived Error or a coverage gap, writes the PDF and the receipt, updates the
 manifest. `propose_figure_part`: appends a `(proposed)` line with the sketch it came from.
 Guardrail: three rounds per Figure, latest render only; a model without vision gets the fault
-report and the receipt records that no render was seen. Acceptance: tool tests on the in-memory
+report and the receipt records that no render was seen. A new review cycle opens only after the
+attorney confirms it in chat; there is no cap on cycles (decided 2026-10-19, #803). Acceptance: tool tests on the in-memory
 filesystem pattern, including each refusal.
 
 ### D6 — `patent-drawings` skill (assets/skills) and the Agents Window entry

@@ -11,7 +11,7 @@ import type { DrawingScene } from '../../../common/scene/drawingScene';
 import { buildDrawingSetOp } from '../buildDrawingSetOp';
 import { NodeMatterFiles } from '../matterFiles';
 import { proposeFigurePartOp } from '../proposeFigurePartOp';
-import { readReviewState, RenderFigureInput, renderFigureOp, RenderFigureResult, resetReviewRoundsOp } from '../renderFigureOp';
+import { RenderFigureInput, renderFigureOp, RenderFigureResult } from '../renderFigureOp';
 
 const KERNEL_TIMEOUT = 60_000;
 
@@ -197,48 +197,24 @@ describe('renderFigureOp', () => {
 		});
 	}, KERNEL_TIMEOUT);
 
-	it('refuses for good after three cycles, with or without newCycle; the review renders count when rounds.json is gone', async () => {
+	it('a fourth cycle opens after confirmation (newCycle); without it the fourth round of cycle 3 is refused; the review renders count when rounds.json is gone', async () => {
 		const { render, files } = await setup();
 		const thirdCycle = (used: number) => files.write('drawings/rounds.json', JSON.stringify({ figures: { '1': { cycle: 3, rounds: Array.from({ length: used }, (_, index) => ({ round: index + 1, png: `review/FIG-1.cycle-3.round-${index + 1}.png`, seen: true })) } } }));
 		await thirdCycle(3);
 		const exhausted = await render({ figure: 1, scene });
-		const exhaustedNewCycle = await render({ figure: 1, scene, newCycle: true });
-		await thirdCycle(1);
-		const fourthCycle = await render({ figure: 1, scene, newCycle: true });
 		await files.delete('drawings/rounds.json');
 		for (const round of [1, 2, 3]) {
 			await files.write(`drawings/review/FIG-1.cycle-3.round-${round}.png`, 'png');
 		}
-		const roundsFileGone = await render({ figure: 1, scene, newCycle: true });
-		const hard = { ok: false, reason: 'FIG. 1 used 3 review cycles; a person must clear it: drawings reset-rounds hinge 1' };
-		expect({ exhausted, exhaustedNewCycle, fourthCycle, roundsFileGone }).toEqual({ exhausted: hard, exhaustedNewCycle: hard, fourthCycle: hard, roundsFileGone: hard });
-	});
-
-	it('reset-rounds clears the entry of one Figure and its review renders, and keeps the other Figures', async () => {
-		const { files, read } = await setup();
-		await files.write('drawings/rounds.json', JSON.stringify({ figures: {
-			'1': { cycle: 3, rounds: [1, 2].map(round => ({ round, png: `review/FIG-1.cycle-3.round-${round}.png`, seen: true })) },
-			'2': [{ round: 1, png: 'review/FIG-2.round-1.png', seen: false }],
-		} }));
-		for (const name of ['FIG-1.round-1.png', 'FIG-1.cycle-3.round-1.png', 'FIG-1.cycle-3.round-2.png', 'FIG-2.round-1.png']) {
-			await files.write(`drawings/review/${name}`, 'png');
-		}
-		const figure = { number: 1, key: '1' };
-		const cleared = await resetReviewRoundsOp(files, figure);
-		expect({
-			cleared,
-			again: await resetReviewRoundsOp(files, figure),
-			review: await files.listFiles('drawings/review'),
-			rounds: JSON.parse(await read('drawings/rounds.json') ?? '{}'),
-			state: (await readReviewState(files, figure)).state,
-		}).toEqual({
-			cleared: { cycle: 3, rounds: 2, deleted: ['drafting/hinge/drawings/review/FIG-1.cycle-3.round-1.png', 'drafting/hinge/drawings/review/FIG-1.cycle-3.round-2.png', 'drafting/hinge/drawings/review/FIG-1.round-1.png'] },
-			again: { cycle: 0, rounds: 0, deleted: [] },
-			review: ['FIG-2.round-1.png'],
-			rounds: { figures: { '2': { cycle: 1, rounds: [{ round: 1, png: 'review/FIG-2.round-1.png', seen: false }] } } },
-			state: { cycle: 1, used: 0 },
+		const roundsFileGone = await render({ figure: 1, scene });
+		const fourthCycle = await render({ figure: 1, scene, newCycle: true });
+		const opened = (result: RenderFigureResult) => result.ok ? { cycle: result.cycle, round: result.round, review: result.review } : result;
+		expect({ exhausted, roundsFileGone, fourthCycle: opened(fourthCycle) }).toEqual({
+			exhausted: { ok: false, reason: 'Three review rounds used for FIG. 1 in cycle 3. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).' },
+			roundsFileGone: { ok: false, reason: 'Three review rounds used for FIG. 1 in cycle 3. Start a new cycle only when the attorney asked for more work on this Figure (newCycle).' },
+			fourthCycle: { cycle: 4, round: 1, review: 'drafting/hinge/drawings/review/FIG-1.cycle-4.round-1.png' },
 		});
-	});
+	}, KERNEL_TIMEOUT);
 
 	it('renders a 3D scene: writes the source, the SVG and the review render, and records the round with seen', async () => {
 		const { render, read, files } = await setup();
