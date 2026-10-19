@@ -134,6 +134,31 @@ function publicationKey(publication: string): string {
 }
 
 /**
+ * The publication each spelling in a set names, for grouping (#729), keyed and valued in separator-free
+ * form. A spelling with a kind code names itself: an A1 and a B1 of one number are two publications
+ * with two dates and stay apart. A bare number names the one kind-coded publication of its document
+ * in the set, so a figure anchor recorded as `US4935850:figure:2` joins `US4935850A`; with none or
+ * more than one it names itself rather than a guess.
+ */
+export function publicationIdentities(publications: readonly string[]): ReadonlyMap<string, string> {
+	const spellings = [...new Set(publications.map(publicationKey))];
+	const coded = new Map<string, string[]>();
+	for (const spelling of spellings.filter(hasKindCode)) {
+		coded.set(documentKey(spelling), [...(coded.get(documentKey(spelling)) ?? []), spelling]);
+	}
+	return new Map(spellings.map(spelling => {
+		const candidates = hasKindCode(spelling) ? [] : coded.get(documentKey(spelling)) ?? [];
+		return [spelling, candidates.length === 1 ? candidates[0] : spelling];
+	}));
+}
+
+/** The distinct publications a list names by {@link publicationIdentities}, in the order first named. */
+export function distinctPublications(publications: readonly string[]): string[] {
+	const identities = publicationIdentities(publications);
+	return [...new Set(publications.map(publication => identities.get(publicationKey(publication)) ?? publicationKey(publication)))];
+}
+
+/**
  * The ledger publication the chart's `challengedPublication` names: the exact publication when it
  * was recorded, else the most recently recorded publication of the same document whatever its kind.
  */
