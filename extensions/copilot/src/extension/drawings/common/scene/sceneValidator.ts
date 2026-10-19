@@ -7,15 +7,6 @@ import { DrawingFinding, NUMERAL_PATTERN } from './drawingFaults';
 import { CAMERA_PRESETS, DrawingScene, HATCH_ANGLES, HATCH_PITCH_MAX, HATCH_PITCH_MIN, LIBRARY_KINDS, PartShape, PRIMITIVE_KINDS } from './drawingScene';
 import { AXIS_KINDS, AXIS_PORT } from './sceneGeometry';
 
-/** Options of the scene validator. */
-export interface SceneValidationOptions {
-	/**
-	 * Allow parts of kind `code` (the per-part escape hatch). Off by default: a scene with a code part
-	 * is refused unless the caller opts in.
-	 */
-	readonly allowCode?: boolean;
-}
-
 /** The citation of a `scene-schema` Error. */
 export const SCHEMA_CITATION = 'ADR 0014 decision 1 (scene schema)';
 
@@ -29,10 +20,10 @@ export function isObject(value: unknown): value is JsonObject {
 
 /**
  * Validates a parsed `FIG-N.scene.json`. Returns the typed scene when there is no Error, and the
- * Findings in document order. The checks are structural: kinds, numbers, ranges, unique part ids,
- * the code opt-in. Port references are checked by the mechanical fault list.
+ * Findings in document order. The checks are structural: kinds, numbers, ranges, unique part ids.
+ * Port references are checked by the mechanical fault list.
  */
-export function validateScene(input: unknown, options: SceneValidationOptions = {}): { scene?: DrawingScene; findings: DrawingFinding[] } {
+export function validateScene(input: unknown): { scene?: DrawingScene; findings: DrawingFinding[] } {
 	const findings: DrawingFinding[] = [];
 	const figure = isObject(input) && typeof input.figure === 'string' ? input.figure : 'FIG';
 	const file = `${figure}.scene.json`;
@@ -273,15 +264,10 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 				}
 				break;
 			case 'code':
-				if (typeof shape.code !== 'string' || shape.code.trim() === '') {
-					error(`${path}.code`, 'must be a non-empty string of replicad code');
-				}
-				if (!options.allowCode) {
-					error(`${path}.kind`, 'the code escape hatch is opt-in and this caller did not allow it', 'code-not-allowed', 'ADR 0014 decision 1 (per-part code escape hatch, opt-in)');
-				}
+				error(`${path}.kind`, 'the "code" kind was dropped (#799, 2026-10-19): build the part from primitives or a library part');
 				break;
 			default:
-				error(`${path}.kind`, `unknown kind "${kind}" (primitives: ${PRIMITIVE_KINDS.join(', ')}; library: ${LIBRARY_KINDS.join(', ')}; code)`);
+				error(`${path}.kind`, `unknown kind "${kind}" (primitives: ${PRIMITIVE_KINDS.join(', ')}; library: ${LIBRARY_KINDS.join(', ')})`);
 		}
 	};
 

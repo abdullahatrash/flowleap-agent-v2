@@ -112,7 +112,6 @@ export function faceNames(shape: PartShape): readonly string[] | undefined {
 		case 'pipe': return ['outer', 'bore', 'end-1', 'end-2'];
 		case 'motor': return ['body', 'face', 'shaft'];
 		case 'cam': return ['top', 'bottom', AXIS_PORT, ...numbered('lobe', shape.lobes.length), ...numbered('land', shape.lobes.length)];
-		case 'code': return undefined;
 	}
 }
 
@@ -334,8 +333,6 @@ function faceAnchor(shape: PartShape, face: string, toViewer: Vec3): Vec3 | unde
 			const [x, y] = camPoint(shape, angle);
 			return [x, y, shape.height / 2];
 		}
-		case 'code':
-			return undefined;
 	}
 }
 

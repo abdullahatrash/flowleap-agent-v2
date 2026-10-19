@@ -8,12 +8,12 @@ import type { DrawingScene, HatchOverride, SectionPlane, Vec2 } from '../../comm
 import { figureScale, layoutFigure, ProjectedPart, ProjectedPort, SHEET_CHORD_TOLERANCE, writeFigureSvg } from '../../common/lineArt/lineArt';
 import { flattenSvgPath, pointSegmentDistance, Segment, toSegments } from '../../common/lineArt/planar';
 import { cameraBasis, CameraBasis, dot, hasCentreMark, isPortEdgeOn, isSectioned, projectedAxis, projectPoint, resolvePort, sectionNormal } from '../../common/scene/sceneGeometry';
-import { SceneValidationOptions, validateScene } from '../../common/scene/sceneValidator';
+import { validateScene } from '../../common/scene/sceneValidator';
 import { KernelDrawing, KernelObject, KernelShape, loadDrawingKernel, point3, ReplicadApi } from './drawingKernel';
 import { buildPart } from './sceneSolids';
 
 /** Options of one Figure render. */
-export interface RenderFigureOptions extends SceneValidationOptions {
+export interface RenderFigureOptions {
 	/** The numerals of the figures list. Omit it to skip the allowed-set check. */
 	readonly allowedNumerals?: readonly string[];
 }
@@ -251,7 +251,7 @@ async function projectScene(scene: DrawingScene, camera: CameraBasis): Promise<P
  * then run the mechanical fault list on the scene and on the written SVG. No model call.
  */
 export async function renderFigure(input: unknown, options: RenderFigureOptions = {}): Promise<RenderedFigure> {
-	const validation = validateScene(input, options);
+	const validation = validateScene(input);
 	if (!validation.scene) {
 		return { findings: validation.findings };
 	}

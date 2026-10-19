@@ -117,7 +117,7 @@ export interface PlacedPrimitive {
 	readonly placement?: Placement;
 }
 
-export type PartShape = PrimitiveShape | LibraryShape | CodeShape;
+export type PartShape = PrimitiveShape | LibraryShape;
 
 export type PrimitiveShape = BoxShape | CylinderShape | ExtrudedPolygonShape | RevolveShape | TubeShape;
 
@@ -252,17 +252,6 @@ export interface CamShape {
 	readonly base: number;
 	readonly lobes: readonly CamLobe[];
 	readonly height: number;
-}
-
-/**
- * The per-part code escape hatch, for a shape the primitives cannot express. OPT-IN: the engine
- * refuses it unless the caller passes `allowCode`. The code is the body of a function that gets
- * only the replicad API as `replicad` and returns one solid; it runs in a separate VM context with
- * no `require`, `process` or file system. A numeral port on a code part must give its `point`.
- */
-export interface CodeShape {
-	readonly kind: 'code';
-	readonly code: string;
 }
 
 /**

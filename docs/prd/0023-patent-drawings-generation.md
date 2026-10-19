@@ -56,7 +56,8 @@ touching parts.
 The scene schema with a validator: primitives (box, cylinder, extruded polygon, revolve, tube
 with straight segments and bends), seven library parts with named ports (fastener, spring, gear,
 bearing, shaft, pipe, motor), placements, camera presets (isometric, front, top, side), section
-planes, numeral ports (part, face, point), a per-part code escape hatch. The build on replicad:
+planes, numeral ports (part, face, point). The per-part code escape hatch was dropped 2026-10-19,
+see #799. The build on replicad:
 solids, booleans, projection with visible and hidden edges, section cut with the cut face.
 Line art writer: visible edges at 0.4 mm, lead lines at 0.2 mm, 45° hatching clipped to the cut
 face, numerals at 3.2 mm sheet scale, lead lines that start beside the numeral, end on the part
