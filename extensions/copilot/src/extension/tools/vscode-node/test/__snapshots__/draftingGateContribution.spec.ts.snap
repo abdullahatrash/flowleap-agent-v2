@@ -1,0 +1,137 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Drafting gate actions > "Waive Errors…" offers all open Errors or one rule, writes one reason under each item, and the checklist moves on; a cancel writes nothing 1`] = `
+{
+  "afterAll": [
+    "- [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`",
+    "- [x] 2. Claims approved: claims.md has \`approved: true\`",
+    "- [x] 3. Outline written for the approved claims: draft-outline.md",
+    "- [x] 3. Draft written: draft-application.md",
+    "- [x] 4. Errors fixed or waived: none open in findings.md",
+    "- [x] 5. Inventor Questions answered and applied: none open in draft-application.md",
+    "- [ ] 6. Export to Word: ready",
+    "Next step for you: step 6.",
+  ],
+  "afterRule": [
+    "- [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`",
+    "- [x] 2. Claims approved: claims.md has \`approved: true\`",
+    "- [x] 3. Outline written for the approved claims: draft-outline.md",
+    "- [x] 3. Draft written: draft-application.md",
+    "- [ ] 4. Fix or waive the Errors: 1 open (findings.md line 11)",
+    "- [x] 5. Inventor Questions answered and applied: none open in draft-application.md",
+    "- [ ] 6. Export to Word: blocked by step 4",
+    "Next step for you: step 4.",
+  ],
+  "before": [
+    "- [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`",
+    "- [x] 2. Claims approved: claims.md has \`approved: true\`",
+    "- [x] 3. Outline written for the approved claims: draft-outline.md",
+    "- [x] 3. Draft written: draft-application.md",
+    "- [ ] 4. Fix or waive the Errors: 3 open (findings.md lines 7, 8, 9)",
+    "- [x] 5. Inventor Questions answered and applied: none open in draft-application.md",
+    "- [ ] 6. Export to Word: blocked by step 4",
+    "Next step for you: step 4.",
+  ],
+  "cancelled": true,
+  "findings": "# Findings
+
+Errors and Inventor Questions block export until they are resolved or waived. To waive one, add a line \`  - Waived: <reason>\` under it. Notes never block. Advisory items come from the model review; they are advice, not a pass.
+
+## Errors
+
+- \`antecedent-basis\` (claims.md, line 4, claim 2): Claim 2: "the clamp body" has no antecedent basis.
+  - Waived: False positive: "a clamp body" is in claim 1.
+- \`antecedent-basis\` (claims.md, line 5, claim 3): Claim 3: "the pin" has no antecedent basis.
+  - Waived: False positive: "a clamp body" is in claim 1.
+- \`defined-term\` (draft-application.md, line 12): Line 12 writes "clamp-body"; the defined term is "clamp body".
+  - Waived: Client spelling.
+
+## Inventor Questions
+
+None.
+
+## Notes
+
+None.
+
+## Advisory
+
+None.
+",
+  "informed": [
+    "No open Error in drafting/hinge/findings.md.",
+  ],
+  "picks": [
+    [
+      "Waive all 3 open Errors…",
+      "Waive the 2 Errors of antecedent-basis…",
+      "Waive the 1 Error of defined-term…",
+    ],
+    [
+      "Waive all 3 open Errors…",
+      "Waive the 2 Errors of antecedent-basis…",
+      "Waive the 1 Error of defined-term…",
+    ],
+    [
+      "Waive the 1 open Error…",
+      "Waive the 1 Error of defined-term…",
+    ],
+  ],
+}
+`;
+
+exports[`Drafting gate actions > a gate click writes the flag and rewrites checklist.md at once; from the preview, the file is found in the workspace 1`] = `
+{
+  "afterApprove": [
+    "- [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`",
+    "- [x] 2. Claims approved: claims.md has \`approved: true\`",
+    "- [x] 3. Outline written for the approved claims: draft-outline.md",
+    "- [x] 3. Draft written: draft-application.md",
+    "- [ ] 4. Fix or waive the Errors: 3 open (findings.md lines 7, 8, 9)",
+    "- [x] 5. Inventor Questions answered and applied: none open in draft-application.md",
+    "- [ ] 6. Export to Word: blocked by step 4",
+    "Next step for you: step 4.",
+  ],
+  "afterConfirm": [
+    "- [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`",
+    "- [ ] 2. Approve the claims: claims.md has no \`approved: true\`",
+    "- [ ] 3. Write the outline: blocked by step 2",
+    "- [x] 3. Draft written: draft-application.md",
+    "- [ ] 4. Fix or waive the Errors: 3 open (findings.md lines 7, 8, 9)",
+    "- [x] 5. Inventor Questions answered and applied: none open in draft-application.md",
+    "- [ ] 6. Export to Word: blocked by steps 2, 3 and 4",
+    "Next step for you: step 2.",
+  ],
+  "claims": [
+    "---",
+    "approved: true",
+    "---",
+  ],
+  "featureList": "---
+office: US
+confirmed: true
+---
+| F1 | lever |
+",
+  "informed": [
+    "The claims are approved already.",
+  ],
+  "picks": [],
+  "revealed": [
+    "/workspace/drafting/hinge/checklist.md",
+    "/workspace/drafting/hinge/checklist.md",
+  ],
+  "saved": [
+    "/workspace/drafting/hinge/feature-list.md",
+    "/workspace/drafting/hinge/claims.md",
+  ],
+}
+`;
+
+exports[`Drafting gate actions > the CodeLens path waives the clicked lines and rewrites the checklist too 1`] = `
+{
+  "step4": "- [ ] 4. Fix or waive the Errors: 2 open (findings.md lines 7, 8)",
+  "waived": "- \`defined-term\` (draft-application.md, line 12): Line 12 writes "clamp-body"; the defined term is "clamp body".
+  - Waived: Boilerplate.",
+}
+`;

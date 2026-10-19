@@ -144,3 +144,14 @@ export function readOffice(fields: DraftingFrontmatterFields): DraftingOffice | 
  * clicked. It is not a tool, and `run_vscode_command` refuses it: the model never writes a gate flag.
  */
 export const DRAFTING_GATE_COMMAND_ID = 'flowleap.drafting.setGateFlag';
+
+/**
+ * The editor-title commands of the two gates: "Confirm Feature List" on `feature-list.md` and
+ * "Approve Claims" on `claims.md`, also in the markdown preview, where no CodeLens shows (#784).
+ * They write the same flag line as {@link DRAFTING_GATE_COMMAND_ID}; `run_vscode_command`
+ * refuses them too.
+ */
+export const DRAFTING_GATE_BUTTON_COMMAND_IDS: Readonly<Record<DraftingGateFlag, string>> = {
+	confirmed: 'flowleap.drafting.confirmFeatureList',
+	approved: 'flowleap.drafting.approveClaims',
+};

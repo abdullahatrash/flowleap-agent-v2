@@ -1,5 +1,62 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`Drafting editor-title buttons > offers all open Errors, then one choice per rule, in the markdown preview as in the text editor 1`] = `
+{
+  "choices": [
+    {
+      "description": "one reason, written under each item",
+      "fileLines": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+      ],
+      "label": "Waive all 11 open Errors…",
+    },
+    {
+      "description": "Claim 2: "the clamp body" has no anteced",
+      "fileLines": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+      ],
+      "label": "Waive the 10 Errors of antecedent-basis…",
+    },
+    {
+      "description": "Line 12 writes "clamp-body"; the defined",
+      "fileLines": [
+        17,
+      ],
+      "label": "Waive the 1 Error of defined-term…",
+    },
+  ],
+  "noOpenError": [],
+  "previewFiles": [
+    "findings.md",
+    "claims.md",
+    "feature-list.md",
+    undefined,
+    "findings.md",
+    undefined,
+    "findings.md",
+  ],
+}
+`;
+
 exports[`Drafting gate CodeLens > names the action at line 1, is inert on a set flag, and writes only the flag line 1`] = `
 [
   {

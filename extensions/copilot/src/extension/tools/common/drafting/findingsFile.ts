@@ -99,6 +99,14 @@ export function parseFindingsFileItems(text: string): FindingsFileItem[] {
  */
 export const DRAFTING_WAIVE_COMMAND_ID = 'flowleap.drafting.waiveFindings';
 
+/**
+ * The editor-title command "Waive Errors…" of `findings.md`, also in the markdown preview, where
+ * no CodeLens shows (#784): it offers all open Errors, or all open Errors of one rule, asks one
+ * reason and writes it through {@link DRAFTING_WAIVE_COMMAND_ID}'s writer. `run_vscode_command`
+ * refuses it too.
+ */
+export const DRAFTING_WAIVE_ERRORS_COMMAND_ID = 'flowleap.drafting.waiveErrors';
+
 /** True for an Error item without a waiver. Inventor Questions are not included: the inventor answers them. */
 export function isWaivableError(item: FindingsFileItem): boolean {
 	return item.finding.severity === 'Error' && !isInventorQuestion(item.finding) && !item.finding.waived;

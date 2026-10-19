@@ -11,6 +11,15 @@ import { DRAFTING_WAIVE_COMMAND_ID, findingsWaiverInsertions, isWaivableError, p
 import { DRAFTING_FILE_NAMES } from '../common/drafting/folderContract';
 import { DRAFTING_GATE_COMMAND_ID, DraftingGateFlag, parseDraftingFrontmatter, readGateFlag } from '../common/drafting/frontmatter';
 
+/** The drafting files with an attorney action: the two gate files and the findings. The editor-title buttons show on them. */
+export type DraftingActionFile = typeof DRAFTING_FILE_NAMES.featureList | typeof DRAFTING_FILE_NAMES.claims | typeof DRAFTING_FILE_NAMES.findings;
+
+/** The {@link DraftingActionFile} a markdown preview shows, from its tab label ("Preview findings.md", "[Preview] claims.md"); `undefined` for any other label. */
+export function draftingPreviewFile(label: string): DraftingActionFile | undefined {
+	const files: DraftingActionFile[] = [DRAFTING_FILE_NAMES.featureList, DRAFTING_FILE_NAMES.claims, DRAFTING_FILE_NAMES.findings];
+	return files.find(file => label === file || label.endsWith(` ${file}`));
+}
+
 /** The files the gate CodeLens shows on: the Feature List and the claims of a matter. */
 export const DRAFTING_GATE_SELECTOR: vscode.DocumentFilter = { language: 'markdown', pattern: '**/drafting/*/{feature-list,claims}.md' };
 
@@ -136,4 +145,37 @@ export async function draftingWaiverEdit(document: DraftingGateDocument, fileLin
 		edit.insert(document.uri, new Position(afterLine - 1, lines[afterLine - 1].length), `\n${waiver}`);
 	}
 	return edit;
+}
+
+/** One choice of the "Waive Errors…" button of `findings.md`: a quick pick item with the 1-based lines of the items it waives. */
+export interface DraftingWaiveChoice extends vscode.QuickPickItem {
+	readonly fileLines: readonly number[];
+}
+
+/**
+ * The choices of the "Waive Errors…" button over the text of `findings.md`: "Waive all N open
+ * Errors…" first, then one choice per rule with its count, in the order of the file. Empty when
+ * no Error is open. One reason is written under each item of the choice.
+ */
+export function findingsWaiveChoices(text: string): DraftingWaiveChoice[] {
+	const errors = parseFindingsFileItems(text).filter(isWaivableError);
+	if (!errors.length) {
+		return [];
+	}
+	const rules = [...new Set(errors.map(item => item.finding.rule))];
+	return [
+		{
+			label: errors.length === 1 ? l10n.t('Waive the 1 open Error…') : l10n.t('Waive all {0} open Errors…', errors.length),
+			description: l10n.t('one reason, written under each item'),
+			fileLines: errors.map(item => item.fileLine),
+		},
+		...rules.map(rule => {
+			const ofRule = errors.filter(item => item.finding.rule === rule);
+			return {
+				label: ofRule.length === 1 ? l10n.t('Waive the 1 Error of {0}…', rule) : l10n.t('Waive the {0} Errors of {1}…', ofRule.length, rule),
+				description: ofRule[0].finding.message,
+				fileLines: ofRule.map(item => item.fileLine),
+			};
+		}),
+	];
 }
