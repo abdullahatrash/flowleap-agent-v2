@@ -498,6 +498,25 @@ structured-save nudge it wrote a prose report with no save. That is the fixture'
 search body, not the Round Report logic. No run ran a round before the answer, and no run
 answered points the expert did not choose.
 
+### T13 — web page text as evidence (#750, added 2026-10-19, not yet run live)
+
+The EP1809422 and Cuozzo acceptance runs were blocked by documents the tools hold no text for
+(GB2155808A, JP2004174393A, DE20208107U1; Wendt US2711153 and US4935850). #750 records a
+fetched patent page under the publication anchor as web text: the writer checks a quote against
+it exactly as against official text, labels the row ("Source: web page (<host>), not official
+full text"), counts it as covered, and lists one open point `source-<pub>` per document. T13
+(fixture `t13-web-text-evidence.json`) is the one case: the challenged patent EP3765432B1 (claims
+1–3), WO2014056789A1 with official text for claim 1, and GB2208140A with its bibliography only,
+whose Google Patents page discloses claim 2. The mocked `write_patent_results` computes the receipt
+from the save and from the fixture's `webPages` (the same page text the `fetch_webpage` rule
+returns), with the writer's own `webSourceOpenPoints`. Predicates:
+`t13_fetched_page_for_textless_document` (the fetch runs after the text-less retrieval),
+`t13_row_rests_on_validated_web_text` (every fragment and quote on the GB anchors is in the fetched
+page text), `t13_receipt_lists_source_point`, `t13_round_report_names_source_point` (a numbered
+question that names the id and recommends the official or certified text). The row label itself
+is the real writer's rendering, covered by `patentWebTextEvidence.spec.ts`. No live run yet;
+record the k-of-n here when it runs (`--filter-pattern '^T13'`).
+
 ### Baseline: key-gate suite (2026-08-07, same model)
 
 **6/6 on all three runs, 18/18 case-runs, zero voids** (181s + 264s + 272s ≈ 12 minutes). This

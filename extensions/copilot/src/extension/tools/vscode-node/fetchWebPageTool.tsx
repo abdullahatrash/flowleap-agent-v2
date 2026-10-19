@@ -17,6 +17,7 @@ import { imageDataPartToTSX } from '../../prompts/node/panel/toolCalling';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { encodeUrlHostname } from '../common/toolUtils';
+import { recordWebPatentPages } from './patentWebEvidence';
 
 interface IFetchWebPageParams {
 	urls: string[];
@@ -118,9 +119,9 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 		}
 
 		// A fetched page is the only description text a US reference has in this session, and a memo
-		// quotes it. Recorded for the audit only, page by page; the tool's answer is unchanged by the
-		// outcome of the write.
-		await this._recordFetches(options.chatSessionResource, validTextContent, invalidUrls);
+		// quotes it. Recorded for the audit page by page; a patent page is also recorded as evidence
+		// under its publication anchor (#750). The tool's answer carries only the note that says so.
+		const evidenceNotes = await this._recordFetches(options.chatSessionResource, validTextContent, invalidUrls);
 
 		const filesAndTheirChunks = await this._index.value.findInUrls(
 			validTextContent,
@@ -151,7 +152,7 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 		const element = await renderPromptElementJSON(
 			this._instantiationService,
 			WebPageResults,
-			{ webPageResults, unrankedWebPages, imageResults, invalidUrls },
+			{ webPageResults, unrankedWebPages, imageResults, invalidUrls, evidenceNotes },
 			options.tokenizationOptions,
 			token
 		);
@@ -159,7 +160,12 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 		return new LanguageModelToolResult([new LanguageModelPromptTsxPart(element)]);
 	}
 
-	private async _recordFetches(session: Uri | undefined, pages: ReadonlyArray<{ readonly uri: URI; readonly content: string }>, invalidUrls: readonly string[]): Promise<void> {
+	/**
+	 * Record each fetch for the audit, then each fetched patent page as evidence under its
+	 * publication anchor. Returns the evidence notes for the answer; a failed write costs nothing
+	 * but the record.
+	 */
+	private async _recordFetches(session: Uri | undefined, pages: ReadonlyArray<{ readonly uri: URI; readonly content: string }>, invalidUrls: readonly string[]): Promise<string[]> {
 		try {
 			for (const page of pages) {
 				await this._ledger.record(session, { kind: 'analytics', status: 'succeeded', tool: 'fetch_webpage', request: page.uri.toString(), resultText: page.content });
@@ -167,8 +173,10 @@ class FetchWebPageTool implements ICopilotTool<IFetchWebPageParams> {
 			for (const url of invalidUrls) {
 				await this._ledger.record(session, { kind: 'analytics', status: 'failed', tool: 'fetch_webpage', request: url });
 			}
+			return await recordWebPatentPages(this._ledger, session, pages.map(page => ({ url: page.uri.toString(), content: page.content })));
 		} catch (error) {
 			this._logService.warn(`FetchWebPageTool: could not record the fetch in the patent execution ledger: ${error}`);
+			return [];
 		}
 	}
 }
@@ -180,6 +188,8 @@ interface WebPageResultsProps extends BasePromptElementProps {
 	unrankedWebPages: WebPageRawResult[];
 	imageResults: WebPageImageResult[];
 	invalidUrls: string[];
+	/** One line per fetched patent page recorded as evidence under its publication anchor. */
+	evidenceNotes: string[];
 }
 
 class WebPageResults extends PromptElement<WebPageResultsProps, void> {
@@ -196,6 +206,9 @@ class WebPageResults extends PromptElement<WebPageResultsProps, void> {
 			}
 			{
 				this.props.invalidUrls.map(url => <TextChunk>Invalid URL so no data was provided: {url}</TextChunk>)
+			}
+			{
+				this.props.evidenceNotes.map(note => <TextChunk>{note}</TextChunk>)
 			}
 		</>;
 	}

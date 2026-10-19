@@ -1,0 +1,214 @@
+{
+  "id": "t13-web-text-evidence",
+  "description": "Web page text as evidence for a document the tools hold no text for (#750). The challenged patent EP3765432B1 comes back with claims 1-3 segmented. WO2014056789A1 discloses claim 1 with official text. GB2208140A comes back with its bibliography only (claims and description unavailable from the tools); its Google Patents page, fetched with fetch_webpage, discloses the added limitation of claim 2 (friction brake pad on the drum flange) and is recorded as web evidence under GB2208140A:description and GB2208140A:claims. No reference discloses claim 3 (glass-fibre reinforced polyamide drum). The get_patent_details rules for GB2208140A that carry an evidenceLookup match before the plain one: argMatch compares String(args.evidenceLookup), which is \"[object Object]\" for any object, so \"object\" selects the lookup calls. The mocked write_patent_results computes its receipt from the save and from webPages (the same page text the fetch rule returns), so a row that rests on the GB web text gets the open point source-GB2208140A exactly as the writer gives it.",
+  "rules": [
+    {
+      "tool": "get_patent_details",
+      "argMatch": {
+        "publicationNumber": "3765432",
+        "evidenceLookup": "object"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "Local evidence index: 5 sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.\nRecorded publication: EP3765432B1. Publication date: 2020-09-02. Title: Hose reel with drum brake.\nEP3765432B1:bibliography — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP3765432B1&section=bibliography)\nEP3765432B1:claims:1:en — 4 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP3765432B1&section=claims&claim=1)\nEP3765432B1:claims:2:en — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP3765432B1&section=claims&claim=2)\nEP3765432B1:claims:3:en — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP3765432B1&section=claims&claim=3)\nEP3765432B1:description:en — 2 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=EP3765432B1&section=description)\nEnd of index.\nLocal returned-text lines: 8 results, starting at 1. Retrieval is not proof of review or completeness; no match does not establish absence from the publication.\n[EP3765432B1:claims:1:en; line 1] 1. A hose reel comprising:\n[EP3765432B1:claims:1:en; line 2] (a) a frame;\n[EP3765432B1:claims:1:en; line 3] (b) a drum rotatably mounted on the frame for winding a hose; and\n[EP3765432B1:claims:1:en; line 4] (c) a crank connected to the drum.\n[EP3765432B1:claims:2:en; line 1] 2. The hose reel according to claim 1, wherein a friction brake pad bears on a flange of the drum.\n[EP3765432B1:claims:3:en; line 1] 3. The hose reel according to claim 1, wherein the drum is made of glass-fibre reinforced polyamide.\n[EP3765432B1:description:en; line 1] [0009] The friction brake pad presses on the flange of the drum so that the drum does not unwind on its own when the hose is pulled.\n[EP3765432B1:description:en; line 2] [0012] The drum is injection-moulded from glass-fibre reinforced polyamide, which keeps the drum light and stiff.\nEnd of results."
+      }
+    },
+    {
+      "tool": "get_patent_details",
+      "argMatch": {
+        "publicationNumber": "3765432"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "EP3765432B1 — \"Hose reel with drum brake\". Proprietor: Gartenflex GmbH. Granted 2020-09-02 (B1). Filed 2017-02-08. Priority 2016-02-10 (DE 10 2016 102 345).\n\nAbstract: A hose reel has a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum. A brake holds the drum when the hose is pulled.\n\nClaims:\n1. A hose reel comprising:\n(a) a frame;\n(b) a drum rotatably mounted on the frame for winding a hose; and\n(c) a crank connected to the drum.\n2. The hose reel according to claim 1, wherein a friction brake pad bears on a flange of the drum.\n3. The hose reel according to claim 1, wherein the drum is made of glass-fibre reinforced polyamide.\n\nDescription [0009]: The friction brake pad presses on the flange of the drum so that the drum does not unwind on its own when the hose is pulled.\nDescription [0012]: The drum is injection-moulded from glass-fibre reinforced polyamide, which keeps the drum light and stiff.\n\nEvidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index. Anchors: EP3765432B1:claims:1:en, EP3765432B1:claims:2:en, EP3765432B1:claims:3:en, EP3765432B1:description:en."
+      }
+    },
+    {
+      "tool": "get_patent_summary",
+      "argMatch": {
+        "patentNumber": "3765432"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "EP3765432B1 — \"Hose reel with drum brake\". Proprietor: Gartenflex GmbH. Granted 2020-09-02 (B1). Filed 2017-02-08. Priority 2016-02-10 (DE 10 2016 102 345).\n\nAbstract: A hose reel has a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum. A brake holds the drum when the hose is pulled.\n\nClaims:\n1. A hose reel comprising:\n(a) a frame;\n(b) a drum rotatably mounted on the frame for winding a hose; and\n(c) a crank connected to the drum.\n2. The hose reel according to claim 1, wherein a friction brake pad bears on a flange of the drum.\n3. The hose reel according to claim 1, wherein the drum is made of glass-fibre reinforced polyamide.\n\nDescription [0009]: The friction brake pad presses on the flange of the drum so that the drum does not unwind on its own when the hose is pulled.\nDescription [0012]: The drum is injection-moulded from glass-fibre reinforced polyamide, which keeps the drum light and stiff.\n\nEvidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index. Anchors: EP3765432B1:claims:1:en, EP3765432B1:claims:2:en, EP3765432B1:claims:3:en, EP3765432B1:description:en."
+      }
+    },
+    {
+      "tool": "get_legal_status",
+      "argMatch": {
+        "publicationNumber": "3765432"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "EP3765432B1 legal status: granted 2020-09-02; in force in DE, FR, GB and IT (renewal fees paid). No opposition was filed; the opposition period ended 2021-06-02."
+      }
+    },
+    {
+      "tool": "get_register_events",
+      "argMatch": {
+        "publicationNumber": "3765432"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "EP3765432 register events: 2017-02-08 application filed; 2017-08-16 publication of A1 with search report; 2020-02-11 communication under Rule 71(3); 2020-09-02 grant (B1); 2021-06-02 no opposition filed within the time limit."
+      }
+    },
+    {
+      "tool": "get_patent_family",
+      "argMatch": {
+        "publicationNumber": "3765432"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "Family of EP3765432B1 (simple family): DE102016102345A1 (priority application, 2016-02-10), EP3765432A1, EP3765432B1. No US or WO member."
+      }
+    },
+    {
+      "tool": "examiner_baseline",
+      "response": {
+        "tag": "OK",
+        "body": "Examiner Baseline for EP3765432B1: the European search report cited WO2014056789A1 (category A, technological background). No X or Y citations. Claims 1-3 were granted as filed."
+      }
+    },
+    {
+      "tool": "get_patent_details",
+      "argMatch": {
+        "publicationNumber": "2014056789",
+        "evidenceLookup": "object"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "Local evidence index: 4 sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.\nRecorded publication: WO2014056789A1. Publication date: 2014-04-17. Title: Garden hose reel.\nWO2014056789A1:bibliography — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=WO2014056789A1&section=bibliography)\nWO2014056789A1:claims:1:en — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=WO2014056789A1&section=claims&claim=1)\nWO2014056789A1:claims:2:en — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=WO2014056789A1&section=claims&claim=2)\nWO2014056789A1:description:en — 2 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=WO2014056789A1&section=description)\nEnd of index.\nLocal returned-text lines: 4 results, starting at 1. Retrieval is not proof of review or completeness; no match does not establish absence from the publication.\n[WO2014056789A1:claims:1:en; line 1] 1. A hose reel comprising a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum.\n[WO2014056789A1:claims:2:en; line 1] 2. The hose reel of claim 1, wherein the drum is moulded from polypropylene.\n[WO2014056789A1:description:en; line 1] [0008] The drum 12 is moulded from polypropylene and carries the hose 20.\n[WO2014056789A1:description:en; line 2] [0010] The crank 16 is connected to the drum 12 so that turning the crank winds the hose.\nEnd of results."
+      }
+    },
+    {
+      "tool": "get_patent_details",
+      "argMatch": {
+        "publicationNumber": "2014056789"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "WO2014056789A1 — \"Garden hose reel\". Applicant: Hosemaster Ltd. Published 2014-04-17.\n\nAbstract: A garden hose reel has a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum. The drum is moulded from polypropylene.\n\nDescription [0008]: \"The drum 12 is moulded from polypropylene and carries the hose 20.\"\nDescription [0010]: \"The crank 16 is connected to the drum 12 so that turning the crank winds the hose.\"\n\nClaims:\n1. A hose reel comprising a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum.\n2. The hose reel of claim 1, wherein the drum is moulded from polypropylene.\n\nEvidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index. Anchors: WO2014056789A1:claims:1:en, WO2014056789A1:claims:2:en, WO2014056789A1:description:en."
+      }
+    },
+    {
+      "tool": "get_patent_summary",
+      "argMatch": {
+        "patentNumber": "2014056789"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "WO2014056789A1 — \"Garden hose reel\". Applicant: Hosemaster Ltd. Published 2014-04-17.\n\nAbstract: A garden hose reel has a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum. The drum is moulded from polypropylene.\n\nDescription [0008]: \"The drum 12 is moulded from polypropylene and carries the hose 20.\"\nDescription [0010]: \"The crank 16 is connected to the drum 12 so that turning the crank winds the hose.\"\n\nClaims:\n1. A hose reel comprising a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum.\n2. The hose reel of claim 1, wherein the drum is moulded from polypropylene.\n\nEvidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index. Anchors: WO2014056789A1:claims:1:en, WO2014056789A1:claims:2:en, WO2014056789A1:description:en."
+      }
+    },
+    {
+      "tool": "get_patent_details",
+      "argMatch": {
+        "publicationNumber": "2208140",
+        "evidenceLookup": "object"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "Local evidence index: 3 sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.\nRecorded publication: GB2208140A. Publication date: 1989-03-01. Title: Reel for a garden hose.\nGB2208140A:bibliography — 1 lines — [Open source](flowleap://flowleap.patent-ai/patent?publication=GB2208140A&section=bibliography)\nGB2208140A:description — 6 lines — web page text (patents.google.com), not official full text; a row that cites it is labelled so — [Open source](flowleap://flowleap.patent-ai/patent?publication=GB2208140A&section=description)\nGB2208140A:claims — 3 lines — web page text (patents.google.com), not official full text; a row that cites it is labelled so — [Open source](flowleap://flowleap.patent-ai/patent?publication=GB2208140A&section=claims)\nEnd of index.\nLocal returned-text lines: 9 results, starting at 1. Retrieval is not proof of review or completeness; no match does not establish absence from the publication.\n[GB2208140A:description; line 1] The invention relates to a reel for a garden hose.\n[GB2208140A:description; line 2] The reel has a frame 10 and a drum 12 rotatably mounted on the frame.\n[GB2208140A:description; line 3] A crank 16 is fixed to the drum 12 for winding the hose.\n[GB2208140A:description; line 4] A friction brake pad 22 bears on a flange 14 of the drum 12 and holds the drum against free rotation when the hose is pulled.\n[GB2208140A:description; line 5] The brake pad 22 is of rubber and is pressed against the flange 14 by a leaf spring 24.\n[GB2208140A:description; line 6] The drum 12 is of sheet steel.\n[GB2208140A:claims; line 1] 1. A reel for a garden hose comprising a frame and a drum rotatably mounted on the frame.\n[GB2208140A:claims; line 2] 2. A reel according to claim 1 wherein a friction brake pad bears on a flange of the drum.\n[GB2208140A:claims; line 3] 3. A reel according to claim 2 wherein the brake pad is pressed against the flange by a spring.\nEnd of results."
+      }
+    },
+    {
+      "tool": "get_patent_details",
+      "argMatch": {
+        "publicationNumber": "2208140"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "GB2208140A — \"Reel for a garden hose\". Applicant: Hozelock Ltd. Published 1989-03-01. IPC: B65H 75/44.\n\nAbstract: A reel for a garden hose has a drum on a frame and a friction brake that holds the drum.\n\nClaims: not available through the tools for this document (no full text for GB documents of this age).\nDescription: not available through the tools for this document.\nSections unavailable: claims, description. No text of this document is recorded; a chart row cannot cite it until text is recorded.\n\nEvidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index. Anchors: GB2208140A:bibliography."
+      }
+    },
+    {
+      "tool": "get_patent_summary",
+      "argMatch": {
+        "patentNumber": "2208140"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "GB2208140A — \"Reel for a garden hose\". Applicant: Hozelock Ltd. Published 1989-03-01. IPC: B65H 75/44.\n\nAbstract: A reel for a garden hose has a drum on a frame and a friction brake that holds the drum.\n\nClaims: not available through the tools for this document (no full text for GB documents of this age).\nDescription: not available through the tools for this document.\nSections unavailable: claims, description. No text of this document is recorded; a chart row cannot cite it until text is recorded.\n\nEvidence recovery: call get_patent_details with this publicationNumber and evidenceLookup: {} for the local anchor index. Anchors: GB2208140A:bibliography."
+      }
+    },
+    {
+      "tool": "patent_api_request",
+      "response": {
+        "tag": "EMPTY",
+        "body": "patent_api_request: no full text available for this document through this route (claims and description not published by the office in machine-readable form)."
+      }
+    },
+    {
+      "tool": "fetch_webpage",
+      "argMatch": {
+        "urls": "2208140"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "GB2208140A - Reel for a garden hose - Google Patents\n\nAbstract\nA reel for a garden hose has a drum on a frame and a friction brake that holds the drum.\n\nDescription\nThe invention relates to a reel for a garden hose.\nThe reel has a frame 10 and a drum 12 rotatably mounted on the frame.\nA crank 16 is fixed to the drum 12 for winding the hose.\nA friction brake pad 22 bears on a flange 14 of the drum 12 and holds the drum against free rotation when the hose is pulled.\nThe brake pad 22 is of rubber and is pressed against the flange 14 by a leaf spring 24.\nThe drum 12 is of sheet steel.\n\nClaims (3)\n1. A reel for a garden hose comprising a frame and a drum rotatably mounted on the frame.\n2. A reel according to claim 1 wherein a friction brake pad bears on a flange of the drum.\n3. A reel according to claim 2 wherein the brake pad is pressed against the flange by a spring.\n\nSimilar Documents\nPublication Publication Date Title\nUS4000000A 1977-01-01 Hose reel cart\nPatent page text recorded as web evidence for GB2208140A (patents.google.com): anchors GB2208140A:description, GB2208140A:claims. Quote it through get_patent_details(publicationNumber: \"GB2208140A\", evidenceLookup: { anchor }) like any recorded text; never type a quote from memory. A chart row that rests on it is labelled as web page text, not official full text, and official text wins where the tools hold any."
+      }
+    },
+    {
+      "tool": "search_patents",
+      "response": {
+        "tag": "OK",
+        "body": "search_patents: 2 results.\n1. WO2014056789A1 — \"Garden hose reel\" (Hosemaster Ltd, published 2014-04-17). Abstract: A garden hose reel has a frame, a drum rotatably mounted on the frame for winding a hose, and a crank connected to the drum. The drum is moulded from polypropylene.\n2. GB2208140A — \"Reel for a garden hose\" (Hozelock Ltd, published 1989-03-01). Abstract: A reel for a garden hose has a drum on a frame and a friction brake that holds the drum.\nBoth results were published before 2016-02-10."
+      }
+    },
+    {
+      "tool": "get_patent_figures",
+      "argMatch": {
+        "publicationNumber": "2014056789"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "WO2014056789A1 drawings: 1 sheet, saved to references/figures/WO2014056789A1-p1.png. Fig. 1 (perspective view): frame 10, drum 12 on an axle of the frame, crank 16 on the drum, hose 20 on the drum. No brake is shown."
+      }
+    },
+    {
+      "tool": "get_patent_figures",
+      "argMatch": {
+        "publicationNumber": "2208140"
+      },
+      "response": {
+        "tag": "OK",
+        "body": "GB2208140A drawings: 1 sheet, saved to references/figures/GB2208140A-p1.png. Fig. 1 (side view): frame 10, drum 12 with flange 14, crank 16, brake pad 22 bearing on the flange 14, leaf spring 24."
+      }
+    },
+    {
+      "tool": "search_npl",
+      "response": {
+        "tag": "EMPTY",
+        "body": "search_npl: 0 works found."
+      }
+    },
+    {
+      "tool": "search_academic",
+      "response": {
+        "tag": "EMPTY",
+        "body": "search_academic: 0 works found."
+      }
+    },
+    {
+      "tool": "write_patent_results",
+      "argMatch": {
+        "template": "invalidity-claim-chart"
+      },
+      "invalidityReceipt": {
+        "reportPath": "invalidity/EP3765432B1-invalidity-chart.md",
+        "preamble": "Chat summary contract: repeat each coverage row's status word exactly (supported / partial / unresolved), do not add novelty, anticipation, obviousness or teaching-away conclusions, and state the retrieved-but-not-cited count and any untranslated documents. The summary must not be more certain than the saved report.",
+        "webPages": [
+          {
+            "url": "https://patents.google.com/patent/GB2208140A/en",
+            "content": "GB2208140A - Reel for a garden hose - Google Patents\n\nAbstract\nA reel for a garden hose has a drum on a frame and a friction brake that holds the drum.\n\nDescription\nThe invention relates to a reel for a garden hose.\nThe reel has a frame 10 and a drum 12 rotatably mounted on the frame.\nA crank 16 is fixed to the drum 12 for winding the hose.\nA friction brake pad 22 bears on a flange 14 of the drum 12 and holds the drum against free rotation when the hose is pulled.\nThe brake pad 22 is of rubber and is pressed against the flange 14 by a leaf spring 24.\nThe drum 12 is of sheet steel.\n\nClaims (3)\n1. A reel for a garden hose comprising a frame and a drum rotatably mounted on the frame.\n2. A reel according to claim 1 wherein a friction brake pad bears on a flange of the drum.\n3. A reel according to claim 2 wherein the brake pad is pressed against the flange by a spring.\n\nSimilar Documents\nPublication Publication Date Title\nUS4000000A 1977-01-01 Hose reel cart"
+          }
+        ]
+      }
+    }
+  ],
+  "default": {
+    "tag": "OK",
+    "body": "OK. Request acknowledged (no data payload)."
+  }
+}
