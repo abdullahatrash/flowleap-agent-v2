@@ -6,7 +6,7 @@
 import type * as vscode from 'vscode';
 import { parsePatentDocumentReference, PatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { ANALYTICS_RESULT_CAP, capRecordedField, evidenceAnchor, IPatentExecutionLedger, PatentEvidenceSource, webPageHost } from '../../patentai/vscode-node/patentExecutionLedger';
-import { documentKey } from './patentFallbackLadder';
+import { documentKey, hasKindCode } from './patentFallbackLadder';
 
 /**
  * Web page text as evidence for documents the backend holds no full text for (#750): an older US
@@ -44,20 +44,29 @@ const PUBLICATION_SEGMENT = /^(?<country>[A-Za-z]{2})\s?(?<number>\d{5,16})\s?(?
 /** A publication number inside a page title, e.g. `GB2155808A - Feed drum - Google Patents`. */
 const TITLE_PUBLICATION = /\b(?<country>[A-Z]{2})\s?(?<number>\d{5,16})\s?(?<kind>[A-Z]\d?)?\b/;
 
-/** Espacenet's biblio page: `CC=GB&NR=2155808A&KC=A`. */
-const ESPACENET_FIELDS = /[?&]CC=(?<country>[A-Za-z]{2})&NR=(?<number>\d+)(?<kind>[A-Za-z]\d?)?/;
+/** Espacenet's biblio page: `CC=GB&NR=2155808A&KC=A` or `CC=GB&NR=2155808&KC=A`; the kind code is read from either place. */
+const ESPACENET_FIELDS = /[?&]CC=(?<country>[A-Za-z]{2})&NR=(?<number>\d+)(?<kind>[A-Za-z]\d?)?(?:&KC=(?<kc>[A-Za-z]\d?))?/;
 
 /** Espacenet's search page: `q=pn%3DGB2155808A` or `q=pn=GB2155808A`. */
 const ESPACENET_QUERY = /[?&]q=pn(?:%3D|=)(?<publication>[A-Za-z]{2}\d{5,16}(?:[A-Za-z]\d?)?)/;
 
-/** FreePatentsOnline: `/4935850.html` is a US grant; `/GB2155808A.html` names its office. */
-const FPO_PAGE = /\/(?<publication>(?:[A-Za-z]{2})?\d{5,16}(?:[A-Za-z]\d?)?)\.html$/;
+/** FreePatentsOnline at the path root: `/4935850.html` is a US grant; `/GB2155808A.html` names its office. */
+const FPO_PAGE = /^\/(?<publication>(?:[A-Za-z]{2})?\d{5,16}(?:[A-Za-z]\d?)?)\.html$/;
+
+/** FreePatentsOnline's US application pages: `/y2004/0174393.html` is US2004174393. */
+const FPO_APPLICATION = /^\/y(?<year>\d{4})\/(?<number>\d{5,12})\.html$/;
 
 /** A heading that opens a text section of a patent page, with or without Markdown marks or a claim count. */
 const SECTION_HEADING = /^\s*(?:#{1,6}\s*)?(?:\*\*)?(?<section>Description|Claims)(?:\s*\(\d+\))?(?:\*\*)?\s*:?\s*$/i;
 
 /** A heading that closes a text section: the other blocks of a Google Patents or office page. */
-const END_HEADING = /^\s*(?:#{1,6}\s*)?(?:\*\*)?(?:Abstract|Info|Links|Images|Classifications|Landscapes|Concepts|Similar Documents|Cited By|Patent Citations|Non-Patent Citations|Family(?: Cites Families)?|Priority (?:And Related )?Applications|Applications? (?:claiming priority|filed)|Worldwide applications|Publications|Legal Events|Legal status)(?:\s*\(\d+\))?(?:\*\*)?\s*:?\s*$/i;
+const END_HEADING = /^\s*(?:#{1,6}\s*)?(?:\*\*)?(?:Abstract|Info|Links|Images|Classifications|Landscapes|Concepts|Similar Documents|Cited By|Patent Citations|Non-Patent Citations|Family(?: Cites Families)?|(?:Family|Parent|Child) Applications|Priority (?:And Related )?Applications|Applications? (?:claiming priority|filed)|Worldwide applications|Publications|Legal Events|Legal status)(?:\s*\(\d+\))?(?:\*\*)?\s*:?\s*$/i;
+
+/** A register or file-inspection host: its pages name application numbers, not published text. */
+const REGISTER_HOST = /^register\./;
+
+/** Above this many digits a kind-less number in a title is an application number, not a publication. */
+const PUBLICATION_DIGITS = 8;
 
 /** Whether the page is on a host that serves patent documents. */
 function patentPageHost(url: string): boolean {
@@ -78,12 +87,15 @@ function publicationFromUrl(url: string): string | undefined {
 	try { parsed = new URL(url); } catch { return undefined; }
 	const search = parsed.search;
 	const fields = ESPACENET_FIELDS.exec(search)?.groups;
-	if (fields) { return publicationFrom(fields.country, fields.number, fields.kind); }
+	if (fields) { return publicationFrom(fields.country, fields.number, fields.kind ?? fields.kc); }
 	const query = ESPACENET_QUERY.exec(search)?.groups;
 	if (query) {
 		const token = PUBLICATION_SEGMENT.exec(query.publication)?.groups;
 		return publicationFrom(token?.country, token?.number, token?.kind);
 	}
+	const application = parsed.hostname.endsWith('freepatentsonline.com') ? FPO_APPLICATION.exec(parsed.pathname)?.groups : undefined;
+	// The epodoc form drops the serial's leading zero: `/y2004/0174393.html` is US2004174393.
+	if (application) { return publicationFrom('US', `${application.year}${application.number.replace(/^0+/, '')}`, undefined); }
 	const fpo = parsed.hostname.endsWith('freepatentsonline.com') ? FPO_PAGE.exec(parsed.pathname)?.groups : undefined;
 	if (fpo) {
 		const token = PUBLICATION_SEGMENT.exec(/^\d/.test(fpo.publication) ? `US${fpo.publication}` : fpo.publication)?.groups;
@@ -102,9 +114,13 @@ function pageTitle(content: string): string {
 	return content.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? '';
 }
 
-/** The publication a page title names, when the URL did not. */
-function publicationFromTitle(content: string): string | undefined {
+/**
+ * The publication a page title names, when the URL did not. A register page, or a kind-less number
+ * with more digits than a publication has, names an application whose text is not published text.
+ */
+function publicationFromTitle(url: string, content: string): string | undefined {
 	const token = TITLE_PUBLICATION.exec(pageTitle(content).slice(0, 300))?.groups;
+	if (REGISTER_HOST.test(webPageHost(url)) || (token && !token.kind && token.number.length > PUBLICATION_DIGITS)) { return undefined; }
 	return publicationFrom(token?.country, token?.number, token?.kind);
 }
 
@@ -119,14 +135,15 @@ function documentTitle(content: string, publication: string): string | undefined
 }
 
 /**
- * The number the ledger already records for this document, when the page names it with a
- * different or missing kind code: the inventory and the open points key on the recorded number,
- * so `US2711153` on a page joins `US2711153A` from the bibliography instead of becoming a second
- * document (#729).
+ * The number the ledger already records for this document, when the page names it without a kind
+ * code: the inventory and the open points key on the recorded number, so `US2711153` on a page
+ * joins `US2711153A` from the bibliography instead of becoming a second document (#729). A page
+ * that names its kind code keeps it: an A and a B publication have different claims, so a fetched
+ * `EP1809422B1` is never recorded under a `EP1809422A1` the ledger holds.
  */
 function recordedForm(publication: string, recorded: readonly string[]): string {
 	const exact = recorded.find(known => known.toUpperCase() === publication);
-	if (exact) { return exact; }
+	if (exact || hasKindCode(publication)) { return exact ?? publication; }
 	const sameDocument = recorded.filter(known => documentKey(known) === documentKey(publication));
 	return sameDocument[sameDocument.length - 1] ?? publication;
 }
@@ -134,16 +151,20 @@ function recordedForm(publication: string, recorded: readonly string[]): string 
 /**
  * The page text by section: the lines under a `Description` heading and under a `Claims` heading,
  * each closed by the next known block heading. A page whose structure gives neither is one
- * `description` section holding the whole text, because the quotation check needs the text under
- * some anchor and a wrong section label is a smaller harm than no text.
+ * `description` section holding the text before the first block heading (the citation, family
+ * and legal-event lists are never disclosure text), because the quotation check needs the text
+ * under some anchor and a wrong section label is a smaller harm than no text; nothing before such
+ * a heading records nothing.
  */
 function splitSections(content: string): ReadonlyMap<WebTextSection, string> {
 	const parts = new Map<WebTextSection, string[]>();
+	const lines = content.split(/\r?\n/);
 	let current: WebTextSection | undefined;
-	for (const line of content.split(/\r?\n/)) {
+	let firstEnd = lines.length;
+	for (const [index, line] of lines.entries()) {
 		const heading = SECTION_HEADING.exec(line)?.groups?.section?.toLowerCase();
 		if (heading === 'description' || heading === 'claims') { current = heading; parts.set(current, parts.get(current) ?? []); continue; }
-		if (END_HEADING.test(line)) { current = undefined; continue; }
+		if (END_HEADING.test(line)) { current = undefined; firstEnd = Math.min(firstEnd, index); continue; }
 		if (current) { parts.get(current)?.push(line); }
 	}
 	const sections = new Map<WebTextSection, string>();
@@ -151,7 +172,8 @@ function splitSections(content: string): ReadonlyMap<WebTextSection, string> {
 		const text = lines.join('\n').trim();
 		if (text) { sections.set(section, text); }
 	}
-	if (!sections.size && content.trim()) { sections.set('description', content.trim()); }
+	const unstructured = lines.slice(0, firstEnd).join('\n').trim();
+	if (!parts.size && unstructured) { sections.set('description', unstructured); }
 	return sections;
 }
 
@@ -165,7 +187,7 @@ function splitSections(content: string): ReadonlyMap<WebTextSection, string> {
  */
 export function webPatentEvidence(url: string, content: string, recorded: readonly string[] = []): WebPatentEvidence | undefined {
 	if (!patentPageHost(url)) { return undefined; }
-	const named = publicationFromUrl(url) ?? publicationFromTitle(content);
+	const named = publicationFromUrl(url) ?? publicationFromTitle(url, content);
 	if (!named) { return undefined; }
 	const publicationNumber = recordedForm(named, recorded);
 	const sources: PatentEvidenceSource[] = [];

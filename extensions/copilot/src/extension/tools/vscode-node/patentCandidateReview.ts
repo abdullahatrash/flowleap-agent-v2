@@ -10,7 +10,7 @@ import { evidenceSourceIndex, PatentEvidenceSource, PatentExecution, PatentExecu
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
 import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
-import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase, webSourceOpenPoints, webSourcesOf } from './patentFallbackLadder';
+import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, hasKindCode, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase, webSourceOpenPoints, webSourcesOf } from './patentFallbackLadder';
 import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
@@ -469,16 +469,31 @@ function webSourceNotes(row: PatentCoverageRow, sources: Map<string, PatentEvide
 }
 
 /**
- * The official-text anchor of each document section the record holds, keyed on document and
- * section, so a web anchor cited where official text exists can be pointed at the official one.
+ * The official-text anchor of each publication section the record holds, keyed on the full
+ * publication number and the section, so a web anchor cited where official text exists can be
+ * pointed at the official one.
  */
 function officialTextAnchors(sources: Map<string, PatentEvidenceSource>): Map<string, string> {
 	const anchors = new Map<string, string>();
 	for (const source of sources.values()) {
 		if (source.textSource === 'web' || source.figure || !source.text?.trim() || source.reference.claimNumber) { continue; }
-		anchors.set(`${documentKey(source.reference.publicationNumber)}:${source.reference.section}`, source.anchor);
+		anchors.set(`${publicationKey(source.reference.publicationNumber)}:${source.reference.section}`, source.anchor);
 	}
 	return anchors;
+}
+
+/**
+ * The official anchor that shadows a web source: the same publication (kind code included) and
+ * section. A web number without a kind code names the document, so any publication of it counts;
+ * a web `EP1809422B1` is never shadowed by an official `EP1809422A1`, whose claims differ.
+ */
+function shadowingOfficialAnchor(official: Map<string, string>, publication: string, section: string): string | undefined {
+	if (hasKindCode(publication)) { return official.get(`${publicationKey(publication)}:${section}`); }
+	for (const [key, anchor] of official) {
+		const [recorded, recordedSection] = key.split(':');
+		if (recordedSection === section && documentKey(recorded) === documentKey(publication)) { return anchor; }
+	}
+	return undefined;
 }
 
 /** Collapse runs of whitespace so a line-wrapped passage still contains its quoted fragment. */
@@ -766,7 +781,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 			}
 			if (row.status !== 'unresolved' && source && !['claims', 'description'].includes(source.reference.section)) { errors.push(`Feature support for ${anchor} requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.`); }
 			// Official text wins: web page text is evidence only where the tools hold no text for that section.
-			const official = source?.textSource === 'web' ? officialAnchors.get(`${documentKey(source.reference.publicationNumber)}:${source.reference.section}`) : undefined;
+			const official = source?.textSource === 'web' ? shadowingOfficialAnchor(officialAnchors, source.reference.publicationNumber, source.reference.section) : undefined;
 			if (source && official) { errors.push(`${anchor} is web page text of ${source.reference.publicationNumber}, but the official ${source.reference.section} text is recorded at ${official}. Cite ${official} (read it with evidenceLookup); web page text is used only where the tools hold no text for that publication and section.`); }
 			if (row.status !== 'unresolved' && !evidence) { errors.push(`Row "${row.feature}" lists ${anchor} in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for ${anchor} with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.`); }
 			if (evidence) {

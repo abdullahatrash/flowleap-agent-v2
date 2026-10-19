@@ -71,6 +71,30 @@ describe('web page text as patent evidence (#750)', () => {
 		});
 	});
 
+	it('keeps the page\'s own kind code, reads KC= and FPO application paths, cuts an unstructured page at the first block heading, and skips register and application titles (review of #777)', () => {
+		expect({
+			kindCodeKept: webPatentEvidence('https://patents.google.com/patent/EP1809422B1/en', 'Description\nB1 text.', ['EP1809422A1'])?.publicationNumber,
+			kindLessJoins: webPatentEvidence('https://patents.google.com/patent/EP1809422/en', 'Description\nText.', ['EP1809422A1'])?.publicationNumber,
+			espacenetKc: webPatentEvidence('https://worldwide.espacenet.com/publicationDetails/biblio?CC=GB&NR=2155808&KC=A&FT=D', 'Text.')?.publicationNumber,
+			fpoApplication: webPatentEvidence('https://www.freepatentsonline.com/y2004/0174393.html', 'Text.', ['US2004174393A1'])?.publicationNumber,
+			fpoNotRoot: webPatentEvidence('https://www.freepatentsonline.com/result/4935850.html', 'Text.'),
+			cutAtFirstHeading: webPatentEvidence(google, 'GB2155808A - Feed drum arrangement - Google Patents\nA drum arrangement is described.\nCited By\nUS1234567A 1990-01-01 Another drum\nChild Applications\nGB2200000A')?.sources.map(source => [source.anchor, source.text]),
+			nothingBeforeHeading: webPatentEvidence(google, 'Similar Documents\nUS1234567A 1990-01-01 Another drum'),
+			registerTitle: webPatentEvidence('https://register.epo.org/application?number=EP05012345', 'EP05012345 - Feed drum arrangement\nApplication text.'),
+			applicationTitle: webPatentEvidence('https://depatisnet.dpma.de/DepatisNet/depatisnet?action=bibdat&docid=x', 'DE 102016102345 - Halterung\nText.'),
+		}).toEqual({
+			kindCodeKept: 'EP1809422B1',
+			kindLessJoins: 'EP1809422A1',
+			espacenetKc: 'GB2155808A',
+			fpoApplication: 'US2004174393A1',
+			fpoNotRoot: undefined,
+			cutAtFirstHeading: [['GB2155808A:description', 'GB2155808A - Feed drum arrangement - Google Patents\nA drum arrangement is described.']],
+			nothingBeforeHeading: undefined,
+			registerTitle: undefined,
+			applicationTitle: undefined,
+		});
+	});
+
 	it('keeps a page without section headings as one description section, capped like any recorded result, never a bibliography anchor', () => {
 		const long = 'x'.repeat(ANALYTICS_RESULT_CAP + 10);
 		const flat = webPatentEvidence('https://patents.google.com/patent/US2711153A/en', 'US2711153A - Compass - Google Patents\nA compass with a card and a bowl.');

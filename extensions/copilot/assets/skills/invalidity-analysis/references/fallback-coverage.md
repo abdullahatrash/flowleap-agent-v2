@@ -81,8 +81,8 @@ X or Y tag and no anticipation or obviousness statement; that judgment stays in 
 the receipt says the publication dates of the cited documents were not checked.
 
 **Web page text**: when the tools hold no text for a cited document, the Google Patents page
-fetched with `fetch_webpage` is recorded under `<PUB>:description` and `<PUB>:claims` as web
-text. Cite those anchors like any other; the writer checks the fragment against the page text
+fetched with `fetch_webpage` is recorded as web text under the anchors the tool note lists
+(`<PUB>:description`, `<PUB>:claims` where the page has those sections). Cite those anchors like any other; the writer checks the fragment against the page text
 and refuses a fragment the page does not hold. The row carries the label "Source: web page
 (<host>), not official full text" and the receipt lists `source-<PUB>`. Official text wins: a web
 anchor cited while the tools hold that section's text is refused with the official anchor.

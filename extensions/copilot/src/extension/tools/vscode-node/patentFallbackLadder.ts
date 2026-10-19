@@ -123,6 +123,11 @@ export function documentKey(publication: string): string {
 	return publication.replace(/[-.\s/]/g, '').toUpperCase().replace(/^([A-Z]{2}\d+)[A-Z]\d?$/, '$1');
 }
 
+/** Whether a publication number carries its kind code (`EP1809422B1`), so it names one publication, not a document. */
+export function hasKindCode(publication: string): boolean {
+	return /^[A-Z]{2}\d+[A-Z]\d?$/.test(publicationKey(publication));
+}
+
 /** Separators removed, kind code kept. */
 function publicationKey(publication: string): string {
 	return publication.replace(/[-.\s/]/g, '').toUpperCase();

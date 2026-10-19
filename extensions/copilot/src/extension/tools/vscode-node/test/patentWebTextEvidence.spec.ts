@@ -136,6 +136,25 @@ describe('web page text as validated evidence (#750)', () => {
 		});
 	});
 
+	it('shadows a web anchor only by official text of the same publication: a kind-less web number by any publication of the document, a kind-coded one never by another kind (review of #777)', () => {
+		const officialA: PatentEvidenceSource = { ...webSource, anchor: `${gb}:description:en`, language: 'en', text: 'The drums counter-rotate.', textSource: undefined, url: undefined };
+		const webB: PatentEvidenceSource = { ...webSource, anchor: 'GB2155808B:description', reference: { publicationNumber: 'GB2155808B', section: 'description' }, url: 'https://patents.google.com/patent/GB2155808B/en' };
+		const webKindless: PatentEvidenceSource = { ...webSource, anchor: 'GB2155808:description', reference: { publicationNumber: 'GB2155808', section: 'description' } };
+		const recorded = snapshotOf(
+			{ id: 'gb-official-en', recordedAt: '2026-10-19T03:30:00Z', kind: 'details', status: 'succeeded', publicationIds: [gb], sources: [officialA] },
+			{ id: 'gb-web-b', recordedAt: '2026-10-19T04:30:00Z', kind: 'details', status: 'succeeded', publicationIds: ['GB2155808B'], sources: [webB] },
+			{ id: 'gb-web-kindless', recordedAt: '2026-10-19T04:40:00Z', kind: 'details', status: 'succeeded', publicationIds: ['GB2155808'], sources: [webKindless] },
+		);
+		const citing = (anchor: string) => withRung({ ...rung, sourceAnchors: [anchor], evidence: [{ ...rung.evidence[0], anchor }], elements: [{ ...rung.elements[0], anchor }] });
+		expect({
+			otherKind: validateCandidateReview(citing(webB.anchor), recorded, '', 'invalidity'),
+			kindless: validateCandidateReview(citing(webKindless.anchor), recorded, '', 'invalidity'),
+		}).toEqual({
+			otherKind: [],
+			kindless: ['GB2155808:description is web page text of GB2155808, but the official description text is recorded at GB2155808A:description:en. Cite GB2155808A:description:en (read it with evidenceLookup); web page text is used only where the tools hold no text for that publication and section.'],
+		});
+	});
+
 	it('accepts a Search Round that answers the source open point of the previous receipt', () => {
 		const save: PatentExecution = { id: 'save', recordedAt: '2026-10-19T05:00:00Z', kind: 'save', status: 'succeeded', tool: 'write_patent_results', request: 'chart.md', rounds: 0, openPoints: ['source-GB2155808A'] };
 		const answering = (answers: string[]): PatentCandidateReview => ({ ...review, rounds: [{ round: 1, targets: ['2'], answers, queries: [{ tool: 'search_patents', query: 'ti=drum' }], outcome: 'Confirmed against the official text.' }] });
