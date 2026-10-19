@@ -74,6 +74,16 @@ describe('Application Drafting claim removal', () => {
 		expect(removalOutline(claims, 2)).toMatchSnapshot();
 	});
 
+	it('removing the claim that claim 9 depends on refuses and names claim 9 (PRD 0025, S5)', () => {
+		const parents = parseClaims(pipeClampClaims).find(claim => claim.number === 9)?.dependsOn ?? [];
+		const removal = removeClaim(pipeClampClaims, parents[0]);
+		expect({ parents, removal, namesClaim9: !removal.removed && removal.reason === 'dependents' && removal.dependents.includes(9) }).toEqual({
+			parents: [1],
+			removal: { removed: false, reason: 'dependents', dependents: [2, 4, 5, 7, 8, 9, 11] },
+			namesClaim9: true,
+		});
+	});
+
 	it('refuses a claim another claim refers to, naming them, and a number with no claim', () => {
 		expect([removeClaim(pipeClampClaims, 1), removeClaim(pipeClampClaims, 9), removeClaim(pipeClampClaims, 15)]).toEqual([
 			{ removed: false, reason: 'dependents', dependents: [2, 4, 5, 7, 8, 9, 11] },
