@@ -25,8 +25,9 @@ its count calls for.
    intelligence") is never discriminating. For "thing A applied to domain B", the pair is the
    discriminating term: keep both.
 
-3. **Write the query.** Read the grammar once per session with `get_search_syntax` (provider
-   epo_ops, or uspto); do not guess a field name. Spend terms on discrimination, not
+3. **Write the query.** A query of one applicant or title term needs no preparation. Before a
+   query with other fields, grouping or wildcards, read the grammar once per session with
+   `get_search_syntax` (provider epo_ops, or uspto); do not guess a field name. Spend terms on discrimination, not
    coverage: two precise title-or-abstract terms beat five vague ones. Uncertain phrasing
    ("glass ceramic" or "glass-ceramic") is a reason to OR both forms, never to drop the term.
    When the invention spans classes, OR the classes together. To find the codes in use for a
