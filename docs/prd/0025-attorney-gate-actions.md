@@ -211,4 +211,23 @@ of the review's transcript, recorded under `docs/reviews/`, closes the PRD.
 
 ## Outcome
 
-(filled at completion)
+**Code complete 2026-10-18.** Seven PRs merged to main: S1 #766, S2 #765, S3 #771, S3b #764, S4 #768, S5 #767, S6 #769.
+
+**Live run 2026-10-19** on the D7 matter (`docs/reviews/2026-10-19-drawings-d7-acceptance-pipe-clamp.md`), founder as the attorney, Claude Opus 5.5:
+
+| Action | Exercised | What happened |
+|---|---|---|
+| Remove claims by a plain sentence (S5) | Yes | "Remove claims 4 and 7" removed both, renumbered the rest, and the claims were re-approved with the hash. |
+| Approve Claims button (S2) | Yes | Claims re-approved after the removal. |
+| Waive by click (S4) | Yes | Two clicks of "Waive all N Errors of this rule", one reason each, 11 waiver lines written. |
+| Checklist surfaced (S3, S3b) | Yes | `checklist.md` showed the next step and the waive instruction. It stayed stale after the waive clicks until the next tool call (#785). |
+| Gate words (S1) | Yes | No step asked for a flag, a frontmatter word or a command name. |
+| Inventor Questions document (S6) | No | The questions were answered in the file before S6 shipped. |
+
+**Gaps found, filed:**
+
+- #784: CodeLens shows in the text editor only. An attorney who reads `findings.md` in the markdown preview sees no button. Fix: editor-title buttons on the three files.
+- #785: the waive and gate clicks write the file but do not rewrite `checklist.md`; the agent then reported waived Errors as blocking.
+- #783: the coverage Error text offers "Remove claim 1" for an independent claim. The remove tool asks for confirmation, so the agent cannot act alone, but the option should not be offered.
+
+The PRD closes when #784 and #785 are merged and one more attorney run reads the files in the preview.
