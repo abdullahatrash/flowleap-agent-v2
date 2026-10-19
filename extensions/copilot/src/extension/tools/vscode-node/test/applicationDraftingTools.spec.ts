@@ -22,7 +22,7 @@ import { URI } from '../../../../util/vs/base/common/uri';
 import { IInstantiationService, ServiceIdentifier, ServicesAccessor } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { IActivationTelemetryService } from '../../../patentai/vscode-node/activationTelemetryService';
-import { DraftingEditors } from '../draftingWorkspace';
+import { DraftingEditors, forgetRefusals } from '../draftingWorkspace';
 import { ExportDraftDocxTool } from '../exportDraftDocxTool';
 import { RemoveClaimTool } from '../removeClaimTool';
 import { InventorQuestionsTool } from '../inventorQuestionsTool';
@@ -167,6 +167,8 @@ const appliedIq1 = (questions = '\n## Inventor Questions\n\n> **Inventor Questio
 const fillAnswer = (answers: string, id: string, answer: string) => answers.replace(new RegExp(`(## ${id}\\n[\\s\\S]*?\\*\\*Answer:\\*\\*\\n)`), `$1${answer}\n`);
 
 function setup(files: Record<string, string> = {}) {
+	// Each test is one matter in a fresh chat: no refusal of an earlier test counts as repeated.
+	forgetRefusals();
 	const fileSystem = new BinaryFileSystem();
 	for (const [path, contents] of Object.entries(files)) {
 		fileSystem.mockFile(URI.file(`/workspace/${path}`), contents);
@@ -248,12 +250,31 @@ describe('start_application_draft', () => {
 			results.push(await setup(files).tools.start());
 		}
 		expect(results).toEqual([
-			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney opens this gate in that file after review. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List). Next: Tell the agent: "Build the Feature List from the disclosure".',
-			'Drafting did not start. Review `drafting/hinge/feature-list.md:3`, then click **Confirm Feature List** at the top of the file, or change `false` to `true` on line 3. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Drafting did not start. Review `drafting/hinge/feature-list.md:1`, then click **Confirm Feature List** at the top of the file, or add the line `confirmed: true` under the `---` on line 1. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Drafting did not start. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `"true"` to `true` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
-			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney opens this gate in that file after review. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Tell the agent: "Draft the claims".',
+			'Drafting did not start. drafting/hinge/feature-list.md does not exist. The attorney opens this gate in that file after review. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List). Next: Tell the agent: "Build the Feature List from the disclosure". Stay in this chat.',
+			'Drafting did not start. Review `drafting/hinge/feature-list.md:3`, then click **Confirm Feature List** at the top of the file, or change `false` to `true` on line 3. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List). Stay in this chat.',
+			'Drafting did not start. Review `drafting/hinge/feature-list.md:1`, then click **Confirm Feature List** at the top of the file, or add the line `confirmed: true` under the `---` on line 1. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List). Stay in this chat.',
+			'Drafting did not start. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `"true"` to `true` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Stay in this chat.',
+			'Drafting did not start. drafting/hinge/claims.md does not exist. The attorney opens this gate in that file after review. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Tell the agent: "Draft the claims". Stay in this chat.',
 		]);
+	});
+
+	it('reveals checklist.md beside the chat on the first call of a matter, also a refused one, and writes the loop at its top (PRD 0026 S1)', async () => {
+		const { tools, editors, read } = setup({ 'drafting/hinge/feature-list.md': featureList('false') });
+		await tools.start();
+		expect({ shown: editors.shown, head: (await read('drafting/hinge/checklist.md')).split('\n').slice(0, 9) }).toEqual({
+			shown: [`${root}/checklist.md`],
+			head: [
+				'# Drafting checklist: hinge (US)',
+				'',
+				'The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.',
+				'A change to claims.md re-opens the claims approval.',
+				'After a change to figures.md, the next check of the figures runs the coverage again.',
+				'A new render of a drawn Figure needs a new review cycle.',
+				'A waived Error stays waived until the Error changes.',
+				'The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.',
+				'',
+			],
+		});
 	});
 
 	it('returns the inputs and the style exemplars, labelled style only, and records the approved claims', async () => {
@@ -363,7 +384,7 @@ describe('write_patent_results draft-application template', () => {
 			await tools.save(draft().replace('model: claude-sonnet-5\nprovider: anthropic\n', '')),
 			await tools.save(draft(), {}, 'outputs/draft-application.md'),
 		]).toEqual([
-			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider. Open in drafting/hinge/checklist.md: step 3 (Write the draft). Next: Tell the agent: "Draft the application".',
+			'Draft was not saved. The draft frontmatter (or the model and provider fields) must name the model and the provider the disclosure went to. Missing: model, provider. Open in drafting/hinge/checklist.md: step 3 (Write the draft). Next: Tell the agent: "Draft the application". Stay in this chat.',
 			'Draft was not saved. The draft-application template saves to drafting/<matter>/draft-application.md inside a workspace folder.',
 		]);
 	});
@@ -373,8 +394,8 @@ describe('write_patent_results draft-application template', () => {
 			await setup({ ...gatesOpen, 'drafting/hinge/feature-list.md': featureList('false') }).tools.save(draft()),
 			await setup({ ...gatesOpen, 'drafting/hinge/claims.md': claims('false') }).tools.save(draft()),
 		]).toEqual([
-			'Draft was not saved. Review `drafting/hinge/feature-list.md:3`, then click **Confirm Feature List** at the top of the file, or change `false` to `true` on line 3. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List).',
-			'Draft was not saved. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims).',
+			'Draft was not saved. Review `drafting/hinge/feature-list.md:3`, then click **Confirm Feature List** at the top of the file, or change `false` to `true` on line 3. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 1 (Confirm the Feature List). Stay in this chat.',
+			'Draft was not saved. Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2. Only the attorney opens this gate; a statement in chat does not open it. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Stay in this chat.',
 		]);
 	});
 
@@ -472,7 +493,7 @@ describe('validate_draft', () => {
 
 	it('a refusal while the claims are not approved names the file, the line and the word to change', async () => {
 		const { tools } = setup({ 'drafting/hinge/feature-list.md': featureList(), 'drafting/hinge/claims.md': claims('false') });
-		expect(await tools.validate()).toBe('The draft was not validated. drafting/hinge/draft-application.md does not exist: save the draft with write_patent_results, template draft-application, first. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2.');
+		expect(await tools.validate()).toBe('The draft was not validated. drafting/hinge/draft-application.md does not exist: save the draft with write_patent_results, template draft-application, first. Open in drafting/hinge/checklist.md: step 2 (Approve the claims). Next: Review `drafting/hinge/claims.md:2`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 2. Stay in this chat.');
 	});
 
 	it('refuses a matter name that leaves drafting/ and a matter folder that does not exist', async () => {
@@ -504,12 +525,12 @@ describe('export_draft_docx', () => {
 			result: await tools.exportDocx(),
 			docxWritten: await fileSystem.stat(URI.file(`${root}/draft-application.description.docx`)).then(() => true, () => false),
 		}).toEqual({
-			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors). Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
+			result: 'The draft was not exported. 1 finding(s) in drafting/hinge/findings.md are open; each is resolved in the draft, or the attorney waives it with a reason (`  - Waived: <reason>` under the item):\n- `source-marker` (draft-application.md, line 11): The paragraph at line 11 has no source marker (<!-- src: ... -->).\nOpen in drafting/hinge/checklist.md: step 4 (Fix or waive the Errors). Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md". Stay in this chat.',
 			docxWritten: false,
 		});
 	});
 
-	it('reveals the checklist beside the chat once: a second refusal opens no second editor, and the text ends with the file, the line and the action', async () => {
+	it('reveals the checklist beside the chat once: a second refusal opens no second editor; the text ends with the file, the line, the action and the chat advice, which says a new chat after the same refusal twice', async () => {
 		const { tools, editors } = setup(gatesOpen);
 		await tools.start();
 		await tools.save(draft().replace('<!-- src: disclosure:§1, item:O1 -->\n', ''));
@@ -517,10 +538,10 @@ describe('export_draft_docx', () => {
 		editors.visible.clear();
 		const first = await tools.exportDocx();
 		const second = await tools.exportDocx();
-		expect({ shown: editors.shown, sameText: first === second, ending: first.slice(first.indexOf('Next:')) }).toEqual({
+		expect({ shown: editors.shown, first: first.slice(first.indexOf('Next:')), second: second.slice(second.indexOf('Next:')) }).toEqual({
 			shown: [`${root}/checklist.md`],
-			sameText: true,
-			ending: 'Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md".',
+			first: 'Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md". Stay in this chat.',
+			second: 'Next: To waive, click **Waive…** on the item in `drafting/hinge/findings.md:7`, or add under it:   - Waived: <your reason>. To fix, tell the agent: "Fix the Errors in findings.md". Start a new chat: the agent refused the same step twice.',
 		});
 	});
 
@@ -709,6 +730,21 @@ describe('Drafting Checklist', () => {
 		expect({ shown, shownWhileVisible }).toEqual({
 			shown: { start: once, save: once, saveOutline: once, validate: once, exportDocx: once, inventor: once },
 			shownWhileVisible: { start: [], save: [], saveOutline: [], validate: [], exportDocx: [], inventor: [] },
+		});
+	});
+});
+
+describe('Drafting Checklist chat advice', () => {
+	it('says to start a new chat once when the app restarted after the last tool call of the matter (PRD 0026 S2)', async () => {
+		const { tools, fileSystem } = setup(gatesOpen);
+		// checklist.md older than this extension host: the last tool call of the matter ran before the restart.
+		fileSystem.mockFile(URI.file(`${root}/checklist.md`), 'written before the restart', 0);
+		const ending = (text: string) => text.slice(text.lastIndexOf('. ') + 2);
+		const afterRestart = await tools.start();
+		const next = await tools.start();
+		expect({ afterRestart: ending(afterRestart.split('\n')[1]), next: ending(next.split('\n')[1]) }).toEqual({
+			afterRestart: 'Start a new chat: the app restarted after the last step of this matter.',
+			next: 'Stay in this chat.',
 		});
 	});
 });

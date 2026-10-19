@@ -53,6 +53,32 @@ export const vscodeEditors: DraftingEditors = {
 /** Characters of one exemplar returned; the rest is cut and the cut is stated. */
 const MAX_EXEMPLAR_CHARS = 20_000;
 
+/**
+ * When this module loaded: the extension activated then. A matter whose last tool call is older
+ * ran in a chat from before the restart or the rebuild (PRD 0026 S2).
+ */
+const ACTIVATED_AT = Date.now();
+
+/**
+ * The last refusal of each matter and Figure, in memory. A refusal that repeats with the same
+ * text means the agent anchors on its own refusal (seen 2026-10-16): the attorney starts a new
+ * chat. The memory lives as long as the extension host: a restart clears it, and a restart is
+ * itself a reason for a new chat. No file carries it, because the attorney never reads it.
+ */
+const lastRefusals = new Map<string, string>();
+
+/** Forgets every refusal; the tests call it between matters. */
+export function forgetRefusals(): void {
+	lastRefusals.clear();
+}
+
+/** The chat advice at the end of every drafting and drawings tool result (PRD 0026 S2). */
+const CHAT_ADVICE = {
+	stay: 'Stay in this chat.',
+	restarted: 'Start a new chat: the app restarted after the last step of this matter.',
+	repeated: 'Start a new chat: the agent refused the same step twice.',
+} as const;
+
 /** The state of the claims approval of a matter, read from `claims.md` and the Working Record. */
 export interface ClaimsApproval {
 	/** The `approved` flag of `claims.md`, or `'no-file'` when the file does not exist. */
@@ -495,9 +521,10 @@ export class DraftingWorkspace {
 	/**
 	 * The result of a refused tool call: the reason, then the open steps of the Drafting Checklist,
 	 * which is written first. `prefix` says what did not happen, e.g. "The draft was not exported.".
+	 * `figure` is the Figure the call was for, so the chat advice counts a repeated refusal per Figure.
 	 */
-	async refusal(prefix: string, reason: string): Promise<LanguageModelToolResult> {
-		const pointer = await this.checklistLine(true, reason);
+	async refusal(prefix: string, reason: string, figure?: string | number): Promise<LanguageModelToolResult> {
+		const pointer = await this.checklistLine(true, reason, figure);
 		return textResult(`${prefix} ${reason}${pointer ? `${reason.includes('\n') ? '\n' : ' '}${pointer}` : ''}`);
 	}
 
@@ -511,21 +538,54 @@ export class DraftingWorkspace {
 	 * Creates the style folder when it has no README, writes the Drafting Checklist and returns the
 	 * sentence a tool result ends with: after a refusal the open steps, else the next step; then
 	 * what the attorney does for the next step, with the file and the line, unless `said` (the
-	 * refusal reason) already says it. Empty when no checklist was written.
+	 * refusal reason) already says it; then the chat advice (PRD 0026 S2). Empty when no checklist
+	 * was written. `figure` is the Figure a drawings tool ran for.
 	 */
-	async checklistLine(refused: boolean, said?: string): Promise<string> {
+	async checklistLine(refused: boolean, said?: string, figure?: string | number): Promise<string> {
 		await this.ensureStyleFolder();
+		const restarted = await this.restartedSinceLastCall();
 		const checklist = await this.writeChecklist();
 		if (!checklist) {
 			return '';
 		}
+		const advice = this.chatAdvice(restarted, refused ? said : undefined, figure);
 		const next = nextChecklistStep(checklist);
 		const action = next ? this.stepAction(next) : '';
 		const nextAction = action && !said?.includes(action) ? ` Next: ${action}` : '';
 		if (refused) {
-			return `${checklistPointer(checklist, this.folder.checklist)}${nextAction}`;
+			return `${checklistPointer(checklist, this.folder.checklist)}${nextAction} ${advice}`;
 		}
-		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).${nextAction}` : 'every step is done.'}`;
+		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).${nextAction}` : 'every step is done.'} ${advice}`;
+	}
+
+	/**
+	 * True when the extension activated after the last tool call of this matter: `checklist.md`,
+	 * which every tool call rewrites, is older than this module. The time of that file is the
+	 * record of the last call: every tool writes it anyway, so no second file and no store is
+	 * needed, and a copy of the matter folder keeps it. A matter with no checklist had no call.
+	 */
+	private async restartedSinceLastCall(): Promise<boolean> {
+		try {
+			return (await this.fileSystemService.stat(this.uri(this.folder.checklist))).mtime < ACTIVATED_AT;
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Whether the attorney stays in this chat (PRD 0026 S2): a new chat after a restart or a
+	 * rebuild, and after the same refusal twice for the same matter and Figure. A call that ran
+	 * forgets the last refusal of its matter and Figure.
+	 */
+	private chatAdvice(restarted: boolean, refusal: string | undefined, figure: string | number | undefined): string {
+		const key = `${this.root.toString()}|${this.folder.matter}|${figure ?? ''}`;
+		const repeated = refusal !== undefined && lastRefusals.get(key) === refusal;
+		if (refusal === undefined) {
+			lastRefusals.delete(key);
+		} else {
+			lastRefusals.set(key, refusal);
+		}
+		return restarted ? CHAT_ADVICE.restarted : repeated ? CHAT_ADVICE.repeated : CHAT_ADVICE.stay;
 	}
 
 	/** What the attorney does for a checklist step, with every `` `file:line` `` as a workspace path. */
