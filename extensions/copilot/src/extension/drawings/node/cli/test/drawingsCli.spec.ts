@@ -204,6 +204,14 @@ describe('drawings CLI', () => {
 				name: 'a flowchart proposal that adds a step', args: ['render', 'widget', '2', '--flowchart', 'flow.json'],
 				setup: async workspace => fs.writeFile(path.join(workspace, 'flow.json'), JSON.stringify({ steps: STEPS, proposal: { nodes: [{ id: 'extra', kind: 'process', text: 'invented step', after: 's1' }] } })),
 			},
+			{
+				name: 'a flowchart request that does not follow the schema', args: ['render', 'widget', '2', '--flowchart', 'flow.json'],
+				setup: async workspace => fs.writeFile(path.join(workspace, 'flow.json'), JSON.stringify({ steps: 'measure, compare, open', fromClaim: '1', proposal: { nodes: [{ id: 'd1', kind: 'loop' }], edges: [{ from: 'd1' }] } })),
+			},
+			{
+				name: 'a block request that does not follow the schema', args: ['render', 'widget', '2', '--block', 'blocks.json'],
+				setup: async workspace => fs.writeFile(path.join(workspace, 'blocks.json'), JSON.stringify({ blocks: [{ id: 'b1' }, { label: 'controller' }], connections: [{ from: 'b1', to: 'b2', direction: 'up' }] })),
+			},
 			{ name: 'a build with no rendered Figure', args: ['build', 'widget'] },
 			{
 				name: 'a build with a proposal in figures.md', args: ['build', 'widget'],

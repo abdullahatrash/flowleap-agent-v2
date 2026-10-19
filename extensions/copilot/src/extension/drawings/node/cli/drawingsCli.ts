@@ -22,7 +22,8 @@
  *
  * `<figure>` is `1`, `1A` or `FIG-1A`. `--root <dir>` is the workspace that holds `drafting/`
  * (default: the current folder). Input and sketch files are read relative to the current folder,
- * then the workspace, then the matter folder.
+ * then the workspace, then the matter folder. A flowchart or block file is checked against its
+ * request shape before the render (#797); a scene file is checked by the render itself.
  *
  * Output: one JSON object on stdout. Exit 0 on success, 1 on a refusal (`ok: false` and the
  * reason; nothing was written), 2 on a usage error. No model call.
@@ -34,10 +35,11 @@ import { resolveDraftingFolder } from '../../../tools/common/drafting/folderCont
 import { DraftFinding } from '../../../tools/common/drafting/finding';
 import type { DrawingScene } from '../../common/scene/drawingScene';
 import { buildDrawingSetOp } from '../ops/buildDrawingSetOp';
-import { figureId, MAX_REVIEW_ROUNDS } from '../../common/drawingFiles';
+import { RequestValidation, validateBlockRequest, validateFlowchartRequest } from '../ops/diagramRequestValidator';
+import { drawingFindingLine, figureId, MAX_REVIEW_ROUNDS } from '../../common/drawingFiles';
 import { NodeMatterFiles } from '../ops/matterFiles';
 import { proposeFigurePartOp } from '../ops/proposeFigurePartOp';
-import { BlockRequest, FlowchartRequest, renderFigureOp, resetReviewRoundsOp } from '../ops/renderFigureOp';
+import { renderFigureOp, resetReviewRoundsOp } from '../ops/renderFigureOp';
 
 /** A JSON value of the CLI output. */
 type CliValue = string | number | boolean | undefined | readonly CliValue[] | { readonly [key: string]: CliValue };
@@ -145,6 +147,14 @@ async function readJsonObject(file: string, folders: readonly string[], what: st
 	}
 }
 
+/** The typed 2D request, or a refusal with the schema Findings (a scene is checked by the render itself). */
+function checkedRequest<T>(validation: RequestValidation<T>, what: string): T {
+	if (!validation.request) {
+		throw new Refusal(`The ${what} request does not follow the schema:\n${validation.findings.map(drawingFindingLine).join('\n')}`);
+	}
+	return validation.request;
+}
+
 function toCliFinding(finding: DraftFinding & { readonly citation?: string }): { [key: string]: CliValue } {
 	return {
 		severity: finding.severity,
@@ -169,7 +179,7 @@ async function render(args: ParsedArgs, root: string, cwd: string): Promise<CliO
 	const result = await renderFigureOp(files, {
 		figure: figure.number,
 		...(figure.partial ? { partial: figure.partial } : {}),
-		...(mode === 'scene' ? { scene: input as DrawingScene } : mode === 'flowchart' ? { flowchart: input as FlowchartRequest } : { block: input as BlockRequest }),
+		...(mode === 'scene' ? { scene: input as DrawingScene } : mode === 'flowchart' ? { flowchart: checkedRequest(validateFlowchartRequest(input, figure.key), mode) } : { block: checkedRequest(validateBlockRequest(input, figure.key), mode) }),
 		seen,
 		...(args.flags.has('new-cycle') ? { newCycle: true } : {}),
 	});

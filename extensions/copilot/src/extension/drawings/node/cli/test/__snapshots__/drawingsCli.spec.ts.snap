@@ -56,6 +56,18 @@ exports[`drawings CLI > refusals > refuses a Figure with no heading in figures.m
 }
 `;
 
+exports[`drawings CLI > refusals > refuses a block request that does not follow the schema and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The block request does not follow the schema:
+- Error \`scene-schema\` (FIG-2.scene.json): blocks[0].label: must be a non-empty string [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): blocks[1].id: must be a non-empty string [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): connections[0].direction: must be one of forward, backward, both, none [ADR 0014 decision 1 (scene schema)]",
+  "wrote": [],
+}
+`;
+
 exports[`drawings CLI > refusals > refuses a build of Letter sheets for the EPO and writes no drawing 1`] = `
 {
   "exitCode": 1,
@@ -111,6 +123,20 @@ exports[`drawings CLI > refusals > refuses a flowchart proposal that adds a step
   "ok": false,
   "reason": "The diagram was refused:
 - Error \`node-count\` (FIG-2.svg): FIG. 2 would have 4 process boxes for 3 steps. The step list is the authority: a proposal may add decisions and edges only, never a step (ADR 0014).",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a flowchart request that does not follow the schema and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The flowchart request does not follow the schema:
+- Error \`scene-schema\` (FIG-2.scene.json): steps: must be an array of step texts [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): fromClaim: must be a claim number [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): proposal.nodes[0].kind: must be one of decision, process [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): proposal.nodes[0].text: must be a non-empty string [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): proposal.edges[0].to: must be a non-empty string [ADR 0014 decision 1 (scene schema)]",
   "wrote": [],
 }
 `;
