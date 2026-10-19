@@ -72,3 +72,17 @@ Attorney-flow gaps found in the same run are in PRD 0025 and its outcome: #784 (
 ## Not published
 
 No time-saved or cost-saved figure.
+
+## Follow-up wave, same day
+
+A two-axis review (standards and spec) of PR #774 found 16 items, #791 to #806. Five draft PRs fixed them, merged by the founder in order #807, #808, #809, #811, #810. Three were founder decisions: the per-part code escape hatch dropped (#799), the hard cap of three review cycles dropped (#803), and drawings depends on drafting in one direction only (#798).
+
+Re-run on the same D7 matter after the merges, in the app:
+
+| Step | Result |
+|---|---|
+| Build the drawing set | Refused: `numeral-not-drawn`, numeral 10 ("pipe clamp") cited from line 42 of the draft and drawn in no Figure. The agent offered three options and asked. |
+| Option 1, new cycle on FIG. 1, lead for 10 | Cycle 3 opened after confirmation. FIG. 1 round 1 carries 10 on the base plate. |
+| Build the drawing set | 3 sheets, Letter. Receipt 38 pass, 0 fail, 1 not checked. New rows: six diagram rules cited, `figure-coverage`, `numeral-not-drawn`, `centre-line-crosses-part`. |
+
+The receipt no longer carries the word the brief bans. Open after the wave: #782, #783 (validator mistakes, waivable by one click), #784 (buttons in the preview), #785 (checklist refresh after a click), #770 (eval tool list), #651 (professional comparison).
