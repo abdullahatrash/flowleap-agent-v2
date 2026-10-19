@@ -21,6 +21,7 @@ describe('extract-tools', () => {
 
 		const names = definitions.map(d => d.function.name).sort();
 		expect(names).toStrictEqual([
+			'build_drawing_set',
 			'citation_api_guide',
 			'compare_claims',
 			'compare_patents',
@@ -38,6 +39,7 @@ describe('extract-tools', () => {
 			'get_patent_term',
 			'get_prosecution_timeline',
 			'get_register_events',
+			'inventor_questions',
 			'legal_search_guide',
 			'ops_api_guide',
 			'patent_analytics_viz',
@@ -47,7 +49,10 @@ describe('extract-tools', () => {
 			'patstat_graph',
 			'patstat_portfolio',
 			'patstat_query',
+			'propose_figure_part',
 			'read_pdf',
+			'remove_claim',
+			'render_figure',
 			'run_in_terminal',
 			'search_academic',
 			'search_citations',
