@@ -6,11 +6,11 @@
 import { parsePatentDocumentReference } from '../../patentai/common/patentDocumentReference';
 import { SecondReadOutcome, secondReadLimitation, unconfirmedVerdicts } from '../common/patentSecondRead';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
-import { PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { evidenceSourceIndex, PatentEvidenceSource, PatentExecution, PatentExecutionSnapshot, webPageHost } from '../../patentai/vscode-node/patentExecutionLedger';
 import { escape } from '../../../util/vs/base/common/strings';
 import { posix } from '../../../util/vs/base/common/path';
 import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
-import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase } from './patentFallbackLadder';
+import { deriveFallbackLadder, documentKey, FallbackCoverage, fallbackCoverage, FallbackLadderDerivation, fallbackLadderErrors, fallbacksNotCovered, hasKindCode, LADDER_UNAVAILABLE, ladderOf, roundLedgerStatus, RoundQueryLedgerStatus, rowOpenPoints, rowReferences, shortPhrase, webSourceOpenPoints, webSourcesOf } from './patentFallbackLadder';
 import { baselineSource, claimComparisons, claimResultSentence, countLine, distinctDocuments, examinerArtHeader, examinerArtLabel, examinerArtReading, FIND_BETTER_STATUS, FindBetterFields, FindBetterSideName, findBetterErrors, flattenSides, incompleteSearch, renderBaseline, renderTracks, sideFeature, sideStatus } from './patentFindBetter';
 
 /**
@@ -213,6 +213,8 @@ interface RetrievedDocument {
 	readonly sectionsWithText: readonly string[];
 	/** Claims language, else description language, else `unrecorded`; never inferred from the text. */
 	readonly language: string;
+	/** Where the recorded text came from: `official`, `web (<host>)`, both, or `—` when no text was recorded. */
+	readonly textSource: string;
 	readonly cited: boolean;
 }
 
@@ -224,7 +226,7 @@ function citedAnchors(review: PatentCandidateReview): Set<string> {
 /** Inventory of documents a succeeded detail or figure retrieval brought into the session. */
 function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly RetrievedDocument[] {
 	const cited = citedAnchors(review);
-	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; figurePages: Set<number>; languages: Map<string, string>; cited: boolean }
+	interface DocumentRecord { date?: string; title?: string; sections: Set<string>; figurePages: Set<number>; languages: Map<string, string>; official: boolean; webHosts: Set<string>; cited: boolean }
 	// The backend echoes ids as `EP0983762.A1` while source references carry `EP0983762A1`; both
 	// name one document, so records are keyed on the separator-free form and shown that way.
 	const documents = new Map<string, DocumentRecord>();
@@ -232,7 +234,7 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		const key = publicationKey(publication);
 		const existing = documents.get(key);
 		if (existing) { return existing; }
-		const created: DocumentRecord = { sections: new Set<string>(), figurePages: new Set<number>(), languages: new Map<string, string>(), cited: false };
+		const created: DocumentRecord = { sections: new Set<string>(), figurePages: new Set<number>(), languages: new Map<string, string>(), official: false, webHosts: new Set<string>(), cited: false };
 		documents.set(key, created);
 		return created;
 	};
@@ -252,7 +254,13 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		for (const source of execution.sources ?? []) {
 			const document = entry(source.reference.publicationNumber);
 			if (source.figure) { document.figurePages.add(source.figure.page); }
-			else if (source.text?.trim()) { document.sections.add(source.reference.section); }
+			else if (source.text?.trim()) {
+				document.sections.add(source.reference.section);
+				// The text-source column is about full text: an abstract on the bibliography says nothing about it.
+				if (source.reference.section === 'claims' || source.reference.section === 'description') {
+					if (source.textSource === 'web') { document.webHosts.add(webPageHost(source.url)); } else { document.official = true; }
+				}
+			}
 			if (source.language && !document.languages.has(source.reference.section)) { document.languages.set(source.reference.section, source.language); }
 			if (cited.has(source.anchor)) { document.cited = true; }
 		}
@@ -263,6 +271,7 @@ function retrievedDocuments(review: PatentCandidateReview, snapshot: PatentExecu
 		publicationTitle: document.title ?? 'Unknown',
 		sectionsWithText: [...document.sections, ...(document.figurePages.size ? [`figures (${document.figurePages.size === 1 ? 'page' : 'pages'} ${pageRuns([...document.figurePages])})`] : [])],
 		language: document.languages.get('claims') ?? document.languages.get('description') ?? 'unrecorded',
+		textSource: [...(document.official ? ['official'] : []), ...[...document.webHosts].sort().map(host => `web (${host})`)].join('; ') || '—',
 		cited: document.cited,
 	}));
 }
@@ -342,6 +351,11 @@ function automaticLimitations(review: PatentCandidateReview, snapshot: PatentExe
 	if ((review.coverage ?? []).some(row => (row.elements ?? []).some(element => figurePage(element, sources) !== undefined))) {
 		lines.push('Findings marked "rests on a drawing reading" rest on the model\'s reading of a retrieved figure, not on quoted text; a drawing discloses arrangement, never dimensions unless stated to scale.');
 	}
+	const webRows = (review.coverage ?? []).map(row => webSourcesOf(row, sources)).filter(cited => cited.length);
+	if (webRows.length) {
+		const publications = [...new Set(webRows.flat().map(cited => cited.publication))].sort();
+		lines.push(`${webRows.length} ${webRows.length === 1 ? 'row rests' : 'rows rest'} on web page text, not official full text: ${publications.join(', ')}. Confirm each against the official full text or a certified copy before use.`);
+	}
 	return lines;
 }
 
@@ -366,8 +380,9 @@ function isoDate(value: string | undefined): string | undefined {
  * and never from the model, in a stable order the Round Report numbers: rungs partly disclosed or not
  * found; independent-claim elements not found; cited documents outside the searched jurisdictions;
  * cited documents published after the structured critical date, or with no recorded date when one is
- * given; rows that rest on a drawing reading; searches that failed and did not run again. Each has a
- * short id that a Search Round's `answers` names.
+ * given; rows that rest on a drawing reading; documents whose cited text is a web page, not official
+ * full text (#750); searches that failed and did not run again. Each has a short id that a Search
+ * Round's `answers` names.
  */
 export function chartOpenPoints(review: PatentCandidateReview, snapshot: PatentExecutionSnapshot): readonly ReceiptOpenPoint[] {
 	const rows = review.coverage ?? [];
@@ -393,6 +408,7 @@ export function chartOpenPoints(review: PatentCandidateReview, snapshot: PatentE
 		const suffix = drawingReadingSuffix(row, sources);
 		if (suffix) { points.push({ id: `drawing-${references[index]}`, text: `The row ${suffix.includes('in part') ? 'rests in part on a drawing reading' : 'rests on a drawing reading'}, not on quoted text: ${shortPhrase(row.feature)}` }); }
 	});
+	points.push(...webSourceOpenPoints(review, sources));
 	unretriedQueries(snapshot).forEach((query, index) => points.push({ id: `search-${index + 1}`, text: `A search failed and did not run again: ${shortPhrase(query)}` }));
 	return points;
 }
@@ -442,9 +458,42 @@ function unretriedQueries(snapshot: PatentExecutionSnapshot): readonly string[] 
 	return [...unretried].map(([query, purpose]) => purpose ? `${purpose} (${query})` : query);
 }
 
-/** Anchor to recorded source, the single index every pass over a snapshot shares. */
+/** Anchor to recorded source, the single index every pass over a snapshot shares; official text wins over web text. */
 function sourceIndex(snapshot: PatentExecutionSnapshot): Map<string, PatentEvidenceSource> {
-	return new Map(snapshot.executions.flatMap(execution => execution.sources ?? []).map(source => [source.anchor, source]));
+	return evidenceSourceIndex(snapshot.executions.flatMap(execution => execution.sources ?? []));
+}
+
+/** The label under a row that rests on web page text, one line per host (PRD 0024 A8, #750). */
+function webSourceNotes(row: PatentCoverageRow, sources: Map<string, PatentEvidenceSource>): string[] {
+	return [...new Set(webSourcesOf(row, sources).map(cited => cited.host))].map(host => `Source: web page (${host}), not official full text. Confirm against the original before use.`);
+}
+
+/**
+ * The official-text anchor of each publication section the record holds, keyed on the full
+ * publication number and the section, so a web anchor cited where official text exists can be
+ * pointed at the official one.
+ */
+function officialTextAnchors(sources: Map<string, PatentEvidenceSource>): Map<string, string> {
+	const anchors = new Map<string, string>();
+	for (const source of sources.values()) {
+		if (source.textSource === 'web' || source.figure || !source.text?.trim() || source.reference.claimNumber) { continue; }
+		anchors.set(`${publicationKey(source.reference.publicationNumber)}:${source.reference.section}`, source.anchor);
+	}
+	return anchors;
+}
+
+/**
+ * The official anchor that shadows a web source: the same publication (kind code included) and
+ * section. A web number without a kind code names the document, so any publication of it counts;
+ * a web `EP1809422B1` is never shadowed by an official `EP1809422A1`, whose claims differ.
+ */
+function shadowingOfficialAnchor(official: Map<string, string>, publication: string, section: string): string | undefined {
+	if (hasKindCode(publication)) { return official.get(`${publicationKey(publication)}:${section}`); }
+	for (const [key, anchor] of official) {
+		const [recorded, recordedSection] = key.split(':');
+		if (recordedSection === section && documentKey(recorded) === documentKey(publication)) { return anchor; }
+	}
+	return undefined;
 }
 
 /** Collapse runs of whitespace so a line-wrapped passage still contains its quoted fragment. */
@@ -696,6 +745,7 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 	const errors: string[] = [];
 	const sources = sourceIndex(snapshot);
 	const anchors = new Set(sources.keys());
+	const officialAnchors = officialTextAnchors(sources);
 	if (sided.content?.trim()) { errors.push(`For ${variant === 'invalidity' ? 'invalidity-claim-chart with coverage' : variant === 'find-better' ? 'find-better-report' : 'prior-art-report'}, content must be empty. Put source evidence and gaps in coverage; the writer generates the assessment so a separate narrative or matrix cannot contradict downgraded statuses.`); }
 	if (variant === 'find-better') { errors.push(...findBetterErrors(sided, sources)); }
 	if (variant === 'invalidity') { errors.push(...fallbackLadderErrors(sided, snapshot, sources), ...assertiveConclusionErrors(sided), ...criticalDateErrors(sided)); }
@@ -730,6 +780,9 @@ export function validateCandidateReview(sided: PatentCandidateReview, snapshot: 
 				continue;
 			}
 			if (row.status !== 'unresolved' && source && !['claims', 'description'].includes(source.reference.section)) { errors.push(`Feature support for ${anchor} requires a claim or description passage, not a bibliography/overview citation. Recover the exact source section with get_patent_details.`); }
+			// Official text wins: web page text is evidence only where the tools hold no text for that section.
+			const official = source?.textSource === 'web' ? shadowingOfficialAnchor(officialAnchors, source.reference.publicationNumber, source.reference.section) : undefined;
+			if (source && official) { errors.push(`${anchor} is web page text of ${source.reference.publicationNumber}, but the official ${source.reference.section} text is recorded at ${official}. Cite ${official} (read it with evidenceLookup); web page text is used only where the tools hold no text for that publication and section.`); }
 			if (row.status !== 'unresolved' && !evidence) { errors.push(`Row "${row.feature}" lists ${anchor} in sourceAnchors (or an element cites it) without an evidence entry. Add an evidence entry for ${anchor} with scope, qualifiers and quantityBasis; quote may be omitted for a numbered claim (the writer copies it) and is required verbatim for a description passage.`); }
 			if (evidence) {
 				if (!source?.text) { errors.push(`No recorded text for ${anchor} (older record): retrieve it once with get_patent_details so the quotation can be checked.`); }
@@ -1120,9 +1173,9 @@ function textLanguage(document: RetrievedDocument): string {
 function uncitedDocumentTable(uncited: readonly RetrievedDocument[]): string[] {
 	if (!uncited.length) { return ['Every retrieved document is cited in at least one coverage row.']; }
 	return [
-		'| Publication | Publication date | Title | Sections with text | Text language |',
-		'| --- | --- | --- | --- | --- |',
-		...uncited.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, document.sectionsWithText.join(', ') || 'none recorded', textLanguage(document)].map(cell).join(' | ') + ' |'),
+		'| Publication | Publication date | Title | Sections with text | Text language | Text source |',
+		'| --- | --- | --- | --- | --- | --- |',
+		...uncited.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, document.sectionsWithText.join(', ') || 'none recorded', textLanguage(document), document.textSource].map(cell).join(' | ') + ' |'),
 	];
 }
 
@@ -1210,9 +1263,9 @@ export function renderCandidateReview(sided: PatentCandidateReview, snapshot: Pa
 		...searchSets(snapshot, documents),
 		'## Retrieved documents',
 		'Retrieval does not establish eligibility as prior art. This inventory may include post-cutoff background documents. Check each publication date and jurisdiction against the requested scope; unknown dates remain unresolved.',
-		'| Publication | Publication date | Title | Text language |' + (jurisdictions.length ? ' Scope |' : ''),
-		'| --- | --- | --- | --- |' + (jurisdictions.length ? ' --- |' : ''),
-		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, textLanguage(document), ...scope(document)].map(cell).join(' | ') + ' |'),
+		'| Publication | Publication date | Title | Text language | Text source |' + (jurisdictions.length ? ' Scope |' : ''),
+		'| --- | --- | --- | --- | --- |' + (jurisdictions.length ? ' --- |' : ''),
+		...documents.map(document => '| ' + [document.publication, document.publicationDate, document.publicationTitle, textLanguage(document), document.textSource, ...scope(document)].map(cell).join(' | ') + ' |'),
 		'',
 		...(variant === 'find-better'
 			? findBetterSections(sided, snapshot, row => coverageRowSection(row, sources, jurisdictions, variant, reportWorkspacePath, '####'))
@@ -1246,6 +1299,7 @@ function coverageRowSection(row: PatentCoverageRow, sources: Map<string, PatentE
 					`Source review (model judgment): scope/dependency — ${evidence.scope}; qualifiers — ${evidence.qualifiers}; original quantity basis — ${evidence.quantityBasis}.`, ''] : [])];
 		}),
 		...elementMap(row, sources, reportWorkspacePath),
+		...webSourceNotes(row, sources).flatMap(note => [note, '']),
 		...rowScopeNotes(row, sources, jurisdictions).flatMap(note => [note, '']),
 		`Remaining gap (model judgment): ${row.gap || 'None declared.'}`, '',
 	];

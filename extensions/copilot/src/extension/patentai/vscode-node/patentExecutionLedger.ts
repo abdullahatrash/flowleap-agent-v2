@@ -25,6 +25,15 @@ export interface PatentEvidenceSource {
 	 * `saveDir`; without it the page exists in the chat alone and a report can only name it.
 	 */
 	readonly figure?: { readonly page: number; readonly file?: string };
+	/**
+	 * `web` marks text read from a fetched patent page (Google Patents, Espacenet, a national office
+	 * site), not the official full text the backend returns; absent means official text. The writer
+	 * checks a quotation against web text exactly as against official text, labels the row, and
+	 * prefers official text wherever both exist for the same publication and section (#750).
+	 */
+	readonly textSource?: 'web';
+	/** The page a web source was read from; set only with {@link textSource}. */
+	readonly url?: string;
 	readonly retrieval: 'returned' | 'unsegmented';
 	readonly review: 'unknown';
 	readonly completeness: 'unknown';
@@ -196,15 +205,43 @@ export class PatentExecutionLedger implements IPatentExecutionLedger {
  * check that finds no number must be able to tell "not produced" from "beyond the recorded cut".
  */
 function capRecordedText(execution: Omit<PatentExecution, 'id' | 'recordedAt'>): Omit<PatentExecution, 'id' | 'recordedAt'> {
-	const cap = (value: string | undefined, limit: number): string | undefined =>
-		value !== undefined && value.length > limit ? value.substring(0, limit) + '\n… [truncated for the audit record]' : value;
-	const request = cap(execution.request, ANALYTICS_REQUEST_CAP);
-	const resultText = cap(execution.resultText, ANALYTICS_RESULT_CAP);
-	const purpose = cap(execution.purpose, SEARCH_PURPOSE_CAP);
+	const request = capRecordedField(execution.request, ANALYTICS_REQUEST_CAP);
+	const resultText = capRecordedField(execution.resultText, ANALYTICS_RESULT_CAP);
+	const purpose = capRecordedField(execution.purpose, SEARCH_PURPOSE_CAP);
 	if (request === execution.request && resultText === execution.resultText && purpose === execution.purpose) {
 		return execution;
 	}
 	return { ...execution, request, resultText, purpose };
+}
+
+/** Cut a stored text at `limit` and say so in the text, so a check past the cut can tell "absent" from "beyond the cut". */
+export function capRecordedField(value: string | undefined, limit: number): string | undefined {
+	return value !== undefined && value.length > limit ? value.substring(0, limit) + '\n… [truncated for the audit record]' : value;
+}
+
+/**
+ * Anchor to recorded source, the single index every pass over recorded sources shares. Official
+ * text wins: a web source never replaces a source with official text at the same anchor, and an
+ * official source always replaces a web one, so the chart quotes the backend's text wherever it
+ * holds any; otherwise the latest record wins, as it always did.
+ */
+export function evidenceSourceIndex(sources: Iterable<PatentEvidenceSource>): Map<string, PatentEvidenceSource> {
+	const index = new Map<string, PatentEvidenceSource>();
+	for (const source of sources) {
+		const known = index.get(source.anchor);
+		if (known && source.textSource === 'web' && known.textSource !== 'web' && known.text !== undefined) { continue; }
+		index.set(source.anchor, source);
+	}
+	return index;
+}
+
+/** The host of a web source's page, for the label a web row carries; a URL that does not parse is just `web`. */
+export function webPageHost(url: string | undefined): string {
+	try {
+		return new URL(url ?? '').hostname.toLowerCase() || 'web';
+	} catch {
+		return 'web';
+	}
 }
 
 /** Stable section/claim identity; never infer a claim or paragraph number from prose. */
@@ -235,16 +272,19 @@ interface RecoveredExecution {
  */
 function readEvidenceSource(value: unknown): PatentEvidenceSource | undefined {
 	if (!value || typeof value !== 'object') { return undefined; }
-	const source = value as { anchor?: unknown; text?: unknown; reference?: unknown; language?: unknown; figure?: unknown; retrieval?: unknown; review?: unknown; completeness?: unknown };
+	const source = value as { anchor?: unknown; text?: unknown; reference?: unknown; language?: unknown; figure?: unknown; textSource?: unknown; url?: unknown; retrieval?: unknown; review?: unknown; completeness?: unknown };
 	const reference = parsePatentDocumentReference(source.reference);
 	const text = typeof source.text === 'string' ? source.text : undefined;
 	const language = typeof source.language === 'string' ? source.language : undefined;
 	const figure = readFigurePage(source.figure);
+	const url = typeof source.url === 'string' && source.url.trim() ? source.url : undefined;
 	if (!reference || (source.text !== undefined && text === undefined) || (source.language !== undefined && language === undefined) || (source.figure !== undefined && source.figure !== null && !figure)) { return undefined; }
+	// A web source is one that says so and names its page; any other text-source value is not a source.
+	if (source.textSource !== undefined && source.textSource !== null && (source.textSource !== 'web' || !url)) { return undefined; }
 	const anchor = figure ? figureAnchor(reference.publicationNumber, figure.page) : evidenceAnchor(reference, language);
 	if (source.anchor !== anchor || source.review !== 'unknown' || source.completeness !== 'unknown') { return undefined; }
 	if (source.retrieval !== 'returned' && source.retrieval !== 'unsegmented') { return undefined; }
-	return { anchor, text, reference, language, figure, retrieval: source.retrieval, review: 'unknown', completeness: 'unknown' };
+	return { anchor, text, reference, language, figure, ...(source.textSource === 'web' ? { textSource: 'web' as const, url } : {}), retrieval: source.retrieval, review: 'unknown', completeness: 'unknown' };
 }
 
 /**
