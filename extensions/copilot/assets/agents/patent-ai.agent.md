@@ -25,6 +25,9 @@ Skills and recipes name tools as the FlowLeap editor chat does. In this session,
 - `get_patent_summary` → `mcp__client__patentSummary`
 - `examiner_baseline` → `mcp__client__examinerBaseline`
 - `export_draft_docx` → `mcp__client__exportDraftDocx`
+- `render_figure` → `mcp__client__renderFigure`
+- `build_drawing_set` → `mcp__client__buildDrawingSet`
+- `propose_figure_part` → `mcp__client__proposeFigurePart`
 - `get_patent_term` → `mcp__client__patentTerm`
 - `compare_patents` → `mcp__client__comparePatents`
 - `get_patent_details` → `mcp__client__patentDetails`
