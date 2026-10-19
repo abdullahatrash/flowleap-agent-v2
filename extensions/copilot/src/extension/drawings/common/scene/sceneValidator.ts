@@ -16,11 +16,14 @@ export interface SceneValidationOptions {
 	readonly allowCode?: boolean;
 }
 
-const SCHEMA_CITATION = 'ADR 0014 decision 1 (scene schema)';
+/** The citation of a `scene-schema` Error. */
+export const SCHEMA_CITATION = 'ADR 0014 decision 1 (scene schema)';
 
-type JsonObject = { readonly [key: string]: unknown };
+/** A parsed JSON object. */
+export type JsonObject = { readonly [key: string]: unknown };
 
-function isObject(value: unknown): value is JsonObject {
+/** True for a JSON object: not null, not an array. */
+export function isObject(value: unknown): value is JsonObject {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 

@@ -8,7 +8,7 @@ import * as path from 'path';
 import { loadDrawingFont, resvgWasmPath } from './drawingAssets';
 
 /** Review renders are 300 dpi: the resolution OJ EPO 2025 A49 Art. 1(2)(a) and PCT Annex F 3.1.3 name. */
-export const REVIEW_DPI = 300;
+const REVIEW_DPI = 300;
 
 type ResvgModule = typeof import('@resvg/resvg-wasm');
 

@@ -23,9 +23,9 @@ import { basename } from '../../../util/vs/base/common/path';
 import { DRAWING_RULES, DrawingRule, figureSvgNumerals } from './scene/drawingFaults';
 import type { BlockDiagramInput } from './diagram/blockDiagram';
 import type { FlowchartInput } from './diagram/flowchart';
-import type { FigureFinding, FigureReviewRecord } from './sheets/receipt';
+import type { CheckResult, FigureFinding, FigureReviewRecord } from './sheets/receipt';
 import { NumeralScheme } from '../../tools/common/drafting/figures';
-import { DraftFinding } from '../../tools/common/drafting/finding';
+import { formatFindingLine } from '../../tools/common/drafting/finding';
 import { DRAFTING_FILE_NAMES } from '../../tools/common/drafting/folderContract';
 import { parseDraftingFrontmatter } from '../../tools/common/drafting/frontmatter';
 import { parseDraftParagraphs } from '../../tools/common/drafting/sourceMarkers';
@@ -158,10 +158,15 @@ export function reviewRecords(rounds: ReviewRounds, keys: readonly string[]): Fi
 	}));
 }
 
-/** One line per Figure finding, with its rule citation when it has one. */
-export function drawingFindingLine(finding: DraftFinding & { readonly citation?: string }): string {
-	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined].filter(Boolean).join(', ');
-	return `- ${finding.severity} \`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}${finding.citation ? ` [${finding.citation}]` : ''}`;
+/** One line per Figure finding: the severity, the rule, and its rule citation when it has one. */
+export function drawingFindingLine(finding: FigureFinding): string {
+	return formatFindingLine(finding, { severity: true, citation: true });
+}
+
+/** The receipt checks by result. */
+export function receiptCounts(checks: readonly CheckResult[]): { readonly pass: number; readonly fail: number; readonly notChecked: number } {
+	const count = (result: CheckResult['result']) => checks.filter(check => check.result === result).length;
+	return { pass: count('pass'), fail: count('fail'), notChecked: count('not-checked') };
 }
 
 /** The parts listed under the figure heading of `figures.md` that names the Figure. */
@@ -330,11 +335,17 @@ export function reviewPngs(files: readonly string[], figure: FigureId): { readon
 	});
 }
 
+/** The current review cycle of a Figure, from 1, and the rounds used in it. */
+export interface ReviewCycleState {
+	readonly cycle: number;
+	readonly used: number;
+}
+
 /**
  * The current review cycle of a Figure and the rounds used in it. The review renders on disk count
  * too, so a deleted or edited `rounds.json` does not reset the count.
  */
-export function reviewState(rounds: ReviewRounds, reviewFiles: readonly string[], figure: FigureId): { readonly cycle: number; readonly used: number } {
+export function reviewState(rounds: ReviewRounds, reviewFiles: readonly string[], figure: FigureId): ReviewCycleState {
 	const pngs = reviewPngs(reviewFiles, figure);
 	const entry = rounds[figure.key];
 	const cycle = Math.max(entry?.cycle ?? 1, ...pngs.map(png => png.cycle));

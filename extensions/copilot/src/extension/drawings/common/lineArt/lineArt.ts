@@ -8,11 +8,11 @@ import { centreMarkLines, NUMERAL_FONT_SIZE, NumeralRequest, PartEdge, PlacedNum
 import { hatch, Rect, Segment, segmentSetsNear, toSegments } from './planar';
 
 /** Visible edge width in sheet millimetres. */
-export const EDGE_WIDTH = 0.4;
+const EDGE_WIDTH = 0.4;
 /** Lead line, hidden edge, hatching and underline width in sheet millimetres. */
-export const THIN_WIDTH = 0.2;
+const THIN_WIDTH = 0.2;
 /** Hatch spacing in sheet millimetres (37 CFR 1.84(h)(3): regularly spaced oblique lines). */
-export const HATCH_SPACING = 2;
+const HATCH_SPACING = 2;
 /**
  * The chain centre line, a thin line (37 CFR 1.84(l); OJ EPO 2025 A49 Art. 1(2)(b)): long dash,
  * gap, short dash, gap, in sheet millimetres. The short dash is as long as the centre mark arms
@@ -32,7 +32,7 @@ export interface HatchStyle {
  * The styles the engine gives to cut faces, in order of preference. Each part takes the first
  * style that no neighbour uses, so adjacent parts read as separate bodies (37 CFR 1.84(h)(3)).
  */
-export const HATCH_SEQUENCE: readonly HatchStyle[] = [
+const HATCH_SEQUENCE: readonly HatchStyle[] = [
 	{ angle: 45, pitch: 2 },
 	{ angle: 135, pitch: 2 },
 	{ angle: 45, pitch: 1.5 },

@@ -77,7 +77,7 @@ export function pointSegmentDistance(point: Vec2, segment: Segment): number {
 }
 
 /** The shortest distance between two segments; 0 when they cross or touch. */
-export function segmentDistance(a: Segment, b: Segment): number {
+function segmentDistance(a: Segment, b: Segment): number {
 	if (segmentsIntersect(a, b)) {
 		return 0;
 	}
@@ -85,7 +85,7 @@ export function segmentDistance(a: Segment, b: Segment): number {
 }
 
 /** The bounding box of segments; `undefined` when there are none. */
-export function segmentBounds(segments: readonly Segment[]): Rect | undefined {
+function segmentBounds(segments: readonly Segment[]): Rect | undefined {
 	if (segments.length === 0) {
 		return undefined;
 	}

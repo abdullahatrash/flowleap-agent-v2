@@ -42,7 +42,7 @@ export const MIN_GLYPH_HEIGHT = 3.2;
 export const CAP_HEIGHT_RATIO = 0.716;
 
 /** The font family every sheet text names; the bundled TTF is Liberation Sans. */
-export const SHEET_FONT_FAMILY = 'Liberation Sans, Arial, Helvetica, sans-serif';
+const SHEET_FONT_FAMILY = 'Liberation Sans, Arial, Helvetica, sans-serif';
 
 /** The smallest FIG label and sheet-number font size (4.3 mm capitals). */
 const MIN_LABEL_FONT_SIZE = 6;
@@ -124,7 +124,7 @@ function fmt(value: number): string {
 }
 
 /** The FIG label for an office: "FIG. 1" for the USPTO (37 CFR 1.84(u)(1)), "Fig. 1" for EPO and PCT (GL A-IX 5.2; PCT IP 5.141). */
-export function figureLabel(office: DrawingOffice, number: number, partial?: string): string {
+function figureLabel(office: DrawingOffice, number: number, partial?: string): string {
 	return `${office === 'US' ? 'FIG.' : 'Fig.'} ${number}${partial ?? ''}`;
 }
 

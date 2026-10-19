@@ -139,7 +139,9 @@ export function loadDrawingKernel(): Promise<ReplicadApi> {
 		const files = kernelFiles();
 		const glue: { default: (options: { locateFile: (file: string) => string }) => Promise<object> } = await import(pathToFileURL(files.glue).href);
 		const oc = await glue.default({ locateFile: () => files.wasm });
-		const replicad: ReplicadApi = require('replicad');
+		// The specifier is widened to `string` so TypeScript does not load replicad's typings (see the note
+		// at the top); esbuild strips the cast and bundles the literal.
+		const replicad: ReplicadApi = await import('replicad' as string);
 		replicad.setOC(oc);
 		return replicad;
 	})();

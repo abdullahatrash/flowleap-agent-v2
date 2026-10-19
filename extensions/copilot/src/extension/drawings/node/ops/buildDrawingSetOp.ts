@@ -18,8 +18,8 @@ import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../com
 import { validateScene } from '../../common/scene/sceneValidator';
 import { CheckResult, FigureFinding, FigureSetFacts, runSheetChecks, SHEET_CHECKS, writeDrawingsReceipt } from '../../common/sheets/receipt';
 import { DrawingPageSize, FigureInput, layoutDrawingSheets } from '../../common/sheets/sheetLayout';
-import { DIAGRAM_SVG_CHECKS, DiagramSource, FIGURE_LIST_RULES, FigureId, figureListText, figureOfSvgFile, figureSetStatus, numeralsNotCheckedFinding, numeralsNotDrawn, numeralsNotDrawnFindings, parseReviewRounds, partsNotDrawn, partsNotDrawnFindings, partsNotDrawnLine, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
-import { MatterFiles, readMatterOffice } from './matterFiles';
+import { DIAGRAM_SVG_CHECKS, DiagramSource, FIGURE_LIST_RULES, FigureId, figureListText, figureOfSvgFile, figureSetStatus, numeralsNotCheckedFinding, numeralsNotDrawn, numeralsNotDrawnFindings, parseReviewRounds, partsNotDrawn, partsNotDrawnFindings, partsNotDrawnLine, receiptCounts, reviewRecords, ROUNDS_FILE } from '../../common/drawingFiles';
+import { figuresPath, MatterFiles, readMatterOffice } from './matterFiles';
 
 /** The result of a build: the written Drawing Set, or the refusal reason (nothing was written). */
 export type BuildDrawingSetResult =
@@ -112,7 +112,7 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 	const path = (name: string) => `${files.folder}/${name}`;
 	const figures = await files.read(DRAFTING_FILE_NAMES.figures);
 	if (figures === undefined) {
-		return refuse(`${path(DRAFTING_FILE_NAMES.figures)} does not exist.`);
+		return refuse(`${figuresPath(files)} does not exist.`);
 	}
 	const draft = await files.read(DRAFTING_FILE_NAMES.draft);
 	const office = await readMatterOffice(files);
@@ -217,16 +217,16 @@ export async function buildDrawingSetOp(files: MatterFiles, options: BuildDrawin
 		manifestLine = `Updated ${path(DRAFTING_FILE_NAMES.filingManifest)}: ${manifest.drawingSheets} drawing sheet(s), measured.`;
 	}
 
-	const count = (result: CheckResult['result']) => receipt.checks.filter(check => check.result === result).length;
+	const counts = receiptCounts(receipt.checks);
 	const failing = receipt.checks.filter(check => check.result === 'fail');
 	const text = [
 		...(status.missing.length ? [`INCOMPLETE SET: ${figureSet.missing} not drawn. Built for review only (partial); do not present it as the Drawing Set.`] : []),
 		`Built ${status.missing.length ? 'a partial set for review' : 'the Drawing Set'} of ${figureFiles.length} Figure(s) on ${sheets.length} ${pageSize} sheet(s) for ${office}: ${sheets.map((_, index) => `${drawings}/sheet-${index + 1}.svg`).join(', ')}, ${drawings}/drawings.pdf, and the receipt ${receiptPath}. Review renders of the sheets are in ${drawings}/review/.`,
-		`Receipt: ${count('pass')} pass, ${count('fail')} fail, ${count('not-checked')} not checked.`,
+		`Receipt: ${counts.pass} pass, ${counts.fail} fail, ${counts.notChecked} not checked.`,
 		failing.length ? `Failing checks:\n${failing.map(checkLine).join('\n')}` : 'No code check fails.',
 		...(notDrawn.length ? [`Parts listed but not drawn (Note, \`figure-parts-not-drawn\`):\n${notDrawn.map(item => `- ${partsNotDrawnLine(item)}`).join('\n')}`] : []),
 		manifestLine,
-		'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.',
+		'Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; the receipt is a check record, not a verdict: never call the drawings ready to file.',
 	].join('\n');
 	return { ok: true, text, sheets: sheets.length, pageSize, checks: receipt.checks, manifestUpdated, missing: status.missing };
 }

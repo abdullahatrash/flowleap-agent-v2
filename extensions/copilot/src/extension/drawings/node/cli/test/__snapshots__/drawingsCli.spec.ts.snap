@@ -56,6 +56,18 @@ exports[`drawings CLI > refusals > refuses a Figure with no heading in figures.m
 }
 `;
 
+exports[`drawings CLI > refusals > refuses a block request that does not follow the schema and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The block request does not follow the schema:
+- Error \`scene-schema\` (FIG-2.scene.json): blocks[0].label: must be a non-empty string [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): blocks[1].id: must be a non-empty string [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): connections[0].direction: must be one of forward, backward, both, none [ADR 0014 decision 1 (scene schema)]",
+  "wrote": [],
+}
+`;
+
 exports[`drawings CLI > refusals > refuses a build of Letter sheets for the EPO and writes no drawing 1`] = `
 {
   "exitCode": 1,
@@ -111,6 +123,20 @@ exports[`drawings CLI > refusals > refuses a flowchart proposal that adds a step
   "ok": false,
   "reason": "The diagram was refused:
 - Error \`node-count\` (FIG-2.svg): FIG. 2 would have 4 process boxes for 3 steps. The step list is the authority: a proposal may add decisions and edges only, never a step (ADR 0014).",
+  "wrote": [],
+}
+`;
+
+exports[`drawings CLI > refusals > refuses a flowchart request that does not follow the schema and writes no drawing 1`] = `
+{
+  "exitCode": 1,
+  "ok": false,
+  "reason": "The flowchart request does not follow the schema:
+- Error \`scene-schema\` (FIG-2.scene.json): steps: must be an array of step texts [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): fromClaim: must be a claim number [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): proposal.nodes[0].kind: must be one of decision, process [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): proposal.nodes[0].text: must be a non-empty string [ADR 0014 decision 1 (scene schema)]
+- Error \`scene-schema\` (FIG-2.scene.json): proposal.edges[0].to: must be a non-empty string [ADR 0014 decision 1 (scene schema)]",
   "wrote": [],
 }
 `;
@@ -238,7 +264,7 @@ exports[`drawings CLI > renders a scene Figure and a flowchart Figure, then buil
 Receipt: 36 pass, 0 fail, 3 not checked.
 No code check fails.
 The Filing Manifest is written by export_draft_docx; it will count the 1 sheet(s).
-Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
+Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; the receipt is a check record, not a verdict: never call the drawings ready to file.",
     },
   },
   "files": [
@@ -274,7 +300,7 @@ Report the receipt by check. The rules a person must judge (sufficient views, ev
 Every Figure drafting/widget/figures.md names is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
-Do not call the Figure compliant or ready to file.",
+The findings are check results, not a verdict: do not call the Figure ready to file.",
     },
   },
   "rounds": {
@@ -318,7 +344,7 @@ Do not call the Figure compliant or ready to file.",
 Still to draw: FIG. 2 (drafting/widget/figures.md names 2 Figure(s)); build_drawing_set refuses until every one is drawn.
 The review render of this round is attached; it is not a deliverable.
 The mechanical fault list found nothing. The attorney still reviews the Figure.
-Do not call the Figure compliant or ready to file.",
+The findings are check results, not a verdict: do not call the Figure ready to file.",
     },
   },
 }

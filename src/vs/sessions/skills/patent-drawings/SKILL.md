@@ -122,6 +122,7 @@ and the attorney is asked.
    with each failing check and its rule, and the rules only the attorney can
    judge ([references/office-page-rules.md](references/office-page-rules.md)).
 
-Done when the receipt is reported. Say "no failing check", never
-"compliant", "passed" or "ready to file". Close with: "AI-assisted drawings
-for review by a registered patent attorney — not legal advice."
+Done when the receipt is reported. The receipt is a check record, not a
+verdict. Say "no failing check", never "passed" or "ready to file". Close
+with: "AI-assisted drawings for review by a registered patent attorney — not
+legal advice."

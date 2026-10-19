@@ -123,7 +123,7 @@ export function matrixScale(matrix: Matrix): number {
 }
 
 /** Parses an SVG `transform` list of `translate`, `rotate`, `scale` and `matrix`. */
-export function parseTransform(value: string | undefined): Matrix {
+function parseTransform(value: string | undefined): Matrix {
 	let result: Matrix = IDENTITY;
 	if (!value) {
 		return result;
