@@ -101,7 +101,8 @@ describe('SearchPatentsTool', () => {
 			### Abstracts
 			- **EP1234567A1**: A photovoltaic module with a light-absorbing layer.
 
-			Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed."
+			Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed.
+			Next step: 2 hits. Read them before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class)."
 		`);
 	});
 
@@ -199,6 +200,35 @@ describe('SearchPatentsTool', () => {
 		const { client } = makeBackendClient({ success: false, tool: 'search_patents', error: { message: 'OPS is overloaded.' } });
 		await new SearchPatentsTool(makeLogService(), client, ledger).invoke(makeOptions({ query: 'ic=A61K6 and ab="fine fraction"', purpose: 'F4 sub-10 µm fine-fraction cap' }), makeToken());
 		expect(executions).toEqual([{ kind: 'search', status: 'failed', query: 'ic=A61K6 and ab="fine fraction"', requestedRange: '1-25', requestedCountries: undefined, purpose: 'F4 sub-10 µm fine-fraction cap' }]);
+	});
+
+
+	it('a count over 1,000 ends with the next step: add a discriminating term before reading any page', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 3549, effectiveQuery: 'ta="artificial intelligence"', range: { begin: 1, end: 1 }, docs: [{ docId: 'EP1234567A1', title: 'AI', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta="artificial intelligence"', range: '1-1' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 3549 hits is a technology area, not an invention. Add the next discriminating term from your extraction list and probe again; do not read pages of this set.');
+	});
+
+
+	it('a count under 10 ends with the next step: read the hits before widening', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 3, effectiveQuery: 'ta="foreign object" AND ta=charging', range: { begin: 1, end: 3 }, docs: [{ docId: 'EP1234567A1', title: 'Charger', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta="foreign object" AND ta=charging' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 3 hits. Read them before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).');
+	});
+
+
+	it('a readable set larger than the page ends with the order and paging facts the model cannot see', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 308, effectiveQuery: 'ta=drone AND ta="turbine blade"', range: { begin: 1, end: 25 }, docs: [{ docId: 'WO2026210250A1', title: 'Blade drone', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=drone AND ta="turbine blade"', range: '1-25' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 308 hits, 1-25 shown. OPS orders by its default order (newest first), not by relevance, and lists one publication per family. To rely on this set, page range through 26-308 (100 per call), or narrow until one page holds it.');
+	});
+
+
+	it('an OPS fault names the grammar fix, so the model edits the query instead of retrying it', async () => {
+		const opsFault = 'OPS error 413: <?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<fault xmlns="http://ops.epo.org">\n    <code>CLIENT.MinimumCharsBeforeTruncation</code>\n    <message>Not enough characters before truncation character must be provided. At least 3 characters must be provided when using truncation \'*\' and at lea';
+		const { client } = makeBackendClient({ success: false, tool: 'search_patents', error: { code: 'INTERNAL_ERROR', message: opsFault } });
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=drone AND pn=EP*' }), makeToken());
+		expect(textOf(result)).toBe(`Error: Patent search backend returned 422: ${opsFault} OPS fault CLIENT.MinimumCharsBeforeTruncation: a * wildcard needs at least 3 characters before it. This is a grammar error, not an empty result: fix the query and run it once; call get_search_syntax for the field list.`);
 	});
 
 });

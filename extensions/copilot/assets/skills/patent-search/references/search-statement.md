@@ -8,8 +8,7 @@ themselves. Write the block in exactly this shape, so every surface renders it t
 ## Before you show it
 
 1. Build the statement from the concept table: OR the synonyms inside one concept, AND the
-   concepts together, AND the classification. Field names come from
-   [cql-reference.md](cql-reference.md) only.
+   concepts together, AND the classification. Field names come from `get_search_syntax` only.
 2. Probe it: run the statement once with a small range and read the total. Record the run with a
    purpose of `Search Statement v<N>` (v1 for the first, +1 for each change). The working record
    lists every query that ran, so each version the user saw is kept. When the search tool is not

@@ -17,6 +17,7 @@ import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
+import { opsFaultHint, searchCountHint } from './cqlSearchHints';
 
 interface ISearchPatentsParams {
 	query: string;
@@ -143,7 +144,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 		} catch (error) {
 			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'search', status: token.isCancellationRequested ? 'cancelled' : 'failed', query, requestedRange: range, requestedCountries: countries, purpose: testedFeature });
-			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`);
+			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`, err => opsFaultHint(err.message));
 			return new LanguageModelToolResult([...result.content, new LanguageModelTextPart(audit)]);
 		}
 	}
@@ -210,6 +211,10 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 		lines.push('');
 		lines.push('Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed.');
+		const hint = searchCountHint(total, result.range);
+		if (hint) {
+			lines.push(hint);
+		}
 
 		return lines.join('\n');
 	}

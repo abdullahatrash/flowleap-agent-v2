@@ -32,6 +32,7 @@ export const patentChatToolReferenceNames: readonly string[] = [
 	'patentFamily',
 	'registerEvents',
 	'searchRegister',
+	'searchSyntax',
 	'readPdf',
 	'citations',
 	'forwardCitations',

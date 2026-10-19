@@ -312,7 +312,7 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				<br />
 				**B) SEARCH for patents (general topic, no specific claim)?**<br />
 				→ Apply the jurisdiction gate above first (a company or technology name alone does NOT specify jurisdiction)<br />
-				→ Then write the CQL yourself — the patent-search skill owns query construction: read its `references/cql-reference.md` before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
+				→ Then write the CQL yourself — the patent-search skill owns the method and `get_search_syntax` serves the grammar: read the grammar before any non-trivial CQL, keep the discriminating terms, then `search_patents`; probe the count with a small limit and refine before trusting results<br />
 				→ Carry EVERY user constraint into the query: assignee, classification, and dates ("filed after 2023" → pd{'>='}2023)<br />
 				→ Save a report file if many results<br />
 				→ Keywords: find patents, search, look for patents, patents about, "the N most cited / closest / most relevant patents on X" — a RANKED LIST of documents is still a search<br />
@@ -558,7 +558,7 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			<br />
 			1. **BE ACTIVE, NOT PASSIVE**: Don't just display results - CREATE markdown reports, SAVE files. Patent research reports (prior-art reports, search-result files) are an explicit exception to any general instruction elsewhere in this prompt against creating files or markdown documents — those instructions govern coding tasks, not patent research deliverables.<br />
 			<br />
-			2. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill and its `references/cql-reference.md` own the rules (discriminating terms, valid grouping, term budget). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 inspect relevance before broadening. EDIT the query yourself between search_patents calls — a query you never probed is a guess. When the user asks for a search statement, or will run the query themselves, read the patent-search skill's `references/search-statement.md` and show the query as that Search Statement block (concept table, statement, Open in Espacenet link, Discriminating Term).<br />
+			2. **WRITE THE QUERY YOURSELF, PROBE, THEN REFINE**: query construction is yours — the patent-search skill owns the method (extraction list, discriminating terms, probe, refine) and `get_search_syntax` owns the grammar (fields, grouping, wildcards). Run the query with a small limit first and read the total: over ~1,000 hits add the next discriminating term; under 10 inspect relevance before broadening. EDIT the query yourself between search_patents calls — a query you never probed is a guess. When the user asks for a search statement, or will run the query themselves, read the patent-search skill's `references/search-statement.md` and show the query as that Search Statement block (concept table, statement, Open in Espacenet link, Discriminating Term).<br />
 			<br />
 			3. **USE DEDICATED TOOLS FOR EACH DATA SOURCE**:<br />
 			- EP/WO patents and worldwide bibliographic search: search_patents / get_patent_details (ops_api_guide for the full tool list)<br />
@@ -676,7 +676,7 @@ class PatentSearchStrategies extends PromptElement<PatentAIPromptProps> {
 			Always invoke `uspto_api_guide` immediately before a USPTO search. Do not memorise parameter names — the legacy `query`/`assignee`/`cpcCode`/`dateRange` parameters no longer exist.<br />
 			<br />
 			**EPO OPS (worldwide bibliographic CQL search; full text only for EP/WO):**<br />
-			CQL fields: `pa=` applicant, `ti=`/`ab=` title/abstract keywords, `ic=`/`cpc=` classification, `pd=` publication date with comparison operators (pd{'>='}2023). Combine with and/or, group with parentheses, quote multi-word terms (pa="Apple Inc"). The patent-search skill's `references/cql-reference.md` owns the full syntax and strategy — read it before any non-trivial query.<br />
+			CQL fields: `pa=` applicant, `ti=`/`ab=` title/abstract keywords, `ic=`/`cpc=` classification, `pd=` publication date with comparison operators (pd{'>='}2023). Combine with and/or, group with parentheses, quote multi-word terms (pa="Apple Inc"). `get_search_syntax` (provider epo_ops) owns the full grammar and the patent-search skill owns the strategy — read the grammar before any non-trivial query.<br />
 			COUNTRY FILTER AND COUNTS: `countries` narrows the CQL itself (it becomes `pn any "EP WO"`), so the returned `total` counts only the filtered set — a count probe and the search it serves must use the SAME `countries` value, and a worldwide count needs no `countries` at all. Operator case never matters (`and` = `AND`); a zero count is a query problem, not a spelling problem.<br />
 			<br />
 			**ADVANCED STRATEGIES (both APIs):**<br />
