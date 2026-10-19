@@ -53,6 +53,22 @@ describe('drawFlowchart', () => {
 		await expect(snapshotText(result)).toMatchFileSnapshot('./__snapshots__/flowchart-epo-linear.svg');
 	});
 
+	it('numbers the steps by the given numerals, not the scheme, and refuses a numeral list of another length (#786)', async () => {
+		const numeralsOf = (result: DiagramResult) => [...(result.svg ?? '').matchAll(/<text class="numeral" data-numeral="(?<numeral>\d+)"/g)].map(match => Number(match.groups?.numeral));
+		const even = await drawFlowchart({ office: 'US', scheme: 'even', figure: 3, steps: fiveSteps, numerals: [44, 46, 48, 50, 52] });
+		const hundreds = await drawFlowchart({ office: 'EPO', scheme: 'hundreds', figure: 3, steps: fiveSteps, numerals: [310, 312, 314, 316, 318] });
+		const short = await drawFlowchart({ office: 'US', scheme: 'even', figure: 3, steps: fiveSteps, numerals: [44, 46] });
+		expect({
+			even: numeralsOf(even),
+			hundreds: numeralsOf(hundreds),
+			short: { svg: short.svg, findings: short.findings },
+		}).toEqual({
+			even: [44, 46, 48, 50, 52],
+			hundreds: [310, 312, 314, 316, 318],
+			short: { svg: undefined, findings: [{ severity: 'Error', rule: 'numeral-count', file: 'FIG-3.svg', message: 'FIG. 3 lists 2 numeral(s) for 5 steps. One numeral per step, in step order.' }] },
+		});
+	});
+
 	it('adds a proposed decision branch and loop', async () => {
 		const result = await drawFlowchart({
 			office: 'US', scheme: 'hundreds', figure: 2, steps: fiveSteps, terminals: true,
@@ -113,6 +129,16 @@ describe('drawBlockDiagram', () => {
 			],
 		});
 		await expect(snapshotText(result)).toMatchFileSnapshot('./__snapshots__/block-us-four.svg');
+	});
+
+	it('numbers the blocks by the given numerals, not the scheme (#786)', async () => {
+		const blocks = [{ id: 'sensor', label: 'Vibration sensor' }, { id: 'processor', label: 'Processor' }];
+		const connections = [{ from: 'sensor', to: 'processor' }];
+		const numeralsOf = (result: DiagramResult) => [...(result.svg ?? '').matchAll(/<text class="numeral" data-numeral="(?<numeral>\d+)"/g)].map(match => Number(match.groups?.numeral));
+		expect({
+			even: numeralsOf(await drawBlockDiagram({ office: 'US', scheme: 'even', figure: 4, blocks, connections, numerals: [60, 62] })),
+			hundreds: numeralsOf(await drawBlockDiagram({ office: 'US', scheme: 'hundreds', figure: 4, blocks, connections, numerals: [420, 422] })),
+		}).toEqual({ even: [60, 62], hundreds: [420, 422] });
 	});
 });
 

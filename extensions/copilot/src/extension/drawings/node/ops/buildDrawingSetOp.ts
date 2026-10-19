@@ -13,7 +13,7 @@ import { DRAFTING_FILE_NAMES, isDrawingSheetFile, resolveDraftingFolder } from '
 import { parseDraftOutline } from '../../../tools/common/drafting/outline';
 import { parseFigureParts } from '../../../tools/common/drafting/specValidators';
 import { checkDiagramSvg } from '../../common/diagram/diagramFaults';
-import { numeralFor } from '../../common/diagram/diagramText';
+import { diagramNumerals } from '../../common/diagram/diagramText';
 import { checkFigureSvgFaults, checkSceneFaults, DRAWING_RULES } from '../../common/scene/drawingFaults';
 import { validateScene } from '../../common/scene/sceneValidator';
 import { CheckResult, FigureFinding, FigureSetFacts, runSheetChecks, SHEET_CHECKS, writeDrawingsReceipt } from '../../common/sheets/receipt';
@@ -58,7 +58,7 @@ async function figureFindings(files: MatterFiles, figure: FigureId, svg: string,
 	if (source?.mode === 'flowchart' || source?.mode === 'block') {
 		const input = source.input;
 		const count = source.mode === 'flowchart' ? source.input.steps.length : source.input.blocks.length;
-		const numerals = Array.from({ length: count }, (_, index) => numeralFor(input.scheme, input.figure, index));
+		const numerals = diagramNumerals(input.scheme, input.figure, count, input.numerals);
 		return [...checkDiagramSvg(svg, { office: input.office, figure: input.figure, numerals }), ...checkFigureSvgFaults(svg, { file, checks: DIAGRAM_SVG_CHECKS })];
 	}
 	const scene = source ? validateScene(source).scene : undefined;

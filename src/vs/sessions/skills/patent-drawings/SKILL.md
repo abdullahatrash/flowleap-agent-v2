@@ -57,9 +57,12 @@ Done when every `FIG. N` heading of `figures.md` has a stated mode or refusal.
    [references/scene-schema.md](references/scene-schema.md). Write the numeral
    ports first, one per listed part, then the geometry. Use a library part
    for each standard part ([references/part-library.md](references/part-library.md)).
-2. Flowchart or block diagram: first make sure `figures.md` lists the step or
-   block numerals under the Figure heading, in the `numerals:` scheme (`2, 4,
-   6` for `even`; `502, 504` in FIG. 5 for `hundreds`). Then write
+2. Flowchart or block diagram: first make sure `figures.md` lists one numeral
+   per step or block under the Figure heading, in order. The Figure takes
+   these numerals from the heading; the render refuses when the heading lists
+   nothing, another count, or a numeral of another Figure. Use free numerals
+   of the `numerals:` scheme (`44, 46` after a part 42 for `even`; `502, 504`
+   in FIG. 5 for `hundreds`). Then write
    `drawings/input/FIG-<N>.json`: a flowchart is `{ "fromClaim": <approved
    method claim number> }` or `{ "steps": ["...", "..."] }`, never both, with
    optional `"terminals": true` and a `"proposal"` of decisions and edges
