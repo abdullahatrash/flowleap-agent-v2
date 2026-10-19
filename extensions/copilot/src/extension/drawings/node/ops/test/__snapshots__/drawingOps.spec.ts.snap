@@ -57,7 +57,7 @@ exports[`buildDrawingSetOp > lays out the Figures, writes the sheets, the PDF an
 - Page size: letter
 - Drawing Sheets: 2
 - Date: <date>
-- Results: 37 pass, 0 fail, 1 not checked
+- Results: 38 pass, 0 fail, 1 not checked
 
 This file lists each code check, the rule it applies and its result. It is not a verdict on the drawings. The rules a person must judge (sufficient views, every claimed feature shown, suitable legends) are not checked here; the attorney reviews them.
 
@@ -94,6 +94,7 @@ This file lists each code check, the rule it applies and its result. It is not a
 | lead-ends-on-nothing | 37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | lead-along-edge | 37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
 | lead-crosses-outline | 37 CFR 1.84(q) (lead lines "as short as possible"); OJ EPO 2025 A49 Art. 2 | pass | No finding. |
+| centre-line-crosses-part | 37 CFR 1.84(l) (lines "uniformly thick and well-defined"; a chain line through another part reads as a line of that part); OJ EPO 2025 A49 Art. 1(2)(b) | pass | No finding. |
 | us-keywords-only | 37 CFR 1.84(o); MPEP 608.02 (legends with "as few words as possible"); PCT Rule 11.11 | pass | No finding. |
 | epo-short-sentence | OJ EPO 2025 A49 Art. 1(2)(j); GL A-IX 8 (a short sentence per method step); PCT Rule 11.11 | pass | No finding. |
 | label-overlap | 37 CFR 1.84(p)(1), (p)(3) ("plain and legible", "should not cross or mingle with the lines"); OJ EPO 2025 A49 Art. 1(2)(g); PCT Rule 11.13(h) | pass | No finding. |
@@ -116,7 +117,7 @@ This file lists each code check, the rule it applies and its result. It is not a
     "pageSize": "letter",
     "sheets": 2,
     "text": "Built the Drawing Set of 2 Figure(s) on 2 letter sheet(s) for US: drafting/hinge/drawings/sheet-1.svg, drafting/hinge/drawings/sheet-2.svg, drafting/hinge/drawings/drawings.pdf, and the receipt drafting/hinge/drawings/drawings-compliance.md. Review renders of the sheets are in drafting/hinge/drawings/review/.
-Receipt: 37 pass, 0 fail, 1 not checked.
+Receipt: 38 pass, 0 fail, 1 not checked.
 No code check fails.
 Updated drafting/hinge/filing-manifest.md: 2 drawing sheet(s), measured.
 Report the receipt by check. The rules a person must judge (sufficient views, every claimed feature shown) stay with the attorney; never call the drawings compliant or ready to file.",
@@ -169,7 +170,7 @@ exports[`buildDrawingSetOp > refuses with no Figure, on a proposed part, on a fi
 exports[`coverage and numeral checks at build > refuses the D7 pipe-clamp set on numeral 10, cited in the description for FIG. 1 and FIG. 2 and drawn in no Figure; builds once the attorney waives it (#802) 1`] = `
 {
   "built": [
-    "Receipt: 36 pass, 0 fail, 2 not checked.",
+    "Receipt: 37 pass, 0 fail, 2 not checked.",
     "No code check fails.",
   ],
   "refused": {
@@ -188,7 +189,7 @@ exports[`coverage and numeral checks at build > refuses the D7 pipe-clamp set on
 exports[`coverage and numeral checks at build > with no Draft Outline and no draft, the receipt rows figure-coverage and numeral-not-drawn show not-checked (#804, #802) 1`] = `
 {
   "result": [
-    "Receipt: 35 pass, 0 fail, 3 not checked.",
+    "Receipt: 36 pass, 0 fail, 3 not checked.",
     "No code check fails.",
   ],
   "rows": [

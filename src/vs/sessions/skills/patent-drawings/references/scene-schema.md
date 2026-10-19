@@ -135,6 +135,7 @@ see [scope-and-refusals.md](scope-and-refusals.md).
 | `point` | no | a point on the face in the part frame. Omit it to use the face anchor. |
 | `surface` | no | `true` when the numeral names a surface: it sits on the surface, underlined, with no lead line |
 | `mark` | no | `"centre"` draws a centre mark (a thin cross, 3 mm arms) at the port. The lead line ends on one arm. Use it for a centre point that has no edge. The `axis` port sets it for you. |
+| `centreLine` | no | `true` draws a thin chain centre line (long dash, short dash) through the port, across the part's outline and 2 mm beyond it. Needs the `axis` port or `mark: "centre"` on a part that has an axis (cylinder, extrudedPolygon, revolve, shaft, cam). A part seen across its axis gets one line along the axis; a part seen along its axis gets two crossing lines. The line is not a lead line. |
 
 You never place a numeral by sheet coordinates. The engine computes the lead
 line from the port and keeps lead lines from crossing.
@@ -147,6 +148,9 @@ A lead line always ends on a visible edge or on a centre mark:
   meets that line at 30° to 60°. It never runs along an edge.
 - An axis or a centre point: use the `axis` port or `mark: "centre"`. The lead
   ends on an arm of the centre mark.
+- A pin or a shaft seen across its axis, or a round part seen along it: add
+  `centreLine: true` to that port. The engine draws the chain centre line and
+  the lead still ends on the centre mark.
 
 The numeral of a centre mark, or of a feature more than 8 mm inside the
 part's outline, goes inside the outline, 5 mm to 8 mm from the feature, with a

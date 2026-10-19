@@ -39,6 +39,7 @@ export const DRAWING_RULES = {
 	'lead-ends-on-nothing': '37 CFR 1.84(q) (lead lines "must originate in the immediate proximity of the reference character and extend to the feature indicated"); OJ EPO 2025 A49 Art. 2',
 	'lead-along-edge': '37 CFR 1.84(q) (lead lines "as short as possible", must not cross each other; a lead along an edge reads as the edge); OJ EPO 2025 A49 Art. 2',
 	'lead-crosses-outline': '37 CFR 1.84(q) (lead lines "as short as possible"); OJ EPO 2025 A49 Art. 2',
+	'centre-line-crosses-part': '37 CFR 1.84(l) (lines "uniformly thick and well-defined"; a chain line through another part reads as a line of that part); OJ EPO 2025 A49 Art. 1(2)(b)',
 } as const;
 
 export type DrawingRule = keyof typeof DRAWING_RULES;
@@ -212,9 +213,11 @@ export interface FigureSvgCheckOptions {
  * runs along a visible edge, or starts far from its numeral, a lead that crosses its own part's
  * outline while the numeral would fit inside it (a Note, found with the placer's own `insidePosition`),
  * a numeral without a lead line that is not underlined, a glyph under 3.2 mm, text beyond
- * keywords, and a numeral that overlaps another numeral or a line. It reads any SVG in the Figure
- * contract (paths, lines, texts with `class` and `data-*`), imports no kernel, and so also runs on
- * the 2D diagram mode's SVG. A lead line without `data-part` skips the on-part check.
+ * keywords, a numeral that overlaps another numeral or a line, and a chain centre line
+ * (`path.centre-line`, never a lead) that runs through a part that does not hold its axis. It
+ * reads any SVG in the Figure contract (paths, lines, texts with `class` and `data-*`), imports
+ * no kernel, and so also runs on the 2D diagram mode's SVG. A lead line without `data-part` skips
+ * the on-part check.
  */
 export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions = {}): DrawingFinding[] {
 	const { paths, texts } = readFigureSvg(svg);
@@ -283,6 +286,23 @@ export function checkFigureSvgFaults(svg: string, options: FigureSvgCheckOptions
 		const request = { numeral: path.numeral ?? '', part: path.part!, anchor, surface: false, mark: mark !== undefined };
 		if (insidePosition(request, partEdges, obstacles, text?.fontSize)) {
 			findings.push(fault('lead-crosses-outline', `The lead line of numeral ${path.numeral} crosses the outline of part "${path.part}", but the numeral fits inside the outline next to its feature with a short lead.`, { numeral: path.numeral, part: path.part, file, severity: 'Note' }));
+		}
+	}
+
+	for (const path of paths.filter(item => item.classes.includes('centre-line') && item.part)) {
+		const own = (item: { numeral?: string; part?: string }) => item.numeral === path.numeral && item.part === path.part;
+		const mark = paths.find(item => item.classes.includes('mark') && own(item))?.lines[0];
+		const segments = toSegments(path.lines);
+		if (!segments.length) {
+			continue;
+		}
+		const [first, last] = [segments[0][0], segments[segments.length - 1][1]];
+		const anchor: Vec2 = mark && mark.length >= 2 ? [(mark[0][0] + mark[mark.length - 1][0]) / 2, (mark[0][1] + mark[mark.length - 1][1]) / 2] : [(first[0] + last[0]) / 2, (first[1] + last[1]) / 2];
+		// The part the axis sits in (a lug around a pin) holds the anchor; the line may run through it.
+		const crossed = [...outlines].find(([part, points]) => part !== path.part && pointPolygonDistance(anchor, convexHull(points)) > 0
+			&& paths.filter(item => item.classes.includes('edge') && item.part === part).flatMap(item => toSegments(item.lines)).some(edge => segments.some(segment => segmentsIntersect(segment, edge))));
+		if (crossed) {
+			findings.push(fault('centre-line-crosses-part', `The centre line of numeral ${path.numeral} runs through part "${crossed[0]}"; a chain line runs across the part it centres and a little beyond, never through another part.`, { numeral: path.numeral, part: path.part, file }));
 		}
 	}
 

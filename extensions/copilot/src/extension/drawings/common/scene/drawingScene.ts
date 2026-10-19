@@ -287,6 +287,13 @@ export interface NumeralPort {
 	 * sets it without this field.
 	 */
 	readonly mark?: 'centre';
+	/**
+	 * `true` draws a thin chain centre line (long dash, short dash) through the port, across the
+	 * part's outline and a little beyond it. The port must be the `axis` port or carry
+	 * `mark: "centre"`, on a part that has an axis. A part seen across its axis gets one line
+	 * along the axis; a part seen along its axis gets two crossing lines. The line is not a lead.
+	 */
+	readonly centreLine?: boolean;
 }
 
 /** The library part kinds, in schema order. */

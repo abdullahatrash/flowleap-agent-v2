@@ -13,6 +13,14 @@ export const EDGE_WIDTH = 0.4;
 export const THIN_WIDTH = 0.2;
 /** Hatch spacing in sheet millimetres (37 CFR 1.84(h)(3): regularly spaced oblique lines). */
 export const HATCH_SPACING = 2;
+/**
+ * The chain centre line, a thin line (37 CFR 1.84(l); OJ EPO 2025 A49 Art. 1(2)(b)): long dash,
+ * gap, short dash, gap, in sheet millimetres. The short dash is as long as the centre mark arms
+ * and sits centred on the mark, as the two centre lines of a circle cross on their short dashes.
+ */
+export const CENTRE_LINE_DASHES: readonly [long: number, gap: number, short: number] = [8, 1.5, 3];
+/** How far a chain centre line runs beyond the part's outline at each end, in sheet millimetres. */
+export const CENTRE_LINE_OVERRUN = 2;
 
 /** The hatch style of one cut face: line angle in degrees and line pitch in sheet millimetres. */
 export interface HatchStyle {
@@ -82,6 +90,11 @@ export interface ProjectedPort {
 	readonly mark?: boolean;
 	/** True when the port's face is a plane the camera sees edge-on. */
 	readonly edgeOn?: boolean;
+	/**
+	 * The projected direction of the part's axis (model millimetres per unit of axis) when the
+	 * port draws a chain centre line; near zero length when the camera looks along the axis.
+	 */
+	readonly centreLine?: Vec2;
 }
 
 /** The kernel output for one Figure. */
@@ -106,6 +119,17 @@ export interface FigureLayout {
 	readonly hatchStyles: readonly ({ readonly part: string } & HatchStyle)[];
 	readonly numerals: readonly PlacedNumeral[];
 	readonly fontSize: number;
+	/** The chain centre lines, one segment each; a part seen along its axis has two that cross at the port. */
+	readonly centreLines: readonly CentreLine[];
+}
+
+/** One chain centre line of a Figure, in sheet millimetres. */
+export interface CentreLine {
+	readonly numeral: string;
+	readonly part: string;
+	/** The port the line runs through; a short dash is centred on it. */
+	readonly anchor: Vec2;
+	readonly line: Segment;
 }
 
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -130,6 +154,30 @@ function dedupe(lines: readonly { readonly part: string; readonly line: readonly
 }
 
 const sameStyle = (a: HatchStyle, b: HatchStyle) => a.angle === b.angle && a.pitch === b.pitch;
+
+/**
+ * The chain centre line(s) through `anchor`: one along `direction` across the extent of `points`
+ * plus the overrun at each end, or two crossing lines (horizontal and vertical on the sheet) when
+ * `direction` is near zero because the camera looks along the axis.
+ */
+function centreLineSegments(anchor: Vec2, direction: Vec2, points: readonly Vec2[]): Segment[] {
+	const length = Math.hypot(direction[0], direction[1]);
+	const units: Vec2[] = length < 1e-3 ? [[1, 0], [0, 1]] : [[direction[0] / length, direction[1] / length]];
+	return units.map((unit): Segment => {
+		const along = points.map(point => (point[0] - anchor[0]) * unit[0] + (point[1] - anchor[1]) * unit[1]);
+		const from = Math.min(0, ...along) - CENTRE_LINE_OVERRUN;
+		const to = Math.max(0, ...along) + CENTRE_LINE_OVERRUN;
+		return [[anchor[0] + unit[0] * from, anchor[1] + unit[1] * from], [anchor[0] + unit[0] * to, anchor[1] + unit[1] * to]];
+	});
+}
+
+/** The dash offset that centres a short dash of the chain line on `anchor`. */
+function centreLineDashOffset(line: Segment, anchor: Vec2): number {
+	const [long, gap, short] = CENTRE_LINE_DASHES;
+	const period = long + 2 * gap + short;
+	const toAnchor = Math.hypot(anchor[0] - line[0][0], anchor[1] - line[0][1]);
+	return round(((long + gap + short / 2 - toAnchor) % period + period) % period);
+}
 
 /**
  * Gives each sectioned part a hatch style. A part's override wins (an omitted field takes the
@@ -183,10 +231,24 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 		}
 	}
 	const drawing: Rect = { x: MARGIN, y: MARGIN, width: spanX * scale, height: spanY * scale };
+	const centreLines: CentreLine[] = projected.ports.flatMap((port): CentreLine[] => {
+		const part = projected.parts.find(item => item.id === port.part);
+		const points = part ? [...part.visible, ...part.hidden, ...part.cutFaces].flat().map(toSheet) : [];
+		if (!port.centreLine || !port.anchor || !points.length) {
+			return [];
+		}
+		const anchor = toSheet(port.anchor);
+		return centreLineSegments(anchor, port.centreLine, points).map(line => ({
+			numeral: port.numeral,
+			part: port.part,
+			anchor: [round(anchor[0]), round(anchor[1])],
+			line: [[round(line[0][0]), round(line[0][1])], [round(line[1][0]), round(line[1][1])]],
+		}));
+	});
 	const requests: NumeralRequest[] = projected.ports
 		.filter((port): port is ProjectedPort & { anchor: Vec2 } => port.anchor !== undefined)
 		.map(port => ({ numeral: port.numeral, part: port.part, surface: port.surface, anchor: toSheet(port.anchor), mark: port.mark, edgeOn: port.edgeOn }));
-	const obstacles = [...toSegments(edges.map(edge => edge.line)), ...toSegments(hidden.map(edge => edge.line)), ...hatching.map(item => item.line)];
+	const obstacles = [...toSegments(edges.map(edge => edge.line)), ...toSegments(hidden.map(edge => edge.line)), ...hatching.map(item => item.line), ...centreLines.map(item => item.line)];
 	const partEdges: PartEdge[] = edges.flatMap(edge => toSegments([edge.line]).map(segment => ({ part: edge.part, segment })));
 	const numerals = placeNumerals(requests, obstacles, drawing, partEdges).map(numeral => ({
 		...numeral,
@@ -195,7 +257,7 @@ export function layoutFigure(projected: ProjectedFigure): FigureLayout {
 		lead: numeral.lead && [[round(numeral.lead[0][0]), round(numeral.lead[0][1])], [round(numeral.lead[1][0]), round(numeral.lead[1][1])]] as Segment,
 		centreMark: numeral.centreMark && [round(numeral.centreMark[0]), round(numeral.centreMark[1])] as Vec2,
 	}));
-	return { figure: projected.figure, width: round(spanX * scale + 2 * MARGIN), height: round(spanY * scale + 2 * MARGIN), edges, hidden, hatching, hatchStyles, numerals, fontSize: NUMERAL_FONT_SIZE };
+	return { figure: projected.figure, width: round(spanX * scale + 2 * MARGIN), height: round(spanY * scale + 2 * MARGIN), edges, hidden, hatching, hatchStyles, numerals, fontSize: NUMERAL_FONT_SIZE, centreLines };
 }
 
 function pathData(line: readonly Vec2[]): string {
@@ -208,7 +270,8 @@ function escapeXml(text: string): string {
 
 /**
  * Writes `FIG-N.svg`: black line art on white, units in sheet millimetres. Visible edges 0.4 mm,
- * lead lines, centre marks (`path.mark`), hatching and dashed hidden edges 0.2 mm, numerals at 4.5 mm font size (3.2 mm digit
+ * lead lines, centre marks (`path.mark`), chain centre lines (`path.centre-line`, long dash,
+ * short dash), hatching and dashed hidden edges 0.2 mm, numerals at 4.5 mm font size (3.2 mm digit
  * height), surface numerals underlined without a lead line. The `class` and `data-*` attributes let
  * the mechanical fault list read the file back.
  */
@@ -225,6 +288,10 @@ export function writeFigureSvg(layout: FigureLayout): string {
 	}
 	for (const item of layout.hatching) {
 		lines.push(`<path class="hatch" data-part="${escapeXml(item.part)}" stroke-width="${THIN_WIDTH}" d="${pathData(item.line)}"/>`);
+	}
+	const [long, gap, short] = CENTRE_LINE_DASHES;
+	for (const item of layout.centreLines) {
+		lines.push(`<path class="centre-line" data-numeral="${escapeXml(item.numeral)}" data-part="${escapeXml(item.part)}" stroke-width="${THIN_WIDTH}" stroke-dasharray="${long} ${gap} ${short} ${gap}" stroke-dashoffset="${centreLineDashOffset(item.line, item.anchor)}" d="${pathData(item.line)}"/>`);
 	}
 	for (const numeral of layout.numerals) {
 		if (numeral.centreMark) {

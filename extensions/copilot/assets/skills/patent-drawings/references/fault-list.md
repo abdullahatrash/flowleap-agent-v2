@@ -30,6 +30,7 @@ From the scene validator, the renderer and `drawingFaults.ts`.
 | `numeral-overlap` | Two numerals overlap. | Move one port to another face or point. |
 | `numeral-on-line` | A numeral sits on a drawn line. | Move the port; a surface numeral needs a free area of the face. |
 | `hatch-same-as-neighbour` | Note: two touching sectioned parts have the same hatch angle and pitch, so they read as one body (37 CFR 1.84(h)(3); OJ EPO 2025 A49 Art. 1(2)(b)). Only a `hatch` override causes it. | Remove the `hatch` of one part, or give it another angle or pitch. Keep it when the two parts are one item. |
+| `centre-line-crosses-part` | A chain centre line (`centreLine: true`) runs through a visible edge of another part that does not hold the axis (37 CFR 1.84(l); OJ EPO 2025 A49 Art. 1(2)(b)). The part the axis sits in (a lug around a pin) is allowed. The line is not a lead and the lead checks ignore it. | Remove `centreLine` from the port, or move the other part. |
 
 ## Diagram faults
 

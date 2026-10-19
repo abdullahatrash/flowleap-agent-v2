@@ -179,4 +179,38 @@ describe('Patent Drawings mechanical fault list', () => {
 			axisOnBox: ['numeral-without-port'],
 		});
 	});
+
+	it('a chain centre line is not a lead and may run through the part that holds its axis (#801)', () => {
+		const mark = '<path class="mark" data-numeral="10" data-part="p" stroke-width="0.2" d="M28.5 30 L31.5 30 M30 28.5 L30 31.5"/>';
+		const chain = '<path class="centre-line" data-numeral="10" data-part="p" stroke-width="0.2" stroke-dasharray="8 1.5 3 1.5" stroke-dashoffset="2" d="M8 30 L52 30"/>';
+		/** A part "h" around the square: a lug that holds the axis of "p". */
+		const host = '<path class="edge" data-part="h" d="M5 5 L55 5 L55 55 L5 55 Z" stroke="#000" stroke-width="0.4" fill="none"/>';
+		/** A part "q" beside the square, inside the overrun of the chain line. */
+		const neighbour = '<path class="edge" data-part="q" d="M51 20 L58 20 L58 40 L51 40 Z" stroke="#000" stroke-width="0.4" fill="none"/>';
+		/** Numeral 10 inside the square, its lead from below the chain line to the top arm end: it crosses the chain line, which is not a lead. */
+		const inside = [mark, lead('10', 'M38 37.5 L30 28.5'), numeral('10', 41, 42)];
+		expect({
+			leadAcrossChain: rules(checkFigureSvgFaults(svg(SQUARE, chain, ...inside))),
+			throughHost: rules(checkFigureSvgFaults(svg(SQUARE, host, chain, ...inside, lead('12', 'M66.7 50 L55 50', 'h'), numeral('12', 70, 52, { part: 'h' })))),
+			throughNeighbour: rules(checkFigureSvgFaults(svg(SQUARE, neighbour, chain, ...inside, lead('14', 'M66.7 30 L58 30', 'q'), numeral('14', 70, 32, { part: 'q' })))),
+		}).toEqual({ leadAcrossChain: [], throughHost: [], throughNeighbour: ['centre-line-crosses-part'] });
+	});
+
+	it('scene validator: centreLine needs an axis port or centre mark on a part with an axis (#801)', () => {
+		const parts = [{ id: 'pin', shape: { kind: 'cylinder' as const, radius: 2, height: 10 } }, { id: 'housing', shape: { kind: 'box' as const, size: [4, 4, 4] as const } }];
+		const messages = (numerals: unknown) => validateScene({ ...scene({ parts }), numerals }).findings.map(finding => finding.message);
+		expect({
+			onAxis: messages([{ numeral: '10', part: 'pin', face: 'axis', centreLine: true }]),
+			onMark: messages([{ numeral: '10', part: 'pin', face: 'top', mark: 'centre', centreLine: true }]),
+			onPlainFace: messages([{ numeral: '10', part: 'pin', face: 'top', centreLine: true }]),
+			onBox: messages([{ numeral: '10', part: 'housing', face: 'top', mark: 'centre', centreLine: true }]),
+			notBoolean: messages([{ numeral: '10', part: 'pin', face: 'axis', centreLine: 'yes' }]),
+		}).toEqual({
+			onAxis: [],
+			onMark: [],
+			onPlainFace: ['numerals[0].centreLine: needs the "axis" port or mark "centre"'],
+			onBox: ['numerals[0].centreLine: part "housing" (box) has no axis; only cylinder, extrudedPolygon, revolve, shaft, cam have one'],
+			notBoolean: ['numerals[0].centreLine: must be true or false'],
+		});
+	});
 });

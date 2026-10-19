@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DrawingFinding, NUMERAL_PATTERN } from './drawingFaults';
-import { CAMERA_PRESETS, DrawingScene, HATCH_ANGLES, HATCH_PITCH_MAX, HATCH_PITCH_MIN, LIBRARY_KINDS, PRIMITIVE_KINDS } from './drawingScene';
+import { CAMERA_PRESETS, DrawingScene, HATCH_ANGLES, HATCH_PITCH_MAX, HATCH_PITCH_MIN, LIBRARY_KINDS, PartShape, PRIMITIVE_KINDS } from './drawingScene';
+import { AXIS_KINDS, AXIS_PORT } from './sceneGeometry';
 
 /** Options of the scene validator. */
 export interface SceneValidationOptions {
@@ -372,7 +373,7 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 		input.numerals.forEach((port, index) => {
 			const path = `numerals[${index}]`;
 			if (!isObject(port)) {
-				error(path, 'must be { numeral, part, face, point?, surface?, mark? }');
+				error(path, 'must be { numeral, part, face, point?, surface?, mark?, centreLine? }');
 				return;
 			}
 			if (typeof port.numeral !== 'string' || !NUMERAL_PATTERN.test(port.numeral)) {
@@ -392,6 +393,18 @@ export function validateScene(input: unknown, options: SceneValidationOptions = 
 			}
 			if (port.mark !== undefined && port.mark !== 'centre') {
 				error(`${path}.mark`, 'must be "centre"');
+			}
+			if (port.centreLine !== undefined && typeof port.centreLine !== 'boolean') {
+				error(`${path}.centreLine`, 'must be true or false');
+			} else if (port.centreLine === true) {
+				if (port.face !== AXIS_PORT && port.mark !== 'centre') {
+					error(`${path}.centreLine`, 'needs the "axis" port or mark "centre"');
+				}
+				const part = Array.isArray(input.parts) ? input.parts.find(item => isObject(item) && item.id === port.part) : undefined;
+				const kind = isObject(part) && isObject(part.shape) && typeof part.shape.kind === 'string' ? part.shape.kind as PartShape['kind'] : undefined;
+				if (kind !== undefined && !AXIS_KINDS.includes(kind)) {
+					error(`${path}.centreLine`, `part "${port.part}" (${kind}) has no axis; only ${AXIS_KINDS.join(', ')} have one`);
+				}
 			}
 		});
 	}
