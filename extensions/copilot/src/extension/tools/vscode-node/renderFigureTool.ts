@@ -129,7 +129,7 @@ export class RenderFigureTool implements ICopilotTool<IRenderFigureParams> {
 			},
 		});
 		if (!result.ok) {
-			return workspace.refusal(refused, result.reason);
+			return workspace.refusal(refused, result.reason, `${input.figure}${input.partial ?? ''}`);
 		}
 		const sketches = await copyAttachedSketches(workspace.matterFiles(), attachedImages(this.promptContext, this.fileSystemService), `${input.figure}${input.partial ?? ''}`, this.today());
 		const text = sketches.length ? `${result.text}\nCopied the attached ${sketches.length === 1 ? 'sketch' : 'sketches'} to ${workspace.folder.folder}/sketches/: ${sketches.map(sketch => sketch.slice('sketches/'.length)).join(', ')}.` : result.text;

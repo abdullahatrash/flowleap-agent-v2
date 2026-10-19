@@ -78,12 +78,12 @@ export class ProposeFigurePartTool implements ICopilotTool<IProposeFigurePartPar
 		if (input.sketch?.trim()) {
 			const resolved = await this.resolveSketch(workspace, input.sketch.trim());
 			if (typeof resolved === 'string') {
-				return workspace.refusal(refused, resolved);
+				return workspace.refusal(refused, resolved, input.figure);
 			}
 			sketch = resolved;
 		}
 		const result = await proposeFigurePartOp(workspace.matterFiles(), { figure: input.figure, part: input.part, numeral: input.numeral, features: input.features, sketch });
-		return result.ok ? textResult(await workspace.textWithChecklistLine(result.text)) : workspace.refusal(refused, result.reason);
+		return result.ok ? textResult(await workspace.textWithChecklistLine(result.text)) : workspace.refusal(refused, result.reason, input.figure);
 	}
 
 	/** The sketch bytes: an attached image whose name matches, else a workspace image file; or the refusal. */
