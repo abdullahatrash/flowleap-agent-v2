@@ -87,7 +87,6 @@ export const PATENT_TOOLS: readonly string[] = [
 	'legalStatus',
 	'patentFamily',
 	'registerEvents',
-	// Legal research
 	// Claim assessment & landscape analytics
 	'analyzeClaim',
 	'compareClaims',
