@@ -57,6 +57,26 @@ describe('patent tool references', () => {
 		expect({ scannedSkills: skillFiles.length > 0, problems }).toEqual({ scannedSkills: true, problems: [] });
 	});
 
+	it('names no retired legal tool in any bundled skill file', () => {
+		// ADR 0017: patent law is read from the official page. The two chat tools that reached the
+		// FlowLeap copy retire; a skill that still names one would route the agent at a dead end.
+		// Scan every file under each skill (SKILL.md and references) so a reference file cannot
+		// carry the name either.
+		const retiredTools = ['search_legal', 'legal_search_guide'];
+		const skillFiles = fs.readdirSync(SKILLS_DIR, { recursive: true, encoding: 'utf8' })
+			.filter(name => name.endsWith('.md'))
+			.map(name => path.join(SKILLS_DIR, name));
+
+		const problems = skillFiles.flatMap(file => {
+			const text = fs.readFileSync(file, 'utf8');
+			return retiredTools
+				.filter(tool => text.includes(tool))
+				.map(tool => `${path.relative(SKILLS_DIR, file)}: ${tool}`);
+		}).sort();
+
+		expect({ scannedSkills: skillFiles.length > 0, problems }).toEqual({ scannedSkills: true, problems: [] });
+	});
+
 	it('enforces the same figures page maximum its input schema documents', () => {
 		// The figures tool clamps user-requested pages to a MAX_REQUESTED_PAGES cap that must match the
 		// "(max N)" the schema advertises to the model, so the promise and the enforcement never drift.
