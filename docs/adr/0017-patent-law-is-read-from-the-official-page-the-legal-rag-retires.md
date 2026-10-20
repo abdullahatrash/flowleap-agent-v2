@@ -70,6 +70,11 @@ to take it for all patent law, and to retire the copy.
   the office's, so the quote carries the office's authority, and the edition date is visible.
 - `docs/LEGAL_RAG_SYSTEM.md` goes with the code. `docs/ACCESS.md` drops the pgvector note.
 - The CLI loses one command and the plugins lose two tool names; both follow the usual sync.
+- Claude.ai users of the hosted MCP server have no client release. At step 3 the two tools
+  leave the MCP catalog (a retired name is not listed; it answers 410 only when a stale client
+  calls it by name) and the 410 notice is their whole migration, so it names the official pages
+  and says that the connected assistant's own web tools read them. This needs a new retirement
+  notice; `CLIENT_SIDE_RETIREMENT` says "runs on the client's model", which is not this case.
 
 ## The migration
 
@@ -77,7 +82,7 @@ to take it for all patent law, and to retire the copy.
 |---|---|---|---|---|
 | 1 | flowleap-agent-v2 | retire the two chat tools, prompt lines, nine skills, seven eval cases re-pointed; `legal-research` becomes the fetch method with a URL reference file | main suite, trajectory repeat gate, full-stack laptop run, release | revert the app release |
 | 2 | flowleap-cli, flowleap-plugins | drop the `legal` command and the two tool names; sync | CI, release | revert |
-| 3 | flowleap-backend | the two names join `RETIRED_TOOL_NAMES`; docs catalog MAJOR bump with a changelog line naming the official sources; one release | tools-facade and retired-tool tests; logs watched one release for 410 hits | remove the two names from the set |
+| 3 | flowleap-backend | the two names join `RETIRED_TOOL_NAMES` with a new retirement notice naming the official pages; the MCP catalog drops them; docs catalog MAJOR bump with a changelog line; one release | tools-facade and retired-tool tests; logs watched one release for 410 hits | remove the two names from the set |
 | 4 | flowleap-backend | delete lib, schema, ingest scripts, dependency, docs; migration drops the two tables and the extension; dump taken first | vitest, eslint, deploy with the dump in hand | restore from the dump and revert the PR; the point of no return without the dump |
 
 Step 3 ships only after the app release of step 1 is out. Step 4 ships only after step 3 ran
