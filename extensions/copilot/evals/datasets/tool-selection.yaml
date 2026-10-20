@@ -151,13 +151,16 @@
       value: |
         const parsed = JSON.parse(output);
         // Patent law is read from the office's own page (#825, ADR 0017): the first call is
-        // fetch_webpage with a URL on an official law host. Subdomains count; look-alike hosts do not.
-        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        // fetch_webpage with a URL on an official law host (subdomains count; look-alike hosts do not).
         const first = (parsed.tool_calls || [])[0];
         if (first?.function?.name !== 'fetch_webpage') return false;
         const args = typeof first.function.arguments === 'string' ? JSON.parse(first.function.arguments) : first.function.arguments;
         const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
-        return urls.some(u => OFFICIAL.test(String(u)));
+        // The official law hosts live in ONE place, assertions/trajectory-assertions.mjs (#825):
+        // dynamic import + cwd-relative path, the way the main config's global guard loads a file.
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => urls.some(H.isOfficialLawUrl));
       metric: path_g_legal_research_official_page
 
 - vars:
@@ -205,13 +208,16 @@
       value: |
         const parsed = JSON.parse(output);
         // Patent law is read from the office's own page (#825, ADR 0017): the first call is
-        // fetch_webpage with a URL on an official law host. Subdomains count; look-alike hosts do not.
-        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        // fetch_webpage with a URL on an official law host (subdomains count; look-alike hosts do not).
         const first = (parsed.tool_calls || [])[0];
         if (first?.function?.name !== 'fetch_webpage') return false;
         const args = typeof first.function.arguments === 'string' ? JSON.parse(first.function.arguments) : first.function.arguments;
         const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
-        return urls.some(u => OFFICIAL.test(String(u)));
+        // The official law hosts live in ONE place, assertions/trajectory-assertions.mjs (#825):
+        // dynamic import + cwd-relative path, the way the main config's global guard loads a file.
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => urls.some(H.isOfficialLawUrl));
       metric: legal_lookup_first_tool_official_page
 
 - vars:

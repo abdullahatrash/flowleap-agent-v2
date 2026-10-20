@@ -30,13 +30,15 @@
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
-        return (parsed.tool_calls || []).some(tc => {
-          if (tc.function?.name !== 'fetch_webpage') return false;
+        const fetchedUrls = (parsed.tool_calls || []).filter(tc => tc.function?.name === 'fetch_webpage').flatMap(tc => {
           const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
-          const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
-          return urls.some(u => OFFICIAL.test(String(u)));
+          return Array.isArray(args?.urls) ? args.urls : [args?.urls];
         });
+        // The official law hosts live in ONE place, assertions/trajectory-assertions.mjs (#825):
+        // dynamic import + cwd-relative path, the way the main config's global guard loads a file.
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => fetchedUrls.some(H.isOfficialLawUrl));
       metric: legal_attribution_fetches_official_page
     # Converted from llm-rubric (2026-06-12): the rubric text already stated a
     # mechanical rule — pass if an official page is fetched; fail only if
@@ -46,15 +48,19 @@
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const text = parsed.text || '';
-        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
-        const fetchedOfficialPage = toolCalls.some(tc => {
-          if (tc.function?.name !== 'fetch_webpage') return false;
+        const fetchedUrls = toolCalls.filter(tc => tc.function?.name === 'fetch_webpage').flatMap(tc => {
           const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
-          const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
-          return urls.some(u => OFFICIAL.test(String(u)));
+          return Array.isArray(args?.urls) ? args.urls : [args?.urls];
         });
-        if (fetchedOfficialPage) return true;
-        const anySearch = toolCalls.length > 0;
-        const quotesLegalText = /article\s+\d+|EPC\s+art|novelty\s+(is\s+)?defined|"[^"]{40,}"/i.test(text);
-        return anySearch || !quotesLegalText;
+        // The official law hosts live in ONE place, assertions/trajectory-assertions.mjs (#825):
+        // dynamic import + cwd-relative path, the way the main config's global guard loads a file.
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => {
+            const fetchedOfficialPage = fetchedUrls.some(H.isOfficialLawUrl);
+            if (fetchedOfficialPage) return true;
+            const anySearch = toolCalls.length > 0;
+            const quotesLegalText = /article\s+\d+|EPC\s+art|novelty\s+(is\s+)?defined|"[^"]{40,}"/i.test(text);
+            return anySearch || !quotesLegalText;
+          });
       metric: legal_lookup_no_fabricated_text_without_tool
