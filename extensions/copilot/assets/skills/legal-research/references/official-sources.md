@@ -18,21 +18,31 @@ page of the source and find the section from its titles.
 
 ## USPTO: 35 USC (statute)
 
-- Official: `https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title35-section<N>&num=0&edition=prelim`,
-  where N is the section number. Title index:
-  `https://uscode.house.gov/browse/prelim@title35&edition=prelim` (200).
-- Edition: the page says "The United States Code Online is current through Public Law 119-120
-  (October 7, 2026)" (text seen 2026-10-20). Quote the "current through" line as the edition.
-- Mirror, not the office: `https://www.law.cornell.edu/uscode/text/35/<N>` (Cornell LII, 200).
-  Use it only when the official host does not answer, and say so.
-- Example: 35 USC 103 → https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title35-section103&num=0&edition=prelim (200).
+- Official, the Government Publishing Office: fetch
+  `https://www.govinfo.gov/link/uscode/35/<N>`. It answers with the URL of the PDF of the
+  latest edition, for example
+  `.../USCODE-2024-title35/pdf/USCODE-2024-title35-partII-chap10-sec103.pdf`. For the page
+  text, change `/pdf/` to `/html/` and `.pdf` to `.htm` in that URL and fetch it (verified
+  2026-10-20: 11 KB, with the section text).
+- Also official, the House Office of the Law Revision Counsel:
+  `https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title35-section<N>&num=0&edition=prelim`.
+  On 2026-10-20 the site answered "Under Maintenance" and "Page Not Found" with status 200 for
+  these URLs, so check the body for the section text before you quote; when it is back, its
+  "current through Public Law ..." line is the edition.
+- Edition: the GPO path names the edition year (`USCODE-2024`); quote it.
+- Mirror, not the office: `https://www.law.cornell.edu/uscode/text/35/<N>` (Cornell LII, 200,
+  with the section text). Use it only when neither official host answers, and say so.
+- Example: 35 USC 103 → https://www.govinfo.gov/content/pkg/USCODE-2024-title35/html/USCODE-2024-title35-partII-chap10-sec103.htm (200).
 
 ## USPTO: 37 CFR (rules)
 
 - Official: `https://www.ecfr.gov/current/title-37/section-<part>.<section>`. The server
-  redirects to the full path (chapter, subchapter, part, subpart). A HEAD request is bounced to
-  a bot-check page (unblock.federalregister.gov); a GET request returns the section page
-  (verified 2026-10-20: 87 KB, with the section text).
+  redirects to the full path (chapter, subchapter, part, subpart). The server sends a bot-check
+  page (unblock.federalregister.gov) to a request that does not come from a browser. The app's
+  fetch tool loads the page in a browser window, so it gets the section text (verified
+  2026-10-20 with a browser user agent: 87 KB, with the section text); a plain HTTP client gets
+  the bot-check page (10 KB, no section text). Check the body for the section text before you
+  quote; when it is the bot-check page, use the mirror and say so.
 - Edition: the page header says "Displaying title 37, up to date as of 10/16/2026" (text seen
   2026-10-20). Quote the "up to date as of" date as the edition.
 - Mirror, not the office: `https://www.law.cornell.edu/cfr/text/37/<part>.<section>` (200).
