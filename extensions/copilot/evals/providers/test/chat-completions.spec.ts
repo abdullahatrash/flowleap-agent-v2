@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { requestChatCompletion, systemMessage } from '../chat-completions';
+import { readTokenUsage, requestChatCompletion, systemMessage } from '../chat-completions';
 
 function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -46,6 +46,20 @@ describe('chat completions shared by the eval providers', () => {
 			'API returned 503: busy',
 			'No choices in response',
 			'Upstream error in a 200 response (finish_reason=error): rate-limited upstream',
+		]);
+	});
+
+	it('reads token usage, with the cached prompt tokens from either wire shape and omitted when the response has none', () => {
+		expect([
+			readTokenUsage({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, prompt_tokens_details: { cached_tokens: 8 } }),
+			readTokenUsage({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, cache_read_input_tokens: 7 }),
+			readTokenUsage({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+			readTokenUsage(undefined),
+		]).toEqual([
+			{ total: 15, prompt: 10, completion: 5, cached: 8 },
+			{ total: 15, prompt: 10, completion: 5, cached: 7 },
+			{ total: 15, prompt: 10, completion: 5 },
+			{ total: 0, prompt: 0, completion: 0 },
 		]);
 	});
 
