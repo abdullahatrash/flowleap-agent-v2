@@ -1,6 +1,6 @@
 # Patent law is read from the official page, and the legal reference search retires on every transport
 
-**Status:** proposed (2026-10-20)
+**Status:** accepted (2026-10-20)
 
 FlowLeap keeps a copy of patent law. A scrape pipeline (`scripts/legal-ingest`) reads the MPEP,
 the EPC and the EPO Guidelines, chunks them, embeds each chunk with a gte-small model and stores
