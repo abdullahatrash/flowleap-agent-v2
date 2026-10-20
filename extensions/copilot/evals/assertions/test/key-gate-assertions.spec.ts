@@ -190,4 +190,13 @@ describe('key-gate fixtures', () => {
 		const gated = loadFixture('k1-gated-office-search').rules.find(r => r.tool === 'search_patents');
 		expect(gated?.response?.body).toContain('This is a user-action stop, not a dead route: do NOT substitute web or Google Patents data for this office, for searches or for single-document reads.');
 	});
+
+	it('name the keyless tools the app names (ADR 0017: NPL search, not the retired legal search) in every gated body', () => {
+		const ids = fs.readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
+		const bodies = ids.flatMap(id => loadFixture(id).rules.flatMap(r => [r.response, ...(r.responses ?? [])]).map(res => res?.body ?? '').filter(body => body.includes('keyless tools (')));
+		expect({
+			gatedBodies: bodies.length > 0,
+			stale: bodies.filter(body => !body.includes('keyless tools (PATSTAT analytics, NPL search, academic search)')).length,
+		}).toEqual({ gatedBodies: true, stale: 0 });
+	});
 });

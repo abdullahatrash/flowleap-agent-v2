@@ -713,8 +713,10 @@ describe('patentBackendErrorRecoveryHint', () => {
 			noWebSubstitution: hint.includes('do NOT substitute web or Google Patents data for this office'),
 			coversSingleDocumentReads: hint.includes('for searches or for single-document reads'),
 			continuesElsewhere: hint.includes('continue with any office whose key is live and with the keyless tools'),
+			// ADR 0017 (#825): the legal search tool retired; the keyless tools are PATSTAT analytics, NPL search and academic search.
+			namesTheKeylessTools: hint.includes('keyless tools (PATSTAT analytics, NPL search, academic search)'),
 			namesTheGap: hint.includes('name the missing-key gap'),
-		}).toEqual({ userActionStop: true, noWebSubstitution: true, coversSingleDocumentReads: true, continuesElsewhere: true, namesTheGap: true });
+		}).toEqual({ userActionStop: true, noWebSubstitution: true, coversSingleDocumentReads: true, continuesElsewhere: true, namesTheKeylessTools: true, namesTheGap: true });
 	});
 
 	it('maps a RateLimitError to a "wait and retry" hint, naming the wait when known', () => {
@@ -729,8 +731,9 @@ describe('patentBackendErrorRecoveryHint', () => {
 			steersToKeys: hint.includes('Patent Data Keys'),
 			userActionStop: hint.includes('user-action stop'),
 			noWebSubstitution: hint.includes('do NOT substitute web or Google Patents data'),
+			namesTheKeylessTools: hint.includes('keyless tools (PATSTAT analytics, NPL search, academic search)'),
 			notARateLimitSteer: !hint.includes('rate-limiting'),
-		}).toEqual({ namesReset: true, steersToKeys: true, userActionStop: true, noWebSubstitution: true, notARateLimitSteer: true });
+		}).toEqual({ namesReset: true, steersToKeys: true, userActionStop: true, noWebSubstitution: true, namesTheKeylessTools: true, notARateLimitSteer: true });
 		expect(patentBackendErrorRecoveryHint(new TrialDataBudgetExhaustedError('spent', undefined, undefined, undefined))).toContain('next UTC day');
 	});
 
