@@ -1,19 +1,22 @@
 {
-	"updated": "2026-08-21",
+	"updated": "2026-10-20",
 	"config": "promptfooconfig.key-gate.yaml",
 	"policy": {
 		"runs": 3,
-		"passThreshold": { "numerator": 2, "denominator": 3 },
+		"passThreshold": {
+			"numerator": 2,
+			"denominator": 3
+		},
 		"minValidSamples": 2
 	},
 	"model": "anthropic/claude-sonnet-5",
-	"judge": "google/gemini-2.5-flash (max_tokens 4096)",
-	"notes": "Re-recorded on sonnet-5 with the #263 harness fix (wrap-up nudge + retry, DEFAULT_MAX_ROUNDS 12). The gemini-era strictness claim ('does not flake, every valid sample must pass') does NOT transfer: sonnet-5 runs void the occasional sample (1 judge parse, 1 provider error across this record's 3 runs + 1 top-up), so the standard 2-of-3-of-valid policy applies. VOID rules unchanged: a judge parse failure or provider error is re-drawn, never counted as a K-case failure. Pre-fix history (empty-finalText noise) is in git — do not compare runs against anything recorded before 2026-08-21. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:key-gate:repeat run.",
+	"judge": "anthropic/claude-haiku-5.5 (max_tokens 4096, no sampling parameters)",
+	"notes": "Re-recorded on sonnet-5 with the #263 harness fix (wrap-up nudge + retry, DEFAULT_MAX_ROUNDS 12). The gemini-era strictness claim ('does not flake, every valid sample must pass') does NOT transfer: sonnet-5 runs void the occasional sample (1 judge parse, 1 provider error across this record's 3 runs + 1 top-up), so the standard 2-of-3-of-valid policy applies. VOID rules unchanged: a judge parse failure or provider error is re-drawn, never counted as a K-case failure. Pre-fix history (empty-finalText noise) is in git — do not compare runs against anything recorded before 2026-08-21. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:key-gate:repeat run. 2026-10-20 (#834): judge moved from google/gemini-2.5-flash to anthropic/claude-haiku-5.5 and the gate re-run on main after #830/#832 (3 runs, 18 rows, 18 rubric components, 0 graderError, 0 provider voids). K2, K3a, K4, K5 matched the record. K1 and K3b fell to FAIL on CODE asserts, not on the judge (every failing sample fails a javascript predicate and the judge's reasons describe the same behaviour); a K1/K3b-only re-draw confirmed it. Expected stays PASS so the gate keeps flagging them; #836 is the follow-up; no prompt, fixture or assert changed in #834.",
 	"cases": {
 		"K1": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-08-21)",
-			"note": "Comprehensive US+EP search with EP gated. Passed only after the #263 wrap-up fix — pre-fix runs failed the narration rubric on empty finalText, not on behavior. Mechanism history (#191 routing collapse, #189 delegation limit): see git."
+			"observed": "1/3 in the 2026-10-20 gate and 1/3 in a K1-only re-draw the same day (2/6); 3/3 (2026-08-21)",
+			"note": "Comprehensive US+EP search with EP gated. REGRESSION recorded 2026-10-20 (#834 run, #836): the model never completes the live US side — its US search is routed into the EPO key gate or malformed, and the round cap arrives before a US result (k1_completed_live_office, k1_did_not_stall_on_the_ask; the rubric then fails criterion (a), no US results). Suspected cause #830 (missing-key hint wording changed in patentBackendClient.ts and every key-gate fixture, legal branch removed from the prompt); the uspto_api_guide loop also matches the T1 debt #734. Not a judge flip. Expected stays PASS (the gate reports the regression until the #836 fix lands and a K1-only probe reads 3/3). History: passed only after the #263 wrap-up fix — pre-fix runs failed the narration rubric on empty finalText, not on behavior; mechanism history (#191 routing collapse, #189 delegation limit): see git."
 		},
 		"K2": {
 			"expected": "PASS",
@@ -27,8 +30,8 @@
 		},
 		"K3b": {
 			"expected": "PASS",
-			"observed": "2/3 valid (1 provider-error void, re-drawn; 2026-08-21)",
-			"note": "CONTROL — dead US routes with a working key still reach the web fallback."
+			"observed": "0/3 in the 2026-10-20 gate and 1/3 in a K3b-only re-draw the same day (1/6); 2/3 valid (1 provider-error void, re-drawn; 2026-08-21)",
+			"note": "CONTROL — dead US routes with a working key still reach the web fallback. REGRESSION recorded 2026-10-20 (#834 run, #836): the model loops on uspto_api_guide (three calls in a row) and patent_api_request and hits the round cap before fetch_webpage (k3b_reached_web_fallback); in two samples it also asked the user to add the EPO OPS key to obtain the US document (k3b_did_not_misclassify_as_key_gate). Suspected cause #830; same loop shape as #734. Not a judge flip. Expected stays PASS (the gate reports the regression until the #836 fix lands and a K3b-only probe reads 3/3)."
 		},
 		"K4": {
 			"expected": "PASS",
