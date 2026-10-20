@@ -738,10 +738,13 @@ const PROMPT_EXAMPLE_FINGERPRINTS = ['US11000000', 'temperature gradient exceedi
 
 /**
  * Hosts whose pages are the office's own text of patent law (#825, ADR 0017): the USPTO (MPEP), the
- * EPO (EPC, Guidelines), WIPO (PCT), the eCFR (37 CFR) and the two official mirrors of 35 USC. A
- * subdomain of one of them counts. The single-turn datasets carry the same list inline.
+ * EPO (EPC, Guidelines), WIPO (PCT), the eCFR (37 CFR), the two official publishers of 35 USC
+ * (uscode.house.gov is the Office of the Law Revision Counsel, govinfo.gov is the Government
+ * Publishing Office) and Cornell LII (law.cornell.edu), a mirror the skill names as the fallback.
+ * A subdomain of one of them counts. This is the ONE list: the single-turn datasets and the
+ * key-gate assertions import {@link isOfficialLawUrl} instead of carrying a copy.
  */
-const OFFICIAL_LAW_HOSTS = ['uspto.gov', 'epo.org', 'wipo.int', 'ecfr.gov', 'uscode.house.gov', 'law.cornell.edu'];
+const OFFICIAL_LAW_HOSTS = ['uspto.gov', 'epo.org', 'wipo.int', 'ecfr.gov', 'uscode.house.gov', 'govinfo.gov', 'law.cornell.edu'];
 
 /**
  * Whether a URL points at one of the {@link OFFICIAL_LAW_HOSTS}.

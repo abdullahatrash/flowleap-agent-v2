@@ -113,6 +113,22 @@ describe('trajectory helpers', () => {
 		expect(H.reactedAfter(retried, 'HTTP_5XX', { differentTool: false })).toBe(true);
 	});
 
+	it('isOfficialLawUrl admits each official law host and its subdomains, and no look-alike or mirror of a mirror', () => {
+		// The GPO link service (govinfo.gov) is the fetchable 35 USC source named in the legal-research skill (#825).
+		expect({
+			mpep: H.isOfficialLawUrl('https://www.uspto.gov/web/offices/pac/mpep/s2143.html'),
+			epc: H.isOfficialLawUrl('https://www.epo.org/en/legal/epc/2020/a54.html'),
+			pct: H.isOfficialLawUrl('https://pctlegal.wipo.int/eGuide/view-doc.xhtml?doc-code=EP&doc-lang=en'),
+			cfr: H.isOfficialLawUrl('https://www.ecfr.gov/current/title-37/section-1.362'),
+			olrc: H.isOfficialLawUrl('https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title35-section103&num=0&edition=prelim'),
+			gpo: H.isOfficialLawUrl('https://www.govinfo.gov/link/uscode/35/103?link-type=html'),
+			cornell: H.isOfficialLawUrl('https://www.law.cornell.edu/uscode/text/35/103'),
+			lookalike: H.isOfficialLawUrl('https://uspto.gov.example.com/mpep'),
+			wikipedia: H.isOfficialLawUrl('https://en.wikipedia.org/wiki/Novelty_(patent)'),
+			notAUrl: H.isOfficialLawUrl('MPEP 2143'),
+		}).toEqual({ mpep: true, epc: true, pct: true, cfr: true, olrc: true, gpo: true, cornell: true, lookalike: false, wikipedia: false, notAUrl: false });
+	});
+
 	it('countTool and distinctToolCount count across rounds', () => {
 		const t = traj([['search_patents', 'HTTP_5XX'], ['search_patents', 'HTTP_5XX'], ['search_patents', 'OK'], ['patent_analytics_viz', 'OK']]);
 		expect(H.countTool(t, 'search_patents')).toBe(3);
