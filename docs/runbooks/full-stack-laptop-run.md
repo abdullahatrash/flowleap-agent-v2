@@ -18,14 +18,16 @@ cp ~/flowleap/flowleap-backend/.env .env                      # .env is not in g
 grep -E "^(PORT|DATABASE_URL|REDIS_URL)=" .env
 ```
 
-Read those three lines before you start. `PORT` is 8000. `DATABASE_URL` and `REDIS_URL` point at
-your local Postgres and Valkey, never at production. Then:
+Read those three lines before you start. `PORT` is 8000. `DATABASE_URL` names the database the
+run writes to: know which one it is before you drive the app. `REDIS_URL` may point at a Valkey
+that is not running; the backend then logs `falling back to in-memory cache` and runs, which is
+fine for a laptop run. Then:
 
 ```bash
 npm run dev
 ```
 
-Leave it running. In another shell, `curl -s http://localhost:8000/health` answers.
+Leave it running. After a few seconds `curl -s http://localhost:8000/health` answers `{"status":"ok",...}`.
 
 ## Terminal 2: the app from its worktree
 
