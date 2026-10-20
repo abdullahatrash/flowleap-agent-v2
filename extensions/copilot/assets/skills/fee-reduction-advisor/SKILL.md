@@ -8,7 +8,7 @@ user-invocable: true
 
 Reductions are not automatic and the rules differ radically by office — the EPO's own e-filing platform never centralised them, so each national office hand-rolled its own incompatible logic. So **interview first, advise second**, and always name the proof the applicant must attach.
 
-Jurisdiction-by-jurisdiction rules, with a date stamp and the "percentages drift, verify the schedule" caveat, live in [references/fee-reductions.md](references/fee-reductions.md). To ground a specific legal basis (e.g. EPC Rule 6), use `search_legal`; do not fetch or invent current fee amounts.
+Jurisdiction-by-jurisdiction rules, with a date stamp and the "percentages drift, verify the schedule" caveat, live in [references/fee-reductions.md](references/fee-reductions.md). To ground a specific legal basis (e.g. EPC Rule 6), use the **legal-research** skill; do not fetch or invent current fee amounts.
 
 ## Step 1 — Interview (ask before advising)
 Collect all four, via `vscode_askQuestions` when available:

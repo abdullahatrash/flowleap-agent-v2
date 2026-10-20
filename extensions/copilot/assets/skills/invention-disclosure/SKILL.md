@@ -36,7 +36,7 @@ Resolve missing information that affects the requested deliverable. For a candid
 For the earliest public disclosure or sale/offer date found:
 - **EPO (and most of the world): absolute novelty** — the inventors' own pre-filing disclosure is prior art against them. Any public disclosure before filing likely bars EP protection.
 - **US: 35 USC 102(b)(1) grace period** — the inventors' own disclosure within 1 year of filing is excepted. Disclosure more than 1 year ago bars US protection too.
-- Verify the current rules with `search_legal` (e.g. query="grace period inventor disclosure 102(b)(1)", jurisdiction="USPTO") — never state bar conclusions from memory.
+- Verify the current rules with the **legal-research** skill (35 USC 102(b)(1) and MPEP 2153, read from the official pages) — never state bar conclusions from memory.
 
 Report urgency explicitly: "disclosed [date] → EP likely barred; US grace period runs out [date+1y]". If everything is barred, stop and say so before spending effort on search.
 

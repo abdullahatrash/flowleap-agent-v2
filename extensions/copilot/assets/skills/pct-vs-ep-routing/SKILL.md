@@ -8,7 +8,7 @@ user-invocable: true
 
 Two things the user usually conflates: (1) **where validation happens** on each route — which changes where and when a mistake surfaces — and (2) **which route to choose**. Cover both.
 
-Route facts, date-stamped with the "official rules govern" caveat, live in [references/routing-notes.md](references/routing-notes.md). For the statutory/procedural basis, use `search_legal`; do not fetch live fee amounts.
+Route facts, date-stamped with the "official rules govern" caveat, live in [references/routing-notes.md](references/routing-notes.md). For the statutory/procedural basis, use the **legal-research** skill; do not fetch live fee amounts.
 
 ## Part 1 — Where validation happens (so where errors surface)
 - **PCT via ePCT** — WIPO's platform validates the **form fields, priority claims, designated states, and fee calculation**. The **receiving office's own checks are thin**, so on the PCT route most catchable errors are caught **up-front by WIPO**, and the receiving office adds little. Practical consequence: a defect ePCT does not catch may not resurface until national/regional phase, far downstream.

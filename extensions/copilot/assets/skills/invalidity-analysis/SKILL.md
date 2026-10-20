@@ -24,7 +24,7 @@ The adversarial mirror of a prior art search: the target is a granted patent's c
 
 Done when the claims are recorded per claim number, and the critical date, legal status and art of record are known.
 
-## Phase 2: Venue & Window (verify with `search_legal` — never from memory)
+## Phase 2: Venue & Window (verify with the **legal-research** skill — never from memory)
 
 - **EPO opposition**: 9 months from grant mention; any ground (novelty, inventive step, added matter, insufficiency)
 - **US IPR**: after 9 months post-grant; grounds limited to patents and printed publications under 102/103. **35 U.S.C. 315(b) time bar**: an IPR petition is BARRED more than one year after the petitioner (or a privy) was served with an infringement complaint — for a user holding a demand letter or complaint, check this clock FIRST.
