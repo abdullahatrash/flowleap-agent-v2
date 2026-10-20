@@ -8,6 +8,7 @@ import type { ApiProvider, ProviderResponse, CallApiContextParams, CallApiOption
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { readTokenUsage, systemMessage, type ChatCompletionUsage } from './chat-completions';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -108,7 +109,7 @@ export default class PatentAIProvider implements ApiProvider {
 		const body: Record<string, unknown> = {
 			model: this.resolveModel(),
 			messages: [
-				{ role: 'system', content: systemPrompt },
+				systemMessage(systemPrompt, this.env),
 				{ role: 'user', content: prompt },
 			],
 			tools: toolDefinitions,
@@ -146,11 +147,7 @@ export default class PatentAIProvider implements ApiProvider {
 					};
 				}>;
 				model?: string;
-				usage?: {
-					prompt_tokens?: number;
-					completion_tokens?: number;
-					total_tokens?: number;
-				};
+				usage?: ChatCompletionUsage;
 			};
 
 			const choice = data.choices[0];
@@ -167,11 +164,7 @@ export default class PatentAIProvider implements ApiProvider {
 
 			return {
 				output: JSON.stringify(structured),
-				tokenUsage: {
-					total: data.usage?.total_tokens ?? 0,
-					prompt: data.usage?.prompt_tokens ?? 0,
-					completion: data.usage?.completion_tokens ?? 0,
-				},
+				tokenUsage: readTokenUsage(data.usage),
 			};
 		} catch (err) {
 			return {

@@ -127,7 +127,7 @@ describe('PatentAIProvider', () => {
 		expect(bodies).toStrictEqual(['anthropic/claude-sonnet-4.5', 'openai/gpt-5.2', 'anthropic/claude-sonnet-5']);
 	});
 
-	it('sends a request body with the system prompt first, the full tool surface, and fixed sampling options', async () => {
+	it('sends a request body with the prompt-cached system prompt first, the full tool surface, and fixed sampling options', async () => {
 		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
 		const provider = new PatentAIProvider({ config: { model: 'openai/gpt-5.2-mini' } }, { fetch: fetchFn, env: { EVAL_API_KEY: 'k' } });
 
@@ -137,7 +137,7 @@ describe('PatentAIProvider', () => {
 		expect(body).toStrictEqual({
 			model: 'openai/gpt-5.2-mini',
 			messages: [
-				{ role: 'system', content: SYSTEM_PROMPT },
+				{ role: 'system', content: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] },
 				{ role: 'user', content: 'what is the novelty of claim 1?' },
 			],
 			tools: TOOL_DEFINITIONS,
@@ -146,6 +146,15 @@ describe('PatentAIProvider', () => {
 			temperature: 0,
 			max_tokens: 4096,
 		});
+	});
+
+	it('sends the system prompt as a plain string when EVAL_PROMPT_CACHE=0', async () => {
+		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
+		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: { EVAL_API_KEY: 'k', EVAL_PROMPT_CACHE: '0' } });
+
+		await provider.callApi('p');
+
+		expect(JSON.parse(String(calls[0].init.body)).messages[0]).toStrictEqual({ role: 'system', content: SYSTEM_PROMPT });
 	});
 
 	it('maps a successful upstream response to the {text, tool_calls} output contract with token usage', async () => {
@@ -159,6 +168,28 @@ describe('PatentAIProvider', () => {
 			tool_calls: SUCCESS_BODY.choices[0].message.tool_calls,
 		});
 		expect(result.tokenUsage).toStrictEqual({ total: 15, prompt: 10, completion: 5 });
+	});
+
+	it('records cached prompt tokens from OpenRouter prompt_tokens_details, or from the Anthropic-native cache_read_input_tokens', async () => {
+		const env: NodeJS.ProcessEnv = { EVAL_API_KEY: 'k' };
+		const openRouter = createFetchStub(() => jsonResponse({
+			...SUCCESS_BODY,
+			usage: { prompt_tokens: 55000, completion_tokens: 5, total_tokens: 55005, prompt_tokens_details: { cached_tokens: 54900 } },
+		}));
+		const anthropicNative = createFetchStub(() => jsonResponse({
+			...SUCCESS_BODY,
+			usage: { prompt_tokens: 55000, completion_tokens: 5, total_tokens: 55005, cache_read_input_tokens: 54800 },
+		}));
+
+		const results = await Promise.all([
+			new PatentAIProvider(undefined, { fetch: openRouter.fetchFn, env }).callApi('p'),
+			new PatentAIProvider(undefined, { fetch: anthropicNative.fetchFn, env }).callApi('p'),
+		]);
+
+		expect(results.map(result => result.tokenUsage)).toStrictEqual([
+			{ total: 55005, prompt: 55000, completion: 5, cached: 54900 },
+			{ total: 55005, prompt: 55000, completion: 5, cached: 54800 },
+		]);
 	});
 
 	it('returns an error string with the status and body text for a non-OK response', async () => {
