@@ -50,8 +50,6 @@ export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.OpsApiGuide,
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
-	ToolName.SearchLegal,
-	ToolName.LegalSearchGuide,
 	ToolName.SearchNpl,
 	ToolName.GetNplWork,
 	ToolName.SearchAcademic,

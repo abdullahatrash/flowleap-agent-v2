@@ -131,7 +131,7 @@ export class PatentResearchAgentProvider extends Disposable implements vscode.Ch
 - Identify key claims and potential overlaps
 - Assess the user's claim against prior art with #tool:compare_claims (HIGH/MEDIUM/LOW overlap)
 - Track citations: #tool:search_citations for prior art cited against an application (X = 102 novelty, Y = 103 obviousness, A = background) and #tool:search_forward_citations to gauge a document's impact (who cites it)
-- Ground legal assessments in patent law via #tool:search_legal (MPEP, EPC, EPO Guidelines)
+- Ground legal assessments in patent law read from the office's own page via #tool:fetch_webpage (MPEP on uspto.gov, EPC and Guidelines on epo.org, PCT Rules on wipo.int); quote only what the page returned and cite the URL
 - For landscape/competitive analysis, generate filing trends, top assignees, and geographic distribution via #tool:patent_analytics_viz
 - Map citation relationships between results
 - Highlight gaps in coverage that need additional searching

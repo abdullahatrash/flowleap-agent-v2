@@ -54,9 +54,20 @@
         const text = parsed.text || '';
         const toolCalls = parsed.tool_calls || [];
         const hasQuotedMpep = /MPEP\s+\d+(\.\d+)*\s+(states|says|provides|reads):\s*["']/i.test(text);
-        // search_legal is PRIMARY per prompt branch J / critical rule 5; legal_search_guide is the advanced path.
-        const hasLegalSearch = toolCalls.some(tc => ['search_legal', 'legal_search_guide'].includes(tc.function?.name));
-        return !hasQuotedMpep || hasLegalSearch;
+        // A quoted MPEP passage must rest on a fetch of the office's own page (#825, ADR 0017):
+        // fetch_webpage with a URL on an official law host (one list, in trajectory-assertions.mjs).
+        const fetchedUrls = toolCalls.filter(tc => tc.function?.name === 'fetch_webpage').flatMap(tc => {
+          const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+          return Array.isArray(args?.urls) ? args.urls : [args?.urls];
+        });
+        // The official law hosts live in ONE place, assertions/trajectory-assertions.mjs (#825):
+        // dynamic import + cwd-relative path, the way the main config's global guard loads a file.
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => {
+            const fetchedOfficialPage = fetchedUrls.some(H.isOfficialLawUrl);
+            return !hasQuotedMpep || fetchedOfficialPage;
+          });
       metric: no_fabricated_legal_citations
 
 - vars:

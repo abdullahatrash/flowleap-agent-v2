@@ -49,8 +49,6 @@ export const patentChatToolReferenceNames: readonly string[] = [
 	'patentApiRequest',
 	'opsApiGuide',
 	'usptoApiGuide',
-	'legal',
-	'legalSearchGuide',
 	'nplWork',
 	'npl',
 	'academic',

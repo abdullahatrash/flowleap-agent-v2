@@ -64,9 +64,8 @@ All dates run from **grant date** (PTA does not move them):
 | 8th-year | grant + 7y | grant + 7.5y | grant + 8y | grant + 8y |
 | 12th-year | grant + 11y | grant + 11.5y | grant + 12y | grant + 12y |
 
-Ground the rule text with `search_legal` ("maintenance fee due dates
-surcharge", jurisdiction USPTO — 37 CFR 1.362, MPEP Chapter 2500) rather than
-asserting it. If all three windows are past, report historical status only.
+Ground the rule text with the **legal-research** skill (37 CFR 1.362 and MPEP
+Chapter 2500, read from the official pages) rather than asserting it. If all three windows are past, report historical status only.
 
 ## Step 4 — Report
 

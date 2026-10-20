@@ -53,11 +53,16 @@ to take it for all patent law, and to retire the copy.
    that could rebuild them goes in the same PR. Rejected: deleting code and tables in the same
    release as the 410 (one release of 410-only answers is the window in which a missed caller
    shows up in the logs).
-5. **The eval gate decides whether fetch is enough.** The seven cases in `anti-hallucination`,
-   `source-attribution`, `frontier` and `tool-selection` are re-pointed to the fetch path and must
-   pass, with the two source-attribution cases quoting a real section from a real URL. The
-   trajectory repeat gate runs as for every harness step. If the gate fails on fetch, the next
-   step is a web-search tool, measured the same way, not the return of the copy.
+5. **The eval gate decides whether fetch is enough, and a real-fetch check decides whether the
+   pages answer.** The seven cases in `anti-hallucination`, `source-attribution`, `frontier` and
+   `tool-selection` are re-pointed to the fetch path and must pass; they read one model turn, so
+   they prove the model chooses an official page, not what the page returns. A trajectory case
+   with a scripted fetch of a real section proves the answer quotes the fetched text. Whether the
+   office's page returns quotable text over the app's fetch path is proven by a scripted
+   real-fetch check kept as an artifact (one MPEP section, one statute section, one rule, one
+   EPC article, one Guidelines part, one PCT rule, each with a known phrase of that section) and
+   by the founder's laptop run; step 4 needs both. If the gate fails on fetch, the next step is a
+   web-search tool, measured the same way, not the return of the copy.
 
 ## Consequences
 

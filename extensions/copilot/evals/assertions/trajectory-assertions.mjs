@@ -737,6 +737,69 @@ const T9_LOOKUP_TOOLS = ['get_patent_details', 'get_patent_summary'];
 const PROMPT_EXAMPLE_FINGERPRINTS = ['US11000000', 'temperature gradient exceeding a predetermined threshold'];
 
 /**
+ * Hosts whose pages are the office's own text of patent law (#825, ADR 0017): the USPTO (MPEP), the
+ * EPO (EPC, Guidelines), WIPO (PCT), the eCFR (37 CFR), the two official publishers of 35 USC
+ * (uscode.house.gov is the Office of the Law Revision Counsel, govinfo.gov is the Government
+ * Publishing Office) and Cornell LII (law.cornell.edu), a mirror the skill names as the fallback.
+ * A subdomain of one of them counts. This is the ONE list: the single-turn datasets and the
+ * key-gate assertions import {@link isOfficialLawUrl} instead of carrying a copy.
+ */
+const OFFICIAL_LAW_HOSTS = ['uspto.gov', 'epo.org', 'wipo.int', 'ecfr.gov', 'uscode.house.gov', 'govinfo.gov', 'law.cornell.edu'];
+
+/**
+ * Whether a URL points at one of the {@link OFFICIAL_LAW_HOSTS}.
+ * @param {unknown} url
+ */
+export function isOfficialLawUrl(url) {
+	try {
+		const host = new URL(String(url)).hostname.toLowerCase();
+		return OFFICIAL_LAW_HOSTS.some(official => host === official || host.endsWith(`.${official}`));
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The URLs a `fetch_webpage` call asked for (`urls` is an array in the schema; a bare string is tolerated).
+ * @param {FlatCall} call
+ */
+export function fetchUrls(call) {
+	const urls = call.args?.urls;
+	return Array.isArray(urls) ? urls.map(String) : (typeof urls === 'string' ? [urls] : []);
+}
+
+/** The `fetch_webpage` calls of a trajectory that asked for at least one official law page. */
+function officialPageFetches(traj) {
+	return flatCalls(traj).filter(call => call.name === 'fetch_webpage' && fetchUrls(call).some(isOfficialLawUrl));
+}
+
+/** Fewer words than this and a quoted span is a term, not a passage: it is not graded. */
+const T14_QUOTE_MIN_WORDS = 6;
+
+/**
+ * The quoted passages of an answer as word strings: each quoted span (quote marks, block quote,
+ * code fence) with its markers stripped, split at an ellipsis or a bracketed insertion, keeping the
+ * fragments of at least {@link T14_QUOTE_MIN_WORDS} words. Normalised the way {@link normalizeWords}
+ * does, so punctuation and line breaks cannot hide or fake a match.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function quotedPassages(text) {
+	const source = String(text ?? '');
+	const passages = [];
+	for (const span of quotedSpans(source)) {
+		const raw = source.slice(span.start, span.end).replace(/```[^\n]*/g, '').replace(/^[ \t]*>/gm, '');
+		for (const fragment of raw.split(/\.{3}|…|\[[^\]]*\]/)) {
+			const words = normalizeWords(fragment);
+			if (words.length >= T14_QUOTE_MIN_WORDS) {
+				passages.push(words.join(' '));
+			}
+		}
+	}
+	return passages;
+}
+
+/**
  * Per-case structural predicates (H4 §4). Each takes a parsed trajectory and returns the
  * boolean the gate asserts. Kept HERE (not inline in the dataset YAML) so the promptfoo
  * asserts and the offline vitest spec exercise the exact same logic — no drift. Every one
@@ -923,5 +986,21 @@ export const cases = {
 	t13_round_report_names_source_point: traj => {
 		const report = traj.turnTexts?.[0] ?? traj.finalText ?? '';
 		return numberedItems(report).some(item => namesPoint(item.text, T13_SOURCE_POINT) && /recommend/i.test(item.text) && /official|certified|original/i.test(item.text));
+	},
+	/** T14 — a `fetch_webpage` call asked for a page on an official law host (#825). */
+	t14_fetched_official_page: traj => officialPageFetches(traj).length > 0,
+	/**
+	 * T14 — the answer quotes at least one passage, and every quoted passage is in the text an
+	 * official page returned. A quote from memory, or from a non-official page, is not in that text.
+	 */
+	t14_quote_rests_on_fetched_page: traj => {
+		const pages = ` ${officialPageFetches(traj).map(call => normalizeWords(call.resultBody).join(' ')).join(' ')} `;
+		const passages = quotedPassages(traj.finalText);
+		return passages.length > 0 && passages.every(passage => pages.includes(` ${passage} `));
+	},
+	/** T14 — the answer carries the URL of an official page the agent fetched. */
+	t14_cites_fetched_url: traj => {
+		const text = String(traj.finalText ?? '').toLowerCase();
+		return officialPageFetches(traj).flatMap(fetchUrls).filter(isOfficialLawUrl).some(url => text.includes(url.toLowerCase().replace(/\/+$/, '')));
 	},
 };

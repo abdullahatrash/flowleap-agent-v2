@@ -40,7 +40,7 @@
         const parsed = JSON.parse(output);
         const allowed = ['search_patents', 'patent_api_request',
           'search_academic', 'write_patent_results', 'read_pdf', 'ops_api_guide',
-          'uspto_api_guide', 'citation_api_guide', 'legal_search_guide',
+          'uspto_api_guide', 'citation_api_guide',
           'patent_search_subagent', 'create_file', 'fetch_webpage',
           'vscode_askQuestions', 'run_in_terminal', 'web_search'];
         return (parsed.tool_calls || []).every(tc => allowed.includes(tc.function?.name));
@@ -89,7 +89,8 @@
 # KNOWN GAP (#244): fails every model measured 2026-08-18, including the
 # anthropic/claude-sonnet-5 reference (51/52, this case the only failure).
 # At temperature 0 the subject models answer the first turn with grounding
-# tool calls (search_legal on both jurisdictions) and EMPTY text — defensible
+# tool calls (fetch_webpage of the EPO and USPTO fee pages, since #825 — before
+# that, search_legal on both jurisdictions) and EMPTY text — defensible
 # agent behavior, but the single-turn harness never sees the follow-through
 # turn where the counts would be computed, so the asserts below cannot be
 # satisfied honestly. Promote back only when the harness can grade a

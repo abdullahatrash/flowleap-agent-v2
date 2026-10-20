@@ -517,6 +517,35 @@ question that names the id and recommends the official or certified text). The r
 is the real writer's rendering, covered by `patentWebTextEvidence.spec.ts`. No live run yet;
 record the k-of-n here when it runs (`--filter-pattern '^T13'`).
 
+### T14 — patent law read from the official page (#825, added 2026-10-20, not yet run live)
+
+ADR 0017 retires `search_legal` and `legal_search_guide`: the agent reads patent law from the
+office's own page with `fetch_webpage`, quotes only the text the page returned, and cites the URL.
+The single-turn suite can grade the fetch call only, because its provider output has no tool
+results. T14 (fixture `t14-legal-official-page.json`) runs the loop: a fetch of an epo.org URL
+returns the text of Article 54 EPC as the page showed it on 2026-10-20
+(`https://www.epo.org/en/legal/epc/2020/a54.html`); a fetch of any other page returns a paraphrase
+in other words; every other tool gets the benign default. Predicates: `t14_fetched_official_page`
+(a `fetch_webpage` call asked for a page on an official law host: uspto.gov, epo.org, wipo.int,
+ecfr.gov, uscode.house.gov, govinfo.gov or law.cornell.edu, the `OFFICIAL_LAW_HOSTS` list that every
+suite imports), `t14_quote_rests_on_fetched_page`
+(the answer quotes at least one passage of six words or more, and every quoted passage, split at an
+ellipsis or a bracketed insertion, is in the text an official page returned), `t14_cites_fetched_url`
+(the answer carries the URL of an official page the agent fetched). No live run yet; record the
+k-of-n here when it runs (`--filter-pattern '^T14'`) and add the case to
+`output/trajectory-baseline.json`.
+
+The suites prove the model chooses the official page and quotes what a scripted fetch returned.
+Whether the office's real page returns quotable text to a non-browser fetch is a separate proof
+(ADR 0017 decision 5): `bash evals/scripts/real-fetch-check.sh` fetches every URL pattern and
+worked example of `assets/skills/legal-research/references/official-sources.md` with plain curl
+(default user agent, no browser headers), strips the markup, and looks for a known phrase of each
+section. It prints status, final URL, bytes and a HIT/MISS per phrase, and exits 1 when a required
+phrase is missing or a block page ("Page Not Found", "Request Access", "CAPTCHA") came back. The two
+human pages that block a non-browser fetch today (uscode.house.gov, the ecfr.gov HTML page) are
+recorded as information only, because the skill names a working route for each (the govinfo link
+service, the eCFR renderer API). The log stays out of the repo; the PR links the run.
+
 ### Baseline: key-gate suite (2026-08-07, same model)
 
 **6/6 on all three runs, 18/18 case-runs, zero voids** (181s + 264s + 272s ≈ 12 minutes). This
@@ -679,7 +708,7 @@ Verifies the agent picks the correct first tool:
 | D | Detailed patent data | `ops_api_guide` |
 | E | US patent search | `uspto_api_guide` or `build_uspto_query` |
 | F | Office action citations | `search_citations` (typed-first; guide is advanced path) |
-| G | Patent law research | `search_legal` (typed-first; guide is advanced path) |
+| G | Patent law research | `fetch_webpage` with a URL on an official law host (uspto.gov, epo.org, wipo.int, ecfr.gov, uscode.house.gov, govinfo.gov, law.cornell.edu — the one list is `OFFICIAL_LAW_HOSTS` in `assertions/trajectory-assertions.mjs`) — #825 |
 | H | Coding task | NOT any patent search tool |
 | I | CN/JP/KR patents | `web_search` or mentions patents.google.com |
 
@@ -698,7 +727,7 @@ Verifies the jurisdiction gate behavior:
 ### `datasets/anti-hallucination.yaml` — 4 tests
 - No patent numbers without a search tool call
 - Must search before citing specific patents
-- No fabricated MPEP/legal quotes without `legal_search_guide`
+- No fabricated MPEP/legal quotes without a `fetch_webpage` of an official law page
 - Famous-patent query → search/ask, or no patent-number pattern in text
 
 ### `datasets/active-behavior.yaml` — 2 tests
@@ -707,7 +736,7 @@ Verifies the jurisdiction gate behavior:
 
 ### `datasets/source-attribution.yaml` — 2 tests
 - Calls search tools when asked to summarize patents
-- Calls `legal_search_guide` or `search_legal` when asked about EPC
+- Fetches an official law page (`fetch_webpage` on epo.org or another official host) when asked about the EPC; the quote-is-in-the-fetched-page check is T14 of the trajectory gate (single-turn output has no tool results)
 
 ### `datasets/search-strategy.yaml` — 5 tests
 - USPTO: uses correct tool for US patent searches
@@ -744,7 +773,8 @@ OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfi
 5. Excess-claims surcharge arithmetic — **KNOWN GAP (#244)**: demoted from the main
    suite (was `datasets/filing-fees.yaml`, its sole case) on 2026-08-18. Every measured
    model, including the `anthropic/claude-sonnet-5` reference, answers the single turn
-   with grounding `search_legal` calls and empty text, so the asserts never see the
+   with grounding tool calls (`fetch_webpage` of the fee pages since #825; `search_legal`
+   before that) and empty text, so the asserts never see the
    7/2 counts. Promote back when the harness can grade a post-grounding turn or a
    prompt change makes the counts land in the first turn again.
 

@@ -30,8 +30,6 @@ const ALL_PATENT_TOOLS: readonly ToolName[] = [
 	ToolName.OpsApiGuide,
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
-	ToolName.SearchLegal,
-	ToolName.LegalSearchGuide,
 	ToolName.SearchNpl,
 	ToolName.GetNplWork,
 	ToolName.SearchAcademic,
@@ -54,6 +52,7 @@ function toolInfo(name: string): vscode.LanguageModelToolInformation {
 
 /** The key state a render is exercised with; omitted fields render the never-read defaults. */
 interface KeyStateOptions {
+	readonly webSearchAvailable?: boolean;
 	readonly subscriptionStatus?: FlowLeapSubscriptionStatus;
 	readonly hasEpoOpsKey?: boolean;
 	readonly hasUsptoOdpKey?: boolean;
@@ -306,13 +305,11 @@ suite('PatentAIInstructions key-gate doctrine', () => {
 		expect({
 			pivotOffered: output.includes('KEYLESS PIVOT — offer it as DIFFERENT data, never as a substitute'),
 			patstatFramedAsSnapshot: output.includes('PATSTAT analytics — aggregate counts from a twice-yearly SNAPSHOT'),
-			legalFramedAsLaw: output.includes('`search_legal` — patent LAW'),
 			academicFramedAsLiterature: output.includes('`search_academic` — scholarly LITERATURE'),
 			notAStandIn: output.includes('not a stand-in for the gated office\'s live search'),
 		}).toEqual({
 			pivotOffered: true,
 			patstatFramedAsSnapshot: true,
-			legalFramedAsLaw: true,
 			academicFramedAsLiterature: true,
 			notAStandIn: true,
 		});
@@ -343,8 +340,8 @@ suite('PatentAIInstructions key-gate doctrine', () => {
 
 	test('omits the keyless-pivot rule when no keyless tool is available', async () => {
 		// Every tool that needs no Patent-Data Key — PATSTAT (all four surfaces, graph included),
-		// legal search, NPL search and academic search. A new keyless tool missing here fails this test.
-		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatGraph, ToolName.PatstatApiGuide, ToolName.SearchLegal, ToolName.SearchNpl, ToolName.SearchAcademic];
+		// NPL search and academic search. A new keyless tool missing here fails this test.
+		const keylessTools: readonly ToolName[] = [ToolName.PatstatPortfolio, ToolName.PatstatQuery, ToolName.PatstatGraph, ToolName.PatstatApiGuide, ToolName.SearchNpl, ToolName.SearchAcademic];
 		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => !keylessTools.includes(t)));
 		expect({
 			pivotOffered: output.includes('KEYLESS PIVOT'),
@@ -635,5 +632,37 @@ suite('PatentAIInstructions source attribution', () => {
 	test('renders no attribution block on a stock configuration', async () => {
 		const output = await renderPatentInstructions([]);
 		expect(output.includes('SOURCE ATTRIBUTION AND QUOTING')).toBe(false);
+	});
+});
+
+suite('PatentAIInstructions patent law', () => {
+	test('branch J reads the law from the official page and never names the retired legal tools (ADR 0017)', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS);
+		const withoutWebSearch = await renderPatentInstructions(ALL_PATENT_TOOLS, { webSearchAvailable: false });
+		expect({
+			lawBranch: output.includes('**J) PATENT LAW (MPEP, 35 USC, 37 CFR, EPC, EPO Guidelines, PCT Rules)?**'),
+			officialPage: output.includes('Read the law from the office\'s own page with fetch_webpage'),
+			quoteOnlyThePage: output.includes('Quote only the text the page returned. Give the URL and the edition or revision that the page shows.'),
+			saysWhenUnanswered: output.includes('If the page did not answer the question, say so'),
+			skillIsTheMethod: output.includes('The `legal-research` skill is the method'),
+			criticalRule: output.includes('- Patent law (MPEP, EPC, Guidelines, PCT): fetch_webpage on the office\'s own page (branch J)'),
+			lawBranchWithoutWebSearch: withoutWebSearch.includes('Read the law from the office\'s own page with fetch_webpage'),
+			retiredToolsGone: !/search_legal|legal_search_guide|legalSearchGuideUsage/.test(output + withoutWebSearch),
+			// The fetch-and-verify lines for Google Patents and NPL are not this step's to change.
+			googlePatentsFetchKept: output.includes('FETCH-AND-VERIFY sources for full text a backend route cannot return: Google Patents (patents.google.com/patent/NUMBER)')
+				&& withoutWebSearch.includes('fetch_webpage the document on Google Patents (patents.google.com/patent/NUMBER) or freepatentsonline.com, then quote only the text the page actually returned'),
+			nplFetchKept: output.includes('READ BEYOND THE ABSTRACT: fetch_webpage the open-access URL or DOI'),
+		}).toEqual({
+			lawBranch: true,
+			officialPage: true,
+			quoteOnlyThePage: true,
+			saysWhenUnanswered: true,
+			skillIsTheMethod: true,
+			criticalRule: true,
+			lawBranchWithoutWebSearch: true,
+			retiredToolsGone: true,
+			googlePatentsFetchKept: true,
+			nplFetchKept: true,
+		});
 	});
 });

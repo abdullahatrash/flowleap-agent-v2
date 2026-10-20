@@ -8,7 +8,7 @@ user-invocable: true
 
 A plain-language pre-flight the user runs BEFORE touching an official portal. Walk every item, ask the user for anything unknown, and report each as PASS / FIX / N/A with the fix needed. Do not submit anything — this readiness check ends at the portal door.
 
-Extracted rules (windows, formats, edge cases) with a date stamp and the "official schedules govern" caveat live in [references/filing-requirements.md](references/filing-requirements.md). When the user wants the statutory basis for a deadline or requirement, ground it with `search_legal` (or `legal_search_guide` to pick the right corpus) rather than asserting it from memory.
+Extracted rules (windows, formats, edge cases) with a date stamp and the "official schedules govern" caveat live in [references/filing-requirements.md](references/filing-requirements.md). When the user wants the statutory basis for a deadline or requirement, read it from the official page with the **legal-research** skill rather than asserting it from memory.
 
 ## 1. Required parts
 - **Description** — required to secure a filing date.

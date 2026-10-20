@@ -1,5 +1,5 @@
 {
-	"updated": "2026-09-02",
+	"updated": "2026-10-20",
 	"config": "promptfooconfig.trajectory.yaml",
 	"policy": {
 		"runs": 3,
@@ -67,6 +67,16 @@
 			"expected": "PASS",
 			"observed": "4/5 (2026-10-17, T12-only probe on #741: P P F P P; the one failure never saved a chart in turn 0)",
 			"note": "Round Report (PRD 0024 C4, ADR 0016 amendment), run with the invalidity-analysis skill replayed and the real completion guard; replaces T11 (retired by C4). Turn 0 must end with a Round Report naming every open point of the receipt with a recommendation and run no round; the scripted expert answer picks points 1 and 3; the turn-1 round must answer exactly those ids and aim its queries at their limitations only. The failing run read the fixture's identical search results as a broken search and wrote a prose report without a structured save, so no predicate could pass; no run ran a round before the answer or answered the wrong points."
+		},
+		"T13": {
+			"expected": "PASS",
+			"observed": "2/3 on feat/825-legal-from-official-page (2026-10-20), first record",
+			"note": "Drafting case recorded with the #825 gate run; was absent from the 2026-09-02 baseline."
+		},
+		"T14": {
+			"expected": "PASS",
+			"observed": "3/3 on feat/825-legal-from-official-page (2026-10-20), first record",
+			"note": "ADR 0017 step 1: the answer quotes only the Article 54 EPC text the scripted epo.org fetch returned and cites its URL."
 		}
 	}
 }
