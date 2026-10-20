@@ -144,9 +144,10 @@ describe('ToolNames', () => {
 	it('no longer names the retired legal tools (ADR 0017: patent law is read from the official page)', () => {
 		// `search_legal` and `legal_search_guide` reached a scraped copy of the MPEP, the EPC and the EPO
 		// Guidelines. The copy retires; the agent fetches the office's own page instead. No shim keeps the names.
-		const contributedNames = packageJson.contributes.languageModelTools.map(tool => tool.name);
+		const internalNames: readonly string[] = Object.values(ToolName);
+		const contributedNames: readonly string[] = packageJson.contributes.languageModelTools.map(tool => tool.name);
 		expect({
-			internal: Object.values(ToolName).filter(name => name === 'search_legal' || name === 'legal_search_guide'),
+			internal: internalNames.filter(name => name === 'search_legal' || name === 'legal_search_guide'),
 			contributed: contributedNames.filter(name => name === 'copilot_searchLegal' || name === 'copilot_legalSearchGuide'),
 		}).toEqual({ internal: [], contributed: [] });
 	});
