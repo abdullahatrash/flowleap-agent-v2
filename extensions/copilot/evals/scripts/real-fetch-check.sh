@@ -91,7 +91,7 @@ check "PCT Applicant's Guide index"        "https://www.wipo.int/en/web/pct-syst
 check "PCT AG national-phase index"        "https://www.wipo.int/en/web/pct-system/guide/npindex" "national phase"
 check "PCT AG EP chapter (pctlegal)"       "https://pctlegal.wipo.int/eGuide/view-doc.xhtml?doc-code=EP&doc-lang=en" "European Patent Organisation" "Valid as from"
 check "PCT AG US chapter (pctlegal)"       "https://pctlegal.wipo.int/eGuide/view-doc.xhtml?doc-code=US&doc-lang=en" "United States" "Valid as from"
-check "CAFC opinions (cafc.uscourts.gov)"  "https://www.cafc.uscourts.gov/home/case-information/opinions-orders/" "Opinions"
+check_info "CAFC opinions (cafc.uscourts.gov, a search page that flaps; informational)"  "https://www.cafc.uscourts.gov/home/case-information/opinions-orders/" "Opinions"
 check "SCOTUS opinions"                    "https://www.supremecourt.gov/opinions/opinions.aspx" "Opinions"
 
 echo "done $(date -u +%Y-%m-%dT%H:%M:%SZ)  failures=$failures" | tee -a "$OUT"
