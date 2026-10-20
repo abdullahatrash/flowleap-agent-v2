@@ -4,50 +4,42 @@ description: Search the MPEP, EPC articles and EPO examination guidelines with e
 user-invocable: true
 ---
 
-# Patent Legal Research
+# Legal Research
 
-Search and cite patent law using the hybrid semantic + keyword legal search engine.
+Read patent law from the office's own page at the moment of the question, and quote the text
+the page gives. This file holds the method only. The URL pattern of each office, one worked
+example each, and the section map for common questions are in
+[references/official-sources.md](references/official-sources.md).
 
-## Tools (typed tool FIRST)
+## Steps
 
-- `search_legal` — **primary** for legal lookups. Searches MPEP, EPC, and EPO Guidelines; supports a jurisdiction filter ("USPTO", "EPO", "EU", "WIPO", "all") and `comprehensive` mode (full section text for quoting).
-- `legal_search_guide` + `patent_api_request` — ONLY for advanced cases: restricting to specific sources (e.g. MPEP only), semantic-only or keyword-only search modes, or semantic-weight/similarity-threshold tuning.
+1. **Name the source.** Decide which kind of text answers the question: a statute (35 USC, the
+   EPC articles, the PCT articles), a rule (37 CFR, the EPC Implementing Regulations, the PCT
+   Regulations), office guidance (the MPEP, the EPO Guidelines, the PCT Applicant's Guide) or
+   case law (the EPO Case Law book and Board decisions, the US court opinions). A question about
+   what the examiner does goes to office guidance. A question about what the law requires goes to
+   the statute or the rule. Take the office from the jurisdiction gate in the system prompt. Done
+   when the source and the office are written down before the first fetch.
 
-## Common Legal Research Tasks
+2. **Resolve the section.** When the user names a section ("MPEP 2143", "EPC Art. 123(2)",
+   "Guidelines G-VII, 5", "PCT Rule 4.9"), build its URL from the pattern in the reference file.
+   When the user asks in plain words, fetch the index page of the source and find the section
+   from its titles, or start from the section map in the reference file. Read the edition year of
+   a dated source (the EPO Guidelines, the Case Law book) from its index page, never from memory.
+   Done when you have one URL for each section you need.
 
-### Patentability (35 USC 101 / EPC Art. 52)
-- USPTO: `search_legal` query="subject matter eligibility software", jurisdiction="USPTO"
-- EPO: query="software patentability technical effect", jurisdiction="EPO"
-- Key MPEP sections: 2106 (101 analysis), 2106.04 (abstract ideas)
-- Key EPC: Art. 52(2)(c) — programs for computers
+3. **Fetch and quote.** Fetch the page. Quote only text that the page returned, word for word,
+   in quotation marks. Do not quote from memory. Do not change the words of a quote. A paraphrase
+   is not a quote: mark it as your summary. Done when each quote in the answer is text of a
+   fetched page.
 
-### Novelty (35 USC 102 / EPC Art. 54)
-- MPEP 2131 (anticipation), 2152 (AIA 102(a)(1) prior art — 2132 is the PRE-AIA section, wrong for first-inventor-to-file applications); EPC Art. 54
-- query="novelty anticipation single reference", jurisdiction="USPTO"
+4. **State the edition and the URL.** Give the URL of the page with each quote. Give the edition
+   or the revision the page shows: the MPEP revision marker, the EPO Guidelines year, the "in
+   force from" date of the PCT texts, the "up to date as of" date of the eCFR. When the page
+   shows no edition, say so and give the date of the fetch. Done when each quote has a URL and an
+   edition statement.
 
-### Obviousness (35 USC 103 / EPC Art. 56)
-- MPEP 2141-2144 (obviousness framework, Graham factors, TSM test)
-- EPC Art. 56 — inventive step, problem-solution approach
-- query="obviousness motivation to combine", jurisdiction="USPTO"
-- query="inventive step problem solution approach", jurisdiction="EPO"
-
-### Written Description / Enablement (35 USC 112)
-- MPEP 2161-2164 (112(a) requirements)
-- query="written description requirement functional claim", jurisdiction="USPTO"
-
-### Claim Construction
-- MPEP 2111 (broadest reasonable interpretation — examination of PENDING applications only; granted patents in litigation/IPR use the *Phillips* ordinary-meaning standard)
-- query="broadest reasonable interpretation claim construction", jurisdiction="USPTO"
-
-## Citation Format
-
-When quoting legal sources:
-- **MPEP**: "MPEP § 2143 states: '[actual text from response]'"
-- **EPC**: "EPC Article 56 provides: '[actual text]'"
-- **EPO Guidelines**: "EPO Guidelines G-VII, 5.4 states: '[actual text]'"
-
-## Rules
-- NEVER paraphrase legal text as if it's a direct quote
-- ALWAYS use `comprehensive=true` when you need to quote sections
-- Cite the exact section number returned by the search
-- If the legal search doesn't have the answer, say so — don't make up law
+5. **Say what the page did not answer.** When the page does not hold the answer, say so. Name
+   the page you read and the question that stays open. Do not fill the gap from memory. Do not
+   report silence as "no such rule". When the fetch fails, say that the fetch failed and give the
+   URL, so the user can open it. Done when each open question is named in the answer.

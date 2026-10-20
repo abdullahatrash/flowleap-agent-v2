@@ -24,7 +24,7 @@ filed is the `SPEC` document from the filing date — read it when an amendment
 needs support, because US descriptions are not served by `get_patent_details`.
 Otherwise read the
 office action (`read_pdf` for PDFs, or pasted text). Extract:
-- Application number, examiner, mailing date, and the **response deadline** — flag it immediately (US: typically 3 months shortened statutory, extendable to 6 with fees; EPO: usually 4 months). Verify current periods with `search_legal` if the user's deadline math matters.
+- Application number, examiner, mailing date, and the **response deadline** — flag it immediately (US: typically 3 months shortened statutory, extendable to 6 with fees; EPO: usually 4 months). Verify current periods with the **legal-research** skill if the user's deadline math matters.
 - Per claim: which ground (35 USC 102/103/101/112, obviousness-type double patenting, or EPC Art. 54/56/84/123(2)) and which cited references
 - The examiner's actual reasoning — quote it, don't summarize from memory
 
@@ -54,7 +54,7 @@ Decompose each rejected claim into features and map the examiner's citation(s) a
 
 ## Step 3: Ground the Arguments in Law
 
-`search_legal` per rejection type (use `comprehensive=true`, quote exact sections):
+Read the law from the official page with the **legal-research** skill, per rejection type (quote exact sections, with the URL and the edition):
 - **103**: MPEP 2141-2145 — motivation to combine, hindsight, teaching away, unexpected results
 - **102**: MPEP 2131 — every element "arranged as in the claim" in a single reference
 - **101**: MPEP 2106 — eligibility two-step analysis
