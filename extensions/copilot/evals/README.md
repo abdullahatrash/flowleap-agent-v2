@@ -526,7 +526,9 @@ results. T14 (fixture `t14-legal-official-page.json`) runs the loop: a fetch of 
 returns the text of Article 54 EPC as the page showed it on 2026-10-20
 (`https://www.epo.org/en/legal/epc/2020/a54.html`); a fetch of any other page returns a paraphrase
 in other words; every other tool gets the benign default. Predicates: `t14_fetched_official_page`
-(a `fetch_webpage` call asked for a page on an official law host), `t14_quote_rests_on_fetched_page`
+(a `fetch_webpage` call asked for a page on an official law host: uspto.gov, epo.org, wipo.int,
+ecfr.gov, uscode.house.gov, govinfo.gov or law.cornell.edu, the `OFFICIAL_LAW_HOSTS` list that every
+suite imports), `t14_quote_rests_on_fetched_page`
 (the answer quotes at least one passage of six words or more, and every quoted passage, split at an
 ellipsis or a bracketed insertion, is in the text an official page returned), `t14_cites_fetched_url`
 (the answer carries the URL of an official page the agent fetched). No live run yet; record the
@@ -695,7 +697,7 @@ Verifies the agent picks the correct first tool:
 | D | Detailed patent data | `ops_api_guide` |
 | E | US patent search | `uspto_api_guide` or `build_uspto_query` |
 | F | Office action citations | `search_citations` (typed-first; guide is advanced path) |
-| G | Patent law research | `fetch_webpage` with a URL on an official law host (uspto.gov, epo.org, wipo.int, ecfr.gov, uscode.house.gov, law.cornell.edu) — #825 |
+| G | Patent law research | `fetch_webpage` with a URL on an official law host (uspto.gov, epo.org, wipo.int, ecfr.gov, uscode.house.gov, govinfo.gov, law.cornell.edu — the one list is `OFFICIAL_LAW_HOSTS` in `assertions/trajectory-assertions.mjs`) — #825 |
 | H | Coding task | NOT any patent search tool |
 | I | CN/JP/KR patents | `web_search` or mentions patents.google.com |
 
