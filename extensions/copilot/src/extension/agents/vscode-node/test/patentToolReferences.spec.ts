@@ -77,6 +77,18 @@ describe('patent tool references', () => {
 		expect({ scannedSkills: skillFiles.length > 0, problems }).toEqual({ scannedSkills: true, problems: [] });
 	});
 
+	it('routes legal-research by a description that names the official page, not the retired search engine', () => {
+		// The frontmatter description is the sole routing signal of a skill. ADR 0017: the skill reads
+		// patent law from the office's own page; the trigger phrases that follow must stay word for word.
+		const text = fs.readFileSync(path.join(SKILLS_DIR, 'legal-research', 'SKILL.md'), 'utf8');
+		const description = /^description: (?<description>.+)$/m.exec(text)?.groups?.description ?? '';
+		expect({
+			namesTheOfficialPage: /official page|office's own page/.test(description),
+			namesTheRetiredEngine: /Search the MPEP/.test(description),
+			keepsTheTriggers: description.includes('Use for a patent-law or procedure question, the statutory basis for patentability, novelty, obviousness or written description, or when the user names a section such as 35 USC 103 or EPC Art. 54.'),
+		}).toEqual({ namesTheOfficialPage: true, namesTheRetiredEngine: false, keepsTheTriggers: true });
+	});
+
 	it('enforces the same figures page maximum its input schema documents', () => {
 		// The figures tool clamps user-requested pages to a MAX_REQUESTED_PAGES cap that must match the
 		// "(max N)" the schema advertises to the model, so the promise and the enforcement never drift.

@@ -1,6 +1,6 @@
 ---
 name: legal-research
-description: Search the MPEP, EPC articles and EPO examination guidelines with exact-quote citations. Use for a patent-law or procedure question, the statutory basis for patentability, novelty, obviousness or written description, or when the user names a section such as 35 USC 103 or EPC Art. 54.
+description: Read patent law from the office's own page (the MPEP, 35 USC and 37 CFR, the EPC and the EPO Guidelines, the PCT rules) and quote it with its URL and edition. Use for a patent-law or procedure question, the statutory basis for patentability, novelty, obviousness or written description, or when the user names a section such as 35 USC 103 or EPC Art. 54.
 user-invocable: true
 ---
 
