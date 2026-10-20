@@ -535,6 +535,17 @@ ellipsis or a bracketed insertion, is in the text an official page returned), `t
 k-of-n here when it runs (`--filter-pattern '^T14'`) and add the case to
 `output/trajectory-baseline.json`.
 
+The suites prove the model chooses the official page and quotes what a scripted fetch returned.
+Whether the office's real page returns quotable text to a non-browser fetch is a separate proof
+(ADR 0017 decision 5): `bash evals/scripts/real-fetch-check.sh` fetches every URL pattern and
+worked example of `assets/skills/legal-research/references/official-sources.md` with plain curl
+(default user agent, no browser headers), strips the markup, and looks for a known phrase of each
+section. It prints status, final URL, bytes and a HIT/MISS per phrase, and exits 1 when a required
+phrase is missing or a block page ("Page Not Found", "Request Access", "CAPTCHA") came back. The two
+human pages that block a non-browser fetch today (uscode.house.gov, the ecfr.gov HTML page) are
+recorded as information only, because the skill names a working route for each (the govinfo link
+service, the eCFR renderer API). The log stays out of the repo; the PR links the run.
+
 ### Baseline: key-gate suite (2026-08-07, same model)
 
 **6/6 on all three runs, 18/18 case-runs, zero voids** (181s + 264s + 272s ≈ 12 minutes). This
