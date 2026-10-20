@@ -2,8 +2,8 @@ description: "Patent AI — Application Drafting regression (outline and draft c
 
 # Judge pinned 2026-10-12: anthropic/claude-haiku-5.5 (same vendor as the subject Sonnet 5; the
 # judge's only task is grounding — list technical sentences absent from the sources — so
-# self-preference risk is low; the other six suites keep google/gemini-2.5-flash until
-# re-baselined). OpenRouter price on 2026-10-12: $0.10 / 1M input, $0.50 / 1M output tokens.
+# self-preference risk is low). The other six suites moved to the same judge on 2026-10-20
+# (#834). OpenRouter price on 2026-10-12: $0.10 / 1M input, $0.50 / 1M output tokens.
 
 # Grades the application-drafting skill on three invented matters (mechanical, software, chemistry),
 # each for the US and the EPO. Two single-turn case kinds (datasets/drafting/drafting-cases.yaml):

@@ -73,12 +73,16 @@ prompts:
 
 defaultTest:
   options:
+    # The llm-rubric judge: anthropic/claude-haiku-5.5 since #834 (2026-10-20), the pin every
+    # suite shares. `omitDefaults` and the explicit max_tokens: see promptfooconfig.trajectory.yaml
+    # and README "Judge model decision".
     provider:
-      id: openai:chat:google/gemini-2.5-flash
+      id: openai:chat:anthropic/claude-haiku-5.5
       config:
         apiBaseUrl: https://openrouter.ai/api/v1
         apiKey: "{{env.OPENROUTER_API_KEY}}"
-        temperature: 0
+        omitDefaults: true
+        max_tokens: 4096
         passthrough:
           stream: false
   assert:
