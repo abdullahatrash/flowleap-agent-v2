@@ -759,8 +759,11 @@ export function isOfficialLawUrl(url) {
 	}
 }
 
-/** The URLs a `fetch_webpage` call asked for (`urls` is an array in the schema; a bare string is tolerated). */
-function fetchUrls(call) {
+/**
+ * The URLs a `fetch_webpage` call asked for (`urls` is an array in the schema; a bare string is tolerated).
+ * @param {FlatCall} call
+ */
+export function fetchUrls(call) {
 	const urls = call.args?.urls;
 	return Array.isArray(urls) ? urls.map(String) : (typeof urls === 'string' ? [urls] : []);
 }

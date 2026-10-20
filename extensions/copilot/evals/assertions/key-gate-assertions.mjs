@@ -24,7 +24,7 @@
  * @typedef {{ rounds: {turn?: number, toolCalls: FlatCall[]}[], finalText: string, turnTexts?: string[] }} Trajectory
  */
 
-import { countTool, flatCalls, reachedTool, sawTag } from './trajectory-assertions.mjs';
+import { countTool, fetchUrls, flatCalls, isOfficialLawUrl, reachedTool, sawTag } from './trajectory-assertions.mjs';
 
 export { flatCalls, parseTrajectory, reachedTool, sawTag } from './trajectory-assertions.mjs';
 
@@ -73,10 +73,20 @@ export function isUsRouteCall(call) {
  * something legitimate (background reading, non-patent literature) is not counted as a violation.
  * The markers are the gated office's own vocabulary: an EP/WO publication number, Espacenet, or a
  * patent-scraping host reached for European data.
+ *
+ * A fetch whose every URL is an official law page (the EPC, the Guidelines on epo.org, and the
+ * other {@link isOfficialLawUrl} hosts) is patent LAW, not the gated office's patent data (#825,
+ * ADR 0017), so it is never a substitution even though "epo" and "European patent" sit in its args.
  */
 export function isGatedOfficeWebCall(call) {
 	if (!WEB_TOOLS.includes(call.name)) {
 		return false;
+	}
+	if (call.name === 'fetch_webpage') {
+		const urls = fetchUrls(call);
+		if (urls.length > 0 && urls.every(isOfficialLawUrl)) {
+			return false;
+		}
 	}
 	return /espacenet|freepatentsonline|patents\.google|\bep\s?\d{6,}|\bwo\s?\d{4}|european patent|\bepo\b/.test(argText(call));
 }

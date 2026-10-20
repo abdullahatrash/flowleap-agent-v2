@@ -89,6 +89,19 @@ describe('K1 — gated-office search', () => {
 			askedFirst: H.cases.k1_did_not_stall_on_the_ask(askedFirst),
 		}).toEqual({ good: [true, true, true, true], substituted: false, stalled: false, askedFirst: false });
 	});
+
+	it('does not count a fetch of the EPO law pages as substitution, while an Espacenet fetch still is', () => {
+		// Patent law is read from the office's own page (#825): the Guidelines on epo.org are law, not
+		// the gated office's patent data, even though the host and the words "EPO" and "European patent" match.
+		const lawFetch = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://www.epo.org/en/legal/guidelines-epc/2026/g_vii_5.html'], query: 'EPO Guidelines inventive step for European patent' }], US_SEARCH], 'US results; EP gap named; the Guidelines say...');
+		const espacenet = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://worldwide.espacenet.com/patent/search?q=EP3564557A1'] }], US_SEARCH], 'EP and US results.');
+		const mixed = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://www.epo.org/en/legal/epc/2020/a54.html', 'https://patents.google.com/patent/EP3564557A1'] }], US_SEARCH], 'EP and US results.');
+		expect({
+			lawFetch: [H.cases.k1_no_web_substitution(lawFetch), H.cases.k4_no_web_substitution(lawFetch)],
+			espacenet: H.cases.k1_no_web_substitution(espacenet),
+			mixed: H.cases.k1_no_web_substitution(mixed),
+		}).toEqual({ lawFetch: [true, true], espacenet: false, mixed: false });
+	});
 });
 
 describe('K2 — gated single-document read', () => {
