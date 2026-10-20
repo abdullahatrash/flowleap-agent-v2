@@ -4,8 +4,10 @@
 > retired — deprecated upstream). Baselines recorded before that date were measured on
 > gemini-2.5-pro and are historical: comparing a sonnet-5 run against them is not valid.
 > Re-record `output/trajectory-baseline.json` and the key-gate baseline on sonnet-5 before
-> relying on the repeat gates. The trajectory JUDGE stays gemini-2.5-flash (measured pin — see
-> promptfooconfig.trajectory.yaml).
+> relying on the repeat gates. The `llm-rubric` JUDGE in every suite is
+> `anthropic/claude-haiku-5.5` since 2026-10-20 (#834; measured pin — see "Judge model decision"
+> and promptfooconfig.trajectory.yaml). Rubric verdicts recorded on the previous judge,
+> `google/gemini-2.5-flash`, are historical.
 
 Automated behavioral evaluations for the Patent AI agent system prompt using [promptfoo](https://promptfoo.dev).
 
@@ -319,6 +321,54 @@ Note for #185: the pro arm graded `t5_no_truncation_misread` differently from fl
 trajectories (flash 10/10 PASS, pro 3/3 FAIL on one run's output and the reverse on another) —
 evidence that T5's rubric, not the judge, is what needs the work. #185 rewrote that rubric; the
 judge is unchanged.
+
+### Judge model decision, 2026-10-20: `anthropic/claude-haiku-5.5` (#834)
+
+The `llm-rubric` judge in all seven suites is now **`anthropic/claude-haiku-5.5`**, the pin the
+drafting suite made on 2026-10-12. The configs keep the explicit `max_tokens: 4096` and send
+`omitDefaults: true` instead of `temperature: 0` (Haiku 5.5 rejects non-default sampling values
+with a 400). The subject model and every assert are unchanged.
+
+Two reasons, neither of them a measurement against the old judge: the founder's model policy
+excludes `google/gemini-2.5-flash` (an old model), and the OpenRouter eval account enforces
+Zero Data Retention, for which that model has no endpoint — from 2026-10-20 every rubric-graded
+case failed with `404 ZDR violation (account settings)`. The old judge therefore could not be
+re-run side by side; the measurement below is the new judge against the committed baselines,
+one suite at a time, on main after #830 and #832, subject `anthropic/claude-sonnet-5`.
+
+| Suite | Cases | Rows | Rubric components | Parse failures (`graderError`) | Flips against the baseline |
+|---|---|---|---|---|---|
+| main (`npm run eval`, cache on) | 51 | 51 | 1 | 0 | 0 judge flips. 3 code-assert failures (case 0 = #778, the drone-lidar claim, the Pfizer nanoparticle search), each re-drawn 3/3 PASS with `--no-cache`: subject draws |
+| trajectory (`eval:trajectory:repeat`, 3 runs) | 13 | 39 | 24 | 0 | **T9** PASS→FAIL (1/3): judge alone, criterion 3; re-drawn 3/3 PASS. **T7** FAIL→PASS (2/3): code assert, subject draw, 2/3 again on re-draw |
+| key-gate (`eval:key-gate:repeat`, 3 runs) | 6 | 18 | 18 | 0 | **K1** PASS→FAIL (1/3), **K3b** PASS→FAIL (0/3): code asserts, not the judge; re-draw 1/3 and 1/3; recorded as expected FAIL, follow-up #836 |
+| skill-grounded (`eval:skill-grounded:repeat`) | 7 | — | — | — | **Not run, pending.** The founder stopped the pass after the key-gate re-draw; `output/skill-grounded-baseline.json` still names the old judge and its rubric verdicts are historical until the suite is re-run on Haiku 5.5 |
+
+Voided samples: 0 grader, 0 provider across the three measured suites. Haiku 5.5 grades inside the 4096
+ceiling: the trajectory gate's third run spent 4 653 completion tokens over 13 rows of judging.
+
+What the flips say about the judge:
+
+- **T9 is the one judge-driven flip.** Its rubric's criterion 3 asks for an answer "organized
+  around the comparison" and fails "merely two summaries in sequence with no comparison". The two
+  failing answers were two per-patent sections with the contrast confined to one line plus the
+  closing verdict; Haiku read that as the FAIL clause (score 0.3), where gemini-2.5-flash had
+  passed the same shape 3/3 on 2026-09-02. The three re-draw answers carried an explicit contrast
+  sentence and passed at 0.7–0.8. The new judge is stricter on criterion 3, and the subject varies
+  in how much comparison prose it writes, so T9 sits on the rubric's border. The baseline keeps
+  T9 at PASS on the re-draw and flags it as a watch case; sharpening the rubric is out of scope
+  for #834.
+- **Every other flip is a code assert**, which no judge touches: T7's call-count ceiling (now
+  met in 4 of 6 draws, a model-behaviour change, kept at expected FAIL because nothing was fixed),
+  and K1/K3b's live-office and web-fallback predicates (#836: suspected #830, which rewrote the
+  missing-key hints and the key-gate fixtures and removed the legal branch; the
+  `uspto_api_guide` loop matches the T1 debt #734).
+- Where a rubric failed beside a code assert (K1, K3b), the judge's written reason described the
+  same behaviour the predicate caught. No sample was failed by the judge on a trajectory the
+  code asserts passed, except T9.
+
+The previous section stays as the record of the 2026-08 measurement and of the token-budget
+mechanism, which still applies: the explicit ceiling is what lets a thinking judge finish its
+JSON.
 
 ### Grading the answer, not the tool trace (#185)
 
