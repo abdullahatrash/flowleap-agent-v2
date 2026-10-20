@@ -198,6 +198,7 @@ describe('every fixture is a well-formed MockScript', () => {
 			't9-source-attribution-quoting',
 			't12-round-report',
 			't13-web-text-evidence',
+			't14-legal-official-page',
 		].sort());
 	});
 
@@ -762,5 +763,62 @@ describe('T13 web page text as evidence for a document the tools hold no text fo
 				'Open point [source-GB2208140A]: Row(s) 2 rest on web page text of GB2208140A (patents.google.com), not official full text',
 			],
 		});
+	});
+});
+
+describe('T14 patent law read from the official page (#825)', () => {
+	const t14Script = loadFixture('t14-legal-official-page');
+	const page = fixtureBody(t14Script, 'fetch_webpage');
+	const officialUrl = 'https://www.epo.org/en/legal/epc/2020/a54.html';
+	const official: CallSpec = ['fetch_webpage', 'OK', { urls: [officialUrl], query: 'Article 54 novelty' }, page];
+	const wikipedia: CallSpec = ['fetch_webpage', 'OK', { urls: ['https://en.wikipedia.org/wiki/Novelty_(patent)'], query: 'novelty' }, 'Novelty (patent) - Wikipedia\nAn invention is not new and therefore not patentable if it was known to the public before the filing date of the application.'];
+	const answer = [
+		'Article 54 EPC governs novelty. The official text reads:',
+		'> (1) An invention shall be considered to be new if it does not form part of the state of the art.',
+		'> (2) The state of the art shall be held to comprise everything made available to the public by means of a written or oral description, by use, or in any other way, before the date of filing of the European patent application.',
+		`Source: ${officialUrl} (EPC 2020 text, as shown on the page).`,
+	].join('\n');
+	const all = (calls: CallSpec[], text = answer) => {
+		const t = traj(calls, text);
+		return {
+			fetched: H.cases.t14_fetched_official_page(t),
+			quoted: H.cases.t14_quote_rests_on_fetched_page(t),
+			cited: H.cases.t14_cites_fetched_url(t),
+		};
+	};
+
+	it('grades the official fetch, the quote that is in the fetched page, the cited URL, and each way a run can miss them', () => {
+		expect({
+			good: all([official]),
+			wikipediaThenOfficial: all([wikipedia, official]),
+			noFetch: all([]),
+			legalToolOnly: all([['search_legal', 'OK', { query: 'novelty' }, 'OK (no scripted result for this tool).']]),
+			wikipediaOnly: all([wikipedia]),
+			quoteFromMemory: all([official], answer.replace('by means of a written or oral description, by use, or in any other way', 'by written or oral description, by use or otherwise')),
+			quoteFromWikipedia: all([wikipedia, official], `Novelty: "An invention is not new and therefore not patentable if it was known to the public before the filing date of the application." Source: ${officialUrl}`),
+			noQuote: all([official], `Article 54 EPC says an invention is new if it is not part of the state of the art. Source: ${officialUrl}`),
+			straightQuotesAndEllipsis: all([official], `Article 54(2) EPC: "The state of the art shall be held to comprise everything made available to the public ... before the date of filing of the European patent application." Source: ${officialUrl}`),
+			noUrl: all([official], answer.replace(officialUrl, 'the EPO website')),
+		}).toEqual({
+			good: { fetched: true, quoted: true, cited: true },
+			wikipediaThenOfficial: { fetched: true, quoted: true, cited: true },
+			noFetch: { fetched: false, quoted: false, cited: false },
+			legalToolOnly: { fetched: false, quoted: false, cited: false },
+			wikipediaOnly: { fetched: false, quoted: false, cited: false },
+			quoteFromMemory: { fetched: true, quoted: false, cited: true },
+			quoteFromWikipedia: { fetched: true, quoted: false, cited: true },
+			noQuote: { fetched: true, quoted: false, cited: true },
+			straightQuotesAndEllipsis: { fetched: true, quoted: true, cited: true },
+			noUrl: { fetched: true, quoted: true, cited: false },
+		});
+	});
+
+	it('the fixture serves the Article 54 page for an epo.org URL and a paraphrase for any other page', () => {
+		const state = createMockScriptState(t14Script);
+		expect({
+			official: resolveMock(t14Script, state, 'fetch_webpage', { urls: [officialUrl] }).body.includes('(1) An invention shall be considered to be new if it does not form part of the state of the art.'),
+			other: resolveMock(t14Script, state, 'fetch_webpage', { urls: ['https://en.wikipedia.org/wiki/Novelty_(patent)'] }).body.startsWith('Novelty (patent) - Wikipedia'),
+			retiredTool: resolveMock(t14Script, state, 'search_legal', { query: 'novelty' }).tag,
+		}).toEqual({ official: true, other: true, retiredTool: 'OK' });
 	});
 });

@@ -54,9 +54,16 @@
         const text = parsed.text || '';
         const toolCalls = parsed.tool_calls || [];
         const hasQuotedMpep = /MPEP\s+\d+(\.\d+)*\s+(states|says|provides|reads):\s*["']/i.test(text);
-        // search_legal is PRIMARY per prompt branch J / critical rule 5; legal_search_guide is the advanced path.
-        const hasLegalSearch = toolCalls.some(tc => ['search_legal', 'legal_search_guide'].includes(tc.function?.name));
-        return !hasQuotedMpep || hasLegalSearch;
+        // A quoted MPEP passage must rest on a fetch of the office's own page (#825, ADR 0017):
+        // fetch_webpage with a URL on an official law host. A non-official page does not count.
+        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        const fetchedOfficialPage = toolCalls.some(tc => {
+          if (tc.function?.name !== 'fetch_webpage') return false;
+          const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+          const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
+          return urls.some(u => OFFICIAL.test(String(u)));
+        });
+        return !hasQuotedMpep || fetchedOfficialPage;
       metric: no_fabricated_legal_citations
 
 - vars:

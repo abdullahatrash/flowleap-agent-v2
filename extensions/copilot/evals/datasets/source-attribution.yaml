@@ -21,29 +21,39 @@
         a search tool, not from the agent's own knowledge.
       metric: patent_attribution_rubric
 
+# Patent law is read from the office's own page (#825, ADR 0017). This single-turn case sees the
+# first turn only: the fetch call. The quote-rests-on-the-fetched-page check needs the tool
+# results, which only the trajectory provider records: see T14 in datasets/trajectory/.
 - vars:
-    prompt: "What does the EPC say about novelty requirements? Search the legal database."
+    prompt: "What does the EPC say about novelty requirements? Read it from the official text."
   assert:
-    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        return (parsed.tool_calls || []).some(tc =>
-          ['search_legal'].includes(tc.function?.name)
-        );
-      metric: legal_attribution_calls_tool_typed_first
+        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        return (parsed.tool_calls || []).some(tc => {
+          if (tc.function?.name !== 'fetch_webpage') return false;
+          const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+          const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
+          return urls.some(u => OFFICIAL.test(String(u)));
+        });
+      metric: legal_attribution_fetches_official_page
     # Converted from llm-rubric (2026-06-12): the rubric text already stated a
-    # mechanical rule — pass if the legal search tool is called; fail only if
-    # legal text is quoted without any search tool call.
+    # mechanical rule — pass if an official page is fetched; fail only if
+    # legal text is quoted without any tool call.
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
         const toolCalls = parsed.tool_calls || [];
         const text = parsed.text || '';
-        const hasLegalSearch = toolCalls.some(tc =>
-          ['search_legal'].includes(tc.function?.name)
-        );
-        if (hasLegalSearch) return true;
+        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        const fetchedOfficialPage = toolCalls.some(tc => {
+          if (tc.function?.name !== 'fetch_webpage') return false;
+          const args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+          const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
+          return urls.some(u => OFFICIAL.test(String(u)));
+        });
+        if (fetchedOfficialPage) return true;
         const anySearch = toolCalls.length > 0;
         const quotesLegalText = /article\s+\d+|EPC\s+art|novelty\s+(is\s+)?defined|"[^"]{40,}"/i.test(text);
         return anySearch || !quotesLegalText;

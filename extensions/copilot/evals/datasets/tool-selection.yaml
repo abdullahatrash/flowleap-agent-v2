@@ -147,13 +147,18 @@
 - vars:
     prompt: "What does MPEP say about obviousness under 35 USC 103?"
   assert:
-    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'search_legal';
-      metric: path_g_legal_research_typed_first
+        // Patent law is read from the office's own page (#825, ADR 0017): the first call is
+        // fetch_webpage with a URL on an official law host. Subdomains count; look-alike hosts do not.
+        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        const first = (parsed.tool_calls || [])[0];
+        if (first?.function?.name !== 'fetch_webpage') return false;
+        const args = typeof first.function.arguments === 'string' ? JSON.parse(first.function.arguments) : first.function.arguments;
+        const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
+        return urls.some(u => OFFICIAL.test(String(u)));
+      metric: path_g_legal_research_official_page
 
 - vars:
     prompt: "Create a Python script that parses patent XML files and extracts claim text into a CSV"
@@ -162,7 +167,7 @@
       value: |
         const parsed = JSON.parse(output);
         const patentSearchTools = ['search_patents', 'patent_api_request',
-          'ops_api_guide', 'uspto_api_guide', 'citation_api_guide', 'legal_search_guide'];
+          'ops_api_guide', 'uspto_api_guide', 'citation_api_guide'];
         return !(parsed.tool_calls || []).some(tc => patentSearchTools.includes(tc.function?.name));
       metric: path_h_coding_task
 
@@ -196,13 +201,18 @@
         const parsed = JSON.parse(output);
         return !(parsed.tool_calls || []).some(tc => tc.function?.name === 'vscode_askQuestions');
       metric: legal_lookup_skips_jurisdiction_gate
-    # Typed tools are PRIMARY per prompt branches F/G + modelDescriptions; guides are the advanced path.
     - type: javascript
       value: |
         const parsed = JSON.parse(output);
-        const firstTool = (parsed.tool_calls || [])[0]?.function?.name;
-        return firstTool === 'search_legal';
-      metric: legal_lookup_first_tool_typed_first
+        // Patent law is read from the office's own page (#825, ADR 0017): the first call is
+        // fetch_webpage with a URL on an official law host. Subdomains count; look-alike hosts do not.
+        const OFFICIAL = /^https?:\/\/([a-z0-9-]+\.)*(uspto\.gov|epo\.org|wipo\.int|ecfr\.gov|uscode\.house\.gov|law\.cornell\.edu)(\/|$)/i;
+        const first = (parsed.tool_calls || [])[0];
+        if (first?.function?.name !== 'fetch_webpage') return false;
+        const args = typeof first.function.arguments === 'string' ? JSON.parse(first.function.arguments) : first.function.arguments;
+        const urls = Array.isArray(args?.urls) ? args.urls : [args?.urls];
+        return urls.some(u => OFFICIAL.test(String(u)));
+      metric: legal_lookup_first_tool_official_page
 
 - vars:
     prompt: "What prior art did the examiner cite against application 16123456?"
