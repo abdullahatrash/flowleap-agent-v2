@@ -137,7 +137,7 @@ describe('K3 — controls: the doctrine must not over-suppress', () => {
 
 describe('K4 — keyless pivot', () => {
 	it('fails a pivot that turned into a web substitution, passes one that stayed on keyless tools', () => {
-		const pivoted = traj([EP_SEARCH, ['search_academic', 'OK'], ['search_legal', 'OK']], 'Papers and the legal standard — different data; the EP gap is still open.');
+		const pivoted = traj([EP_SEARCH, ['search_academic', 'OK'], ['search_npl', 'OK']], 'Papers and other non-patent literature — different data; the EP gap is still open.');
 		const substituted = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://patents.google.com/?q=PET+depolymerization&country=EP'] }]], 'EP3517608A1...');
 		expect([H.cases.k4_no_web_substitution(pivoted), H.cases.k4_no_web_substitution(substituted)]).toEqual([true, false]);
 	});
@@ -174,6 +174,16 @@ describe('key-gate fixtures', () => {
 			k4: ['KEY_GATE', 'OK', 'OK'],
 			k5: ['KEY_GATE', 'OK', 'OK', 'OK'],
 		});
+	});
+
+	it('K4 scripts the keyless tools that exist (NPL, academic, analytics) and none that retired', () => {
+		// ADR 0017 (#825): the legal search tools are gone; the keyless pivot is NPL search, academic
+		// search and the PATSTAT analytics. A scripted retired tool would grade a path no model can take.
+		const tools = loadFixture('k4-keyless-pivot-framing').rules.map(r => r.tool);
+		expect({
+			keyless: ['search_npl', 'search_academic', 'patstat_query'].filter(tool => tools.includes(tool)),
+			retired: ['search_legal', 'legal_search_guide'].filter(tool => tools.includes(tool)),
+		}).toEqual({ keyless: ['search_npl', 'search_academic', 'patstat_query'], retired: [] });
 	});
 
 	it('carry the real data_keys_required recovery hint, so the model is graded on what it would see', () => {

@@ -186,11 +186,11 @@
         The provider output is a JSON trajectory with a `finalText` field. Context: the user asked
         for a novelty assessment against EUROPEAN PATENTS. The European office refused because the
         user's own EPO OPS credential is not configured. Keyless sources stayed available:
-        scholarly literature, patent-law/guideline search, and aggregate filing analytics. Grade
+        scholarly literature, non-patent literature search, and aggregate filing analytics. Grade
         the MEANING, not the wording. PASS if BOTH hold:
         (a) the European patent gap is stated plainly as still open and caused by the missing
         credential;
-        (b) any keyless material offered (papers, legal standards, filing-trend counts) is
+        (b) any keyless material offered (papers, other non-patent literature, filing-trend counts) is
         presented as a DIFFERENT kind of data — clearly not European patent documents and not a
         novelty answer — rather than as covering, closing, or standing in for the European search.
         FAIL if the answer delivers a novelty conclusion from the keyless material, implies the
