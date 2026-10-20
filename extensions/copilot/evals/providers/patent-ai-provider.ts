@@ -8,7 +8,8 @@ import type { ApiProvider, ProviderResponse, CallApiContextParams, CallApiOption
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { readTokenUsage, systemMessage, type ChatCompletionUsage } from './chat-completions';
+import { readTokenUsage, systemMessage, type ChatCompletionTokenUsage, type ChatCompletionUsage } from './chat-completions';
+import { isResponseCacheEnabled, ResponseCache } from './response-cache';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,8 @@ const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 // jurisdiction skip rules (3/40 baseline failures), which would make the
 // regression gate fire on model weakness instead of prompt drift.
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
+// Under evals/output, which .gitignore keeps out of the repo.
+const DEFAULT_CACHE_DIR = path.join(EVALS_DIR, 'output', 'response-cache');
 
 function loadSystemPrompt(): string {
 	const promptPath = path.join(EVALS_DIR, 'prompts', 'system-prompt.txt');
@@ -43,6 +46,14 @@ const toolDefinitions = loadToolDefinitions();
 export interface PatentAIProviderDeps {
 	readonly fetch?: typeof fetch;
 	readonly env?: NodeJS.ProcessEnv;
+	/** Where the response cache lives. Default: evals/output/response-cache. */
+	readonly cacheDir?: string;
+}
+
+/** What the response cache stores per request: the output contract and the live usage. */
+interface CachedResponse {
+	readonly output: string;
+	readonly tokenUsage: ChatCompletionTokenUsage;
 }
 
 /**
@@ -58,6 +69,9 @@ export interface PatentAIProviderDeps {
  *   EVAL_API_BASE_URL  Base URL for the chat completions API. Default: https://openrouter.ai/api/v1
  *   EVAL_API_KEY        API key. Falls back to OPENROUTER_API_KEY. Required — no unauthenticated requests.
  *   EVAL_MODEL          Default model slug when the provider config omits one. Default: anthropic/claude-sonnet-5
+ *   EVAL_PROMPT_CACHE   Set to 0 to send the system prompt without an Anthropic cache breakpoint.
+ *   PROMPTFOO_CACHE_ENABLED  `false` (what the launcher sets for `--no-cache`) bypasses the
+ *                       response cache (see response-cache.ts); every call then reaches the model.
  *
  * Usage in promptfooconfig.yaml:
  *   providers:
@@ -70,11 +84,13 @@ export default class PatentAIProvider implements ApiProvider {
 	private readonly configModel: string | undefined;
 	private readonly fetchFn: typeof fetch;
 	private readonly env: NodeJS.ProcessEnv;
+	private readonly cache: ResponseCache;
 
 	constructor(options?: { config?: { model?: string }; id?: string; label?: string }, deps?: PatentAIProviderDeps) {
 		this.configModel = options?.config?.model;
 		this.fetchFn = deps?.fetch ?? globalThis.fetch;
 		this.env = deps?.env ?? process.env;
+		this.cache = new ResponseCache(deps?.cacheDir ?? DEFAULT_CACHE_DIR);
 	}
 
 	id(): string {
@@ -96,7 +112,7 @@ export default class PatentAIProvider implements ApiProvider {
 
 	async callApi(
 		prompt: string,
-		_context?: CallApiContextParams,
+		context?: CallApiContextParams,
 		_options?: CallApiOptionsParams,
 	): Promise<ProviderResponse> {
 		const apiKey = this.resolveApiKey();
@@ -118,6 +134,14 @@ export default class PatentAIProvider implements ApiProvider {
 			temperature: 0,
 			max_tokens: 4096,
 		};
+
+		// The key is the whole body: model, messages, tools and sampling parameters.
+		const useCache = isResponseCacheEnabled(this.env, context);
+		const replay = useCache ? this.cache.get<CachedResponse>(body) : undefined;
+		if (replay) {
+			// promptfoo's own convention for a replayed response: all tokens counted as cached, no live prompt/completion.
+			return { output: replay.output, tokenUsage: { total: replay.tokenUsage.total, cached: replay.tokenUsage.total }, cached: true };
+		}
 
 		try {
 			const response = await this.fetchFn(`${this.resolveBaseUrl()}/chat/completions`, {
@@ -162,10 +186,14 @@ export default class PatentAIProvider implements ApiProvider {
 				tool_calls: choice.message.tool_calls || [],
 			};
 
-			return {
+			const result: CachedResponse = {
 				output: JSON.stringify(structured),
 				tokenUsage: readTokenUsage(data.usage),
 			};
+			if (useCache) {
+				this.cache.set(body, result);
+			}
+			return result;
 		} catch (err) {
 			return {
 				error: `Request failed: ${err instanceof Error ? err.message : String(err)}`,

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,9 @@ const SUCCESS_BODY = {
 	usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
 };
 
+/** The response cache off, as `--no-cache` sets it: the tests below exercise the live path. */
+const NO_CACHE: NodeJS.ProcessEnv = { PROMPTFOO_CACHE_ENABLED: 'false' };
+
 interface RecordedCall {
 	readonly url: string;
 	readonly init: RequestInit;
@@ -55,7 +59,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('PatentAIProvider', () => {
 	it('returns an error and never calls fetch when no api key is configured', async () => {
 		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
-		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: {} });
+		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: NO_CACHE });
 
 		const result = await provider.callApi('test prompt');
 
@@ -67,7 +71,7 @@ describe('PatentAIProvider', () => {
 
 	it('prefers EVAL_API_KEY over the OPENROUTER_API_KEY fallback', async () => {
 		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
-		const env: NodeJS.ProcessEnv = { EVAL_API_KEY: 'eval-key', OPENROUTER_API_KEY: 'or-key' };
+		const env: NodeJS.ProcessEnv = { ...NO_CACHE, EVAL_API_KEY: 'eval-key', OPENROUTER_API_KEY: 'or-key' };
 		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env });
 
 		await provider.callApi('test prompt');
@@ -80,7 +84,7 @@ describe('PatentAIProvider', () => {
 
 	it('falls back to OPENROUTER_API_KEY when EVAL_API_KEY is unset', async () => {
 		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
-		const env: NodeJS.ProcessEnv = { OPENROUTER_API_KEY: 'or-key-only' };
+		const env: NodeJS.ProcessEnv = { ...NO_CACHE, OPENROUTER_API_KEY: 'or-key-only' };
 		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env });
 
 		await provider.callApi('test prompt');
@@ -92,7 +96,7 @@ describe('PatentAIProvider', () => {
 	});
 
 	it('builds the endpoint URL from the default base, and strips trailing slashes on a custom one without doubling /v1', async () => {
-		const env: NodeJS.ProcessEnv = { EVAL_API_KEY: 'k' };
+		const env: NodeJS.ProcessEnv = { ...NO_CACHE, EVAL_API_KEY: 'k' };
 		const defaultRun = createFetchStub(() => jsonResponse(SUCCESS_BODY));
 		await new PatentAIProvider(undefined, { fetch: defaultRun.fetchFn, env }).callApi('p');
 
@@ -109,7 +113,7 @@ describe('PatentAIProvider', () => {
 	});
 
 	it('resolves the model with precedence: provider config, then EVAL_MODEL, then the built-in default', async () => {
-		const env: NodeJS.ProcessEnv = { EVAL_API_KEY: 'k' };
+		const env: NodeJS.ProcessEnv = { ...NO_CACHE, EVAL_API_KEY: 'k' };
 
 		const configured = createFetchStub(() => jsonResponse(SUCCESS_BODY));
 		await new PatentAIProvider({ config: { model: 'anthropic/claude-sonnet-4.5' } }, {
@@ -129,7 +133,7 @@ describe('PatentAIProvider', () => {
 
 	it('sends a request body with the prompt-cached system prompt first, the full tool surface, and fixed sampling options', async () => {
 		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
-		const provider = new PatentAIProvider({ config: { model: 'openai/gpt-5.2-mini' } }, { fetch: fetchFn, env: { EVAL_API_KEY: 'k' } });
+		const provider = new PatentAIProvider({ config: { model: 'openai/gpt-5.2-mini' } }, { fetch: fetchFn, env: { ...NO_CACHE, EVAL_API_KEY: 'k' } });
 
 		await provider.callApi('what is the novelty of claim 1?');
 
@@ -150,7 +154,7 @@ describe('PatentAIProvider', () => {
 
 	it('sends the system prompt as a plain string when EVAL_PROMPT_CACHE=0', async () => {
 		const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
-		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: { EVAL_API_KEY: 'k', EVAL_PROMPT_CACHE: '0' } });
+		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: { ...NO_CACHE, EVAL_API_KEY: 'k', EVAL_PROMPT_CACHE: '0' } });
 
 		await provider.callApi('p');
 
@@ -159,7 +163,7 @@ describe('PatentAIProvider', () => {
 
 	it('maps a successful upstream response to the {text, tool_calls} output contract with token usage', async () => {
 		const { fetchFn } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
-		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: { EVAL_API_KEY: 'k' } });
+		const provider = new PatentAIProvider(undefined, { fetch: fetchFn, env: { ...NO_CACHE, EVAL_API_KEY: 'k' } });
 
 		const result = await provider.callApi('test prompt');
 
@@ -171,7 +175,7 @@ describe('PatentAIProvider', () => {
 	});
 
 	it('records cached prompt tokens from OpenRouter prompt_tokens_details, or from the Anthropic-native cache_read_input_tokens', async () => {
-		const env: NodeJS.ProcessEnv = { EVAL_API_KEY: 'k' };
+		const env: NodeJS.ProcessEnv = { ...NO_CACHE, EVAL_API_KEY: 'k' };
 		const openRouter = createFetchStub(() => jsonResponse({
 			...SUCCESS_BODY,
 			usage: { prompt_tokens: 55000, completion_tokens: 5, total_tokens: 55005, prompt_tokens_details: { cached_tokens: 54900 } },
@@ -190,6 +194,60 @@ describe('PatentAIProvider', () => {
 			{ total: 55005, prompt: 55000, completion: 5, cached: 54900 },
 			{ total: 55005, prompt: 55000, completion: 5, cached: 54800 },
 		]);
+	});
+
+	describe('response cache', () => {
+		const env: NodeJS.ProcessEnv = { EVAL_API_KEY: 'k' };
+		const freshCacheDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'flowleap-evals-cache-'));
+
+		it('serves a second identical request from disk without calling fetch, marked cached with the prompt tokens counted as cached', async () => {
+			const cacheDir = freshCacheDir();
+			const first = createFetchStub(() => jsonResponse(SUCCESS_BODY));
+			const second = createFetchStub(() => jsonResponse(SUCCESS_BODY));
+
+			const live = await new PatentAIProvider(undefined, { fetch: first.fetchFn, env, cacheDir }).callApi('same prompt');
+			const replay = await new PatentAIProvider(undefined, { fetch: second.fetchFn, env, cacheDir }).callApi('same prompt');
+
+			expect({ fetches: [first.calls.length, second.calls.length], live, replay }).toStrictEqual({
+				fetches: [1, 0],
+				live: { output: live.output, tokenUsage: { total: 15, prompt: 10, completion: 5 } },
+				replay: { output: live.output, tokenUsage: { total: 15, cached: 15 }, cached: true },
+			});
+		});
+
+		it('misses when the prompt or the model differs', async () => {
+			const cacheDir = freshCacheDir();
+			const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
+
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env, cacheDir }).callApi('prompt A');
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env, cacheDir }).callApi('prompt B');
+			await new PatentAIProvider({ config: { model: 'openai/gpt-5.2' } }, { fetch: fetchFn, env, cacheDir }).callApi('prompt A');
+
+			expect(calls).toHaveLength(3);
+		});
+
+		it('calls the network every time under --no-cache (PROMPTFOO_CACHE_ENABLED=false) or a bustCache context, and stores nothing', async () => {
+			const cacheDir = freshCacheDir();
+			const { fetchFn, calls } = createFetchStub(() => jsonResponse(SUCCESS_BODY));
+			const context = { prompt: { raw: 'p', label: 'p' }, vars: {}, bustCache: true };
+
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env: { ...env, PROMPTFOO_CACHE_ENABLED: 'false' }, cacheDir }).callApi('p');
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env: { ...env, PROMPTFOO_CACHE_ENABLED: 'false' }, cacheDir }).callApi('p');
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env, cacheDir }).callApi('p', context);
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env, cacheDir }).callApi('p', context);
+
+			expect({ fetches: calls.length, stored: fs.readdirSync(cacheDir) }).toStrictEqual({ fetches: 4, stored: [] });
+		});
+
+		it('does not store an error response', async () => {
+			const cacheDir = freshCacheDir();
+			const { fetchFn, calls } = createFetchStub(() => new Response('busy', { status: 503 }));
+
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env, cacheDir }).callApi('p');
+			await new PatentAIProvider(undefined, { fetch: fetchFn, env, cacheDir }).callApi('p');
+
+			expect({ fetches: calls.length, stored: fs.readdirSync(cacheDir) }).toStrictEqual({ fetches: 2, stored: [] });
+		});
 	});
 
 	it('returns an error string with the status and body text for a non-OK response', async () => {
