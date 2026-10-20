@@ -92,7 +92,7 @@ OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfi
 OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml \
   -t datasets/tool-selection.yaml
 
-# Skip cache (re-run all GRADER calls — the providers never cache; see Caching)
+# Skip cache (fresh model calls AND fresh grader calls; see Caching)
 OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml --no-cache
 
 # Run against a specific model (single-model config reads EVAL_MODEL)
@@ -128,6 +128,18 @@ OpenRouter with the real prefix (41 149 tokens): first call **$0.103**, identica
 **$0.008** (`cached_tokens: 41149`). A full 3-run gate cost ~$20 before this; expect a few
 dollars now. `EVAL_PROMPT_CACHE=0` sends the plain string (to measure the uncached cost).
 OpenRouter ignores the breakpoint for non-Anthropic models, so it is safe under `EVAL_MODEL`.
+
+The single-turn provider (`patent-ai-provider.ts`, the main suite) sends the same breakpoint on
+its system prompt since #831, so the 55k-token prefix (system prompt + 44 tool definitions, resent
+for each of the 51 cases) is written once per run and read at the cache rate by the other cases.
+The output file records the saving as `tokenUsage.cached` (OpenRouter's
+`prompt_tokens_details.cached_tokens`). The same provider also keeps a **response cache** of its
+own under `evals/output/response-cache/` (gitignored, 14-day age cap): a request with the same
+model, messages, tools and sampling parameters replays the stored answer without a model call and
+is marked `cached: true` in the result. An assert-only rerun of the main suite therefore costs
+nothing. To bypass it, pass `--no-cache` through the launcher (the repeat gates always do), which
+also sets `PROMPTFOO_CACHE_ENABLED=false` for the provider; or set that env var yourself. To clear
+it, delete the folder.
 
 Spend discipline: probe the cases a change touches (`-- --filter-pattern T9`, ~$0.50 cached)
 and reserve the full repeat gate for release time. The gate's per-case flake is real
@@ -180,8 +192,8 @@ npm run eval:view -- -p 15600  # different port
 - **Default port 15500.** The UI lists runs by description, so a suite's `description:` field is how
   you find it (for example "Patent AI — Key-Gate Doctrine Adherence (#176)").
 - **Cache interplay.** `--no-cache` does not change what the dashboard shows; it only forces fresh
-  API calls during the run. Because our providers bypass the promptfoo cache entirely (see
-  [Caching](#caching)), `--no-cache` on our suites affects the **grader** calls only.
+  API calls during the run: the graders, and the single-turn provider's own response cache (see
+  [Caching](#caching)). The trajectory provider never caches.
 - **Export a run:** `npx tsx scripts/promptfoo.ts export eval latest -o run.json` (or an explicit eval
   id; `--include-media` embeds blobs). Import elsewhere with `promptfoo import <file>`.
 - **Share:** `promptfoo share` uploads the run to promptfoo's hosted viewer. **Do not use it** — our
@@ -649,9 +661,11 @@ keys.
 Promptfoo caches API responses by default (14-day TTL at `~/.promptfoo/cache`). This means re-running evals without changes is instant. Use `--no-cache` to force fresh API calls. To clear: `promptfoo cache clear`.
 
 **Our providers are not in that path.** `patent-ai-provider.ts` and `trajectory-provider.ts` call the
-endpoint with `fetch` and never use promptfoo's cache API, so the agent's own calls are always live
-and `--no-cache` only re-runs the **graders**. See
-[Techniques survey](#techniques-survey--what-we-use-and-what-we-do-not).
+endpoint with `fetch` and never use promptfoo's cache API. The trajectory provider's calls are
+always live, so `--no-cache` on its suites only re-runs the **graders**. The single-turn provider
+keeps its own response cache (see [Cost](#cost-prompt-caching-is-on-by-default)); the launcher
+turns `--no-cache` into `PROMPTFOO_CACHE_ENABLED=false`, which both promptfoo and that provider
+read. See [Techniques survey](#techniques-survey--what-we-use-and-what-we-do-not).
 
 | Env Variable | Purpose | Default |
 |---|---|---|
@@ -1144,12 +1158,14 @@ encode specific doctrine from specific issues (#173 key-gate, jurisdiction gatin
 to be traceable to the rule it defends. Synthesised cases would need that review anyway, so they
 save nothing. It stays an option for widening coverage once a rule is stable.
 
-**Caching** — *effectively off for the model under test*. Both providers call the endpoint directly
-with `fetch` and never touch promptfoo's cache API, so **nothing about the agent's behaviour is ever
-cached**; only grader (`llm-rubric`) calls go through the 14-day disk cache at `~/.promptfoo/cache`.
-`--no-cache` on our suites therefore re-runs the judges, not the agent. Clear it with `promptfoo
-cache clear`. Two consequences worth remembering: an assertion-only edit can be re-graded cheaply,
-and a provider response poisoned by an upstream error would be cached if we ever routed the agent
+**Caching** — *promptfoo's own cache is off for the model under test*. Both providers call the
+endpoint directly with `fetch` and never touch promptfoo's cache API; only grader (`llm-rubric`)
+calls go through the 14-day disk cache at `~/.promptfoo/cache`. Since #831 the single-turn provider
+keeps a response cache of its own (`evals/output/response-cache/`, same `--no-cache` bypass, error
+responses never stored); the trajectory provider still never caches. Clear promptfoo's with
+`promptfoo cache clear`, ours by deleting the folder. Two consequences worth remembering: an
+assertion-only edit re-grades cheaply and, on the main suite, re-runs no model call at all; and a
+provider response poisoned by an upstream error would be cached if we ever routed the agent
 through promptfoo's own provider — an independent reason to keep the loop in our provider.
 
 **Sharing** — *not used*. See [Local dashboard](#local-dashboard-promptfoo-view).
