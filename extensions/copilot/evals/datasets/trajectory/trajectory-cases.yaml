@@ -425,3 +425,31 @@
           .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
           .then(H => H.cases.t13_round_report_names_source_point(H.parseTrajectory(output)));
       metric: t13_round_report_names_source_point
+
+# ── T14 — patent law read from the official page (#825, ADR 0017). ──────────────────
+# The single-turn source-attribution case sees the fetch call only. This case runs the loop
+# and grades the answer against the page text the fetch returned (`resultBody`): the quoted
+# passage must be in it, and the answer must carry the fetched URL.
+- description: "T14 — EPC novelty from the official page: fetch the epo.org article, quote only the text the page returned, cite its URL"
+  vars:
+    prompt: "What does the EPC say about novelty requirements? Quote the article from the official text and give me the source."
+    mockScript: t14-legal-official-page
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t14_fetched_official_page(H.parseTrajectory(output)));
+      metric: t14_fetched_official_page
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t14_quote_rests_on_fetched_page(H.parseTrajectory(output)));
+      metric: t14_quote_rests_on_fetched_page
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t14_cites_fetched_url(H.parseTrajectory(output)));
+      metric: t14_cites_fetched_url

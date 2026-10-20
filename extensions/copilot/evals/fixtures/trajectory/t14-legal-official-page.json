@@ -1,0 +1,27 @@
+{
+	"id": "t14-legal-official-page",
+	"description": "Patent law read from the official page (#825, ADR 0017). A fetch of the EPO legal-text page returns the text of Article 54 EPC as the page showed it on 2026-10-20 (https://www.epo.org/en/legal/epc/2020/a54.html, EPC 2020 path). A fetch of a non-official page (Wikipedia and the like) returns a mock paraphrase in other words, so a quote taken from it is not in the official text. Every other tool gets the benign default: the legal search tools are retired and nothing else holds the law.",
+	"rules": [
+		{
+			"tool": "fetch_webpage",
+			"argMatch": {
+				"urls": "epo.org"
+			},
+			"response": {
+				"tag": "OK",
+				"body": "Article 54 – Novelty\nEuropean Patent Convention – Legal texts – Part II – Chapter I – Patentability\nPage: https://www.epo.org/en/legal/epc/2020/a54.html\n\nArticle 54\nNovelty\n(1) An invention shall be considered to be new if it does not form part of the state of the art.\n(2) The state of the art shall be held to comprise everything made available to the public by means of a written or oral description, by use, or in any other way, before the date of filing of the European patent application.\n(3) Additionally, the content of European patent applications as filed, the dates of filing of which are prior to the date referred to in paragraph 2 and which were published on or after that date, shall be considered as comprised in the state of the art.\n(4) Paragraphs 2 and 3 shall not exclude the patentability of any substance or composition, comprised in the state of the art, for use in a method referred to in Article 53(c), provided that its use for any such method is not comprised in the state of the art.\n(5) Paragraphs 2 and 3 shall also not exclude the patentability of any substance or composition referred to in paragraph 4 for any specific use in a method referred to in Article 53(c), provided that such use is not comprised in the state of the art.\n\n42 Amended by the Act revising the European Patent Convention of 29.11.2000."
+			}
+		},
+		{
+			"tool": "fetch_webpage",
+			"response": {
+				"tag": "OK",
+				"body": "Novelty (patent) - Wikipedia\nNovelty is a requirement for a patent claim to be patentable. An invention is not new and therefore not patentable if it was known to the public before the filing date of the application, or before its priority date if the applicant claims priority of an earlier application. Prior art is the set of all information that has been made available to the public before the filing date."
+			}
+		}
+	],
+	"default": {
+		"tag": "OK",
+		"body": "OK (no scripted result for this tool)."
+	}
+}
