@@ -14,6 +14,18 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-21
+
+### Fixed
+
+- **Fresh install with a signed-in Pro account and no API key no longer locks the chat.**
+  The Models picker said "Sign in to use FlowLeap" although you were signed in, and clicking
+  it started a setup that never finished ("Getting chat ready..."). The picker now reads
+  "No models available" and offers Add Model (and Sign In when you are signed out). Adding a
+  key in FlowLeap Settings was, and is, the way to start chatting on a Pro plan.
+- **No more `Cannot find module 'source-map-support'` error at startup.** The chat
+  extension is now packaged as a production build.
+
 ## [0.9.0] - 2026-10-21
 
 ### Added
