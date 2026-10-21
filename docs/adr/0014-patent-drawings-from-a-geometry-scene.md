@@ -22,8 +22,9 @@ ADR 0012 non-goal by this ADR rather than by editing it.
    spring, gear, bearing, shaft, pipe, motor), placements, cameras, and reference numerals as
    named ports on part faces. The engine builds solids, projects them, removes hidden lines,
    places numerals and lead lines, and writes SVG. The scene is the source of truth; SVG, sheets
-   and PDF are derived and regenerate. A per-part code escape hatch exists for shapes the
-   primitives cannot express. Rejected: image-to-image line art (no part identity, no second
+   and PDF are derived and regenerate. A per-part code escape hatch existed for shapes the
+   primitives cannot express; it was dropped 2026-10-19 (#799), no run needed it. Rejected:
+   image-to-image line art (no part identity, no second
    view, no hidden lines, not editable); the model writing kernel code directly (no check can run
    before a render, and BYOK models of mixed quality write JSON more reliably than code).
 2. **The kernel is OpenCascade compiled to WebAssembly, through replicad.** It is the only

@@ -118,10 +118,10 @@ The other branches (C analytics, E claim comparison, F/G patent lookup and figur
 → Citation categories: X=novelty-destroying (102), Y=obviousness (103), A=background
 → Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited
 
-**J) PATENT LAW RESEARCH (MPEP, EPC, Guidelines)?**
-→ PRIMARY: `search_legal` (query free text; jurisdiction="USPTO" for MPEP, "EPO" for EPC/Guidelines; comprehensive=true for full quotable sections)
-→ Use `legal_search_guide` ONLY for advanced cases: source filters, semantic/keyword-only modes, threshold tuning, and the jurisdiction list
-→ Keywords: MPEP, obviousness law, 101 eligibility, EPC Article, inventive step
+**J) PATENT LAW (MPEP, 35 USC, 37 CFR, EPC, EPO Guidelines, PCT Rules)?**
+→ Read the law from the office's own page with fetch_webpage: the MPEP section on uspto.gov, 35 USC and 37 CFR on their official hosts, the EPC and the EPO Guidelines on epo.org, the PCT Rules on wipo.int. The `legal-research` skill is the method: it names the source for each kind of question and the URL pattern of each office
+→ Quote only the text the page returned. Give the URL and the edition or revision that the page shows. If the page did not answer the question, say so; do not fill the gap from memory
+→ Keywords: MPEP, obviousness law, 101 eligibility, EPC Article, inventive step, PCT Rule
 
 **K) CODING/IMPLEMENTATION task?**
 → Use standard coding tools: create_file, run_in_terminal, edit tools
@@ -146,7 +146,7 @@ CRITICAL RULES:
 - EP/WO patents and worldwide bibliographic search: search_patents / get_patent_details (ops_api_guide for the full tool list)
 - US patents: search_patents with provider="uspto" / get_us_grant (uspto_api_guide for the full tool list)
 - Office action citations: search_citations / search_forward_citations (citation_api_guide for advanced)
-- Patent law (MPEP/EPC): search_legal (legal_search_guide for advanced)
+- Patent law (MPEP, EPC, Guidelines, PCT): fetch_webpage on the office's own page (branch J)
 - CN/JP/KR patents: no dedicated search tool; use fetch_webpage against Google Patents (branch L) to fetch-and-verify before reporting any coverage gap
 
 4. **ANALYSIS SUPPORT, NOT LEGAL ADVICE**: For any patentability, validity, infringement, FTO, or office-action-response output, include one brief note that this is analytical support and not legal advice; recommend qualified patent counsel for filing or dispute decisions. Once per response, not per paragraph.

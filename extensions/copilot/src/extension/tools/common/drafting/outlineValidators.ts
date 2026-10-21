@@ -103,15 +103,40 @@ export function checkOutlineCoverage(outline: DraftOutline, claims: readonly Dra
  * heading (`| F3 | ...`, `- F3: ...`, `## F3 ...`), optionally in bold.
  */
 function featureRowIds(featureList: string): Set<string> {
+	return new Set(parseFeatureRows(featureList).keys());
+}
+
+/** One row of `feature-list.md`: its feature text, the section it is under and its example status. */
+export interface FeatureRow {
+	/** The cell after the ID in a table row, or the text after the ID in a list item or heading; empty when the row has none. */
+	readonly text: string;
+	/** The nearest heading above the row (`Alternatives`, `Tests`); empty above the first heading. */
+	readonly section: string;
+	/** True when a cell after the feature text (the example status) says `prophetic`; for a list item, when its text says so. */
+	readonly prophetic: boolean;
+}
+
+const propheticPattern = /\bprophetic\b/i;
+
+/** The rows of `feature-list.md` by ID, the first row of an ID when it is written twice. */
+export function parseFeatureRows(featureList: string): Map<string, FeatureRow> {
 	const { body } = parseDraftingFrontmatter(featureList);
-	const ids = new Set<string>();
+	const rows = new Map<string, FeatureRow>();
+	let section = '';
 	for (const content of body.split('\n')) {
-		const id = /^\s*(?:\|\s*|[-*]\s+|#{1,6}\s+)?(?:\*\*)?(?<id>F\d+)\b/.exec(content)?.groups?.id;
-		if (id) {
-			ids.add(id);
+		const heading = /^#{1,6}\s+(?<label>.+?)\s*#*\s*$/.exec(content)?.groups?.label;
+		const row = /^\s*(?:(?<table>\|\s*)|[-*]\s+|#{1,6}\s+)?(?:\*\*)?(?<id>F\d+)\b(?:\*\*)?(?<rest>.*)$/.exec(content)?.groups;
+		if (heading !== undefined && !row) {
+			section = heading;
+		}
+		if (row && !rows.has(row.id)) {
+			const cells = row.table ? row.rest.split('|') : [];
+			const text = row.table ? cells[1] ?? '' : row.rest.replace(/^\s*[:.)\u2013\u2014-]?\s*/, '');
+			const prophetic = row.table ? cells.slice(2).some(cell => propheticPattern.test(cell)) : propheticPattern.test(text);
+			rows.set(row.id, { text: text.trim(), section, prophetic });
 		}
 	}
-	return ids;
+	return rows;
 }
 
 function quoteList(texts: readonly string[]): string {

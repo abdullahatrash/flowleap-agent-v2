@@ -14,7 +14,7 @@ import { URI } from '../../../util/vs/base/common/uri';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { LanguageModelTextPart, LanguageModelToolResult } from '../../../vscodeTypes';
 import { checklistPointer, DraftingChecklist, DraftingChecklistStep, gateActionText, gateEdit, nextChecklistStep, readDraftingChecklist, renderChecklist, stepActionText } from '../common/drafting/checklist';
-import { DraftFinding, isInventorQuestion } from '../common/drafting/finding';
+import { DraftFinding, findingLine, isInventorQuestion } from '../common/drafting/finding';
 import { blockingFindings, mergeFindings, parseFindingsFile, renderFindingsFile } from '../common/drafting/findingsFile';
 import { DRAFT_DOCUMENT_TYPES, DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DraftingFolder, resolveDraftingFolder } from '../common/drafting/folderContract';
 import { DraftingFrontmatterFields, DraftingGateFlag, DraftingGateState, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice, writeDraftingFrontmatter } from '../common/drafting/frontmatter';
@@ -24,6 +24,8 @@ import { isStyleExemplar, MAX_STYLE_EXEMPLARS, renderStyleReadme, STYLE_README }
 import { validateDraft } from '../common/drafting/validateDraft';
 import { addRecordLine, APPROVAL_CLEARED, APPROVED_CLAIMS_HASH, emptyWorkingRecord, readRecordField, setRecordField, EXPORTED_DRAFT_HASH, VALIDATED_DRAFT_HASH, VERSION_CLAIMS_HASH } from '../common/drafting/workingRecord';
 import { assertFileOkForTool } from '../node/toolUtils';
+import { figureOfSvgFile } from '../../drawings/common/drawingFiles';
+import type { MatterFiles } from '../../drawings/node/ops/matterFiles';
 
 /** Reads the text of a PDF style exemplar; the default goes through the FlowLeap PDF Preview extension. */
 export type PdfTextReader = (uri: URI) => Promise<string>;
@@ -50,6 +52,32 @@ export const vscodeEditors: DraftingEditors = {
 
 /** Characters of one exemplar returned; the rest is cut and the cut is stated. */
 const MAX_EXEMPLAR_CHARS = 20_000;
+
+/**
+ * When this module loaded: the extension activated then. A matter whose last tool call is older
+ * ran in a chat from before the restart or the rebuild (PRD 0026 S2).
+ */
+const ACTIVATED_AT = Date.now();
+
+/**
+ * The last refusal of each matter and Figure, in memory. A refusal that repeats with the same
+ * text means the agent anchors on its own refusal (seen 2026-10-16): the attorney starts a new
+ * chat. The memory lives as long as the extension host: a restart clears it, and a restart is
+ * itself a reason for a new chat. No file carries it, because the attorney never reads it.
+ */
+const lastRefusals = new Map<string, string>();
+
+/** Forgets every refusal; the tests call it between matters. */
+export function forgetRefusals(): void {
+	lastRefusals.clear();
+}
+
+/** The chat advice at the end of every drafting and drawings tool result (PRD 0026 S2). */
+const CHAT_ADVICE = {
+	stay: 'Stay in this chat.',
+	restarted: 'Start a new chat: the app restarted after the last step of this matter.',
+	repeated: 'Start a new chat: the agent refused the same step twice.',
+} as const;
 
 /** The state of the claims approval of a matter, read from `claims.md` and the Working Record. */
 export interface ClaimsApproval {
@@ -387,7 +415,41 @@ export class DraftingWorkspace {
 		await this.write(this.folder.workingRecord, setRecordField(record, EXPORTED_DRAFT_HASH, draftHash(draft, claims)));
 	}
 
-	private async exists(path: string): Promise<boolean> {
+	/** The files of this matter for the drawing operations: paths relative to `drafting/<matter>/`. */
+	matterFiles(): MatterFiles {
+		const at = (path: string) => `${this.folder.folder}/${path}`;
+		return {
+			folder: this.folder.folder,
+			read: path => this.read(at(path)),
+			readBytes: path => this.readBytes(at(path)),
+			write: (path, content) => this.write(at(path), content),
+			listFiles: folder => this.listFiles(at(folder)),
+			delete: path => this.delete(at(path)),
+			exists: path => this.exists(at(path)),
+		};
+	}
+
+	/** The names of the files in a workspace-relative folder, sorted; empty when the folder does not exist. */
+	async listFiles(path: string): Promise<string[]> {
+		const uri = this.uri(path);
+		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+		try {
+			return (await this.fileSystemService.readDirectory(uri)).filter(([, type]) => type === FileType.File).map(([name]) => name).sort();
+		} catch {
+			return [];
+		}
+	}
+
+	/** Deletes a workspace-relative file; nothing happens when it does not exist. */
+	async delete(path: string): Promise<void> {
+		const uri = this.uri(path);
+		await this.instantiationService.invokeFunction(accessor => assertFileOkForTool(accessor, uri));
+		if (await this.exists(path)) {
+			await this.fileSystemService.delete(uri);
+		}
+	}
+
+	async exists(path: string): Promise<boolean> {
 		try {
 			await this.fileSystemService.stat(this.uri(path));
 			return true;
@@ -398,10 +460,11 @@ export class DraftingWorkspace {
 
 	/**
 	 * Writes the Drafting Checklist (`checklist.md`) from the files of the matter and returns it.
-	 * Every drafting tool calls it after it runs, also after a refusal. Nothing is written while the
-	 * matter has no folder and no drafting input.
+	 * Every drafting tool and every drawing tool calls it after it runs, also after a refusal; the
+	 * gate and waiver clicks of the editor call it too, so the file shows the new state at once
+	 * (#785). Nothing is written while the matter has no folder and no drafting input.
 	 */
-	private async writeChecklist(): Promise<DraftingChecklist | undefined> {
+	async writeChecklist(): Promise<DraftingChecklist | undefined> {
 		const { folder } = this;
 		const [featureList, claims, draftOutline, draft] = [await this.read(folder.featureList), await this.read(folder.claims), await this.read(folder.draftOutline), await this.read(folder.draft)];
 		if (featureList === undefined && claims === undefined && draftOutline === undefined && draft === undefined && !await this.exists(folder.folder)) {
@@ -427,6 +490,7 @@ export class DraftingWorkspace {
 			draft,
 			draftStale: draft !== undefined && claims !== undefined && !!versionHash && versionHash !== claimsHash(claims),
 			figures: await this.read(folder.figures),
+			drawnFigures: (await this.listFiles(folder.drawings)).filter(name => figureOfSvgFile(name) !== undefined).length,
 			inventorAnswers: await this.read(folder.inventorAnswers),
 			findings,
 			findingsCurrent: findings !== undefined && !!currentHash && readRecordField(record, VALIDATED_DRAFT_HASH) === currentHash,
@@ -457,31 +521,71 @@ export class DraftingWorkspace {
 	/**
 	 * The result of a refused tool call: the reason, then the open steps of the Drafting Checklist,
 	 * which is written first. `prefix` says what did not happen, e.g. "The draft was not exported.".
+	 * `figure` is the Figure the call was for, so the chat advice counts a repeated refusal per Figure.
 	 */
-	async refusal(prefix: string, reason: string): Promise<LanguageModelToolResult> {
-		const pointer = await this.checklistLine(true, reason);
+	async refusal(prefix: string, reason: string, figure?: string | number): Promise<LanguageModelToolResult> {
+		const pointer = await this.checklistLine(true, reason, figure);
 		return textResult(`${prefix} ${reason}${pointer ? `${reason.includes('\n') ? '\n' : ' '}${pointer}` : ''}`);
+	}
+
+	/** The text of a tool result that ran, then on a new line the next step of the Drafting Checklist, which is written first. */
+	async textWithChecklistLine(text: string): Promise<string> {
+		const line = await this.checklistLine(false);
+		return line ? `${text}\n${line}` : text;
 	}
 
 	/**
 	 * Creates the style folder when it has no README, writes the Drafting Checklist and returns the
 	 * sentence a tool result ends with: after a refusal the open steps, else the next step; then
 	 * what the attorney does for the next step, with the file and the line, unless `said` (the
-	 * refusal reason) already says it. Empty when no checklist was written.
+	 * refusal reason) already says it; then the chat advice (PRD 0026 S2). Empty when no checklist
+	 * was written. `figure` is the Figure a drawings tool ran for.
 	 */
-	async checklistLine(refused: boolean, said?: string): Promise<string> {
+	async checklistLine(refused: boolean, said?: string, figure?: string | number): Promise<string> {
 		await this.ensureStyleFolder();
+		const restarted = await this.restartedSinceLastCall();
 		const checklist = await this.writeChecklist();
 		if (!checklist) {
 			return '';
 		}
+		const advice = this.chatAdvice(restarted, refused ? said : undefined, figure);
 		const next = nextChecklistStep(checklist);
 		const action = next ? this.stepAction(next) : '';
 		const nextAction = action && !said?.includes(action) ? ` Next: ${action}` : '';
 		if (refused) {
-			return `${checklistPointer(checklist, this.folder.checklist)}${nextAction}`;
+			return `${checklistPointer(checklist, this.folder.checklist)}${nextAction} ${advice}`;
 		}
-		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).${nextAction}` : 'every step is done.'}`;
+		return `Wrote ${this.folder.checklist}: ${next ? `the next step for the attorney is step ${next.step} (${next.title}).${nextAction}` : 'every step is done.'} ${advice}`;
+	}
+
+	/**
+	 * True when the extension activated after the last tool call of this matter: `checklist.md`,
+	 * which every tool call rewrites, is older than this module. The time of that file is the
+	 * record of the last call: every tool writes it anyway, so no second file and no store is
+	 * needed, and a copy of the matter folder keeps it. A matter with no checklist had no call.
+	 */
+	private async restartedSinceLastCall(): Promise<boolean> {
+		try {
+			return (await this.fileSystemService.stat(this.uri(this.folder.checklist))).mtime < ACTIVATED_AT;
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Whether the attorney stays in this chat (PRD 0026 S2): a new chat after a restart or a
+	 * rebuild, and after the same refusal twice for the same matter and Figure. A call that ran
+	 * forgets the last refusal of its matter and Figure.
+	 */
+	private chatAdvice(restarted: boolean, refusal: string | undefined, figure: string | number | undefined): string {
+		const key = `${this.root.toString()}|${this.folder.matter}|${figure ?? ''}`;
+		const repeated = refusal !== undefined && lastRefusals.get(key) === refusal;
+		if (refusal === undefined) {
+			lastRefusals.delete(key);
+		} else {
+			lastRefusals.set(key, refusal);
+		}
+		return restarted ? CHAT_ADVICE.restarted : repeated ? CHAT_ADVICE.repeated : CHAT_ADVICE.stay;
 	}
 
 	/** What the attorney does for a checklist step, with every `` `file:line` `` as a workspace path. */
@@ -545,12 +649,6 @@ export class DraftingWorkspace {
 		}
 		return new TextDecoder().decode(bytes);
 	}
-}
-
-/** One line per finding, for a tool result. */
-export function findingLine(finding: DraftFinding): string {
-	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
-	return `- \`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}`;
 }
 
 /** Counts by severity and the blocking list, for a tool result. */

@@ -28,6 +28,10 @@ export interface DraftFinding {
 	readonly question?: string;
 	/** The attorney's waiver, kept in the findings file. */
 	readonly waived?: { readonly reason: string };
+	/** True for a Note that records that its check did not run; the Drawing Set receipt shows the row as `not-checked`. */
+	readonly notChecked?: boolean;
+	/** The rule text a drawings check applies, e.g. `37 CFR 1.84(q)`; the drafting validators set none. */
+	readonly citation?: string;
 }
 
 /** The findings with the Errors first, each group in its given order. */
@@ -38,4 +42,24 @@ export function errorsFirst(findings: readonly DraftFinding[]): DraftFinding[] {
 /** True for an Inventor Question Finding (an Error that blocks export like the other Errors). */
 export function isInventorQuestion(finding: DraftFinding): boolean {
 	return finding.rule === INVENTOR_QUESTION;
+}
+
+/** What {@link findingLine} adds to a line; the drawings engine lines carry both. */
+export interface FindingLineOptions {
+	/** Puts the severity before the rule: `- Error \`rule\``. */
+	readonly severity?: boolean;
+	/** Ends the line with the rule citation in brackets, when the finding has one. */
+	readonly citation?: boolean;
+}
+
+/** One line per finding, for a tool result: `- \`rule\` (file, line N, claim N): message`. */
+export function findingLine(finding: DraftFinding): string {
+	return formatFindingLine(finding, {});
+}
+
+/** {@link findingLine} with what the options add. */
+export function formatFindingLine(finding: DraftFinding, options: FindingLineOptions): string {
+	const location = [finding.file, finding.line !== undefined ? `line ${finding.line}` : undefined, finding.claim !== undefined ? `claim ${finding.claim}` : undefined].filter(Boolean).join(', ');
+	const citation = options.citation && finding.citation ? ` [${finding.citation}]` : '';
+	return `- ${options.severity ? `${finding.severity} ` : ''}\`${finding.rule}\`${location ? ` (${location})` : ''}: ${finding.message.replace(/\s*\n\s*/g, ' ')}${citation}`;
 }

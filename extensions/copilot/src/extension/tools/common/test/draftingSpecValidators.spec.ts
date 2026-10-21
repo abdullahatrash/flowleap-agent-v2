@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import { parseClaims } from '../drafting/claims';
 import { parseInventorAnswers } from '../drafting/inventorAnswers';
 import { parseDraftParagraphs } from '../drafting/sourceMarkers';
 import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, figureHeadingCount, hasFigures, parseFigureParts, parseFigureSections, readReferenceSigns } from '../drafting/specValidators';
@@ -92,6 +93,33 @@ describe('Application Drafting specification validators', () => {
 		]);
 	});
 
+	it('figure parts: reads the part name without its Feature List links and proposal marker', () => {
+		expect(parseFigureParts('## FIG. 1\n- 12: housing [F2]\n- 14: bracket [F3, F5] (proposed from sketches/sketch-2.png)\n| 16 | coil spring (proposed) |\n')).toEqual([
+			{ numeral: '12', part: 'housing', features: ['F2'], line: 2 },
+			{ numeral: '14', part: 'bracket', features: ['F3', 'F5'], proposed: { source: 'sketches/sketch-2.png' }, line: 3 },
+			{ numeral: '16', part: 'coil spring', proposed: {}, line: 4 },
+		]);
+	});
+
+	it('reference numerals: the numeral sets of drawings and text cite the office rule; for EPO the claims count as text', () => {
+		const linked = '## FIG. 1\n- 10: hinge [F1]\n- 12: housing [F2] (proposed)\n- 14: coil spring\n- 16: pin\n';
+		const text = draft('The hinge 10 has a housing 12, a spring 14 and a damper 18.');
+		const claims = parseClaims('1. A hinge (10) with a pin (16), a latch (20) and 2 arms.\n2. The hinge of claim 1, wherein the latch (20) is steel.');
+		expect({
+			US: checkReferenceNumerals(text, linked, 'US', claims),
+			EPO: checkReferenceNumerals(text, linked, 'EPO', claims),
+		}).toEqual({
+			US: [
+				{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 uses numeral 18 ("damper 18"), which figures.md does not list (37 CFR 1.84(p)(5)).' },
+				{ severity: 'Error', rule: 'reference-numeral', file: 'figures.md', line: 5, message: 'Numeral 16 ("pin") in figures.md does not appear in the draft text (37 CFR 1.84(p)(5)).' },
+			],
+			EPO: [
+				{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 uses numeral 18 ("damper 18"), which figures.md does not list (OJ EPO 2025 A49 Art. 1(2)(i)).' },
+				{ severity: 'Error', rule: 'reference-numeral', file: 'claims.md', line: 1, claim: 1, message: 'Claim 1 uses reference sign 20 ("latch (20)"), which figures.md does not list (OJ EPO 2025 A49 Art. 1(2)(i)).' },
+			],
+		});
+	});
+
 	it('reference numerals: pass when text and figures.md agree', () => {
 		expect(checkReferenceNumerals(draft(
 			'# Brief Description of the Drawings',
@@ -118,6 +146,42 @@ describe('Application Drafting specification validators', () => {
 	it('reference numerals: Error when the text names a numeral as another part', () => {
 		expect(checkReferenceNumerals(draft('The hinge 10 has a housing 12 and a lever 14.'), figures)).toEqual([
 			{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 writes "lever 14", but figures.md names numeral 14 "coil spring".' },
+		]);
+	});
+
+	it('reference numerals: "step", "block", "operation" and "box" name a numeral of a flowchart or block diagram figure (#782)', () => {
+		// FIG. 3 of the D7 pipe-clamp matter (test/fixtures/pipe-clamp/figures.md), a flowchart whose steps are named by what they do.
+		const flowchart = [
+			'## FIG. 3',
+			'',
+			'Flowchart of the method of securing a pipe in the clamp (the method claim; disclosure §5).',
+			'',
+			'- 44: placing the pipe in the saddle groove [F19]',
+			'- 46: pivoting the cap about the hinge pin onto the pipe [F19]',
+			'- 48: compressing the spring with the cap [F19]',
+			'- 50: pushing the locking pin through the latch lug and the cap latch lug [F19]',
+			'- 52: releasing the cap, the locking pin holding the cap closed against the spring [F19]',
+		].join('\n');
+		const blockDiagram = '## FIG. 4: block diagram of the controller\n- 60: sensor\n- 62: processor\n';
+		expect({
+			steps: checkReferenceNumerals(draft('In step 44, the pipe is placed in the saddle groove. Step 46 pivots the cap; operation 48 compresses the spring; block 50 pushes the locking pin; in box 52 the cap is released.'), flowchart),
+			named: checkReferenceNumerals(draft('The steps 44, 46, 48, 50 and 52 follow: placing 44, pivoting 46, compressing 48, pushing 50, releasing 52.'), flowchart),
+			blocks: checkReferenceNumerals(draft('Block 60 feeds block 62.'), blockDiagram),
+			wrongWord: checkReferenceNumerals(draft('In step 44 the pipe is placed; the lever 46 pivots; the damper 48 compresses; step 50 pushes; step 52 releases.'), flowchart),
+		}).toEqual({
+			steps: [],
+			named: [],
+			blocks: [],
+			wrongWord: [
+				{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 writes "lever 46", but figures.md names numeral 46 "pivoting the cap about the hinge pin onto the pipe".' },
+				{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 writes "damper 48", but figures.md names numeral 48 "compressing the spring with the cap".' },
+			],
+		});
+	});
+
+	it('reference numerals: "step" before a numeral of a part figure is still the wrong word (#782)', () => {
+		expect(checkReferenceNumerals(draft('The hinge 10 has a housing 12; in step 14 the coil spring is set.'), figures)).toEqual([
+			{ severity: 'Error', rule: 'reference-numeral', file: 'draft-application.md', line: 1, message: 'Line 1 writes "step 14", but figures.md names numeral 14 "coil spring".' },
 		]);
 	});
 
@@ -179,16 +243,16 @@ describe('Application Drafting specification validators', () => {
 	});
 
 	it('figure headings: a range or list counts each figure; a heading without a figure name is no figure', () => {
-		const figures = '# Figures\n\n- 8: base\n\n## FIG. 1\n\n- 10: frame\n\n## FIGS. 7 to 10\n\n- 14: cam\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n';
+		const figures = '# Figures\n\n- 8: base\n\n## FIG. 1\n\n- 10: frame\n\n## FIGS. 7 to 10\n\n- 14: cam\n\n## FIG. 11\n\nFlow diagram of the method.\n\n- 18: start\n\n## Parts named in the answers, figure not stated\n\n- 16: spring\n';
 		expect({
 			counts: ['FIG. 1', 'FIGS. 7 to 10', 'Figs. 7-10', 'FIGS. 7 and 8', 'FIGS. 1, 3 and 5', 'Figure 2: side view', 'Figures', 'Parts named in the answers, figure not stated', 'a figure 8 track'].map(figureHeadingCount),
-			sections: parseFigureSections(figures).figures.map(section => [section.label, section.count, section.parts.map(part => part.numeral)]),
+			sections: parseFigureSections(figures).figures.map(section => [section.label, section.count, section.diagram, section.parts.map(part => part.numeral)]),
 			drawn: parseFigureSections(figures).drawnParts.map(part => part.numeral),
 			hasFigures: [hasFigures(figures), hasFigures('# Figures\n'), hasFigures('- 12: housing\n')],
 		}).toEqual({
 			counts: [1, 4, 4, 2, 3, 1, 0, 0, 0],
-			sections: [['FIG. 1', 1, ['10']], ['FIGS. 7 to 10', 4, ['14']]],
-			drawn: ['10', '14'],
+			sections: [['FIG. 1', 1, false, ['10']], ['FIGS. 7 to 10', 4, false, ['14']], ['FIG. 11', 1, true, ['18']]],
+			drawn: ['10', '14', '18'],
 			hasFigures: [true, false, true],
 		});
 	});

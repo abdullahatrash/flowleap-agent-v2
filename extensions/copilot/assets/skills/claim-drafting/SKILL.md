@@ -41,7 +41,7 @@ Run every claim through this checklist:
 - **Antecedent basis**: "a processor" before any "the processor"
 - **Means-plus-function**: avoid "means for [function]" unless deliberately invoking 112(f); prefer structural terms
 - **Relative terms**: "substantially", "about" only where the disclosure gives a standard or range
-- Ground doubtful calls with `search_legal` (e.g. query="written description requirement functional claim", jurisdiction="USPTO")
+- Ground doubtful calls with the **legal-research** skill (e.g. the written description requirement for a functional claim, MPEP 2163)
 
 ## Step 5: Self-Examination Loop (MANDATORY)
 

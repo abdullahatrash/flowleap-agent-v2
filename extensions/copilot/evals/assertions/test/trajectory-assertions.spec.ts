@@ -113,6 +113,22 @@ describe('trajectory helpers', () => {
 		expect(H.reactedAfter(retried, 'HTTP_5XX', { differentTool: false })).toBe(true);
 	});
 
+	it('isOfficialLawUrl admits each official law host and its subdomains, and no look-alike or mirror of a mirror', () => {
+		// The GPO link service (govinfo.gov) is the fetchable 35 USC source named in the legal-research skill (#825).
+		expect({
+			mpep: H.isOfficialLawUrl('https://www.uspto.gov/web/offices/pac/mpep/s2143.html'),
+			epc: H.isOfficialLawUrl('https://www.epo.org/en/legal/epc/2020/a54.html'),
+			pct: H.isOfficialLawUrl('https://pctlegal.wipo.int/eGuide/view-doc.xhtml?doc-code=EP&doc-lang=en'),
+			cfr: H.isOfficialLawUrl('https://www.ecfr.gov/current/title-37/section-1.362'),
+			olrc: H.isOfficialLawUrl('https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title35-section103&num=0&edition=prelim'),
+			gpo: H.isOfficialLawUrl('https://www.govinfo.gov/link/uscode/35/103?link-type=html'),
+			cornell: H.isOfficialLawUrl('https://www.law.cornell.edu/uscode/text/35/103'),
+			lookalike: H.isOfficialLawUrl('https://uspto.gov.example.com/mpep'),
+			wikipedia: H.isOfficialLawUrl('https://en.wikipedia.org/wiki/Novelty_(patent)'),
+			notAUrl: H.isOfficialLawUrl('MPEP 2143'),
+		}).toEqual({ mpep: true, epc: true, pct: true, cfr: true, olrc: true, gpo: true, cornell: true, lookalike: false, wikipedia: false, notAUrl: false });
+	});
+
 	it('countTool and distinctToolCount count across rounds', () => {
 		const t = traj([['search_patents', 'HTTP_5XX'], ['search_patents', 'HTTP_5XX'], ['search_patents', 'OK'], ['patent_analytics_viz', 'OK']]);
 		expect(H.countTool(t, 'search_patents')).toBe(3);
@@ -197,6 +213,8 @@ describe('every fixture is a well-formed MockScript', () => {
 			't8-jurisdiction-nonblock',
 			't9-source-attribution-quoting',
 			't12-round-report',
+			't13-web-text-evidence',
+			't14-legal-official-page',
 		].sort());
 	});
 
@@ -697,5 +715,126 @@ describe('T12 Round Report: the expert steers each Search Round', () => {
 				'Open point [rung-5]: Claim 5 (fallback of claim 1) is partly disclosed in the cited art: Claim 5 (depends on 1) — added limitation',
 			],
 		});
+	});
+});
+
+describe('T13 web page text as evidence for a document the tools hold no text for (#750)', () => {
+	const t13Script = loadFixture('t13-web-text-evidence');
+	const page = fixtureBody(t13Script, 'fetch_webpage');
+	const webAnchor = 'GB2208140A:description';
+	const receipt = (points: string[]) => ['Successfully wrote patent results to chart.md', 'Prior-art artifact receipt: {} fallbacksNotCovered=1 rounds=0 notCovered=3', `Open points: ${points.length}. Critical date: 2016-02-10. Write the Round Report now: …`, ...points.map(id => `Open point [${id}]: …`)].join('\n');
+	const rung = (disclosedBy: string, quote: string) => ({ kind: 'fallback', claimNumber: '2', fallbackOf: '1', feature: 'Claim 2 — added limitation: friction brake pad on the drum flange', status: 'supported', sourceAnchors: [webAnchor], evidence: [{ anchor: webAnchor, quote }], elements: [{ element: 'friction brake pad on a flange of the drum', anchor: webAnchor, disclosedBy }] });
+	const chart = (rows: object[]) => ({ template: 'invalidity-claim-chart', content: '', challengedPublication: 'EP3765432B1', criticalDate: '2016-02-10', coverage: [{ kind: 'feature', claimNumber: '1', feature: 'Claim 1 — element (a)', status: 'supported' }, ...rows, { kind: 'fallback', claimNumber: '3', fallbackOf: '1', feature: 'Claim 3 — polyamide drum', status: 'unresolved' }] });
+	const details: CallSpec = ['get_patent_details', 'OK', { publicationNumber: 'GB2208140A' }, 'GB2208140A — bibliography only.'];
+	const fetch: CallSpec = ['fetch_webpage', 'OK', { urls: ['https://patents.google.com/patent/GB2208140A/en'] }, page];
+	const lookup: CallSpec = ['get_patent_details', 'OK', { publicationNumber: 'GB2208140A', evidenceLookup: { anchor: webAnchor } }, '[GB2208140A:description; line 4] A friction brake pad 22 bears on a flange 14 of the drum 12'];
+	const goodRung = rung('friction brake pad 22 bears on a flange 14 of the drum 12', 'A friction brake pad 22 bears on a flange 14 of the drum 12 and holds the drum against free rotation when the hose is pulled.');
+	const save = (rows: object[], points: string[]): CallSpec => ['write_patent_results', 'OK', chart(rows), receipt(points)];
+	const report = ['Saved. Fallbacks: 1 of 2 covered; 2 open points.', '1. **[rung-3]** Claim 3 (polyamide drum) is not found. Recommended: search reinforced polyamide drums.', '2. **[source-GB2208140A]** Claim 2 rests on the Google Patents text of GB2208140A. Recommended: confirm against the official full text or a certified copy before use.', 'Reply with the ids to run (for example rung-3, element-1.3), \'all\', or your own steer.'].join('\n');
+	const all = (calls: CallSpec[], text = report) => {
+		const t = { ...traj(calls, text), turnTexts: [text] };
+		return {
+			fetched: H.cases.t13_fetched_page_for_textless_document(t),
+			validated: H.cases.t13_row_rests_on_validated_web_text(t),
+			receipt: H.cases.t13_receipt_lists_source_point(t),
+			report: H.cases.t13_round_report_names_source_point(t),
+		};
+	};
+	const good = [details, fetch, lookup, save([goodRung], ['rung-3', 'source-GB2208140A'])];
+
+	it('grades the fetch after the text-less retrieval, the validated web row, the receipt point and the Round Report, and each way a run can miss them', () => {
+		expect({
+			good: all(good),
+			noFetch: all([details, lookup, save([goodRung], ['rung-3', 'source-GB2208140A'])]),
+			fetchBeforeDetails: all([fetch, details, lookup, save([goodRung], ['rung-3', 'source-GB2208140A'])]),
+			quoteFromMemory: all([details, fetch, lookup, save([rung('a brake pad engages the drum rim', 'A friction brake pad 22 bears on a flange 14 of the drum 12 and holds the drum against free rotation when the hose is pulled.')], ['rung-3', 'source-GB2208140A'])]),
+			noWebRow: all([details, fetch, lookup, save([{ ...goodRung, status: 'unresolved' }], ['rung-2', 'rung-3'])]),
+			noRecommendation: all(good, report.replace(/Recommended: confirm[^\n]*/, '')),
+			notNamed: all(good, report.split('\n').filter(line => !line.includes('source-')).join('\n')),
+		}).toEqual({
+			good: { fetched: true, validated: true, receipt: true, report: true },
+			noFetch: { fetched: false, validated: false, receipt: true, report: true },
+			fetchBeforeDetails: { fetched: false, validated: true, receipt: true, report: true },
+			quoteFromMemory: { fetched: true, validated: false, receipt: true, report: true },
+			noWebRow: { fetched: true, validated: false, receipt: false, report: true },
+			noRecommendation: { fetched: true, validated: true, receipt: true, report: false },
+			notNamed: { fetched: true, validated: true, receipt: true, report: false },
+		});
+	});
+
+	it('the fixture serves no text for the GB document, then its page, then the recorded web lines, and a receipt with the source point', () => {
+		const state = createMockScriptState(t13Script);
+		const webPages = t13Script.rules.find(rule => rule.invalidityReceipt)?.invalidityReceipt?.webPages ?? [];
+		expect({
+			biblio: resolveMock(t13Script, state, 'get_patent_details', { publicationNumber: 'GB2208140A' }).body.includes('Sections unavailable: claims, description'),
+			page: resolveMock(t13Script, state, 'fetch_webpage', { urls: ['https://patents.google.com/patent/GB2208140A/en'] }).body.startsWith(webPages[0]?.content ?? '\0'),
+			lookup: resolveMock(t13Script, state, 'get_patent_details', { publicationNumber: 'GB2208140A', evidenceLookup: {} }).body.split('\n').filter(line => line.startsWith('[GB2208140A:description; line 4]')),
+			receipt: resolveMock(t13Script, state, 'write_patent_results', chart([goodRung])).body.split('\n').filter(line => line.startsWith('Open point [')),
+		}).toEqual({
+			biblio: true,
+			page: true,
+			lookup: ['[GB2208140A:description; line 4] A friction brake pad 22 bears on a flange 14 of the drum 12 and holds the drum against free rotation when the hose is pulled.'],
+			receipt: [
+				'Open point [rung-3]: Claim 3 (fallback of claim 1) is not found in the cited art: Claim 3 — polyamide drum',
+				'Open point [source-GB2208140A]: Row(s) 2 rest on web page text of GB2208140A (patents.google.com), not official full text',
+			],
+		});
+	});
+});
+
+describe('T14 patent law read from the official page (#825)', () => {
+	const t14Script = loadFixture('t14-legal-official-page');
+	const page = fixtureBody(t14Script, 'fetch_webpage');
+	const officialUrl = 'https://www.epo.org/en/legal/epc/2020/a54.html';
+	const official: CallSpec = ['fetch_webpage', 'OK', { urls: [officialUrl], query: 'Article 54 novelty' }, page];
+	const wikipedia: CallSpec = ['fetch_webpage', 'OK', { urls: ['https://en.wikipedia.org/wiki/Novelty_(patent)'], query: 'novelty' }, 'Novelty (patent) - Wikipedia\nAn invention is not new and therefore not patentable if it was known to the public before the filing date of the application.'];
+	const answer = [
+		'Article 54 EPC governs novelty. The official text reads:',
+		'> (1) An invention shall be considered to be new if it does not form part of the state of the art.',
+		'> (2) The state of the art shall be held to comprise everything made available to the public by means of a written or oral description, by use, or in any other way, before the date of filing of the European patent application.',
+		`Source: ${officialUrl} (EPC 2020 text, as shown on the page).`,
+	].join('\n');
+	const all = (calls: CallSpec[], text = answer) => {
+		const t = traj(calls, text);
+		return {
+			fetched: H.cases.t14_fetched_official_page(t),
+			quoted: H.cases.t14_quote_rests_on_fetched_page(t),
+			cited: H.cases.t14_cites_fetched_url(t),
+		};
+	};
+
+	it('grades the official fetch, the quote that is in the fetched page, the cited URL, and each way a run can miss them', () => {
+		expect({
+			good: all([official]),
+			wikipediaThenOfficial: all([wikipedia, official]),
+			noFetch: all([]),
+			legalToolOnly: all([['search_legal', 'OK', { query: 'novelty' }, 'OK (no scripted result for this tool).']]),
+			wikipediaOnly: all([wikipedia]),
+			quoteFromMemory: all([official], answer.replace('by means of a written or oral description, by use, or in any other way', 'by written or oral description, by use or otherwise')),
+			quoteFromWikipedia: all([wikipedia, official], `Novelty: "An invention is not new and therefore not patentable if it was known to the public before the filing date of the application." Source: ${officialUrl}`),
+			noQuote: all([official], `Article 54 EPC says an invention is new if it is not part of the state of the art. Source: ${officialUrl}`),
+			straightQuotesAndEllipsis: all([official], `Article 54(2) EPC: "The state of the art shall be held to comprise everything made available to the public ... before the date of filing of the European patent application." Source: ${officialUrl}`),
+			noUrl: all([official], answer.replace(officialUrl, 'the EPO website')),
+		}).toEqual({
+			good: { fetched: true, quoted: true, cited: true },
+			wikipediaThenOfficial: { fetched: true, quoted: true, cited: true },
+			noFetch: { fetched: false, quoted: false, cited: false },
+			legalToolOnly: { fetched: false, quoted: false, cited: false },
+			wikipediaOnly: { fetched: false, quoted: false, cited: false },
+			quoteFromMemory: { fetched: true, quoted: false, cited: true },
+			quoteFromWikipedia: { fetched: true, quoted: false, cited: true },
+			noQuote: { fetched: true, quoted: false, cited: true },
+			straightQuotesAndEllipsis: { fetched: true, quoted: true, cited: true },
+			noUrl: { fetched: true, quoted: true, cited: false },
+		});
+	});
+
+	it('the fixture serves the Article 54 page for an epo.org URL and a paraphrase for any other page', () => {
+		const state = createMockScriptState(t14Script);
+		expect({
+			official: resolveMock(t14Script, state, 'fetch_webpage', { urls: [officialUrl] }).body.includes('(1) An invention shall be considered to be new if it does not form part of the state of the art.'),
+			other: resolveMock(t14Script, state, 'fetch_webpage', { urls: ['https://en.wikipedia.org/wiki/Novelty_(patent)'] }).body.startsWith('Novelty (patent) - Wikipedia'),
+			retiredTool: resolveMock(t14Script, state, 'search_legal', { query: 'novelty' }).tag,
+		}).toEqual({ official: true, other: true, retiredTool: 'OK' });
 	});
 });

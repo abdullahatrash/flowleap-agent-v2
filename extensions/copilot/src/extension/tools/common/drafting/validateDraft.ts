@@ -5,11 +5,13 @@
 
 import { parseClaims } from './claims';
 import { checkAntecedentBasis, checkClaimCount, checkClaimNumbering, checkClaimOneSentence, checkClaimReferencesToDescription, checkDependencyTargets, checkEpoClaimReferenceSigns, checkEpoOneIndependentPerCategory, checkLiteralBasis, checkRelativeTerms, checkUsMultipleDependency } from './claimValidators';
+import { checkClaimedFeatureCoverage, checkFigureProposals, checkFiguresSettings, checkNumeralScheme } from './figureValidators';
 import { checkPageCount, filingManifest } from './filingManifest';
 import { DraftFinding, errorsFirst } from './finding';
 import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice } from './frontmatter';
 import { parseInventorAnswers } from './inventorAnswers';
+import { parseDraftOutline } from './outline';
 import { checkDraftAgainstOutline, checkOutline } from './outlineValidators';
 import { parseDraftParagraphs } from './sourceMarkers';
 import { checkAbstractLength, checkDefinedTerms, checkEpoAbstractFigure, checkInventorQuestions, checkReferenceNumerals, checkSourceMarkers, isAbstractParagraph, isClaimsParagraph } from './specValidators';
@@ -55,9 +57,10 @@ function outlineFindings(input: DraftValidationInput, outline: DraftOutlineRules
 }
 
 /**
- * Runs the deterministic validator set of the office over one draft (ADR 0012 decision 4), and
- * the Draft Outline rules when `outline` is given: Errors first (claims, then draft text, then
- * the outline), then Notes. No model call; Advisory items are added
+ * Runs the deterministic validator set of the office over one draft (ADR 0012 decision 4), the
+ * `figures.md` rules (PRD 0023), and the Draft Outline rules when `outline` is given; the
+ * claimed-feature coverage of `figures.md` needs the outline too. Errors first (claims, then
+ * draft text and figures, then the outline), then Notes. No model call; Advisory items are added
  * by the caller.
  */
 export function validateDraft(input: DraftValidationInput): DraftFinding[] {
@@ -80,7 +83,11 @@ export function validateDraft(input: DraftValidationInput): DraftFinding[] {
 		...checkLiteralBasis(claims, description),
 		...checkAbstractLength(paragraphs, input.office),
 		...checkDefinedTerms(paragraphs),
-		...checkReferenceNumerals(paragraphs, figures),
+		...checkReferenceNumerals(paragraphs, figures, input.office, claims),
+		...checkFiguresSettings(figures, input.office),
+		...checkNumeralScheme(figures),
+		...checkFigureProposals(figures),
+		...(input.outline?.text !== undefined ? checkClaimedFeatureCoverage({ office: input.office, figures, outline: parseDraftOutline(input.outline.text), featureList: input.outline.featureList, claims }) : []),
 		...checkSourceMarkers(paragraphs, answers, figures),
 		...checkInventorQuestions(input.draft, answers),
 		...checkClaimCount(claims, input.office),

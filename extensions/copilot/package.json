@@ -1215,7 +1215,9 @@
         "icon": "$(search)",
         "userDescription": "Execute patent search using CQL query",
         "modelDescription": "Executes an EPO OPS CQL patent search over the EPO's worldwide bibliographic index (all offices; full text is served for EP/WO documents only); returns a page of summaries (title, applicant, publication date, abstract) and ends with a Next step line that names the move the count calls for. Preferred when the query targets European or international (WO) patents or needs a worldwide bibliographic sweep; not US prosecution data (for that, write a Lucene query and use patent_api_request; see uspto_api_guide for the request shape). The jurisdiction gate applies BEFORE this tool: when jurisdiction is not explicit in the user's message (a company or technology name alone is not explicit) and the task does not imply comprehensive coverage, ask via vscode_askQuestions first. You write the CQL yourself by the patent-search skill's method: every query needs a discriminating term (the specific subject matter, never just the technology area or a classification code). The query field lists the CQL fields; write the query from it and call this tool directly. A grammar fault comes back with its fix named and points at get_search_syntax, the full grammar. Probe the count with a small range first, then refine; the probe must use the same countries value as the real search. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50'; max 100 per request); countries (optional; compiled into the CQL as pn any \"EP WO\", so total counts the filtered set; omit it for a worldwide count; use 'EP,WO' only when the task needs full text or the user asked for those offices). The result echoes total, the CQL actually sent (effectiveQuery) and the active country filter.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1255,7 +1257,9 @@
         "icon": "$(diff)",
         "userDescription": "Compare your claim against existing patents to find overlaps",
         "modelDescription": "Compare a user's patent claim against one or more existing patents to identify overlaps and differences. WORKFLOW: (1) First decompose the user's claim into elements yourself, (2) Use search_patents to find potentially relevant patents, (3) Then use THIS tool to compare the user's claim against specific patent numbers. Fetches the actual claims of each cited patent from EPO OPS and returns them alongside the user's claim with an analysis rubric — YOU then perform the element-by-element comparison: relevance (HIGH/MEDIUM/LOW), overlapping elements, missing elements (potential novelty), key differences, and a 102/103 risk summary. NOTE: EPO OPS full text covers mainly EP/WO publications; for US patents whose claims are unavailable, fetch them via patent_api_request (POST /patent-search-uspto/search). Useful for patentability assessment, freedom-to-operate analysis, and prior art evaluation.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1285,7 +1289,9 @@
         "icon": "$(organization)",
         "userDescription": "Aggregate patent portfolio for one company: worldwide counts by filing year, office, and grant status (PATSTAT)",
         "modelDescription": "AGGREGATE PORTFOLIO ANALYTICS (PATSTAT): USE WHEN the user asks about ONE NAMED company's/applicant's aggregate patent activity — 'show me Siemens' patent portfolio', 'how many patents does Toyota file per year', 'which offices does Bosch file in', grant counts, filing velocity, competitor portfolio size. Returns grounded worldwide counts from the PATSTAT analytics layer (EPO worldwide patent statistics database, twice-yearly snapshot): totals, by filing year, by office, plus a quotable `summary` string and the `data_edition` (e.g. 'PATSTAT 2026 Spring') — ALWAYS quote the summary and name the edition so the user knows data freshness. Applicant matching is fuzzy against harmonized (PSN) names ('Siemens' finds SIEMENS AKTIENGESELLSCHAFT and its variants); distinct entities are never merged silently — an ambiguous name returns the candidate entities: relay them and retry with a more specific name. COUNTING SEMANTICS: patent APPLICATIONS by FILING year — numbers legitimately differ from patent_analytics_viz (publications by publication year); never mix the two in one table. ROUTING RULE: AGGREGATE questions (counts, trends, ranked statistics ABOUT a corpus — never a list of documents to open and read) → PATSTAT analytics tools; a request to find, list or name specific patents, however ranked ('the most cited patents on X') → the search tools; a SPECIFIC document's current text or legal status → the live OPS/USPTO document tools (get_patent_details, get_legal_status, patent_api_request); technology/topic analytics with no named company → patent_analytics_viz. PATSTAT is a twice-yearly snapshot — never present its grant data as an individual patent's CURRENT legal status (that is get_legal_status). TRIGGER KEYWORDS: 'patent portfolio', 'portfolio', 'how many patents does X have', 'filings per year', 'patent count', 'which jurisdictions/offices', competitor patent activity. DO NOT use for: finding or reading specific patent documents (search branches), keyword/technology landscapes without a named applicant (patent_analytics_viz), current legal status of a patent (get_legal_status).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1315,7 +1321,9 @@
         "icon": "$(database)",
         "userDescription": "Run one guarded SQL SELECT against the PATSTAT analytics views for aggregate patent questions",
         "modelDescription": "GUARDED SQL OVER PATSTAT (Layer 2) — RETURNS AGGREGATE ROWS, NEVER DOCUMENTS: USE WHEN the deliverable is NUMBERS ABOUT A CORPUS and no typed analytics tool answers it — technology landscapes by CPC ('who dominates solid-state electrolytes'), filing trends, grant rates, citation-impact STATISTICS over a corpus, inventor analytics, family/jurisdiction coverage, or any combination. It returns statistic rows only (counts, shares, rates, ranked aggregates) plus the data_edition: it CANNOT retrieve patent documents and CANNOT produce a list of specific patents for the user to open and read, and an aggregate row NEVER satisfies a request for documents. DOCUMENTS vs AGGREGATES: any request to FIND, SEARCH FOR, RETRIEVE, LIST or NAME specific patents is a SEARCH — search_patents (or the USPTO path) — however that request ranks the documents it asks for ('which 5 EP patents on X are the most cited? search for them', 'the top patents in area Y'); ranking is not aggregation. ANTI-PATTERN — never write a SELECT whose rows are publication/application NUMBERS ordered by a citation count (or any other statistic) so that you can then look those documents up: identifiers off a snapshot are not search results, the snapshot is months stale, and that question was a search all along — run search_patents, then get citation counts for the hits with search_forward_citations. Every SELECT you write here must AGGREGATE (GROUP BY / COUNT / AVG / share), not enumerate documents. You WRITE one SQL SELECT against the flowleap.* semantic views; the backend gates it deterministically (single-SELECT parse check, flowleap-only allowlist, EXPLAIN cost ceiling, 5000-row/5MB hard caps, 20s timeout) and returns rows + data_edition. MANDATORY WORKFLOW (details: patstat_api_guide action='workflow', workflow='guarded-sql'): (1) check patstat_api_guide action='section' section='examples' first — reuse verified SQL, and if an example carries promoted_to, call that tool instead; (2) fetch section='semantic-model' BEFORE writing SQL — schema-qualify every table as flowleap.<view>, apply its interpretation_conventions (count FAMILIES for 'how many patents', applications for office stats; earliest_filing_year for trends), and ALWAYS state the chosen interpretation in your answer plus the data_edition; (3) always send `question` (the user's words, verbatim); (4) on a patstat_sql_* error, the message contains the exact fix instruction — fix the SQL ONCE, resubmit with retryOf, and STOP after a second failure (never loop); patstat_busy means back off and retry the SAME SQL. ROUTING: a list of patent documents, however ranked → the search tools, never this one; ONE NAMED company's standard portfolio → patstat_portfolio (preferred); keyword/free-text technology analytics → patent_analytics_viz (publication counts — different semantics, never mix); a specific document's text or CURRENT legal status → OPS/USPTO document tools. Budget: 10 queries/minute. DO NOT use for anything a typed tool already answers.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1345,7 +1353,9 @@
         "icon": "$(type-hierarchy)",
         "userDescription": "Walk the PATSTAT relationship graph around one named patent or applicant: citations, family, paths, co-applicants",
         "modelDescription": "GRAPH ANALYTICS OVER PATSTAT — A NAMED NODE AND THE RELATIONSHIPS AROUND IT: USE WHEN the user names ONE patent or ONE applicant and asks about its CONNECTIONS — 'who cites EP3477840', 'what does this patent cite', 'why does this patent matter', 'how are patent X and patent Y connected', 'where does this family have coverage', 'who does this company co-file with'. THREE-WAY ROUTING (criteria shape decides, never the metric): (1) DOCUMENTS — a request to FIND, LIST, RANK or NAME patents on a SUBJECT ('the 5 most cited EP patents on solid-state electrolytes — search for them') is a SEARCH: search_patents or the USPTO path, NEVER this tool, however the request ranks the documents it asks for; (2) AGGREGATES — counts, trends, shares or rankings over a CORPUS ('how many patents does Siemens file per year', 'who dominates H01M10/0562') are patstat_portfolio / patstat_query, NEVER this tool; (3) TRAVERSAL — a question ABOUT a node you can already NAME, answered by the edges around it, is THIS tool. A traversal answers a question about a named node; it does NOT discover documents by subject and it does NOT count a corpus. ANTI-PATTERN — never call resolve/neighborhood/explain on some patent you picked yourself in order to present its citing or cited documents as 'the most relevant patents on <topic>': edges around one arbitrary node are not a subject search, that question was a search all along, and the snapshot is months stale. If the user has not NAMED the node, you are not in this tool. OPERATIONS (one call each, `operation` selects): 'resolve' (a publication number → its pat:<appln_id> anchor; a company name → ranked harmonized psn_id entity candidates) — START HERE whenever you hold only a number or a name; 'patent_view' (the whole citation picture of one publication: applicants, inventors, CPC, backward patent/NPL/unresolved citations, forward citations, DOCDB family, priorities); 'applicant_view' (one psn_id's filings by year, top CPC, jurisdictions, co-applicant network); 'neighborhood' (bounded 1-2 hop expansion, scope it with edgeTypes); 'path' (shortest citation/family path between two patents); 'explain' (cheapest single-node 'what matters here' summary). AMBIGUITY IS AN INTERACTION STEP: an ambiguous number or a company name returns CANDIDATES — present them and let the USER pick, never choose one yourself; psnId comes only from resolve, never guessed. Every edge carries a confidence tag (EXTRACTED = a direct PATSTAT row, state as fact; INFERRED = a derived join, hedge it; AMBIGUOUS = unresolved, flag it and build nothing on it) and an at=<table>:<row> provenance ref — relay the backend text and tags rather than re-deriving facts. CITATION UNIVERSES (both exist, neither is a superset): THIS tool is the WORLDWIDE DOCDB citation network with examiner-vs-applicant origin — use it for 'who cites this patent' and citation structure, especially on EP/WO subjects; search_citations / search_forward_citations are the USPTO office-action dataset with X/Y/A relevance categories — use those for examiner rejection art on US documents. For citation completeness on an EP subject, exhaust both. PATSTAT is a twice-yearly SNAPSHOT and needs no patent-data key (it stays live while EPO/USPTO are key-gated): always name the data_edition, and never present snapshot data as an individual patent's CURRENT legal status (that is get_legal_status). Per-operation request shapes and bounds: patstat_api_guide action='workflow' workflow='graph', or action='endpoint' with the operation name.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1415,7 +1425,9 @@
         "icon": "$(book)",
         "userDescription": "Get PATSTAT analytics API documentation for aggregate patent statistics endpoints",
         "modelDescription": "Get documentation AND data sections for the PATSTAT analytics API — the aggregate-statistics layer AND the relationship-graph layer over the EPO PATSTAT database. Actions: 'list' (endpoints/workflows/sections), 'endpoint' (one endpoint's docs, e.g. 'query', or a graph operation: 'resolve', 'patent', 'applicant', 'neighborhood', 'path', 'explain'), 'workflow' (step-by-step guides — 'guarded-sql' is the mandatory workflow for the patstat_query tool, and 'graph' documents the resolve-first flow and per-operation bounds for the patstat_graph tool), 'full' (complete docs), 'section' (served data: section='semantic-model' returns the FULL schema/metrics/interpretation-conventions YAML to read BEFORE writing SQL for patstat_query; section='examples' returns verified question→SQL pairs — reuse these, and prefer their promoted_to tools). For the standard one-company portfolio question PREFER patstat_portfolio; for other aggregate questions fetch the sections here then use patstat_query; for a named node and its relationships use patstat_graph. DO NOT use for individual patent documents (OPS/USPTO guides) or keyword landscapes (patent_analytics_viz).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1460,7 +1472,9 @@
         "icon": "$(graph)",
         "userDescription": "Full-corpus patent analytics: filing trends, top assignees, country and CPC breakdowns as tables",
         "modelDescription": "PRIORITY TOOL FOR ANALYTICS: Use this tool when users ask about patent trends, landscapes, market analysis, or competitive intelligence. Runs a full-corpus aggregation over the backend patent corpus (a quarterly-refreshed slice of the Google Patents corpus) and returns ready-made markdown TABLES: filing trend by publication year, top assignees, country breakdown, and top CPC sections (each capped at top 20). Present the tables directly — they are the deliverable; you do NOT need to write Python or generate charts. TRIGGER KEYWORDS: 'trends', 'chart', 'dashboard', 'landscape', 'top companies', 'market analysis', 'geographic', 'filing trends', 'competitive analysis'. ROUTING vs patstat_portfolio: THIS tool counts PUBLICATIONS by publication year, matched on keywords/phrases in English titles/abstracts — use it for TECHNOLOGY/TOPIC analytics expressible ONLY as free-text keywords. A landscape defined by a CPC/IPC CLASS ('who dominates H01M10/0562') belongs to patstat_query instead — family-level counts under harmonized applicant names; THIS tool's publication counts fragment entities and double-count within families. For ONE NAMED company's aggregate portfolio (counts by filing year and office, grant counts) PREFER patstat_portfolio — worldwide application-level counts under harmonized applicant names. The two counting semantics legitimately differ; never mix their numbers in one table. DO NOT run a document search for analytics - use THIS tool directly. Provide at least one criterion. PREFERRED: Use 'keywords' array for individual terms (preserves short terms like 'AI', '5G'), use 'phrases' for exact matches like 'machine learning'.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1519,7 +1533,9 @@
         "icon": "$(book)",
         "userDescription": "One-call overview of a patent: bibliographic data, abstract, legal status, family, and estimated term",
         "modelDescription": "DEFAULT entry point for a single-patent OVERVIEW question. One call returns a compound snapshot from multiple backend sources: bibliographic data (title, applicants, inventors, dates, IPC/CPC), the abstract, the latest legal-status events, patent-family size, and the estimated term — collapsing what used to take 3-4 separate round-trips. USE WHEN the user asks about ONE known patent in general terms: 'tell me about patent X', 'what is US10123456 about', 'give me an overview/summary of EP1234567', 'summarize this patent'. INPUT: a publication number (e.g. 'EP1234567', 'US10123456'; hyphens optional). Does NOT return full claims or description text — for those use get_patent_details; for drawings use get_patent_figures; for a dedicated expiry estimate use get_patent_term.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1541,7 +1557,9 @@
         "icon": "$(references)",
         "userDescription": "Every document the examining offices cited across a patent family, saved in full to the workspace",
         "modelDescription": "Examiner Baseline: every document cited across a granted patent's family, by office; computed in code, not assembled. One call walks the INPADOC family, reads the references-cited block of every publication of every member (EPO OPS bibliography) and, for each US grant, the USPTO office-action citations, and writes the FULL, unedited, untruncated Baseline JSON (publication, offices[], membersWalked[], documents[] with per-office cells and their citations[]; each non-patent row carries `npl` (the printed string) and `nplWork` (its OpenAlex record: title, DOI, date, abstract preview, or candidates / not_found), gaps[], dedupe) to <saveDir>/<publication>.examiner-baseline.json in the workspace (saveDir defaults to 'references'). Provenance: every category, claim list and count is copied from the offices' records by code, never inferred by a model; a gaps[] row means that office returned no citation record or could not be read for that member: report it as a gap, never as \"nothing cited\". The tool returns only a short summary (offices, members walked with their citedCount/examinerCount, document and gap counts) and the file path, never the matrix: read documents[] from the file with read_file. USE FIRST in a Find Better run (find-better skill, Step 1), before any search. Pass the returned path as baselinePath to write_patent_results; never paste the matrix inline, never edit the file, and never rebuild the Baseline from family, bibliography or citation calls or from patent_api_request (a tool result with a character budget drops rows).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1567,7 +1585,9 @@
         "icon": "$(file-text)",
         "userDescription": "Read the gates and the inputs of an Application Drafting matter",
         "modelDescription": "Start Application Drafting (application-drafting skill, Step 3) for one matter folder drafting/<matter>/. The tool reads the gates from the files, never from the chat: `confirmed: true` in feature-list.md and `approved: true` in claims.md (only an unquoted true counts). If a file is missing or the value is not true, it refuses with one sentence that names the file with its line and the word to change, e.g. \"Review `drafting/<matter>/claims.md:3`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 3.\" Give the attorney that sentence as it is, with the path and its line in backticks: the chat opens the file at that line. An approval said in chat opens no gate. When the gates are open it returns the Feature List, figures.md, the Approved Claims, the claim terms to plan (copy them verbatim into the `Claim terms` column of the Draft Outline; the outline-coverage rule checks these exact terms), the Draft Outline (drafting/<matter>/draft-outline.md) when it was made for the Approved Claims, the office, and up to five style exemplars from the workspace style/ folder (.md, .docx, .pdf) as text. Exemplars are labelled style only, never a source: they shape voice and structure, and no fact, feature, value, example or result enters the draft from them. The tool records the SHA-256 of the approved claims in drafting/<matter>/draft-application.working-record.md. Editing claims.md after this clears the approval: this tool, validate_draft and export_draft_docx then set `approved: false` in claims.md and refuse until the attorney reviews the claims and sets `approved: true` again; the next save then starts a new draft version. When the outline is missing or stale (made for other claims), plan first: write the Draft Outline and save it with the draft-outline save template; the draft save refuses until then. Call it before writing the specification, and again after any change to the claims. Like every drafting tool, also after a refusal, it rewrites drafting/<matter>/checklist.md from the files: read that file first in a matter.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1582,6 +1602,35 @@
         }
       },
       {
+        "name": "copilot_removeClaim",
+        "displayName": "Remove Claim",
+        "toolReferenceName": "removeClaim",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(trash)",
+        "userDescription": "Remove one claim from the claims of a drafting matter and renumber the claims after it",
+        "modelDescription": "Remove one claim from drafting/<matter>/claims.md (application-drafting skill, Step 4). Call it only after the attorney chose \"Remove claim N\" in chat, for example on a figure-coverage Error (37 CFR 1.83(a): a claim cites a Feature List row that no figure shows) or an advisory item that says a claim has no figure support. VS Code shows the attorney the cost and runs the tool only after the attorney confirms. The tool deletes the claim, renumbers each later claim down by one, and changes the claim references in the other claims with them (\"of claim 5\" becomes \"of claim 4\"). It refuses, and changes nothing, when another claim refers to the claim (the refusal names those claims: the attorney decides about them first) or when claims.md has no claim with that number. The removal changes the claims, so it re-opens the claims approval: `approved` in claims.md becomes false and the attorney approves the claims again before drafting continues; then call start_application_draft. The tool records the old and new claim numbers in the Working Record. Report the renumbering and the re-opened approval to the attorney; never remove a claim on your own.",
+        "tags": [
+          "patent_ai"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge' for drafting/hinge/."
+            },
+            "claim": {
+              "type": "number",
+              "description": "The number of the claim to remove, as claims.md numbers it now."
+            }
+          },
+          "required": [
+            "matter",
+            "claim"
+          ]
+        }
+      },
+      {
         "name": "copilot_validateDraft",
         "displayName": "Validate Draft",
         "toolReferenceName": "validateDraft",
@@ -1589,7 +1638,9 @@
         "icon": "$(checklist)",
         "userDescription": "Run the drafting validators and write the findings file",
         "modelDescription": "Validate a saved Draft Application (application-drafting skill, Step 4). Reads drafting/<matter>/draft-application.md, claims.md and figures.md, runs the deterministic validators of the office in code (antecedent basis, dependency targets, claim numbering, the office claim-form rule, one sentence per claim, references to the description or drawings in claims (Error for EPO, Note for US), abstract length (Error for US, Note for EPO), defined terms, reference numerals against figures.md, literal basis, source markers (an `inventor:IQ-n` marker needs a filled answer to IQ-n in inventor-answers.md), open Inventor Questions (a question answered in inventor-answers.md but still in the draft is reported as answered, to apply), the Draft Outline rules on draft-outline.md (outline-claims: made for the current Approved Claims, an Error when the file does not exist; outline-coverage: every claim term and claimed combination planned; outline-sources; item-coverage: every Technical item realised by a paragraph marker `item:O<n>`); Notes for claim count and relative terms and, for EPO, for reference signs not in parentheses in the claims and for an abstract without the figure to publish or without reference signs in parentheses, for a Template item no paragraph names and for a sentence repeated in two paragraphs) and writes drafting/<matter>/findings.md. The attorney's waivers (a `  - Waived: <reason>` line under an item) are kept across runs. Pass the items of your advisory review in `advisory`: each quotes the passage it concerns and gives its line or claim; they are recorded as Advisory findings and never block export. When claims.md changed after start_application_draft recorded the approved claims, the tool adds a `claims-changed` Error and sets `approved: false` in claims.md: the attorney approves again and the draft is regenerated. Returns the counts by severity and the list of findings that block export. Report them by severity with line references; never say the draft passed or is ready to file. Every result ends with the next step for the attorney, with the file and the line when there is one: give it as it is.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1634,8 +1685,10 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(export)",
         "userDescription": "Export a validated Draft Application to a Word file",
-        "modelDescription": "Export a Draft Application to Word, one file per document type: drafting/<matter>/draft-application.description.docx, draft-application.claims.docx and draft-application.abstract.docx (application-drafting skill, Step 6), only when the attorney asks for the Word file. The tool re-runs the validators and refuses while any Error or Inventor Question in findings.md is open and unwaived, while `approved` in claims.md is not true, or while claims.md differs from the claims the draft was generated against (it then sets `approved: false`); each refusal lists every blocking item and names the open steps of drafting/<matter>/checklist.md; at the claims gate it gives one sentence that names the file with its line and the word to change, e.g. \"Review `drafting/<matter>/claims.md:3`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 3.\" Give that sentence to the attorney as it is, with the path and its line in backticks. Report every item it lists; the attorney resolves it in the draft or writes a waiver with a reason in findings.md. On success it diffs the edited draft against the generated snapshot (draft-application.generated.md) paragraph by paragraph, appends the attorney's edits to the Working Record, strips the source markers and the Inventor Questions section, and writes the three .docx files with the office page setup (EPO: Rule 49 EPC, A4, page numbers centred at the top, line numbers every five lines in the description and the claims; US: 37 CFR 1.52, letter size, page numbers centred at the bottom; both 1.5 line spacing and margins top 2 cm, left 2.5 cm, right 2 cm, bottom 2 cm), the draft's headings in the office section order and one paragraph per numbered claim. It does not generate drawings. Beside the .docx files it writes drafting/<matter>/filing-manifest.md: title, language, office, claims in total and independent, drawing sheets (from figures.md), the proposed abstract figure, and the ESTIMATED pages per document and in total; report the page counts as estimates. It also writes drafting/<matter>/draft-application.full.docx, the full review copy: the whole application in one file laid out like a published patent (front page with the proposed abstract figure, description with [0001] paragraph numbers, claims, abstract, one page per figure of figures.md, for EPO the reference signs list), marked \"Draft for attorney review — not for filing\", with a visible [MISSING: ...] placeholder naming the checklist step or note for each missing part. Tell the attorney it is for reading only; the three filing files are what is filed. Returns the paths, the manifest counts and the counts of kept, changed, deleted and added paragraphs. The export is a draft for attorney review, not a filing.",
-        "tags": [],
+        "modelDescription": "Export a Draft Application to Word, one file per document type: drafting/<matter>/draft-application.description.docx, draft-application.claims.docx and draft-application.abstract.docx (application-drafting skill, Step 6), only when the attorney asks for the Word file. The tool re-runs the validators and refuses while any Error or Inventor Question in findings.md is open and unwaived, while `approved` in claims.md is not true, or while claims.md differs from the claims the draft was generated against (it then sets `approved: false`); each refusal lists every blocking item and names the open steps of drafting/<matter>/checklist.md; at the claims gate it gives one sentence that names the file with its line and the word to change, e.g. \"Review `drafting/<matter>/claims.md:3`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 3.\" Give that sentence to the attorney as it is, with the path and its line in backticks. Report every item it lists; the attorney resolves it in the draft or writes a waiver with a reason in findings.md. On success it diffs the edited draft against the generated snapshot (draft-application.generated.md) paragraph by paragraph, appends the attorney's edits to the Working Record, strips the source markers and the Inventor Questions section, and writes the three .docx files with the office page setup (EPO: Rule 49 EPC, A4, page numbers centred at the top, line numbers every five lines in the description and the claims; US: 37 CFR 1.52, letter size, page numbers centred at the bottom; both 1.5 line spacing and margins top 2 cm, left 2.5 cm, right 2 cm, bottom 2 cm), the draft's headings in the office section order and one paragraph per numbered claim. It does not generate drawings; build_drawing_set does. Beside the .docx files it writes drafting/<matter>/filing-manifest.md: title, language, office, claims in total and independent, drawing sheets (measured from drawings/sheet-N.svg when build_drawing_set built them, else from figures.md), the proposed abstract figure, and the ESTIMATED pages per document and in total; report the page counts as estimates. It also writes drafting/<matter>/draft-application.full.docx, the full review copy: the whole application in one file laid out like a published patent (front page with the proposed abstract figure, description with [0001] paragraph numbers, claims, abstract, one page per figure of figures.md, for EPO the reference signs list), marked \"Draft for attorney review — not for filing\", with a visible [MISSING: ...] placeholder naming the checklist step or note for each missing part. Tell the attorney it is for reading only; the three filing files are what is filed. Returns the paths, the manifest counts and the counts of kept, changed, deleted and added paragraphs. The export is a draft for attorney review, not a filing.",
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1657,7 +1710,9 @@
         "icon": "$(person)",
         "userDescription": "Write the open Inventor Questions to a Word table for the inventor, or copy the inventor's answers back",
         "modelDescription": "The Inventor Questions document of one matter folder drafting/<matter>/ (application-drafting skill, Step 5). action \"send\": when the attorney asks to send the questions to the inventor, it writes drafting/<matter>/inventor-questions.docx from inventor-answers.md: a heading, one sentence on what the inventor does, and one table with a row per open question (a question whose current answer is empty) with the question, where the answer goes and an empty answer cell. It refuses while the existing inventor-questions.docx holds answers that are not imported yet. action \"import\": when the attorney asks to apply the answers and the inventor answered in a file, call it first with that file (default drafting/<matter>/inventor-questions.docx; also a .md file in the format of inventor-answers.md, in the matter folder). Code copies each answer, in the inventor's words, into the empty answer slot of its question in inventor-answers.md and never writes over a filled answer; the result names the questions filled, the questions not changed and the ids it does not know. Then apply the answers to the draft as the skill says. Never write an answer into inventor-answers.md yourself.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1685,6 +1740,266 @@
         }
       },
       {
+        "name": "copilot_renderFigure",
+        "displayName": "Render Figure",
+        "toolReferenceName": "renderFigure",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(file-media)",
+        "userDescription": "Render one patent Figure to line art and check it",
+        "modelDescription": "Render one Figure of a drafting matter to filing line art (patent-drawings skill). Give exactly one source: `scene` for a 3D Figure (housings, brackets, plates, revolves with stated diameters, assemblies of 15 labelled parts or fewer; library parts for fasteners, springs, gears, bearings, shafts, pipes, motors), `flowchart` for a method (the numbered steps in order, or `fromClaim` with the number of an approved method claim; a proposal may add decisions and edges, never a step), or `block` for a block diagram (blocks and named connections). The tool reads drafting/<matter>/figures.md first. It refuses, and writes nothing, when figures.md has no heading for the Figure, when a part has no numeral, or when a numeral is not in figures.md (for a 2D Figure: not under the Figure's heading; the refusal lists the lines to add). Then it renders, runs the mechanical fault list (lead lines, numeral sizes, numerals on lines, text beyond keywords, numeral set), writes drafting/<matter>/drawings/FIG-N.scene.json (the source) and FIG-N.svg, writes the review render drawings/review/FIG-N.round-R.png, and returns that render, the findings with their rule citations, and the Figures of figures.md still to draw. Three rounds per review cycle: the fourth call is refused; then stop and report the open Errors. `newCycle: true` starts the next cycle (three more rounds) after the attorney confirms it in chat; set it only when the attorney asked to continue work on this Figure or the engine changed, never on your own. There is no cap on cycles; the attorney confirms each one. Fix the Errors it reports in the source and render again. The findings are check results, not a verdict: never call a Figure ready to file.",
+        "tags": [
+          "patent_ai"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge'."
+            },
+            "figure": {
+              "type": "number",
+              "description": "The figure number, e.g. 1 for FIG. 1."
+            },
+            "partial": {
+              "type": "string",
+              "description": "The capital letter of a partial view, e.g. A for FIG. 1A."
+            },
+            "scene": {
+              "type": "object",
+              "description": "The 3D scene (FIG-N.scene.json schema): camera, parts with shapes and placements, numerals as (part, face, point) ports, optional section plane and hiddenEdges. Every part needs a numeral port; every numeral must be in figures.md. The figure field is set by the tool."
+            },
+            "flowchart": {
+              "type": "object",
+              "description": "A method flowchart. Give steps or fromClaim, not both. One box per step; step ids are s1, s2, ... in order.",
+              "properties": {
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The method steps in order, one text each."
+                },
+                "fromClaim": {
+                  "type": "number",
+                  "description": "The number of an approved method claim in claims.md; its steps become the boxes."
+                },
+                "terminals": {
+                  "type": "boolean",
+                  "description": "Draw START and END terminals."
+                },
+                "proposal": {
+                  "type": "object",
+                  "description": "Decisions and extra edges (branches, loops). A proposal never adds a step.",
+                  "properties": {
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "decision"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "after": {
+                            "type": "string",
+                            "description": "The step id (s1, s2, ...) or decision id the decision follows."
+                          },
+                          "continueLabel": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "text",
+                          "after"
+                        ]
+                      }
+                    },
+                    "edges": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string"
+                          },
+                          "to": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "block": {
+              "type": "object",
+              "description": "A block diagram: blocks in numeral order and named connections.",
+              "properties": {
+                "blocks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ]
+                  }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "from": {
+                        "type": "string"
+                      },
+                      "to": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "forward",
+                          "backward",
+                          "both",
+                          "none"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "blocks"
+              ]
+            },
+            "includeRender": {
+              "type": "boolean",
+              "description": "Set false when you cannot read images: the tool returns the findings only and records that no render was seen."
+            },
+            "newCycle": {
+              "type": "boolean",
+              "description": "Starts the next review cycle of the Figure (three more rounds); the attorney confirms it in chat. Never set it on your own: set it only when the attorney asked to continue work on this Figure or the engine changed."
+            }
+          },
+          "required": [
+            "matter",
+            "figure"
+          ]
+        }
+      },
+      {
+        "name": "copilot_buildDrawingSet",
+        "displayName": "Build Drawing Set",
+        "toolReferenceName": "buildDrawingSet",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(files)",
+        "userDescription": "Lay out the rendered Figures on Drawing Sheets and write the PDF and the check receipt",
+        "modelDescription": "Build the Drawing Set of a drafting matter from every drafting/<matter>/drawings/FIG-N.svg that render_figure wrote (patent-drawings skill, last step). It refuses while a Figure that figures.md names is not drawn (figures-missing: every `## FIG. N` heading, and each member of a range heading like `FIGS. 7 to 10`, needs drawings/FIG-N.svg; the refusal names the missing Figures), while figures.md has a (proposed) part, while an Error of the figure-list checks is open and unwaived (page size for the office, every Feature List row an approved claim cites has a drawn part: 37 CFR 1.83(a)), while an Error of the Figure checks (re-run on the written Figure files) is open and unwaived, while a sheet check fails, or when there is no Figure. Otherwise it lays out the Figures on sheets for the office and the page size (Letter for a US matter, A4 for EPO and PCT; one size per application; pageSize in figures.md overrides), and writes drawings/sheet-N.svg, review renders drawings/review/sheet-N.png, drawings/drawings.pdf and the receipt drawings/drawings-compliance.md (every code check with its rule and result, and the review rounds the model saw). When the export already wrote filing-manifest.md, it updates the measured sheet count there. With `partial: true` it builds the Figures drawn so far for review only: the receipt starts with `INCOMPLETE SET: FIG. ... not drawn`, the FIG labels follow the figure-list count, and filing-manifest.md is never changed; never present a partial build as the Drawing Set. Returns the pass and fail counts and every failing check with its citation. Report the receipt by check; it is a check record, not a verdict: never call the drawings ready to file.",
+        "tags": [
+          "patent_ai"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge'."
+            },
+            "partial": {
+              "type": "boolean",
+              "description": "Build the Figures drawn so far for review although figures.md names more. The receipt is marked INCOMPLETE SET and the Filing Manifest is not changed. Only when the attorney asks for a review build."
+            }
+          },
+          "required": [
+            "matter"
+          ]
+        }
+      },
+      {
+        "name": "copilot_proposeFigurePart",
+        "displayName": "Propose Figure Part",
+        "toolReferenceName": "proposeFigurePart",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(add)",
+        "userDescription": "Propose a part for the figure list that the attorney must confirm",
+        "modelDescription": "Propose a part the disclosure does not state, for example one read from an inventor sketch (patent-drawings skill). Appends `- NN: <part> (proposed from sketches/<file>)` under the figure heading of drafting/<matter>/figures.md, with the next free numeral of the numerals scheme (even, or hundreds per figure) when you give none. It refuses a numeral already used or outside the scheme. Give `sketch` as the name of an image attached in chat, or a workspace path: the tool copies it to drafting/<matter>/sketches/ and names it in the proposal. Never draw a part silently: propose it, then stop and ask the attorney. build_drawing_set and the export stay blocked until the attorney confirms the part by removing (proposed).",
+        "tags": [
+          "patent_ai"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "matter": {
+              "type": "string",
+              "description": "The matter folder name under drafting/, e.g. 'hinge'."
+            },
+            "figure": {
+              "type": "number",
+              "description": "The figure the part is drawn in."
+            },
+            "part": {
+              "type": "string",
+              "description": "The part name, e.g. 'bracket'."
+            },
+            "numeral": {
+              "type": "string",
+              "description": "The reference numeral. Leave it out to take the next free numeral of the scheme."
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The Feature List rows the part shows, e.g. F3."
+            },
+            "sketch": {
+              "type": "string",
+              "description": "The sketch the part comes from: the name of an image attached in chat, or a workspace path to an image."
+            }
+          },
+          "required": [
+            "matter",
+            "figure",
+            "part"
+          ]
+        }
+      },
+      {
         "name": "copilot_getPatentTerm",
         "displayName": "Get Patent Term",
         "toolReferenceName": "patentTerm",
@@ -1692,7 +2007,9 @@
         "icon": "$(calendar)",
         "userDescription": "Estimate when a patent expires (base 20-year term from filing, with adjustment caveats)",
         "modelDescription": "Estimate a patent's TERM / EXPIRY. Returns the filing date, the estimated base expiry date (20 years from filing), the basis, and a disclaimer covering the adjustments the base estimate does NOT include (PTA/PTE, SPCs, terminal disclaimers, annuity lapses). USE WHEN the user asks about a patent's lifespan: 'when does US10123456 expire', 'patent term', 'expiration date', 'is EP1234567 still in force', 'how long until this patent expires'. INPUT: a publication number (hyphens optional). This is a base estimate, not the enforceable expiry — for lapse/adjustment data point the user to get_patent_summary (legal-status events).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1714,7 +2031,9 @@
         "icon": "$(diff)",
         "userDescription": "Side-by-side comparison of 2-10 published patents (biblio, classifications, dates, abstracts)",
         "modelDescription": "Data-grounded, side-by-side comparison of 2 to 10 PUBLISHED patent documents. Fetches each document's bibliographic record from the backend and renders an attribute-by-patent comparison table (title, applicants, inventors, filing/publication/priority dates, IPC/CPC) plus bounded abstracts, so YOU can read off the similarities and differences. USE WHEN the user wants to compare EXISTING patents to each other: 'compare patents US10123456 and EP1234567', 'what's the difference between these patents', 'how do these two patents relate'. INPUT: an array of 2-10 publication numbers. IMPORTANT — this is DOCUMENT-to-DOCUMENT: do NOT use it for a user's own DRAFTED claim text against references (that is compare_claims, which builds an element-by-element claim chart). For a single patent use get_patent_summary or get_patent_details.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1739,7 +2058,9 @@
         "icon": "$(file-text)",
         "userDescription": "Get full patent details including claims and description",
         "modelDescription": "Retrieve patent details from EPO OPS: bibliographic data (title, abstract, applicants, inventors, dates, IPC/CPC classifications) plus full CLAIMS and DESCRIPTION where published. Use this tool AFTER search_patents when users need: (1) full claims text for infringement/validity analysis, (2) detailed description for technical understanding, (3) complete patent document analysis. WORKFLOW: First use search_patents (with CQL you write) to find relevant patents, then use THIS tool to get full text for specific patents of interest. FORMAT: Pass the publication number in EPO epodoc format without hyphens (US7654321B2, EP1234567A1, WO2020123456A1); hyphenated input is normalized automatically. NOTE: OPS full text covers mainly EP/WO publications — biblio and abstract resolve for all jurisdictions, and for US full text the output points you to the USPTO fallback (patent_api_request). For previously retrieved sources, use evidenceLookup: {} to recover exact source anchor IDs locally, evidenceLookup.query for literal matches anywhere in the stored text, or evidenceLookup.anchor plus start for paginated source lines. These lookups do not call the backend. Inspect later relevant passages before absence claims; include full dependent claims and keep every constituent in the original quantity basis. When the result lists cited references, the examiner-cited X/Y entries are the closest art on record for that document; retrieve them before running broader searches. Cited non-patent literature appears as [NPL] strings as the office printed them; pass resolveNpl: true when the user asks about the papers or literature cited against a patent (or the cited NPL matters to the analysis), and each [NPL] entry is resolved to its OpenAlex record (title, DOI, publication date, abstract preview, open-access link). A 'matched' record is the cited paper; 'candidates' are possible matches only.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1789,7 +2110,9 @@
         "icon": "$(file-media)",
         "userDescription": "Get patent figure/drawing images as viewable PNGs",
         "modelDescription": "Retrieve patent figure/drawing IMAGES and return them as inline PNG images you can SEE and analyze. USE WHEN: the user asks to see, show, view, analyze, save, or download the figures, drawings, or images of a specific patent. The backend fetches the drawings from EPO and rasterizes them to PNG, so they render directly in chat. The inline images exist ONLY in the chat response — they are NOT files on disk, so never try to find or copy them with file tools. TO SAVE the drawings as files, pass 'saveDir' (a workspace folder, e.g. 'figures'); the tool then also writes each page as a PNG file there and reports the file paths. During a prior-art or invalidity search, pass saveDir: \"references/figures\" so the page cited in a coverage row is on disk beside the report instead of living only in this chat. INPUT: a patent publication number (e.g. 'EP1234567', 'US10000000B2'; hyphens optional). By default returns the actual DRAWING pages (EPO scans put cover/biblio/description pages first, so they are skipped automatically); pass 'pages' (e.g. '1,2,3') to override and fetch specific pages. Do NOT use this for full claims/description text — use get_patent_details for text.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1819,7 +2142,9 @@
         "icon": "$(law)",
         "userDescription": "Check a patent's legal status — in force, lapsed, expired, or opposed",
         "modelDescription": "PRIMARY tool for the LEGAL STATUS of a known patent: returns the INPADOC legal-status event history (grants, lapses, withdrawals, renewal-fee payments, oppositions) from EPO OPS as a per-jurisdiction chronological table, from which in-force vs. lapsed/expired is read. Use whenever the user asks whether a patent is still in force / valid / active, whether it has lapsed or expired, about maintenance/renewal fees, or whether it was opposed. Prefer this over ops_api_guide + patent_api_request legal endpoints for standard legal-status lookups; use the raw path only for advanced cases the typed tool doesn't cover. Input: publicationNumber in epodoc format (e.g. 'EP1000000', 'US10000000B2'; hyphens normalized). For the patent family across jurisdictions use get_patent_family; for EP register prosecution events use get_register_events. Events carry the contracting state for EP post-grant events; the result opens with a per-state summary (latest lapse or fee event per state). Read a target market's row before rating risk; 'lapsed' with an effective date before today means no live right in that state. ALSO THE ONLY TOOL THAT ANSWERS 'WHICH COUNTRIES DOES THIS COVER' for a European filing: the result names the designated contracting states (and extension/validation states) an EP application designates, which get_patent_family CANNOT give — family names the offices the invention published in, one 'EP' entry for a European regional filing. Designated is not the same as in force: subtract the states the per-state summary reads as lapsed.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1841,7 +2166,9 @@
         "icon": "$(globe)",
         "userDescription": "List a patent's INPADOC family members across jurisdictions",
         "modelDescription": "PRIMARY tool for the PATENT FAMILY of a known patent: returns the EXTENDED INPADOC family from EPO OPS — every application and publication linked through common priorities, so the grants, divisionals and continuations of the same application as well as the equivalents filed in other offices — as a table with ONE ROW PER MEMBER (one application). Use whenever the user asks about a patent's family, INPADOC family, foreign equivalents/counterparts, or where a patent was also filed or granted in other countries. Each row names the publication to CITE for that member: its first grant where one exists, else its earliest publication, with the member's other publications listed beside it. Report a granted member by its grant number, NEVER by the pre-grant publication beside it — a pre-grant publication and a granted patent are different legal objects, and answering a family question from pre-grant publications alone reads as though a granted family is still pending. Prefer this over ops_api_guide + patent_api_request family endpoints for standard family lookups; use the raw path only for advanced cases the typed tool doesn't cover. Input: publicationNumber in epodoc format (e.g. 'EP1000000', 'US10000000B2'; hyphens normalized). NOT the answer to 'which COUNTRIES does this cover' for a European filing: a family lists OFFICES, and an EP regional filing appears as a single 'EP' member that says nothing about the EPC states it designates — those are the designated contracting states on get_legal_status. For the legal status of a member use get_legal_status; for EP register prosecution events use get_register_events.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1863,7 +2190,9 @@
         "icon": "$(history)",
         "userDescription": "List a patent's EP Register prosecution events (oppositions, transfers, lapses)",
         "modelDescription": "PRIMARY tool for the EP REGISTER prosecution events of a known patent: returns the EPO Register event history (oppositions, transfers of rights, amendments, lapses, procedural steps) as a chronological table. Use whenever the user asks about a patent's register events, opposition proceedings, transfers or assignments of rights, or EP prosecution/procedural history. EP applications/patents only. Prefer this over ops_api_guide + patent_api_request register endpoints for standard register lookups; use the raw path only for advanced cases the typed tool doesn't cover. Input: publicationNumber in epodoc format (e.g. 'EP1000000'; hyphens normalized). For INPADOC legal-status events across all jurisdictions use get_legal_status; for the patent family use get_patent_family.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1885,7 +2214,9 @@
         "icon": "$(law)",
         "userDescription": "Search the EP Register by representative, opponent, applicant or inventor (EP only)",
         "modelDescription": "PRIMARY tool for REPRESENTATIVE or OPPONENT questions: searches the EP Register with register CQL and returns OPS's total for the whole query plus one row per EP application (publication, application number, representative, status, applicant, title). The EP Register is the ONLY search with a representative index: use re=<name> for the professional representative (agent) of record ('how many EP filings does representative X handle', 'which applications does firm Y represent') and op=<name> for an opponent ('which oppositions did Z file'). nm=<name> matches a name in ANY role (applicant, inventor, representative, opponent): when a role index (re/op/ia/pa/in) returns 0, retry with nm= to find which role the person holds. The register stores names surname-first, so use the surname alone (nm=Boniberger) or nm=\"Surname, First\" (nm=\"Boniberger, Bernhard\"); nm=\"First Surname\" returns 0. Other register indexes: ia (inventor or applicant), pa, in, ti, pn, ap, pr, pd, ic. NOT register indexes (they return nothing): ag, rep, ab, cpc, st, ps, fd, ctr. Quote a multi-word value: re=\"Muster Patentanwälte\". search_patents has NO representative index at any office, so never answer a representative question from a bare name there. EP applications only: say so when you report a count. The total is capped at 10000; report it as the count and the rows as examples. For the US attorney of record, search_patents provider=uspto on recordAttorney.attorneyBag.lastName names the USPTO-registered practitioner; an EP agent is not a USPTO practitioner, so expect 0 there for the same firm. Grammar: get_search_syntax provider=epo_register. For one application's register events use get_register_events.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1911,7 +2242,9 @@
         "icon": "$(book)",
         "userDescription": "Read the query grammar of a patent search provider (EPO OPS CQL, USPTO ODP Lucene, EP Register CQL)",
         "modelDescription": "Full query grammar of a search provider, served by the backend that runs the search: every field, the rules the provider enforces (wildcards, grouping, result order, one publication per family), date forms, text coverage per office and worked examples. It is a reference for AFTER a problem, never a first step: call it when a search tool reports a grammar fault, when a count is zero and the field may be wrong, or when you need a field the search tool's query description does not list. Do not call it before a search. Provider 'epo_ops' for search_patents CQL, 'uspto' for the ODP Lucene query you send through patent_api_request, 'epo_register' for search_register.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1935,7 +2268,9 @@
         "icon": "$(file-pdf)",
         "userDescription": "Extract text content from PDF files",
         "modelDescription": "Extract text content from a local PDF file. Use this tool when users reference PDF documents (patent PDFs, research papers, technical documents) and need to analyze their content. Reads all pages by default, a single page via 'pageNumber', or a range via 'startPage'/'endPage'. Returns extracted text plus metadata (title, author, page count). The PDF must be a local file accessible from the workspace. If the user attached the PDF to the chat message, its full content — including figures and scanned pages — is already visible to you; do not use this tool for attached PDFs. Use it only for PDF files on disk that are not attached.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1969,7 +2304,9 @@
         "icon": "$(references)",
         "userDescription": "Find prior art citations against a USPTO patent application",
         "modelDescription": "PRIMARY TOOL for backward citation search: finds prior-art references cited by examiners against a USPTO application (X = novelty-destroying/102, Y = obviousness/103, A = background). Use whenever the user asks about citations against an application, examiner prior art, or X/Y/A rejection references. Prefer this over citation_api_guide + patent_api_request for standard citation lookups — use citation_api_guide only for citation statistics. Input: applicationNumber (numeric string, no slashes — normalize '16/000,001' to '16000001'); category ('X'/'Y'/'A', omit for all); examinerOnly (boolean); size (default 100); dateFrom/dateTo (YYYY-MM-DD, inclusive office-action date window; either bound may stand alone).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2018,7 +2355,9 @@
         "icon": "$(references)",
         "userDescription": "Find patents that cite a given document (forward citation impact analysis)",
         "modelDescription": "PRIMARY TOOL for forward citation impact analysis: finds patents that CITE a given document, measuring its influence as prior art. Use when asked 'who cites this patent', 'forward citations', 'impact analysis', or 'how influential is X'. Distinct from search_citations (which finds prior art cited against an application): this tool takes a document being cited and returns the citing patents. Prefer this over citation_api_guide + patent_api_request for standard forward lookups. Input: citedDocument (patent/publication number in any standard format, e.g. 'US 20150284881 A1' or 'EP 1234567 A1'); category ('X'/'Y'/'A', omit for all); examinerOnly (boolean); size (default 100).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2059,7 +2398,9 @@
         "icon": "$(git-merge)",
         "userDescription": "Get the USPTO parent/child continuity chain for a US application",
         "modelDescription": "PRIMARY TOOL for the USPTO parent/child continuity chain of a US application: the divisionals, continuations, and continuations-in-part that make up a patent family, with each relationship (CON/DIV/CIP/PRO), filing date, patent number, and status. Use whenever the user asks about continuity, the parent application, child/divisional/continuation applications, the priority chain, or double patenting (the parent it runs over). This returns the applicant's OWN related filings — NOT prior art. Do NOT confuse with search_citations (examiner-cited prior art X/Y/A) or get_prosecution_timeline (legal-event chronology). Prefer this over the raw uspto_api_guide continuity path for standard continuity lookups. Input: applicationNumber (numeric string, no slashes — normalize '16/123,456' to '16123456').",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2081,7 +2422,9 @@
         "icon": "$(history)",
         "userDescription": "Get a chronological prosecution / legal-status timeline for a patent",
         "modelDescription": "PRIMARY TOOL for a chronological prosecution / legal-status timeline of a patent: merges EP Register events and INPADOC legal-status events (filing, search report, grant, oppositions, assignments, renewals/maintenance-fee payments, lapse) into one dated chronology. Use whenever the user asks about the prosecution history, the file wrapper / legal-event timeline, what happened during prosecution, grant/opposition/lapse history, or maintenance status over time. Most complete for EP/WO; for US patents it surfaces the INPADOC legal events (assignment, grant, maintenance fees). Do NOT confuse with search_citations (examiner-cited prior art X/Y/A) or get_continuity (parent/child application chain). Input: publicationNumber — a PUBLICATION number (US10123456, EP1000000, WO2020123456; hyphens optional), NOT an application number.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2103,7 +2446,9 @@
         "icon": "$(references)",
         "userDescription": "Get USPTO Citation Search API documentation for office action citations",
         "modelDescription": "Documentation for the USPTO Citation Search API. DEFER TO TYPED TOOLS for the common cases: use search_citations for prior art cited AGAINST an application (input: applicationNumber), use search_forward_citations for patents that CITE a given document (input: citedDocument, impact analysis). Use THIS guide tool ONLY for advanced cases not covered by either typed tool: (1) citation statistics aggregations (/stats endpoint), (2) novelty-only convenience endpoint, (3) date-range filtering, (4) general API exploration. X = novelty-destroying (102), Y = obviousness (103), A = background. Available actions: 'list', 'endpoint' (search, forward, stats, novelty), 'workflow' (prior-art-analysis, impact-analysis, claim-analysis), 'full'. After getting docs, call the endpoint via patent_api_request.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2139,7 +2484,9 @@
         "icon": "$(cloud-download)",
         "userDescription": "Make an authenticated request to the Patent AI backend",
         "modelDescription": "Make an authenticated request to the Patent AI backend and get the JSON result directly. Use this to call a backend TOOL that has no typed tool of its own: supply the `path` (\"/tools/<tool_name>\", e.g. /tools/get_citations), `method` \"POST\", and `body` (the tool's JSON input, e.g. '{\"patent_number\":\"EP1000000\"}'). The *_api_guide tools name the tool and give its input schema. PATSTAT routes (/patstat/...) are the exception and are still called by path. Prefer this over running curl in the terminal: it authenticates automatically and returns structured results. Do NOT put the backend host or /v1 in the path.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2173,7 +2520,9 @@
         "icon": "$(book)",
         "userDescription": "Get EPO OPS API documentation for patent data access",
         "modelDescription": "Get documentation for EPO OPS (Open Patent Services) API endpoints. Use this tool FIRST to learn available endpoints and request shapes, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for specific endpoint), 'workflow' (step-by-step guides for common tasks like prior-art-search, citation-analysis, competitor-analysis), 'full' (complete documentation). After getting docs, call the endpoint via patent_api_request; respect the documented rate limits between sequential calls.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2209,7 +2558,9 @@
         "icon": "$(book)",
         "userDescription": "Get USPTO PatentsView API documentation for US patent searches",
         "modelDescription": "Get documentation for the USPTO Open Data Portal (ODP) API endpoints — the single source of truth for the current request shapes (the API migrated from PatentsView; legacy parameters no longer exist). Use this tool FIRST to learn available endpoints, then call them with the patent_api_request tool (authenticated, no terminal needed). Available actions: 'list' (compact endpoint list), 'endpoint' (detailed docs for specific endpoint like 'search' or 'grants'), 'workflow' (step-by-step guides for basic-search, assignee-search, citation-analysis, date-filtered-search), 'full' (complete documentation). After getting docs, call the endpoint via patent_api_request.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2238,84 +2589,6 @@
         }
       },
       {
-        "name": "copilot_searchLegal",
-        "displayName": "Search Legal Sources",
-        "toolReferenceName": "legal",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(law)",
-        "userDescription": "Search MPEP, EPC, and EPO Guidelines using semantic search",
-        "modelDescription": "PRIMARY TOOL for patent law and procedure lookups: searches MPEP (USPTO), EPC, and EPO Guidelines using hybrid semantic + keyword search. Use whenever the user asks about patent law, examination procedure, statutory bases (35 USC, EPC Articles), or wants to look up MPEP sections or EPO Guidelines. Prefer this over legal_search_guide + patent_api_request for standard queries; use legal_search_guide only for advanced cases (custom search modes, similarity thresholds). Input: query (free text, e.g. 'obviousness 103 prima facie Graham factors'); jurisdiction ('USPTO' for MPEP, 'EPO' for EPC/Guidelines, omit for all); comprehensive (true = full section content for quoting, false = matched chunks); limit (default 10).",
-        "tags": [],
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string",
-              "description": "Free-text legal search query, minimum 3 characters. Examples: 'obviousness 103 prima facie', 'MPEP 2143 Graham factors', 'EPC Article 54 novelty', 'inventive step problem-solution approach'."
-            },
-            "jurisdiction": {
-              "type": "string",
-              "enum": [
-                "EPO",
-                "USPTO",
-                "EU",
-                "WIPO"
-              ],
-              "description": "Optional filter. Omit to search across all jurisdictions. Use USPTO for MPEP, EPO for EPC and EPO Guidelines."
-            },
-            "comprehensive": {
-              "type": "boolean",
-              "description": "Optional. If true, returns full section content grouped by document (better for quoting full rules). If false (default), returns matched chunks with similarity scores (better for quick lookup).",
-              "default": false
-            },
-            "limit": {
-              "type": "number",
-              "description": "Optional. Maximum results to return. Default: 10.",
-              "default": 10
-            }
-          },
-          "required": [
-            "query"
-          ]
-        }
-      },
-      {
-        "name": "copilot_legalSearchGuide",
-        "displayName": "Legal Search API Guide",
-        "toolReferenceName": "legalSearchGuide",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(law)",
-        "userDescription": "Get Legal RAG Search API documentation for MPEP, EPC, and EPO Guidelines",
-        "modelDescription": "Documentation for the Legal RAG Search API (MPEP, EPC, EPO Guidelines). DEFER TO search_legal for basic legal lookup queries — that typed tool covers the common case (search MPEP/EPC/EPO Guidelines with optional jurisdiction filter and comprehensive mode). Use THIS guide tool ONLY for advanced cases not covered by search_legal: (1) specific source filters (e.g., restrict to MPEP only and exclude EPC), (2) custom search modes (semantic-only or keyword-only instead of hybrid), (3) semantic-weight tuning, (4) similarity threshold tuning, (5) stats and jurisdictions meta endpoints, (6) general API exploration. Available actions: 'list', 'endpoint' (search, stats, jurisdictions), 'workflow' (mpep-lookup, epc-research, cross-jurisdiction), 'full'. After getting docs, call the endpoint via patent_api_request.",
-        "tags": [],
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "action": {
-              "type": "string",
-              "enum": [
-                "list",
-                "endpoint",
-                "workflow",
-                "full"
-              ],
-              "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
-            },
-            "endpoint": {
-              "type": "string",
-              "description": "Endpoint name when action='endpoint'. Options: search, stats, jurisdictions"
-            },
-            "workflow": {
-              "type": "string",
-              "description": "Workflow name when action='workflow'. Options: mpep-lookup, epc-research, cross-jurisdiction"
-            }
-          },
-          "required": [
-            "action"
-          ]
-        }
-      },
-      {
         "name": "copilot_getNplWork",
         "displayName": "Look Up Cited Paper",
         "toolReferenceName": "nplWork",
@@ -2323,7 +2596,9 @@
         "icon": "$(book)",
         "userDescription": "Resolve a cited paper (citation string, DOI or OpenAlex id) to its OpenAlex record",
         "modelDescription": "Resolves ONE cited non-patent literature reference to its OpenAlex record: title, authors, venue, publication date, DOI, full abstract and open-access link. Use it when the user asks about a paper cited against a patent (an examiner- or applicant-cited [NPL] entry of get_patent_details, an NPL row of the examiner_baseline file, an NPL citation of a US office action) or gives a DOI. Pass the reference EXACTLY as the office printed it (e.g. 'CONG L. ET AL: \"MULTIPLEX GENOME ENGINEERING USING CRISPR/CAS SYSTEMS\", SCIENCE, vol. 339, ... XP055102030'), or a bare DOI (10.1126/science.1231143) or OpenAlex id (W2064815984). Lookup order: OpenAlex id, then any DOI in the string, then the quoted title. Status 'matched' = the cited work; 'candidates' = similar works, none certain: report them as possible matches, never as the cited paper; 'not found' = OpenAlex has no similar work (standards, manuals, web pages and many conference abstracts are absent). For all the cited papers of one patent at once, use get_patent_details with resolveNpl: true instead. To FIND new literature, use search_npl.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2345,7 +2620,9 @@
         "icon": "$(library)",
         "userDescription": "Search 250M+ scholarly works (OpenAlex) for non-patent literature",
         "modelDescription": "Searches non-patent literature (NPL) in OpenAlex: 250M+ scholarly works across all disciplines (journal articles, conference proceedings, book chapters, preprints, reviews, theses, reports, standards), ranked by relevance. This is the PRIMARY NPL source: use it first whenever prior-art, novelty, invalidity or landscape work needs papers, or the user asks for scientific literature. Each work carries its publication date (check it against the critical date), venue, DOI, citation count, abstract and open-access link. Use search_academic as a second pass (Semantic Scholar, arXiv) and web search for what neither covers (product docs, web disclosures). Not a patent database: use the patent tools for patent documents. Input: query (free text, e.g. 'sulfide solid electrolyte lithium dendrite suppression'); optional fromYear/toYear (inclusive publication years); openAccess (true = only open-access works); type (journal-article, proceedings-article, book-chapter, preprint, review, book, dissertation, report, standard, dataset); limit (default 10, max 50); page (default 1).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2408,7 +2685,9 @@
         "icon": "$(book)",
         "userDescription": "Search academic papers on Semantic Scholar and arXiv",
         "modelDescription": "Searches academic research papers on Semantic Scholar and arXiv for non-patent literature (NPL) prior art. Use for prior-art research when the invention has academic antecedents, or when the user asks for scientific papers, research publications, or NPL references. Complements patent searches — combine with EP/WO search (search_patents) and US search (uspto_api_guide + patent_api_request) for comprehensive prior-art coverage. Not a substitute for patent databases — use dedicated patent tools for EP/WO and US patents. It does not search Google Scholar or PubMed; for biomedical literature use web search (site:pubmed.gov). Results are relevance-ranked with the two sources interleaved and duplicates merged. The result reports each source's status: if a source was rate limited or failed, say so and retry later rather than concluding no literature exists. Input: query (free text; wrap an exact phrase in double quotes, e.g. '\"solid state electrolyte\" lithium'); sources (['scholar','arxiv'], default both; 'scholar' is Semantic Scholar); maxResults (default 10, max 50); fromYear / toYear (inclusive publication-year bounds, e.g. toYear = the priority year to keep to art published before it).",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2464,7 +2743,9 @@
         "icon": "$(save)",
         "userDescription": "Write patent search results to a file",
         "modelDescription": "Write or update patent research results in a workspace file. prior-art-report, and only prior-art-report, takes empty content: for that template the writer generates the sole assessment from coverage rows and source quotations, including an explicit essential combination row. Supply subject, objective, searchStrategy, concepts, classifications, coverage, limitations and stopReason. The save produces two documents: the client report at filePath, and a working record beside it at <report>.working-record.md holding the full search log (including the queries that could not run), the retrieved-but-unread list, the wording review, the provenance and the second read; a later session on the same matter reads the working record first. For supported/partial rows quote complete claims (including dependency text and all constituents) and exact description passages; record scope, qualifiers and original quantity basis beside each source. Each supported/partial coverage row lists its elements with the literal fragment of cited text that discloses each; an element without a fragment makes the row partial at most. An element may instead rest on a recorded drawing: give it the PUB:figure:N anchor printed by get_patent_figures, basis \"figure\" and a reading of what the figure clearly shows (never a dimension or ratio unless the drawing is stated to be to scale); the report marks that row as resting on a drawing reading and the second read does not judge it. An essential feature is refused as unresolved while no drawing of any retrieved document was read this session: call get_patent_figures on the closest candidates with saveDir \"references/figures\", or put in that row's gap the phrase \"figures not consulted:\" followed by why a drawing cannot settle it. Use get_patent_details evidenceLookup to recover IDs and later passages without repeating searches. Identity checks are not semantic verification. Every other template requires a written content body and is rejected when content is empty or a placeholder. landscape-report: content required; figures are checked against recorded tool outputs and listed in a provenance appendix. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent, sources = prior-art passages; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report (Find Better, ADR 0010) is structured only and refused without coverage, baseline or baselinePath, examinerBestArt and tracks: content stays empty; give the Examiner Baseline either inline as baseline (the --json output of flowleap patent examiner-baseline, or the examiner_baseline backend tool's result) or as baselinePath, the workspace path of that --json output on disk — exactly one of the two; examinerBestArt names, per independent claim, the Baseline document(s) taken as the examiner's best art, each of which must be in baseline.documents[] with an X or Y category or, where none exists, an examiner citation or a US office-action rejection (an applicant-only document is refused); every coverage row is one element of one independent claim (claimNumber required) and carries two sides, examiner and found, each with its own status, sourceAnchors, evidence, elements and gap, checked exactly like an invalidity chart row; the examiner side may cite only that claim's examiner's best art. The writer renders the Baseline matrix and its gaps, a per-claim table element | examiner's best art | best art found, and counts \"disclosed n of m\" itself from the validated rows; no score or rating field exists and any number supplied outside tracks is ignored. The writer refuses a Baseline that carries _truncation or whose documents[] holds fewer citations from a publication than membersWalked counts for it (re-run the examiner_baseline tool or the CLI). The result sentence and table header name only the examiner's best art that an examiner-side row cites; the rest are listed as \"named but not scored\"; an examiner document with a P or E category, or published after the earliest date stated in objective (give it as YYYY-MM-DD), is flagged as published after the critical date. Finding nothing better is a complete result only when every track ran a query and the backward-citation track has a hop 2 entry; otherwise the result reads \"Search incomplete\". Free-form saves (no template) retain their existing behavior.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2594,7 +2875,7 @@
             },
             "coverage": {
               "type": "array",
-              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 \u2014 element (b): \u2026\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report: one row per element of each independent claim (claimNumber required), each with an examiner side and a found side; the row's own status, sourceAnchors, evidence and elements are unused there.",
+              "description": "Required for prior-art-report: explicit feature rows and an essential combination row. Status is model judgment. Copy known IDs from inline source labels or local evidenceLookup. Supported/partial rows require exact source quotations and review fields. invalidity-claim-chart accepts the same structured coverage: feature = a claim element of the challenged patent written as \"Claim 1 — element (b): …\", one combination row per independent claim (\"Claim 1 as a whole\"), claimNumber naming that claim, and sourceAnchors/evidence/elements pointing at the PRIOR-ART documents; when coverage is supplied content must be empty and the writer validates, renders and receipts the chart. find-better-report: one row per element of each independent claim (claimNumber required), each with an examiner side and a found side; the row's own status, sourceAnchors, evidence and elements are unused there.",
               "minItems": 1,
               "items": {
                 "type": "object",
@@ -3229,7 +3510,9 @@
         "icon": "$(search)",
         "userDescription": "Autonomous patent search subagent that searches EPO, USPTO, and academic databases",
         "modelDescription": "Autonomous patent search subagent. Delegates patent and academic literature searching to a specialized subagent that runs in its own context. The subagent searches EPO (via CQL), USPTO, and academic sources (arXiv, Google Scholar) using optimized queries. Use this when you need comprehensive patent research without cluttering the main conversation. The subagent will search multiple databases in parallel and return structured findings including patent numbers, titles, abstracts, and relevance assessments.",
-        "tags": [],
+        "tags": [
+          "patent_ai"
+        ],
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -4122,6 +4405,21 @@
       }
     ],
     "commands": [
+      {
+        "command": "flowleap.drafting.confirmFeatureList",
+        "title": "%flowleap.drafting.confirmFeatureList.title%",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.drafting.approveClaims",
+        "title": "%flowleap.drafting.approveClaims.title%",
+        "category": "FlowLeap"
+      },
+      {
+        "command": "flowleap.drafting.waiveErrors",
+        "title": "%flowleap.drafting.waiveErrors.title%",
+        "category": "FlowLeap"
+      },
       {
         "command": "flowleap.signIn",
         "title": "Sign In",
@@ -6762,6 +7060,21 @@
     "menus": {
       "editor/title": [
         {
+          "command": "flowleap.drafting.confirmFeatureList",
+          "when": "resourcePath =~ /[\\\\/]drafting[\\\\/][^\\\\/]+[\\\\/]feature-list\\.md$/ || activeWebviewPanelId == 'markdown.preview' && flowleap.drafting.previewFile == 'feature-list.md'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowleap.drafting.approveClaims",
+          "when": "resourcePath =~ /[\\\\/]drafting[\\\\/][^\\\\/]+[\\\\/]claims\\.md$/ || activeWebviewPanelId == 'markdown.preview' && flowleap.drafting.previewFile == 'claims.md'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowleap.drafting.waiveErrors",
+          "when": "resourcePath =~ /[\\\\/]drafting[\\\\/][^\\\\/]+[\\\\/]findings\\.md$/ || activeWebviewPanelId == 'markdown.preview' && flowleap.drafting.previewFile == 'findings.md'",
+          "group": "navigation@1"
+        },
+        {
           "command": "github.copilot.chat.notebook.enableFollowCellExecution",
           "when": "config.github.copilot.chat.notebook.followCellExecution.enabled && !github.copilot.notebookFollowInSessionEnabled && github.copilot.notebookAgentModeUsage && !config.notebook.globalToolbar",
           "group": "navigation@10"
@@ -6815,6 +7128,18 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "flowleap.drafting.confirmFeatureList",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.drafting.approveClaims",
+          "when": "false"
+        },
+        {
+          "command": "flowleap.drafting.waiveErrors",
+          "when": "false"
+        },
         {
           "command": "patent-ai.signIn",
           "when": "false"
@@ -8020,6 +8345,9 @@
         "path": "./assets/skills/application-drafting/SKILL.md"
       },
       {
+        "path": "./assets/skills/patent-drawings/SKILL.md"
+      },
+      {
         "path": "./assets/skills/office-action-response/SKILL.md"
       },
       {
@@ -8156,6 +8484,7 @@
     "@types/minimist": "^1.2.5",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.3",
+    "@types/pdfkit": "0.17.6",
     "@types/picomatch": "^4.0.0",
     "@types/react": "17.0.44",
     "@types/react-dom": "^18.2.17",
@@ -8243,6 +8572,7 @@
     "@opentelemetry/sdk-metrics": "^2.5.1",
     "@opentelemetry/sdk-trace-node": "^2.5.1",
     "@opentelemetry/semantic-conventions": "^1.39.0",
+    "@resvg/resvg-wasm": "2.6.2",
     "@sinclair/typebox": "^0.34.41",
     "@vscode/copilot-api": "^0.4.3",
     "@vscode/extension-telemetry": "^1.5.1",
@@ -8256,6 +8586,7 @@
     "best-effort-json-parser": "^1.2.1",
     "diff": "^8.0.3",
     "docx": "^9.9.0",
+    "elkjs": "0.12.0",
     "express": "^5.2.1",
     "ignore": "^7.0.5",
     "isbinaryfile": "^5.0.4",
@@ -8264,6 +8595,9 @@
     "mammoth": "^1.13.0",
     "markdown-it": "^14.1.1",
     "minimatch": "^10.2.1",
+    "pdfkit": "0.20.2",
+    "replicad": "1.1.0",
+    "replicad-opencascadejs": "1.1.0",
     "undici": "^7.24.1",
     "web-tree-sitter": "^0.23.0"
   },

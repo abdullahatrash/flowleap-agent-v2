@@ -135,6 +135,13 @@ the invalidity skill's Phase 4b.
 - Acceptance: `priorArtReportCompletion.spec.ts` cases: open points + no Round Report → nudge;
   open points + Round Report → accepted; no open points → accepted; prior-art template → no
   nudge. `patentFallbackLadder.spec.ts`: round answering no open point → refused.
+- #750 (2026-10-19): a cited document the tools hold no text for (GB, JP, DE utility model,
+  older US) gets its fetched patent page recorded under the publication anchor as web text
+  (`textSource: 'web'`, URL). The writer checks a quote against it as against official text,
+  labels the row, counts it as covered, and adds the open point `source-<pub>` ("Row(s) … rest on
+  web page text of <pub> (<host>), not official full text"); the Round Report carries the
+  recommendation to confirm against the official full text or a certified copy. Official text
+  wins where both exist. Eval T13.
 
 ## Track S — the skill
 
@@ -214,7 +221,8 @@ run on its own. A Tier B point moves to Tier A only when a code guard ships for 
 | A5 | Loop rule (C4): every save is followed by a Round Report that names every open point of the receipt with a recommendation, and the turn ends there; a Search Round runs only after an expert answer, records in `rounds[].answers` the open points the expert chose, and every round query matches a ledger execution that ran after the previous save. A receipt with no open points needs no Round Report. | receipt, ledger, chart, chat |
 | A6 | 0 assertive legal-conclusion phrases (is obvious, anticipates, is not novel and their forms); noun forms only in disclaimers or listed by the wording review. | chart, working record |
 | A7 | Generated honesty sections present and drawn from the record: Limitations (failed searches, unread documents, out-of-scope jurisdictions), second read in the working record. | chart, working record |
-| A8 | No element or rung marked disclosed on a bibliography anchor, and every figure-based row carries "rests on a drawing reading". | chart |
+| A8 | No element or rung marked disclosed on a bibliography anchor; every figure-based row carries "rests on a drawing reading"; every row that rests on web page text carries "Source: web page (<host>), not official full text", the Limitations count such rows, and the receipt lists `source-<pub>` for each such document (#750). A web source is never a bibliography anchor. | chart, receipt |
+| A9 | One row per publication: Reference roles and Retrieved documents list each publication once whatever spelling its anchors use, so a figure anchor without a kind code (`US4935850:figure:2`) joins the dated publication of its document (`US4935850A`), and no `scope-`/`date-` open point names a bare number that a kind-coded publication of the same document covers. An A1 and a B1 of one number stay two rows with two dates (#729). | chart, receipt |
 
 Verdict per run: PASS when every Tier A point holds; FAIL when any does not. A Tier A failure is a
 code defect and becomes an issue.
@@ -230,7 +238,10 @@ code defect and becomes an issue.
 | B6 | Count of legal noun forms outside disclaimers. |
 
 A Tier B observation that recurs across runs and that code can check becomes a code-guard issue;
-when the guard ships, the point moves to Tier A. Example: B3 needs a structured critical date on
+when the guard ships, the point moves to Tier A. A9 is the first such move: the duplicate reference
+rows seen in the pilot and in both Cuozzo runs (#729) became the writer's publication-identity rule (PR #781),
+checked by `patentFallbackLadder.spec.ts`. The trajectory evals cannot check A9: their mock save has no ledger,
+so the receipt they compute has no `scope-`/`date-` points at all. A9 is read on the saved chart of a live run. Example: B3 needs a structured critical date on
 the chart before code can check cited publication dates against it.
 
 ## Out of scope

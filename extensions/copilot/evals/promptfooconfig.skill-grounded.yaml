@@ -24,14 +24,15 @@ prompts:
 
 defaultTest:
   options:
-    # Same judge and explicit max_tokens as the trajectory and key-gate gates — the measured
-    # decision recorded in promptfooconfig.trajectory.yaml and README "Judge model decision".
+    # Same judge (anthropic/claude-haiku-5.5 since #834), explicit max_tokens and `omitDefaults`
+    # as the trajectory and key-gate gates — the measured decision recorded in
+    # promptfooconfig.trajectory.yaml and README "Judge model decision".
     provider:
-      id: openai:chat:google/gemini-2.5-flash
+      id: openai:chat:anthropic/claude-haiku-5.5
       config:
         apiBaseUrl: https://openrouter.ai/api/v1
         apiKey: "{{env.OPENROUTER_API_KEY}}"
-        temperature: 0
+        omitDefaults: true
         max_tokens: 4096
         passthrough:
           stream: false

@@ -12,8 +12,14 @@
  * sections, style exemplars), and one "Next step for you:" line. Code writes it from the files
  * after every drafting tool call; the model never writes it.
  *
+ * The file opens with the loop (PRD 0026 S1): the steps in order, what re-opens what, and the
+ * name of the Prompts view page that shows the loop before the first matter.
+ *
  * ```
  * # Drafting checklist: hinge (EPO)
+ *
+ * The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+ * ...
  *
  * - [x] 1. Feature List confirmed: feature-list.md has `confirmed: true`
  * - [ ] 5. Answer the Inventor Questions: 9 open
@@ -21,7 +27,7 @@
  *       → Then tell the agent: "Apply the answers"
  *
  * Not blocking:
- * - Figures: 10 in figures.md
+ * - Figures: 10 in figures.md, 3 drawn in drawings/
  *
  * Next step for you: step 5.
  * ```
@@ -30,7 +36,7 @@
 import { isInventorQuestion } from './finding';
 import { FindingsFileItem, parseFindingsFileItems } from './findingsFile';
 import { missingParts } from './filingDocuments';
-import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER } from './folderContract';
+import { DRAFT_OUTLINE_SAVE, DRAFTING_FILE_NAMES, DRAFTING_STYLE_FOLDER, DRAWINGS_FOLDER } from './folderContract';
 import { DraftingGateFlag, DraftingOffice, parseDraftingFrontmatter, readGateFlag, readOffice } from './frontmatter';
 import { currentAnswer, currentRound, isAnswered, parseInventorAnswers } from './inventorAnswers';
 import { parseInventorQuestions } from './sourceMarkers';
@@ -52,6 +58,8 @@ export interface DraftingChecklistFiles {
 	/** True when the saved draft was generated against other claims than the current `claims.md`. */
 	readonly draftStale?: boolean;
 	readonly figures?: string;
+	/** The Figures drawn in `drawings/` (one `FIG-N.svg` each); absent when not counted. */
+	readonly drawnFigures?: number;
 	readonly inventorAnswers?: string;
 	readonly findings?: string;
 	/** True when `findings.md` was written by a validator run over the current draft and claims. */
@@ -358,14 +366,14 @@ function questionsStep(input: DraftingChecklistFiles, findingsItems: readonly Fi
 	]);
 }
 
-/** The notes of the checklist: figures, required sections of the office, style exemplars. */
+/** The notes of the checklist: figures (with the drawn count when Figures are drawn), required sections of the office, style exemplars. */
 function checklistNotes(input: DraftingChecklistFiles, office: DraftingOffice | undefined): DraftingChecklistNote[] {
 	const notes: DraftingChecklistNote[] = [];
 	const figures = parseFigureSections(input.figures ?? '').figures;
 	const figureCount = figures.reduce((sum, figure) => sum + figure.count, 0);
 	notes.push(input.figures === undefined || !figureCount
 		? { name: CHECKLIST_NOTE.figures, detail: input.figures === undefined ? `${DRAFTING_FILE_NAMES.figures} does not exist` : `none in ${DRAFTING_FILE_NAMES.figures}`, actions: [`→ When the application has drawings, add one heading per figure to ${DRAFTING_FILE_NAMES.figures} (e.g. "## FIG. 1") with its parts, or tell the agent: "Build figures.md from the disclosure"`] }
-		: { name: CHECKLIST_NOTE.figures, detail: `${figureCount} in ${DRAFTING_FILE_NAMES.figures}`, actions: [] });
+		: { name: CHECKLIST_NOTE.figures, detail: `${figureCount} in ${DRAFTING_FILE_NAMES.figures}${input.drawnFigures ? `, ${input.drawnFigures} drawn in ${DRAWINGS_FOLDER}/` : ''}`, actions: [] });
 	if (input.draft !== undefined && office) {
 		const missing = missingParts(input.draft, office, figureCount > 0);
 		notes.push(missing.length
@@ -392,11 +400,30 @@ export function nextChecklistStep(checklist: DraftingChecklist): DraftingCheckli
 	return checklist.steps.find(entry => !entry.done && !entry.blockedBy.length);
 }
 
+/** The title of the Prompts view page that shows the loop before the first matter (PRD 0026 S3). */
+const LOOP_PAGE = 'Drafting with drawings: the loop';
+
+/**
+ * The map of the loop at the top of `checklist.md` (PRD 0026 S1): the steps in order, what
+ * re-opens what, and the Prompts view page. At most six lines; the attorney reads them, so no
+ * technical term for the file format and no command name.
+ */
+const LOOP_HEADER: readonly string[] = [
+	'The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.',
+	`A change to ${DRAFTING_FILE_NAMES.claims} re-opens the claims approval.`,
+	`After a change to ${DRAFTING_FILE_NAMES.figures}, the next check of the figures runs the coverage again.`,
+	'A new render of a drawn Figure needs a new review cycle.',
+	'A waived Error stays waived until the Error changes.',
+	`The Prompts view page "${LOOP_PAGE}" shows this loop before the first matter.`,
+];
+
 /** Renders `checklist.md`. */
 export function renderChecklist(checklist: DraftingChecklist): string {
 	const next = nextChecklistStep(checklist);
 	const lines = [
 		`# Drafting checklist: ${checklist.matter}${checklist.office ? ` (${checklist.office})` : ''}`,
+		'',
+		...LOOP_HEADER,
 		'',
 		'Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.',
 		'',

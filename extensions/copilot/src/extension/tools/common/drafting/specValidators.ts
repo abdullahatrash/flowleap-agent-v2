@@ -9,10 +9,14 @@
  * and open Inventor Questions. No model call.
  *
  * `figures.md` lists one part per line, as a list item `- 12: housing` or a table row
- * `| 12 | housing |`. In the draft, a reference numeral follows its part name: `the housing 12`
- * or `the housing (12)`.
+ * `| 12 | housing |`, with optional Feature List links and a proposal marker after the name
+ * (`- 12: housing [F3] (proposed)`, see `figures.ts`). In the draft, a reference numeral follows
+ * its part name: `the housing 12` or `the housing (12)`. A step of a flowchart or a block of a
+ * block diagram is named by what it does, so the draft writes `step 44` or `block 60` (#782).
  */
 
+import { DraftClaim } from './claims';
+import { FigurePartMarkers, readPartMarkers } from './figures';
 import { DraftFinding, INVENTOR_QUESTION } from './finding';
 import { DRAFTING_FILE_NAMES } from './folderContract';
 import { DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
@@ -26,10 +30,9 @@ const answersFile = DRAFTING_FILE_NAMES.inventorAnswers;
 /** The word of a figure name before its number: `FIG.`, `Figs.`, `Figure` (see {@link figureNamePattern}). */
 const figureWord = String.raw`(?:(?:FIGS?|Figs?)\.?|FIGURES?|Figures?)\s*`;
 
-/** One part of `figures.md` with its reference numeral. */
-export interface FigurePart {
+/** One part of `figures.md` with its reference numeral, its Feature List links and its proposal marker. */
+export interface FigurePart extends FigurePartMarkers {
 	readonly numeral: string;
-	readonly part: string;
 	readonly line: number;
 }
 
@@ -135,7 +138,11 @@ export function checkDefinedTerms(paragraphs: readonly DraftParagraph[]): DraftF
 	return findings.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
 }
 
-/** Parses the parts of `figures.md` (list items `- 12: housing`, table rows `| 12 | housing |`). */
+/**
+ * Parses the parts of `figures.md` (list items `- 12: housing`, table rows `| 12 | housing |`).
+ * The part name is read without its markers: `- 12: housing [F3] (proposed)` is the part
+ * `housing` linked to `F3` and proposed.
+ */
 export function parseFigureParts(figures: string): FigurePart[] {
 	const { body, bodyStartLine } = parseDraftingFrontmatter(figures);
 	const parts: FigurePart[] = [];
@@ -143,7 +150,7 @@ export function parseFigureParts(figures: string): FigurePart[] {
 		const match = /^\s*[-*]\s+(?<numeral>\d{1,4}[a-z]?)\s*[:–—-]?\s+(?<part>[^|\s].*?)\s*$/.exec(content)
 			?? /^\s*\|\s*(?<numeral>\d{1,4}[a-z]?)\s*\|\s*(?<part>[^|]+?)\s*\|/.exec(content);
 		if (match?.groups) {
-			parts.push({ numeral: match.groups.numeral, part: match.groups.part, line: bodyStartLine + index });
+			parts.push({ numeral: match.groups.numeral, ...readPartMarkers(match.groups.part), line: bodyStartLine + index });
 		}
 	});
 	return parts;
@@ -184,12 +191,35 @@ function stemWord(word: string): string {
 	return word.toLowerCase().replace(/(?<!s)s$/, '');
 }
 
+/** True when the word is a word of the part name, singular or plural: `springs` names `coil spring`. */
+export function partNameHasWord(part: string, word: string): boolean {
+	return part.split(/[\s-]+/).some(partWord => stemWord(partWord) === stemWord(word));
+}
+
+/** The words that name a step or block of a flowchart or block diagram before its numeral: `step 44`, `blocks 60 and 62`. */
+const diagramStepPattern = /^(?:steps?|blocks?|operations?|box(?:es)?)$/i;
+
+/** The rule that the numerals of the drawings and of the text are one set, per office. */
+const numeralSetRule: Record<DraftingOffice, string> = {
+	US: '37 CFR 1.84(p)(5)',
+	EPO: 'OJ EPO 2025 A49 Art. 1(2)(i)',
+};
+
 /**
  * Error when a numeral in the draft text is not in `figures.md`, a numeral of `figures.md`
  * does not appear in the text, the text names a numeral as another part, or `figures.md` gives
- * one numeral to two parts or two numerals to one part.
+ * one numeral to two parts or two numerals to one part. The word before a numeral names the part
+ * when it is a word of the part name; under a flowchart or block diagram figure (see
+ * {@link FigureSection.diagram}) `step`, `block`, `operation` and `box` name a numeral too (#782).
+ *
+ * With an office, the two set Errors (missing in the drawings, missing in the text) cite its
+ * rule: 37 CFR 1.84(p)(5) for US, OJ EPO 2025 A49 Art. 1(2)(i) for EPO. For EPO the claims count
+ * as text too ("not mentioned in the description and claims ... and vice versa"): a numeral used
+ * only in a claim is used, and a reference sign in parentheses in a claim (`spring (30)`) that
+ * `figures.md` does not list is an Error on the claim.
  */
-export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], figures: string): DraftFinding[] {
+export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], figures: string, office?: DraftingOffice, claims: readonly DraftClaim[] = []): DraftFinding[] {
+	const citation = office ? ` (${numeralSetRule[office]})` : '';
 	const parts = parseFigureParts(figures);
 	const findings: DraftFinding[] = [];
 	const partsByNumeral = new Map<string, FigurePart[]>();
@@ -208,6 +238,7 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 		}
 	}
 
+	const diagramNumerals = new Set(parseFigureSections(figures).figures.filter(section => section.diagram).flatMap(section => section.parts.map(part => part.numeral)));
 	const used = new Set<string>();
 	const reported = new Set<string>();
 	for (const paragraph of paragraphs.filter(candidate => candidate.kind === 'text')) {
@@ -218,11 +249,11 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 			if (!known) {
 				if (!reported.has(numeral)) {
 					reported.add(numeral);
-					findings.push({ severity: 'Error', rule: 'reference-numeral', file: draftFile, line, message: `Line ${line} uses numeral ${numeral} ("${word} ${numeral}"), which figures.md does not list.` });
+					findings.push({ severity: 'Error', rule: 'reference-numeral', file: draftFile, line, message: `Line ${line} uses numeral ${numeral} ("${word} ${numeral}"), which figures.md does not list${citation}.` });
 				}
 				continue;
 			}
-			const named = known.some(part => part.part.split(/[\s-]+/).some(partWord => stemWord(partWord) === stemWord(word)));
+			const named = known.some(part => partNameHasWord(part.part, word)) || (diagramStepPattern.test(word) && diagramNumerals.has(numeral));
 			const key = `${numeral}:${word.toLowerCase()}`;
 			if (!named && !reported.has(key)) {
 				reported.add(key);
@@ -231,11 +262,26 @@ export function checkReferenceNumerals(paragraphs: readonly DraftParagraph[], fi
 		}
 	}
 
+	const claimsCount = office === 'EPO';
+	if (claimsCount) {
+		const claimReported = new Set<string>();
+		for (const claim of claims) {
+			for (const { word, numeral, parenthesised } of readReferenceSigns(claim.text)) {
+				if (partsByNumeral.has(numeral)) {
+					used.add(numeral);
+				} else if (parenthesised && !claimReported.has(numeral)) {
+					claimReported.add(numeral);
+					findings.push({ severity: 'Error', rule: 'reference-numeral', file: DRAFTING_FILE_NAMES.claims, line: claim.line, claim: claim.number, message: `Claim ${claim.number} uses reference sign ${numeral} ("${word} (${numeral})"), which figures.md does not list${citation}.` });
+				}
+			}
+		}
+	}
+
 	const unusedReported = new Set<string>();
 	for (const part of parts) {
 		if (!used.has(part.numeral) && !unusedReported.has(part.numeral + part.part)) {
 			unusedReported.add(part.numeral + part.part);
-			findings.push({ severity: 'Error', rule: 'reference-numeral', file: figuresFile, line: part.line, message: `Numeral ${part.numeral} ("${part.part}") in figures.md does not appear in the draft text.` });
+			findings.push({ severity: 'Error', rule: 'reference-numeral', file: figuresFile, line: part.line, message: `Numeral ${part.numeral} ("${part.part}") in figures.md does not appear in the draft text${claimsCount ? ' or the claims' : ''}${citation}.` });
 		}
 	}
 	return findings;
@@ -248,8 +294,13 @@ export interface FigureSection {
 	readonly line: number;
 	/** The figures the heading names: 1, or the size of a range or list (`FIGS. 7 to 10` = 4). */
 	readonly count: number;
+	/** True when the heading, or the text under it before the next heading, says flowchart, flow chart, flow diagram or block diagram. */
+	readonly diagram: boolean;
 	readonly parts: readonly FigurePart[];
 }
+
+/** A figure whose parts are steps or blocks: flowchart, flow chart, flow diagram or block diagram. */
+const diagramFigurePattern = /\b(?:flow\s*chart|flow\s+diagram|block\s+diagram)\b/i;
 
 /** The figure sections of `figures.md` and the parts shown in a figure. */
 interface FigureSections {
@@ -296,7 +347,8 @@ export function figureHeadingCount(label: string): number {
 /** Reads the figure headings of `figures.md` and the parts each one lists. */
 export function parseFigureSections(figures: string): FigureSections {
 	const { body, bodyStartLine } = parseDraftingFrontmatter(figures);
-	const headings = body.split('\n')
+	const lines = body.split('\n');
+	const headings = lines
 		.map((content, index) => ({ label: /^#{1,6}\s+(?<label>.+?)\s*#*\s*$/.exec(content)?.groups?.label, line: bodyStartLine + index }))
 		.filter((heading): heading is { label: string; line: number } => heading.label !== undefined);
 	const parts = parseFigureParts(figures);
@@ -309,7 +361,9 @@ export function parseFigureSections(figures: string): FigureSections {
 		}
 		const end = headings[index + 1]?.line ?? Infinity;
 		const under = parts.filter(part => part.line > heading.line && part.line < end);
-		sections.push({ label: heading.label, line: heading.line, count, parts: under });
+		const description = lines.slice(heading.line - bodyStartLine + 1, Math.min(end, bodyStartLine + lines.length) - bodyStartLine).filter((_, offset) => !under.some(part => part.line === heading.line + 1 + offset));
+		const diagram = diagramFigurePattern.test(heading.label) || description.some(content => diagramFigurePattern.test(content));
+		sections.push({ label: heading.label, line: heading.line, count, diagram, parts: under });
 		drawnParts.push(...under);
 	});
 	return { figures: sections, drawnParts: drawnParts.sort((a, b) => a.line - b.line) };

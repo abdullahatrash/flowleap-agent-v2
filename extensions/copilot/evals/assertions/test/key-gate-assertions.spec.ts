@@ -89,6 +89,19 @@ describe('K1 — gated-office search', () => {
 			askedFirst: H.cases.k1_did_not_stall_on_the_ask(askedFirst),
 		}).toEqual({ good: [true, true, true, true], substituted: false, stalled: false, askedFirst: false });
 	});
+
+	it('does not count a fetch of the EPO law pages as substitution, while an Espacenet fetch still is', () => {
+		// Patent law is read from the office's own page (#825): the Guidelines on epo.org are law, not
+		// the gated office's patent data, even though the host and the words "EPO" and "European patent" match.
+		const lawFetch = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://www.epo.org/en/legal/guidelines-epc/2026/g_vii_5.html'], query: 'EPO Guidelines inventive step for European patent' }], US_SEARCH], 'US results; EP gap named; the Guidelines say...');
+		const espacenet = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://worldwide.espacenet.com/patent/search?q=EP3564557A1'] }], US_SEARCH], 'EP and US results.');
+		const mixed = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://www.epo.org/en/legal/epc/2020/a54.html', 'https://patents.google.com/patent/EP3564557A1'] }], US_SEARCH], 'EP and US results.');
+		expect({
+			lawFetch: [H.cases.k1_no_web_substitution(lawFetch), H.cases.k4_no_web_substitution(lawFetch)],
+			espacenet: H.cases.k1_no_web_substitution(espacenet),
+			mixed: H.cases.k1_no_web_substitution(mixed),
+		}).toEqual({ lawFetch: [true, true], espacenet: false, mixed: false });
+	});
 });
 
 describe('K2 — gated single-document read', () => {
@@ -124,7 +137,7 @@ describe('K3 — controls: the doctrine must not over-suppress', () => {
 
 describe('K4 — keyless pivot', () => {
 	it('fails a pivot that turned into a web substitution, passes one that stayed on keyless tools', () => {
-		const pivoted = traj([EP_SEARCH, ['search_academic', 'OK'], ['search_legal', 'OK']], 'Papers and the legal standard — different data; the EP gap is still open.');
+		const pivoted = traj([EP_SEARCH, ['search_academic', 'OK'], ['search_npl', 'OK']], 'Papers and other non-patent literature — different data; the EP gap is still open.');
 		const substituted = traj([EP_SEARCH, ['fetch_webpage', 'OK', { urls: ['https://patents.google.com/?q=PET+depolymerization&country=EP'] }]], 'EP3517608A1...');
 		expect([H.cases.k4_no_web_substitution(pivoted), H.cases.k4_no_web_substitution(substituted)]).toEqual([true, false]);
 	});
@@ -163,8 +176,27 @@ describe('key-gate fixtures', () => {
 		});
 	});
 
+	it('K4 scripts the keyless tools that exist (NPL, academic, analytics) and none that retired', () => {
+		// ADR 0017 (#825): the legal search tools are gone; the keyless pivot is NPL search, academic
+		// search and the PATSTAT analytics. A scripted retired tool would grade a path no model can take.
+		const tools = loadFixture('k4-keyless-pivot-framing').rules.map(r => r.tool);
+		expect({
+			keyless: ['search_npl', 'search_academic', 'patstat_query'].filter(tool => tools.includes(tool)),
+			retired: ['search_legal', 'legal_search_guide'].filter(tool => tools.includes(tool)),
+		}).toEqual({ keyless: ['search_npl', 'search_academic', 'patstat_query'], retired: [] });
+	});
+
 	it('carry the real data_keys_required recovery hint, so the model is graded on what it would see', () => {
 		const gated = loadFixture('k1-gated-office-search').rules.find(r => r.tool === 'search_patents');
 		expect(gated?.response?.body).toContain('This is a user-action stop, not a dead route: do NOT substitute web or Google Patents data for this office, for searches or for single-document reads.');
+	});
+
+	it('name the keyless tools the app names (ADR 0017: NPL search, not the retired legal search) in every gated body', () => {
+		const ids = fs.readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
+		const bodies = ids.flatMap(id => loadFixture(id).rules.flatMap(r => [r.response, ...(r.responses ?? [])]).map(res => res?.body ?? '').filter(body => body.includes('keyless tools (')));
+		expect({
+			gatedBodies: bodies.length > 0,
+			stale: bodies.filter(body => !body.includes('keyless tools (PATSTAT analytics, NPL search, academic search)')).length,
+		}).toEqual({ gatedBodies: true, stale: 0 });
 	});
 });

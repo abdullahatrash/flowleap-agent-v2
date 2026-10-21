@@ -31,6 +31,39 @@ export function systemMessage(text: string, env: NodeJS.ProcessEnv): { readonly 
 	};
 }
 
+/** The `usage` block of a chat-completions response, in the two wire shapes the eval subjects return. */
+export interface ChatCompletionUsage {
+	readonly prompt_tokens?: number;
+	readonly completion_tokens?: number;
+	readonly total_tokens?: number;
+	/** OpenRouter: the prompt tokens served from the Anthropic prompt cache. */
+	readonly prompt_tokens_details?: { readonly cached_tokens?: number };
+	/** Anthropic-native: the same count under its own name. */
+	readonly cache_read_input_tokens?: number;
+}
+
+/** promptfoo's per-response token usage; `cached` is present only when the response reports a prompt-cache read. */
+export interface ChatCompletionTokenUsage {
+	readonly total: number;
+	readonly prompt: number;
+	readonly completion: number;
+	readonly cached?: number;
+}
+
+/**
+ * Maps a response `usage` block to promptfoo's token usage, so the output file shows how many
+ * prompt tokens the cache breakpoint saved (issue #831: the saving is measured, not assumed).
+ */
+export function readTokenUsage(usage: ChatCompletionUsage | undefined): ChatCompletionTokenUsage {
+	const cached = usage?.prompt_tokens_details?.cached_tokens ?? usage?.cache_read_input_tokens;
+	return {
+		total: usage?.total_tokens ?? 0,
+		prompt: usage?.prompt_tokens ?? 0,
+		completion: usage?.completion_tokens ?? 0,
+		...(cached === undefined ? {} : { cached }),
+	};
+}
+
 /** The fields of a response choice that say whether the upstream model failed. */
 export interface ChoiceStatus {
 	/** OpenRouter reports an upstream failure (e.g. a 429) INSIDE a 200 body, as this pair. */

@@ -1,5 +1,5 @@
 {
-	"updated": "2026-09-02",
+	"updated": "2026-10-20",
 	"config": "promptfooconfig.trajectory.yaml",
 	"policy": {
 		"runs": 3,
@@ -10,8 +10,8 @@
 		"minValidSamples": 2
 	},
 	"model": "anthropic/claude-sonnet-5",
-	"judge": "google/gemini-2.5-flash (max_tokens 4096)",
-	"notes": "Re-recorded on sonnet-5 with the #263 harness fix: the max_rounds wrap-up turn now carries an explicit user nudge and retries once on empty content. Before the fix, sonnet-5 returned EMPTY finalText on 7 of 9 cases at the cap, so every narration rubric graded noise — do not compare against anything recorded before 2026-08-21. DEFAULT_MAX_ROUNDS stays 8: raising it to 12 changed case semantics (t7_bounded_engagement's ≤16-call cap is calibrated to 8 rounds; T3a's eventual success drowned in the extra rounds). Sonnet-5 samples void occasionally (judge parse and provider errors) — the VOID rules apply, re-draw, never count as case failures. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:trajectory:repeat run. 2026-09-02: full gate re-run after the sourceAttributionRules block (#300): every case matched except T2 (see its note). Prompt caching added to the provider the same day; a full gate before caching cost ~$20 on this key.",
+	"judge": "anthropic/claude-haiku-5.5 (max_tokens 4096, no sampling parameters)",
+	"notes": "Re-recorded on sonnet-5 with the #263 harness fix: the max_rounds wrap-up turn now carries an explicit user nudge and retries once on empty content. Before the fix, sonnet-5 returned EMPTY finalText on 7 of 9 cases at the cap, so every narration rubric graded noise — do not compare against anything recorded before 2026-08-21. DEFAULT_MAX_ROUNDS stays 8: raising it to 12 changed case semantics (t7_bounded_engagement's ≤16-call cap is calibrated to 8 rounds; T3a's eventual success drowned in the extra rounds). Sonnet-5 samples void occasionally (judge parse and provider errors) — the VOID rules apply, re-draw, never count as case failures. Recorded against the pre-#262 prompt; after #262 merges, confirm transfer with one eval:trajectory:repeat run. 2026-09-02: full gate re-run after the sourceAttributionRules block (#300): every case matched except T2 (see its note). Prompt caching added to the provider the same day; a full gate before caching cost ~$20 on this key. 2026-10-20 (#834): judge moved from google/gemini-2.5-flash to anthropic/claude-haiku-5.5 and the full gate re-run on main (3 runs, 39 rows, 24 rubric components, 0 graderError, 0 provider voids). Eleven of 13 cases matched the record; T7 and T9 moved (see their notes). Rubric verdicts recorded before this date were graded by the old judge.",
 	"cases": {
 		"T1": {
 			"expected": "FAIL",
@@ -50,8 +50,8 @@
 		},
 		"T7": {
 			"expected": "FAIL",
-			"observed": "1/3 (2026-09-02)",
-			"note": "KNOWN GAP on sonnet-5, consistent (not flake): negative control on a genuinely empty space — the model batches 2-3 calls per round and reformulates through all 8 rounds, exceeding t7_bounded_engagement's ≤16-call ceiling; the prompt's EFFORT CEILING is not obeyed on empty spaces. Pre-fix passes were empty-finalText noise. Prompt-doctrine follow-up, tracked from #263; flip expected to PASS when fixed."
+			"observed": "2/3 in the 2026-10-20 gate and 2/3 in a T7-only re-draw the same day (4/6); 1/3 (2026-09-02)",
+			"note": "KNOWN GAP on sonnet-5, now intermittent: negative control on a genuinely empty space — the model batches 2-3 calls per round and reformulates through all 8 rounds, exceeding t7_bounded_engagement's ≤16-call ceiling; the prompt's EFFORT CEILING is not obeyed on empty spaces. Pre-fix passes were empty-finalText noise. 2026-10-20 (#834): the only failing assert is the structural call-count predicate, so the 4/6 is subject-model behaviour, not the judge; no prompt or assert changed, so expected stays FAIL (a pass is reported as an improvement). Prompt-doctrine follow-up, tracked from #263; flip expected to PASS when a fix lands and a T7-only probe reads 3/3."
 		},
 		"T8": {
 			"expected": "PASS",
@@ -60,13 +60,23 @@
 		},
 		"T9": {
 			"expected": "PASS",
-			"observed": "3/3 (2026-09-02, T9-only probe; judge 3/3) and 3/3 in the full gate",
-			"note": "Two-document comparison: name the source beside each fact, no source wording outside quotation marks, no leak of the prompt's worked example, and a judged attribution/organization check. First probe read 1/3 because the copy detector counted a run that began two lead-in words before an opening quotation mark; the detector now requires 8 consecutive words OUTSIDE any quoted span, and the same three saved outputs re-grade 3/3. Full-suite baseline (T1-T8 with the new block) still to be re-recorded."
+			"observed": "1/3 in the 2026-10-20 gate, then 3/3 in a T9-only re-draw the same day (4/6); 3/3 (2026-09-02, old judge)",
+			"note": "Two-document comparison: name the source beside each fact, no source wording outside quotation marks, no leak of the prompt's worked example, and a judged attribution/organization check. First probe read 1/3 because the copy detector counted a run that began two lead-in words before an opening quotation mark; the detector now requires 8 consecutive words OUTSIDE any quoted span, and the same three saved outputs re-grade 3/3. 2026-10-20 (#834): the two gate failures were the judge alone (t9_attribution_and_quoting_judged, score 0.3 each) on rubric criterion 3: the answer was two per-patent sections with the contrast confined to one line and the closing verdict, and haiku-5.5 read that as 'two summaries in sequence'; the structural asserts passed every draw. The re-draw answers carried an explicit contrast sentence and passed at 0.7-0.8. Reading: the new judge applies criterion 3 more strictly than gemini-2.5-flash did, and the subject varies in how much comparison prose it writes, so the verdict sits on the rubric's border. Expected stays PASS on the 3/3 re-draw; watch this case, and if it reads below 2/3 again the rubric's criterion 3 needs a sharper FAIL line (not changed here, out of scope for #834)."
 		},
 		"T12": {
 			"expected": "PASS",
 			"observed": "4/5 (2026-10-17, T12-only probe on #741: P P F P P; the one failure never saved a chart in turn 0)",
 			"note": "Round Report (PRD 0024 C4, ADR 0016 amendment), run with the invalidity-analysis skill replayed and the real completion guard; replaces T11 (retired by C4). Turn 0 must end with a Round Report naming every open point of the receipt with a recommendation and run no round; the scripted expert answer picks points 1 and 3; the turn-1 round must answer exactly those ids and aim its queries at their limitations only. The failing run read the fixture's identical search results as a broken search and wrote a prose report without a structured save, so no predicate could pass; no run ran a round before the answer or answered the wrong points."
+		},
+		"T13": {
+			"expected": "PASS",
+			"observed": "2/3 on feat/825-legal-from-official-page (2026-10-20), first record",
+			"note": "Drafting case recorded with the #825 gate run; was absent from the 2026-09-02 baseline."
+		},
+		"T14": {
+			"expected": "PASS",
+			"observed": "3/3 on feat/825-legal-from-official-page (2026-10-20), first record",
+			"note": "ADR 0017 step 1: the answer quotes only the Article 54 EPC text the scripted epo.org fetch returned and cites its URL."
 		}
 	}
 }

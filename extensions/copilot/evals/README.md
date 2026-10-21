@@ -4,8 +4,10 @@
 > retired — deprecated upstream). Baselines recorded before that date were measured on
 > gemini-2.5-pro and are historical: comparing a sonnet-5 run against them is not valid.
 > Re-record `output/trajectory-baseline.json` and the key-gate baseline on sonnet-5 before
-> relying on the repeat gates. The trajectory JUDGE stays gemini-2.5-flash (measured pin — see
-> promptfooconfig.trajectory.yaml).
+> relying on the repeat gates. The `llm-rubric` JUDGE in every suite is
+> `anthropic/claude-haiku-5.5` since 2026-10-20 (#834; measured pin — see "Judge model decision"
+> and promptfooconfig.trajectory.yaml). Rubric verdicts recorded on the previous judge,
+> `google/gemini-2.5-flash`, are historical.
 
 Automated behavioral evaluations for the Patent AI agent system prompt using [promptfoo](https://promptfoo.dev).
 
@@ -92,7 +94,7 @@ OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfi
 OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml \
   -t datasets/tool-selection.yaml
 
-# Skip cache (re-run all GRADER calls — the providers never cache; see Caching)
+# Skip cache (fresh model calls AND fresh grader calls; see Caching)
 OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfig.yaml --no-cache
 
 # Run against a specific model (single-model config reads EVAL_MODEL)
@@ -128,6 +130,18 @@ OpenRouter with the real prefix (41 149 tokens): first call **$0.103**, identica
 **$0.008** (`cached_tokens: 41149`). A full 3-run gate cost ~$20 before this; expect a few
 dollars now. `EVAL_PROMPT_CACHE=0` sends the plain string (to measure the uncached cost).
 OpenRouter ignores the breakpoint for non-Anthropic models, so it is safe under `EVAL_MODEL`.
+
+The single-turn provider (`patent-ai-provider.ts`, the main suite) sends the same breakpoint on
+its system prompt since #831, so the 55k-token prefix (system prompt + 44 tool definitions, resent
+for each of the 51 cases) is written once per run and read at the cache rate by the other cases.
+The output file records the saving as `tokenUsage.cached` (OpenRouter's
+`prompt_tokens_details.cached_tokens`). The same provider also keeps a **response cache** of its
+own under `evals/output/response-cache/` (gitignored, 14-day age cap): a request with the same
+model, messages, tools and sampling parameters replays the stored answer without a model call and
+is marked `cached: true` in the result. An assert-only rerun of the main suite therefore costs
+nothing. To bypass it, pass `--no-cache` through the launcher (the repeat gates always do), which
+also sets `PROMPTFOO_CACHE_ENABLED=false` for the provider; or set that env var yourself. To clear
+it, delete the folder.
 
 Spend discipline: probe the cases a change touches (`-- --filter-pattern T9`, ~$0.50 cached)
 and reserve the full repeat gate for release time. The gate's per-case flake is real
@@ -180,8 +194,8 @@ npm run eval:view -- -p 15600  # different port
 - **Default port 15500.** The UI lists runs by description, so a suite's `description:` field is how
   you find it (for example "Patent AI — Key-Gate Doctrine Adherence (#176)").
 - **Cache interplay.** `--no-cache` does not change what the dashboard shows; it only forces fresh
-  API calls during the run. Because our providers bypass the promptfoo cache entirely (see
-  [Caching](#caching)), `--no-cache` on our suites affects the **grader** calls only.
+  API calls during the run: the graders, and the single-turn provider's own response cache (see
+  [Caching](#caching)). The trajectory provider never caches.
 - **Export a run:** `npx tsx scripts/promptfoo.ts export eval latest -o run.json` (or an explicit eval
   id; `--include-media` embeds blobs). Import elsewhere with `promptfoo import <file>`.
 - **Share:** `promptfoo share` uploads the run to promptfoo's hosted viewer. **Do not use it** — our
@@ -307,6 +321,54 @@ Note for #185: the pro arm graded `t5_no_truncation_misread` differently from fl
 trajectories (flash 10/10 PASS, pro 3/3 FAIL on one run's output and the reverse on another) —
 evidence that T5's rubric, not the judge, is what needs the work. #185 rewrote that rubric; the
 judge is unchanged.
+
+### Judge model decision, 2026-10-20: `anthropic/claude-haiku-5.5` (#834)
+
+The `llm-rubric` judge in all seven suites is now **`anthropic/claude-haiku-5.5`**, the pin the
+drafting suite made on 2026-10-12. The configs keep the explicit `max_tokens: 4096` and send
+`omitDefaults: true` instead of `temperature: 0` (Haiku 5.5 rejects non-default sampling values
+with a 400). The subject model and every assert are unchanged.
+
+Two reasons, neither of them a measurement against the old judge: the founder's model policy
+excludes `google/gemini-2.5-flash` (an old model), and the OpenRouter eval account enforces
+Zero Data Retention, for which that model has no endpoint — from 2026-10-20 every rubric-graded
+case failed with `404 ZDR violation (account settings)`. The old judge therefore could not be
+re-run side by side; the measurement below is the new judge against the committed baselines,
+one suite at a time, on main after #830 and #832, subject `anthropic/claude-sonnet-5`.
+
+| Suite | Cases | Rows | Rubric components | Parse failures (`graderError`) | Flips against the baseline |
+|---|---|---|---|---|---|
+| main (`npm run eval`, cache on) | 51 | 51 | 1 | 0 | 0 judge flips. 3 code-assert failures (case 0 = #778, the drone-lidar claim, the Pfizer nanoparticle search), each re-drawn 3/3 PASS with `--no-cache`: subject draws |
+| trajectory (`eval:trajectory:repeat`, 3 runs) | 13 | 39 | 24 | 0 | **T9** PASS→FAIL (1/3): judge alone, criterion 3; re-drawn 3/3 PASS. **T7** FAIL→PASS (2/3): code assert, subject draw, 2/3 again on re-draw |
+| key-gate (`eval:key-gate:repeat`, 3 runs) | 6 | 18 | 18 | 0 | **K1** PASS→FAIL (1/3), **K3b** PASS→FAIL (0/3): code asserts, not the judge; re-draw 1/3 and 1/3; recorded as expected FAIL, follow-up #836 |
+| skill-grounded (`eval:skill-grounded:repeat`) | 7 | — | — | — | **Not run, pending.** The founder stopped the pass after the key-gate re-draw; `output/skill-grounded-baseline.json` still names the old judge and its rubric verdicts are historical until the suite is re-run on Haiku 5.5 |
+
+Voided samples: 0 grader, 0 provider across the three measured suites. Haiku 5.5 grades inside the 4096
+ceiling: the trajectory gate's third run spent 4 653 completion tokens over 13 rows of judging.
+
+What the flips say about the judge:
+
+- **T9 is the one judge-driven flip.** Its rubric's criterion 3 asks for an answer "organized
+  around the comparison" and fails "merely two summaries in sequence with no comparison". The two
+  failing answers were two per-patent sections with the contrast confined to one line plus the
+  closing verdict; Haiku read that as the FAIL clause (score 0.3), where gemini-2.5-flash had
+  passed the same shape 3/3 on 2026-09-02. The three re-draw answers carried an explicit contrast
+  sentence and passed at 0.7–0.8. The new judge is stricter on criterion 3, and the subject varies
+  in how much comparison prose it writes, so T9 sits on the rubric's border. The baseline keeps
+  T9 at PASS on the re-draw and flags it as a watch case; sharpening the rubric is out of scope
+  for #834.
+- **Every other flip is a code assert**, which no judge touches: T7's call-count ceiling (now
+  met in 4 of 6 draws, a model-behaviour change, kept at expected FAIL because nothing was fixed),
+  and K1/K3b's live-office and web-fallback predicates (#836: suspected #830, which rewrote the
+  missing-key hints and the key-gate fixtures and removed the legal branch; the
+  `uspto_api_guide` loop matches the T1 debt #734).
+- Where a rubric failed beside a code assert (K1, K3b), the judge's written reason described the
+  same behaviour the predicate caught. No sample was failed by the judge on a trajectory the
+  code asserts passed, except T9.
+
+The previous section stays as the record of the 2026-08 measurement and of the token-budget
+mechanism, which still applies: the explicit ceiling is what lets a thinking judge finish its
+JSON.
 
 ### Grading the answer, not the tool trace (#185)
 
@@ -498,6 +560,54 @@ structured-save nudge it wrote a prose report with no save. That is the fixture'
 search body, not the Round Report logic. No run ran a round before the answer, and no run
 answered points the expert did not choose.
 
+### T13 — web page text as evidence (#750, added 2026-10-19, not yet run live)
+
+The EP1809422 and Cuozzo acceptance runs were blocked by documents the tools hold no text for
+(GB2155808A, JP2004174393A, DE20208107U1; Wendt US2711153 and US4935850). #750 records a
+fetched patent page under the publication anchor as web text: the writer checks a quote against
+it exactly as against official text, labels the row ("Source: web page (<host>), not official
+full text"), counts it as covered, and lists one open point `source-<pub>` per document. T13
+(fixture `t13-web-text-evidence.json`) is the one case: the challenged patent EP3765432B1 (claims
+1–3), WO2014056789A1 with official text for claim 1, and GB2208140A with its bibliography only,
+whose Google Patents page discloses claim 2. The mocked `write_patent_results` computes the receipt
+from the save and from the fixture's `webPages` (the same page text the `fetch_webpage` rule
+returns), with the writer's own `webSourceOpenPoints`. Predicates:
+`t13_fetched_page_for_textless_document` (the fetch runs after the text-less retrieval),
+`t13_row_rests_on_validated_web_text` (every fragment and quote on the GB anchors is in the fetched
+page text), `t13_receipt_lists_source_point`, `t13_round_report_names_source_point` (a numbered
+question that names the id and recommends the official or certified text). The row label itself
+is the real writer's rendering, covered by `patentWebTextEvidence.spec.ts`. No live run yet;
+record the k-of-n here when it runs (`--filter-pattern '^T13'`).
+
+### T14 — patent law read from the official page (#825, added 2026-10-20, not yet run live)
+
+ADR 0017 retires `search_legal` and `legal_search_guide`: the agent reads patent law from the
+office's own page with `fetch_webpage`, quotes only the text the page returned, and cites the URL.
+The single-turn suite can grade the fetch call only, because its provider output has no tool
+results. T14 (fixture `t14-legal-official-page.json`) runs the loop: a fetch of an epo.org URL
+returns the text of Article 54 EPC as the page showed it on 2026-10-20
+(`https://www.epo.org/en/legal/epc/2020/a54.html`); a fetch of any other page returns a paraphrase
+in other words; every other tool gets the benign default. Predicates: `t14_fetched_official_page`
+(a `fetch_webpage` call asked for a page on an official law host: uspto.gov, epo.org, wipo.int,
+ecfr.gov, uscode.house.gov, govinfo.gov or law.cornell.edu, the `OFFICIAL_LAW_HOSTS` list that every
+suite imports), `t14_quote_rests_on_fetched_page`
+(the answer quotes at least one passage of six words or more, and every quoted passage, split at an
+ellipsis or a bracketed insertion, is in the text an official page returned), `t14_cites_fetched_url`
+(the answer carries the URL of an official page the agent fetched). No live run yet; record the
+k-of-n here when it runs (`--filter-pattern '^T14'`) and add the case to
+`output/trajectory-baseline.json`.
+
+The suites prove the model chooses the official page and quotes what a scripted fetch returned.
+Whether the office's real page returns quotable text to a non-browser fetch is a separate proof
+(ADR 0017 decision 5): `bash evals/scripts/real-fetch-check.sh` fetches every URL pattern and
+worked example of `assets/skills/legal-research/references/official-sources.md` with plain curl
+(default user agent, no browser headers), strips the markup, and looks for a known phrase of each
+section. It prints status, final URL, bytes and a HIT/MISS per phrase, and exits 1 when a required
+phrase is missing or a block page ("Page Not Found", "Request Access", "CAPTCHA") came back. The two
+human pages that block a non-browser fetch today (uscode.house.gov, the ecfr.gov HTML page) are
+recorded as information only, because the skill names a working route for each (the govinfo link
+service, the eCFR renderer API). The log stays out of the repo; the PR links the run.
+
 ### Baseline: key-gate suite (2026-08-07, same model)
 
 **6/6 on all three runs, 18/18 case-runs, zero voids** (181s + 264s + 272s ≈ 12 minutes). This
@@ -547,18 +657,22 @@ prompt debt. Note also what one discarded probe showed: stripping `patstat_query
 model duly called a tool that was not in its surface. The two artifacts only mean anything
 when they move together, which is why the renderer now imports the tool list.
 
-## Eval Tool Surface (31 patent tools)
+## Eval Tool Surface (41 patent tools)
 
 `prompts/tool-definitions.json` (generated by `prompts/extract-tools.ts`) mirrors the
-tools enabled in production. `PATENT_TOOL_NAMES` in `extract-tools.ts` lists the 31
+tools enabled in production. `PATENT_TOOL_NAMES` in `extract-tools.ts` lists the 41
 patent tools as `ToolName` enum members (sourced from
 `src/extension/tools/common/toolNames.ts`), and their descriptions and schemas are read
 from `package.json`'s `contributes.languageModelTools` — so a `modelDescription` edit
-reaches the evals through a regeneration, never by hand. On top of those, the extracted
+reaches the evals through a regeneration, never by hand. Entry rule: a tool
+joins the list when the editor Patent Agent offers it in production (the core patent tool set in
+`patentChatToolReferenceNames.ts` or the `Core` category in `toolNames.ts`), even when no prompt
+branch names it. The drafting tools (#558), the drawings tools and `remove_claim` / `inventor_questions`
+(#770) entered this way. On top of those, the extracted
 definitions include the two core VS Code tools the prompt references by name
 (`create_file`, `fetch_webpage`) and 3 synthetic tools with no `package.json`
 contribution (`vscode_askQuestions`, `run_in_terminal`, and Anthropic's native
-`web_search`) — 36 definitions in all.
+`web_search`) — 46 definitions in all.
 
 **Two guards, because the surface has failed in both directions.**
 `extract-tools.ts` exits 1 if an expected patent/core name is missing from
@@ -626,9 +740,11 @@ keys.
 Promptfoo caches API responses by default (14-day TTL at `~/.promptfoo/cache`). This means re-running evals without changes is instant. Use `--no-cache` to force fresh API calls. To clear: `promptfoo cache clear`.
 
 **Our providers are not in that path.** `patent-ai-provider.ts` and `trajectory-provider.ts` call the
-endpoint with `fetch` and never use promptfoo's cache API, so the agent's own calls are always live
-and `--no-cache` only re-runs the **graders**. See
-[Techniques survey](#techniques-survey--what-we-use-and-what-we-do-not).
+endpoint with `fetch` and never use promptfoo's cache API. The trajectory provider's calls are
+always live, so `--no-cache` on its suites only re-runs the **graders**. The single-turn provider
+keeps its own response cache (see [Cost](#cost-prompt-caching-is-on-by-default)); the launcher
+turns `--no-cache` into `PROMPTFOO_CACHE_ENABLED=false`, which both promptfoo and that provider
+read. See [Techniques survey](#techniques-survey--what-we-use-and-what-we-do-not).
 
 | Env Variable | Purpose | Default |
 |---|---|---|
@@ -656,7 +772,7 @@ Verifies the agent picks the correct first tool:
 | D | Detailed patent data | `ops_api_guide` |
 | E | US patent search | `uspto_api_guide` or `build_uspto_query` |
 | F | Office action citations | `search_citations` (typed-first; guide is advanced path) |
-| G | Patent law research | `search_legal` (typed-first; guide is advanced path) |
+| G | Patent law research | `fetch_webpage` with a URL on an official law host (uspto.gov, epo.org, wipo.int, ecfr.gov, uscode.house.gov, govinfo.gov, law.cornell.edu — the one list is `OFFICIAL_LAW_HOSTS` in `assertions/trajectory-assertions.mjs`) — #825 |
 | H | Coding task | NOT any patent search tool |
 | I | CN/JP/KR patents | `web_search` or mentions patents.google.com |
 
@@ -675,7 +791,7 @@ Verifies the jurisdiction gate behavior:
 ### `datasets/anti-hallucination.yaml` — 4 tests
 - No patent numbers without a search tool call
 - Must search before citing specific patents
-- No fabricated MPEP/legal quotes without `legal_search_guide`
+- No fabricated MPEP/legal quotes without a `fetch_webpage` of an official law page
 - Famous-patent query → search/ask, or no patent-number pattern in text
 
 ### `datasets/active-behavior.yaml` — 2 tests
@@ -684,7 +800,7 @@ Verifies the jurisdiction gate behavior:
 
 ### `datasets/source-attribution.yaml` — 2 tests
 - Calls search tools when asked to summarize patents
-- Calls `legal_search_guide` or `search_legal` when asked about EPC
+- Fetches an official law page (`fetch_webpage` on epo.org or another official host) when asked about the EPC; the quote-is-in-the-fetched-page check is T14 of the trajectory gate (single-turn output has no tool results)
 
 ### `datasets/search-strategy.yaml` — 5 tests
 - USPTO: uses correct tool for US patent searches
@@ -721,7 +837,8 @@ OPENROUTER_API_KEY=sk-or-... npx tsx scripts/promptfoo.ts eval -c promptfooconfi
 5. Excess-claims surcharge arithmetic — **KNOWN GAP (#244)**: demoted from the main
    suite (was `datasets/filing-fees.yaml`, its sole case) on 2026-08-18. Every measured
    model, including the `anthropic/claude-sonnet-5` reference, answers the single turn
-   with grounding `search_legal` calls and empty text, so the asserts never see the
+   with grounding tool calls (`fetch_webpage` of the fee pages since #825; `search_legal`
+   before that) and empty text, so the asserts never see the
    7/2 counts. Promote back when the harness can grade a post-grounding turn or a
    prompt change makes the counts land in the first turn again.
 
@@ -1011,7 +1128,7 @@ evals/
 ├── prompts/
 │   ├── system-prompt.txt         # Static render of patentAIPrompt.tsx
 │   ├── key-state/                # Per-key-state prompt variants (same render script)
-│   ├── tool-definitions.json     # 20 tools in OpenAI function format (generated)
+│   ├── tool-definitions.json     # 46 tools in OpenAI function format (generated)
 │   └── extract-tools.ts          # Script to regenerate tool-definitions.json (fails on missing names)
 ├── datasets/
 │   ├── tool-selection.yaml       # 29 tests — decision paths A-I + lookups + gate exemptions
@@ -1121,12 +1238,14 @@ encode specific doctrine from specific issues (#173 key-gate, jurisdiction gatin
 to be traceable to the rule it defends. Synthesised cases would need that review anyway, so they
 save nothing. It stays an option for widening coverage once a rule is stable.
 
-**Caching** — *effectively off for the model under test*. Both providers call the endpoint directly
-with `fetch` and never touch promptfoo's cache API, so **nothing about the agent's behaviour is ever
-cached**; only grader (`llm-rubric`) calls go through the 14-day disk cache at `~/.promptfoo/cache`.
-`--no-cache` on our suites therefore re-runs the judges, not the agent. Clear it with `promptfoo
-cache clear`. Two consequences worth remembering: an assertion-only edit can be re-graded cheaply,
-and a provider response poisoned by an upstream error would be cached if we ever routed the agent
+**Caching** — *promptfoo's own cache is off for the model under test*. Both providers call the
+endpoint directly with `fetch` and never touch promptfoo's cache API; only grader (`llm-rubric`)
+calls go through the 14-day disk cache at `~/.promptfoo/cache`. Since #831 the single-turn provider
+keeps a response cache of its own (`evals/output/response-cache/`, same `--no-cache` bypass, error
+responses never stored); the trajectory provider still never caches. Clear promptfoo's with
+`promptfoo cache clear`, ours by deleting the folder. Two consequences worth remembering: an
+assertion-only edit re-grades cheaply and, on the main suite, re-runs no model call at all; and a
+provider response poisoned by an upstream error would be cached if we ever routed the agent
 through promptfoo's own provider — an independent reason to keep the loop in our provider.
 
 **Sharing** — *not used*. See [Local dashboard](#local-dashboard-promptfoo-view).

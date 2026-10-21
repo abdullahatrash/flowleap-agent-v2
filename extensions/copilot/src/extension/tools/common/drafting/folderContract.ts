@@ -11,7 +11,7 @@
  *   README.md                            how to use the folder; written by the tools when missing, never an exemplar
  * drafting/<matter>/
  *   feature-list.md                      Feature List; frontmatter: office, confirmed
- *   figures.md                           figure list with parts and reference numerals
+ *   figures.md                           figure list with parts and reference numerals; frontmatter: numerals, pageSize, drawingSheets
  *   claims.md                            Approved Claims; frontmatter: approved
  *   draft-outline.md                     Draft Outline: the plan, one row per Outline Item; frontmatter: office, claims (SHA-256)
  *   draft-application.md                 Draft Application; frontmatter: office, model, provider, version
@@ -26,6 +26,7 @@
  *   draft-application.abstract.docx
  *   draft-application.full.docx          export: full review copy, the whole application in one file, not for filing
  *   filing-manifest.md                   export: claims, drawing sheets, abstract figure, estimated pages
+ *   drawings/                            the Drawing Set (PRD 0023); sheet-1.svg, sheet-2.svg, ... one file per Drawing Sheet
  * ```
  *
  * All paths are workspace-relative and use `/`.
@@ -63,6 +64,14 @@ export const DRAFTING_FILE_NAMES = {
 	filingManifest: 'filing-manifest.md',
 } as const;
 
+/** The folder of the Drawing Set in a matter folder. */
+export const DRAWINGS_FOLDER = 'drawings';
+
+/** True for the file name of one Drawing Sheet in `drawings/`: `sheet-1.svg`, `sheet-2.svg`, ... */
+export function isDrawingSheetFile(name: string): boolean {
+	return /^sheet-[1-9]\d*\.svg$/.test(name);
+}
+
 /**
  * How the Draft Outline is saved, for tool results, refusals and checklist actions:
  * "Save the outline ${DRAFT_OUTLINE_SAVE}, to drafting/<matter>/draft-outline.md".
@@ -92,6 +101,8 @@ export interface DraftingFolder {
 	readonly fullReviewCopy: string;
 	/** The filing manifest written beside the export. */
 	readonly filingManifest: string;
+	/** The folder of the Drawing Set: one `sheet-N.svg` per Drawing Sheet (PRD 0023). */
+	readonly drawings: string;
 }
 
 /**
@@ -125,6 +136,7 @@ export function resolveDraftingFolder(matter: string): DraftingFolder | undefine
 		},
 		fullReviewCopy: `${folder}/${DRAFTING_FILE_NAMES.fullReviewCopy}`,
 		filingManifest: `${folder}/${DRAFTING_FILE_NAMES.filingManifest}`,
+		drawings: `${folder}/${DRAWINGS_FOLDER}`,
 	};
 }
 

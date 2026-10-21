@@ -13,7 +13,7 @@
 import { parseClaims } from './claims';
 import { DraftFinding } from './finding';
 import { documentParagraphs, exportedParagraphs, FilingParagraph, OFFICE_PAGE_SETUP, OfficePageSetup } from './filingDocuments';
-import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DraftDocumentType, DraftingFolder } from './folderContract';
+import { DRAFT_DOCUMENT_TYPES, DRAFTING_FILE_NAMES, DraftDocumentType, DraftingFolder, isDrawingSheetFile } from './folderContract';
 import { DraftingFrontmatterValue, DraftingOffice, parseDraftingFrontmatter } from './frontmatter';
 import { FigureSection, isAbstractParagraph, parseFigureSections } from './specValidators';
 
@@ -70,7 +70,15 @@ export interface FilingManifestInput {
 	readonly claims: string;
 	/** `figures.md`; absent when the application has no figures. */
 	readonly figures?: string;
+	/** The file names in `drawings/` (`sheet-1.svg`, ...); absent when the folder does not exist. */
+	readonly drawingFiles?: readonly string[];
 }
+
+/**
+ * Where the drawing sheet count comes from: the `sheet-N.svg` files in `drawings/` (measured),
+ * `drawingSheets` in `figures.md` (declared), or one sheet per figure (estimated).
+ */
+type DrawingSheetsBasis = 'measured' | 'declared' | 'estimated';
 
 /** The values of a filing manifest. */
 export interface FilingManifest {
@@ -83,9 +91,12 @@ export interface FilingManifest {
 	readonly figures: readonly string[];
 	/** The number of figures: a range heading counts each figure it names. */
 	readonly figureCount: number;
-	/** `drawingSheets` of `figures.md` when set, else an estimate of one sheet per figure. */
+	/**
+	 * The `sheet-N.svg` files in `drawings/` when there are any, else `drawingSheets` of
+	 * `figures.md` when set, else an estimate of one sheet per figure.
+	 */
 	readonly drawingSheets: number;
-	readonly drawingSheetsDeclared: boolean;
+	readonly drawingSheetsBasis: DrawingSheetsBasis;
 	/** The figure entry whose reference numerals the abstract names most, else the first figure. */
 	readonly abstractFigure?: string;
 	/** Why the abstract figure was proposed: the abstract names its numerals, or it names none and the first figure is taken. */
@@ -125,9 +136,11 @@ export function filingManifest(input: FilingManifestInput): FilingManifest {
 	const claims = parseClaims(input.claims);
 	const figures = parseFigureSections(input.figures ?? '').figures;
 	const figureCount = figures.reduce((sum, figure) => sum + figure.count, 0);
+	const measuredSheets = (input.drawingFiles ?? []).filter(isDrawingSheetFile).length;
 	const declaredSheets = parseDraftingFrontmatter(input.figures ?? '').fields.drawingSheets;
-	const drawingSheetsDeclared = typeof declaredSheets === 'number' && Number.isInteger(declaredSheets) && declaredSheets >= 0;
-	const drawingSheets = drawingSheetsDeclared ? declaredSheets : figureCount;
+	const declared = typeof declaredSheets === 'number' && Number.isInteger(declaredSheets) && declaredSheets >= 0 ? declaredSheets : undefined;
+	const drawingSheetsBasis: DrawingSheetsBasis = measuredSheets ? 'measured' : declared !== undefined ? 'declared' : 'estimated';
+	const drawingSheets = measuredSheets || (declared ?? figureCount);
 
 	const paragraphs = exportedParagraphs(input.draft);
 	const documents = documentParagraphs(paragraphs);
@@ -147,7 +160,7 @@ export function filingManifest(input: FilingManifestInput): FilingManifest {
 		figures: figures.map(figure => figure.label),
 		figureCount,
 		drawingSheets,
-		drawingSheetsDeclared,
+		drawingSheetsBasis,
 		...proposeAbstractFigure(figures, abstractText),
 		pages: { description, claims: claimPages, abstract, drawings: drawingSheets, total: description + claimPages + abstract + drawingSheets },
 		pagesForPageFee: description + claimPages + Math.min(abstract, EPO_ABSTRACT_FEE_PAGES) + drawingSheets,
@@ -180,9 +193,12 @@ export function renderFilingManifest(manifest: FilingManifest, folder: DraftingF
 	const setup = OFFICE_PAGE_SETUP[manifest.office];
 	const basis = pageEstimateBasis(setup);
 	const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
-	const sheets = manifest.drawingSheetsDeclared
-		? `${manifest.drawingSheets} (\`drawingSheets\` in ${DRAFTING_FILE_NAMES.figures})`
-		: `${manifest.drawingSheets} (estimated: one sheet per figure in ${DRAFTING_FILE_NAMES.figures}; set \`drawingSheets\` in its frontmatter to the real count)`;
+	const drawingsFolder = `${fileName(folder.drawings)}/`;
+	const sheets = {
+		measured: `${manifest.drawingSheets} (measured: the sheet-N.svg files in ${drawingsFolder})`,
+		declared: `${manifest.drawingSheets} (\`drawingSheets\` in ${DRAFTING_FILE_NAMES.figures})`,
+		estimated: `${manifest.drawingSheets} (estimated: one sheet per figure in ${DRAFTING_FILE_NAMES.figures}; set \`drawingSheets\` in its frontmatter to the real count)`,
+	}[manifest.drawingSheetsBasis];
 	const abstractFigure = !manifest.abstractFigure
 		? 'None (no figures)'
 		: manifest.abstractFigureBasis === 'first'
@@ -210,7 +226,7 @@ export function renderFilingManifest(manifest: FilingManifest, folder: DraftingF
 		'| Document | File | Pages |',
 		'| --- | --- | --- |',
 		...DRAFT_DOCUMENT_TYPES.map(type => `| ${documentLabels[type]} | ${fileName(folder.docx[type])} | ${manifest.pages[type]} |`),
-		`| Drawings | Not generated: prepared outside FlowLeap | ${manifest.pages.drawings} |`,
+		`| Drawings | ${manifest.drawingSheetsBasis === 'measured' ? `${drawingsFolder} (Drawing Sheets)` : 'Not generated: prepared outside FlowLeap'} | ${manifest.pages.drawings} |`,
 		`| Total | | ${manifest.pages.total} |`,
 		...(manifest.office === 'EPO' ? [
 			'',

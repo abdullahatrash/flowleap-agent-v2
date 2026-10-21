@@ -69,8 +69,6 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		hasOpsApiGuide: toolNames.has(ToolName.OpsApiGuide),
 		hasUSPTOApiGuide: toolNames.has(ToolName.USPTOApiGuide),
 		hasCitationApiGuide: toolNames.has(ToolName.CitationApiGuide),
-		hasSearchLegal: toolNames.has(ToolName.SearchLegal),
-		hasLegalSearchGuide: toolNames.has(ToolName.LegalSearchGuide),
 		hasSearchAcademic: toolNames.has(ToolName.SearchAcademic),
 		hasSearchNpl: toolNames.has(ToolName.SearchNpl),
 		hasGetNplWork: toolNames.has(ToolName.GetNplWork),
@@ -99,8 +97,6 @@ function detectPatentTools(availableTools: readonly LanguageModelToolInformation
 		base.hasOpsApiGuide,
 		base.hasUSPTOApiGuide,
 		base.hasCitationApiGuide,
-		base.hasSearchLegal,
-		base.hasLegalSearchGuide,
 		base.hasSearchAcademic,
 		base.hasSearchNpl,
 		base.hasGetNplWork,
@@ -389,10 +385,10 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				{(tools.hasGetContinuity || tools.hasGetProsecutionTimeline) && <>→ NOT this branch: the applicant's own parent/child chain or a prosecution/legal-event chronology is branch M (`get_continuity` / `get_prosecution_timeline`), not citations.<br /></>}
 				→ Keywords: office action, examiner citations, 102 rejection, 103 rejection, prior art cited<br />
 				<br />
-				**J) PATENT LAW RESEARCH (MPEP, EPC, Guidelines)?**<br />
-				→ PRIMARY: `search_legal` (query free text; jurisdiction="USPTO" for MPEP, "EPO" for EPC/Guidelines; comprehensive=true for full quotable sections)<br />
-				→ Use `legal_search_guide` ONLY for advanced cases: source filters, semantic/keyword-only modes, threshold tuning, and the jurisdiction list<br />
-				→ Keywords: MPEP, obviousness law, 101 eligibility, EPC Article, inventive step<br />
+				**J) PATENT LAW (MPEP, 35 USC, 37 CFR, EPC, EPO Guidelines, PCT Rules)?**<br />
+				→ Read the law from the office's own page with fetch_webpage: the MPEP section on uspto.gov, 35 USC and 37 CFR on their official hosts, the EPC and the EPO Guidelines on epo.org, the PCT Rules on wipo.int. The `legal-research` skill is the method: it names the source for each kind of question and the URL pattern of each office<br />
+				→ Quote only the text the page returned. Give the URL and the edition or revision that the page shows. If the page did not answer the question, say so; do not fill the gap from memory<br />
+				→ Keywords: MPEP, obviousness law, 101 eligibility, EPC Article, inventive step, PCT Rule<br />
 				<br />
 				**K) CODING/IMPLEMENTATION task?**<br />
 				→ Use standard coding tools: create_file, run_in_terminal, edit tools<br />
@@ -511,34 +507,6 @@ class PatentToolSelectionPrompt extends PromptElement<PatentAIPromptProps> {
 				• "Who cites this patent?" → `search_forward_citations`<br />
 				• "How many X/Y/A references in total?" → this guide, then `get_citation_stats`<br />
 			</Tag>}
-			{tools.hasLegalSearchGuide && <Tag name='legalSearchGuideUsage'>
-				<br />
-				DEFER TO search_legal for standard lookups — this guide is the advanced path.<br />
-				<br />
-				LEGAL SEARCH API GUIDE TOOL (`legal_search_guide`):<br />
-				<br />
-				This tool teaches you how to search patent law documents using hybrid semantic + keyword search:<br />
-				• **MPEP** (USPTO): Manual of Patent Examining Procedure - US patent law/procedure<br />
-				• **EPC** (EPO): European Patent Convention - EP articles and rules<br />
-				• **EPO Guidelines**: Detailed examination guidelines<br />
-				<br />
-				**Actions:**<br />
-				• action="list" → Get the list of legal reference tools<br />
-				• action="endpoint", endpoint="reference_search" → Get its parameters, examples and input schema<br />
-				• action="endpoint", endpoint="get_legal_jurisdictions" → How to discover the valid jurisdiction and source filters<br />
-				<br />
-				**Key parameters:**<br />
-				• jurisdiction: "USPTO", "EPO", "EU", "WIPO" — or omit the parameter to search all jurisdictions<br />
-				• comprehensive: true → Get full section content for quoting<br />
-				• search_mode: "hybrid" (default), "semantic", "keyword"<br />
-				<br />
-				DO NOT use for patent search — this is for law/procedure only.<br />
-				<br />
-				**When to use:**<br />
-				• "What does MPEP say about obviousness?" → legal search with jurisdiction=USPTO<br />
-				• "EPC requirements for sufficiency" → legal search with jurisdiction=EPO<br />
-				• "How does EPO handle software patents?" → EPO Guidelines search<br />
-			</Tag>}
 		</Tag>;
 	}
 }
@@ -565,7 +533,7 @@ class PatentCriticalRules extends PromptElement<PatentAIPromptProps> {
 			- US patents: search_patents with provider="uspto" / get_us_grant (uspto_api_guide for the full tool list)<br />
 			- Office action citations: search_citations / search_forward_citations (citation_api_guide for advanced)<br />
 			{tools.hasPatstatGraph && <>- Worldwide citation network, family and co-applicant edges around ONE named patent or applicant: `patstat_graph` (PATSTAT snapshot; examiner-vs-applicant origin, no X/Y/A categories)<br /></>}
-			- Patent law (MPEP/EPC): search_legal (legal_search_guide for advanced)<br />
+			- Patent law (MPEP, EPC, Guidelines, PCT): fetch_webpage on the office's own page (branch J)<br />
 			{this.props.webSearchAvailable
 				? <>- CN/JP/KR patents: web search / fetch_webpage (no dedicated backend tool)<br /></>
 				: <>- CN/JP/KR patents: no dedicated search tool; use fetch_webpage against Google Patents (branch L) to fetch-and-verify before reporting any coverage gap<br /></>}
@@ -628,7 +596,7 @@ class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
 		}
 
 		const hasPatstat = tools.hasPatstatPortfolio || tools.hasPatstatQuery || tools.hasPatstatGraph || tools.hasPatstatApiGuide;
-		const hasKeylessTool = hasPatstat || tools.hasSearchLegal || tools.hasSearchNpl || tools.hasSearchAcademic;
+		const hasKeylessTool = hasPatstat || tools.hasSearchNpl || tools.hasSearchAcademic;
 
 		return <Tag name='keyGateDoctrine'>
 			KEY-GATE DOCTRINE — what you do when an office answers data_keys_required:<br />
@@ -643,7 +611,6 @@ class PatentKeyGateDoctrine extends PromptElement<PatentAIPromptProps> {
 				<br />
 				**KEYLESS PIVOT — offer it as DIFFERENT data, never as a substitute.** While an office is gated, these need no Patent-Data Key and stay live; you may offer them to keep the work moving, each labeled for what it actually is:<br />
 				{hasPatstat && <>{'  '}• PATSTAT analytics — aggregate counts from a twice-yearly SNAPSHOT (portfolios, filing trends, landscapes). Aggregates, not documents, and not current: it does not answer "what prior art exists for this claim".<br /></>}
-				{tools.hasSearchLegal && <>{'  '}• `search_legal` — patent LAW (MPEP/EPC/guidelines). It tells you the legal standard, never what has been published or filed.<br /></>}
 				{tools.hasSearchNpl && <>{'  '}• `search_npl` — scholarly LITERATURE (OpenAlex). Papers are prior art in their own right, but they are not patent documents and cover a different corpus.<br /></>}
 				{tools.hasSearchAcademic && <>{'  '}• `search_academic` — scholarly LITERATURE. Papers are prior art in their own right, but they are not patent documents and cover a different corpus.<br /></>}
 				{'  '}• Say plainly that this is different data, not a stand-in for the gated office's live search. Never present a keyless result as if it closed the missing-key gap.<br />

@@ -4,10 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 import { describe, expect, it, vi } from 'vitest';
 import { URI } from '../../../../util/vs/base/common/uri';
-import { Range, WorkspaceEdit } from '../../../../vscodeTypes';
 import { DraftFinding } from '../../common/drafting/finding';
 import { renderFindingsFile } from '../../common/drafting/findingsFile';
-import { DraftingGateDocument, draftingGateEdit, DraftingGateLensProvider, draftingWaiverEdit, DraftingWaiverLensProvider } from '../draftingGateLens';
+import { DraftingGateDocument, draftingGateEdit, DraftingGateLensProvider, draftingPreviewFile, draftingWaiverEdit, DraftingWaiverLensProvider, findingsWaiveChoices } from '../draftingGateLens';
+import { applied } from './draftingGateTestUtils';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
 
@@ -16,23 +16,6 @@ const help = '# Review, then change false to true below, or click the action at 
 /** An in-memory text document of a drafting file. */
 function documentOf(path: string, text: string): DraftingGateDocument {
 	return { uri: URI.file(`/workspace/drafting/hinge/${path}`), getText: () => text };
-}
-
-/** The text of the document after the edit, the way the editor applies it. */
-function applied(text: string, edit: WorkspaceEdit | undefined): string | undefined {
-	if (!edit) {
-		return undefined;
-	}
-	const offset = (lines: string[], line: number, character: number) => lines.slice(0, line).reduce((sum, content) => sum + content.length + 1, 0) + character;
-	let result = text;
-	for (const [, edits] of edit.entries()) {
-		for (const { range, newText } of [...edits].reverse()) {
-			const lines = result.split('\n');
-			const { start, end }: Range = range;
-			result = result.slice(0, offset(lines, start.line, start.character)) + newText + result.slice(offset(lines, end.line, end.character));
-		}
-	}
-	return result;
 }
 
 describe('Drafting gate CodeLens', () => {
@@ -86,6 +69,16 @@ describe('Drafting waiver CodeLens', () => {
 			waivedItem: await draftingWaiverEdit(document, [findingsText.split('\n').findIndex(line => line.includes('`source-marker`')) + 1], answer('Again.')),
 			prompts,
 			gateLensesOnFindings: new DraftingGateLensProvider().provideCodeLenses(document),
+		}).toMatchSnapshot();
+	});
+});
+
+describe('Drafting editor-title buttons', () => {
+	it('offers all open Errors, then one choice per rule, in the markdown preview as in the text editor', () => {
+		expect({
+			choices: findingsWaiveChoices(findingsText).map(choice => ({ label: choice.label, description: choice.description?.slice(0, 40), fileLines: choice.fileLines })),
+			noOpenError: findingsWaiveChoices(renderFindingsFile([{ severity: 'Note', rule: 'claim-count', file: 'claims.md', message: '11 claims in total.' }])),
+			previewFiles: ['Preview findings.md', '[Preview] claims.md', 'Preview feature-list.md', 'Preview draft-application.md', 'findings.md', 'Preview myfindings.md', 'Vorschau findings.md'].map(draftingPreviewFile),
 		}).toMatchSnapshot();
 	});
 });

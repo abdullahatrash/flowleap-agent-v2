@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { PatentEvidenceSource, PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { evidenceSourceIndex, PatentEvidenceSource, PatentExecutionSnapshot, webPageHost } from '../../patentai/vscode-node/patentExecutionLedger';
 import { patentCitationLink } from '../../patentai/vscode-node/patentCitationLink';
 
 export interface PatentEvidenceLookup {
@@ -24,7 +24,9 @@ function indexSummary(source: PatentEvidenceSource): string {
 	if (source.figure) {
 		return `drawing page ${source.figure.page} — no text; cite it with basis: figure and a reading of what the drawing clearly shows`;
 	}
-	return source.text === undefined ? 'text unavailable in this older record' : `${source.text.split(/\r?\n/).length} lines`;
+	if (source.text === undefined) { return 'text unavailable in this older record'; }
+	const lines = `${source.text.split(/\r?\n/).length} lines`;
+	return source.textSource === 'web' ? `${lines} — web page text (${webPageHost(source.url)}), not official full text; a row that cites it is labelled so` : lines;
 }
 
 const pageRows = 30;
@@ -50,8 +52,9 @@ function recordedPublications(snapshot: PatentExecutionSnapshot): string[] {
 
 /** Recover identities and exact returned text locally. This is not a new search or a declaration of review. */
 export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publication: string, lookup: PatentEvidenceLookup): string {
-	const sources = new Map(snapshot.executions.flatMap(execution => execution.sources ?? [])
-		.filter(source => samePublication(source.reference.publicationNumber, publication)).map(source => [source.anchor, source]));
+	// Official text wins over web text at the same anchor, exactly as in the writer's index.
+	const sources = evidenceSourceIndex(snapshot.executions.flatMap(execution => execution.sources ?? [])
+		.filter(source => samePublication(source.reference.publicationNumber, publication)));
 	const start = lookup.start ?? 1;
 	if (!Number.isInteger(start) || start < 1) { return 'Evidence lookup start must be a positive integer.'; }
 	const offset = lookup.offset ?? 0;
@@ -68,10 +71,12 @@ export function lookupPatentEvidence(snapshot: PatentExecutionSnapshot, publicat
 	if (!lookup.anchor && !lookup.query) {
 		if (offset) { return 'Evidence index uses start only; offset applies to source text.'; }
 		const page = selected.slice(start - 1, start - 1 + pageRows);
-		const details = [...snapshot.executions].reverse().find(execution => execution.kind === 'details' && execution.status === 'succeeded' && execution.sources?.some(source => samePublication(source.reference.publicationNumber, publication)));
-		const title = details?.publicationTitle;
+		// A web page record carries no date and seldom a title, so the latest record that states each wins.
+		const details = [...snapshot.executions].reverse().filter(execution => execution.kind === 'details' && execution.status === 'succeeded' && execution.sources?.some(source => samePublication(source.reference.publicationNumber, publication)));
+		const title = details.find(execution => execution.publicationTitle)?.publicationTitle;
+		const date = details.find(execution => execution.publicationDate)?.publicationDate;
 		const recorded = selected[0]?.reference.publicationNumber ?? publication;
-		const metadata = `Recorded publication: ${recorded}. Publication date: ${details?.publicationDate ?? 'not recorded'}. Title: ${title ? title.slice(0, 500) + (title.length > 500 ? '… (shortened)' : '') : 'not recorded'}.`;
+		const metadata = `Recorded publication: ${recorded}. Publication date: ${date ?? 'not recorded'}. Title: ${title ? title.slice(0, 500) + (title.length > 500 ? '… (shortened)' : '') : 'not recorded'}.`;
 		return [`Local evidence index: ${selected.length} sources. Use evidenceLookup.anchor for paginated text or evidenceLookup.query for a literal search across all stored passages. No backend calls were made.`,
 			metadata,
 			...page.map(source => `${source.anchor} — ${indexSummary(source)} — ${patentCitationLink('Open source', source.reference)}`),

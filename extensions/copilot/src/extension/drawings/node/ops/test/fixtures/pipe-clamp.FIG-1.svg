@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="168mm" height="175.18mm" viewBox="0 0 168 175.18" data-figure="FIG-1" data-kind="3d">
+<rect width="168" height="175.18" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M24 111.02 L24 100.31 L27.14 98.5"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M24 111.02 L93.57 151.18"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M93.57 151.18 L93.57 140.47 L139.94 113.7"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M24 100.31 L28.11 102.68"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M56.09 118.84 L93.57 140.47"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M128.35 107 L139.94 113.7"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M99.36 133.11 L99.69 132.9 L99.97 132.68 L100.22 132.44 L100.43 132.19 L100.64 131.84 L100.76 131.47 L100.8 131.1 L100.77 130.76 L100.66 130.42 L100.48 130.1 L100.24 129.78 L99.93 129.49 L99.57 129.22 L99.15 128.98 L98.68 128.77 L98.17 128.59 L97.63 128.45 L97.06 128.35 L96.48 128.28 L95.88 128.26 L95.24 128.29 L94.61 128.36 L94 128.48 L93.42 128.64 L92.89 128.85 L92.41 129.09 L91.98 129.37 L91.62 129.68 L91.34 130.02 L91.13 130.37 L91.01 130.73 L90.97 131.1 L91.01 131.47 L91.13 131.84 L91.34 132.19 L91.62 132.52 L91.98 132.83 L92.41 133.11 L92.89 133.36 L93.42 133.56 L94 133.73 L94.61 133.85 L95.24 133.92 L95.88 133.94 L96.53 133.92 L97.16 133.85 L97.77 133.73 L98.34 133.56 L98.88 133.36 L99.36 133.11"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M139.94 124.41 L139.94 113.7"/>
+<path class="edge" data-part="base-plate" stroke-width="0.4" d="M93.57 151.18 L139.94 124.41"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M128.35 107 L122.55 110.35"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M110.96 117.05 L81.97 133.78 L81.97 107"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M35.59 80.23 L35.59 83.34"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M86.61 104.33 L81.97 107 L73.86 102.32"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M128.35 107 L128.35 93.62"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M73.86 102.32 L73.78 103.98 L73.57 105.55 L73.21 107 L72.71 108.32 L71.84 109.86 L70.74 111.12 L69.44 112.08 L68.67 112.46 L67.86 112.75 L67 112.95 L66.1 113.06"/>
+<path class="edge" data-part="saddle-block" stroke-width="0.4" d="M38.29 81.78 L35.59 80.23"/>
+<path class="edge" data-part="latch-lug" stroke-width="0.4" d="M122.55 110.35 L122.55 80.9"/>
+<path class="edge" data-part="latch-lug" stroke-width="0.4" d="M99.36 83.58 L99.36 80.9 L110.96 87.59 L122.55 80.9"/>
+<path class="edge" data-part="latch-lug" stroke-width="0.4" d="M99.36 80.9 L110.96 74.2 L122.55 80.9"/>
+<path class="edge" data-part="latch-lug" stroke-width="0.4" d="M99.36 110.35 L110.96 117.05"/>
+<path class="edge" data-part="latch-lug" stroke-width="0.4" d="M110.96 117.05 L122.55 110.35"/>
+<path class="edge" data-part="latch-lug" stroke-width="0.4" d="M110.96 117.05 L110.96 87.59"/>
+<path class="edge" data-part="cap" stroke-width="0.4" d="M81.97 107 L81.97 77.55 L35.59 50.78 L35.59 80.23"/>
+<path class="edge" data-part="cap" stroke-width="0.4" d="M45.61 77.56 L46.15 76.83 L46.75 76.19 L47.41 75.63 L48.12 75.16 L49.45 74.56 L50.91 74.23 L52.47 74.17 L54.12 74.38 L55.84 74.85 L57.6 75.58 L59.37 76.57 L61.14 77.79 L62.87 79.23 L64.55 80.87 L66.15 82.68 L67.64 84.65 L69.01 86.74 L70.24 88.93 L71.31 91.18 L72.21 93.47 L72.92 95.76 L73.44 98.02 L73.75 100.21 L73.86 102.32"/>
+<path class="edge" data-part="cap" stroke-width="0.4" d="M128.35 50.78 L81.97 77.55"/>
+<path class="edge" data-part="cap" stroke-width="0.4" d="M128.35 70.86 L128.35 50.78 L81.97 24 L35.59 50.78"/>
+<path class="edge" data-part="cap-hinge-lug" stroke-width="0.4" d="M29.8 54.12 L35.59 50.78"/>
+<path class="edge" data-part="cap-hinge-lug" stroke-width="0.4" d="M29.8 64.12 L29.8 54.12 L35.59 57.47"/>
+<path class="edge" data-part="cap-hinge-lug" stroke-width="0.4" d="M32.74 71.89 L35.59 73.53"/>
+<path class="edge" data-part="cap-hinge-lug" stroke-width="0.4" d="M35.59 68.85 L35.22 68.6 L34.84 68.3 L34.48 67.95 L34.14 67.56 L33.83 67.14 L33.54 66.69 L33.29 66.21 L33.08 65.73 L32.92 65.24 L32.79 64.75 L32.72 64.28 L32.7 63.83 L32.72 63.41 L32.79 63.02 L32.92 62.68 L33.08 62.38 L33.29 62.14 L33.54 61.95 L33.83 61.83 L34.14 61.77 L34.48 61.77 L34.75 61.81 L35.03 61.89 L35.31 62.01 L35.59 62.16"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M87.77 87.59 L97.04 82.24"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M87.77 92.85 L87.77 87.59 L99.36 94.29 L108.64 88.93 L97.04 82.24"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M108.64 105 L108.64 88.93"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M99.36 110.35 L108.64 105"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M94.81 107.72 L99.36 110.35 L99.36 94.29"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M113.28 72.87 L122.55 67.51 L134.14 74.2"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M113.28 75.54 L113.28 72.87"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M124.87 79.56 L134.14 74.2"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M124.87 79.56 L113.28 72.87"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M134.14 90.27 L134.14 74.2"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M124.87 95.62 L134.14 90.27"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M124.87 95.62 L122.55 94.29"/>
+<path class="edge" data-part="cap-latch-lug" stroke-width="0.4" d="M124.87 95.62 L124.87 79.56"/>
+<path class="edge" data-part="hinge-pin" stroke-width="0.4" d="M30.38 71.86 L30.36 72.18 L30.32 72.48 L30.25 72.76 L30.16 73.01 L29.99 73.31 L29.78 73.55 L29.53 73.74"/>
+<path class="edge" data-part="hinge-pin" stroke-width="0.4" d="M29.8 73.58 L35.59 70.24"/>
+<path class="edge" data-part="hinge-pin" stroke-width="0.4" d="M29.53 73.74 L29.24 73.86 L28.93 73.92 L28.59 73.92 L28.23 73.85 L27.86 73.72 L27.48 73.53 L27.1 73.29 L26.73 72.99 L26.37 72.64 L26.03 72.25 L25.71 71.82 L25.43 71.37 L25.18 70.9 L24.97 70.41 L24.8 69.92 L24.68 69.44 L24.6 68.97 L24.58 68.51 L24.6 68.09 L24.68 67.71 L24.8 67.36 L24.97 67.07 L25.18 66.82 L25.43 66.64 L33.28 62.11"/>
+<path class="edge" data-part="hinge-pin" stroke-width="0.4" d="M25.43 66.64 L25.68 66.52 L25.96 66.46 L26.26 66.45 L26.58 66.49 L26.91 66.58 L27.25 66.72 L27.59 66.91 L27.93 67.14 L28.27 67.42 L28.59 67.74 L28.89 68.09 L29.18 68.46 L29.45 68.87 L29.68 69.29 L29.89 69.72 L30.06 70.16 L30.2 70.6 L30.3 71.03 L30.36 71.46 L30.38 71.86"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M95.88 104.33 L95.86 104.97 L95.77 105.57 L95.63 106.13 L95.44 106.63 L95.11 107.23 L94.69 107.71 L94.19 108.08"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M94.72 107.77 L97.66 106.07"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M94.19 108.08 L93.66 108.31 L93.09 108.44 L92.47 108.46 L91.81 108.37 L91.13 108.17 L90.44 107.86 L89.74 107.46 L89.04 106.96 L88.36 106.38 L87.71 105.71 L87.09 104.98 L86.51 104.19 L85.99 103.35 L85.49 102.4 L85.07 101.43 L84.73 100.45 L84.49 99.48 L84.34 98.54 L84.29 97.63 L84.34 96.79 L84.49 96.01 L84.73 95.33 L85.07 94.73 L85.49 94.25 L85.99 93.88 L89.47 91.87 L89.98 91.64 L90.54 91.52 L91.14 91.49 L91.77 91.57 L92.43 91.75 L93.11 92.04 L93.79 92.41 L94.47 92.88 L95.14 93.44 L95.78 94.07 L96.4 94.77 L96.97 95.52 L97.5 96.33 L97.97 97.17 L98.39 98.04 L98.73 98.92 L99 99.8 L99.2 100.66 L99.32 101.51 L99.36 102.32 L99.31 103.16 L99.16 103.94 L98.92 104.63 L98.59 105.22 L98.16 105.7 L97.66 106.07"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M85.99 93.88 L86.5 93.65 L87.06 93.52 L87.66 93.5 L88.3 93.58 L88.96 93.76 L89.63 94.04 L90.31 94.42 L90.99 94.89 L91.66 95.45 L92.31 96.08 L92.99 96.86 L93.62 97.71 L94.19 98.61 L94.69 99.56 L95.11 100.53 L95.44 101.51 L95.69 102.48 L95.83 103.42 L95.88 104.33"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M144 73.2 L143.98 73.62 L143.9 74.01 L143.78 74.35 L143.61 74.65 L143.4 74.89 L143.15 75.08"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M139.05 67.98 L139.34 67.85 L139.65 67.79 L139.99 67.79 L140.35 67.86 L140.72 67.99 L141.1 68.18 L141.48 68.43 L141.85 68.73 L142.21 69.08 L142.52 69.42 L142.81 69.8 L143.07 70.21 L143.31 70.63 L143.51 71.06 L143.68 71.5 L143.82 71.94 L143.92 72.37 L143.98 72.8 L144 73.2"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M134.14 80.28 L143.15 75.08"/>
+<path class="edge" data-part="locking-pin" stroke-width="0.4" d="M131.21 72.51 L139.05 67.98"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M53.57 110.69 L53.46 112.46 L53.15 114.08 L52.64 115.53 L52.13 116.48 L51.51 117.31 L50.8 118.01 L50 118.57 L48.8 119.09 L47.48 119.35 L46.05 119.33 L44.54 119.05 L42.98 118.51 L41.39 117.71 L39.8 116.68 L38.24 115.42 L36.73 113.96 L35.3 112.32 L33.98 110.53 L32.78 108.63 L31.73 106.64 L30.85 104.6 L30.14 102.54 L29.63 100.51 L29.32 98.52 L29.22 96.63 L29.32 94.85 L29.63 93.23 L30.14 91.78 L30.85 90.54 L31.73 89.52 L32.78 88.75 L33.98 88.23 L35.3 87.97 L36.73 87.98 L38.24 88.26 L39.8 88.8 L41.39 89.6 L42.98 90.64 L44.54 91.9 L46.05 93.36 L47.48 95 L48.8 96.78 L50 98.69 L51.05 100.68 L51.93 102.72 L52.64 104.77 L53.15 106.81 L53.46 108.79 L53.57 110.69"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M55.88 112.02 L55.81 113.63 L55.61 115.13 L55.26 116.52 L54.78 117.79"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M54.78 117.79 L53.94 119.27 L52.89 120.48 L51.64 121.41 L71.96 109.68"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M51.64 121.41 L50.21 122.03 L48.64 122.33 L46.94 122.32 L45.14 121.99 L43.28 121.34 L41.39 120.39 L39.5 119.16 L37.64 117.66 L35.85 115.92 L34.14 113.97 L32.57 111.84 L31.14 109.57 L29.98 107.39 L28.99 105.15 L28.18 102.9 L27.55 100.65 L27.14 98.44 L26.92 96.32 L26.92 94.3 L27.14 92.41 L27.55 90.69 L28.18 89.16 L28.99 87.84 L29.98 86.75 L31.14 85.91 L38.29 81.78 L51.46 74.18"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M31.14 85.91 L32.42 85.34 L33.82 85.02 L35.32 84.96 L36.91 85.16 L38.56 85.61 L40.25 86.32 L41.96 87.26 L43.66 88.44 L45.33 89.82 L46.94 91.4 L48.47 93.15 L49.91 95.04 L51.23 97.05 L52.41 99.15 L53.44 101.32 L54.3 103.52 L54.99 105.72 L55.48 107.89 L55.78 110 L55.88 112.02"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M137.04 65.17 L137.01 66.32 L136.9 67.42 L136.73 68.47 L136.48 69.46"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M112.3 39.05 L113.73 38.43 L115.3 38.12 L117 38.14 L118.8 38.47 L120.66 39.12 L122.55 40.07 L124.44 41.3 L126.3 42.8 L128.1 44.54 L129.63 46.29 L131.07 48.18 L132.39 50.19 L133.57 52.29 L134.6 54.46 L135.46 56.66 L136.15 58.86 L136.64 61.03 L136.94 63.14 L137.04 65.17"/>
+<path class="edge" data-part="pipe" stroke-width="0.4" d="M110.17 40.28 L112.3 39.05"/>
+<line class="lead" data-numeral="22" data-part="hinge-pin" stroke-width="0.2" x1="18.39" y1="98.7" x2="34.46" y2="70.89"/>
+<line class="lead" data-numeral="28" data-part="cap-hinge-lug" stroke-width="0.2" x1="20.3" y1="59.13" x2="35.59" y2="59.48"/>
+<line class="lead" data-numeral="24" data-part="cap" stroke-width="0.2" x1="147.7" y1="81.58" x2="81.97" y2="81.57"/>
+<line class="lead" data-numeral="34" data-part="locking-pin" stroke-width="0.2" x1="147.7" y1="77.03" x2="139.96" y2="76.92"/>
+<line class="lead" data-numeral="32" data-part="latch-lug" stroke-width="0.2" x1="147.7" y1="85.98" x2="115.59" y2="84.92"/>
+<line class="lead" data-numeral="30" data-part="cap-latch-lug" stroke-width="0.2" x1="147.7" y1="93.51" x2="102.84" y2="92.28"/>
+<line class="lead" data-numeral="36" data-part="locking-pin" stroke-width="0.2" x1="147.7" y1="104.08" x2="99.22" y2="103.63"/>
+<line class="lead" data-numeral="14" data-part="base-plate" stroke-width="0.2" x1="92.29" y1="155.77" x2="92.41" y2="133.11"/>
+<line class="lead" data-numeral="16" data-part="saddle-block" stroke-width="0.2" x1="140.17" y1="156.55" x2="81.97" y2="127.76"/>
+<line class="lead" data-numeral="12" data-part="base-plate" stroke-width="0.2" x1="74.17" y1="155.77" x2="73.86" y2="139.8"/>
+<line class="lead" data-numeral="42" data-part="pipe" stroke-width="0.2" x1="53.09" y1="19.41" x2="51.63" y2="97.76"/>
+</g>
+<text class="numeral" data-numeral="22" data-part="hinge-pin" x="17" y="102.72" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">22</text>
+<text class="numeral" data-numeral="28" data-part="cap-hinge-lug" x="17" y="60.67" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">28</text>
+<text class="numeral" data-numeral="24" data-part="cap" x="151" y="83.2" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">24</text>
+<text class="numeral" data-numeral="34" data-part="locking-pin" x="151" y="78.69" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">34</text>
+<text class="numeral" data-numeral="32" data-part="latch-lug" x="151" y="87.7" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">32</text>
+<text class="numeral" data-numeral="30" data-part="cap-latch-lug" x="151" y="95.21" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">30</text>
+<text class="numeral" data-numeral="36" data-part="locking-pin" x="151" y="105.72" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">36</text>
+<text class="numeral" data-numeral="14" data-part="base-plate" x="92.28" y="159.8" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">14</text>
+<text class="numeral" data-numeral="16" data-part="saddle-block" x="143.47" y="159.8" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">16</text>
+<text class="numeral" data-numeral="12" data-part="base-plate" x="74.21" y="159.8" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">12</text>
+<text class="numeral" data-numeral="42" data-part="pipe" x="53.13" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">42</text>
+</svg>

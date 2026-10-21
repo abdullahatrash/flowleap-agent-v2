@@ -32,7 +32,6 @@ import { GetPatentFiguresTool } from '../getPatentFiguresTool';
 import { SearchAcademicTool } from '../searchAcademicTool';
 import { SearchNplTool } from '../searchNplTool';
 import { GetNplWorkTool } from '../getNplWorkTool';
-import { SearchLegalTool } from '../searchLegalTool';
 
 vi.mock('../../../../vscodeTypes', async () => import('../../../../util/common/test/shims/vscodeTypesShim'));
 vi.mock('vscode', async importOriginal => ({ ...await importOriginal<typeof vscode>(), env: { uriScheme: 'flowleap' } }));
@@ -433,23 +432,5 @@ describe('get_npl_work', () => {
 		const { client, calls } = makeBackendClient({});
 		const text = textOf(await new GetNplWorkTool(makeLogService(), client).invoke(makeOptions({ reference: '  ' }), makeToken()));
 		expect({ calls: calls.length, error: text.startsWith('Error: No reference provided') }).toEqual({ calls: 0, error: true });
-	});
-});
-
-describe('search_legal', () => {
-
-	it('calls reference_search, the facade name for legal reference lookup', async () => {
-		const { client, calls } = makeBackendClient({
-			reference_search: { count: 0, results: [] },
-		});
-		const tool = new SearchLegalTool(makeLogService(), client);
-
-		await tool.invoke(makeOptions({ query: 'inventive step', jurisdiction: 'EPO' as const }), makeToken());
-
-		expect(calls).toHaveLength(1);
-		expect(calls[0]).toEqual(expect.objectContaining({
-			tool: 'reference_search',
-			input: { query: 'inventive step', limit: 10, comprehensive: false, jurisdiction: 'EPO' },
-		}));
 	});
 });

@@ -376,3 +376,80 @@
           .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
           .then(H => H.cases.t12_round_answers_chosen_points(H.parseTrajectory(output)));
       metric: t12_round_answers_chosen_points
+
+# ── T13 — web page text as evidence for a document the tools hold no text for (#750). ──
+# The challenged patent's claims 1–3 come back segmented. WO2014056789A1 discloses claim 1 with
+# official text. GB2208140A comes back with its bibliography only (claims and description
+# unavailable from the tools, as for the GB, JP and older US documents of the EP1809422 and
+# Cuozzo runs). Its Google Patents page, fetched once with `fetch_webpage`, discloses the added
+# limitation of claim 2 and is recorded as web evidence under GB2208140A:description and
+# GB2208140A:claims; the evidence lookups then return those lines. The agent must fetch the page
+# after the text-less retrieval, chart claim 2 on the recorded web anchors with fragments the page
+# holds (never a quote from memory), read the receipt's `source-GB2208140A` open point, and name
+# it in the Round Report with the recommendation to confirm against the official full text or a
+# certified copy. Claim 3 stays open. `T13_WEB_DOCUMENT` in trajectory-assertions.mjs names the
+# document: change both together. The saved chart's row label is the real writer's rendering and
+# is covered by the vitest spec (patentWebTextEvidence.spec.ts); a mock save writes no chart.
+#
+# Single turn; `skill` and `completionGuard` as in T12, same caps.
+- description: "T13 — GB document with no text in the tools: fetch its patent page once, cite the recorded web text, and carry source-GB2208140A into the Round Report"
+  vars:
+    prompt: "Build an invalidity chart for EP3765432B1, claims 1 to 3, against EP, WO and GB prior art published before its 2016-02-10 priority date, and save it."
+    mockScript: t13-web-text-evidence
+    skill: invalidity-analysis
+    completionGuard: true
+    maxRounds: 20
+    maxTokens: 16000
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t13_fetched_page_for_textless_document(H.parseTrajectory(output)));
+      metric: t13_fetched_page_for_textless_document
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t13_row_rests_on_validated_web_text(H.parseTrajectory(output)));
+      metric: t13_row_rests_on_validated_web_text
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t13_receipt_lists_source_point(H.parseTrajectory(output)));
+      metric: t13_receipt_lists_source_point
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t13_round_report_names_source_point(H.parseTrajectory(output)));
+      metric: t13_round_report_names_source_point
+
+# ── T14 — patent law read from the official page (#825, ADR 0017). ──────────────────
+# The single-turn source-attribution case sees the fetch call only. This case runs the loop
+# and grades the answer against the page text the fetch returned (`resultBody`): the quoted
+# passage must be in it, and the answer must carry the fetched URL.
+- description: "T14 — EPC novelty from the official page: fetch the epo.org article, quote only the text the page returned, cite its URL"
+  vars:
+    prompt: "What does the EPC say about novelty requirements? Quote the article from the official text and give me the source."
+    mockScript: t14-legal-official-page
+  assert:
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t14_fetched_official_page(H.parseTrajectory(output)));
+      metric: t14_fetched_official_page
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t14_quote_rests_on_fetched_page(H.parseTrajectory(output)));
+      metric: t14_quote_rests_on_fetched_page
+    - type: javascript
+      value: |
+        return import('node:url')
+          .then(u => import(u.pathToFileURL(process.cwd() + '/assertions/trajectory-assertions.mjs').href))
+          .then(H => H.cases.t14_cites_fetched_url(H.parseTrajectory(output)));
+      metric: t14_cites_fetched_url

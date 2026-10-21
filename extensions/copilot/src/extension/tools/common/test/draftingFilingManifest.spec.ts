@@ -94,7 +94,7 @@ describe('filingManifest', () => {
 			figures: ['FIG. 1', 'FIG. 2'],
 			figureCount: 2,
 			drawingSheets: 2,
-			drawingSheetsDeclared: false,
+			drawingSheetsBasis: 'estimated',
 			abstractFigure: 'FIG. 2',
 			abstractFigureBasis: 'numerals',
 			pages: { description: 1, claims: 1, abstract: 1, drawings: 2, total: 5 },
@@ -104,9 +104,23 @@ describe('filingManifest', () => {
 
 	it('takes the title from the frontmatter and the drawing sheets from figures.md when set; no language, no figures', () => {
 		const manifest = filingManifest({ office: 'US', draft: draft('title: Hinge for heavy doors\n', 'A hinge.'), claims, figures: '---\ndrawingSheets: 1\n---\n' });
-		expect({ title: manifest.title, language: manifest.language, figures: manifest.figures, drawingSheets: manifest.drawingSheets, drawingSheetsDeclared: manifest.drawingSheetsDeclared, abstractFigure: manifest.abstractFigure }).toEqual({
-			title: 'Hinge for heavy doors', language: undefined, figures: [], drawingSheets: 1, drawingSheetsDeclared: true, abstractFigure: undefined,
+		expect({ title: manifest.title, language: manifest.language, figures: manifest.figures, drawingSheets: manifest.drawingSheets, drawingSheetsBasis: manifest.drawingSheetsBasis, abstractFigure: manifest.abstractFigure }).toEqual({
+			title: 'Hinge for heavy doors', language: undefined, figures: [], drawingSheets: 1, drawingSheetsBasis: 'declared', abstractFigure: undefined,
 		});
+	});
+
+	it('measures the drawing sheets from the sheet-N.svg files in drawings/ before figures.md declares or estimates them', () => {
+		const declared = `---\ndrawingSheets: 5\n---\n${figures}`;
+		const sheets = (drawingFiles: readonly string[] | undefined) => {
+			const manifest = filingManifest({ office: 'EPO', draft: draft('', 'A hinge.'), claims, figures: declared, drawingFiles });
+			const rendered = renderFilingManifest(manifest, resolveDraftingFolder('hinge')!).split('\n').filter(line => /^\| (?:Drawing sheets|Drawings) /.test(line));
+			return { drawingSheets: manifest.drawingSheets, basis: manifest.drawingSheetsBasis, drawingPages: manifest.pages.drawings, rendered };
+		};
+		expect([sheets(['FIG-1.scene.json', 'FIG-1.svg', 'sheet-1.svg', 'sheet-2.svg', 'sheet-3.svg', 'drawings.pdf']), sheets(['FIG-1.svg']), sheets(undefined)]).toEqual([
+			{ drawingSheets: 3, basis: 'measured', drawingPages: 3, rendered: ['| Drawing sheets | 3 (measured: the sheet-N.svg files in drawings/) |', '| Drawings | drawings/ (Drawing Sheets) | 3 |'] },
+			{ drawingSheets: 5, basis: 'declared', drawingPages: 5, rendered: ['| Drawing sheets | 5 (`drawingSheets` in figures.md) |', '| Drawings | Not generated: prepared outside FlowLeap | 5 |'] },
+			{ drawingSheets: 5, basis: 'declared', drawingPages: 5, rendered: ['| Drawing sheets | 5 (`drawingSheets` in figures.md) |', '| Drawings | Not generated: prepared outside FlowLeap | 5 |'] },
+		]);
 	});
 });
 

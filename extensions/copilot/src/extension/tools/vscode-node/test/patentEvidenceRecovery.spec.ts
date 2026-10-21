@@ -180,9 +180,9 @@ describe('prior-art evidence recovery and review contract', () => {
 			elements: [{ element: 'composite filler reservoir', anchor: 'US5356951A:claims:1:en', disclosedBy: 'composite filler reservoir' }, { element: 'photocurable monomer' }] };
 		const rendered = renderCandidateReview({ ...review, coverage: [row] }, scoped, 'review.working-record.md');
 		expect({
-			header: rendered.includes('| Publication | Publication date | Title | Text language | Scope |'),
-			outside: rendered.includes('| US5356951A | 1994-10-18 | Examiner X reference | en | outside searched jurisdictions (US) |'),
-			inside: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en | in scope |'),
+			header: rendered.includes('| Publication | Publication date | Title | Text language | Text source | Scope |'),
+			outside: rendered.includes('| US5356951A | 1994-10-18 | Examiner X reference | en | official | outside searched jurisdictions (US) |'),
+			inside: rendered.includes('| WO9951190A1 | 1999-10-14 | Dental composition | en | official | in scope |'),
 			limitation: rendered.includes('- Outside the searched jurisdictions (EP, WO): US5356951A. These were reached through cited references or direct retrieval, not through the scoped search; findings that rest on them are outside the confirmed scope unless the scope is widened.'),
 			note: rendered.includes('Scope note (generated): US5356951A is outside the searched jurisdictions (EP, WO).'),
 			beforeGap: rendered.indexOf('Scope note (generated)') < rendered.indexOf('Remaining gap (model judgment)'),
@@ -192,7 +192,7 @@ describe('prior-art evidence recovery and review contract', () => {
 	it('discloses no scope at all when no recorded search applied a jurisdiction filter', () => {
 		const rendered = renderCandidateReview(claimsOnly, retrieval, 'review.working-record.md');
 		expect({
-			column: rendered.includes('| Text language | Scope |'),
+			column: rendered.includes('| Text source | Scope |'),
 			limitation: rendered.includes('Outside the searched jurisdictions'),
 			note: rendered.includes('Scope note (generated)'),
 		}).toEqual({ column: false, limitation: false, note: false });

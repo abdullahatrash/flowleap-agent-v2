@@ -397,6 +397,30 @@
   {
     "type": "function",
     "function": {
+      "name": "remove_claim",
+      "description": "Remove one claim from drafting/<matter>/claims.md (application-drafting skill, Step 4). Call it only after the attorney chose \"Remove claim N\" in chat, for example on a figure-coverage Error (37 CFR 1.83(a): a claim cites a Feature List row that no figure shows) or an advisory item that says a claim has no figure support. VS Code shows the attorney the cost and runs the tool only after the attorney confirms. The tool deletes the claim, renumbers each later claim down by one, and changes the claim references in the other claims with them (\"of claim 5\" becomes \"of claim 4\"). It refuses, and changes nothing, when another claim refers to the claim (the refusal names those claims: the attorney decides about them first) or when claims.md has no claim with that number. The removal changes the claims, so it re-opens the claims approval: `approved` in claims.md becomes false and the attorney approves the claims again before drafting continues; then call start_application_draft. The tool records the old and new claim numbers in the Working Record. Report the renumbering and the re-opened approval to the attorney; never remove a claim on your own.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "matter": {
+            "type": "string",
+            "description": "The matter folder name under drafting/, e.g. 'hinge' for drafting/hinge/."
+          },
+          "claim": {
+            "type": "number",
+            "description": "The number of the claim to remove, as claims.md numbers it now."
+          }
+        },
+        "required": [
+          "matter",
+          "claim"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "validate_draft",
       "description": "Validate a saved Draft Application (application-drafting skill, Step 4). Reads drafting/<matter>/draft-application.md, claims.md and figures.md, runs the deterministic validators of the office in code (antecedent basis, dependency targets, claim numbering, the office claim-form rule, one sentence per claim, references to the description or drawings in claims (Error for EPO, Note for US), abstract length (Error for US, Note for EPO), defined terms, reference numerals against figures.md, literal basis, source markers (an `inventor:IQ-n` marker needs a filled answer to IQ-n in inventor-answers.md), open Inventor Questions (a question answered in inventor-answers.md but still in the draft is reported as answered, to apply), the Draft Outline rules on draft-outline.md (outline-claims: made for the current Approved Claims, an Error when the file does not exist; outline-coverage: every claim term and claimed combination planned; outline-sources; item-coverage: every Technical item realised by a paragraph marker `item:O<n>`); Notes for claim count and relative terms and, for EPO, for reference signs not in parentheses in the claims and for an abstract without the figure to publish or without reference signs in parentheses, for a Template item no paragraph names and for a sentence repeated in two paragraphs) and writes drafting/<matter>/findings.md. The attorney's waivers (a `  - Waived: <reason>` line under an item) are kept across runs. Pass the items of your advisory review in `advisory`: each quotes the passage it concerns and gives its line or claim; they are recorded as Advisory findings and never block export. When claims.md changed after start_application_draft recorded the approved claims, the tool adds a `claims-changed` Error and sets `approved: false` in claims.md: the attorney approves again and the draft is regenerated. Returns the counts by severity and the list of findings that block export. Report them by severity with line references; never say the draft passed or is ready to file. Every result ends with the next step for the attorney, with the file and the line when there is one: give it as it is.",
       "parameters": {
@@ -441,7 +465,7 @@
     "type": "function",
     "function": {
       "name": "export_draft_docx",
-      "description": "Export a Draft Application to Word, one file per document type: drafting/<matter>/draft-application.description.docx, draft-application.claims.docx and draft-application.abstract.docx (application-drafting skill, Step 6), only when the attorney asks for the Word file. The tool re-runs the validators and refuses while any Error or Inventor Question in findings.md is open and unwaived, while `approved` in claims.md is not true, or while claims.md differs from the claims the draft was generated against (it then sets `approved: false`); each refusal lists every blocking item and names the open steps of drafting/<matter>/checklist.md; at the claims gate it gives one sentence that names the file with its line and the word to change, e.g. \"Review `drafting/<matter>/claims.md:3`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 3.\" Give that sentence to the attorney as it is, with the path and its line in backticks. Report every item it lists; the attorney resolves it in the draft or writes a waiver with a reason in findings.md. On success it diffs the edited draft against the generated snapshot (draft-application.generated.md) paragraph by paragraph, appends the attorney's edits to the Working Record, strips the source markers and the Inventor Questions section, and writes the three .docx files with the office page setup (EPO: Rule 49 EPC, A4, page numbers centred at the top, line numbers every five lines in the description and the claims; US: 37 CFR 1.52, letter size, page numbers centred at the bottom; both 1.5 line spacing and margins top 2 cm, left 2.5 cm, right 2 cm, bottom 2 cm), the draft's headings in the office section order and one paragraph per numbered claim. It does not generate drawings. Beside the .docx files it writes drafting/<matter>/filing-manifest.md: title, language, office, claims in total and independent, drawing sheets (from figures.md), the proposed abstract figure, and the ESTIMATED pages per document and in total; report the page counts as estimates. It also writes drafting/<matter>/draft-application.full.docx, the full review copy: the whole application in one file laid out like a published patent (front page with the proposed abstract figure, description with [0001] paragraph numbers, claims, abstract, one page per figure of figures.md, for EPO the reference signs list), marked \"Draft for attorney review — not for filing\", with a visible [MISSING: ...] placeholder naming the checklist step or note for each missing part. Tell the attorney it is for reading only; the three filing files are what is filed. Returns the paths, the manifest counts and the counts of kept, changed, deleted and added paragraphs. The export is a draft for attorney review, not a filing.",
+      "description": "Export a Draft Application to Word, one file per document type: drafting/<matter>/draft-application.description.docx, draft-application.claims.docx and draft-application.abstract.docx (application-drafting skill, Step 6), only when the attorney asks for the Word file. The tool re-runs the validators and refuses while any Error or Inventor Question in findings.md is open and unwaived, while `approved` in claims.md is not true, or while claims.md differs from the claims the draft was generated against (it then sets `approved: false`); each refusal lists every blocking item and names the open steps of drafting/<matter>/checklist.md; at the claims gate it gives one sentence that names the file with its line and the word to change, e.g. \"Review `drafting/<matter>/claims.md:3`, then click **Approve Claims** at the top of the file, or change `false` to `true` on line 3.\" Give that sentence to the attorney as it is, with the path and its line in backticks. Report every item it lists; the attorney resolves it in the draft or writes a waiver with a reason in findings.md. On success it diffs the edited draft against the generated snapshot (draft-application.generated.md) paragraph by paragraph, appends the attorney's edits to the Working Record, strips the source markers and the Inventor Questions section, and writes the three .docx files with the office page setup (EPO: Rule 49 EPC, A4, page numbers centred at the top, line numbers every five lines in the description and the claims; US: 37 CFR 1.52, letter size, page numbers centred at the bottom; both 1.5 line spacing and margins top 2 cm, left 2.5 cm, right 2 cm, bottom 2 cm), the draft's headings in the office section order and one paragraph per numbered claim. It does not generate drawings; build_drawing_set does. Beside the .docx files it writes drafting/<matter>/filing-manifest.md: title, language, office, claims in total and independent, drawing sheets (measured from drawings/sheet-N.svg when build_drawing_set built them, else from figures.md), the proposed abstract figure, and the ESTIMATED pages per document and in total; report the page counts as estimates. It also writes drafting/<matter>/draft-application.full.docx, the full review copy: the whole application in one file laid out like a published patent (front page with the proposed abstract figure, description with [0001] paragraph numbers, claims, abstract, one page per figure of figures.md, for EPO the reference signs list), marked \"Draft for attorney review — not for filing\", with a visible [MISSING: ...] placeholder naming the checklist step or note for each missing part. Tell the attorney it is for reading only; the three filing files are what is filed. Returns the paths, the manifest counts and the counts of kept, changed, deleted and added paragraphs. The export is a draft for attorney review, not a filing.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -452,6 +476,283 @@
         },
         "required": [
           "matter"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "inventor_questions",
+      "description": "The Inventor Questions document of one matter folder drafting/<matter>/ (application-drafting skill, Step 5). action \"send\": when the attorney asks to send the questions to the inventor, it writes drafting/<matter>/inventor-questions.docx from inventor-answers.md: a heading, one sentence on what the inventor does, and one table with a row per open question (a question whose current answer is empty) with the question, where the answer goes and an empty answer cell. It refuses while the existing inventor-questions.docx holds answers that are not imported yet. action \"import\": when the attorney asks to apply the answers and the inventor answered in a file, call it first with that file (default drafting/<matter>/inventor-questions.docx; also a .md file in the format of inventor-answers.md, in the matter folder). Code copies each answer, in the inventor's words, into the empty answer slot of its question in inventor-answers.md and never writes over a filled answer; the result names the questions filled, the questions not changed and the ids it does not know. Then apply the answers to the draft as the skill says. Never write an answer into inventor-answers.md yourself.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "matter": {
+            "type": "string",
+            "description": "The matter folder name under drafting/, e.g. 'hinge'."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "send",
+              "import"
+            ],
+            "description": "\"send\" writes inventor-questions.docx for the inventor; \"import\" copies the inventor's answers into inventor-answers.md."
+          },
+          "file": {
+            "type": "string",
+            "description": "For \"import\" only: the workspace-relative path of the answered file in drafting/<matter>/, a .docx or a .md. Default: drafting/<matter>/inventor-questions.docx."
+          }
+        },
+        "required": [
+          "matter",
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "render_figure",
+      "description": "Render one Figure of a drafting matter to filing line art (patent-drawings skill). Give exactly one source: `scene` for a 3D Figure (housings, brackets, plates, revolves with stated diameters, assemblies of 15 labelled parts or fewer; library parts for fasteners, springs, gears, bearings, shafts, pipes, motors), `flowchart` for a method (the numbered steps in order, or `fromClaim` with the number of an approved method claim; a proposal may add decisions and edges, never a step), or `block` for a block diagram (blocks and named connections). The tool reads drafting/<matter>/figures.md first. It refuses, and writes nothing, when figures.md has no heading for the Figure, when a part has no numeral, or when a numeral is not in figures.md (for a 2D Figure: not under the Figure's heading; the refusal lists the lines to add). Then it renders, runs the mechanical fault list (lead lines, numeral sizes, numerals on lines, text beyond keywords, numeral set), writes drafting/<matter>/drawings/FIG-N.scene.json (the source) and FIG-N.svg, writes the review render drawings/review/FIG-N.round-R.png, and returns that render, the findings with their rule citations, and the Figures of figures.md still to draw. Three rounds per review cycle: the fourth call is refused; then stop and report the open Errors. `newCycle: true` starts the next cycle (three more rounds) after the attorney confirms it in chat; set it only when the attorney asked to continue work on this Figure or the engine changed, never on your own. There is no cap on cycles; the attorney confirms each one. Fix the Errors it reports in the source and render again. The findings are check results, not a verdict: never call a Figure ready to file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "matter": {
+            "type": "string",
+            "description": "The matter folder name under drafting/, e.g. 'hinge'."
+          },
+          "figure": {
+            "type": "number",
+            "description": "The figure number, e.g. 1 for FIG. 1."
+          },
+          "partial": {
+            "type": "string",
+            "description": "The capital letter of a partial view, e.g. A for FIG. 1A."
+          },
+          "scene": {
+            "type": "object",
+            "description": "The 3D scene (FIG-N.scene.json schema): camera, parts with shapes and placements, numerals as (part, face, point) ports, optional section plane and hiddenEdges. Every part needs a numeral port; every numeral must be in figures.md. The figure field is set by the tool."
+          },
+          "flowchart": {
+            "type": "object",
+            "description": "A method flowchart. Give steps or fromClaim, not both. One box per step; step ids are s1, s2, ... in order.",
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The method steps in order, one text each."
+              },
+              "fromClaim": {
+                "type": "number",
+                "description": "The number of an approved method claim in claims.md; its steps become the boxes."
+              },
+              "terminals": {
+                "type": "boolean",
+                "description": "Draw START and END terminals."
+              },
+              "proposal": {
+                "type": "object",
+                "description": "Decisions and extra edges (branches, loops). A proposal never adds a step.",
+                "properties": {
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "decision"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "after": {
+                          "type": "string",
+                          "description": "The step id (s1, s2, ...) or decision id the decision follows."
+                        },
+                        "continueLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "text",
+                        "after"
+                      ]
+                    }
+                  },
+                  "edges": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "block": {
+            "type": "object",
+            "description": "A block diagram: blocks in numeral order and named connections.",
+            "properties": {
+              "blocks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ]
+                }
+              },
+              "connections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "forward",
+                        "backward",
+                        "both",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "blocks"
+            ]
+          },
+          "includeRender": {
+            "type": "boolean",
+            "description": "Set false when you cannot read images: the tool returns the findings only and records that no render was seen."
+          },
+          "newCycle": {
+            "type": "boolean",
+            "description": "Starts the next review cycle of the Figure (three more rounds); the attorney confirms it in chat. Never set it on your own: set it only when the attorney asked to continue work on this Figure or the engine changed."
+          }
+        },
+        "required": [
+          "matter",
+          "figure"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "build_drawing_set",
+      "description": "Build the Drawing Set of a drafting matter from every drafting/<matter>/drawings/FIG-N.svg that render_figure wrote (patent-drawings skill, last step). It refuses while a Figure that figures.md names is not drawn (figures-missing: every `## FIG. N` heading, and each member of a range heading like `FIGS. 7 to 10`, needs drawings/FIG-N.svg; the refusal names the missing Figures), while figures.md has a (proposed) part, while an Error of the figure-list checks is open and unwaived (page size for the office, every Feature List row an approved claim cites has a drawn part: 37 CFR 1.83(a)), while an Error of the Figure checks (re-run on the written Figure files) is open and unwaived, while a sheet check fails, or when there is no Figure. Otherwise it lays out the Figures on sheets for the office and the page size (Letter for a US matter, A4 for EPO and PCT; one size per application; pageSize in figures.md overrides), and writes drawings/sheet-N.svg, review renders drawings/review/sheet-N.png, drawings/drawings.pdf and the receipt drawings/drawings-compliance.md (every code check with its rule and result, and the review rounds the model saw). When the export already wrote filing-manifest.md, it updates the measured sheet count there. With `partial: true` it builds the Figures drawn so far for review only: the receipt starts with `INCOMPLETE SET: FIG. ... not drawn`, the FIG labels follow the figure-list count, and filing-manifest.md is never changed; never present a partial build as the Drawing Set. Returns the pass and fail counts and every failing check with its citation. Report the receipt by check; it is a check record, not a verdict: never call the drawings ready to file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "matter": {
+            "type": "string",
+            "description": "The matter folder name under drafting/, e.g. 'hinge'."
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "Build the Figures drawn so far for review although figures.md names more. The receipt is marked INCOMPLETE SET and the Filing Manifest is not changed. Only when the attorney asks for a review build."
+          }
+        },
+        "required": [
+          "matter"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "propose_figure_part",
+      "description": "Propose a part the disclosure does not state, for example one read from an inventor sketch (patent-drawings skill). Appends `- NN: <part> (proposed from sketches/<file>)` under the figure heading of drafting/<matter>/figures.md, with the next free numeral of the numerals scheme (even, or hundreds per figure) when you give none. It refuses a numeral already used or outside the scheme. Give `sketch` as the name of an image attached in chat, or a workspace path: the tool copies it to drafting/<matter>/sketches/ and names it in the proposal. Never draw a part silently: propose it, then stop and ask the attorney. build_drawing_set and the export stay blocked until the attorney confirms the part by removing (proposed).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "matter": {
+            "type": "string",
+            "description": "The matter folder name under drafting/, e.g. 'hinge'."
+          },
+          "figure": {
+            "type": "number",
+            "description": "The figure the part is drawn in."
+          },
+          "part": {
+            "type": "string",
+            "description": "The part name, e.g. 'bracket'."
+          },
+          "numeral": {
+            "type": "string",
+            "description": "The reference numeral. Leave it out to take the next free numeral of the scheme."
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The Feature List rows the part shows, e.g. F3."
+          },
+          "sketch": {
+            "type": "string",
+            "description": "The sketch the part comes from: the name of an image attached in chat, or a workspace path to an image."
+          }
+        },
+        "required": [
+          "matter",
+          "figure",
+          "part"
         ]
       }
     }
@@ -947,78 +1248,6 @@
           "workflow": {
             "type": "string",
             "description": "Workflow name when action='workflow'. Options: basic-search, assignee-search, citation-analysis, date-filtered-search"
-          }
-        },
-        "required": [
-          "action"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "search_legal",
-      "description": "PRIMARY TOOL for patent law and procedure lookups: searches MPEP (USPTO), EPC, and EPO Guidelines using hybrid semantic + keyword search. Use whenever the user asks about patent law, examination procedure, statutory bases (35 USC, EPC Articles), or wants to look up MPEP sections or EPO Guidelines. Prefer this over legal_search_guide + patent_api_request for standard queries; use legal_search_guide only for advanced cases (custom search modes, similarity thresholds). Input: query (free text, e.g. 'obviousness 103 prima facie Graham factors'); jurisdiction ('USPTO' for MPEP, 'EPO' for EPC/Guidelines, omit for all); comprehensive (true = full section content for quoting, false = matched chunks); limit (default 10).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "type": "string",
-            "description": "Free-text legal search query, minimum 3 characters. Examples: 'obviousness 103 prima facie', 'MPEP 2143 Graham factors', 'EPC Article 54 novelty', 'inventive step problem-solution approach'."
-          },
-          "jurisdiction": {
-            "type": "string",
-            "enum": [
-              "EPO",
-              "USPTO",
-              "EU",
-              "WIPO"
-            ],
-            "description": "Optional filter. Omit to search across all jurisdictions. Use USPTO for MPEP, EPO for EPC and EPO Guidelines."
-          },
-          "comprehensive": {
-            "type": "boolean",
-            "description": "Optional. If true, returns full section content grouped by document (better for quoting full rules). If false (default), returns matched chunks with similarity scores (better for quick lookup).",
-            "default": false
-          },
-          "limit": {
-            "type": "number",
-            "description": "Optional. Maximum results to return. Default: 10.",
-            "default": 10
-          }
-        },
-        "required": [
-          "query"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "legal_search_guide",
-      "description": "Documentation for the Legal RAG Search API (MPEP, EPC, EPO Guidelines). DEFER TO search_legal for basic legal lookup queries — that typed tool covers the common case (search MPEP/EPC/EPO Guidelines with optional jurisdiction filter and comprehensive mode). Use THIS guide tool ONLY for advanced cases not covered by search_legal: (1) specific source filters (e.g., restrict to MPEP only and exclude EPC), (2) custom search modes (semantic-only or keyword-only instead of hybrid), (3) semantic-weight tuning, (4) similarity threshold tuning, (5) stats and jurisdictions meta endpoints, (6) general API exploration. Available actions: 'list', 'endpoint' (search, stats, jurisdictions), 'workflow' (mpep-lookup, epc-research, cross-jurisdiction), 'full'. After getting docs, call the endpoint via patent_api_request.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "action": {
-            "type": "string",
-            "enum": [
-              "list",
-              "endpoint",
-              "workflow",
-              "full"
-            ],
-            "description": "Action type: 'list' for compact endpoint list, 'endpoint' for specific endpoint docs, 'workflow' for task guides, 'full' for complete docs"
-          },
-          "endpoint": {
-            "type": "string",
-            "description": "Endpoint name when action='endpoint'. Options: search, stats, jurisdictions"
-          },
-          "workflow": {
-            "type": "string",
-            "description": "Workflow name when action='workflow'. Options: mpep-lookup, epc-research, cross-jurisdiction"
           }
         },
         "required": [

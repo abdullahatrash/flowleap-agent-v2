@@ -75,6 +75,21 @@ describe('Application Drafting findings file', () => {
 		});
 	});
 
+	it('keeps a waived Drawing Set Figure item across a validator run that has no drawing findings, but not an unwaived one', () => {
+		const previous = parseFindingsFile([
+			'# Findings', '', '## Errors', '',
+			'- `numeral-not-allowed` (FIG-1.scene.json): Numeral 12 is not in the figures list.',
+			'  - Waived: The top face is named in the description only.',
+			'- `lead-lines-cross` (FIG-2.svg): The lead lines of numerals 4 and 6 cross.',
+			'',
+		].join('\n'));
+		const current: DraftFinding[] = [{ severity: 'Error', rule: 'defined-term', file: 'draft-application.md', line: 12, message: 'Line 12 writes "control-unit"; the defined term is "control unit".' }];
+		expect(mergeFindings(current, previous)).toEqual([
+			current[0],
+			{ severity: 'Error', rule: 'numeral-not-allowed', file: 'FIG-1.scene.json', message: 'Numeral 12 is not in the figures list.', waived: { reason: 'The top face is named in the description only.' } },
+		]);
+	});
+
 	it('round-trips the waivers a click writes: each Error waived, the waived item and the Inventor Question left alone', () => {
 		const text = renderFindingsFile(findings);
 		const lines = text.split('\n');

@@ -1,0 +1,24 @@
+<!-- findings: [] -->
+<svg xmlns="http://www.w3.org/2000/svg" width="168mm" height="175.41mm" viewBox="0 0 168 175.41" data-figure="FIG-4" data-kind="3d">
+<rect width="168" height="175.41" fill="#fff"/>
+<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+<path class="edge" data-part="cam" stroke-width="0.4" d="M112.15 87.71 L112.12 86.81 L112.03 85.91 L111.9 85.02 L111.71 84.14 L111.38 82.99 L110.97 81.87 L110.47 80.78 L109.58 79.21 L108.55 77.74 L107.38 76.37 L106.11 75.1 L104.68 73.89 L103.17 72.78 L101.59 71.78 L99.95 70.88 L96.53 69.34 L93 68.11 L91.62 67.7 L90.22 67.32 L87.43 66.59 L84.65 65.82 L83.28 65.36 L81.95 64.82 L81.03 64.31 L80.15 63.74 L78.46 62.48 L76.77 61.23 L75.88 60.66 L74.99 60.12 L74.06 59.61 L73.13 59.13 L71.2 58.29 L69.27 57.46 L68.34 56.98 L67.43 56.44 L66.3 55.55 L65.21 54.6 L63.16 52.57 L61.13 50.52 L60.11 49.51 L59.06 48.52"/>
+<path class="edge" data-part="cam" stroke-width="0.4" d="M59.06 48.52 L56.22 46.07 L53.19 43.88 L51.58 42.91 L49.93 42.04 L48.21 41.28 L46.45 40.65 L44.71 40.19 L42.94 39.86 L41.15 39.7 L39.36 39.72 L38.16 39.83 L36.98 40.03 L35.82 40.32 L34.96 40.6 L34.12 40.93 L33.31 41.31 L32.51 41.73 L31.75 42.2 L31.02 42.73 L30.31 43.29 L29.64 43.89 L28.81 44.75 L28.05 45.67 L27.35 46.65 L26.44 48.2 L25.68 49.83 L25.08 51.52 L24.61 53.26 L24.28 55.1 L24.08 56.97 L24 58.84 L24.04 60.71 L24.42 64.43 L25.12 68.11 L25.45 69.52 L25.82 70.91 L26.58 73.69 L27.31 76.49 L27.59 77.9 L27.79 79.33 L27.81 80.38 L27.75 81.43 L27.51 83.52 L27.27 85.6 L27.23 86.66 L27.2 87.71 L27.23 88.76 L27.27 89.81 L27.51 91.9 L27.75 93.98 L27.81 95.03 L27.79 96.09 L27.59 97.51 L27.31 98.93 L26.58 101.72 L25.82 104.5 L25.45 105.9 L25.12 107.3 L24.42 110.98 L24.04 114.71 L24 116.58 L24.08 118.45 L24.28 120.31 L24.61 122.15 L25.08 123.89 L25.68 125.58 L26.44 127.21 L27.35 128.76 L28.05 129.74 L28.81 130.66 L29.64 131.52 L30.31 132.13 L31.02 132.69 L31.75 133.21 L32.51 133.68 L33.31 134.11 L34.12 134.48 L34.96 134.81 L35.82 135.09 L36.98 135.38 L38.16 135.58 L39.36 135.69 L41.15 135.71 L42.94 135.55 L44.71 135.22 L46.45 134.76 L48.21 134.13 L49.93 133.37 L51.58 132.5 L53.19 131.53 L56.22 129.34 L59.06 126.9"/>
+<path class="edge" data-part="cam" stroke-width="0.4" d="M59.06 126.9 L60.11 125.91 L61.13 124.89 L63.16 122.84 L65.21 120.81 L66.3 119.86 L67.43 118.97 L68.34 118.44 L69.27 117.96 L71.2 117.12 L73.13 116.29 L74.06 115.8 L74.99 115.3 L75.88 114.75 L76.77 114.19 L78.46 112.93 L80.15 111.68 L81.03 111.11 L81.95 110.59 L83.28 110.05 L84.65 109.59 L87.43 108.83 L90.22 108.09 L91.62 107.71 L93 107.3 L96.53 106.07 L99.95 104.53 L101.59 103.63 L103.17 102.63 L104.68 101.53 L106.11 100.32 L107.38 99.04 L108.55 97.67 L109.58 96.2 L110.47 94.64 L110.97 93.55 L111.38 92.42 L111.71 91.27 L111.9 90.39 L112.03 89.5 L112.12 88.61 L112.15 87.71"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M112.15 151.41 L112.15 88.61"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M112.15 86.81 L112.15 24 L144 24"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M144 151.41 L144 24"/>
+<path class="edge" data-part="camsurface" stroke-width="0.4" d="M112.15 151.41 L144 151.41"/>
+<line class="lead" data-numeral="208" data-part="cam" stroke-width="0.2" x1="21.55" y1="41.26" x2="32.51" y2="41.73"/>
+<line class="lead" data-numeral="210" data-part="cam" stroke-width="0.2" x1="75.68" y1="19.41" x2="74.99" y2="60.12"/>
+<line class="lead" data-numeral="194" data-part="camsurface" stroke-width="0.2" x1="96.73" y1="19.41" x2="112.15" y2="45.24"/>
+<line class="lead" data-numeral="196" data-part="cam" stroke-width="0.2" x1="21.55" y1="134.15" x2="32.51" y2="133.68"/>
+<path class="mark" data-numeral="154" data-part="cam" stroke-width="0.2" d="M57.56 87.71 L60.56 87.71 M59.06 86.21 L59.06 89.21"/>
+<line class="lead" data-numeral="154" data-part="cam" stroke-width="0.2" x1="56.09" y1="85.52" x2="57.56" y2="87.71"/>
+</g>
+<text class="numeral" data-numeral="208" data-part="cam" x="17" y="42.68" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">208</text>
+<text class="numeral" data-numeral="210" data-part="cam" x="75.72" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">210</text>
+<text class="numeral" data-numeral="194" data-part="camsurface" x="95.29" y="18.61" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">194</text>
+<text class="numeral" data-numeral="196" data-part="cam" x="17" y="135.95" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">196</text>
+<text class="numeral" data-numeral="154" data-part="cam" x="54.46" y="84.72" font-size="4.5" font-family="Liberation Sans, Arial, Helvetica, sans-serif" text-anchor="middle" fill="#000">154</text>
+</svg>

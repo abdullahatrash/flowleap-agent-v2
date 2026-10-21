@@ -109,8 +109,6 @@ describe('ToolNames', () => {
 			'SearchCitations',
 			'SearchForwardCitations',
 			'CitationApiGuide',
-			'SearchLegal',
-			'LegalSearchGuide',
 			'CompareClaims',
 			'PatentAnalyticsViz',
 			'PatentApiRequest',
@@ -140,7 +138,18 @@ describe('ToolNames', () => {
 		}).filter(entry => entry.issues.length > 0);
 
 		expect({ count: PATENT_TOOL_KEYS.length, duplicates: PATENT_TOOL_KEYS.length - new Set(PATENT_TOOL_KEYS).size, problems })
-			.toEqual({ count: 21, duplicates: 0, problems: [] });
+			.toEqual({ count: 19, duplicates: 0, problems: [] });
+	});
+
+	it('no longer names the retired legal tools (ADR 0017: patent law is read from the official page)', () => {
+		// `search_legal` and `legal_search_guide` reached a scraped copy of the MPEP, the EPC and the EPO
+		// Guidelines. The copy retires; the agent fetches the office's own page instead. No shim keeps the names.
+		const internalNames: readonly string[] = Object.values(ToolName);
+		const contributedNames: readonly string[] = packageJson.contributes.languageModelTools.map(tool => tool.name);
+		expect({
+			internal: internalNames.filter(name => name === 'search_legal' || name === 'legal_search_guide'),
+			contributed: contributedNames.filter(name => name === 'copilot_searchLegal' || name === 'copilot_legalSearchGuide'),
+		}).toEqual({ internal: [], contributed: [] });
 	});
 
 	it('returns original name for unmapped core tools', () => {

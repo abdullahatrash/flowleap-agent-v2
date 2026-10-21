@@ -106,8 +106,6 @@ export enum ToolName {
 	OpsApiGuide = 'ops_api_guide',
 	USPTOApiGuide = 'uspto_api_guide',
 	CitationApiGuide = 'citation_api_guide',
-	SearchLegal = 'search_legal',
-	LegalSearchGuide = 'legal_search_guide',
 	SearchAcademic = 'search_academic',
 	SearchNpl = 'search_npl',
 	GetNplWork = 'get_npl_work',
@@ -127,6 +125,10 @@ export enum ToolName {
 	StartApplicationDraft = 'start_application_draft',
 	ValidateDraft = 'validate_draft',
 	ExportDraftDocx = 'export_draft_docx',
+	RenderFigure = 'render_figure',
+	BuildDrawingSet = 'build_drawing_set',
+	ProposeFigurePart = 'propose_figure_part',
+	RemoveClaim = 'remove_claim',
 	InventorQuestions = 'inventor_questions',
 }
 
@@ -213,8 +215,6 @@ export enum ContributedToolName {
 	GetContinuity = 'copilot_getContinuity',
 	GetProsecutionTimeline = 'copilot_getProsecutionTimeline',
 	CitationApiGuide = 'copilot_citationApiGuide',
-	SearchLegal = 'copilot_searchLegal',
-	LegalSearchGuide = 'copilot_legalSearchGuide',
 	PatstatPortfolio = 'copilot_patstatPortfolio',
 	PatstatQuery = 'copilot_patstatQuery',
 	PatstatGraph = 'copilot_patstatGraph',
@@ -223,6 +223,10 @@ export enum ContributedToolName {
 	StartApplicationDraft = 'copilot_startApplicationDraft',
 	ValidateDraft = 'copilot_validateDraft',
 	ExportDraftDocx = 'copilot_exportDraftDocx',
+	RenderFigure = 'copilot_renderFigure',
+	BuildDrawingSet = 'copilot_buildDrawingSet',
+	ProposeFigurePart = 'copilot_proposeFigurePart',
+	RemoveClaim = 'copilot_removeClaim',
 	InventorQuestions = 'copilot_inventorQuestions',
 }
 
@@ -368,8 +372,6 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.OpsApiGuide]: ToolCategory.WebInteraction,
 	[ToolName.USPTOApiGuide]: ToolCategory.WebInteraction,
 	[ToolName.CitationApiGuide]: ToolCategory.WebInteraction,
-	[ToolName.SearchLegal]: ToolCategory.WebInteraction,
-	[ToolName.LegalSearchGuide]: ToolCategory.WebInteraction,
 	[ToolName.SearchAcademic]: ToolCategory.WebInteraction,
 	[ToolName.SearchNpl]: ToolCategory.WebInteraction,
 	[ToolName.GetNplWork]: ToolCategory.WebInteraction,
@@ -389,6 +391,10 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.StartApplicationDraft]: ToolCategory.Core,
 	[ToolName.ValidateDraft]: ToolCategory.Core,
 	[ToolName.ExportDraftDocx]: ToolCategory.Core,
+	[ToolName.RenderFigure]: ToolCategory.Core,
+	[ToolName.BuildDrawingSet]: ToolCategory.Core,
+	[ToolName.ProposeFigurePart]: ToolCategory.Core,
+	[ToolName.RemoveClaim]: ToolCategory.Core,
 	[ToolName.InventorQuestions]: ToolCategory.Core,
 } as const;
 

@@ -38,6 +38,13 @@ describe('Application Drafting checklist', () => {
 		expect(render({})).toMatchInlineSnapshot(`
 			"# Drafting checklist: hinge
 
+			The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+			A change to claims.md re-opens the claims approval.
+			After a change to figures.md, the next check of the figures runs the coverage again.
+			A new render of a drawn Figure needs a new review cycle.
+			A waived Error stays waived until the Error changes.
+			The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.
+
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
 			- [ ] 1. Confirm the Feature List: feature-list.md does not exist
@@ -62,6 +69,13 @@ describe('Application Drafting checklist', () => {
 	it('gates open: names the file, the line and the text to write', () => {
 		expect(render({ featureList: featureList('false'), claims: claims().replace('approved: true\n', '') })).toMatchInlineSnapshot(`
 			"# Drafting checklist: hinge (EPO)
+
+			The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+			A change to claims.md re-opens the claims approval.
+			After a change to figures.md, the next check of the figures runs the coverage again.
+			A new render of a drawn Figure needs a new review cycle.
+			A waived Error stays waived until the Error changes.
+			The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.
 
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
@@ -88,6 +102,13 @@ describe('Application Drafting checklist', () => {
 	it('Inventor Questions open and Errors open, with the answer slot lines and findings.md lines', () => {
 		expect(render({ featureList: featureList(), claims: claims(), draftOutline: outline, draft, inventorAnswers: answers(), findings: renderFindingsFile(errors), findingsCurrent: true })).toMatchInlineSnapshot(`
 			"# Drafting checklist: hinge (EPO)
+
+			The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+			A change to claims.md re-opens the claims approval.
+			After a change to figures.md, the next check of the figures runs the coverage again.
+			A new render of a drawn Figure needs a new review cycle.
+			A waived Error stays waived until the Error changes.
+			The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.
 
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
@@ -118,6 +139,13 @@ describe('Application Drafting checklist', () => {
 	it('answered but not applied, findings.md older than the draft', () => {
 		expect(render({ featureList: featureList(), claims: claims(), draftOutline: outline, draft, inventorAnswers: answers({ 'IQ-1': 'Grade 304.', 'IQ-2': 'Not stated' }), findings: renderFindingsFile(errors) })).toMatchInlineSnapshot(`
 			"# Drafting checklist: hinge (EPO)
+
+			The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+			A change to claims.md re-opens the claims approval.
+			After a change to figures.md, the next check of the figures runs the coverage again.
+			A new render of a drawn Figure needs a new review cycle.
+			A waived Error stays waived until the Error changes.
+			The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.
 
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
@@ -150,6 +178,13 @@ describe('Application Drafting checklist', () => {
 		expect(render({ featureList: featureList(), claims: claims(), draftOutline: outline, draft: applied, inventorAnswers: answers({ 'IQ-1': 'Grade 304.', 'IQ-2': 'Four millimetres.' }), findings: renderFindingsFile(waived), findingsCurrent: true })).toMatchInlineSnapshot(`
 			"# Drafting checklist: hinge (EPO)
 
+			The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+			A change to claims.md re-opens the claims approval.
+			After a change to figures.md, the next check of the figures runs the coverage again.
+			A new render of a drawn Figure needs a new review cycle.
+			A waived Error stays waived until the Error changes.
+			The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.
+
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
 			- [x] 1. Feature List confirmed: feature-list.md has \`confirmed: true\`
@@ -177,6 +212,13 @@ describe('Application Drafting checklist', () => {
 		const applied = draft.replace(/\n## Inventor Questions[\s\S]*$/, '\n');
 		expect(render({ featureList: featureList(), claims: claims(), draftOutline: outline, draft: applied, findings: renderFindingsFile([]), findingsCurrent: true, exported: true })).toMatchInlineSnapshot(`
 			"# Drafting checklist: hinge (EPO)
+
+			The loop, in order: Feature List, claims, outline, draft, findings, figures, drawings, export.
+			A change to claims.md re-opens the claims approval.
+			After a change to figures.md, the next check of the figures runs the coverage again.
+			A new render of a drawn Figure needs a new review cycle.
+			A waived Error stays waived until the Error changes.
+			The Prompts view page "Drafting with drawings: the loop" shows this loop before the first matter.
 
 			Code writes this file from the files of this folder after every drafting tool call. Do not edit it: edit the file each step names. The step numbers are the steps of the application-drafting skill.
 
@@ -210,7 +252,7 @@ describe('Application Drafting checklist', () => {
 		const noSections = `---\noffice: EPO\n---\n# Hinge\n\n## Summary\n\n<!-- src: feature:F1 -->\nA lever.\n`;
 		expect({
 			nothing: notes({ styleExemplars: 7 }),
-			gaps: notes({ featureList: featureList(), claims: claims(), draftOutline: outline, draft: noSections, figures: '# Figures\n\n## FIG. 1\n\n- 10: lever\n\n## FIGS. 2 to 4\n', styleExemplars: 1 }),
+			gaps: notes({ featureList: featureList(), claims: claims(), draftOutline: outline, draft: noSections, figures: '# Figures\n\n## FIG. 1\n\n- 10: lever\n\n## FIGS. 2 to 4\n', drawnFigures: 3, styleExemplars: 1 }),
 		}).toEqual({
 			nothing: [
 				'- Figures: figures.md does not exist',
@@ -219,7 +261,7 @@ describe('Application Drafting checklist', () => {
 				'      → Put 1 to 5 of your own filed applications or claim sets in style/ (.md, .docx, .pdf). FlowLeap copies their voice and structure only, never their facts. Leave the folder empty to use the office template style.',
 			],
 			gaps: [
-				'- Figures: 4 in figures.md',
+				'- Figures: 4 in figures.md, 3 drawn in drawings/',
 				'- Required sections: missing in draft-application.md: Technical Field, Background Art, Brief Description of the Drawings, Description of Embodiments, Claims, Abstract',
 				'      → Tell the agent: "Add the missing sections: Technical Field, Background Art, Brief Description of the Drawings, Description of Embodiments, Claims, Abstract"',
 				'- Style exemplars: 1 file in style/',

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { RECORDED_TOOLS, type PatentEvidenceSource, type PatentExecution, type PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
+import { RECORDED_TOOLS, webPageHost, type PatentEvidenceSource, type PatentExecution, type PatentExecutionSnapshot } from '../../patentai/vscode-node/patentExecutionLedger';
 import type { ReceiptOpenPoint } from '../node/priorArtReportCompletion';
 import type { PatentCandidateReview } from './patentCandidateReview';
 import { queryKey } from './patentFindBetter';
@@ -123,9 +123,39 @@ export function documentKey(publication: string): string {
 	return publication.replace(/[-.\s/]/g, '').toUpperCase().replace(/^([A-Z]{2}\d+)[A-Z]\d?$/, '$1');
 }
 
+/** Whether a publication number carries its kind code (`EP1809422B1`), so it names one publication, not a document. */
+export function hasKindCode(publication: string): boolean {
+	return /^[A-Z]{2}\d+[A-Z]\d?$/.test(publicationKey(publication));
+}
+
 /** Separators removed, kind code kept. */
 function publicationKey(publication: string): string {
 	return publication.replace(/[-.\s/]/g, '').toUpperCase();
+}
+
+/**
+ * The publication each spelling in a set names, for grouping (#729), keyed and valued in separator-free
+ * form. A spelling with a kind code names itself: an A1 and a B1 of one number are two publications
+ * with two dates and stay apart. A bare number names the one kind-coded publication of its document
+ * in the set, so a figure anchor recorded as `US4935850:figure:2` joins `US4935850A`; with none or
+ * more than one it names itself rather than a guess.
+ */
+export function publicationIdentities(publications: readonly string[]): ReadonlyMap<string, string> {
+	const spellings = [...new Set(publications.map(publicationKey))];
+	const coded = new Map<string, string[]>();
+	for (const spelling of spellings.filter(hasKindCode)) {
+		coded.set(documentKey(spelling), [...(coded.get(documentKey(spelling)) ?? []), spelling]);
+	}
+	return new Map(spellings.map(spelling => {
+		const candidates = hasKindCode(spelling) ? [] : coded.get(documentKey(spelling)) ?? [];
+		return [spelling, candidates.length === 1 ? candidates[0] : spelling];
+	}));
+}
+
+/** The distinct publications a list names by {@link publicationIdentities}, in the order first named. */
+export function distinctPublications(publications: readonly string[]): string[] {
+	const identities = publicationIdentities(publications);
+	return [...new Set(publications.map(publication => identities.get(publicationKey(publication)) ?? publicationKey(publication)))];
 }
 
 /**
@@ -461,6 +491,48 @@ export function rowReferences(review: PatentCandidateReview): readonly string[] 
 		if (row.kind === 'feature' && claim) { return `${claim}.${next(`claim ${claim}`)}`; }
 		return `row${index + 1}`;
 	});
+}
+
+/** A document read from the web that a row's disclosure rests on. */
+export interface WebCitation {
+	readonly publication: string;
+	readonly host: string;
+}
+
+/**
+ * The web documents a row's disclosure rests on (#750): every anchor the row cites (its sources,
+ * its evidence, its elements) that resolves to a web source, one entry per publication. An
+ * unresolved row establishes no disclosure and so rests on nothing, exactly as for a drawing reading.
+ */
+export function webSourcesOf(row: PatentCoverageRow, sources: ReadonlyMap<string, PatentEvidenceSource>): readonly WebCitation[] {
+	if (row.status === 'unresolved') { return []; }
+	const cited = new Map<string, WebCitation>();
+	for (const anchor of [...(row.sourceAnchors ?? []), ...(row.evidence ?? []).map(item => item.anchor), ...(row.elements ?? []).flatMap(element => element.anchor ? [element.anchor] : [])]) {
+		const source = sources.get(anchor);
+		if (source?.textSource !== 'web') { continue; }
+		const publication = publicationKey(source.reference.publicationNumber);
+		if (!cited.has(publication)) { cited.set(publication, { publication, host: webPageHost(source.url) }); }
+	}
+	return [...cited.values()];
+}
+
+/**
+ * One open point per document read from the web (#750), `source-<pub>`, naming the rows that rest
+ * on it, in publication order, so the expert decides whether to confirm it against the official
+ * full text or a certified copy. The writer adds these after the drawing points.
+ */
+export function webSourceOpenPoints(review: PatentCandidateReview, sources: ReadonlyMap<string, PatentEvidenceSource>): readonly ReceiptOpenPoint[] {
+	const references = rowReferences(review);
+	const documents = new Map<string, { host: string; rows: string[] }>();
+	(review.coverage ?? []).forEach((row, index) => {
+		for (const cited of webSourcesOf(row, sources)) {
+			const entry = documents.get(cited.publication) ?? { host: cited.host, rows: [] };
+			entry.rows.push(references[index]);
+			documents.set(cited.publication, entry);
+		}
+	});
+	return [...documents].sort(([first], [second]) => first.localeCompare(second))
+		.map(([publication, entry]) => ({ id: `source-${publication}`, text: `Row(s) ${entry.rows.join(', ')} rest on web page text of ${publication} (${entry.host}), not official full text` }));
 }
 
 /** The chart wording of a status that leaves a point open. */

@@ -107,8 +107,8 @@ describe('a coverage element that rests on a recorded drawing', () => {
 			uncited: rendered.split('\n').filter(line => line.startsWith('| EP2000000A1')).pop(),
 			log: record.split('\n').find(line => line.endsWith('not counts of documents reviewed.')),
 		}).toEqual({
-			retrieved: '| EP2000000A1 | Unknown | Unknown | unrecorded |',
-			uncited: '| EP2000000A1 | Unknown | Unknown | figures (pages 3-5) | unrecorded |',
+			retrieved: '| EP2000000A1 | Unknown | Unknown | unrecorded | — |',
+			uncited: '| EP2000000A1 | Unknown | Unknown | figures (pages 3-5) | unrecorded | — |',
 			log: '1 recorded search outcomes; 1 recorded detail outcomes; 2 recorded figure outcomes. These are tool invocations, not counts of documents reviewed.',
 		});
 	});
