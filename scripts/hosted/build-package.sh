@@ -79,6 +79,14 @@ else
 		(cd "$src" && FLOWLEAP_VERSION="${FLOWLEAP_VERSION:-$ref}" node build/flowleap/stamp-flowleap-version.mjs)
 	fi
 
+	# The chat extension's .esbuild.mts stamps its package.json with buildType "prod" only
+	# when BUILD_SOURCEVERSION is set (upstream's Azure convention; VSCODE_QUALITY picks the
+	# stable version line). flowleap-release.yml sets the same two (#845). Without them the
+	# package shipped a "dev" build whose activation ran configureDevPackages and logged
+	# "Cannot find module 'source-map-support'".
+	export VSCODE_QUALITY="${VSCODE_QUALITY:-stable}"
+	export BUILD_SOURCEVERSION="$(git -C "$src" rev-parse HEAD)"
+
 	# The sequence from #521 (H1b). The mangling compile fails, so the -min-ci task
 	# runs after the non-mangled compile and the separate extension tasks.
 	log "gulp build (about 15 minutes on a fast machine)"
@@ -98,6 +106,7 @@ else
 	server="$work/vscode-reh-web-linux-x64"
 	[ -x "$server/bin/flowleap-server" ] || die "the gulp build did not produce $server/bin/flowleap-server"
 	[ -f "$server/out/vs/platform/agentHost/node/agentHostMain.js" ] || die "agentHostMain.js is missing from the package (#517)"
+	grep -q '"buildType": *"prod"' "$server/extensions/copilot/package.json" || die "the chat extension is not stamped as a prod build (BUILD_SOURCEVERSION was not honoured)"
 fi
 
 if [[ "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
