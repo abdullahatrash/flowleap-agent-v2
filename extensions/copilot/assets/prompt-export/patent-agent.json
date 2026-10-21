@@ -1,0 +1,127 @@
+{
+	"sourceFile": "extensions/copilot/src/extension/prompts/node/agent/patentAIPrompt.tsx",
+	"renderedWith": {
+		"tools": [
+			"search_patents",
+			"search_register",
+			"get_legal_status",
+			"get_patent_family",
+			"get_register_events",
+			"get_continuity",
+			"get_prosecution_timeline",
+			"search_academic",
+			"search_npl",
+			"get_npl_work",
+			"compare_patents",
+			"get_patent_summary",
+			"get_patent_term",
+			"patstat_portfolio",
+			"patstat_query"
+		],
+		"webSearchAvailable": false,
+		"subscriptionStatus": "unknown"
+	},
+	"includedTools": [
+		"mcp__flowleap__search_patents",
+		"mcp__flowleap__search_register",
+		"mcp__flowleap__get_legal_status",
+		"mcp__flowleap__get_patent_family",
+		"mcp__flowleap__get_register_events",
+		"mcp__flowleap__get_continuity",
+		"mcp__flowleap__get_prosecution_timeline",
+		"mcp__flowleap__search_academic",
+		"mcp__flowleap__search_npl",
+		"mcp__flowleap__get_npl_work",
+		"mcp__flowleap__compare_patents",
+		"mcp__flowleap__get_patent_summary",
+		"mcp__flowleap__get_patent_term",
+		"mcp__flowleap__patstat_portfolio",
+		"mcp__flowleap__patstat_query"
+	],
+	"excludedTools": [
+		"get_patent_details",
+		"get_patent_figures",
+		"patent_api_request",
+		"search_citations",
+		"search_forward_citations",
+		"ops_api_guide",
+		"uspto_api_guide",
+		"citation_api_guide",
+		"patstat_api_guide",
+		"write_patent_results",
+		"compare_claims",
+		"patent_analytics_viz",
+		"patstat_graph",
+		"patent_search_subagent",
+		"read_pdf",
+		"examiner_baseline",
+		"start_application_draft",
+		"validate_draft",
+		"export_draft_docx",
+		"render_figure",
+		"build_drawing_set",
+		"propose_figure_part",
+		"remove_claim",
+		"inventor_questions"
+	],
+	"gaps": [
+		{
+			"name": "citation_api_guide",
+			"count": 3
+		},
+		{
+			"name": "create_file",
+			"count": 1
+		},
+		{
+			"name": "fetch_webpage",
+			"count": 8
+		},
+		{
+			"name": "get_patent_details",
+			"count": 8
+		},
+		{
+			"name": "ops_api_guide",
+			"count": 3
+		},
+		{
+			"name": "patent_api_request",
+			"count": 2
+		},
+		{
+			"name": "read_file",
+			"count": 2
+		},
+		{
+			"name": "run_in_terminal",
+			"count": 1
+		},
+		{
+			"name": "search_citations",
+			"count": 6
+		},
+		{
+			"name": "search_forward_citations",
+			"count": 3
+		},
+		{
+			"name": "uspto_api_guide",
+			"count": 8
+		},
+		{
+			"name": "vscode_askQuestions",
+			"count": 8
+		},
+		{
+			"name": "web_search",
+			"count": 2
+		},
+		{
+			"name": "write_patent_results",
+			"count": 1
+		}
+	],
+	"wordCount": 8010,
+	"generatedBy": "extensions/copilot: PATENT_PROMPT_EXPORT=write npx vitest run src/extension/prompts/node/agent/test/patentPromptExport.spec.tsx"
+}
