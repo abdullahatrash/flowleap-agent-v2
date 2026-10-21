@@ -14,8 +14,21 @@ import type { FlowLeapSubscriptionStatus } from '../../../../patentai/common/tri
 import { renderPromptElement } from '../../base/promptRenderer';
 import { PatentAIInstructions } from '../patentAIPrompt';
 
-/** The full patent tool surface that activates every decision-tree branch. */
+/**
+ * The IDE-only tools the agent mode always hands the prompt beside the patent tools: the
+ * question carousel, web fetch and the coding/file tools. The MCP harness has none of them.
+ */
+const IDE_CORE_TOOLS: readonly ToolName[] = [
+	ToolName.CoreAskQuestions,
+	ToolName.FetchWebPage,
+	ToolName.ReadFile,
+	ToolName.CreateFile,
+	ToolName.CoreRunInTerminal,
+];
+
+/** The full IDE tool surface that activates every decision-tree branch. */
 const ALL_PATENT_TOOLS: readonly ToolName[] = [
+	...IDE_CORE_TOOLS,
 	ToolName.SearchPatents,
 	ToolName.GetPatentDetails,
 	ToolName.GetPatentFigures,
@@ -664,5 +677,105 @@ suite('PatentAIInstructions patent law', () => {
 			googlePatentsFetchKept: true,
 			nplFetchKept: true,
 		});
+	});
+});
+
+suite('PatentAIInstructions tool-availability gates', () => {
+	/**
+	 * The harness shape (mirrors patentPromptExport.spec.tsx): only the typed tools with an MCP twin,
+	 * none of the IDE-only tools, no guides, no citation tools, no web search.
+	 */
+	const HARNESS_TOOLS: readonly ToolName[] = [
+		ToolName.SearchPatents, ToolName.SearchRegister, ToolName.GetLegalStatus, ToolName.GetPatentFamily, ToolName.GetRegisterEvents,
+		ToolName.GetContinuity, ToolName.GetProsecutionTimeline, ToolName.SearchAcademic, ToolName.SearchNpl, ToolName.GetNplWork,
+		ToolName.ComparePatents, ToolName.GetPatentSummary, ToolName.GetPatentTerm, ToolName.PatstatPortfolio, ToolName.PatstatQuery,
+	];
+	const ideOnlyToolNames = /\b(vscode_askQuestions|fetch_webpage|read_file|create_file|run_in_terminal|web_search)\b/;
+
+	test('without the IDE-only tools no passage names one, and the jurisdiction gate asks in the reply', async () => {
+		const output = await renderPatentInstructions(HARNESS_TOOLS, { webSearchAvailable: false });
+		expect({
+			namesAnIdeOnlyTool: ideOnlyToolNames.test(output),
+			asksInReply: output.includes('JURISDICTION GATE - ASK THE USER IN YOUR REPLY') && output.includes('Ask the user in your reply which jurisdiction to search, then end the turn and wait for the answer. Offer exactly these options:'),
+			listsTheOptions: output.includes('• US patents only (USPTO)') && output.includes('• European/International (EP/WO)') && output.includes('• Both (comprehensive) — recommended'),
+			skipRule: output.includes('**PROCEED IMMEDIATELY (skip the question) only when jurisdiction IS explicit'),
+			confirmRule: output.includes('Never ask to CONFIRM a scope the user already stated') && output.includes('make that single confirmation question your first action'),
+			firstAction: output.includes('your FIRST action for these branches is the jurisdiction question in your reply') && output.includes('the jurisdiction question in your reply IS that first action'),
+			carouselGone: output.includes('carousel'),
+			codingLine: output.includes('→ Use the coding tools this session offers'),
+			usptoWithoutGuide: output.includes('the tool\'s input schema supplies the request envelope') && output.includes('input schema for provider="uspto"'),
+			noWebTool: output.includes('No web tool is available in this session, so the office\'s page cannot be read') && output.includes('**L) CN/JP/KR PATENTS, NPL BEYOND THE BACKEND, OR A DOCUMENT A BACKEND ROUTE CANNOT RETURN?**') && output.includes('this rung cannot be taken') && output.includes('THE ABSTRACT IS THE TEXT YOU HAVE'),
+			citationBranchGone: output.includes('**I) OFFICE ACTION CITATIONS') || output.includes('search_citations') || output.includes('citation_api_guide'),
+			firstCheckNamesTheGap: output.includes('→ that is a citation question no tool in this session answers — say so, NOT this branch.'),
+			branchListTrimmed: output.includes('F/G patent lookup and figures, J legal, K coding, L coverage gaps) are NOT jurisdiction-gated'),
+			stillPatentRole: output.includes('<patentAIIdentity>') && output.includes('PATENT TOOL DECISION TREE'),
+		}).toEqual({
+			namesAnIdeOnlyTool: false,
+			asksInReply: true,
+			listsTheOptions: true,
+			skipRule: true,
+			confirmRule: true,
+			firstAction: true,
+			carouselGone: false,
+			codingLine: true,
+			usptoWithoutGuide: true,
+			noWebTool: true,
+			citationBranchGone: false,
+			firstCheckNamesTheGap: true,
+			branchListTrimmed: true,
+			stillPatentRole: true,
+		});
+	});
+
+	test('the plain-text jurisdiction question carries the key-state annotations', async () => {
+		const output = await renderPatentInstructions(HARNESS_TOOLS, { webSearchAvailable: false, subscriptionStatus: 'active', hasEpoOpsKey: true, hasUsptoOdpKey: false });
+		expect({
+			annotatedOption: output.includes('• US patents only (USPTO) — needs your USPTO ODP key (not set)'),
+			plainOption: output.includes('• European/International (EP/WO)\n'),
+			carryRule: output.includes('Carry those key-state annotations into the options exactly as written'),
+		}).toEqual({ annotatedOption: true, plainOption: true, carryRule: true });
+	});
+
+	test('web search without fetch_webpage routes the law and the web fallback through web_search', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.FetchWebPage), { webSearchAvailable: true });
+		expect({
+			fetchGone: output.includes('fetch_webpage'),
+			lawViaWebSearch: output.includes('Read the law from the office\'s own page with web_search'),
+			oneWebTool: output.includes('One web tool: web_search (available to this model). Use it (a) for offices'),
+			ladderViaWebSearch: output.includes('(iii) **Web fallback** — web_search against Google Patents or freepatentsonline to fetch-and-verify'),
+			criticalRule: output.includes('- CN/JP/KR patents: web search (no dedicated backend tool)'),
+		}).toEqual({ fetchGone: false, lawViaWebSearch: true, oneWebTool: true, ladderViaWebSearch: true, criticalRule: true });
+	});
+
+	test('each IDE-only or guide tool gates exactly its own passages', async () => {
+		const gated: [ToolName, RegExp][] = [
+			[ToolName.ReadFile, /read_file|offloaded to a file|ordinary evidence analysis uses local lookup/],
+			[ToolName.WritePatentResults, /write_patent_results/],
+			[ToolName.PatentApiRequest, /patent_api_request/],
+			[ToolName.USPTOApiGuide, /uspto_api_guide/],
+			[ToolName.OpsApiGuide, /ops_api_guide/],
+			[ToolName.CitationApiGuide, /citation_api_guide/],
+			[ToolName.GetPatentDetails, /get_patent_details|evidenceLookup/],
+		];
+		const leaks: string[] = [];
+		for (const [tool, pattern] of gated) {
+			const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== tool));
+			if (pattern.test(output)) {
+				leaks.push(`${tool}: ${output.match(pattern)![0]}`);
+			}
+		}
+		expect(leaks).toEqual([]);
+	});
+
+	test('without the citation tools branch I is absent and the citation guide block defers to nothing', async () => {
+		const output = await renderPatentInstructions(ALL_PATENT_TOOLS.filter(t => t !== ToolName.SearchCitations && t !== ToolName.SearchForwardCitations));
+		expect({
+			branchIGone: output.includes('**I) OFFICE ACTION CITATIONS'),
+			citationToolsGone: /search_citations|search_forward_citations/.test(output),
+			guideKept: output.includes('CITATION SEARCH API GUIDE TOOL (`citation_api_guide`)'),
+			deferGone: output.includes('DEFER TO'),
+			criticalRuleGone: output.includes('- Office action citations:'),
+			firstCheckRoutesToGraph: output.includes('→ that is branch C4 (`patstat_graph`) for the worldwide citing network, NOT this branch.'),
+		}).toEqual({ branchIGone: false, citationToolsGone: false, guideKept: true, deferGone: false, criticalRuleGone: false, firstCheckRoutesToGraph: true });
 	});
 });

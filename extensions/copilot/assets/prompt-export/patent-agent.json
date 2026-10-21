@@ -64,64 +64,7 @@
 		"remove_claim",
 		"inventor_questions"
 	],
-	"gaps": [
-		{
-			"name": "citation_api_guide",
-			"count": 3
-		},
-		{
-			"name": "create_file",
-			"count": 1
-		},
-		{
-			"name": "fetch_webpage",
-			"count": 8
-		},
-		{
-			"name": "get_patent_details",
-			"count": 8
-		},
-		{
-			"name": "ops_api_guide",
-			"count": 3
-		},
-		{
-			"name": "patent_api_request",
-			"count": 2
-		},
-		{
-			"name": "read_file",
-			"count": 2
-		},
-		{
-			"name": "run_in_terminal",
-			"count": 1
-		},
-		{
-			"name": "search_citations",
-			"count": 6
-		},
-		{
-			"name": "search_forward_citations",
-			"count": 3
-		},
-		{
-			"name": "uspto_api_guide",
-			"count": 8
-		},
-		{
-			"name": "vscode_askQuestions",
-			"count": 8
-		},
-		{
-			"name": "web_search",
-			"count": 2
-		},
-		{
-			"name": "write_patent_results",
-			"count": 1
-		}
-	],
-	"wordCount": 8010,
+	"gaps": [],
+	"wordCount": 7385,
 	"generatedBy": "extensions/copilot: PATENT_PROMPT_EXPORT=write npx vitest run src/extension/prompts/node/agent/test/patentPromptExport.spec.tsx"
 }
