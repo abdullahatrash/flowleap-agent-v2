@@ -47,6 +47,7 @@ export const PATENT_TOOL_NAMES: readonly ToolName[] = [
 	ToolName.GetPatentFamily,
 	ToolName.GetRegisterEvents,
 	ToolName.SearchRegister,
+	ToolName.GetSearchSyntax,
 	ToolName.OpsApiGuide,
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
