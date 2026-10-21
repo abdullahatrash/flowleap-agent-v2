@@ -66,6 +66,10 @@ concurrency:
 
 env:
   VSCODE_QUALITY: stable
+  # The copilot extension's .esbuild.mts stamps package.json with buildType "prod" only when this
+  # is set (upstream's Azure convention). Without it every release shipped a "dev" build whose
+  # activation ran configureDevPackages and logged "Cannot find module 'source-map-support'".
+  BUILD_SOURCEVERSION: ${{ github.sha }}
   # Memory optimization for large builds
   NODE_OPTIONS: --max-old-space-size=8192
 

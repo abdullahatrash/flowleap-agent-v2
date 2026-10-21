@@ -70,17 +70,22 @@ suite('ModelPickerPresentation', () => {
 
 	test('requires setup only when setup opens a sign-in or sign-up dialog', () => {
 		const cases = [
-			{ name: 'Unknown', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: false },
-			{ name: 'Unknown + anonymous', entitlement: ChatEntitlement.Unknown, anonymous: true, hasByokModels: false },
-			{ name: 'Unknown + BYOK', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: true },
-			{ name: 'Available', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: false },
-			{ name: 'Available + BYOK', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: true },
-			{ name: 'Unavailable', entitlement: ChatEntitlement.Unavailable, anonymous: false, hasByokModels: false },
-			{ name: 'Unresolved', entitlement: ChatEntitlement.Unresolved, anonymous: false, hasByokModels: false },
-			{ name: 'Free', entitlement: ChatEntitlement.Free, anonymous: false, hasByokModels: false },
-			{ name: 'Pro', entitlement: ChatEntitlement.Pro, anonymous: false, hasByokModels: false },
-			{ name: 'EDU', entitlement: ChatEntitlement.EDU, anonymous: false, hasByokModels: false },
-			{ name: 'Enterprise', entitlement: ChatEntitlement.Enterprise, anonymous: false, hasByokModels: false },
+			{ name: 'Unknown', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Unknown + anonymous', entitlement: ChatEntitlement.Unknown, anonymous: true, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Unknown + BYOK', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: true, clientByokEnabled: false },
+			{ name: 'Available', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Available + BYOK', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: true, clientByokEnabled: false },
+			{ name: 'Unavailable', entitlement: ChatEntitlement.Unavailable, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Unresolved', entitlement: ChatEntitlement.Unresolved, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Free', entitlement: ChatEntitlement.Free, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Pro', entitlement: ChatEntitlement.Pro, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'EDU', entitlement: ChatEntitlement.EDU, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			{ name: 'Enterprise', entitlement: ChatEntitlement.Enterprise, anonymous: false, hasByokModels: false, clientByokEnabled: false },
+			// FlowLeap BYOK-only mode: a fresh machine with no key (signed in or not) is "no models",
+			// never Copilot's sign-in setup.
+			{ name: 'BYOK mode + Unknown', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: false, clientByokEnabled: true },
+			{ name: 'BYOK mode + Available', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: false, clientByokEnabled: true },
+			{ name: 'BYOK mode + Available + BYOK', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: true, clientByokEnabled: true },
 		];
 
 		assert.deepStrictEqual(Object.fromEntries(cases.map(c => [c.name, modelPickerRequiresSetup(c)])), {
@@ -95,6 +100,9 @@ suite('ModelPickerPresentation', () => {
 			'Pro': false,
 			'EDU': false,
 			'Enterprise': false,
+			'BYOK mode + Unknown': false,
+			'BYOK mode + Available': false,
+			'BYOK mode + Available + BYOK': false,
 		});
 	});
 
