@@ -117,7 +117,25 @@ gh secret list
    awk "/^## \[X.Y.Z\]/{flag=1;next}/^## \[/{flag=0}flag" CHANGELOG.md
    ```
 
-2. Commit and tag. There is no version to bump: `build/flowleap/stamp-flowleap-version.mjs`
+2. Fresh-machine acceptance lap. Run the packaged build once on a clean
+   macOS user account (or a clean machine), signed in as a Pro account with
+   NO API key saved. Do this before you push the tag. Get the DMG from a
+   `dry_run=true` macOS run of the release workflow on the release commit (see
+   "Testing a pipeline change without minting a release"). Check:
+   - [ ] The Models picker reads "No models available" with "Add Model"
+         inside. Signed out, it reads "Sign In · Add Model".
+   - [ ] The status bar never shows "Getting chat ready...".
+   - [ ] The dev-tools console has no `Cannot find module 'source-map-support'`
+         line.
+   - [ ] Add a key in FlowLeap Settings. The picker now lists models.
+
+   Why: this is the state every new paying customer starts in, and a throwaway
+   profile cannot stand in for it because it cannot complete sign-in (#838).
+   v0.9.0 shipped a picker that said "Sign in to use FlowLeap" and hung at
+   "Getting chat ready..." in exactly this state. CI was green: the unit test
+   encoded upstream's rule, and no run had used a Pro account with no key.
+
+3. Commit and tag. There is no version to bump: `build/flowleap/stamp-flowleap-version.mjs`
    reads the tag in CI and stamps `extensions/flowleap/package.json` at build
    time. The root `package.json` version is Code OSS's and is not the product
    version.
@@ -131,14 +149,14 @@ gh secret list
    Tag only a commit whose CI is already green — the release workflow does not
    re-run the PR gate.
 
-3. Watch the run in the **Actions** tab for `flowleap-release.yml`. Confirm:
+4. Watch the run in the **Actions** tab for `flowleap-release.yml`. Confirm:
    - macOS build+sign+notarize+staple jobs succeed.
    - Both Windows build jobs (x64 and arm64) succeed, each uploading its
      unsigned zip + two `.exe` installers — four `.exe` in total — plus
      `SHASUMS256.txt`.
    - A **draft** GitHub release was created for the tag.
 
-4. On a Windows machine with SimplySign Desktop running and logged in:
+5. On a Windows machine with SimplySign Desktop running and logged in:
 
    ```powershell
    pwsh build/flowleap/sign-windows-release.ps1 -Tag vX.Y.Z
@@ -146,7 +164,7 @@ gh secret list
 
    Omit `-Tag` to auto-sign the most recently created draft release.
 
-5. Verification checklist before publishing:
+6. Verification checklist before publishing:
    - [ ] macOS: `spctl -a -vvv -t install /path/to/FlowLeap.app` reports
          `accepted` and `source=Notarized Developer ID`.
    - [ ] macOS: `xcrun stapler validate /path/to/FlowLeap.app` succeeds.
@@ -169,7 +187,7 @@ gh secret list
    - [ ] `SHASUMS256.txt` on the release matches the hashes of the actual
          uploaded files (`sha256sum -c` locally after downloading).
 
-6. Publish to the PUBLIC distribution repo. End users and the website never see
+7. Publish to the PUBLIC distribution repo. End users and the website never see
    this repo's draft release — the download page, changelog page and
    `/api/latest-version` on `flowleap-website-v2` all read the GitHub releases
    of the public repo `abdullahatrash/flowleap-releases`. Copy the finished
@@ -190,6 +208,32 @@ gh secret list
 
    The draft on this (source) repo can stay a draft — it serves as the internal
    build record; publishing it is optional and has no user-facing effect.
+
+## Upstream sync
+
+The fork follows upstream VS Code by whole-tree copy, not by merge. The method
+is PRD 0017 (`docs/prd/0017-agents-window-wholesale-sync.md`) and the replay
+kit is `build/upstream-sync/1.140/` (read its `README.md`). The next sync is a
+re-run of that kit against a newer upstream reference plus one short intent
+list.
+
+After every sync, before the sync PR merges:
+
+1. Entitlement review. Walk every Copilot sign-in, entitlement and
+   "setup required" rule under `src/vs/workbench/contrib/chat/browser/`.
+   For each rule, do one of two things:
+   - rewrite it for BYOK mode (gate it on `clientByokEnabled`), or
+   - show it is unreachable in the fork and say where it is cut off.
+
+   Record the list in the sync PR. Two rules slipped through the 1.140 sync and
+   shipped in v0.6.0 through v0.9.0: `modelPickerRequiresSetup` in
+   `widget/input/modelPicker/modelPickerPresentation.ts` sent a Pro user with
+   no key to Copilot setup, and `CHAT_SETUP_ACTION_ID` in
+   `actions/chatActions.ts` was the action that hung at "Getting chat ready...".
+   A green unit test is not proof here: upstream's tests encode upstream's rule.
+
+2. Run the fresh-machine acceptance lap from "Cutting a release" on the synced
+   build.
 
 ## Windows specifics
 
