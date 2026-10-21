@@ -1,6 +1,6 @@
 ---
 name: flowleap-tools
-description: Discover and run FlowLeap backend tools through the agent-first /v1/tools facade — one stable contract (search_patents, get_bibliography, get_claims, get_patent_summary, compare_patents, reference_search, …) instead of provider-specific endpoints. Trigger when an agent needs patent data and wants a uniform tool interface, needs to discover what the backend can do, or wants compound operations like patent summaries, comparisons, or prosecution timelines.
+description: Discover and run FlowLeap backend tools through the agent-first /v1/tools facade — one stable contract (search_patents, get_bibliography, get_claims, get_patent_summary, compare_patents, …) instead of provider-specific endpoints. Trigger when an agent needs patent data and wants a uniform tool interface, needs to discover what the backend can do, or wants compound operations like patent summaries, comparisons, or prosecution timelines.
 ---
 
 # FlowLeap Tools (agent-first facade)
@@ -80,14 +80,25 @@ request.
 read it rather than trusting this snapshot when the two disagree.
 
 Search: `search_patents` (`provider=epo_ops` CQL | `uspto` Lucene),
-`get_search_syntax`, `search_uspto_portfolio_by_customer_number`.
+`search_register` (EP Register CQL, EP applications only — the one search
+with a representative index: `re=` representative, `op=` opponent, `nm=`
+name in any role, surname-first, for when a role index returns 0;
+`search_patents` has none at any office), `get_search_syntax` (`provider`
+`epo_ops` | `uspto` | `epo_register`), `search_uspto_portfolio_by_customer_number`.
 
-Retrieval (any publication number, EPO OPS worldwide): `get_bibliography`,
-`get_abstract`, `get_claims`, `get_description`, `get_fulltext`, `get_family`
-(INPADOC extended family), `get_patent_family` (simple family),
-`get_legal_status`, `get_register_events`, `get_register_biblio` (EP
-representatives and opponents), `get_citations`, `get_patent_image`,
+Retrieval, worldwide bibliographic (any publication number, EPO OPS):
+`get_bibliography`, `get_abstract`, `get_family` (INPADOC extended family),
+`get_patent_family` (simple family), `get_legal_status`,
+`get_register_events`, `get_register_biblio` (EP representatives and
+opponents), `get_citations`, `get_patent_image`
+(through MCP, `include_images: true` returns each PNG or JPEG page as an image
+content block you can see, with the page metadata in the text block),
 `convert_patent_number`.
+
+Text, by office: `get_claims` (EP and WO from EPO OPS; US from BigQuery, in
+English only), `get_description` (EP and WO from EPO OPS), `get_fulltext` (EP
+and WO). Every other office answers `FULLTEXT_UNAVAILABLE`. For an office
+with no text source, use the family-member workaround in `flowleap-shared`.
 
 US lookups and prosecution: `get_us_grant`, `get_us_application`,
 `get_continuity`, `get_transactions`, `get_assignments`, `get_foreign_priority`,
@@ -100,10 +111,9 @@ Citations: `search_office_action_citations` (by application),
 Compound (one call, multiple sources): `get_patent_summary`, `compare_patents`
 (2-10 patents), `get_prosecution_timeline`, `get_patent_term`.
 
-Literature and reference: `search_academic` (Semantic Scholar + arXiv),
-`search_npl` (OpenAlex), `get_npl_work` (one cited paper to its OpenAlex
-record), `reference_search` (patent-law RAG: EPC, EPO
-Guidelines, MPEP, …), `get_legal_jurisdictions`.
+Literature: `search_academic` (Semantic Scholar + arXiv), `search_npl`
+(OpenAlex), `get_npl_work` (one cited paper to its OpenAlex record). Patent law
+is not a tool: read it from the office's own page with `flowleap-legal`.
 
 Analytics and documents: `patent_analytics` (Topic Analytics, free-text
 keywords), `ocr`. Meta: `server_info`.

@@ -1,6 +1,6 @@
 ---
 name: flowleap-ops
-description: Direct EPO Open Patent Services access through the FlowLeap backend — CQL search plus per-document bibliography, claims, description, family, legal status, and abstract. Trigger when an agent needs authoritative EPO document data for a known publication number, full claims or description text, family members, legal-status events, or a raw OPS CQL search. For query-building or ranked discovery use flowleap-patent; use OPS for authoritative per-document data.
+description: Direct EPO Open Patent Services access through the FlowLeap backend — CQL search, EP Register search by representative or opponent, plus per-document bibliography, family, legal status and abstract worldwide, and claims and description for EP and WO (US claims from BigQuery, English only). Trigger when an agent needs authoritative EPO document data for a known publication number, claims or description text for EP, WO or US, family members, legal-status events, a raw OPS CQL search, or how many EP filings a professional representative handles. For query-building or ranked discovery use flowleap-patent; use OPS for authoritative per-document data.
 ---
 
 # FlowLeap OPS
@@ -35,6 +35,51 @@ flowleap ops search --cql <query> [flags]
 | `--start` | Start position | `1` |
 | `--end` | End position | `25` |
 
+### EP Register search
+
+```bash
+flowleap ops register-search --cql <query> [--start 1] [--end 25]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--cql` | EP Register CQL (required). Quote a multi-word value: `re="Muster Patentanwälte"` | — |
+| `--start` | Start position | `1` |
+| `--end` | End position (max 100 per page) | `25` |
+
+`register-search` is the one search with a representative index. It searches
+the EP Register (EP applications only) with register CQL and answers OPS's
+`total` for the whole query plus one row per EP application: its application
+number, earliest EP publication (`docId`, null while none is published),
+title, applicants, representatives of record, status, opponents and dates.
+Rows arrive in OPS register order, not ranked. Report `total` as the count and
+the page as examples.
+
+- Indexes that work: `re` (professional representative), `op` (opponent),
+  `ia` (inventor or applicant), `pa`, `in`, `ti`, `pn`, `ap`, `pr`, `pd`, `ic`.
+- `nm` = a name in any role (applicant, inventor, representative, opponent).
+  Use it when a role index (`re`/`op`/`ia`/`pa`/`in`) returns 0, to find
+  which role the person holds. The register stores names surname-first, so
+  use the surname alone or `nm="Surname, First"`. Measured 2026-10-15:
+  `re=Boniberger` 0, `op=Boniberger` 3, `nm=Boniberger` 5,
+  `nm="Bernhard Boniberger"` 0, `nm="Boniberger, Bernhard"` 3.
+- A zero-result role-index query can carry a top-level `hint` string from
+  the backend (for example "No results for re=Boniberger. The name may
+  appear in another role; retry with nm=Boniberger."). Human and table
+  output print it as `Hint: <text>` after the Total line; `--json` keeps it
+  in the data. Follow the hint before you retry a spelling.
+- Not register indexes: `ag`, `rep`, `ab`, `cpc`, `st`, `ps`, `fd`, `ctr`.
+  `flowleap --json tools run get_search_syntax provider=epo_register` lists
+  both sets.
+- `total` is capped at 10000.
+- A representative count from here is EP-only: say so. `ops search` and
+  `patent search` (`search_patents`) have no representative index at any
+  office; a bare name there is a fuzzy full-text hit, not a representative
+  count. The US attorney of record is a different thing — a USPTO-registered
+  practitioner — read with `uspto attorney` per application or
+  `uspto search` on `recordAttorney.attorneyBag.lastName`; an EP agent
+  answers 0 there.
+
 ### Document Commands
 
 All document commands take a patent document number (e.g., `EP1234567`).
@@ -50,7 +95,11 @@ flowleap ops family <doc>                  # Patent family members
 flowleap ops legal <doc>                   # Legal status events + designated states
 flowleap ops abstract <doc>                # Abstract text
 flowleap ops register-biblio <EP-doc>      # EP Register: representatives, opponents, status
+flowleap ops register-search --cql <query>  # EP Register search: re=<representative>, op=<opponent>, nm=<name in any role>
 ```
+
+`claims` serves EP and WO from EPO OPS and US from BigQuery (English only);
+`description` serves EP and WO. For an office with no text source, use the family-member workaround in `flowleap-shared`.
 
 `biblio --resolve-npl` looks each `citedReferences[].npl` string up in
 OpenAlex and attaches `nplWork` (`status` `matched` | `candidates` |
@@ -73,13 +122,13 @@ number), convert it to DOCDB first so OPS can match it:
 flowleap convert-number US5443036.A --to docdb
 ```
 
-A `SERVER.EntityNotFound` on some KR/CN documents is an OPS coverage gap, not a
+A `SERVER.EntityNotFound` on some KR/CN documents is an OPS holding gap, not a
 retryable error — don't retry it; fall back to another source for that document.
 
 ### Response envelope
 
 Every `ops` command runs a tool on the Tools facade — `search_patents` for
-`ops search`, then `get_bibliography`, `get_abstract`, `get_claims`,
+`ops search`, `search_register` for `ops register-search`, then `get_bibliography`, `get_abstract`, `get_claims`,
 `get_description`, `get_legal_status`, `get_family` and `get_register_biblio`
 for the document reads.
 The per-source provider route each used to call is a retired endpoint.
@@ -156,14 +205,24 @@ flowleap ops biblio EP1234567
 # Bibliography plus the EPC states the filing designates (extra EPO read)
 flowleap ops biblio EP1234567 --designated-states
 
-# Get claims in German
-flowleap ops claims US10123456 --lang de
+# Get claims in German (EP and WO only; US claims are BigQuery, English)
+flowleap ops claims EP1234567 --lang de
 
 # Get family members (JSON for agents)
 flowleap ops family EP1234567 --json
 
 # Search with pagination
 flowleap ops search --cql "ti=battery" --start 1 --end 50
+
+# How many EP applications a representative handles (JSON: total + one row per application)
+flowleap --json ops register-search --cql 're=Kreuels' --end 3
+
+# Oppositions one party filed, published since 2020
+flowleap ops register-search --cql 'op=Siemens and pd>=20200101' --end 50
+
+# A role index returned 0: find which role the person holds (surname alone, or surname-first)
+flowleap --json ops register-search --cql 'nm=Boniberger' --end 5
+flowleap --json ops register-search --cql 'nm="Boniberger, Bernhard"' --end 5
 
 # Verbose shows cache status and timing
 flowleap ops biblio EP1234567 --verbose

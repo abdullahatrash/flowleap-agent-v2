@@ -39,6 +39,7 @@ so no `flowleap …` command can run there.
 |---|---|---|
 | `ops biblio` / `claims` / `description` / `family` / `legal` / `abstract` | `get_bibliography`, `get_claims`, `get_description`, `get_family`, `get_legal_status`, `get_abstract` | `get_family` is the INPADOC extended family; `--resolve-npl` is `resolve_npl: true` |
 | `ops register-biblio` | `get_register_biblio` | EP only: representatives of record, opponents |
+| `ops register-search` | `search_register` | EP Register CQL (`query`, `range`); the one search with a representative index (`re=`), opponent (`op=`), name in any role (`nm=`, surname-first — use it when a role index returns 0); EP applications only |
 | `patent search`, `ops search` | `search_patents` | `provider: "epo_ops"`, CQL |
 | `uspto search` | `search_patents` | `provider: "uspto"`, Lucene |
 | `uspto application` / `grant` / `continuity` | `get_us_application`, `get_us_grant`, `get_continuity` | |
@@ -49,7 +50,6 @@ so no `flowleap …` command can run there.
 | `patent examiner-baseline` | `examiner_baseline` | In a chat client call the examiner_baseline tool; it returns the same JSON. |
 | `academic search`, `npl` | `search_academic`, `search_npl` | |
 | `npl-work` | `get_npl_work` | one cited paper: DOI, OpenAlex id or citation string |
-| `legal search` / `jurisdictions` | `reference_search`, `get_legal_jurisdictions` | |
 | `analytics` | `patent_analytics` | |
 | `ocr` | `ocr` | |
 | `patstat portfolio` / `query` / `docs` | `patstat_portfolio`, `patstat_query`, `patstat_docs` | |
@@ -264,6 +264,68 @@ install as a ✗ carrying the `refresh-skills` next step.
 flowleap upgrade --check --json
 flowleap upgrade
 ```
+
+## Office coverage of the text tools and the family-member workaround
+
+**Office coverage** is a property of a tool: the offices it answers for, and
+from which source. The three text tools serve two offices from EPO OPS and US
+claims from BigQuery. The other document reads (`ops biblio`, `family`,
+`legal`, `abstract`) are worldwide bibliographic; `get_citations` is worldwide
+DOCDB citation data; `get_patent_image` serves EPO OPS images for the offices
+EPO OPS holds.
+
+- `ops claims` / `get_claims`: EP and WO from EPO OPS; US from BigQuery, in
+  English only.
+- `ops description` / `get_description`: EP and WO from EPO OPS. US description
+  is not served.
+- `get_fulltext` (no command): probes the EPO OPS holdings only, so it answers
+  for EP and WO. A negative probe means EPO OPS holds no text, not that no text
+  exists.
+
+Eight offices have bibliographic, family and legal-event depth and **no text
+source**: CN, JP, KR, CA, AU, FR, DE and GB. Backend ADR 0024 adds no source
+until a customer names an office, so never call one of them "pending".
+
+**Family-member workaround** for a publication at one of those offices, two
+steps:
+
+1. `flowleap --json ops family <number>` / `get_family` (the extended INPADOC
+   family) to find the EP, WO or US member.
+2. `flowleap --json ops claims <member>` or `ops description <member>` /
+   `get_claims` or `get_description` on that member.
+
+Two limits apply, always. The member's claims are not the office's claims: use
+them for prior art and reading only, never for a freedom-to-operate,
+infringement or validity verdict on that office's right, and label the text as
+the member's. The member's text must itself be served: only EP, WO or US text
+is served, and US description is not.
+
+How likely the workaround is: the share of A filings 2015 to 2024 whose
+extended family has an EP, WO or US member, measured on PATSTAT 2026 Spring.
+Tell the human the share before you spend a family read.
+
+| Office | Share with such a member |
+|---|---|
+| CA | 95% |
+| AU | 88% |
+| FR | 60% |
+| DE | 55% |
+| GB | 54% |
+| JP | 48% |
+| KR | 38% |
+| CN | 13% |
+
+The share for CN is low. For a CN prior-art question go to the abstract, the
+bibliography and the citations first, and try the family after.
+
+**The served failure.** A text read for an office with no text source answers
+`FULLTEXT_UNAVAILABLE` (HTTP 404, exit 5; a data verdict, never retry). Under
+`error.details`, `reason` is `no_source` and the `workaround` field beside it
+is `{ tool: "get_family", note }`: act on that field, not on the message text. A
+US publication the BigQuery table does not hold answers `no_source` with no
+workaround (a holding gap). Reason `not_configured` means the server has no
+BigQuery configured: a server configuration gap, no workaround, and
+`server_info` shows it on the US `get_claims` row (`officeCoverage`).
 
 ## Safety
 
