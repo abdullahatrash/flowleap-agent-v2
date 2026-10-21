@@ -141,7 +141,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 		} catch (error) {
 			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'search', status: token.isCancellationRequested ? 'cancelled' : 'failed', query, requestedRange: range, requestedCountries: countries, purpose: testedFeature });
-			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`, err => opsFaultHint(err.message));
+			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`, err => opsFaultHint(err.message, err.status));
 			return new LanguageModelToolResult([...result.content, new LanguageModelTextPart(audit)]);
 		}
 	}

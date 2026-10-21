@@ -10,7 +10,7 @@ import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
-import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
+import { type IPatentBackendClient, type IPatentBackendRequestOptions, PatentBackendError } from '../../../patentai/vscode-node/patentBackendClient';
 import { SearchPatentsTool } from '../searchPatentsTool';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
@@ -235,6 +235,14 @@ describe('SearchPatentsTool', () => {
 		const { client } = makeBackendClient(facadeEnvelope({ total: 308, effectiveQuery: 'ta=drone AND ta="turbine blade"', range: { begin: 1, end: 25 }, docs: [{ docId: 'WO2026210250A1', title: 'Blade drone', applicants: [], publicationDate: null, abstract: null }] }));
 		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=drone AND ta="turbine blade"', range: '1-25' }), makeToken());
 		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 308 hits, 1-25 shown. OPS orders by its default order (newest first), not by relevance, and lists one publication per family. To rely on this set, page range through 26-308 (100 per call), or narrow until one page holds it.');
+	});
+
+
+	it('an OPS throttle names the wait, so the model retries this one query later instead of firing more probes', async () => {
+		const { client } = makeBackendClient();
+		client.post = async () => { throw new PatentBackendError(503, 'EPO OPS asked us to wait 12 seconds and the shared EPO throttle is still backing off. Please retry the same query in 12 seconds.'); };
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=lidar AND ta=UAV AND ta=obstacle' }), makeToken());
+		expect(textOf(result)).toBe('Error: Patent search backend returned 503: EPO OPS asked us to wait 12 seconds and the shared EPO throttle is still backing off. Please retry the same query in 12 seconds. OPS is throttling, not rejecting the query: wait the seconds named, then rerun this one query; send no other probe until it answers.');
 	});
 
 

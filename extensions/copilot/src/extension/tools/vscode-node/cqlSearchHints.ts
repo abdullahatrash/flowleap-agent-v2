@@ -53,7 +53,10 @@ const OPS_FAULT_FIXES: ReadonlyMap<string, string> = new Map([
  * message carries no OPS fault. OPS answers a bad query with an XML fault whose `<code>` names the
  * rule; the model cannot read that XML as a next step, so the tool says it in words.
  */
-export function opsFaultHint(message: string): string {
+export function opsFaultHint(message: string, status?: number): string {
+	if (status === 503 || /retry the same query in \d+ seconds/i.test(message)) {
+		return ' OPS is throttling, not rejecting the query: wait the seconds named, then rerun this one query; send no other probe until it answers.';
+	}
 	const code = message.match(/<code>(?<code>[A-Z]+\.[A-Za-z]+)<\/code>/)?.groups?.code;
 	if (!code) {
 		return '';
