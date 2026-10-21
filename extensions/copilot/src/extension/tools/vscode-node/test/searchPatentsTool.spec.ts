@@ -137,7 +137,7 @@ describe('SearchPatentsTool', () => {
 		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [], countryFilter: ['EP', 'WO'], effectiveQuery }));
 		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 		const result = await tool.invoke(makeOptions({ query: 'pa=Kuraray* and pd<20020221', countries: 'EP,WO' }), makeToken());
-		expect(textOf(result)).toBe(`No patents found for CQL: ${effectiveQuery}`);
+		expect(textOf(result).split('\n')[0]).toBe(`No patents found for CQL: ${effectiveQuery}`);
 	});
 
 	it('reports no results when the backend returns an empty doc list', async () => {
@@ -146,7 +146,7 @@ describe('SearchPatentsTool', () => {
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=(nothing)' }), makeToken());
 
-		expect(textOf(result)).toBe('No patents found for query: ti=(nothing)');
+		expect(textOf(result).split('\n')[0]).toBe('No patents found for query: ti=(nothing)');
 	});
 
 	it('a page emptied by the country post-filter is reported as filtered, never as zero hits', async () => {
@@ -214,6 +214,20 @@ describe('SearchPatentsTool', () => {
 		const { client } = makeBackendClient(facadeEnvelope({ total: 3, effectiveQuery: 'ta="foreign object" AND ta=charging', range: { begin: 1, end: 3 }, docs: [{ docId: 'EP1234567A1', title: 'Charger', applicants: [], publicationDate: null, abstract: null }] }));
 		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta="foreign object" AND ta=charging' }), makeToken());
 		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 3 hits. Read them before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).');
+	});
+
+
+	it('a zero count ends with the next step: check the field and the vocabulary, then widen one feature', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 0, effectiveQuery: 'ta=lidar AND ta=drone AND ta=obstacle', range: { begin: 1, end: 0 }, docs: [] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=lidar AND ta=drone AND ta=obstacle', range: '1-5' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 0 hits. A zero count is usually the vocabulary or the field, not absence: check each field name against the query field list, then widen one feature at a time (OR a synonym with the field repeated, or drop the least certain term) and probe again.');
+	});
+
+
+	it('a single hit is counted in the singular', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 1, effectiveQuery: 'ta=lidar AND ta=drone AND ta=obstacle', range: { begin: 1, end: 1 }, docs: [{ docId: 'WO2026173556A2', title: 'Multi-functional spider drone', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=lidar AND ta=drone AND ta=obstacle', range: '1-5' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 1 hit. Read it before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).');
 	});
 
 

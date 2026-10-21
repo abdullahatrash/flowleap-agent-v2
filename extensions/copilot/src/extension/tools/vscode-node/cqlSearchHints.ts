@@ -26,8 +26,12 @@ export function searchCountHint(total: number, page?: SearchResultPage): string 
 	if (total > BROAD_SET_THRESHOLD) {
 		return `Next step: ${total} hits is a technology area, not an invention. Add the next discriminating term from your extraction list and probe again; do not read pages of this set.`;
 	}
-	if (total > 0 && total < NARROW_SET_THRESHOLD) {
-		return `Next step: ${total} hits. Read them before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).`;
+	if (total === 0) {
+		return 'Next step: 0 hits. A zero count is usually the vocabulary or the field, not absence: check each field name against the query field list, then widen one feature at a time (OR a synonym with the field repeated, or drop the least certain term) and probe again.';
+	}
+	if (total < NARROW_SET_THRESHOLD) {
+		const hits = total === 1 ? '1 hit. Read it' : `${total} hits. Read them`;
+		return `Next step: ${hits} before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).`;
 	}
 	if (page && total > page.end) {
 		return `Next step: ${total} hits, ${page.begin}-${page.end} shown. OPS orders by its default order (newest first), not by relevance, and lists one publication per family. To rely on this set, page range through ${page.end + 1}-${total} (${OPS_PAGE_LIMIT} per call), or narrow until one page holds it.`;

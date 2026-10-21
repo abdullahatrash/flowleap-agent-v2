@@ -173,7 +173,8 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 					`This is NOT a zero-hit query. To count the [${filter}] hits, either re-run with a wider range (e.g. "1-100") or put the filter into the CQL instead (e.g. append \`and pn any "${result.countryFilter!.join(' ')}"\`) so the total reflects it.`,
 				].join('\n');
 			}
-			return filterInQuery ? `No patents found for CQL: ${sentQuery}` : `No patents found for query: ${query}`;
+			const none = filterInQuery ? `No patents found for CQL: ${sentQuery}` : `No patents found for query: ${query}`;
+			return [none, searchCountHint(0)].join('\n');
 		}
 
 		// `total` is optional in the backend response; fall back to the number of
