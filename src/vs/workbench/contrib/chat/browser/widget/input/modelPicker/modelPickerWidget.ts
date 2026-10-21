@@ -309,6 +309,7 @@ export class ModelPickerWidget extends Disposable {
 			entitlement: this._entitlementService.entitlement,
 			anonymous: this._entitlementService.anonymous,
 			hasByokModels: this._entitlementService.hasByokModels,
+			clientByokEnabled: this._entitlementService.clientByokEnabled,
 		});
 	}
 

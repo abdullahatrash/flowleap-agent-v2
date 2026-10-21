@@ -67,11 +67,22 @@ export const enum ModelPickerUnavailableReason {
 	SetupRequired = 'setupRequired',
 }
 
+/**
+ * Whether the picker's empty state is Copilot's "sign in to set up chat" rather than a plain
+ * "no models". In FlowLeap's BYOK-only mode (`clientByokEnabled`) the Copilot setup never
+ * applies: a signed-in subscriber with no key is simply model-less, and the way out is the
+ * BYOK no-model entry (Sign In · Add Model), not the GitHub setup flow — which in this build
+ * hangs at "Getting chat ready..." and never produces a model.
+ */
 export function modelPickerRequiresSetup(context: {
 	readonly entitlement: ChatEntitlement;
 	readonly anonymous: boolean;
 	readonly hasByokModels: boolean;
+	readonly clientByokEnabled: boolean;
 }): boolean {
+	if (context.clientByokEnabled) {
+		return false;
+	}
 	return context.entitlement === ChatEntitlement.Available
 		|| (context.entitlement === ChatEntitlement.Unknown
 			&& !context.anonymous
