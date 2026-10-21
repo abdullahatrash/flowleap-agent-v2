@@ -14,9 +14,26 @@ test-only work, CI) belong in the commit message, not here.
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-10-17
+## [0.9.0] - 2026-10-21
 
 ### Added
+
+- **Patent drawings from a geometry scene.** The Patent Agent builds figure sheets for an
+  application from a scene the attorney describes or sketches: line art with numerals and
+  lead lines, section views, flowcharts and block diagrams, laid out on EPO or USPTO sheets.
+  Every sheet comes with a receipt that names each rule it checked and each numeral it drew.
+- **Gate buttons in the drafting loop.** The feature list, the claims and the findings open
+  with gate and waive buttons in the editor title; a click rewrites `checklist.md`. Each
+  drafting tool ends with the next file to open and the next step to take, and the
+  checklist carries the attorney's map of the whole loop. New: claim decisions with a
+  `remove_claim` tool, and an Inventor Questions document for the facts the draft still
+  needs.
+- **A Prompts view page for drafting with drawings** walks through the loop from idea to
+  filing set.
+- **Patent law is read from the office's own page.** For a law question the agent fetches
+  the MPEP section, the EPC article, the EPO Guidelines part or the PCT rule from the
+  office's site, quotes only the text the page returned, and cites the URL and the edition.
+  The `legal-research` skill is the method and lists the official sources per office.
 
 - **Remote Access: follow your Agent Sessions and Editor Chats from your phone.** Switch
   Remote Access on in the Agents Window title bar, pair your phone by scanning the QR code
@@ -37,6 +54,14 @@ test-only work, CI) belong in the commit message, not here.
 
 ### Changed
 
+- **The legal search tools are retired.** `search_legal` and `legal_search_guide` are gone
+  from the tool picker; the skills that used them now point at the official pages. The
+  bundled CLI skills are at flowleap-cli v0.12.0, which removes the `legal` command, and
+  the plugins pack is at 2.6.0.
+- **Invalidity charts take web page text as validated evidence**, with a source label and
+  an open point for what the page could not settle, and list one reference per publication
+  when a figure anchor carries no kind code. The Round Report asks for ids and echoes the
+  mapping it used.
 - **Editor Chats are stored with a neutral title** on the computer's session catalog while
   Remote Access is on ("Editor chat, <date>"); the real title stays in memory and on the
   encrypted wire only.
