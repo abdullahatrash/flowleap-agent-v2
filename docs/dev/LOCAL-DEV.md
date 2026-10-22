@@ -11,7 +11,7 @@ Both repos run on this machine without touching production. Verified 2026-10-22 
 | Redis (Docker) | `localhost:6379` |
 | `DATABASE_URL` | `postgresql://flowleap:flowleap@localhost:5433/flowleap` |
 | `REDIS_URL` | `redis://localhost:6379` |
-| `SKIP_AUTH` | `true`: every request is the dev user `eval-user` / `eval@localhost`, no sign-in needed. `false`: real Clerk sign-in through the local website |
+| `SKIP_AUTH` | `true`: every request is the dev user `eval-user` / `eval@localhost`, no sign-in needed. Empty (`SKIP_AUTH=`): real Clerk sign-in through the local website. `SKIP_AUTH=false` still bypasses: one check reads the variable as a truthy string, so set it empty, not `false` |
 | Website | `http://localhost:3000` (`pnpm dev`; TanStack Start on nitro's default port) |
 | Website → backend | `PUBLIC_BACKEND_URL=http://localhost:8000` (no `/v1`) |
 | App → backend | `PATENT_API_URL=http://localhost:8000/v1` (keep the `/v1`) |
@@ -130,7 +130,7 @@ Extension log: `[Patent AI] Backend URL: http://localhost:8000/v1` and `FlowLeap
 Only the default profile can receive the `flowleap://` callback (issue #838), and only one instance runs per profile. So:
 
 1. Quit the dev app if it is open (it hands off otherwise, and `PATENT_API_URL` is dropped).
-2. Run the backend with `SKIP_AUTH=false` (the command above with `false`), and the website.
+2. Run the backend with `SKIP_AUTH=` (empty; the command above with the value removed), and the website. `GET localhost:8000/api/profile` without a token must answer 401.
 3. Launch on the default profile:
 
    ```bash
