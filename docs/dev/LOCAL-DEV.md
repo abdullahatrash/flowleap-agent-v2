@@ -190,6 +190,8 @@ Why flush and restart: the key-resolution gate caches a status for 60 s in proce
 
 What changes in the app on `active`: FlowLeap Settings shows the account as Active with no countdown, the Trial models disappear from the picker (`/v1/trial/model-key` answers 403 `trial_model_key_unavailable`), and patent data needs your own Patent-Data Keys (no house keys).
 
+Verified 2026-10-22 on the founder's account: after the flip, flush, restart and a window reload, FlowLeap Settings shows Active with no countdown and no Trial models; the backend's own `getSubscription` answers `status: active`, period end 2027-10-22.
+
 ## Stop
 
 ```bash
