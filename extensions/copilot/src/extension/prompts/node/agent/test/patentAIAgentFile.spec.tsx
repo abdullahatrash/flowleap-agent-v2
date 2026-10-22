@@ -38,6 +38,13 @@ const CLAUDE_BUILTIN_TOOL_NAMES: readonly (readonly [string, string])[] = [
 	['run_in_terminal', 'Bash'],
 ];
 
+/**
+ * The editor tools above are available in every Claude session under their built-in names, so
+ * the prompt renders with them present (its passages are gated on tool availability) and the
+ * names are then rewritten.
+ */
+const CLAUDE_BUILTIN_EDITOR_TOOL_NAMES: readonly string[] = CLAUDE_BUILTIN_TOOL_NAMES.map(([editorName]) => editorName);
+
 /** Replaces each whole-word tool name in `text`, longest names first. */
 function renameTools(text: string, names: ReadonlyMap<string, string>): string {
 	const sorted = [...names.keys()].sort((a, b) => b.length - a.length);
@@ -99,7 +106,7 @@ suite('Patent AI agent for Claude sessions', () => {
 	test('assets/agents/patent-ai.agent.md matches the rendered Patent AI prompt', async () => {
 		const tools = contributedPatentTools();
 		const modelToolNames = tools.map(tool => getToolName(tool.name));
-		const prompt = await renderForClaudeSession(modelToolNames);
+		const prompt = await renderForClaudeSession([...modelToolNames, ...CLAUDE_BUILTIN_EDITOR_TOOL_NAMES]);
 
 		// Name every tool exactly as Claude sees it in this session. The editor names
 		// (`search_patents`, ...) match a FlowLeap MCP connector a user may also have
