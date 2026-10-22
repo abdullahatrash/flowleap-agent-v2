@@ -7,15 +7,17 @@
  * Patent Agent prompt export + drift gate.
  *
  * agent-v2 is the single owner of the Patent Agent system prompt (`patentAIPrompt.tsx`). The
- * sibling dsh harness (DeepSeek Harness fork) runs the same agent, but its data tools are MCP
- * tools named `mcp__flowleap__<tool>` from the FlowLeap MCP server and it has no VS Code tools.
- * This spec renders the prompt with only the typed tools that have a same-named MCP twin,
- * rewrites those tool names to their MCP form, and keeps the result committed under
+ * sibling dsh harness (DeepSeek Harness fork) runs the same agent and has no VS Code tools. Its
+ * data tools come in two forms (ADR 0019 C2/C6): the office tools run natively in the harness
+ * under their plain backend names, and only the paid backend tools arrive over MCP as
+ * `mcp__flowleap__<tool>` from the FlowLeap MCP server. This spec renders the prompt with only
+ * the typed tools the harness serves, rewrites the paid tool names to their MCP form, keeps the
+ * office tool names as they are, and keeps the result committed under
  * `extensions/copilot/assets/prompt-export/`:
  *
  * - `patent-agent.md`   the prompt text only (the harness loads it verbatim as a system-prompt section)
- * - `patent-agent.json` provenance: render inputs, included/excluded tools, remaining VS Code-only
- *                       tool references ("gaps"), word count
+ * - `patent-agent.json` provenance: render inputs, included/excluded tools split into native and
+ *                       MCP tools, remaining VS Code-only tool references ("gaps"), word count
  *
  * Two modes:
  * - default: asserts the committed artifacts equal a fresh render (the drift gate)
@@ -46,8 +48,8 @@ const EXPORT_DIR = join(__dirname, '..', '..', '..', '..', '..', '..', 'assets',
 const MARKDOWN_PATH = join(EXPORT_DIR, 'patent-agent.md');
 const JSON_PATH = join(EXPORT_DIR, 'patent-agent.json');
 
-/** Typed tools with a same-named twin on the FlowLeap MCP server. */
-const INCLUDED_TOOLS: readonly ToolName[] = [
+/** Office tools the harness runs natively under their plain backend names; never rewritten. */
+const NATIVE_TOOLS: readonly ToolName[] = [
 	ToolName.SearchPatents,
 	ToolName.SearchRegister,
 	ToolName.GetLegalStatus,
@@ -61,11 +63,18 @@ const INCLUDED_TOOLS: readonly ToolName[] = [
 	ToolName.ComparePatents,
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
+];
+
+/** Paid backend tools that reach the harness over MCP; rewritten to `mcp__flowleap__<tool>`. */
+const MCP_TOOLS: readonly ToolName[] = [
 	ToolName.PatstatPortfolio,
 	ToolName.PatstatQuery,
 ];
 
-/** Patent tools left out on purpose: no MCP twin, or local-only (files, webviews, subagents). */
+/** Every typed tool the harness serves, in render order. */
+const INCLUDED_TOOLS: readonly ToolName[] = [...NATIVE_TOOLS, ...MCP_TOOLS];
+
+/** Patent tools left out on purpose: not served by the harness, or local-only (files, webviews, subagents). */
 const EXCLUDED_TOOLS: readonly ToolName[] = [
 	ToolName.GetPatentDetails,
 	ToolName.GetPatentFigures,
@@ -127,6 +136,8 @@ interface PromptExportManifest {
 		readonly subscriptionStatus: string;
 	};
 	readonly includedTools: readonly string[];
+	readonly nativeTools: readonly string[];
+	readonly mcpTools: readonly string[];
 	readonly excludedTools: readonly string[];
 	readonly gaps: readonly ToolGap[];
 	readonly wordCount: number;
@@ -172,8 +183,13 @@ async function renderPromptText(): Promise<string> {
 	}
 }
 
+function mcpToolName(name: ToolName): string {
+	return `${MCP_PREFIX}${name}`;
+}
+
+/** Rewrites only the paid (MCP) tool names; the native office tool names stay as rendered. */
 function rewriteToolNames(text: string): string {
-	return text.replace(wholeWordPattern(INCLUDED_TOOLS), `${MCP_PREFIX}$<tool>`);
+	return text.replace(wholeWordPattern(MCP_TOOLS), `${MCP_PREFIX}$<tool>`);
 }
 
 function countGaps(text: string): ToolGap[] {
@@ -198,7 +214,9 @@ async function buildPromptExport(): Promise<PromptExport> {
 			webSearchAvailable: RENDER_OPTIONS.webSearchAvailable,
 			subscriptionStatus: RENDER_OPTIONS.subscriptionStatus,
 		},
-		includedTools: INCLUDED_TOOLS.map(name => `${MCP_PREFIX}${name}`),
+		includedTools: [...NATIVE_TOOLS, ...MCP_TOOLS.map(mcpToolName)],
+		nativeTools: [...NATIVE_TOOLS],
+		mcpTools: MCP_TOOLS.map(mcpToolName),
 		excludedTools: [...EXCLUDED_TOOLS],
 		gaps: countGaps(rewritten),
 		wordCount: rewritten.split(/\s+/).filter(Boolean).length,
@@ -214,13 +232,17 @@ function serializeManifest(manifest: PromptExportManifest): string {
 suite('Patent Agent prompt export', () => {
 	const writeMode = process.env.PATENT_PROMPT_EXPORT === 'write';
 
-	test('every included tool name is rewritten and the prompt still carries the patent role', async () => {
+	test('paid tool names carry the MCP prefix, native tool names stay bare, and the prompt still carries the patent role', async () => {
 		const { markdown } = await buildPromptExport();
 		expect(markdown).toContain('<patentAIIdentity>');
-		expect(markdown).toContain(`${MCP_PREFIX}search_patents`);
-		// No bare included name survives: each must now carry the MCP prefix.
-		const bare = [...markdown.matchAll(wholeWordPattern(INCLUDED_TOOLS))].filter(match => !markdown.startsWith(MCP_PREFIX, match.index! - MCP_PREFIX.length));
-		expect(bare.map(match => match[0])).toEqual([]);
+		expect(markdown).toContain('search_patents');
+		expect(markdown).toContain(`${MCP_PREFIX}patstat_query`);
+		// No bare paid name survives (`\b` never matches inside `mcp__flowleap__<tool>`, so every match is bare).
+		const barePaid = [...markdown.matchAll(wholeWordPattern(MCP_TOOLS))];
+		expect(barePaid.map(match => match[0])).toEqual([]);
+		// No native name was rewritten: the harness serves these under their plain names.
+		const prefixedNative = [...markdown.matchAll(new RegExp(`${MCP_PREFIX}(?<tool>${NATIVE_TOOLS.map(escapeRegExp).join('|')})\\b`, 'g'))];
+		expect(prefixedNative.map(match => match[0])).toEqual([]);
 	});
 
 	test(writeMode ? 'writes the committed artifacts' : 'committed artifacts match a fresh render', async () => {
