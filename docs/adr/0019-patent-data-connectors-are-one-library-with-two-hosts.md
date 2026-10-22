@@ -1,6 +1,6 @@
 # Patent data connectors are one shared library with two hosts, and the self-hosted harness runs them with the firm's own keys
 
-**Status:** proposed (2026-10-22)
+**Status:** accepted (2026-10-22)
 
 Every patent lookup today passes through `api.flowleap.co`. The backend owns the office clients in
 TypeScript (`src/lib/ops`, 6,181 lines with OAuth, throttling, XML decoding, register and family
