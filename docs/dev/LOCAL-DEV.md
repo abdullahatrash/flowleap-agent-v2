@@ -173,6 +173,23 @@ Three things the logs showed that did not block the flow:
 - The website's auth page calls `/billing/subscription` with the plain session token and gets 401 (`get-flowleap-auth.ts`, best-effort trial nudge). The nudge is suppressed; the handoff proceeds.
 - The website dev console logs `Unhandled rejection: TypeError: Cannot use 'in' operator to search for 'subscribe' in undefined` on the sign-in page, and a TanStack route-template warning for `/en/sign-in`. Both website-side, neither stops sign-in.
 
+## Pro account locally (no trial)
+
+A fresh sign-in gets the 7-day app trial (Trial models, house keys, countdown pill). Local work should exercise the Pro path. Flip the local account (backend PR #607, `scripts/dev-set-plan.ts`):
+
+```bash
+cd ~/flowleap/flowleap-backend
+DATABASE_URL=postgresql://flowleap:flowleap@localhost:5433/flowleap npm run dev:set-plan -- --email abodi1987@gmail.com --status active
+docker exec flowleap-redis redis-cli FLUSHALL
+# restart the backend (kill the :8000 listener, start npm run dev again), then reload the app window
+```
+
+`--status trialing` puts the account back on a fresh 7-day app trial. The script only writes `sub_dev_*` subscription rows and `users.trial_ends_at`, refuses a non-local `DATABASE_URL`, and needs the user to have signed in once (the row must exist).
+
+Why flush and restart: the key-resolution gate caches a status for 60 s in process and in Redis; the app itself re-reads `/billing/subscription` on a timer, so a reload of the window shows the new state.
+
+What changes in the app on `active`: FlowLeap Settings shows the account as Active with no countdown, the Trial models disappear from the picker (`/v1/trial/model-key` answers 403 `trial_model_key_unavailable`), and patent data needs your own Patent-Data Keys (no house keys).
+
 ## Stop
 
 ```bash
