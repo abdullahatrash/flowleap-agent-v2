@@ -11,8 +11,11 @@ Both repos run on this machine without touching production. Verified 2026-10-22 
 | Redis (Docker) | `localhost:6379` |
 | `DATABASE_URL` | `postgresql://flowleap:flowleap@localhost:5433/flowleap` |
 | `REDIS_URL` | `redis://localhost:6379` |
-| `SKIP_AUTH` | `true` (every request is the dev user `eval-user` / `eval@localhost`) |
+| `SKIP_AUTH` | `true`: every request is the dev user `eval-user` / `eval@localhost`, no sign-in needed. `false`: real Clerk sign-in through the local website |
+| Website | `http://localhost:3000` (`pnpm dev`; TanStack Start on nitro's default port) |
+| Website → backend | `PUBLIC_BACKEND_URL=http://localhost:8000` (no `/v1`) |
 | App → backend | `PATENT_API_URL=http://localhost:8000/v1` (keep the `/v1`) |
+| App → website | derived: `localhost` in `PATENT_API_URL` → `http://localhost:3000`. Override: `PATENT_FRONTEND_URL` |
 
 The backend `.env` on this Mac points `DATABASE_URL` at the hosted Supabase database. Do not run `db:migrate` or `db:seed` with it. Export the local URL on the command line: `.env` never overrides a variable that is already set.
 
@@ -48,6 +51,33 @@ npm run test:run                → 2187 passed, 7 skipped, 0 failed (with #607;
 The one failure before #607: the `.env` on this Mac has `SKIP_AUTH=true`, and `tests/setup.ts` reset it too late (after the lazy server import that loads dotenv). The `/mcp` 401-challenge test answered 200. #607 sets `SKIP_AUTH=false` at module scope.
 
 Compose already uses plain `postgres:16`; migrations 0002/0003 guard the pgvector statements and 0028 drops the extension. Nothing to fix there.
+
+## Website (`~/flowleap/flowleap-website-v2`, branch `master`)
+
+The app's sign-in goes app → backend `/oauth/authorize` → website `/en/auth/flowleap` → Clerk sign-in → website `/api/auth/flowleap` mints the token → `flowleap://…/callback`. So the website must run locally too.
+
+```bash
+cd ~/flowleap/flowleap-website-v2
+git pull
+pnpm install --frozen-lockfile
+PUBLIC_BACKEND_URL=http://localhost:8000 pnpm dev
+```
+
+Env: `.env` holds the Clerk **development** keys (`VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, both `*_test_`). They are the same Clerk instance as the backend `.env` keys, so a token the website mints verifies on the local backend. `.env.local` sets `PUBLIC_BACKEND_URL` to production; the inline export above wins (Vite never overrides a set variable). Export it every time, or edit `.env.local`.
+
+Backend side: `FRONTEND_URL=http://localhost:3000` in the backend `.env` is already right (it is the default). The `flowleap://` redirect URIs are a fixed allowlist in `src/routes/oauth.ts`; nothing to configure.
+
+### Proof (2026-10-22)
+
+```text
+GET localhost:8000/oauth/authorize?client_id=patent-ai-agent&redirect_uri=flowleap://flowleap.patent-ai-agent/callback&state=x
+  → 302 http://localhost:3000/en/auth/flowleap?redirect_uri=…&state=x
+GET localhost:3000/en/auth/flowleap?…   (signed out)
+  → 307 http://localhost:3000/en/sign-in?…&auth_flow=flowleap
+GET localhost:3000/en/sign-in?…         → 200 (Clerk sign-in page)
+```
+
+The website calls the backend only after sign-in (`/billing/subscription`), so that call shows in the backend log during the sign-in below.
 
 ## App (`~/flowleap/flowleap-agent-v2`, branch `main`)
 
@@ -95,9 +125,28 @@ Extension log: `[Patent AI] Backend URL: http://localhost:8000/v1` and `FlowLeap
 
 `npm run typecheck-client`: green.
 
+## Full sign-in from the app (default profile)
+
+Only the default profile can receive the `flowleap://` callback (issue #838), and only one instance runs per profile. So:
+
+1. Quit the dev app if it is open (it hands off otherwise, and `PATENT_API_URL` is dropped).
+2. Run the backend with `SKIP_AUTH=false` (the command above with `false`), and the website.
+3. Launch on the default profile:
+
+   ```bash
+   cd ~/flowleap/flowleap-agent-v2
+   TMPDIR=/tmp PATENT_API_URL=http://localhost:8000/v1 ./scripts/code.sh
+   ```
+
+4. FlowLeap Settings → Sign out (the stored token was minted against production) → Sign In. The browser opens `localhost:3000`. Sign in on the Clerk **development** instance: your production account does not exist there, so sign up once.
+5. The browser redirects to `flowleap://flowleap.patent-ai-agent/callback` and the app shows your account. Backend log: `GET /api/profile … status=200` and `GET /billing/subscription … status=200` (the local backend creates your user row and a 7-day app trial on first sign-in).
+
+Step 4 is a human step: an agent must not enter the password. Status 2026-10-22: steps 1–3 and the redirect chain verified; step 4–5 pending the founder.
+
 ## Stop
 
 ```bash
 $C down                                                   # app; evidence stays under .claude/skills/verify-flowleap-ide/artifacts/
 docker compose -f docker-compose.dev.yml stop postgres redis   # backend; data stays in the postgres_data volume
+# website: Ctrl-C in its terminal
 ```
