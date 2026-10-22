@@ -141,7 +141,37 @@ Only the default profile can receive the `flowleap://` callback (issue #838), an
 4. FlowLeap Settings → Sign out (the stored token was minted against production) → Sign In. The browser opens `localhost:3000`. Sign in on the Clerk **development** instance: your production account does not exist there, so sign up once.
 5. The browser redirects to `flowleap://flowleap.patent-ai-agent/callback` and the app shows your account. Backend log: `GET /api/profile … status=200` and `GET /billing/subscription … status=200` (the local backend creates your user row and a 7-day app trial on first sign-in).
 
-Step 4 is a human step: an agent must not enter the password. Status 2026-10-22: steps 1–3 and the redirect chain verified; step 4–5 pending the founder.
+Step 4 is a human step: an agent must not enter the password.
+
+### Proof (2026-10-22, founder's sign-in on the default profile)
+
+App extension log:
+
+```text
+15:16:21 [Patent AI Auth] Signing out … Signed out successfully
+15:16:22 [Patent AI] Sign In: opening browser via provider.signIn()
+15:16:26 [Patent AI Auth] Received OAuth callback: /callback
+15:16:26 [Patent AI Auth] Clerk token received … Token expires in 2592000 seconds
+15:16:26 [Patent AI Auth] Successfully authenticated via Clerk
+```
+
+Backend log (UTC), the same flow:
+
+```text
+12:14:21 GET /oauth/authorize status=302                      (app → website)
+12:14:43 ✅ Created new user: abodi1987@gmail.com (user_3Idj…)  (website's Clerk session, first backend call)
+12:16:26 GET /api/profile status=200          client vscode/0.55.0
+12:16:26 GET /billing/subscription status=200 client vscode/0.55.0
+12:16:27 GET /v1/trial/model-key status=200   client vscode/0.55.0   (the 7-day app trial, ADR 0018)
+```
+
+Database: a `users` row for the founder with `trial_ends_at` seven days out. No `subscriptions` row: the app trial is synthetic.
+
+Three things the logs showed that did not block the flow:
+
+- `[Billing] Failed to reconcile subscription from Stripe: Expired API Key` — the `STRIPE_SECRET_KEY` in the backend `.env` is an expired test key. `/billing/subscription` still answers 200 (app trial). Rotate the key from the Stripe test dashboard when billing work starts.
+- The website's auth page calls `/billing/subscription` with the plain session token and gets 401 (`get-flowleap-auth.ts`, best-effort trial nudge). The nudge is suppressed; the handoff proceeds.
+- The website dev console logs `Unhandled rejection: TypeError: Cannot use 'in' operator to search for 'subscribe' in undefined` on the sign-in page, and a TanStack route-template warning for `/en/sign-in`. Both website-side, neither stops sign-in.
 
 ## Stop
 
