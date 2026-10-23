@@ -8,9 +8,10 @@
  *
  * agent-v2 is the single owner of the Patent Agent system prompt (`patentAIPrompt.tsx`). The
  * sibling dsh harness (DeepSeek Harness fork) runs the same agent and has no VS Code tools. Its
- * data tools come in two forms (ADR 0019 C2/C6): the office tools run natively in the harness
- * under their plain backend names, and only the paid backend tools arrive over MCP as
- * `mcp__flowleap__<tool>` from the FlowLeap MCP server. This spec renders the prompt with only
+ * data tools come in two forms (ADR 0019 C2/C6): the office tools, the deliverable tools and the
+ * application-drafting tools (slice S5) run natively in the harness under their plain backend
+ * names, and only the paid backend tools arrive over MCP as `mcp__flowleap__<tool>` from the
+ * FlowLeap MCP server. This spec renders the prompt with only
  * the typed tools the harness serves, rewrites the paid tool names to their MCP form, keeps the
  * office tool names as they are, and keeps the result committed under
  * `extensions/copilot/assets/prompt-export/`:
@@ -48,7 +49,11 @@ const EXPORT_DIR = join(__dirname, '..', '..', '..', '..', '..', '..', 'assets',
 const MARKDOWN_PATH = join(EXPORT_DIR, 'patent-agent.md');
 const JSON_PATH = join(EXPORT_DIR, 'patent-agent.json');
 
-/** Office tools the harness runs natively under their plain backend names; never rewritten. */
+/**
+ * Tools the harness runs natively under their plain backend names; never rewritten. The office
+ * tools (ADR 0019 C2/C6) plus, since slice S5, the deliverable tools (`write_patent_results`,
+ * `compare_claims`) and the application-drafting tools that the harness ports under the same names.
+ */
 const NATIVE_TOOLS: readonly ToolName[] = [
 	ToolName.SearchPatents,
 	ToolName.SearchRegister,
@@ -63,6 +68,13 @@ const NATIVE_TOOLS: readonly ToolName[] = [
 	ToolName.ComparePatents,
 	ToolName.GetPatentSummary,
 	ToolName.GetPatentTerm,
+	ToolName.WritePatentResults,
+	ToolName.CompareClaims,
+	ToolName.StartApplicationDraft,
+	ToolName.ValidateDraft,
+	ToolName.RemoveClaim,
+	ToolName.InventorQuestions,
+	ToolName.ExportDraftDocx,
 ];
 
 /** Paid backend tools that reach the harness over MCP; rewritten to `mcp__flowleap__<tool>`. */
@@ -85,21 +97,14 @@ const EXCLUDED_TOOLS: readonly ToolName[] = [
 	ToolName.USPTOApiGuide,
 	ToolName.CitationApiGuide,
 	ToolName.PatstatApiGuide,
-	ToolName.WritePatentResults,
-	ToolName.CompareClaims,
 	ToolName.PatentAnalyticsViz,
 	ToolName.PatstatGraph,
 	ToolName.PatentSearchSubagent,
 	ToolName.ReadPdf,
 	ToolName.ExaminerBaseline,
-	ToolName.StartApplicationDraft,
-	ToolName.ValidateDraft,
-	ToolName.ExportDraftDocx,
 	ToolName.RenderFigure,
 	ToolName.BuildDrawingSet,
 	ToolName.ProposeFigurePart,
-	ToolName.RemoveClaim,
-	ToolName.InventorQuestions,
 ];
 
 /** `ToolName` values that are also plain English words in the prompt text; never counted as gaps. */
