@@ -38,7 +38,17 @@ export interface PatentAIPromptProps extends BasePromptElementProps {
 	readonly hasEpoOpsKey?: boolean;
 	/** True when the user's USPTO ODP API key is configured. */
 	readonly hasUsptoOdpKey?: boolean;
+	/**
+	 * Who renders the per-turn key state. `extension` (the default) renders it here from the props.
+	 * `host` renders a pointer only: a harness that holds the firm's keys (the FlowLeap web harness,
+	 * ADR 0019) contributes the live state as its own prompt section under the heading
+	 * {@link HOST_KEY_STATE_HEADING}, so the static prompt export carries no key claim of its own.
+	 */
+	readonly keyStateOwner?: 'extension' | 'host';
 }
+
+/** The heading of the host-owned key-state section; the FlowLeap harness registers it under this name. */
+export const HOST_KEY_STATE_HEADING = 'Patent-data keys (this host)';
 
 /**
  * The per-turn key state the prompt renders: the subscription status plus, per patent-data
@@ -186,6 +196,12 @@ class PatentKeyStateRules extends PromptElement<PatentAIPromptProps> {
 		const tools = detectPatentTools(this.props.availableTools);
 		if (!tools.hasAnyPatentTool) {
 			return null;
+		}
+
+		if (this.props.keyStateOwner === 'host') {
+			return <Tag name='patentDataKeyState'>
+				PATENT-DATA KEY STATE (this turn): the host that runs this agent reports it in its own section of this prompt, under the heading "{HOST_KEY_STATE_HEADING}". That section is live for this turn: follow it. If it is absent, state NOTHING about which patent-data offices you can reach — no office is declared reachable and none is declared gated.<br />
+			</Tag>;
 		}
 
 		const { status, hasEpoOpsKey, hasUsptoOdpKey, epoGated, usptoGated } = deriveKeyState(this.props);
