@@ -37,7 +37,7 @@ import { IInstantiationService } from '../../../../../util/vs/platform/instantia
 import { createExtensionUnitTestingServices } from '../../../../test/node/services';
 import { ToolName } from '../../../../tools/common/toolNames';
 import { renderPromptElement } from '../../base/promptRenderer';
-import { PatentAIInstructions } from '../patentAIPrompt';
+import { HOST_KEY_STATE_HEADING, PatentAIInstructions } from '../patentAIPrompt';
 
 const REFRESH_COMMAND = 'PATENT_PROMPT_EXPORT=write npx vitest run src/extension/prompts/node/agent/test/patentPromptExport.spec.tsx';
 const SOURCE_FILE = 'extensions/copilot/src/extension/prompts/node/agent/patentAIPrompt.tsx';
@@ -121,6 +121,9 @@ const RENDER_OPTIONS = {
 	subscriptionStatus: 'unknown',
 	hasEpoOpsKey: false,
 	hasUsptoOdpKey: false,
+	// The harness holds the firm's keys and contributes the live key state as its own section
+	// (`dsh-flowleap-connectors`, heading HOST_KEY_STATE_HEADING); the export carries a pointer only.
+	keyStateOwner: 'host',
 } as const;
 
 interface ToolGap {
@@ -134,6 +137,7 @@ interface PromptExportManifest {
 		readonly tools: readonly string[];
 		readonly webSearchAvailable: boolean;
 		readonly subscriptionStatus: string;
+		readonly keyStateOwner: string;
 	};
 	readonly includedTools: readonly string[];
 	readonly nativeTools: readonly string[];
@@ -213,6 +217,7 @@ async function buildPromptExport(): Promise<PromptExport> {
 			tools: [...INCLUDED_TOOLS],
 			webSearchAvailable: RENDER_OPTIONS.webSearchAvailable,
 			subscriptionStatus: RENDER_OPTIONS.subscriptionStatus,
+			keyStateOwner: RENDER_OPTIONS.keyStateOwner,
 		},
 		includedTools: [...NATIVE_TOOLS, ...MCP_TOOLS.map(mcpToolName)],
 		nativeTools: [...NATIVE_TOOLS],
@@ -243,6 +248,14 @@ suite('Patent Agent prompt export', () => {
 		// No native name was rewritten: the harness serves these under their plain names.
 		const prefixedNative = [...markdown.matchAll(new RegExp(`${MCP_PREFIX}(?<tool>${NATIVE_TOOLS.map(escapeRegExp).join('|')})\\b`, 'g'))];
 		expect(prefixedNative.map(match => match[0])).toEqual([]);
+	});
+
+	test('the export carries no key claim of its own: it points at the host-owned key-state section', async () => {
+		const { markdown } = await buildPromptExport();
+		expect(markdown).toContain(`under the heading "${HOST_KEY_STATE_HEADING}"`);
+		// The static per-turn line of the `unknown` branch ("Key presence only: EPO OPS key is not set; …") must not ship.
+		expect(markdown).not.toContain('Key presence only:');
+		expect(markdown).not.toContain('The subscription status could not be read this turn');
 	});
 
 	test(writeMode ? 'writes the committed artifacts' : 'committed artifacts match a fresh render', async () => {

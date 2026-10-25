@@ -19,7 +19,8 @@
 			"patstat_query"
 		],
 		"webSearchAvailable": false,
-		"subscriptionStatus": "unknown"
+		"subscriptionStatus": "unknown",
+		"keyStateOwner": "host"
 	},
 	"includedTools": [
 		"search_patents",
@@ -84,6 +85,6 @@
 		"inventor_questions"
 	],
 	"gaps": [],
-	"wordCount": 7385,
+	"wordCount": 7376,
 	"generatedBy": "extensions/copilot: PATENT_PROMPT_EXPORT=write npx vitest run src/extension/prompts/node/agent/test/patentPromptExport.spec.tsx"
 }
