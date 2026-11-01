@@ -10,7 +10,7 @@ import { unrecordedPatentLedger } from './patentLedgerTestUtils';
 import type { ILogService } from '../../../../platform/log/common/logService';
 import type { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { LanguageModelTextPart } from '../../../../vscodeTypes';
-import type { IPatentBackendClient, IPatentBackendRequestOptions } from '../../../patentai/vscode-node/patentBackendClient';
+import { type IPatentBackendClient, type IPatentBackendRequestOptions, PatentBackendError } from '../../../patentai/vscode-node/patentBackendClient';
 import { SearchPatentsTool } from '../searchPatentsTool';
 
 // ── Fakes ──────────────────────────────────────────────────────────────────────
@@ -101,7 +101,8 @@ describe('SearchPatentsTool', () => {
 			### Abstracts
 			- **EP1234567A1**: A photovoltaic module with a light-absorbing layer.
 
-			Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed."
+			Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed.
+			Next step: 2 hits. Read them before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class)."
 		`);
 	});
 
@@ -136,7 +137,7 @@ describe('SearchPatentsTool', () => {
 		const { client } = makeBackendClient(facadeEnvelope({ total: 0, docs: [], countryFilter: ['EP', 'WO'], effectiveQuery }));
 		const tool = new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger);
 		const result = await tool.invoke(makeOptions({ query: 'pa=Kuraray* and pd<20020221', countries: 'EP,WO' }), makeToken());
-		expect(textOf(result)).toBe(`No patents found for CQL: ${effectiveQuery}`);
+		expect(textOf(result).split('\n')[0]).toBe(`No patents found for CQL: ${effectiveQuery}`);
 	});
 
 	it('reports no results when the backend returns an empty doc list', async () => {
@@ -145,7 +146,7 @@ describe('SearchPatentsTool', () => {
 
 		const result = await tool.invoke(makeOptions({ query: 'ti=(nothing)' }), makeToken());
 
-		expect(textOf(result)).toBe('No patents found for query: ti=(nothing)');
+		expect(textOf(result).split('\n')[0]).toBe('No patents found for query: ti=(nothing)');
 	});
 
 	it('a page emptied by the country post-filter is reported as filtered, never as zero hits', async () => {
@@ -199,6 +200,57 @@ describe('SearchPatentsTool', () => {
 		const { client } = makeBackendClient({ success: false, tool: 'search_patents', error: { message: 'OPS is overloaded.' } });
 		await new SearchPatentsTool(makeLogService(), client, ledger).invoke(makeOptions({ query: 'ic=A61K6 and ab="fine fraction"', purpose: 'F4 sub-10 µm fine-fraction cap' }), makeToken());
 		expect(executions).toEqual([{ kind: 'search', status: 'failed', query: 'ic=A61K6 and ab="fine fraction"', requestedRange: '1-25', requestedCountries: undefined, purpose: 'F4 sub-10 µm fine-fraction cap' }]);
+	});
+
+
+	it('a count over 1,000 ends with the next step: add a discriminating term before reading any page', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 3549, effectiveQuery: 'ta="artificial intelligence"', range: { begin: 1, end: 1 }, docs: [{ docId: 'EP1234567A1', title: 'AI', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta="artificial intelligence"', range: '1-1' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 3549 hits is a technology area, not an invention. Add the next discriminating term from your extraction list and probe again; do not read pages of this set.');
+	});
+
+
+	it('a count under 10 ends with the next step: read the hits before widening', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 3, effectiveQuery: 'ta="foreign object" AND ta=charging', range: { begin: 1, end: 3 }, docs: [{ docId: 'EP1234567A1', title: 'Charger', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta="foreign object" AND ta=charging' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 3 hits. Read them before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).');
+	});
+
+
+	it('a zero count ends with the next step: check the field and the vocabulary, then widen one feature', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 0, effectiveQuery: 'ta=lidar AND ta=drone AND ta=obstacle', range: { begin: 1, end: 0 }, docs: [] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=lidar AND ta=drone AND ta=obstacle', range: '1-5' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 0 hits. A zero count is usually the vocabulary or the field, not absence: check each field name against the query field list, then widen one feature at a time (OR a synonym with the field repeated, or drop the least certain term) and probe again.');
+	});
+
+
+	it('a single hit is counted in the singular', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 1, effectiveQuery: 'ta=lidar AND ta=drone AND ta=obstacle', range: { begin: 1, end: 1 }, docs: [{ docId: 'WO2026173556A2', title: 'Multi-functional spider drone', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=lidar AND ta=drone AND ta=obstacle', range: '1-5' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 1 hit. Read it before you widen; widen only for a feature that stays unresolved (OR a synonym with the field repeated, drop the classification, or use its parent class).');
+	});
+
+
+	it('a readable set larger than the page ends with the order and paging facts the model cannot see', async () => {
+		const { client } = makeBackendClient(facadeEnvelope({ total: 308, effectiveQuery: 'ta=drone AND ta="turbine blade"', range: { begin: 1, end: 25 }, docs: [{ docId: 'WO2026210250A1', title: 'Blade drone', applicants: [], publicationDate: null, abstract: null }] }));
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=drone AND ta="turbine blade"', range: '1-25' }), makeToken());
+		expect(textOf(result).split('\n').at(-1)).toBe('Next step: 308 hits, 1-25 shown. OPS orders by its default order (newest first), not by relevance, and lists one publication per family. To rely on this set, page range through 26-308 (100 per call), or narrow until one page holds it.');
+	});
+
+
+	it('an OPS throttle names the wait, so the model retries this one query later instead of firing more probes', async () => {
+		const { client } = makeBackendClient();
+		client.post = async () => { throw new PatentBackendError(503, 'EPO OPS asked us to wait 12 seconds and the shared EPO throttle is still backing off. Please retry the same query in 12 seconds.'); };
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=lidar AND ta=UAV AND ta=obstacle' }), makeToken());
+		expect(textOf(result)).toBe('Error: Patent search backend returned 503: EPO OPS asked us to wait 12 seconds and the shared EPO throttle is still backing off. Please retry the same query in 12 seconds. OPS is throttling, not rejecting the query: wait the seconds named, then rerun this one query; send no other probe until it answers.');
+	});
+
+
+	it('an OPS fault names the grammar fix, so the model edits the query instead of retrying it', async () => {
+		const opsFault = 'OPS error 413: <?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<fault xmlns="http://ops.epo.org">\n    <code>CLIENT.MinimumCharsBeforeTruncation</code>\n    <message>Not enough characters before truncation character must be provided. At least 3 characters must be provided when using truncation \'*\' and at lea';
+		const { client } = makeBackendClient({ success: false, tool: 'search_patents', error: { code: 'INTERNAL_ERROR', message: opsFault } });
+		const result = await new SearchPatentsTool(makeLogService(), client, unrecordedPatentLedger).invoke(makeOptions({ query: 'ta=drone AND pn=EP*' }), makeToken());
+		expect(textOf(result)).toBe(`Error: Patent search backend returned 422: ${opsFault} OPS fault CLIENT.MinimumCharsBeforeTruncation: a * wildcard needs at least 3 characters before it. This is a grammar error, not an empty result: fix the query and run it once; call get_search_syntax for the field list.`);
 	});
 
 });

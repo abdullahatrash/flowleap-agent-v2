@@ -22,6 +22,7 @@ import './getPatentTermTool';
 import './getPatentFiguresTool';
 import './getProsecutionTimelineTool';
 import './getRegisterEventsTool';
+import './getSearchSyntaxTool';
 import './opsApiGuideTool';
 import './patentAnalyticsVizTool';
 import './patentApiRequestTool';

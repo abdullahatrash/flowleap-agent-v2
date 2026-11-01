@@ -17,6 +17,7 @@ import { handlePatentToolError } from './patentToolError';
 import { ToolName } from '../common/toolNames';
 import { ICopilotTool, ToolRegistry } from '../common/toolsRegistry';
 import { renderMarkdownTable, ToolResponseBudgets, truncatePreview } from './patentResponseFormatter';
+import { opsFaultHint, searchCountHint, SearchResultPage } from './cqlSearchHints';
 
 interface ISearchPatentsParams {
 	query: string;
@@ -45,10 +46,7 @@ interface PatentSearchData {
 	countryFilter?: string[];
 	/** The CQL actually sent to OPS — carries the compiled country clause when a filter was requested. */
 	effectiveQuery?: string;
-	range?: {
-		begin: number;
-		end: number;
-	};
+	range?: SearchResultPage;
 	docs?: PatentDoc[];
 }
 
@@ -143,7 +141,7 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 		} catch (error) {
 			const audit = await this.ledger.record(options.chatSessionResource, { kind: 'search', status: token.isCancellationRequested ? 'cancelled' : 'failed', query, requestedRange: range, requestedCountries: countries, purpose: testedFeature });
-			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`);
+			const result = handlePatentToolError(error, this.logService, '[SearchPatentsTool]', err => `Error: Patent search backend returned ${err.status}: ${err.message}`, err => opsFaultHint(err.message, err.status));
 			return new LanguageModelToolResult([...result.content, new LanguageModelTextPart(audit)]);
 		}
 	}
@@ -175,7 +173,8 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 					`This is NOT a zero-hit query. To count the [${filter}] hits, either re-run with a wider range (e.g. "1-100") or put the filter into the CQL instead (e.g. append \`and pn any "${result.countryFilter!.join(' ')}"\`) so the total reflects it.`,
 				].join('\n');
 			}
-			return filterInQuery ? `No patents found for CQL: ${sentQuery}` : `No patents found for query: ${query}`;
+			const none = filterInQuery ? `No patents found for CQL: ${sentQuery}` : `No patents found for query: ${query}`;
+			return [none, searchCountHint(0)].join('\n');
 		}
 
 		// `total` is optional in the backend response; fall back to the number of
@@ -210,6 +209,10 @@ export class SearchPatentsTool implements ICopilotTool<ISearchPatentsParams> {
 
 		lines.push('');
 		lines.push('Note: Use these patent document IDs to fetch detailed information (full claims, descriptions, etc.) if needed.');
+		const hint = searchCountHint(total, result.range);
+		if (hint) {
+			lines.push(hint);
+		}
 
 		return lines.join('\n');
 	}

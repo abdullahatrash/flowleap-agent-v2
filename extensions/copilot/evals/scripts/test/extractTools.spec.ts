@@ -39,6 +39,7 @@ describe('extract-tools', () => {
 			'get_patent_term',
 			'get_prosecution_timeline',
 			'get_register_events',
+			'get_search_syntax',
 			'inventor_questions',
 			'ops_api_guide',
 			'patent_analytics_viz',

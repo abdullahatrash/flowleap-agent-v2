@@ -54,13 +54,13 @@
     "type": "function",
     "function": {
       "name": "search_patents",
-      "description": "Executes an EPO OPS CQL patent search over the EPO's worldwide bibliographic index (all offices; full text is only served for EP/WO documents); returns summaries (title, applicant, publication date, abstract). Preferred when the query targets European or international (WO) patents or needs a worldwide bibliographic sweep — not US prosecution data (for those, write a Lucene query and use patent_api_request; see uspto_api_guide for the request shape). The jurisdiction gate applies BEFORE this tool: when jurisdiction is not explicit in the user's message (a company or technology name alone is not explicit) and the task does not imply comprehensive coverage, ask via vscode_askQuestions first. You write the CQL yourself: every query needs a discriminating term (the specific subject matter, never just the technology area or a classification code), and the patent-search skill's references/cql-reference.md documents the fields, grouping and limits — read it before any non-trivial query. Probe the count with a small range first and refine; the probe must use the same countries value as the real search, and CQL operators are case-insensitive (and/AND are the same). Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50' for pagination); countries (optional; compiled into the CQL as pn any \"EP WO\", so total counts the filtered set — omit it for a worldwide count; use 'EP,WO' only when the task needs full text or the user asked for those offices). The result echoes total, the CQL actually sent (effectiveQuery) and the active country filter. No wildcards on ic/cpc fields; max 100 results per request.",
+      "description": "Executes an EPO OPS CQL patent search over the EPO's worldwide bibliographic index (all offices; full text is served for EP/WO documents only); returns a page of summaries (title, applicant, publication date, abstract) and ends with a Next step line that names the move the count calls for. Preferred when the query targets European or international (WO) patents or needs a worldwide bibliographic sweep; not US prosecution data (for that, write a Lucene query and use patent_api_request; see uspto_api_guide for the request shape). The jurisdiction gate applies BEFORE this tool: when jurisdiction is not explicit in the user's message (a company or technology name alone is not explicit) and the task does not imply comprehensive coverage, ask via vscode_askQuestions first. You write the CQL yourself by the patent-search skill's method: every query needs a discriminating term (the specific subject matter, never just the technology area or a classification code). The query field lists the CQL fields; write the query from it and call this tool directly. A grammar fault comes back with its fix named and points at get_search_syntax, the full grammar. Probe the count with a small range first, then refine; the probe must use the same countries value as the real search. Input: query (CQL string, e.g. 'pa=Tesla and ic=H01M and pd>=2022'); range ('1-25', '26-50'; max 100 per request); countries (optional; compiled into the CQL as pn any \"EP WO\", so total counts the filtered set; omit it for a worldwide count; use 'EP,WO' only when the task needs full text or the user asked for those offices). The result echoes total, the CQL actually sent (effectiveQuery) and the active country filter.",
       "parameters": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "CQL query string you write yourself (patent-search skill rules). Examples: 'pa=Pfizer* AND ic=A61K AND ti=cancer', 'pa=Vestas* AND ic=F03D AND ti=\"wind turbine\"'. IMPORTANT: No wildcards on ic/cpc fields."
+            "description": "CQL query string you write yourself (patent-search skill method). Fields: ta (title or abstract, preferred), ti, ab, txt (title, abstract, applicant, inventor), pa (applicant; wildcard for name variants: pa=GOOGLE*), in (inventor), pn, ap, pr, pd (pd>=2020, pd within \"2020 2023\"), ic, cpc, cl (all classifications), ct (documents citing this one). Combine with AND/OR/NOT, group clauses with parentheses, quote phrases; a * wildcard needs 3 characters before it. Examples: 'pa=Pfizer* AND ic=A61K AND ta=cancer', '(ta=\"glass ceramic\" OR ta=\"glass-ceramic\") AND ic=C03C'."
           },
           "range": {
             "type": "string",
@@ -949,6 +949,27 @@
         "required": [
           "query"
         ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_search_syntax",
+      "description": "Full query grammar of a search provider, served by the backend that runs the search: every field, the rules the provider enforces (wildcards, grouping, result order, one publication per family), date forms, text coverage per office and worked examples. It is a reference for AFTER a problem, never a first step: call it when a search tool reports a grammar fault, when a count is zero and the field may be wrong, or when you need a field the search tool's query description does not list. Do not call it before a search. Provider 'epo_ops' for search_patents CQL, 'uspto' for the ODP Lucene query you send through patent_api_request, 'epo_register' for search_register.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "epo_ops",
+              "uspto",
+              "epo_register"
+            ],
+            "description": "Which grammar: 'epo_ops' (search_patents CQL, default), 'uspto' (search_patents provider=uspto Lucene field paths), 'epo_register' (search_register CQL)."
+          }
+        }
       }
     }
   },
