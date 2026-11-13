@@ -254,3 +254,6 @@ no-ops are already in the extension (0 extension errors after the dts).
 strings "Sign in to FlowLeap", "GitHub may show…"); agentSessionsDraftHandoff.test hunk dropped (the
 handoff strings are gone upstream); customizationsToolbar.test is aw's.
 ## 32-integration chatWidget hunk (removing a duplicated PatentIdeContextKeys import): not needed.
+
+## A5.3 chat half (03800aba03c): re-anchored (31-reapply-52, NEW)
+chatWidget.ts `_applyInputPlaceholder`: upstream now prefers the session contribution's own `inputPlaceholder`; the patent voice (`getPatentModeInputPlaceholder`, fork-only common/widget/patentInputPlaceholder.ts) sits between it and the generic "Chat with {0}" fallback. Brand owns the B5b half in chatInputEditorContrib.ts.
