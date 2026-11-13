@@ -35,6 +35,9 @@ import { IEditorService } from '../../../../../../services/editor/common/editorS
 import { getChatSessionType } from '../../../../common/model/chatUri.js';
 import { ICustomizationHarnessService } from '../../../../common/customizationHarnessService.js';
 import { getSandboxPlaceholder } from './chatInputSandboxContribution.js';
+import { IContextKeyService } from '../../../../../../../platform/contextkey/common/contextkey.js';
+import { PatentIdeContextKeys } from '../../../../../../common/patent/patentIdeContextKeys.js';
+import { getPatentModeInputPlaceholder } from '../../../../common/widget/patentInputPlaceholder.js';
 
 const decorationDescription = 'chat';
 const placeholderDecorationType = 'chat-session-detail';
@@ -81,6 +84,7 @@ class InputEditorDecorations extends Disposable {
 		@IThemeService private readonly themeService: IThemeService,
 		@IChatAgentService private readonly chatAgentService: IChatAgentService,
 		@ILabelService private readonly labelService: ILabelService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@ICustomizationHarnessService private readonly customizationHarnessService: ICustomizationHarnessService,
 		@IEditorService private readonly editorService: IEditorService,
 	) {
@@ -234,7 +238,9 @@ class InputEditorDecorations extends Disposable {
 			}
 
 			const mode = this.widget.input.currentModeObs.get();
-			const placeholder = mode.argumentHint?.get() ?? mode.description.get() ?? '';
+			// FlowLeap Patent IDE: patent-voice per-mode placeholders instead of the coding mode description
+			const isPatentMode = PatentIdeContextKeys.Mode.getValue(this.contextKeyService) !== false;
+			const placeholder = getPatentModeInputPlaceholder(mode.kind, isPatentMode) ?? mode.argumentHint?.get() ?? mode.description.get() ?? '';
 			const displayPlaceholder = getSandboxPlaceholder(viewModel.inputPlaceholder || placeholder, this.widget.input.sandboxToggleChecked.get());
 
 			const decoration: IDecorationOptions[] = [
