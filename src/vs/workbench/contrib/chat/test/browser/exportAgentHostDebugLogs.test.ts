@@ -155,6 +155,8 @@ suite('exportAgentHostDebugLogs progress', () => {
 
 	function setupExport(collection: () => Promise<IAgentHostDebugLogsArtifact>) {
 		const instantiation = disposables.add(new TestInstantiationService());
+		// FlowLeap (PRD 0018 A4): the export reads the session-log content mode from configuration.
+		instantiation.stub(IConfigurationService, new TestConfigurationService());
 		const notifications: INotification[] = [];
 		const notificationService = new class extends TestNotificationService {
 			override notify(notification: INotification) {
