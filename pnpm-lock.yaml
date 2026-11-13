@@ -594,9 +594,9 @@ importers:
   scripts: {}
 
   src/vs/sessions/test/e2e:
-    dependencies:
+    devDependencies:
       '@playwright/cli':
-        specifier: latest
+        specifier: ^0.1.22
         version: 0.1.24
 
   test/automation:
