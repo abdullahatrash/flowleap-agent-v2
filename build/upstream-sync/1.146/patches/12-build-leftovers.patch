@@ -1,0 +1,15 @@
+diff --git a/build/lib/i18n.resources.json b/build/lib/i18n.resources.json
+index 27023251aeb..767cc9b4bf7 100644
+--- a/build/lib/i18n.resources.json
++++ b/build/lib/i18n.resources.json
+@@ -326,10 +326,6 @@
+ 			"name": "vs/workbench/contrib/patent",
+ 			"project": "vscode-workbench"
+ 		},
+-		{
+-			"name": "vs/workbench/contrib/welcomeAgentSessions",
+-			"project": "vscode-workbench"
+-		},
+ 		{
+ 			"name": "vs/workbench/contrib/welcomeOnboarding",
+ 			"project": "vscode-workbench"
