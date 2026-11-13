@@ -1,20 +1,26 @@
-# Upstream sync to VS Code 1.140 (PRD 0017)
+# Upstream sync to VS Code 1.146 (PRD 0027 PR B)
 
-> **Superseded by the 1.146 sync (PRD 0027).** The repo moved from npm to pnpm 12 with upstream 1.146: `packageManager` pins `pnpm@12.16.0`, each install root (`/`, `build/`, `remote/`, `extensions/`, `extensions/copilot`) has its own `pnpm-lock.yaml`, and there is no `package-lock.json` or `.npmrc` any more. So step 11 (`11-npm-deps.sh`, npm packages at upstream's lockfile versions plus the lockfile stub for `npm ci`) and the npm worktree setup below (copying the root `node_modules`, symlinking the others) no longer apply: a worktree now gets its own `pnpm install --frozen-lockfile`. See `docs/prd/0027-upstream-sync-1.146-pnpm.md` and `docs/dev/LOCAL-DEV.md`. The rest of the kit (copy, keep-out, re-apply) is still the method.
+Second run of the whole-tree recipe from the 1.140 kit: copy upstream `src/vs` + `src/vscode-dts` + the `src/` root files + `test/unit`, restore the files the fork created, re-point their imports at the paths upstream moved, keep out what the product does not ship, then re-apply the fork's intents as small patches written against upstream's 1.146 code. The build side (pnpm 12, Electron 43.8.6, `build/` at 1.146) landed first as PR A (#860), so this kit has no npm step.
 
-These scripts turned the fork into a whole-tree sync of `src/vs` and `src/vscode-dts` with upstream 1.140. The next upstream sync is a re-run of the same kit against a newer reference, not a rediscovery.
-
-**What they do:** copy upstream, keep what the fork deliberately keeps out, then re-apply the fork's intents as small patches written against upstream's code. Old fork hunks are never merged.
-
-- **PRD:** `docs/prd/0017-agents-window-wholesale-sync.md`
-- **Evidence:** `docs/reviews/2026-09-29-prd-0017-spike-report.md` (v1) and `docs/reviews/2026-09-29-prd-0017-spike-report-v2.md`
-- **PR:** #464
+- **PRD:** `docs/prd/0027-upstream-sync-1.146-pnpm.md`
+- **Survey:** `docs/reviews/2026-11-13-upstream-survey-1.140-to-1.146.md` (+ `-agenthost-sessions.md`, `-chat-byok-build.md`)
+- **Intent briefs per group:** `notes/prb-rules.md`, `notes/prb-group-{aw,chat,agenthost,brand}.md`
 
 | | Commit |
 |---|---|
-| Upstream reference (`microsoft/vscode`) | `480c6e142fa` (1.140.0) |
-| Fork base the scripts were written against | `810ad70ca59` (v0.4.0) |
-| Fork point of the fork | `b0b6062a946` (1.127.0) |
+| Upstream reference (`microsoft/vscode`) | tag `1.146.0` = `69047191fc4` |
+| Previous upstream base | `480c6e142fa` (1.140.0) |
+| Fork base the scripts were written against | `1feddc94420` (main after PR A) |
+| Fork-side commit of the previous sync | `45a4c6d6ddc` (PR #464 merge) |
+
+## What changed since the 1.140 kit
+
+- Step 10 keeps `platform/agentHost/{node,electron-main}` (the fork ships the agent host since PRD 0018) and no longer rewrites `agentSessionState`.
+- Step 10 computes "fork-only" against the previous upstream base: a file the 1.140.0 tree had is upstream-deleted or moved and the copy subsumes it; only files the fork created are restored.
+- Step 10 rewrites the relative imports of restored files through `tools/rewrite-imports.mjs` with the rename map `git diff -M 480c6e142fa 1.146.0`, because upstream moved the Agents Window into `workbench/contrib/sessions` (`dfe0bb738db`).
+- Steps 12/13 take the fork-side base (`FORK_PREV_REF`) for the "did the fork touch this" check; upstream commits are not in the fork's history.
+- Step 11 (npm deps) is gone; `34-keep-out-agent-host-client` is gone (obsolete since PRD 0018).
+- Re-apply ran as four groups on their own branches (`port/1146-{aw,chat,agenthost,brand}`), one commit per intent, merged into `port/1146-src-sync`.
 
 ## Setup
 
@@ -40,13 +46,16 @@ node build/next/index.ts transpile
 ## Run
 
 ```bash
-UPSTREAM=<vscode checkout at the reference commit> build/upstream-sync/1.140/run-all.sh ../wt-sync
+UPSTREAM=<vscode checkout that has tag 1.146.0> build/upstream-sync/1.146/run-all.sh ../wt-sync
 ```
 
 Optional variables:
 - `FORK`: a clone of the fork that has the base commit. Default: the worktree itself.
-- `FORK_REF`: the base commit. Default: `810ad70ca59`.
-- `SYNC_OUT`: where step 10 writes its file lists. Default: `$TMPDIR/upstream-sync-1.140`.
+- `FORK_REF`: the fork base commit. Default: `1feddc94420`.
+- `UPSTREAM_REF`: the upstream tag. Default: `1.146.0`.
+- `PREV_REF`: the previous upstream base. Default: `480c6e142fa`.
+- `FORK_PREV_REF`: the fork-side commit of the previous sync. Default: `45a4c6d6ddc`.
+- `SYNC_OUT`: where step 10 writes its file lists. Default: `$TMPDIR/upstream-sync-1.146`.
 
 Every script takes the worktree path as its only argument. Scripts are idempotent: a patch that is already applied is skipped.
 
