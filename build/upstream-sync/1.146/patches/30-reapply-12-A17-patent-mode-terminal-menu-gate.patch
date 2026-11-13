@@ -1,5 +1,5 @@
 diff --git a/src/vs/sessions/browser/parts/menubar.contribution.ts b/src/vs/sessions/browser/parts/menubar.contribution.ts
-index 48789175372..de5214c0509 100644
+index 6b2cd5d6a00..1d76e630fc1 100644
 --- a/src/vs/sessions/browser/parts/menubar.contribution.ts
 +++ b/src/vs/sessions/browser/parts/menubar.contribution.ts
 @@ -6,6 +6,7 @@
@@ -7,7 +7,7 @@ index 48789175372..de5214c0509 100644
  import { MenuId, MenuRegistry } from '../../../platform/actions/common/actions.js';
  import { IsMacNativeContext } from '../../../platform/contextkey/common/contextkeys.js';
 +import { PatentIdeContextKeys } from '../../../workbench/common/patent/patentIdeContextKeys.js';
- import { Menus } from '../menus.js';
+ import { AgentsWindowMenus } from '../agentsWindowMenus.js';
  
  MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
 @@ -65,7 +66,8 @@ MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
