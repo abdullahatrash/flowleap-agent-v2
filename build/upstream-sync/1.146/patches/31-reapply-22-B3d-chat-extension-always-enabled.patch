@@ -1,8 +1,8 @@
 diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
-index 2de672a95bc..e4188911d70 100644
+index 37cbeefd169..0dd2e9e8ebc 100644
 --- a/src/vs/base/common/product.ts
 +++ b/src/vs/base/common/product.ts
-@@ -433,6 +433,14 @@ export interface IDefaultChatAgent {
+@@ -432,6 +432,14 @@ export interface IDefaultChatAgent {
  	readonly extensionId: string;
  	readonly chatExtensionId: string;
  
@@ -18,26 +18,26 @@ index 2de672a95bc..e4188911d70 100644
  	readonly chatExtensionOutputExtensionStateCommand: string;
  
 diff --git a/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts b/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts
-index 141241fdb70..1427541badd 100644
+index 94592fa2229..3472618e8b5 100644
 --- a/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts
 +++ b/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts
-@@ -59,6 +59,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+@@ -60,6 +60,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
  	// Extension unification
  	private readonly _completionsExtensionId: string | undefined;
  	private readonly _chatExtensionId: string | undefined;
 +	private readonly _alwaysEnableChatExtension: boolean;
  	private _extensionUnificationEnabled: boolean;
  
- 	// Sessions window allow-list (lowercased extension ids)
-@@ -115,6 +116,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+ 	private _maliciousExtensionsCache: ReadonlyArray<MaliciousExtensionInfo> | undefined;
+@@ -113,6 +114,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
  		// Extension unification
  		this._completionsExtensionId = productService.defaultChatAgent?.extensionId.toLowerCase();
  		this._chatExtensionId = productService.defaultChatAgent?.chatExtensionId.toLowerCase();
 +		this._alwaysEnableChatExtension = productService.defaultChatAgent?.alwaysEnabled === true;
- 		this._sessionsWindowAllowedExtensions = new Set<string>((productService.sessionsWindowAllowedExtensions ?? []).map(id => id.toLowerCase()));
  		const unificationExtensions = [this._completionsExtensionId, this._chatExtensionId].filter(id => !!id);
  
-@@ -157,6 +159,19 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+ 		// Disabling extension unification should immediately disable the unified extension flow
+@@ -164,6 +166,19 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
  			return;
  		}
  
@@ -57,7 +57,7 @@ index 141241fdb70..1427541badd 100644
  		const builtinChatExtensionEnablementMigrationKey = 'builtinChatExtensionEnablementMigration';
  		const builtinChatExtensionEnablementMigration = this.storageService.getBoolean(builtinChatExtensionEnablementMigrationKey, StorageScope.PROFILE) === true;
  		if (builtinChatExtensionEnablementMigration) {
-@@ -661,6 +676,13 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+@@ -668,6 +683,13 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
  	}
  
  	private _isDisabledByUnification(identifier: IExtensionIdentifier): boolean {
@@ -72,10 +72,10 @@ index 141241fdb70..1427541badd 100644
  	}
  
 diff --git a/src/vs/workbench/services/extensionManagement/test/browser/extensionEnablementService.test.ts b/src/vs/workbench/services/extensionManagement/test/browser/extensionEnablementService.test.ts
-index 8bdae656e82..86c7560e6d3 100644
+index 9f18ad9cd41..b6d383a17fb 100644
 --- a/src/vs/workbench/services/extensionManagement/test/browser/extensionEnablementService.test.ts
 +++ b/src/vs/workbench/services/extensionManagement/test/browser/extensionEnablementService.test.ts
-@@ -1186,7 +1186,11 @@ suite('ExtensionEnablementService Test', () => {
+@@ -1295,7 +1295,11 @@ suite('ExtensionEnablementService Test', () => {
  		assert.deepStrictEqual((<IExtension>target.args[0][0][0]).identifier, { id: 'pub.a' });
  	});
  
@@ -88,7 +88,7 @@ index 8bdae656e82..86c7560e6d3 100644
  		const chatExtensionId = productService.defaultChatAgent!.chatExtensionId;
  		const chatExtension = aLocalExtension(chatExtensionId, undefined, ExtensionType.System);
  		installed.push(chatExtension);
-@@ -1202,19 +1206,15 @@ suite('ExtensionEnablementService Test', () => {
+@@ -1311,19 +1315,15 @@ suite('ExtensionEnablementService Test', () => {
  		testObject = disposableStore.add(new TestExtensionEnablementService(instantiationService, chatEntitlementService));
  		await testObject.waitUntilInitialized();
  
