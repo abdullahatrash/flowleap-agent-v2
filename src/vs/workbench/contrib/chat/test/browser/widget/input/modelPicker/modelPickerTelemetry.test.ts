@@ -21,8 +21,10 @@ import { ITabbedActionListDetailsOptions, TabbedActionListWidget } from '../../.
 import { ICommandService } from '../../../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../../../../platform/configuration/test/common/testConfigurationService.js';
+import { IContextKeyService } from '../../../../../../../../platform/contextkey/common/contextkey.js';
 import { IDefaultAccountService } from '../../../../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { TestInstantiationService } from '../../../../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { MockContextKeyService } from '../../../../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { IOpenerService, OpenOptions } from '../../../../../../../../platform/opener/common/opener.js';
 import { COPILOT_COMMUNICATION_SUPPORT_URL_KEY, IManagedSettingsService, NullManagedSettingsService } from '../../../../../../../../platform/policy/common/copilotManagedSettings.js';
 import { IProductService } from '../../../../../../../../platform/product/common/productService.js';
@@ -86,8 +88,12 @@ suite('ModelPickerTelemetry', () => {
 		},
 	});
 
-	function createPicker(selectedModel = model, beforeSave?: (id: string) => Promise<void>, models = [autoModel, model, fastModel, otherModel, thirdPartyModel], entitlement = ChatEntitlement.Pro, supportsProgrammaticSelection = true, showAutoModel = true, controlManifest: IModelsControlManifest = { free: {}, paid: {} }, presentsConfiguration = true, presentConfiguration = (access: IModelConfigurationAccess) => access) {
+	function createPicker(selectedModel = model, beforeSave?: (id: string) => Promise<void>, models = [autoModel, model, fastModel, otherModel, thirdPartyModel], entitlement = ChatEntitlement.Pro, supportsProgrammaticSelection = true, showAutoModel = true, controlManifest: IModelsControlManifest = { free: {}, paid: {} }, presentsConfiguration = true, presentConfiguration = (access: IModelConfigurationAccess) => access, byok?: { clientByokEnabled: boolean; flowleapSignedIn: boolean }) {
 		const instantiationService = store.add(new TestInstantiationService());
+		const executedCommands: string[] = [];
+		const contextKeyService = store.add(new MockContextKeyService());
+		contextKeyService.createKey('flowleap.signedIn', byok?.flowleapSignedIn ?? false);
+		instantiationService.stub(IContextKeyService, contextKeyService);
 		const events: { name: string; data: unknown }[] = [];
 		const pickerEvents: { name: string; data: unknown }[] = [];
 		const pickerSessionIds: string[] = [];
@@ -242,7 +248,7 @@ suite('ModelPickerTelemetry', () => {
 			hide: () => hideTabbedPicker(),
 			dispose: () => { },
 		});
-		instantiationService.stub(ICommandService, {});
+		instantiationService.stub(ICommandService, { executeCommand: async (id: string) => { executedCommands.push(id); } });
 		instantiationService.stub(IOpenerService, {
 			open: async (resource: URI | string, options?: OpenOptions) => {
 				openedLinks.push(resource.toString());
@@ -305,6 +311,7 @@ suite('ModelPickerTelemetry', () => {
 		const entitlementChanged = store.add(new Emitter<void>());
 		const entitlementService = new class extends TestChatEntitlementService {
 			override readonly onDidChangeEntitlement = entitlementChanged.event;
+			override readonly clientByokEnabled = byok?.clientByokEnabled ?? false;
 		}();
 		entitlementService.entitlement = entitlement;
 		instantiationService.stub(IChatEntitlementService, entitlementService);
@@ -336,7 +343,7 @@ suite('ModelPickerTelemetry', () => {
 		picker.show(container);
 
 		return {
-			events, pickerEvents, eventNames, openedLinks, openedExternally, picker, container, configurations, savedConfigurations, pinnedModelIds, delegateSelections, programmaticDelegateSelections, configurationService,
+			events, pickerEvents, eventNames, openedLinks, openedExternally, executedCommands, picker, container, configurations, savedConfigurations, pinnedModelIds, delegateSelections, programmaticDelegateSelections, configurationService,
 			get visible() { return visible; },
 			fireManagedSettingsChange: () => managedSettingsChange.fire(),
 			get tabbedShows() { return tabbedShows; },
@@ -424,6 +431,25 @@ suite('ModelPickerTelemetry', () => {
 				visible: true,
 				events: [],
 				openedLinks: [],
+			});
+		});
+	}
+
+	for (const flowleapSignedIn of [false, true]) {
+		test(`BYOK-only mode without models offers ${flowleapSignedIn ? 'adding a key' : 'signing in to FlowLeap'} instead of Copilot setup`, () => {
+			const result = createPicker(model, undefined, [], ChatEntitlement.Unknown, true, false, undefined, undefined, undefined, { clientByokEnabled: true, flowleapSignedIn });
+			const welcome = result.welcome();
+			welcome?.runAction();
+			assert.deepStrictEqual({ setupRequired: result.picker.isSetupRequired(), welcome: welcome?.text, visible: result.visible, executedCommands: result.executedCommands }, flowleapSignedIn ? {
+				setupRequired: false,
+				welcome: ['Copilot', 'No AI model connected yet. Add your AI model with your own API key to start chatting.', 'Add Model'],
+				visible: false,
+				executedCommands: ['workbench.action.chat.manage'],
+			} : {
+				setupRequired: false,
+				welcome: ['Copilot', 'No AI model connected yet. Sign in to FlowLeap to use the free Trial models, or add your AI model with your own API key.', 'Sign In'],
+				visible: false,
+				executedCommands: ['flowleap.signIn'],
 			});
 		});
 	}

@@ -114,9 +114,12 @@ suite('ModelPickerPresentation', () => {
 			{ name: 'Pro', entitlement: ChatEntitlement.Pro, anonymous: false, hasByokModels: false },
 			{ name: 'EDU', entitlement: ChatEntitlement.EDU, anonymous: false, hasByokModels: false },
 			{ name: 'Enterprise', entitlement: ChatEntitlement.Enterprise, anonymous: false, hasByokModels: false },
+			// FlowLeap BYOK-only mode: a signed-in subscriber with no key is model-less, never "set up Copilot".
+			{ name: 'Unknown + client BYOK', entitlement: ChatEntitlement.Unknown, anonymous: false, hasByokModels: false, clientByokEnabled: true },
+			{ name: 'Available + client BYOK', entitlement: ChatEntitlement.Available, anonymous: false, hasByokModels: false, clientByokEnabled: true },
 		];
 
-		assert.deepStrictEqual(Object.fromEntries(cases.map(c => [c.name, modelPickerRequiresSetup(c)])), {
+		assert.deepStrictEqual(Object.fromEntries(cases.map(c => [c.name, modelPickerRequiresSetup({ clientByokEnabled: false, ...c })])), {
 			'Unknown': true,
 			'Unknown + anonymous': false,
 			'Unknown + BYOK': false,
@@ -128,6 +131,8 @@ suite('ModelPickerPresentation', () => {
 			'Pro': false,
 			'EDU': false,
 			'Enterprise': false,
+			'Unknown + client BYOK': false,
+			'Available + client BYOK': false,
 		});
 	});
 

@@ -839,8 +839,8 @@ export class TestChatEntitlementService implements IChatEntitlementService {
 	markSetupCompleted(): void { }
 	setForceHidden(_hidden: boolean): void { }
 
-	readonly clientByokEnabled = false;
-	readonly hasByokModels = false;
+	readonly clientByokEnabled: boolean = false;
+	readonly hasByokModels: boolean = false;
 }
 
 export class TestLifecycleService extends Disposable implements ILifecycleService {
